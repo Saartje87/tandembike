@@ -475,6 +475,105 @@ describe('Counting matching Tickets', () => {
   });
 });
 
+describe('Sorting Tickets by Board position', () => {
+  /** A Project whose Board shows Todo: C, A; In progress: E, D; Done: B. */
+  function boardTickets() {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const add = (title: string, status: Status) =>
+      tickets.createTicket({ projectId: project.id, title, status }).number;
+    const a = add('A', 'Todo');
+    add('B', 'Done');
+    const c = add('C', 'Todo');
+    const d = add('D', 'In progress');
+    const e = add('E', 'In progress');
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'Todo',
+      ticketNumbers: [c, a],
+    });
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'In progress',
+      ticketNumbers: [e, d],
+    });
+    return { tickets, project };
+  }
+
+  it('lists the lanes Todo, In progress, Done, each in Board order', () => {
+    const { tickets, project } = boardTickets();
+
+    expect(
+      titles(tickets.findTickets({ projectId: project.id, sort: 'position' })),
+    ).toEqual(['C', 'A', 'E', 'D', 'B']);
+    expect(
+      titles(tickets.findTickets({ projectName: 'website', sort: 'position' })),
+    ).toEqual(['C', 'A', 'E', 'D', 'B']);
+  });
+
+  it('lists oldest-created first by default', () => {
+    const { tickets, project } = boardTickets();
+
+    expect(
+      titles(tickets.findTickets({ projectId: project.id, sort: 'created' })),
+    ).toEqual(['A', 'B', 'C', 'D', 'E']);
+    expect(titles(tickets.findTickets({ projectId: project.id }))).toEqual([
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+    ]);
+  });
+
+  it('pages through Board order without skipping or repeating Tickets', () => {
+    const { tickets, project } = boardTickets();
+    const input = {
+      projectId: project.id,
+      sort: 'position' as const,
+      limit: 2,
+    };
+
+    const pages: string[][] = [];
+    let cursor: number | undefined;
+    do {
+      const page = tickets.findTickets({ ...input, cursor });
+      pages.push(titles(page));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages).toEqual([['C', 'A'], ['E', 'D'], ['B']]);
+  });
+
+  it('combines with the other filters, archived Tickets included', () => {
+    const { tickets, project } = boardTickets();
+    tickets.archiveTicket(3);
+    const input = {
+      projectId: project.id,
+      sort: 'position' as const,
+      status: ['Todo', 'In progress'] as Status[],
+    };
+
+    expect(titles(tickets.findTickets(input))).toEqual(['A', 'E', 'D']);
+    expect(
+      titles(tickets.findTickets({ ...input, includeArchived: true })),
+    ).toEqual(['C', 'A', 'E', 'D']);
+    expect(
+      titles(tickets.findTickets({ ...input, query: 'd', detail: 'full' })),
+    ).toEqual(['D']);
+  });
+
+  it('refuses to sort by position without a Project', () => {
+    const tickets = createTestTickets();
+
+    expect(errorFrom(() => tickets.findTickets({ sort: 'position' }))).toEqual(
+      new ValidationError({
+        sort: 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.',
+      }),
+    );
+  });
+});
+
 function titles(page: TicketPage): string[] {
   return page.tickets.map(({ title }) => title);
 }

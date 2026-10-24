@@ -832,6 +832,46 @@ describe('Label tools', () => {
     await client.close();
   });
 
+  it('lists Tickets in Board order when asked', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['First', 'Second']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'Todo',
+      ticketNumbers: [2, 1],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const board = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, sort: 'position' },
+    });
+    const noProject = await client.callTool({
+      name: 'list_tickets',
+      arguments: { sort: 'position' },
+    });
+    const unknown = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, sort: 'updated' },
+    });
+
+    expect(
+      (resultJson(board) as { tickets: { title: string }[] }).tickets.map(
+        ({ title }) => title,
+      ),
+    ).toEqual(['Second', 'First']);
+    expect(noProject.isError).toBe(true);
+    expect(resultText(noProject)).toBe(
+      'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.',
+    );
+    expect(unknown.isError).toBe(true);
+    expect(resultText(unknown)).toMatch(/sort/);
+    await client.close();
+  });
+
   it('explains a bad page size', async () => {
     const client = await connectMcpClient(createTestTickets());
 

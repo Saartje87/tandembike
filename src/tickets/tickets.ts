@@ -1,4 +1,5 @@
 import {
+  type AnyColumn,
   and,
   asc,
   count,
@@ -11,6 +12,8 @@ import {
   not,
   notInArray,
   or,
+  type SQL,
+  type SQLWrapper,
   sql,
 } from 'drizzle-orm';
 
@@ -53,7 +56,7 @@ import {
 } from './errors';
 import { nextPosition } from './positions';
 import { checkTitle, throwFieldErrors } from './rules';
-import { isStatus, type Status, statusRule } from './status';
+import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 
 export type Project = {
@@ -285,7 +288,17 @@ export type FindTicketsInput = ListTicketsFilter & {
   cursor?: number;
   /** How much of each Ticket to list; defaults to `summary`. */
   detail?: TicketDetail;
+  /** The order to list them in; defaults to `created`. */
+  sort?: TicketSort;
 };
+
+/**
+ * The orders `findTickets` lists Tickets in: oldest-created first, or Board
+ * order, lane by lane in Status order. Board order needs one Project.
+ */
+export const ticketSorts = ['created', 'position'] as const;
+
+export type TicketSort = (typeof ticketSorts)[number];
 
 /**
  * How much of each Ticket `findTickets` lists: a short `TicketSummary`, or
@@ -831,10 +844,11 @@ export function createTickets(
         input.cursor === undefined
           ? undefined
           : db
-              .select({ number: tickets.number, createdAt: tickets.createdAt })
+              .select(orderColumns)
               .from(tickets)
               .where(eq(tickets.number, input.cursor))
               .get();
+      const order = input.sort === 'position' ? boardOrder : oldestCreatedOrder;
       throwFieldErrors({
         limit: checkLimit(limit),
         status:
@@ -842,6 +856,10 @@ export function createTickets(
             ? undefined
             : checkStatusFilter(input.status),
         query: query === undefined ? undefined : checkQuery(query),
+        sort:
+          input.sort === 'position' && filter.projectId === undefined
+            ? 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.'
+            : undefined,
         cursor:
           input.cursor !== undefined && !cursor
             ? `There is no Ticket #${input.cursor} to continue after.`
@@ -855,12 +873,9 @@ export function createTickets(
         .select({ number: tickets.number })
         .from(tickets)
         .where(
-          and(
-            matching,
-            cursor === undefined ? undefined : orderedAfter(cursor),
-          ),
+          and(matching, cursor === undefined ? undefined : order.after(cursor)),
         )
-        .orderBy(...oldestCreatedFirst)
+        .orderBy(...order.by)
         .limit(limit + 1)
         .all()
         .map(({ number }) => number);
@@ -1811,15 +1826,67 @@ function checkStatusFilter(status: Status | readonly Status[]) {
 /** Tickets in the order `listTickets` and `findTickets` list them. */
 const oldestCreatedFirst = [asc(tickets.createdAt), asc(tickets.number)];
 
-/** The condition for Tickets listed after Ticket `cursor`, by `oldestCreatedFirst`. */
-function orderedAfter(cursor: Pick<Ticket, 'number' | 'createdAt'>) {
-  return or(
-    gt(tickets.createdAt, cursor.createdAt),
-    and(
-      eq(tickets.createdAt, cursor.createdAt),
-      gt(tickets.number, cursor.number),
-    ),
-  );
+/** The columns a Ticket is ordered by, in every order of `findTickets`. */
+const orderColumns = {
+  number: tickets.number,
+  createdAt: tickets.createdAt,
+  status: tickets.status,
+  position: tickets.position,
+};
+
+type OrderKeys = { [Key in keyof typeof orderColumns]: Ticket[Key] };
+
+/**
+ * An order of `findTickets`: the `by` clauses, and the condition for the
+ * Tickets listed after a cursor Ticket in that order.
+ */
+type TicketOrder = {
+  by: SQL[];
+  after: (cursor: OrderKeys) => SQL | undefined;
+};
+
+/** `oldestCreatedFirst`, as an order of `findTickets`. */
+const oldestCreatedOrder: TicketOrder = {
+  by: oldestCreatedFirst,
+  after: (cursor) =>
+    listedAfter([
+      [tickets.createdAt, cursor.createdAt],
+      [tickets.number, cursor.number],
+    ]),
+};
+
+/** A Ticket's lane on the Board, counted from 0 in Status order. */
+const lane = sql<number>`case ${tickets.status} ${sql.join(
+  statuses.map((status, index) => sql`when ${status} then ${index}`),
+  sql` `,
+)} end`;
+
+/**
+ * Board order: lanes in Status order, each by position, ties by creation
+ * time then number, as the Board orders them.
+ */
+const boardOrder: TicketOrder = {
+  by: [asc(lane), asc(tickets.position), ...oldestCreatedFirst],
+  after: (cursor) =>
+    listedAfter([
+      [lane, statuses.indexOf(cursor.status)],
+      [tickets.position, cursor.position],
+      [tickets.createdAt, cursor.createdAt],
+      [tickets.number, cursor.number],
+    ]),
+};
+
+/**
+ * The condition for rows after `keys` in ascending order of their columns:
+ * greater in the first key, or equal in it and after the rest.
+ */
+function listedAfter(
+  keys: [SQLWrapper | AnyColumn, unknown][],
+): SQL | undefined {
+  const [[column, value], ...rest] = keys;
+  return rest.length === 0
+    ? gt(column, value)
+    : or(gt(column, value), and(eq(column, value), listedAfter(rest)));
 }
 
 /**
