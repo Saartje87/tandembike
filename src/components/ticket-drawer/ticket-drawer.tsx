@@ -42,6 +42,7 @@ import {
 import type { Blockers, Comment, Project, Ticket } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
+import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
@@ -513,9 +514,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
         <Stack gap={5}>
           <Stack gap={3}>
             <Inline gap={2} alignY="center" justifyContent="space-between">
-              <Text fontSize="small" color="text-600">
-                #{ticket.number}
-              </Text>
+              <CopyTicketNumber number={ticket.number} />
               <Button
                 type="button"
                 variant="ghost"
@@ -687,7 +686,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 };
 
 /**
- * A Ticket in a side drawer over its Board: its number, its title as an
+ * A Ticket in a side drawer over its Board: its number to copy, its title as an
  * in-place editable heading, its Status, Project, labels and Blockers, its Markdown
  * description, acceptance criteria and comments, and a footer with its timestamps and Archive.
  * Each field saves on its own when the User finishes with it, shows the new

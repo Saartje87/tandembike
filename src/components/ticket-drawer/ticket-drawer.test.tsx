@@ -133,7 +133,7 @@ describe('TicketDrawer', () => {
     expect(
       screen.getByRole('dialog', { name: 'Fix the header' }),
     ).toBeInTheDocument();
-    expect(inDrawer().getByText('#4')).toBeInTheDocument();
+    expect(button('Copy Ticket number #4')).toHaveTextContent('#4');
     expect(
       inDrawer().getByRole('heading', { level: 2, name: 'Fix the header' }),
     ).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe('TicketDrawer', () => {
 
     expect(
       inDocumentOrder(
-        inDrawer().getByText('#4'),
+        button('Copy Ticket number #4'),
         button('Close'),
         inDrawer().getByText('This Ticket is archived'),
         inDrawer().getByRole('heading', { level: 2 }),
