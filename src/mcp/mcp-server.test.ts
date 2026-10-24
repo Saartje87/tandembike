@@ -21,6 +21,7 @@ describe('MCP server', () => {
       'create_cycle',
       'create_project',
       'create_ticket',
+      'create_tickets',
       'edit_comment',
       'get_ticket',
       'list_blockers',
@@ -61,6 +62,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/list_labels/);
     expect(instructions).toMatch(/add_comment/);
     expect(instructions).toMatch(/add_blocker/);
+    expect(instructions).toMatch(/create_tickets/);
     expect(instructions).toMatch(/claim_ticket/);
     expect(instructions).toMatch(/release_ticket_claim/);
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
@@ -773,6 +775,58 @@ describe('Batch tools', () => {
     expect(
       tools.find((tool) => tool.name === 'update_tickets')?.description,
     ).toMatch(/at most 50/);
+    await client.close();
+  });
+});
+
+describe('Batch create tool', () => {
+  it('creates several Tickets with Blockers by position and lists their numbers', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [
+          {
+            title: 'Design',
+            description: 'Two options.',
+            labels: ['design'],
+            acceptanceCriteria: [{ text: 'Approved' }],
+          },
+          { title: 'Build', blockedByPositions: [0] },
+        ],
+      },
+    });
+
+    expect(resultJson(result)).toEqual({ numbers: [1, 2] });
+    expect(tickets.getTicket(1)).toMatchObject({
+      description: 'Two options.',
+      labels: ['design'],
+      acceptanceCriteria: [{ text: 'Approved', checked: false }],
+    });
+    expect(tickets.getTicket(2).blockedBy).toEqual([1]);
+    await client.close();
+  });
+
+  it('refuses the whole batch, naming the offending Ticket', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [{ title: 'Design' }, { title: '' }],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe('Ticket at position 1: Enter a title.');
+    expect(tickets.listTickets()).toEqual([]);
     await client.close();
   });
 });

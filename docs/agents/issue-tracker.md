@@ -8,6 +8,7 @@ Tickets and Projects live in the local Tandembike app. Use its MCP server at `ht
 - `create_project`, `rename_project`: manage Projects.
 - `list_tickets`: find Tickets; filter by Project, Status, labels (a Ticket must have every given label) and/or `query` (a case-insensitive substring of the title or description), and include archived Tickets when needed. It returns `{ tickets, nextCursor }`, at most `limit` Tickets a page (default 50, at most 200), oldest-created first; pass `nextCursor` back as `cursor` with the same filters for the next page, until it is `null`. Results leave out descriptions unless `includeDescription` is set; read one Ticket's description with `get_ticket`.
 - `get_ticket`: read a Ticket by its number before starting work or changing its description.
+- `create_tickets`: create from 1 to 50 Tickets in one Project in one call, in order, each with the fields of `create_ticket`, optionally all under one Epic (`epicNumber`). Give each Ticket's Blockers as `blockedByPositions`: the positions, counted from 0, of earlier Tickets in the same list, so list them in dependency order. It is all or nothing: if any Ticket breaks a rule, none is created and the error names it by position (`Ticket at position 2: ...`). It returns `{ numbers }`, the new Ticket numbers in the order given.
 - `create_ticket`, `update_ticket`: create and update Tickets. `update_ticket` replaces the full description when a new description is supplied, so preserve existing content when editing it. It also takes `addLabels` and `removeLabels`, applied atomically with the other fields (removals first).
 - `update_tickets`: apply the same Status, `addLabels` and/or `removeLabels` to an explicit list of at most 50 Ticket numbers. It reports `updated` and `failed` per Ticket; a result with any failure is an error, but the Tickets in `updated` were still changed.
 - `list_labels`, `add_ticket_labels`, `remove_ticket_labels`: read and change Ticket labels. Reuse a label from `list_labels` when one fits. `create_ticket` also takes `labels`.
@@ -43,7 +44,7 @@ While working a Ticket, check off each criterion with `set_acceptance_criteria_c
 
 ## When a skill says “publish to the issue tracker”
 
-Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in dependency order and record each dependency with `add_blocker`.
+Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in one `create_tickets` call, in dependency order, with each dependency in `blockedByPositions`; for more than 50 items, or a dependency on an existing Ticket, use further calls and `add_blocker`.
 
 ## When a skill says “fetch the relevant ticket”
 

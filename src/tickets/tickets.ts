@@ -151,6 +151,27 @@ export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
   checked?: boolean;
 };
 
+/** Normal Tickets to create in one Project, all or none. */
+export type CreateTicketBatchInput = {
+  projectId: number;
+  /** An Epic of the same Project to create them all under. */
+  epicNumber?: number;
+  /** In order, from 1 to `maxBatchSize` of them. */
+  tickets: BatchTicketInput[];
+};
+
+/** One Ticket of a batch: the fields of `CreateTicketInput` that apply. */
+export type BatchTicketInput = Pick<
+  CreateTicketInput,
+  'title' | 'description' | 'status' | 'labels' | 'acceptanceCriteria'
+> & {
+  /**
+   * The positions, from 0, of the earlier Tickets in the batch that block
+   * this one. Defaults to none.
+   */
+  blockedByPositions?: number[];
+};
+
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
 export type UpdateTicketInput = {
   title?: string;
@@ -413,7 +434,7 @@ function checkAcceptanceCriteria(texts: readonly string[]): string | undefined {
  * The cleaned-up fields of a new Ticket, or a `ValidationError` with a
  * reason for every field that breaks the rules.
  */
-function checkNewTicket(input: CreateTicketInput) {
+function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
   const title = input.title.trim();
   const description = input.description ?? '';
   const status = input.status ?? 'Todo';
@@ -442,6 +463,94 @@ function checkNewTicket(input: CreateTicketInput) {
     labels,
     acceptanceCriteria,
   };
+}
+
+type CheckedNewTicket = ReturnType<typeof checkNewTicket>;
+
+/**
+ * The checked fields and Blocker positions of the batch's Ticket at
+ * `position`, or a `ValidationError` naming it by position: each field is
+ * keyed `tickets[2].title`, and each reason starts with the position.
+ */
+function checkBatchTicket(
+  { blockedByPositions = [], ...input }: BatchTicketInput,
+  position: number,
+): { ticket: CheckedNewTicket; blockedByPositions: number[] } {
+  const reasons: Record<string, string | undefined> = {};
+  const reasonAt = (field: string, reason: string | undefined) => {
+    reasons[`tickets[${position}].${field}`] =
+      reason === undefined
+        ? undefined
+        : `Ticket at position ${position}: ${reason}`;
+  };
+  let ticket: CheckedNewTicket | undefined;
+  try {
+    ticket = checkNewTicket(input);
+  } catch (error) {
+    if (!(error instanceof ValidationError)) {
+      throw error;
+    }
+    for (const [field, reason] of Object.entries(error.fieldErrors)) {
+      reasonAt(field, reason);
+    }
+  }
+  reasonAt(
+    'blockedByPositions',
+    checkBlockedByPositions(blockedByPositions, position),
+  );
+  throwFieldErrors(reasons);
+  // Without a ValidationError, `checkNewTicket` returned.
+  return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+}
+
+/** Why a batch Ticket's Blocker positions break the rules, if they do. */
+function checkBlockedByPositions(
+  positions: readonly number[],
+  position: number,
+): string | undefined {
+  if (positions.length === 0) {
+    return undefined;
+  }
+  if (position === 0) {
+    return 'blockedByPositions can only name earlier positions, and it is first.';
+  }
+  if (
+    positions.some(
+      (blocker) =>
+        !Number.isInteger(blocker) || blocker < 0 || blocker >= position,
+    )
+  ) {
+    return `blockedByPositions can only name earlier positions, from 0 to ${position - 1}.`;
+  }
+  if (new Set(positions).size !== positions.length) {
+    return 'name each position in blockedByPositions once.';
+  }
+  return undefined;
+}
+
+/**
+ * Inserts a checked new Ticket at the end of its Status lane, with its
+ * labels and acceptance criteria, and returns its number. Run it in a
+ * transaction.
+ */
+function insertTicket(
+  db: DatabaseConnection,
+  { values, labels, acceptanceCriteria }: CheckedNewTicket,
+  row: { projectId: number; epicNumber: number | null; createdAt: Date },
+): number {
+  const { number } = db
+    .insert(tickets)
+    .values({
+      ...values,
+      ...row,
+      position: nextPosition(db, row.projectId, values.status),
+      updatedAt: row.createdAt,
+    })
+    .returning({ number: tickets.number })
+    .get();
+  insertLabels(db, number, labels);
+  insertAcceptanceCriteria(db, number, acceptanceCriteria);
+  return number;
 }
 
 /** The fields of a Ticket row an update may set. */
@@ -877,7 +986,6 @@ export function createTickets(
         );
       }
 
-      const now = new Date();
       // better-sqlite3 runs every statement on this one connection, so
       // statements on `db` inside the callback are part of the transaction.
       const number = db.transaction(() => {
@@ -887,20 +995,15 @@ export function createTickets(
             projectId: project.id,
           });
         }
-        const { number } = db
-          .insert(tickets)
-          .values({
-            ...values,
-            epicNumber: input.epicNumber ?? null,
+        const number = insertTicket(
+          db,
+          { values, labels, acceptanceCriteria },
+          {
             projectId: project.id,
-            position: nextPosition(db, project.id, values.status),
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning({ number: tickets.number })
-          .get();
-        insertLabels(db, number, labels);
-        insertAcceptanceCriteria(db, number, acceptanceCriteria);
+            epicNumber: input.epicNumber ?? null,
+            createdAt: new Date(),
+          },
+        );
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
@@ -914,6 +1017,72 @@ export function createTickets(
           : { type: 'tickets', numbers: [number, input.epicNumber] },
       );
       return getTicket(number);
+    },
+
+    /**
+     * Creates every Ticket in `input.tickets` in one Project, in order, by
+     * the rules for creating one, with the Blockers each names by position
+     * among the earlier ones, and under an Epic when `epicNumber` is given.
+     * All or nothing: a refusal names the offending Ticket by position and
+     * creates none. The new Tickets are announced once.
+     */
+    createTicketBatch(input: CreateTicketBatchInput): Ticket[] {
+      throwFieldErrors({
+        tickets:
+          input.tickets.length === 0
+            ? 'Give at least one Ticket to create.'
+            : input.tickets.length > maxBatchSize
+              ? `Create at most ${maxBatchSize} Tickets at a time.`
+              : undefined,
+      });
+      const checked = input.tickets.map(checkBatchTicket);
+      const project = db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .get();
+      if (!project) {
+        throw new NotFoundError(
+          `There is no Project with id ${input.projectId}.`,
+        );
+      }
+      const epicNumber = input.epicNumber ?? null;
+
+      const numbers = db.transaction(() => {
+        if (epicNumber !== null) {
+          checkEpicChild(db, epicNumber, {
+            type: 'Ticket',
+            projectId: project.id,
+          });
+        }
+        const createdAt = new Date();
+        const created: number[] = [];
+        for (const { ticket, blockedByPositions } of checked) {
+          const number = insertTicket(db, ticket, {
+            projectId: project.id,
+            epicNumber,
+            createdAt,
+          });
+          if (blockedByPositions.length > 0) {
+            db.insert(ticketBlockers)
+              .values(
+                blockedByPositions.map((position) => ({
+                  blockerNumber: created[position],
+                  blockedNumber: number,
+                })),
+              )
+              .run();
+          }
+          created.push(number);
+        }
+        syncEpicStatus(db, epicNumber);
+        return created;
+      });
+      changes.publish({
+        type: 'tickets',
+        numbers: epicNumber === null ? numbers : [...numbers, epicNumber],
+      });
+      return numbers.map(getTicket);
     },
 
     /**

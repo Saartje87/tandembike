@@ -26,6 +26,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. You can edit or remove only comments written by an Agent.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. A Blocker is resolved once it is Done or archived; list_tickets with blocked: false finds Tickets that are ready to start.
+- To create several related Tickets at once, use create_tickets: list them in dependency order and give each one's Blockers as blockedByPositions, the positions of earlier Tickets in the list. It creates all of them or none.
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them. A Ticket is in at most one Cycle that is not Archived, and only open, non-archived Tickets can be planned. The Backlog is the Tickets in no Prepared or Active Cycle: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
@@ -114,6 +115,28 @@ const cycleTitle = z
 const status = z
   .enum(statuses)
   .describe('The Status: "Todo", "In progress" or "Done".');
+
+/** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
+const newTicketFields = {
+  title: z.string().describe('A one-line title, at most 200 characters.'),
+  description: z
+    .string()
+    .optional()
+    .describe('Optional details in Markdown, at most 50,000 characters.'),
+  status: status
+    .optional()
+    .describe('The starting Status. Defaults to "Todo".'),
+  labels: z
+    .array(label)
+    .optional()
+    .describe('Optional labels. Call list_labels to reuse existing ones.'),
+  acceptanceCriteria: z
+    .array(newCriterion)
+    .optional()
+    .describe(
+      `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome.`,
+    ),
+};
 
 /** `value` as a tool result of pretty-printed JSON text. */
 function jsonResult(value: unknown): CallToolResult {
@@ -337,29 +360,47 @@ export function createMcpServer(tickets: Tickets): McpServer {
         projectId: projectId.describe(
           'The Project the Ticket belongs to (id from list_projects).',
         ),
-        title: z.string().describe('A one-line title, at most 200 characters.'),
-        description: z
-          .string()
-          .optional()
-          .describe('Optional details in Markdown, at most 50,000 characters.'),
-        status: status
-          .optional()
-          .describe('The starting Status. Defaults to "Todo".'),
-        labels: z
-          .array(label)
-          .optional()
-          .describe(
-            'Optional labels. Call list_labels to reuse existing ones.',
-          ),
-        acceptanceCriteria: z
-          .array(newCriterion)
-          .optional()
-          .describe(
-            `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome.`,
-          ),
+        ...newTicketFields,
       },
     },
     (input) => respond(() => tickets.createTicket(input)),
+  );
+
+  server.registerTool(
+    'create_tickets',
+    {
+      title: 'Create Tickets',
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      inputSchema: {
+        projectId: projectId.describe(
+          'The Project the Tickets belong to (id from list_projects).',
+        ),
+        epicNumber: ticketNumber
+          .optional()
+          .describe(
+            'Create every Ticket as a child of this Epic, which must be in the same Project.',
+          ),
+        tickets: z
+          .array(
+            z.object({
+              ...newTicketFields,
+              blockedByPositions: z
+                .array(z.number().int())
+                .optional()
+                .describe(
+                  'The positions, counted from 0, of earlier Tickets in this list that block this one. Only earlier positions can be named, so list the Tickets in dependency order.',
+                ),
+            }),
+          )
+          .describe(
+            `The Tickets to create, in order, from 1 to ${maxBatchSize}.`,
+          ),
+      },
+    },
+    (input) =>
+      respond(() => ({
+        numbers: tickets.createTicketBatch(input).map(({ number }) => number),
+      })),
   );
 
   server.registerTool(
