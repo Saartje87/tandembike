@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  archiveCycle,
   discardCycle,
   renameCycle,
   startCycle,
@@ -15,6 +16,7 @@ import { CycleHeader } from './cycle-header';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../../app/cycles/actions', () => ({
+  archiveCycle: vi.fn(),
   discardCycle: vi.fn(),
   renameCycle: vi.fn(),
   startCycle: vi.fn(),
@@ -27,6 +29,7 @@ const prepared: Cycle = {
   state: 'Prepared',
   ticketNumbers: [],
   createdAt: new Date('2026-01-01'),
+  archivedAt: null,
 };
 
 describe('CycleHeader', () => {
@@ -38,6 +41,7 @@ describe('CycleHeader', () => {
     vi.mocked(renameCycle).mockReset();
     vi.mocked(discardCycle).mockReset();
     vi.mocked(startCycle).mockReset();
+    vi.mocked(archiveCycle).mockReset();
     vi.restoreAllMocks();
   });
 
@@ -181,5 +185,50 @@ describe('CycleHeader', () => {
     expect(
       screen.queryByRole('button', { name: 'Discard Cycle' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('archives an Active Cycle after confirming, and goes to the Backlog', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(archiveCycle).mockResolvedValue({ ok: true });
+    renderWithTheme(<CycleHeader cycle={{ ...prepared, state: 'Active' }} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Archive Cycle' }),
+    );
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Archive the Cycle "Launch the beta"? Its unfinished Tickets go back to the Backlog.',
+    );
+    expect(archiveCycle).toHaveBeenCalledExactlyOnceWith({ cycleId: 7 });
+    expect(router.push).toHaveBeenCalledWith('/project/3');
+  });
+
+  it('keeps an Active Cycle when the User declines to archive it', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderWithTheme(<CycleHeader cycle={{ ...prepared, state: 'Active' }} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Archive Cycle' }),
+    );
+
+    expect(archiveCycle).not.toHaveBeenCalled();
+  });
+
+  it('shows an Archived Cycle read-only, with when it was archived', () => {
+    renderWithTheme(
+      <CycleHeader
+        cycle={{
+          ...prepared,
+          state: 'Archived',
+          archivedAt: new Date('2026-03-04T12:00:00Z'),
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Launch the beta' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^Archived/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

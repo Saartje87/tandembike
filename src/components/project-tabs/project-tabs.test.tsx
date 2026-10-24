@@ -19,6 +19,7 @@ const cycle = (
   state: 'Prepared',
   ticketNumbers: [],
   createdAt: new Date('2026-01-01'),
+  archivedAt: null,
   ...fields,
 });
 
@@ -56,6 +57,7 @@ describe('ProjectTabs', () => {
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
+      { name: 'History', href: '/project/3/cycles', current: null },
     ]);
   });
 
@@ -76,6 +78,18 @@ describe('ProjectTabs', () => {
       'Backlog',
       'Launch',
       'Beta',
+      'History',
+    ]);
+  });
+
+  it('marks the History tab current on the History', () => {
+    renderWithTheme(
+      <ProjectTabs projectId={3} cycles={[]} current="history" />,
+    );
+
+    expect(tabs()).toEqual([
+      { name: 'Backlog', href: '/project/3', current: null },
+      { name: 'History', href: '/project/3/cycles', current: 'page' },
     ]);
   });
 
@@ -86,6 +100,7 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
+      { name: 'History', href: '/project/3/cycles', current: null },
     ]);
   });
 

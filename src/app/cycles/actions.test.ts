@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
 import {
+  archiveCycle,
   createCycle,
   discardCycle,
   planTicket,
@@ -95,6 +96,26 @@ describe('Cycle actions', () => {
       error: 'The Cycle "Beta" is Active. Archive it before starting another.',
     });
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it('archives an Active Cycle, and returns why a Prepared one may not be', async () => {
+    const { tickets, project } = appWithTicket();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.startCycle(beta.id);
+
+    await expect(archiveCycle({ cycleId: beta.id })).resolves.toEqual({
+      ok: true,
+    });
+    expect(tickets.getCycle(beta.id).state).toBe('Archived');
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    await expect(archiveCycle({ cycleId: launch.id })).resolves.toEqual({
+      ok: false,
+      error:
+        'The Cycle "Launch" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.',
+    });
   });
 
   it("returns the module's reason a change was refused", async () => {

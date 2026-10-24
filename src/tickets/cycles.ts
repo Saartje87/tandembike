@@ -14,9 +14,14 @@ export type Cycle = {
   /** One line, trimmed: the goal it works towards. */
   title: string;
   state: CycleState;
-  /** The numbers of the Tickets planned into it, sorted. */
+  /**
+   * The numbers of the Tickets planned into it, sorted. An Archived Cycle's
+   * are its final membership.
+   */
   ticketNumbers: number[];
   createdAt: Date;
+  /** When it was archived, or `null` while it is not. */
+  archivedAt: Date | null;
 };
 
 export type CreateCycleInput = { projectId: number; title: string };
@@ -32,9 +37,19 @@ const cycleColumns = {
   title: cycles.title,
   state: cycles.state,
   createdAt: cycles.createdAt,
+  archivedAt: cycles.archivedAt,
 };
 
 type CycleRow = Omit<Cycle, 'ticketNumbers'>;
+
+/** Throws unless `cycle` may change: an Archived Cycle is read-only. */
+function checkChangeable(cycle: Pick<CycleRow, 'title' | 'state'>) {
+  if (cycle.state === 'Archived') {
+    throw new NotAllowedError(
+      `The Cycle "${cycle.title}" is Archived and cannot change.`,
+    );
+  }
+}
 
 /** A trimmed Cycle title, or a `ValidationError` when it breaks the rules. */
 function checkedCycleTitle(rawTitle: string): string {
@@ -107,13 +122,18 @@ export function planNewTicket(
   projectId: number,
 ) {
   const cycle = db
-    .select({ projectId: cycles.projectId, title: cycles.title })
+    .select({
+      projectId: cycles.projectId,
+      title: cycles.title,
+      state: cycles.state,
+    })
     .from(cycles)
     .where(eq(cycles.id, cycleId))
     .get();
   if (!cycle) {
     throw new NotFoundError(`There is no Cycle with id ${cycleId}.`);
   }
+  checkChangeable(cycle);
   if (cycle.projectId !== projectId) {
     throw new NotAllowedError(
       `The Cycle "${cycle.title}" is in another Project. A Cycle holds only its own Project's Tickets.`,
@@ -210,7 +230,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     /** Renames Cycle `id` by the rules for creating one. */
     renameCycle(id: number, input: RenameCycleInput): Cycle {
       const title = checkedCycleTitle(input.title);
-      cycleRow(id);
+      checkChangeable(cycleRow(id));
       db.update(cycles).set({ title }).where(eq(cycles.id, id)).run();
       changes.publish({ type: 'cycle', id });
       return getCycle(id);
@@ -241,9 +261,14 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     startCycle(id: number): Cycle {
       db.transaction(() => {
         const cycle = cycleRow(id);
-        if (cycle.state !== 'Prepared') {
+        if (cycle.state === 'Active') {
           throw new NotAllowedError(
-            `The Cycle "${cycle.title}" is ${cycle.state} already.`,
+            `The Cycle "${cycle.title}" is Active already.`,
+          );
+        }
+        if (cycle.state === 'Archived') {
+          throw new NotAllowedError(
+            `The Cycle "${cycle.title}" is Archived. Only a Prepared Cycle can be started.`,
           );
         }
         const active = db
@@ -271,6 +296,31 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     },
 
     /**
+     * Archives Active Cycle `id`, finished or not. Only the Cycle changes:
+     * its Tickets keep their Status and archived flag, and its membership
+     * stays as history while unfinished Tickets return to the Backlog.
+     */
+    archiveCycle(id: number): Cycle {
+      const cycle = cycleRow(id);
+      if (cycle.state === 'Archived') {
+        throw new NotAllowedError(
+          `The Cycle "${cycle.title}" is Archived already.`,
+        );
+      }
+      if (cycle.state === 'Prepared') {
+        throw new NotAllowedError(
+          `The Cycle "${cycle.title}" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.`,
+        );
+      }
+      db.update(cycles)
+        .set({ state: 'Archived', archivedAt: new Date() })
+        .where(eq(cycles.id, id))
+        .run();
+      changes.publish({ type: 'cycle', id });
+      return getCycle(id);
+    },
+
+    /**
      * Plans Ticket `number` into Cycle `cycleId`; planning a member again
      * changes nothing. Only an open, non-archived Ticket of the Cycle's
      * Project can be planned, and only while it is in no other Cycle that is
@@ -279,6 +329,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     planTicket({ cycleId, number }: CycleTicketInput): Cycle {
       db.transaction(() => {
         const cycle = cycleRow(cycleId);
+        checkChangeable(cycle);
         const ticket = db
           .select({
             projectId: tickets.projectId,
@@ -333,7 +384,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
     /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
     unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      cycleRow(cycleId);
+      checkChangeable(cycleRow(cycleId));
       db.delete(cycleTickets)
         .where(
           and(

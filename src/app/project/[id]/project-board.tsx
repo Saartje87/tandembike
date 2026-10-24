@@ -1,8 +1,11 @@
-import type { FC } from 'react';
+import { Stack } from '@blockle/blocks';
+import type { FC, ReactNode } from 'react';
 
 import { Board } from '../../../components/board/board';
 import { CycleHeader } from '../../../components/cycle-header/cycle-header';
+import { CycleTicketList } from '../../../components/cycle-ticket-list/cycle-ticket-list';
 import { ProjectTabs } from '../../../components/project-tabs/project-tabs';
+import { RenameProjectInlineEdit } from '../../../components/rename-project-inline-edit/rename-project-inline-edit';
 import { appTickets } from '../../../tickets/app-tickets';
 import type { Cycle } from '../../../tickets/cycles';
 import type { Project } from '../../../tickets/tickets';
@@ -15,9 +18,34 @@ export type ProjectBoardProps = {
   openTicket?: number;
 };
 
+export type ProjectFrameProps = {
+  project: Project;
+  current: 'history';
+  children: ReactNode;
+};
+
+/** A Project page that is not a Board: its name and tabs above `children`. */
+export const ProjectFrame: FC<ProjectFrameProps> = ({
+  project,
+  current,
+  children,
+}) => (
+  <Stack gap={4}>
+    <RenameProjectInlineEdit key={project.id} project={project} />
+    <ProjectTabs
+      projectId={project.id}
+      cycles={appTickets().listCycles(project.id)}
+      current={current}
+    />
+    {children}
+  </Stack>
+);
+
 /**
  * One tab of a Project: its Board holding the Backlog's Tickets (those in no
- * Prepared or Active Cycle) or one Cycle's, under the Project's tabs.
+ * Prepared or Active Cycle) or one Cycle's, under the Project's tabs. An
+ * Archived Cycle belongs to the History, and lists its final Tickets
+ * read-only instead.
  */
 export const ProjectBoard: FC<ProjectBoardProps> = ({
   project,
@@ -26,14 +54,23 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
 }) => {
   const tickets = appTickets();
   const cycleId = tab === 'backlog' ? null : tab.id;
+  const shown = tickets.listTickets({
+    projectId: project.id,
+    cycleId,
+    includeArchived: true,
+  });
+  if (tab !== 'backlog' && tab.state === 'Archived') {
+    return (
+      <ProjectFrame project={project} current="history">
+        <CycleHeader key={tab.id} cycle={tab} />
+        <CycleTicketList tickets={shown} />
+      </ProjectFrame>
+    );
+  }
   return (
     <Board
       project={project}
-      tickets={tickets.listTickets({
-        projectId: project.id,
-        cycleId,
-        includeArchived: true,
-      })}
+      tickets={shown}
       cycleId={cycleId}
       openTicket={openTicket}
       header={

@@ -132,6 +132,7 @@ export const cycles = sqliteTable(
     title: text('title').notNull(),
     state: text('state', { enum: cycleStates }).notNull(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
   },
   (table) => [
     index('cycles_project_id').on(table.projectId),
