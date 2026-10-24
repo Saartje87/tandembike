@@ -240,7 +240,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first, optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, Board position, archived flag and timestamps`,
+      description: `Find Tickets, oldest-created first, optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, Board position, archived flag and timestamps`,
       inputSchema: {
         projectId: projectId
           .optional()

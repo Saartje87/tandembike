@@ -29,6 +29,7 @@ describe('Finding Tickets', () => {
         },
       ],
       nextCursor: null,
+      total: 1,
     });
   });
 
@@ -61,6 +62,7 @@ describe('Finding Tickets', () => {
     expect(tickets.findTickets({ detail: 'full' })).toEqual({
       tickets: [tickets.getTicket(ticket.number)],
       nextCursor: null,
+      total: 1,
     });
     expect(
       tickets.findTickets({ detail: 'full', projectId: project.id }).tickets,
@@ -223,6 +225,7 @@ describe('Finding Tickets', () => {
     expect(tickets.findTickets({ query: 'footer' })).toEqual({
       tickets: [],
       nextCursor: null,
+      total: 0,
     });
   });
 
@@ -412,6 +415,63 @@ describe('Resolving a Project', () => {
         projectId: 'Choose a Project by projectId or projectName.',
       }),
     );
+  });
+});
+
+describe('Counting matching Tickets', () => {
+  it('counts every matching Ticket across all pages, ignoring the cursor', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['One', 'Two', 'Three']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+
+    const first = tickets.findTickets({ limit: 2 });
+    const second = tickets.findTickets({ limit: 2, cursor: 2 });
+
+    expect([first.tickets.length, first.total]).toEqual([2, 3]);
+    expect([second.tickets.length, second.total]).toEqual([1, 3]);
+  });
+
+  it('counts 0 when nothing matches', () => {
+    const tickets = createTestTickets();
+
+    expect(tickets.findTickets().total).toBe(0);
+  });
+
+  it('counts by every filter', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    const wanted = {
+      projectId: website.id,
+      title: 'Header bug',
+      status: 'In progress' as const,
+      labels: ['bug'],
+    };
+    const blocker = tickets.createTicket({ ...wanted, title: 'Blocker' });
+    tickets.createTicket(wanted);
+    const blocked = tickets.createTicket(wanted);
+    tickets.addBlocker({ blocker: blocker.number, blocked: blocked.number });
+    const claimed = tickets.createTicket(wanted);
+    tickets.claimTicket(claimed.number, { agentRunId: 'run-1' });
+    tickets.createTicket({ ...wanted, projectId: app.id });
+    tickets.createTicket({ ...wanted, status: 'Done' });
+    tickets.createTicket({ ...wanted, labels: [] });
+    tickets.archiveTicket(tickets.createTicket(wanted).number);
+    const filter = {
+      projectId: website.id,
+      status: ['In progress' as const],
+      labels: ['bug'],
+      query: 'header',
+    };
+
+    expect(tickets.findTickets(filter).total).toBe(3);
+    expect(
+      tickets.findTickets({ ...filter, includeArchived: true }).total,
+    ).toBe(4);
+    expect(tickets.findTickets({ ...filter, blocked: true }).total).toBe(1);
+    expect(tickets.findTickets({ ...filter, claimed: false }).total).toBe(2);
   });
 });
 

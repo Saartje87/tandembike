@@ -312,6 +312,8 @@ export type TicketPage = {
   tickets: TicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
+  /** How many Tickets match the filters, over all pages. */
+  total: number;
 };
 
 /** Who wrote a Comment: the UI writes `user`, MCP writes `agent`. */
@@ -845,13 +847,16 @@ export function createTickets(
             ? `There is no Ticket #${input.cursor} to continue after.`
             : undefined,
       });
+      const matching = and(
+        matchingTickets(db, filter),
+        query === undefined ? undefined : titleOrDescriptionContains(query),
+      );
       const numbers = db
         .select({ number: tickets.number })
         .from(tickets)
         .where(
           and(
-            matchingTickets(db, filter),
-            query === undefined ? undefined : titleOrDescriptionContains(query),
+            matching,
             cursor === undefined ? undefined : orderedAfter(cursor),
           ),
         )
@@ -880,6 +885,9 @@ export function createTickets(
                 filter.projectId === undefined,
               ),
         nextCursor: numbers.length > limit ? page[page.length - 1] : null,
+        total:
+          db.select({ total: count() }).from(tickets).where(matching).get()
+            ?.total ?? 0,
       };
     },
 

@@ -258,6 +258,7 @@ describe('Ticket tools', () => {
         },
       ],
       nextCursor: null,
+      total: 1,
     });
     await client.close();
   });
@@ -295,6 +296,7 @@ describe('Ticket tools', () => {
         },
       ],
       nextCursor: null,
+      total: 1,
     });
     expect(resultJson(full)).toEqual({
       tickets: [
@@ -305,6 +307,7 @@ describe('Ticket tools', () => {
         },
       ],
       nextCursor: null,
+      total: 1,
     });
     expect(Object.keys(listTickets?.inputSchema.properties ?? {})).toEqual(
       expect.arrayContaining(['detail']),
@@ -784,6 +787,7 @@ describe('Label tools', () => {
     expect(resultJson(result)).toEqual({
       tickets: [expect.objectContaining({ title: 'Ready bug' })],
       nextCursor: null,
+      total: 1,
     });
     await client.close();
   });
@@ -823,6 +827,7 @@ describe('Label tools', () => {
         }),
       ],
       nextCursor: 3,
+      total: 3,
     });
     await client.close();
   });
