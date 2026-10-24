@@ -48,6 +48,10 @@ _Avoid_: Lock, reservation
 A unique identifier for one Agent run, used to claim Tickets independently of its optional display name.
 _Avoid_: Agent name as the owner identifier
 
+**Activity**:
+A Ticket's record of the changes made to it, one **Activity entry** per change. Each entry says what changed, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.
+_Avoid_: History, event, audit log, changelog
+
 **Archived**:
 A Ticket taken out of the normal views without being destroyed; it can be restored.
 _Avoid_: Deleted, removed, trashed, closed

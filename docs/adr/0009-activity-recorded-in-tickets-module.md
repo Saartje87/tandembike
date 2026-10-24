@@ -1,0 +1,3 @@
+# Activity is recorded inside the Tickets module
+
+Every Tickets module function that changes a Ticket takes who is acting (`user` or `agent`, set by where the call came from, as for Comments in ADR 0006) and writes the Activity entry in the same transaction as the change. It records only real changes and writes one entry per action, not one per field. We rejected building Activity from the live-update change channel (`changes.ts`, ADR 0005): it says only that something changed, not what or who, and it is not durable. Recording at the one write seam (ADR 0004) means a change cannot happen without its entry, whether it came from the UI or MCP.
