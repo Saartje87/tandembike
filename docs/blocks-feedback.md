@@ -371,7 +371,9 @@ Cancel buttons swap themselves out the same way and use the same workaround
 same kind of test. The redesigned drawer (#16) swaps out many more buttons:
 the title (which turns into an input), the description's Save and Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
-banner's Restore all need it.
+banner's Restore all need it. The header's copy button for the Ticket
+number (#34, `copy-ticket-number.tsx`) swaps its text and icon on click and
+calls it too.
 
 **Question.** Should `useClickOutside` decide from where the interaction
 began, so unmounting the target is safe?
@@ -710,6 +712,36 @@ typed as `keyof AlignItemsMap`, whose keys are `left`, `right`, `center` and
 items with `alignY="center"`, so no code depends on this today.
 
 **Question.** Can `alignY` get its own map with `top` and `bottom`?
+
+## 24. No live region for a polite announcement
+
+**Problem.** The drawer's copy button for the Ticket number (#34) confirms
+"Copied" in place, but its accessible name stays "Copy Ticket number #42",
+so screen readers need a separate announcement. Blocks has no live-region or
+announcer component. `Alert` is always `role="alert"` and visible (19), and a
+toast needs a `ToastProvider` the app does not have. `VisuallyHidden` takes
+HTML attributes, so it can carry `role="status"`, but every consumer has to
+know to keep it mounted and empty so that later text is announced.
+
+**Repro.**
+
+```tsx
+<Button aria-label="Copy Ticket number #42" onClick={copy}>
+  {copied ? 'Copied' : '#42'}
+</Button>;
+// The name never changes, so nothing announces "Copied".
+```
+
+**Expected.** A component such as `<LiveRegion politeness="polite">` (or an
+`announce()` hook) that stays mounted, is visually hidden and announces
+changes to its text.
+
+**Workaround.** `copy-ticket-number.tsx` renders
+`<VisuallyHidden role="status">` all the time, empty until a copy succeeds
+or fails.
+
+**Question.** Should Blocks ship a live region or an `announce` hook, so
+that in-place confirmations are announced the same way everywhere?
 
 ## Notes (lower priority)
 
