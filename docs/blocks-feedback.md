@@ -193,8 +193,8 @@ marker-free ordered list.
 **Expected.** A list of cards with no bullets.
 
 **Workaround.** `board.css.ts`, `breadcrumbs.css.ts`, `label-list.css.ts`,
-`ticket-comments.css.ts`, `blocker-editor.css.ts` and
-`acceptance-criteria-editor.css.ts` each use
+`ticket-comments.css.ts`, `blocker-editor.css.ts`,
+`acceptance-criteria-editor.css.ts` and `epic-children.css.ts` each use
 `style({ listStyle: 'none' })`, passed as `className` to the list component.
 
 **Question.** Should `Stack`/`Inline` with a list `tag` drop the markers by
@@ -430,7 +430,9 @@ as `Box` does through `HTMLElementProps`, or at least `aria-*` and `id`.
 flexWrap="wrap" gap={1}` around a plain `<ul aria-label="Labels">`.
 `ticket-comments.tsx` does the same for its comment list, with
 `flexDirection="column"` and `aria-labelledby` pointing at the "Comments"
-heading, where a `Stack tag="ul"` would otherwise do.
+heading, where a `Stack tag="ul"` would otherwise do. The Board card's
+`BlockedMarker`, `CriteriaProgress` and `EpicProgress` need `role="img"` on
+an inline row, so each is a `Box asChild display="flex"` around a `<span>`.
 
 **Undocumented escape hatch.** TypeScript does not check hyphenated JSX
 attributes against a component's props, so `<Stack tag="ul" aria-label="…">`
@@ -469,7 +471,8 @@ asChild` (background, `borderRadius="full"`, padding), `Text
 fontSize="xsmall"` and a ghost `Button size="small"` with an icon. The
 small button makes a removable pill taller than a plain one. The Board
 card's "Blocked" marker is a second, non-removable pill with an intent
-colour and a leading icon, assembled the same way.
+colour and a leading icon, assembled the same way, and its Epic marker
+(icon, "Epic" and a `2/4` child count, in `primary` shades) a third.
 
 **Repro.**
 
@@ -485,7 +488,8 @@ named remove button sized to the pill.
 
 **Workaround.** `src/components/label-list/label-list.tsx` composes the parts
 above; the card's `BlockedMarker` (`src/components/ticket-card/ticket-card.tsx`)
-does too, with `warning` shades and an `Icon`.
+does too, with `warning` shades and an `Icon`, as does its `EpicProgress`
+with `primary` shades.
 
 **Question.** Is a `Badge` (or `Tag`) with an optional remove action in scope
 for Blocks?

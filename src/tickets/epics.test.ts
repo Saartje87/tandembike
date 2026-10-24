@@ -639,3 +639,37 @@ describe('Claiming an Epic', () => {
     expect(numbers(true)).toEqual([epic.number, first.number, second.number]);
   });
 });
+
+describe('Archived children', () => {
+  it('keeps a Done Epic Done once all its children are archived', () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      status: 'Done',
+    });
+
+    tickets.archiveTicket(child.number);
+
+    expect(tickets.getTicket(epic.number).status).toBe('Done');
+  });
+
+  it('refuses to restore a child of an archived Epic', () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    tickets.archiveTicket(child.number);
+    tickets.archiveTicket(epic.number);
+
+    expect(errorFrom(() => tickets.restoreTicket(child.number))).toEqual(
+      new NotAllowedError(
+        `Ticket #${child.number} is in Epic #${epic.number}, which is archived. Restore the Epic first.`,
+      ),
+    );
+    expect(tickets.getTicket(child.number).archived).toBe(true);
+  });
+});

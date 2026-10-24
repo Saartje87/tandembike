@@ -117,7 +117,8 @@ export function derivedStatus(children: readonly Status[]): Status {
 
 /**
  * Sets Epic `epicNumber`'s Status from its children that are not archived,
- * moving it to the end of a new Status lane. Run it in the transaction
+ * or from all of them when every one is, moving it to the end of a new
+ * Status lane. Run it in the transaction
  * that changed a child. Returns whether the Status changed.
  */
 export function syncEpicStatus(
@@ -135,15 +136,17 @@ export function syncEpicStatus(
   if (!epic) {
     return false;
   }
+  const children = db
+    .select({ status: tickets.status, archived: tickets.archived })
+    .from(tickets)
+    .where(eq(tickets.epicNumber, epicNumber))
+    .all();
+  const unarchived = children.filter((child) => !child.archived);
+  // Once every child is archived, the Epic keeps the Status they ended in.
   const status = derivedStatus(
-    db
-      .select({ status: tickets.status })
-      .from(tickets)
-      .where(
-        and(eq(tickets.epicNumber, epicNumber), eq(tickets.archived, false)),
-      )
-      .all()
-      .map((child) => child.status),
+    (unarchived.length > 0 ? unarchived : children).map(
+      (child) => child.status,
+    ),
   );
   if (status === epic.status) {
     return false;
@@ -224,16 +227,16 @@ export function checkNoBlockerBetween(
 }
 
 /** Throws if Epic `number` has children that are not archived. */
-export function checkNoLiveChildren(db: DatabaseConnection, number: number) {
-  const live = db
+export function checkChildrenArchived(db: DatabaseConnection, number: number) {
+  const unarchived = db
     .select({ number: tickets.number })
     .from(tickets)
     .where(and(eq(tickets.epicNumber, number), eq(tickets.archived, false)))
     .orderBy(asc(tickets.number))
     .all();
-  if (live.length > 0) {
+  if (unarchived.length > 0) {
     throw new NotAllowedError(
-      `Epic #${number} has child Tickets that are not archived: ${live.map((child) => `#${child.number}`).join(', ')}. Archive or detach them first.`,
+      `Epic #${number} has child Tickets that are not archived: ${unarchived.map((child) => `#${child.number}`).join(', ')}. Archive or detach them first.`,
     );
   }
 }
@@ -316,5 +319,23 @@ export function checkEpicClaimable(
         `Epic #${number} has child Ticket #${child.number} claimed by ${claimOwner(child.claimAgentRunId, child.claimAgentName)}. Claiming an Epic covers its children, so that claim must be released first.`,
       );
     }
+  }
+}
+
+/**
+ * Throws if Ticket `number` is a child of an archived Epic, so it cannot be
+ * restored: an archived Epic keeps only archived children.
+ */
+export function checkEpicNotArchived(db: DatabaseConnection, number: number) {
+  const epic = db
+    .select({ number: epics.number })
+    .from(tickets)
+    .innerJoin(epics, eq(epics.number, tickets.epicNumber))
+    .where(and(eq(tickets.number, number), eq(epics.archived, true)))
+    .get();
+  if (epic) {
+    throw new NotAllowedError(
+      `Ticket #${number} is in Epic #${epic.number}, which is archived. Restore the Epic first.`,
+    );
   }
 }

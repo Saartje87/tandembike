@@ -42,8 +42,8 @@ function parseTicketNumber(text: string): number | undefined {
   return Number.isSafeInteger(number) && number > 0 ? number : undefined;
 }
 
-/** A child's Status, and whether it is blocked or archived. */
-function stateOf(child: EpicChild): string {
+/** A child's Status, and whether it is blocked or archived, as shown. */
+function describeChild(child: EpicChild): string {
   return [
     child.status,
     ...(child.blocked && child.status !== 'Done' ? ['Blocked'] : []),
@@ -69,7 +69,6 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
   const [attaching, setAttaching] = useState(false);
   const [refocusAttach, setRefocusAttach] = useState(false);
   const {
-    clearErrors,
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
@@ -78,6 +77,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
   } = useForm<{ number: string }>({ defaultValues: { number: '' } });
   const fieldError = errors.number?.message;
   const serverError = errors.root?.server?.message;
+  const [detachError, setDetachError] = useState<string>();
   const [, startDetach] = useTransition();
 
   const stopAttaching = () => {
@@ -101,12 +101,12 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
   });
 
   const detach = (child: number) => {
-    clearErrors();
+    setDetachError(undefined);
     startDetach(async () => {
       showDetached(child);
       const result = await detachTicketFromEpic({ number: child });
       if (!result.ok) {
-        setError('root.server', { message: result.error });
+        setDetachError(result.error);
       }
     });
   };
@@ -130,7 +130,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                   #{child.number} {child.title}
                 </AppLink>
                 <Text fontSize="xsmall" color="text-600">
-                  {stateOf(child)}
+                  {describeChild(child)}
                 </Text>
                 <Button
                   type="button"
@@ -227,6 +227,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
           </Button>
         </Inline>
       )}
+      {detachError && <Alert intent="error">{detachError}</Alert>}
       {serverError && <Alert intent="error">{serverError}</Alert>}
     </Stack>
   );

@@ -115,11 +115,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
                   size="small"
                   disabled={isSubmitting}
                   aria-label="Create Epic"
-                  onClick={() => {
-                    if (!isSubmitting) {
-                      void create('Epic')();
-                    }
-                  }}
+                  onClick={() => void create('Epic')()}
                 >
                   <Icon name="rectangle-stack" size="small" />
                 </Button>

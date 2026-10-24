@@ -33,10 +33,11 @@ import {
   planNewTicket,
 } from './cycles';
 import {
+  checkChildrenArchived,
   checkEpicChild,
   checkEpicClaimable,
+  checkEpicNotArchived,
   checkNoBlockerBetween,
-  checkNoLiveChildren,
   checkNotEpicAndChild,
   checkUngrouped,
   claimedEpics,
@@ -1006,11 +1007,7 @@ export function createTickets(
         return number;
       });
       // A child changes its Epic's children, and maybe its Status.
-      changes.publish(
-        input.epicNumber === undefined
-          ? { type: 'ticket', number }
-          : { type: 'tickets', numbers: [number, input.epicNumber] },
-      );
+      publishWithEpic(number, input.epicNumber ?? null);
       return getTicket(number);
     },
 
@@ -1101,11 +1098,7 @@ export function createTickets(
       }
 
       const { leftCycles, changedEpic } = applyTicketChanges(number, checked);
-      changes.publish(
-        changedEpic === null
-          ? { type: 'ticket', number }
-          : { type: 'tickets', numbers: [number, changedEpic] },
-      );
+      publishWithEpic(number, changedEpic);
       for (const id of leftCycles) {
         changes.publish({ type: 'cycle', id });
       }
@@ -1540,6 +1533,15 @@ export function createTickets(
     },
   };
 
+  /** Announces Ticket `number`'s change, together with Epic `epic`'s if given. */
+  function publishWithEpic(number: number, epic: number | null) {
+    changes.publish(
+      epic === null
+        ? { type: 'ticket', number }
+        : { type: 'tickets', numbers: [number, epic] },
+    );
+  }
+
   function getTicket(number: number): Ticket {
     const ticket = db
       .select(ticketColumns)
@@ -1646,7 +1648,9 @@ export function createTickets(
   function setArchived(number: number, archived: boolean): Ticket {
     const changedEpic = db.transaction(() => {
       if (archived) {
-        checkNoLiveChildren(db, number);
+        checkChildrenArchived(db, number);
+      } else {
+        checkEpicNotArchived(db, number);
       }
       const ticket = db
         .update(tickets)
@@ -1659,11 +1663,7 @@ export function createTickets(
       }
       return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
     });
-    changes.publish(
-      changedEpic === null
-        ? { type: 'ticket', number }
-        : { type: 'tickets', numbers: [number, changedEpic] },
-    );
+    publishWithEpic(number, changedEpic);
     return getTicket(number);
   }
 }

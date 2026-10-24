@@ -124,6 +124,23 @@ describe('EpicChildren', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows why a detach was refused, and the child again', async () => {
+    vi.mocked(detachTicketFromEpic).mockResolvedValue({
+      ok: false,
+      error: 'There is no Ticket #5.',
+    });
+    renderWithTheme(<EpicChildren epic={epic} items={[card]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detach #5' }));
+
+    expect(
+      await screen.findByText('There is no Ticket #5.'),
+    ).toBeInTheDocument();
+    expect(
+      within(childList()).getByRole('link', { name: '#5 Pay by card' }),
+    ).toBeInTheDocument();
+  });
+
   it('detaches a child at once', async () => {
     const { promise, resolve } =
       Promise.withResolvers<Awaited<ReturnType<typeof detachTicketFromEpic>>>();
