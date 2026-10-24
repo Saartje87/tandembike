@@ -20,6 +20,10 @@ _Avoid_: Workspace, sub-project
 A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time.
 _Avoid_: Sprint
 
+**Backlog**:
+A Project's Tickets that are in no Prepared or Active Cycle, the work not yet planned. Tickets of an Archived Cycle that are still open return to it.
+_Avoid_: Inbox, unplanned list
+
 **Epic**:
 A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them.
 _Avoid_: Feature, parent Ticket, story

@@ -15,24 +15,31 @@ describe('MCP server', () => {
       'add_blocker',
       'add_comment',
       'add_ticket_labels',
+      'archive_cycle',
       'archive_ticket',
       'claim_ticket',
+      'create_cycle',
       'create_project',
       'create_ticket',
       'edit_comment',
       'get_ticket',
       'list_blockers',
       'list_comments',
+      'list_cycles',
       'list_labels',
       'list_projects',
       'list_tickets',
+      'plan_ticket',
       'release_ticket_claim',
       'remove_blocker',
       'remove_comment',
       'remove_ticket_labels',
+      'rename_cycle',
       'rename_project',
       'restore_ticket',
       'set_acceptance_criteria_checked',
+      'start_cycle',
+      'unplan_ticket',
       'update_ticket',
       'update_tickets',
     ]);
@@ -57,6 +64,8 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/claim_ticket/);
     expect(instructions).toMatch(/release_ticket_claim/);
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
+    expect(instructions).toMatch(/list_cycles/);
+    expect(instructions).toMatch(/confirmArchiveActive/);
     await client.close();
   });
 
@@ -1116,6 +1125,166 @@ describe('Acceptance criteria tools', () => {
     expect(resultText(unknown)).toBe(
       `Ticket #${ticket.number} has no acceptance criterion 7.`,
     );
+    await client.close();
+  });
+});
+
+describe('Cycle tools', () => {
+  /** A Project with Tickets #1 to #3, and an MCP client on it. */
+  async function cycleSetup() {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['One', 'Two', 'Three']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+    const client = await connectMcpClient(tickets);
+    return { tickets, project, client };
+  }
+
+  it("creates, renames and lists a Project's Cycles with their Tickets", async () => {
+    const { tickets, project, client } = await cycleSetup();
+
+    const created = resultJson(
+      await client.callTool({
+        name: 'create_cycle',
+        arguments: { projectId: project.id, title: 'Beta' },
+      }),
+    ) as { id: number };
+    await client.callTool({
+      name: 'plan_ticket',
+      arguments: { cycleId: created.id, number: 2 },
+    });
+    await client.callTool({
+      name: 'rename_cycle',
+      arguments: { id: created.id, title: 'Public beta' },
+    });
+    const listed = await client.callTool({
+      name: 'list_cycles',
+      arguments: { projectId: project.id },
+    });
+
+    const cycle = tickets.getCycle(created.id);
+    expect(resultJson(listed)).toEqual([
+      {
+        id: created.id,
+        projectId: project.id,
+        title: 'Public beta',
+        state: 'Prepared',
+        ticketNumbers: [2],
+        createdAt: iso(cycle.createdAt),
+        archivedAt: null,
+      },
+    ]);
+    await client.close();
+  });
+
+  it('plans a Ticket out of a Cycle, and lists the Tickets of a Cycle or the Backlog', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: 1 });
+    tickets.planTicket({ cycleId: cycle.id, number: 2 });
+
+    const unplanned = await client.callTool({
+      name: 'unplan_ticket',
+      arguments: { cycleId: cycle.id, number: 2 },
+    });
+    const numbers = async (cycleId: number | null) =>
+      (
+        resultJson(
+          await client.callTool({
+            name: 'list_tickets',
+            arguments: { projectId: project.id, cycleId },
+          }),
+        ) as { tickets: { number: number }[] }
+      ).tickets.map(({ number }) => number);
+
+    expect(resultJson(unplanned)).toMatchObject({ ticketNumbers: [1] });
+    expect(await numbers(cycle.id)).toEqual([1]);
+    expect(await numbers(null)).toEqual([2, 3]);
+    await client.close();
+  });
+
+  it('starts and archives a Cycle', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const started = await client.callTool({
+      name: 'start_cycle',
+      arguments: { id: cycle.id },
+    });
+    expect(resultJson(started)).toMatchObject({ state: 'Active' });
+
+    const archived = await client.callTool({
+      name: 'archive_cycle',
+      arguments: { id: cycle.id },
+    });
+    expect(resultJson(archived)).toMatchObject({
+      state: 'Archived',
+      archivedAt: expect.any(String),
+    });
+    await client.close();
+  });
+
+  it('archives the Active Cycle and rolls over only when the call confirms it', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: beta.id, number: 1 });
+    tickets.startCycle(beta.id);
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+
+    const refused = await client.callTool({
+      name: 'start_cycle',
+      arguments: { id: launch.id },
+    });
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toBe(
+      'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
+    );
+    expect(tickets.getCycle(beta.id).state).toBe('Active');
+
+    const started = await client.callTool({
+      name: 'start_cycle',
+      arguments: { id: launch.id, confirmArchiveActive: true },
+    });
+    expect(resultJson(started)).toMatchObject({
+      state: 'Active',
+      ticketNumbers: [1],
+    });
+    expect(tickets.getCycle(beta.id).state).toBe('Archived');
+    await client.close();
+  });
+
+  it("returns the module's message when a Cycle change is refused", async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.updateTicket(3, { status: 'Done' });
+
+    const done = await client.callTool({
+      name: 'plan_ticket',
+      arguments: { cycleId: cycle.id, number: 3 },
+    });
+    const untitled = await client.callTool({
+      name: 'create_cycle',
+      arguments: { projectId: project.id, title: ' ' },
+    });
+    const missing = await client.callTool({
+      name: 'archive_cycle',
+      arguments: { id: 99 },
+    });
+
+    expect([done, untitled, missing].map((result) => result.isError)).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(resultText(done)).toBe(
+      'Ticket #3 is Done. Only open Tickets can be planned into a Cycle.',
+    );
+    expect(resultText(untitled)).toBe('Enter a title.');
+    expect(resultText(missing)).toBe('There is no Cycle with id 99.');
     await client.close();
   });
 });
