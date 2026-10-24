@@ -1,0 +1,103 @@
+'use client';
+
+import {
+  Button,
+  Label,
+  Stack,
+  TextInput,
+  VisuallyHidden,
+} from '@blockle/blocks';
+import type { FC } from 'react';
+import { useId } from 'react';
+import { useForm } from 'react-hook-form';
+
+import { createTicket } from '../../app/tickets/actions';
+import { FieldError } from '../field-error/field-error';
+import { Icon } from '../icon/icon';
+
+export type NewTicketInlineProps = {
+  /** The Project the new Ticket goes in. */
+  projectId: number;
+};
+
+/**
+ * A title field that creates a Ticket in Todo in `projectId` on Enter, or
+ * with its Create Ticket button, and clears for the next one; Escape clears
+ * it without creating. The module validates, and its reason shows under the
+ * field. On success the Server Action revalidates the Board, which shows the
+ * new Ticket.
+ */
+export const NewTicketInline: FC<NewTicketInlineProps> = ({ projectId }) => {
+  const titleId = useId();
+  const errorId = useId();
+  const {
+    formState: { errors, isSubmitting },
+    handleSubmit,
+    register,
+    reset,
+    setError,
+  } = useForm<{ title: string }>({ defaultValues: { title: '' } });
+  const reason = errors.title?.message ?? errors.root?.server?.message;
+
+  const submit = handleSubmit(async ({ title }) => {
+    const result = await createTicket({ projectId, title });
+    if (!result.ok) {
+      const titleReason = result.fieldErrors?.title;
+      if (titleReason) {
+        setError('title', { type: 'server', message: titleReason });
+      } else {
+        setError('root.server', { message: result.error });
+      }
+      return;
+    }
+    reset();
+  });
+
+  // While a Ticket saves, the field is read-only and ignores Enter and
+  // Escape, so a Ticket is created once and what was saved is what clears.
+  return (
+    <form
+      onSubmit={(event) => {
+        if (isSubmitting) {
+          event.preventDefault();
+          return;
+        }
+        submit(event);
+      }}
+    >
+      <Stack gap={1}>
+        <Label htmlFor={titleId}>
+          <VisuallyHidden>New Ticket title</VisuallyHidden>
+        </Label>
+        <TextInput
+          {...register('title')}
+          id={titleId}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape' && !isSubmitting) {
+              event.preventDefault();
+              reset();
+              event.currentTarget.blur();
+            }
+          }}
+          placeholder="Add a Ticket…"
+          autoComplete="off"
+          readOnly={isSubmitting}
+          endSlot={
+            <Button
+              type="submit"
+              variant="ghost"
+              size="small"
+              loading={isSubmitting}
+              aria-label="Create Ticket"
+            >
+              <Icon name="plus" size="small" />
+            </Button>
+          }
+          aria-invalid={errors.title ? true : undefined}
+          aria-describedby={reason ? errorId : undefined}
+        />
+        <FieldError id={errorId} reason={reason} />
+      </Stack>
+    </form>
+  );
+};

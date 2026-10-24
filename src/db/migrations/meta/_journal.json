@@ -1,0 +1,62 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1792789913387,
+      "tag": "0000_create_projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1792790554113,
+      "tag": "0001_create_tickets",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1792799033894,
+      "tag": "0002_far_wong",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1792841222401,
+      "tag": "0003_create_ticket_labels",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1792844639648,
+      "tag": "0004_create_ticket_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792852709837,
+      "tag": "0005_create_ticket_blockers",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1792855699256,
+      "tag": "0006_nostalgic_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1792860732838,
+      "tag": "0007_create_ticket_acceptance_criteria",
+      "breakpoints": true
+    }
+  ]
+}

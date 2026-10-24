@@ -1,0 +1,133 @@
+import { screen, within } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
+
+import { renderWithTheme } from '../../test/render';
+import { TicketCard } from './ticket-card';
+
+const ticket = {
+  number: 4,
+  title: 'Fix the header',
+  description: '',
+  status: 'In progress' as const,
+  projectId: 1,
+  position: 0,
+  archived: false,
+  labels: [],
+  blockedBy: [],
+  blocked: false,
+  claim: null,
+  acceptanceCriteria: [],
+  createdAt: new Date('2026-01-01'),
+  updatedAt: new Date('2026-01-01'),
+};
+
+describe('TicketCard', () => {
+  it('shows its number beside the title link', () => {
+    renderWithTheme(<TicketCard ticket={ticket} />);
+
+    const title = screen.getByRole('link', { name: 'Fix the header' });
+    expect(title).toHaveAttribute('href', '/project/1/ticket/4');
+    expect(screen.getByText('#4').parentElement).toContainElement(title);
+  });
+
+  it('shows an icon-only drag handle with an accessible name', () => {
+    renderWithTheme(<TicketCard ticket={ticket} />);
+
+    const handle = screen.getByRole('button', {
+      name: 'Drag Ticket #4 to another Status',
+    });
+    expect(handle).not.toHaveTextContent('Drag');
+    const icon = handle.querySelector('span[role="presentation"]');
+    expect(icon).toBeInTheDocument();
+    expect(icon).toHaveAttribute(
+      'style',
+      expect.stringContaining('/heroicons/outline/bars-3.svg'),
+    );
+    expect(
+      (handle.compareDocumentPosition(
+        screen.getByRole('link', { name: 'Fix the header' }),
+      ) &
+        Node.DOCUMENT_POSITION_FOLLOWING) !==
+        0,
+    ).toBe(true);
+  });
+
+  it('does not show a Status dropdown on the card', () => {
+    renderWithTheme(<TicketCard ticket={ticket} />);
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('shows its labels', () => {
+    renderWithTheme(
+      <TicketCard ticket={{ ...ticket, labels: ['bug', 'needs-triage'] }} />,
+    );
+
+    expect(
+      within(screen.getByRole('list', { name: 'Labels' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['bug', 'needs-triage']);
+  });
+
+  it('shows no label list without labels', () => {
+    renderWithTheme(<TicketCard ticket={ticket} />);
+
+    expect(
+      screen.queryByRole('list', { name: 'Labels' }),
+    ).not.toBeInTheDocument();
+  });
+
+  describe('acceptance-criteria progress', () => {
+    const criteria = (...checked: boolean[]) =>
+      checked.map((isChecked, index) => ({
+        id: index + 1,
+        text: `Criterion ${index + 1}`,
+        checked: isChecked,
+      }));
+
+    it('shows how many criteria are checked out of the total', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{
+            ...ticket,
+            acceptanceCriteria: criteria(true, false, true, false),
+          }}
+        />,
+      );
+
+      const progress = screen.getByRole('img', {
+        name: 'Acceptance criteria: 2 of 4 checked',
+      });
+      expect(progress).toHaveTextContent('2/4');
+    });
+
+    it('shows no count for a Ticket without criteria', () => {
+      renderWithTheme(<TicketCard ticket={ticket} />);
+
+      expect(
+        screen.queryByRole('img', { name: /Acceptance criteria/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('updates the count when the Board data changes', () => {
+      const { rerender } = renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, acceptanceCriteria: criteria(false, false) }}
+        />,
+      );
+
+      rerender(
+        <TicketCard
+          ticket={{ ...ticket, acceptanceCriteria: criteria(true, false) }}
+        />,
+      );
+
+      expect(
+        screen.getByRole('img', {
+          name: 'Acceptance criteria: 1 of 2 checked',
+        }),
+      ).toHaveTextContent('1/2');
+    });
+  });
+});

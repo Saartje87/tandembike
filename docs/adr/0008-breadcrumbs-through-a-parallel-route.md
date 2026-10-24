@@ -1,0 +1,5 @@
+# Breadcrumbs reach the header through a parallel route
+
+The header is rendered once by the root layout, but each page knows its own trail (a Board's needs its Project's name). Pages hand their trail to the header through an `@breadcrumbs` parallel route in the root layout: each route has a matching page in the slot that renders its trail on the server. A client context was rejected because the trail would flash in after the page renders, and working the trail out from the URL still needs a server read for the Project name.
+
+**Consequences:** every new route needs a page in `src/app/@breadcrumbs`. On a navigation within the app, a slot with no matching page keeps showing its previous content, so a route without one shows an earlier page's trail. A catch-all page clears the trail for routes that have none, and `default.tsx` does the same on a full page load. A Project's trail is rendered by a layout in the slot rather than by its pages, so it stays mounted while a Ticket's drawer opens and closes.

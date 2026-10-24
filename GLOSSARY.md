@@ -1,0 +1,63 @@
+# Tandembike
+
+A personal ticket tracker, used by one person and by AI agents working on their behalf.
+
+## Language
+
+**Ticket**:
+A single unit of work to be tracked from creation to completion.
+_Avoid_: Task, issue, item, card
+
+**Ticket number**:
+The number that identifies a Ticket across the whole app, written `#42`. It never changes, even when the Ticket moves to another Project.
+_Avoid_: Ticket key, ticket ID, `WEB-12`-style keys
+
+**Project**:
+A named group of Tickets. Every Ticket belongs to exactly one Project. A Project's name is unique, ignoring case and surrounding spaces; a Project can be renamed but not removed.
+_Avoid_: Workspace, sub-project
+
+**Board**:
+The view of one Project's Tickets, laid out in one column per Status.
+_Avoid_: Kanban, dashboard, list
+
+**Status**:
+Where a Ticket stands: one of a fixed set, **Todo**, **In progress** or **Done**. A Ticket can move between any two Statuses.
+_Avoid_: State, stage, column
+
+**Acceptance criterion**:
+An optional, independently verifiable condition describing a Ticket's desired outcome. It can be checked off separately; doing so does not change the Ticket's Status.
+_Avoid_: Checklist task
+
+**Label**:
+A short tag on a Ticket that classifies it, such as `bug` or `needs-triage`. Labels are stored trimmed and lower-cased; a Ticket has each at most once and can have any number. A label exists only while some Ticket has it.
+_Avoid_: Tag, category, triage metadata
+
+**Comment**:
+A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent`.
+_Avoid_: Note, reply, update
+
+**Blocker**:
+A Ticket that must be resolved before another Ticket can start. A Blocker is resolved once it is Done or Archived; a Ticket is **blocked** while any of its Blockers is unresolved, and ready to start when none is. A Ticket cannot block itself, Blockers never form a cycle, and they may cross Projects. Archiving a Ticket keeps its Blockers.
+_Avoid_: Dependency, prerequisite, `Blocked by:` lines
+
+**Claim**:
+A cooperative marker on a Ticket identifying the Agent run working on it. Only one Agent run can hold a Ticket's Claim; that Agent run can release it, the User can clear it, and moving the Ticket to Done releases it. Claims are not an authorization boundary.
+_Avoid_: Lock, reservation
+
+**Agent-run ID**:
+A unique identifier for one Agent run, used to claim Tickets independently of its optional display name.
+_Avoid_: Agent name as the owner identifier
+
+**Archived**:
+A Ticket taken out of the normal views without being destroyed; it can be restored.
+_Avoid_: Deleted, removed, trashed, closed
+
+## Actors
+
+**User**:
+The one person who owns and uses the app.
+_Avoid_: Owner, admin, customer
+
+**Agent**:
+An AI coding agent that works with Tickets on the User's behalf.
+_Avoid_: Bot, assistant, client
