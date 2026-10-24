@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { FC } from 'react';
 
 import { Board } from '../../../../../components/board/board';
+import { ProjectTabs } from '../../../../../components/project-tabs/project-tabs';
 import { TicketDrawer } from '../../../../../components/ticket-drawer/ticket-drawer';
 import { loadProjectTicket, type ProjectTicketPageProps } from './ticket-data';
 
@@ -23,6 +24,13 @@ const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
           includeArchived: true,
         })}
         openTicket={ticket.number}
+        header={
+          <ProjectTabs
+            projectId={project.id}
+            cycles={tickets.listCycles(project.id)}
+            current="backlog"
+          />
+        }
       />
       <TicketDrawer
         ticket={ticket}

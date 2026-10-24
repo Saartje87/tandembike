@@ -1,9 +1,11 @@
 /**
- * What changed, enough for a client to know what to refetch: a Project by
- * id, a Ticket by Ticket number, or several Tickets changed in one batch.
+ * What changed, enough for a client to know what to refetch: a Project or a
+ * Cycle by id, a Ticket by Ticket number, or several Tickets changed in one
+ * batch.
  */
 export type Change =
   | { type: 'project'; id: number }
+  | { type: 'cycle'; id: number }
   | { type: 'ticket'; number: number }
   | { type: 'tickets'; numbers: number[] };
 

@@ -12,6 +12,11 @@ export function projectPath(projectId: number): string {
   return `/project/${projectId}`;
 }
 
+/** One of a Project's Cycles, as a tab of the Project. */
+export function cyclePath(projectId: number, cycleId: number): string {
+  return `${projectPath(projectId)}/cycle/${cycleId}`;
+}
+
 export function ticketPath(projectId: number, number: number): string {
   return `${projectPath(projectId)}/ticket/${number}`;
 }
@@ -21,8 +26,12 @@ export function ticketByNumberPath(number: number): string {
   return `/ticket/${number}`;
 }
 
-/** Route patterns, for revalidating every Board or every Ticket page. */
+/**
+ * Route patterns, for revalidating every Board, Cycle or Ticket page. A
+ * `revalidatePath(boardRoute, 'layout')` covers every page of a Project.
+ */
 export const boardRoute = '/project/[id]';
+export const cycleRoute = '/project/[id]/cycle/[cycleId]';
 export const ticketRoute = '/project/[id]/ticket/[number]';
 
 /** The id of the Project whose Board or Ticket is on screen, if any. */
