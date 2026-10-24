@@ -1,5 +1,5 @@
 import { act, fireEvent, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { renderWithTheme } from '../../test/render';
 import { CopyTicketNumber } from './copy-ticket-number';
@@ -35,6 +35,23 @@ describe('CopyTicketNumber', () => {
     await copy();
 
     expect(writeText).toHaveBeenCalledWith('#42');
+  });
+
+  // The drawer closes on a document click whose target has left the dialog,
+  // and the click swaps the button's text and icon.
+  it('keeps the click from reaching the document', async () => {
+    stubClipboard({ writeText: vi.fn().mockResolvedValue(undefined) });
+    const onDocumentClick = vi.fn();
+    document.addEventListener('click', onDocumentClick);
+    onTestFinished(() =>
+      document.removeEventListener('click', onDocumentClick),
+    );
+    renderWithTheme(<CopyTicketNumber number={42} />);
+
+    await copy();
+    await copy();
+
+    expect(onDocumentClick).not.toHaveBeenCalled();
   });
 
   it('confirms the copy in place and announces it, then shows the number again', async () => {

@@ -6,8 +6,8 @@ import { type FC, type MouseEvent, useEffect, useState } from 'react';
 import { Icon } from '../icon/icon';
 import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 
-/** How long the confirmation shows, in milliseconds. */
-const confirmationTime = 2000;
+/** How long the confirmation shows. */
+const confirmationMs = 2000;
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
@@ -34,7 +34,7 @@ export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({ number }) => {
     if (state !== 'copied') {
       return;
     }
-    const timer = setTimeout(() => setState('idle'), confirmationTime);
+    const timer = setTimeout(() => setState('idle'), confirmationMs);
     return () => clearTimeout(timer);
   }, [state]);
 
