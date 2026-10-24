@@ -19,6 +19,28 @@ export type TicketCardProps = {
 
 type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
+/** A pill that says the Ticket is blocked by an unresolved Blocker. */
+const BlockedMarker: FC = () => (
+  // `Inline` takes no `role` and cannot render a `span` (docs/blocks-feedback.md, 15).
+  <Box
+    asChild
+    display="flex"
+    alignItems="center"
+    alignSelf="flex-start"
+    gap={1}
+    backgroundColor="warning-100"
+    borderRadius="full"
+    paddingInline={2}
+  >
+    <span role="img" aria-label="Blocked by an unresolved Ticket">
+      <Icon name="lock-closed" size="small" color="warning-800" />
+      <Text fontSize="xsmall" color="warning-800">
+        Blocked
+      </Text>
+    </span>
+  </Box>
+);
+
 /** How many acceptance criteria are checked, as `2/4`; nothing without any. */
 const CriteriaProgress: FC<CriteriaProgressProps> = ({
   acceptanceCriteria,
@@ -46,8 +68,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
 };
 
 /**
- * A Ticket on the Board: its number, title, labels and acceptance-criteria
- * progress, and a drag handle.
+ * A Ticket on the Board: its number, title, whether it is blocked (unless it
+ * is Done), labels and acceptance-criteria progress, and a drag handle.
  * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
  */
 export const TicketCard: FC<TicketCardProps> = ({
@@ -94,6 +116,7 @@ export const TicketCard: FC<TicketCardProps> = ({
               </AppLink>
             </Text>
 
+            {ticket.blocked && ticket.status !== 'Done' && <BlockedMarker />}
             <LabelList labels={ticket.labels} />
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
           </Stack>

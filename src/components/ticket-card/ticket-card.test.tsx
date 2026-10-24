@@ -78,6 +78,37 @@ describe('TicketCard', () => {
     ).not.toBeInTheDocument();
   });
 
+  describe('blocked', () => {
+    const blocked = { name: 'Blocked by an unresolved Ticket' };
+
+    it('says so when the Ticket is blocked', () => {
+      renderWithTheme(
+        <TicketCard ticket={{ ...ticket, blockedBy: [3], blocked: true }} />,
+      );
+
+      expect(screen.getByRole('img', blocked)).toHaveTextContent('Blocked');
+    });
+
+    it('says nothing, not even ready, when it is not blocked', () => {
+      renderWithTheme(
+        <TicketCard ticket={{ ...ticket, blockedBy: [3], blocked: false }} />,
+      );
+
+      expect(screen.queryByRole('img', blocked)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Blocked|Ready/)).not.toBeInTheDocument();
+    });
+
+    it('says nothing once the Ticket is Done, though a Blocker is unresolved', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, status: 'Done', blockedBy: [3], blocked: true }}
+        />,
+      );
+
+      expect(screen.queryByRole('img', blocked)).not.toBeInTheDocument();
+    });
+  });
+
   describe('acceptance-criteria progress', () => {
     const criteria = (...checked: boolean[]) =>
       checked.map((isChecked, index) => ({

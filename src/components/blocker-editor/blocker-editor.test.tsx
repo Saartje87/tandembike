@@ -79,6 +79,75 @@ describe('BlockerEditor', () => {
     expect(items[1]).toHaveTextContent('In progress · Archived');
   });
 
+  describe('whether the Ticket is ready to start', () => {
+    it('says it is blocked while a Blocker is unresolved', () => {
+      renderWithTheme(
+        <BlockerEditor
+          ticketNumber={4}
+          direction="blockedBy"
+          related={[design, api]}
+        />,
+      );
+
+      expect(screen.getByText('Blocked', { exact: true })).toBeInTheDocument();
+    });
+
+    it('says it is ready to start once every Blocker is Done or archived', () => {
+      renderWithTheme(
+        <BlockerEditor
+          ticketNumber={4}
+          direction="blockedBy"
+          related={[design, { ...api, archived: true, resolved: true }]}
+        />,
+      );
+
+      expect(screen.getByText('Ready to start')).toBeInTheDocument();
+      expect(screen.queryByText('Blocked')).not.toBeInTheDocument();
+    });
+
+    it('says it is ready as soon as the last unresolved Blocker is removed', async () => {
+      const removed = deferred<{ ok: true }>();
+      vi.mocked(removeTicketBlocker).mockReturnValue(removed.promise);
+      renderWithTheme(
+        <BlockerEditor
+          ticketNumber={4}
+          direction="blockedBy"
+          related={[design, api]}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Remove Blocker #5' }),
+      );
+
+      expect(screen.getByText('Ready to start')).toBeInTheDocument();
+      expect(screen.queryByText('Blocked')).not.toBeInTheDocument();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Remove Blocker #3' }),
+      );
+
+      expect(screen.queryByText(/^(Blocked|Ready to start)$/)).toBeNull();
+      await act(async () => removed.resolve({ ok: true }));
+    });
+
+    it('says neither without any Blockers', () => {
+      renderWithTheme(
+        <BlockerEditor ticketNumber={4} direction="blockedBy" related={[]} />,
+      );
+
+      expect(screen.queryByText(/^(Blocked|Ready to start)$/)).toBeNull();
+    });
+
+    it('says neither for the Tickets it blocks', () => {
+      renderWithTheme(
+        <BlockerEditor ticketNumber={4} direction="blocks" related={[api]} />,
+      );
+
+      expect(screen.queryByText(/^(Blocked|Ready to start)$/)).toBeNull();
+    });
+  });
+
   it('adds a Blocker by Ticket number and closes the field once saved', async () => {
     const saved = deferred<{ ok: true }>();
     vi.mocked(addTicketBlocker).mockReturnValue(saved.promise);

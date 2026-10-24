@@ -461,7 +461,9 @@ criterion?" confirm cancels on Escape. `<Stack onKeyDown={…}>` is a type error
 Blocks has no `Badge`/`Tag` component, so each pill is assembled from `Box
 asChild` (background, `borderRadius="full"`, padding), `Text
 fontSize="xsmall"` and a ghost `Button size="small"` with an icon. The
-small button makes a removable pill taller than a plain one.
+small button makes a removable pill taller than a plain one. The Board
+card's "Blocked" marker is a second, non-removable pill with an intent
+colour and a leading icon, assembled the same way.
 
 **Repro.**
 
@@ -476,7 +478,8 @@ small button makes a removable pill taller than a plain one.
 named remove button sized to the pill.
 
 **Workaround.** `src/components/label-list/label-list.tsx` composes the parts
-above.
+above; the card's `BlockedMarker` (`src/components/ticket-card/ticket-card.tsx`)
+does too, with `warning` shades and an `Icon`.
 
 **Question.** Is a `Badge` (or `Tag`) with an optional remove action in scope
 for Blocks?

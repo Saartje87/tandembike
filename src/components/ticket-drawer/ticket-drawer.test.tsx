@@ -810,6 +810,45 @@ describe('TicketDrawer', () => {
       ).toHaveTextContent('#7 Ship the header');
     });
 
+    it('says plainly in the Blocked by row whether the Ticket is blocked', () => {
+      renderWithTheme(
+        <TicketDrawer
+          ticket={{ ...ticket, blockedBy: [2], blocked: true }}
+          projects={projects}
+          blockers={{
+            blockedBy: [
+              {
+                number: 2,
+                title: 'Design the header',
+                status: 'In progress',
+                projectId: 1,
+                archived: false,
+                resolved: false,
+              },
+            ],
+            blocks: [],
+          }}
+        />,
+      );
+
+      expect(
+        inDocumentOrder(
+          inDrawer().getByText('Blocked by', { selector: 'span' }),
+          inDrawer().getByText('Blocked', { exact: true }),
+          inDrawer().getByRole('list', { name: 'Blocked by' }),
+          inDrawer().getByText('Blocks', { exact: true }),
+        ),
+      ).toBe(true);
+    });
+
+    it('says nothing about readiness without Blockers', () => {
+      renderDrawer();
+
+      expect(
+        inDrawer().queryByText(/^(Blocked|Ready to start)$/),
+      ).not.toBeInTheDocument();
+    });
+
     it('adds a Blocker without closing the drawer', async () => {
       vi.mocked(addTicketBlocker).mockResolvedValue({ ok: true });
       renderDrawer();
