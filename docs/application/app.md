@@ -11,6 +11,7 @@ The Ticket Application allows users to manage and track tickets for various proj
 - Update ticket status and information.
 - Record which tickets block others, and find tickets that are ready to start.
 - Plan tickets into Cycles: goal-led plans shown as tabs beside the Backlog, started one at a time and archived into a History.
+- Group tickets into Epics: one level of child tickets in the same project, handed off as one unit.
 - Track progress and manage project tasks effectively.
 - API integration for seamless data management.
 

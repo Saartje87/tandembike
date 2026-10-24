@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { isAllowedHost } from '../http/allowed-host';
 import { TicketsError } from '../tickets/errors';
 import { statuses } from '../tickets/status';
+import { ticketTypes } from '../tickets/ticket-type';
 import {
   defaultPageSize,
   maxAcceptanceCriteria,
@@ -26,9 +27,12 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. You can edit or remove only comments written by an Agent.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. A Blocker is resolved once it is Done or archived; list_tickets with blocked: false finds Tickets that are ready to start.
+- To create several related Tickets at once, use create_tickets: list them in dependency order and give each one's Blockers as blockedByPositions, the positions of earlier Tickets in the list. It creates all of them or none.
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them. A Ticket is in at most one Cycle that is not Archived, and only open, non-archived Tickets can be planned. The Backlog is the Tickets in no Prepared or Active Cycle: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
+- To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go. Deliver the whole Epic on one branch and PR named after the Epic.
 - Errors explain what was wrong with the input; fix it and try again.`;
 
 const projectId = z
@@ -114,6 +118,28 @@ const cycleTitle = z
 const status = z
   .enum(statuses)
   .describe('The Status: "Todo", "In progress" or "Done".');
+
+/** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
+const newTicketFields = {
+  title: z.string().describe('A one-line title, at most 200 characters.'),
+  description: z
+    .string()
+    .optional()
+    .describe('Optional details in Markdown, at most 50,000 characters.'),
+  status: status
+    .optional()
+    .describe('The starting Status. Defaults to "Todo".'),
+  labels: z
+    .array(label)
+    .optional()
+    .describe('Optional labels. Call list_labels to reuse existing ones.'),
+  acceptanceCriteria: z
+    .array(newCriterion)
+    .optional()
+    .describe(
+      `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome.`,
+    ),
+};
 
 /** `value` as a tool result of pretty-printed JSON text. */
 function jsonResult(value: unknown): CallToolResult {
@@ -207,7 +233,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one Status, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
+      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one Status, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -235,7 +261,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .boolean()
           .optional()
           .describe(
-            'true lists only claimed Tickets; false lists only unclaimed Tickets.',
+            "true lists only claimed Tickets; false lists only unclaimed Tickets. A claimed Epic's children count as claimed, since its Claim covers them.",
           ),
         query: z
           .string()
@@ -278,7 +304,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Read it before starting work on the Ticket.',
+        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic; epic is the Epic it is a child of ({ number, title }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. Read it before starting work on the Ticket.',
       inputSchema: { number: ticketNumber },
       annotations: { readOnlyHint: true },
     },
@@ -290,7 +316,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Claim Ticket',
       description:
-        'Atomically claim a Ticket for one Agent run. A repeated claim by the same Agent run succeeds; another run cannot take an existing claim and is told who holds it.',
+        'Atomically claim a Ticket for one Agent run. A repeated claim by the same Agent run succeeds; another run cannot take an existing claim and is told who holds it. Claiming an Epic covers its children: no other run can claim them meanwhile, and an Epic is refused while another run holds a child, or once it is Done.',
       inputSchema: {
         number: ticketNumber,
         agentRunId: z
@@ -337,29 +363,58 @@ export function createMcpServer(tickets: Tickets): McpServer {
         projectId: projectId.describe(
           'The Project the Ticket belongs to (id from list_projects).',
         ),
-        title: z.string().describe('A one-line title, at most 200 characters.'),
-        description: z
-          .string()
-          .optional()
-          .describe('Optional details in Markdown, at most 50,000 characters.'),
-        status: status
-          .optional()
-          .describe('The starting Status. Defaults to "Todo".'),
-        labels: z
-          .array(label)
+        ...newTicketFields,
+        type: z
+          .enum(ticketTypes)
           .optional()
           .describe(
-            'Optional labels. Call list_labels to reuse existing ones.',
+            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children, so give it none.",
           ),
-        acceptanceCriteria: z
-          .array(newCriterion)
+        epicNumber: ticketNumber
           .optional()
           .describe(
-            `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome.`,
+            'Create the Ticket as a child of this Epic, which must be in the same Project.',
           ),
       },
     },
     (input) => respond(() => tickets.createTicket(input)),
+  );
+
+  server.registerTool(
+    'create_tickets',
+    {
+      title: 'Create Tickets',
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      inputSchema: {
+        projectId: projectId.describe(
+          'The Project the Tickets belong to (id from list_projects).',
+        ),
+        epicNumber: ticketNumber
+          .optional()
+          .describe(
+            'Create every Ticket as a child of this Epic, which must be in the same Project.',
+          ),
+        tickets: z
+          .array(
+            z.object({
+              ...newTicketFields,
+              blockedByPositions: z
+                .array(z.number().int())
+                .optional()
+                .describe(
+                  'The positions, counted from 0, of earlier Tickets in this list that block this one. Only earlier positions can be named, so list the Tickets in dependency order.',
+                ),
+            }),
+          )
+          .describe(
+            `The Tickets to create, in order, from 1 to ${maxBatchSize}.`,
+          ),
+      },
+    },
+    (input) =>
+      respond(() => ({
+        numbers: tickets.createTicketBatch(input).map(({ number }) => number),
+      })),
   );
 
   server.registerTool(
@@ -380,10 +435,16 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'A new Markdown description, at most 50,000 characters. Replaces the whole description.',
           ),
-        status: status.optional().describe('The new Status.'),
+        status: status
+          .optional()
+          .describe(
+            "The new Status. An Epic's follows its children and cannot be set.",
+          ),
         projectId: projectId
           .optional()
-          .describe('Move the Ticket to this Project (id from list_projects).'),
+          .describe(
+            'Move the Ticket to this Project (id from list_projects). A child, or an Epic with children, cannot move.',
+          ),
         addLabels,
         removeLabels,
         acceptanceCriteria: z
@@ -426,6 +487,36 @@ export function createMcpServer(tickets: Tickets): McpServer {
       },
     },
     (input) => respondBatch(() => tickets.updateTickets(input)),
+  );
+
+  server.registerTool(
+    'attach_to_epic',
+    {
+      title: 'Attach Ticket to Epic',
+      description:
+        'Make an existing normal Ticket a child of an Epic in the same Project, and return the child. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing.',
+      inputSchema: {
+        epic: ticketNumber.describe('The Epic, e.g. 41 for #41.'),
+        ticket: ticketNumber.describe(
+          'The Ticket to make its child, e.g. 42 for #42.',
+        ),
+      },
+      annotations: { idempotentHint: true },
+    },
+    ({ epic, ticket }) =>
+      respond(() => tickets.attachToEpic({ epic, child: ticket })),
+  );
+
+  server.registerTool(
+    'detach_from_epic',
+    {
+      title: 'Detach Ticket from Epic',
+      description:
+        'Take a Ticket out of its Epic, and return it. A Ticket in no Epic stays as it is.',
+      inputSchema: { number: ticketNumber },
+      annotations: { idempotentHint: true },
+    },
+    ({ number }) => respond(() => tickets.detachFromEpic(number)),
   );
 
   server.registerTool(

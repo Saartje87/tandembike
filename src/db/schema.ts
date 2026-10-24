@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnySQLiteColumn,
   index,
   integer,
   primaryKey,
@@ -10,6 +11,7 @@ import {
 
 import { cycleStates } from '../tickets/cycle-state';
 import { statuses } from '../tickets/status';
+import { ticketTypes } from '../tickets/ticket-type';
 
 export const projects = sqliteTable('projects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -27,6 +29,12 @@ export const tickets = sqliteTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     status: text('status', { enum: statuses }).notNull(),
+    /** Fixed at creation. An Epic's Status is derived from its children. */
+    type: text('type', { enum: ticketTypes }).notNull().default('Ticket'),
+    /** The Epic this Ticket is a child of, in the same Project, or null. */
+    epicNumber: integer('epic_number').references(
+      (): AnySQLiteColumn => tickets.number,
+    ),
     projectId: integer('project_id')
       .notNull()
       .references(() => projects.id),
@@ -37,7 +45,10 @@ export const tickets = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
-  (table) => [index('tickets_project_id').on(table.projectId)],
+  (table) => [
+    index('tickets_project_id').on(table.projectId),
+    index('tickets_epic_number').on(table.epicNumber),
+  ],
 );
 
 /** A Ticket's labels: one row per label, stored trimmed and lower-cased. */

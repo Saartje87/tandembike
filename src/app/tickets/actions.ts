@@ -3,8 +3,10 @@
 import { revalidatePath } from 'next/cache';
 
 import { appTickets } from '../../tickets/app-tickets';
+import type { EpicChildInput } from '../../tickets/epics';
 import { ValidationError } from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
+import type { TicketType } from '../../tickets/ticket-type';
 import type {
   AcceptanceCriterionInput,
   BlockerInput,
@@ -18,7 +20,8 @@ import { boardRoute, cycleRoute, projectPath, ticketRoute } from '../lib/paths';
 export type CreateTicketResult = ActionResult<{ number: number }>;
 
 /**
- * Creates a Ticket in Todo for the UI; the description defaults to empty.
+ * Creates a Ticket or an Epic in Todo for the UI, under an Epic when
+ * `epicNumber` is given; the description defaults to empty.
  * Domain errors come back as `error` (with `fieldErrors` for a validation
  * failure) so the UI can show the module's messages; anything else is a bug
  * and throws.
@@ -29,6 +32,10 @@ export async function createTicket(input: {
   description?: string;
   /** The Cycle whose tab it was created on, to plan it into. */
   cycleId?: number;
+  /** Defaults to a normal Ticket. */
+  type?: TicketType;
+  /** The Epic whose drawer it was created in, to make it a child of. */
+  epicNumber?: number;
 }): Promise<CreateTicketResult> {
   return actionResult(() => {
     const ticket = appTickets().createTicket({
@@ -39,9 +46,15 @@ export async function createTicket(input: {
       ...(input?.cycleId === undefined
         ? {}
         : { cycleId: Number(input.cycleId) }),
+      ...(input?.type === undefined ? {} : { type: input.type }),
+      ...(input?.epicNumber === undefined
+        ? {}
+        : { epicNumber: Number(input.epicNumber) }),
     });
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
+    // A child shows in its Epic's drawer.
+    revalidatePath(ticketRoute, 'page');
     return { number: ticket.number };
   });
 }
@@ -358,4 +371,40 @@ export async function checkTicketAcceptanceCriterion(input: {
       { id: Number(input?.id), checked: Boolean(input?.checked) },
     ]),
   );
+}
+
+export type TicketEpicResult = ActionResult;
+
+/**
+ * Runs an Epic membership change for the UI and refreshes the Boards, whose
+ * cards show it, and both drawers. Domain errors come back as `error`, like
+ * `createTicket`.
+ */
+function changeEpic(change: () => void): TicketEpicResult {
+  return actionResult(() => {
+    change();
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    revalidatePath(ticketRoute, 'page');
+    return {};
+  });
+}
+
+/** Makes an existing Ticket a child of an Epic, for the UI. */
+export async function attachTicketToEpic(
+  input: EpicChildInput,
+): Promise<TicketEpicResult> {
+  return changeEpic(() =>
+    appTickets().attachToEpic({
+      epic: Number(input?.epic),
+      child: Number(input?.child),
+    }),
+  );
+}
+
+/** Takes a Ticket out of its Epic, for the UI. */
+export async function detachTicketFromEpic(input: {
+  number: number;
+}): Promise<TicketEpicResult> {
+  return changeEpic(() => appTickets().detachFromEpic(Number(input?.number)));
 }

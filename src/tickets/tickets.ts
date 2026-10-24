@@ -7,7 +7,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  max,
   ne,
   not,
   notInArray,
@@ -26,6 +25,7 @@ import {
   tickets,
 } from '../db/schema';
 import { type ChangeChannel, createChangeChannel } from './changes';
+import { claimOwner } from './claim-owner';
 import {
   createCycles,
   cycleMembers,
@@ -33,14 +33,28 @@ import {
   planNewTicket,
 } from './cycles';
 import {
+  checkChildrenArchived,
+  checkEpicChild,
+  checkEpicClaimable,
+  checkEpicNotArchived,
+  checkNoBlockerBetween,
+  checkNotEpicAndChild,
+  checkUngrouped,
+  claimedEpics,
+  type EpicChildInput,
+  syncEpicStatus,
+} from './epics';
+import {
   NameTakenError,
   NotAllowedError,
   NotFoundError,
   TicketsError,
   ValidationError,
 } from './errors';
+import { nextPosition } from './positions';
 import { checkTitle, throwFieldErrors } from './rules';
 import { isStatus, type Status, statusRule } from './status';
+import { isTicketType, type TicketType } from './ticket-type';
 
 export type Project = {
   id: number;
@@ -66,6 +80,15 @@ export type Ticket = {
   /** Markdown; empty when the Ticket has none. */
   description: string;
   status: Status;
+  /** Fixed at creation: a normal Ticket, or an Epic grouping children. */
+  type: TicketType;
+  /** The Epic this Ticket is a child of, or `null` when it has none. */
+  epic: EpicLink | null;
+  /**
+   * An Epic's children, archived ones included, by Ticket number; always
+   * empty for a normal Ticket.
+   */
+  children: EpicChild[];
   projectId: number;
   position: number;
   archived: boolean;
@@ -82,6 +105,15 @@ export type Ticket = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+/** The Epic a child Ticket belongs to. */
+export type EpicLink = Pick<Ticket, 'number' | 'title'>;
+
+/** A child Ticket as its Epic lists it. */
+export type EpicChild = Pick<
+  Ticket,
+  'number' | 'title' | 'status' | 'archived' | 'blockedBy' | 'blocked'
+>;
 
 export type AcceptanceCriterion = {
   id: number;
@@ -112,11 +144,36 @@ export type CreateTicketInput = {
   acceptanceCriteria?: NewAcceptanceCriterion[];
   /** A Cycle of the same Project to plan it into; defaults to none. */
   cycleId?: number;
+  /** Fixed once created. Defaults to a normal Ticket. */
+  type?: TicketType;
+  /** An Epic of the same Project to create it under; defaults to none. */
+  epicNumber?: number;
 };
 
 export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
   /** Defaults to false. */
   checked?: boolean;
+};
+
+/** Normal Tickets to create in one Project, all or none. */
+export type CreateTicketBatchInput = {
+  projectId: number;
+  /** An Epic of the same Project to create them all under. */
+  epicNumber?: number;
+  /** In order, from 1 to `maxBatchSize` of them. */
+  tickets: BatchTicketInput[];
+};
+
+/** One Ticket of a batch: the fields of `CreateTicketInput` that apply. */
+export type BatchTicketInput = Pick<
+  CreateTicketInput,
+  'title' | 'description' | 'status' | 'labels' | 'acceptanceCriteria'
+> & {
+  /**
+   * The positions, from 0, of the earlier Tickets in the batch that block
+   * this one. Defaults to none.
+   */
+  blockedByPositions?: number[];
 };
 
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
@@ -222,12 +279,12 @@ export type FindTicketsInput = ListTicketsFilter & {
 };
 
 /**
- * A Ticket as `findTickets` lists it: without its description, position or
- * acceptance criteria.
+ * A Ticket as `findTickets` lists it: without its description, position,
+ * acceptance criteria or children.
  */
 export type TicketSummary = Omit<
   Ticket,
-  'description' | 'position' | 'acceptanceCriteria'
+  'description' | 'position' | 'acceptanceCriteria' | 'children'
 >;
 
 /** One page of `findTickets`. */
@@ -318,15 +375,6 @@ function checkedAgentRunId(rawAgentRunId: string): string {
   return agentRunId;
 }
 
-function claimOwner(agentRunId: string | null, agentName: string | null) {
-  if (agentRunId === null) {
-    throw new Error('A claimed Ticket must have an Agent run id.');
-  }
-  return agentName === null
-    ? `Agent run ${agentRunId}`
-    : `${agentName} (${agentRunId})`;
-}
-
 function checkStatus(status: string): string | undefined {
   return isStatus(status) ? undefined : statusRule;
 }
@@ -381,10 +429,11 @@ function checkAcceptanceCriteria(texts: readonly string[]): string | undefined {
  * The cleaned-up fields of a new Ticket, or a `ValidationError` with a
  * reason for every field that breaks the rules.
  */
-function checkNewTicket(input: CreateTicketInput) {
+function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
   const title = input.title.trim();
   const description = input.description ?? '';
   const status = input.status ?? 'Todo';
+  const type = input.type ?? 'Ticket';
   const labels = normalizeLabels(input.labels ?? []);
   const acceptanceCriteria = (input.acceptanceCriteria ?? []).map(
     ({ text, checked }) => ({ text: text.trim(), checked: checked ?? false }),
@@ -393,13 +442,110 @@ function checkNewTicket(input: CreateTicketInput) {
   throwFieldErrors({
     title: checkTitle(title),
     description: checkDescription(description),
-    status: checkStatus(status),
+    status:
+      checkStatus(status) ??
+      (type === 'Epic' && status !== 'Todo'
+        ? "An Epic's Status follows its child Tickets. Leave the Status out."
+        : undefined),
+    type: isTicketType(type) ? undefined : 'Choose a type: Ticket or Epic.',
     labels: checkLabels(labels),
     acceptanceCriteria: checkAcceptanceCriteria(
       acceptanceCriteria.map(({ text }) => text),
     ),
   });
-  return { values: { title, description, status }, labels, acceptanceCriteria };
+  return {
+    values: { title, description, status, type },
+    labels,
+    acceptanceCriteria,
+  };
+}
+
+type CheckedNewTicket = ReturnType<typeof checkNewTicket>;
+
+/**
+ * The checked fields and Blocker positions of the batch's Ticket at
+ * `position`, or a `ValidationError` naming it by position: each field is
+ * keyed `tickets[2].title`, and each reason starts with the position.
+ */
+function checkBatchTicket(
+  { blockedByPositions = [], ...input }: BatchTicketInput,
+  position: number,
+): { ticket: CheckedNewTicket; blockedByPositions: number[] } {
+  const reasons: Record<string, string | undefined> = {};
+  const reasonAt = (field: string, reason: string | undefined) => {
+    reasons[`tickets[${position}].${field}`] =
+      reason === undefined
+        ? undefined
+        : `Ticket at position ${position}: ${reason}`;
+  };
+  let ticket: CheckedNewTicket | undefined;
+  try {
+    ticket = checkNewTicket(input);
+  } catch (error) {
+    if (!(error instanceof ValidationError)) {
+      throw error;
+    }
+    for (const [field, reason] of Object.entries(error.fieldErrors)) {
+      reasonAt(field, reason);
+    }
+  }
+  reasonAt(
+    'blockedByPositions',
+    checkBlockedByPositions(blockedByPositions, position),
+  );
+  throwFieldErrors(reasons);
+  // Without a ValidationError, `checkNewTicket` returned.
+  return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+}
+
+/** Why a batch Ticket's Blocker positions break the rules, if they do. */
+function checkBlockedByPositions(
+  positions: readonly number[],
+  position: number,
+): string | undefined {
+  if (positions.length === 0) {
+    return undefined;
+  }
+  if (position === 0) {
+    return 'blockedByPositions can only name earlier positions, and it is first.';
+  }
+  if (
+    positions.some(
+      (blocker) =>
+        !Number.isInteger(blocker) || blocker < 0 || blocker >= position,
+    )
+  ) {
+    return `blockedByPositions can only name earlier positions, from 0 to ${position - 1}.`;
+  }
+  if (new Set(positions).size !== positions.length) {
+    return 'name each position in blockedByPositions once.';
+  }
+  return undefined;
+}
+
+/**
+ * Inserts a checked new Ticket at the end of its Status lane, with its
+ * labels and acceptance criteria, and returns its number. Run it in a
+ * transaction.
+ */
+function insertTicket(
+  db: DatabaseConnection,
+  { values, labels, acceptanceCriteria }: CheckedNewTicket,
+  row: { projectId: number; epicNumber: number | null; createdAt: Date },
+): number {
+  const { number } = db
+    .insert(tickets)
+    .values({
+      ...values,
+      ...row,
+      position: nextPosition(db, row.projectId, values.status),
+      updatedAt: row.createdAt,
+    })
+    .returning({ number: tickets.number })
+    .get();
+  insertLabels(db, number, labels);
+  insertAcceptanceCriteria(db, number, acceptanceCriteria);
+  return number;
 }
 
 /** The fields of a Ticket row an update may set. */
@@ -517,6 +663,8 @@ const ticketColumns = {
   title: tickets.title,
   description: tickets.description,
   status: tickets.status,
+  type: tickets.type,
+  epicNumber: tickets.epicNumber,
   projectId: tickets.projectId,
   claimAgentRunId: tickets.claimAgentRunId,
   claimAgentName: tickets.claimAgentName,
@@ -698,6 +846,7 @@ export function createTickets(
       const agentName = input.agentName?.trim() || null;
 
       const changed = db.transaction(() => {
+        checkEpicClaimable(db, number, agentRunId);
         const claimed = db
           .update(tickets)
           .set({
@@ -833,30 +982,99 @@ export function createTickets(
         );
       }
 
-      const now = new Date();
       // better-sqlite3 runs every statement on this one connection, so
       // statements on `db` inside the callback are part of the transaction.
       const number = db.transaction(() => {
-        const { number } = db
-          .insert(tickets)
-          .values({
-            ...values,
+        if (input.epicNumber !== undefined) {
+          checkEpicChild(db, input.epicNumber, {
+            type: values.type,
             projectId: project.id,
-            position: nextPosition(db, project.id, values.status),
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning({ number: tickets.number })
-          .get();
-        insertLabels(db, number, labels);
-        insertAcceptanceCriteria(db, number, acceptanceCriteria);
+          });
+        }
+        const number = insertTicket(
+          db,
+          { values, labels, acceptanceCriteria },
+          {
+            projectId: project.id,
+            epicNumber: input.epicNumber ?? null,
+            createdAt: new Date(),
+          },
+        );
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
+        syncEpicStatus(db, input.epicNumber ?? null);
         return number;
       });
-      changes.publish({ type: 'ticket', number });
+      // A child changes its Epic's children, and maybe its Status.
+      publishWithEpic(number, input.epicNumber ?? null);
       return getTicket(number);
+    },
+
+    /**
+     * Creates every Ticket in `input.tickets` in one Project, in order, by
+     * the rules for creating one, with the Blockers each names by position
+     * among the earlier ones, and under an Epic when `epicNumber` is given.
+     * All or nothing: a refusal names the offending Ticket by position and
+     * creates none. The new Tickets are announced once.
+     */
+    createTicketBatch(input: CreateTicketBatchInput): Ticket[] {
+      throwFieldErrors({
+        tickets:
+          input.tickets.length === 0
+            ? 'Give at least one Ticket to create.'
+            : input.tickets.length > maxBatchSize
+              ? `Create at most ${maxBatchSize} Tickets at a time.`
+              : undefined,
+      });
+      const checked = input.tickets.map(checkBatchTicket);
+      const project = db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.id, input.projectId))
+        .get();
+      if (!project) {
+        throw new NotFoundError(
+          `There is no Project with id ${input.projectId}.`,
+        );
+      }
+      const epicNumber = input.epicNumber ?? null;
+
+      const numbers = db.transaction(() => {
+        if (epicNumber !== null) {
+          checkEpicChild(db, epicNumber, {
+            type: 'Ticket',
+            projectId: project.id,
+          });
+        }
+        const createdAt = new Date();
+        const created: number[] = [];
+        for (const { ticket, blockedByPositions } of checked) {
+          const number = insertTicket(db, ticket, {
+            projectId: project.id,
+            epicNumber,
+            createdAt,
+          });
+          if (blockedByPositions.length > 0) {
+            db.insert(ticketBlockers)
+              .values(
+                blockedByPositions.map((position) => ({
+                  blockerNumber: created[position],
+                  blockedNumber: number,
+                })),
+              )
+              .run();
+          }
+          created.push(number);
+        }
+        syncEpicStatus(db, epicNumber);
+        return created;
+      });
+      changes.publish({
+        type: 'tickets',
+        numbers: epicNumber === null ? numbers : [...numbers, epicNumber],
+      });
+      return numbers.map(getTicket);
     },
 
     /**
@@ -879,8 +1097,8 @@ export function createTickets(
         }
       }
 
-      const leftCycles = applyTicketChanges(number, checked);
-      changes.publish({ type: 'ticket', number });
+      const { leftCycles, changedEpic } = applyTicketChanges(number, checked);
+      publishWithEpic(number, changedEpic);
       for (const id of leftCycles) {
         changes.publish({ type: 'cycle', id });
       }
@@ -908,12 +1126,16 @@ export function createTickets(
       });
 
       const changed: number[] = [];
+      const changedEpics = new Set<number>();
       const failed: UpdateTicketsResult['failed'] = [];
       try {
         for (const number of ticketNumbers) {
           try {
-            applyTicketChanges(number, checked);
+            const { changedEpic } = applyTicketChanges(number, checked);
             changed.push(number);
+            if (changedEpic !== null) {
+              changedEpics.add(changedEpic);
+            }
           } catch (error) {
             if (!(error instanceof TicketsError)) {
               throw error;
@@ -923,7 +1145,13 @@ export function createTickets(
         }
       } finally {
         if (changed.length > 0) {
-          changes.publish({ type: 'tickets', numbers: changed });
+          changes.publish({
+            type: 'tickets',
+            numbers: [
+              ...changed,
+              ...[...changedEpics].filter((epic) => !changed.includes(epic)),
+            ],
+          });
         }
       }
       return { updated: changed.map(getTicket), failed };
@@ -1011,6 +1239,7 @@ export function createTickets(
       });
       db.transaction(() => {
         getTicket(blocker);
+        checkNotEpicAndChild(db, { blocker, blocked });
         const cycle = blockingPath(db, blocked, blocker);
         throwFieldErrors({
           blocker: cycle
@@ -1046,6 +1275,76 @@ export function createTickets(
       });
       changes.publish({ type: 'tickets', numbers: [blocker, blocked] });
       return getTicket(blocked);
+    },
+
+    /**
+     * Makes normal Ticket `child` a child of Epic `epic` in the same Project
+     * (ADR 0011), and bumps both updated times. Attaching it again changes
+     * nothing; a Ticket in another Epic must be detached first. Returns the
+     * child.
+     */
+    attachToEpic({ epic, child }: EpicChildInput): Ticket {
+      const changed = db.transaction(() => {
+        const ticket = db
+          .select({
+            type: tickets.type,
+            projectId: tickets.projectId,
+            epicNumber: tickets.epicNumber,
+          })
+          .from(tickets)
+          .where(eq(tickets.number, child))
+          .get();
+        if (!ticket) {
+          throw new NotFoundError(`There is no Ticket #${child}.`);
+        }
+        checkEpicChild(db, epic, { number: child, ...ticket });
+        if (ticket.epicNumber === epic) {
+          return false;
+        }
+        checkNoBlockerBetween(db, { epic, child });
+        db.update(tickets)
+          .set({ epicNumber: epic, updatedAt: new Date() })
+          .where(eq(tickets.number, child))
+          .run();
+        touchTicket(db, epic);
+        syncEpicStatus(db, epic);
+        return true;
+      });
+      if (changed) {
+        changes.publish({ type: 'tickets', numbers: [epic, child] });
+      }
+      return getTicket(child);
+    },
+
+    /**
+     * Takes Ticket `number` out of its Epic, if it has one, and bumps both
+     * updated times. Returns the Ticket.
+     */
+    detachFromEpic(number: number): Ticket {
+      const epic = db.transaction(() => {
+        const ticket = db
+          .select({ epicNumber: tickets.epicNumber })
+          .from(tickets)
+          .where(eq(tickets.number, number))
+          .get();
+        if (!ticket) {
+          throw new NotFoundError(`There is no Ticket #${number}.`);
+        }
+        if (ticket.epicNumber === null) {
+          return null;
+        }
+        db.update(tickets)
+          .set({ epicNumber: null, updatedAt: new Date() })
+          .where(eq(tickets.number, number))
+          .run();
+        touchTicket(db, ticket.epicNumber);
+        syncEpicStatus(db, ticket.epicNumber);
+        return ticket.epicNumber;
+      });
+      if (epic !== null) {
+        changes.publish({ type: 'tickets', numbers: [epic, number] });
+      }
+      return getTicket(number);
     },
 
     /**
@@ -1234,6 +1533,15 @@ export function createTickets(
     },
   };
 
+  /** Announces Ticket `number`'s change, together with Epic `epic`'s if given. */
+  function publishWithEpic(number: number, epic: number | null) {
+    changes.publish(
+      epic === null
+        ? { type: 'ticket', number }
+        : { type: 'tickets', numbers: [number, epic] },
+    );
+  }
+
   function getTicket(number: number): Ticket {
     const ticket = db
       .select(ticketColumns)
@@ -1274,13 +1582,14 @@ export function createTickets(
    * Writes checked `changes` to Ticket `number` in one transaction, without
    * announcing them: removed labels go before added ones, a Ticket that
    * changes Project or Status goes to the end of its new lane, and one that
-   * changes Project leaves its Cycle unless that is Archived. Returns the
-   * ids of the Cycles it left.
+   * changes Project leaves its Cycle unless that is Archived. A child's
+   * Status change updates its Epic's. Returns the ids of the Cycles it left,
+   * and its Epic's number if that Epic's Status changed.
    */
   function applyTicketChanges(
     number: number,
     { values, addLabels, removeLabels, acceptanceCriteria }: TicketChanges,
-  ): number[] {
+  ): { leftCycles: number[]; changedEpic: number | null } {
     return db.transaction(() => {
       const existing = db
         .select(ticketColumns)
@@ -1294,6 +1603,14 @@ export function createTickets(
       const status = values.status ?? existing.status;
       const moved =
         projectId !== existing.projectId || status !== existing.status;
+      if (existing.type === 'Epic' && status !== existing.status) {
+        throw new ValidationError({
+          status: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+        });
+      }
+      if (projectId !== existing.projectId) {
+        checkUngrouped(db, existing);
+      }
       db.update(tickets)
         .set({
           ...values,
@@ -1316,22 +1633,37 @@ export function createTickets(
       if (acceptanceCriteria !== undefined) {
         replaceAcceptanceCriteria(db, number, acceptanceCriteria);
       }
-      return leftCycles;
+      const changedEpic =
+        status !== existing.status && syncEpicStatus(db, existing.epicNumber)
+          ? existing.epicNumber
+          : null;
+      return { leftCycles, changedEpic };
     });
   }
 
-  /** Sets only the archived flag (and updated time), and announces it. */
+  /**
+   * Sets only the archived flag (and updated time), and announces it. A
+   * child's Epic leaves out archived children, so its Status may change.
+   */
   function setArchived(number: number, archived: boolean): Ticket {
-    const ticket = db
-      .update(tickets)
-      .set({ archived, updatedAt: new Date() })
-      .where(eq(tickets.number, number))
-      .returning({ number: tickets.number })
-      .get();
-    if (!ticket) {
-      throw new NotFoundError(`There is no Ticket #${number}.`);
-    }
-    changes.publish({ type: 'ticket', number });
+    const changedEpic = db.transaction(() => {
+      if (archived) {
+        checkChildrenArchived(db, number);
+      } else {
+        checkEpicNotArchived(db, number);
+      }
+      const ticket = db
+        .update(tickets)
+        .set({ archived, updatedAt: new Date() })
+        .where(eq(tickets.number, number))
+        .returning({ epicNumber: tickets.epicNumber })
+        .get();
+      if (!ticket) {
+        throw new NotFoundError(`There is no Ticket #${number}.`);
+      }
+      return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
+    });
+    publishWithEpic(number, changedEpic);
     return getTicket(number);
   }
 }
@@ -1372,8 +1704,17 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
     filter.claimed === undefined
       ? undefined
       : filter.claimed
-        ? isNotNull(tickets.claimAgentRunId)
-        : isNull(tickets.claimAgentRunId),
+        ? or(
+            isNotNull(tickets.claimAgentRunId),
+            inArray(tickets.epicNumber, claimedEpics(db)),
+          )
+        : and(
+            isNull(tickets.claimAgentRunId),
+            or(
+              isNull(tickets.epicNumber),
+              notInArray(tickets.epicNumber, claimedEpics(db)),
+            ),
+          ),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
@@ -1698,24 +2039,34 @@ function withBlockers<Row extends { number: number }>(
   }));
 }
 
-/** `rows` with each Ticket's claim, labels, Blockers and acceptance criteria. */
+/** The columns `withSummaryRelations` turns into a Ticket's claim and Epic. */
+type RelationColumns = {
+  claimAgentRunId: string | null;
+  claimAgentName: string | null;
+  epicNumber: number | null;
+};
+
+/**
+ * `rows` with each Ticket's claim, Epic, labels, Blockers, acceptance
+ * criteria and children.
+ */
 function withRelations<Row extends { number: number }>(
   db: DatabaseConnection,
-  rows: (Row & {
-    claimAgentRunId: string | null;
-    claimAgentName: string | null;
-  })[],
+  rows: (Row & RelationColumns)[],
 ) {
-  return withAcceptanceCriteria(db, withSummaryRelations(db, rows));
+  return withChildren(
+    db,
+    withAcceptanceCriteria(db, withSummaryRelations(db, rows)),
+  );
 }
 
-/** `rows` with each Ticket's claim, labels and Blockers, as summaries list them. */
+/**
+ * `rows` with each Ticket's claim, Epic, labels and Blockers, as summaries
+ * list them.
+ */
 function withSummaryRelations<Row extends { number: number }>(
   db: DatabaseConnection,
-  rows: (Row & {
-    claimAgentRunId: string | null;
-    claimAgentName: string | null;
-  })[],
+  rows: (Row & RelationColumns)[],
 ) {
   const withClaims = rows.map(
     ({ claimAgentRunId, claimAgentName, ...row }) => ({
@@ -1726,29 +2077,67 @@ function withSummaryRelations<Row extends { number: number }>(
           : { agentRunId: claimAgentRunId, agentName: claimAgentName },
     }),
   );
-  return withBlockers(db, withLabels(db, withClaims));
+  return withBlockers(db, withLabels(db, withEpics(db, withClaims)));
 }
 
-function nextPosition(
+/** `rows` with each Ticket's Epic by number and title, in one query. */
+function withEpics<Row extends { epicNumber: number | null }>(
   db: DatabaseConnection,
-  projectId: number,
-  status: Status,
-  exceptNumber?: number,
-): number {
-  const result = db
-    .select({ position: max(tickets.position) })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.projectId, projectId),
-        eq(tickets.status, status),
-        exceptNumber === undefined
-          ? undefined
-          : ne(tickets.number, exceptNumber),
-      ),
-    )
-    .get();
-  return (result?.position ?? -1) + 1;
+  rows: Row[],
+): (Omit<Row, 'epicNumber'> & Pick<Ticket, 'epic'>)[] {
+  const epicNumbers = [
+    ...new Set(rows.flatMap(({ epicNumber }) => epicNumber ?? [])),
+  ];
+  const epics = new Map(
+    epicNumbers.length === 0
+      ? []
+      : db
+          .select({ number: tickets.number, title: tickets.title })
+          .from(tickets)
+          .where(inArray(tickets.number, epicNumbers))
+          .all()
+          .map((epic) => [epic.number, epic]),
+  );
+  return rows.map(({ epicNumber, ...row }) => ({
+    ...row,
+    epic: epicNumber === null ? null : (epics.get(epicNumber) ?? null),
+  }));
+}
+
+/**
+ * `rows` with each Epic's children and their Blockers, by Ticket number; a
+ * normal Ticket's are empty.
+ */
+function withChildren<Row extends { number: number }>(
+  db: DatabaseConnection,
+  rows: Row[],
+): (Row & Pick<Ticket, 'children'>)[] {
+  const childrenByNumber = new Map<number, EpicChild[]>(
+    rows.map((row) => [row.number, []]),
+  );
+  if (rows.length > 0) {
+    const childRows = db
+      .select({
+        epicNumber: tickets.epicNumber,
+        number: tickets.number,
+        title: tickets.title,
+        status: tickets.status,
+        archived: tickets.archived,
+      })
+      .from(tickets)
+      .where(inArray(tickets.epicNumber, [...childrenByNumber.keys()]))
+      .orderBy(asc(tickets.number))
+      .all();
+    for (const { epicNumber, ...child } of withBlockers(db, childRows)) {
+      if (epicNumber !== null) {
+        childrenByNumber.get(epicNumber)?.push(child);
+      }
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    children: childrenByNumber.get(row.number) ?? [],
+  }));
 }
 
 /**
