@@ -381,7 +381,7 @@ describe('Starting a Cycle', () => {
 
     expect(errorFrom(() => tickets.startCycle(launch.id))).toEqual(
       new NotAllowedError(
-        'The Cycle "Beta" is Active. Archive it before starting another.',
+        'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
       ),
     );
     expect(tickets.getCycle(launch.id).state).toBe('Prepared');
@@ -535,5 +535,109 @@ describe('Archiving a Cycle', () => {
     tickets.archiveCycle(cycle.id);
 
     expect(tickets.startCycle(next.id).state).toBe('Active');
+  });
+});
+
+describe('Starting a Cycle with rollover', () => {
+  /**
+   * A Project whose Active Cycle "Beta" holds #1 Todo, #2 In progress, #3
+   * Done and #4 archived, and whose Prepared Cycle "Launch" holds #5.
+   */
+  function withActiveAndNext() {
+    const { tickets, project } = ticketsWithProject();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    for (const title of ['Todo', 'In progress', 'Done', 'Archived']) {
+      tickets.createTicket({ projectId: project.id, title, cycleId: beta.id });
+    }
+    tickets.updateTicket(2, { status: 'In progress' });
+    tickets.updateTicket(3, { status: 'Done' });
+    tickets.archiveTicket(4);
+    tickets.startCycle(beta.id);
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Planned',
+      cycleId: launch.id,
+    });
+    return { tickets, project, beta, launch };
+  }
+
+  it('still refuses to start over an Active Cycle without confirmation', () => {
+    const { tickets, beta, launch } = withActiveAndNext();
+
+    expect(errorFrom(() => tickets.startCycle(launch.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
+      ),
+    );
+    expect(tickets.getCycle(beta.id).state).toBe('Active');
+    expect(tickets.getCycle(launch.id)).toMatchObject({
+      state: 'Prepared',
+      ticketNumbers: [5],
+    });
+  });
+
+  it('archives the Active Cycle and rolls its open Tickets into the started one', () => {
+    const { tickets, beta, launch } = withActiveAndNext();
+
+    const started = tickets.startCycle(launch.id, { archiveActive: true });
+
+    expect(started).toMatchObject({
+      state: 'Active',
+      ticketNumbers: [1, 2, 5],
+    });
+    expect(tickets.getCycle(beta.id)).toMatchObject({
+      state: 'Archived',
+      ticketNumbers: [1, 2, 3, 4],
+      archivedAt: expect.any(Date),
+    });
+    expect(tickets.getTicket(3).status).toBe('Done');
+    expect(tickets.getTicket(4).archived).toBe(true);
+  });
+
+  it('starts as usual when confirmed with no Active Cycle', () => {
+    const { tickets, project } = ticketsWithProject();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    expect(tickets.startCycle(beta.id, { archiveActive: true }).state).toBe(
+      'Active',
+    );
+  });
+
+  it('changes nothing when the start fails', () => {
+    const { tickets, beta } = withActiveAndNext();
+
+    expect(
+      errorFrom(() => tickets.startCycle(beta.id, { archiveActive: true })),
+    ).toEqual(new NotAllowedError('The Cycle "Beta" is Active already.'));
+    expect(tickets.getCycle(beta.id)).toMatchObject({
+      state: 'Active',
+      ticketNumbers: [1, 2, 3, 4],
+    });
+  });
+
+  it('announces the archived Cycle and the started one', () => {
+    const changes = createChangeChannel();
+    const listener = vi.fn();
+    changes.subscribe(listener);
+    const tickets = createTestTickets(changes);
+    const project = tickets.createProject({ name: 'Website' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.startCycle(beta.id);
+    listener.mockClear();
+
+    tickets.startCycle(launch.id, { archiveActive: true });
+
+    expect(listener.mock.calls).toEqual([
+      [{ type: 'cycle', id: beta.id }],
+      [{ type: 'cycle', id: launch.id }],
+    ]);
   });
 });

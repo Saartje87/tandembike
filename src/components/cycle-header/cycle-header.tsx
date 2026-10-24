@@ -29,6 +29,8 @@ import { FieldError } from '../field-error/field-error';
 
 export type CycleHeaderProps = {
   cycle: Cycle;
+  /** The Project's Active Cycle, which starting a Prepared one archives. */
+  activeCycle?: Cycle;
 };
 
 type CycleTitleProps = {
@@ -133,10 +135,12 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
 
 /**
  * The head of a Cycle's page: its title, editable in place, and its state.
- * A Prepared Cycle can be started or discarded, an Active one archived
- * (both go back to the Backlog), and an Archived one is read-only.
+ * A Prepared Cycle can be started, after the User confirms archiving the
+ * Active one if there is one, or discarded. An Active one can be archived.
+ * Discarding or archiving goes back to the Backlog; an Archived Cycle is
+ * read-only.
  */
-export const CycleHeader: FC<CycleHeaderProps> = ({ cycle }) => {
+export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -155,6 +159,20 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle }) => {
       }
       onDone?.();
     });
+  };
+
+  const start = () => {
+    if (!activeCycle) {
+      run(startCycle);
+      return;
+    }
+    if (
+      window.confirm(
+        `Start "${cycle.title}" and archive the Active Cycle "${activeCycle.title}"? Its open Tickets move to "${cycle.title}".`,
+      )
+    ) {
+      run(({ cycleId }) => startCycle({ cycleId, archiveActive: true }));
+    }
   };
 
   const archive = () => {
@@ -208,7 +226,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle }) => {
               type="button"
               size="small"
               disabled={pending}
-              onClick={() => run(startCycle)}
+              onClick={start}
             >
               Start Cycle
             </Button>

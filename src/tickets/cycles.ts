@@ -28,6 +28,15 @@ export type CreateCycleInput = { projectId: number; title: string };
 
 export type RenameCycleInput = { title: string };
 
+export type StartCycleInput = {
+  /**
+   * Confirms archiving the Project's Active Cycle, if it has one, and
+   * rolling its open, non-archived Tickets into the started Cycle.
+   * Defaults to false, which refuses to start while another is Active.
+   */
+  archiveActive?: boolean;
+};
+
 /** A Ticket to plan into, or out of, a Cycle. */
 export type CycleTicketInput = { cycleId: number; number: number };
 
@@ -256,10 +265,16 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
     /**
      * Makes Prepared Cycle `id` its Project's Active Cycle, whatever its
-     * Tickets' Statuses. It is refused while another Cycle is Active.
+     * Tickets' Statuses. While another Cycle is Active it is refused, unless
+     * `archiveActive` confirms the rollover (ADR 0010): that Cycle is
+     * archived and its open, non-archived Tickets join this one, all in one
+     * transaction.
      */
-    startCycle(id: number): Cycle {
-      db.transaction(() => {
+    startCycle(
+      id: number,
+      { archiveActive = false }: StartCycleInput = {},
+    ): Cycle {
+      const archivedId = db.transaction(() => {
         const cycle = cycleRow(id);
         if (cycle.state === 'Active') {
           throw new NotAllowedError(
@@ -272,7 +287,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           );
         }
         const active = db
-          .select({ title: cycles.title })
+          .select({ id: cycles.id, title: cycles.title })
           .from(cycles)
           .where(
             and(
@@ -281,16 +296,48 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
             ),
           )
           .get();
-        if (active) {
+        if (active && !archiveActive) {
           throw new NotAllowedError(
-            `The Cycle "${active.title}" is Active. Archive it before starting another.`,
+            `The Cycle "${active.title}" is Active. Starting another archives it, so confirm that first.`,
           );
+        }
+        if (active) {
+          const rolledOver = db
+            .select({ number: cycleTickets.ticketNumber })
+            .from(cycleTickets)
+            .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
+            .where(
+              and(
+                eq(cycleTickets.cycleId, active.id),
+                ne(tickets.status, 'Done'),
+                eq(tickets.archived, false),
+              ),
+            )
+            .all();
+          db.update(cycles)
+            .set({ state: 'Archived', archivedAt: new Date() })
+            .where(eq(cycles.id, active.id))
+            .run();
+          if (rolledOver.length > 0) {
+            db.insert(cycleTickets)
+              .values(
+                rolledOver.map(({ number }) => ({
+                  cycleId: id,
+                  ticketNumber: number,
+                })),
+              )
+              .run();
+          }
         }
         db.update(cycles)
           .set({ state: 'Active' })
           .where(eq(cycles.id, id))
           .run();
+        return active?.id;
       });
+      if (archivedId !== undefined) {
+        changes.publish({ type: 'cycle', id: archivedId });
+      }
       changes.publish({ type: 'cycle', id });
       return getCycle(id);
     },

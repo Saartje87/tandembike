@@ -46,8 +46,17 @@ vi.mock('../../../../../components/project-tabs/project-tabs', () => ({
   ),
 }));
 vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
-  CycleHeader: ({ cycle }: { cycle: { title: string } }) => (
-    <h2>{cycle.title}</h2>
+  CycleHeader: ({
+    cycle,
+    activeCycle,
+  }: {
+    cycle: { title: string };
+    activeCycle?: { title: string };
+  }) => (
+    <header>
+      <h2>{cycle.title}</h2>
+      {`Active: ${activeCycle?.title ?? 'none'}`}
+    </header>
   ),
 }));
 
@@ -128,6 +137,33 @@ describe('CyclePage', () => {
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
     ).toHaveTextContent(`#${done.number}ShippedDone`);
+  });
+
+  it("tells a Prepared Cycle's header which Cycle is Active", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.startCycle(beta.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    renderWithTheme(
+      <main>
+        {
+          await CyclePage({
+            params: Promise.resolve({
+              id: String(project.id),
+              cycleId: String(launch.id),
+            }),
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('banner')).toHaveTextContent('Active: Beta');
   });
 
   it("does not show another Project's Cycle", async () => {
