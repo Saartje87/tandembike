@@ -27,6 +27,9 @@ vi.mock('../../app/cycles/actions', () => ({
 vi.mock('../../app/tickets/actions', () => ({
   addTicketBlocker: vi.fn(),
   removeTicketBlocker: vi.fn(),
+  attachTicketToEpic: vi.fn(),
+  detachTicketFromEpic: vi.fn(),
+  createTicket: vi.fn(),
   addTicketLabel: vi.fn(),
   removeTicketLabel: vi.fn(),
   clearTicketClaim: vi.fn(),
@@ -56,6 +59,9 @@ const ticket: Ticket = {
   labels: [],
   blockedBy: [],
   blocked: false,
+  type: 'Ticket',
+  epic: null,
+  children: [],
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-03-01T09:00:00Z'),
@@ -1030,6 +1036,50 @@ describe('TicketDrawer', () => {
         number: 4,
         status: 'Done',
       });
+    });
+  });
+
+  describe('Epics', () => {
+    const epic: Ticket = {
+      ...ticket,
+      number: 8,
+      title: 'Checkout',
+      type: 'Epic',
+      children: [
+        {
+          number: 9,
+          title: 'Pay by card',
+          status: 'Todo',
+          archived: false,
+          blockedBy: [],
+          blocked: false,
+        },
+      ],
+    };
+
+    it("lists an Epic's child Tickets, with no Epic of its own", () => {
+      renderDrawer(epic);
+
+      expect(
+        within(
+          inDrawer().getByRole('list', { name: 'Child Tickets' }),
+        ).getByRole('link', { name: '#9 Pay by card' }),
+      ).toBeInTheDocument();
+      expect(
+        inDrawer().queryByRole('button', { name: 'Detach from Epic' }),
+      ).not.toBeInTheDocument();
+      expect(inDrawer().getByText('Epic')).toBeInTheDocument();
+    });
+
+    it('links a child to its Epic and lists no children', () => {
+      renderDrawer({ ...ticket, epic: { number: 8, title: 'Checkout' } });
+
+      expect(
+        inDrawer().getByRole('link', { name: '#8 Checkout' }),
+      ).toHaveAttribute('href', '/project/1/ticket/8');
+      expect(
+        inDrawer().queryByRole('heading', { name: 'Child Tickets' }),
+      ).not.toBeInTheDocument();
     });
   });
 

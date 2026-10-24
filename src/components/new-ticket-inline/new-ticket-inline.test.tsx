@@ -29,6 +29,39 @@ describe('NewTicketInline', () => {
     });
   });
 
+  it('creates an Epic with the title from its own button', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderWithTheme(<NewTicketInline projectId={3} />);
+
+    await userEvent.type(titleField(), 'Checkout');
+    await userEvent.click(screen.getByRole('button', { name: 'Create Epic' }));
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: 3,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+  });
+
+  it('creates a child Ticket under an Epic, with no Epic button', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderWithTheme(<NewTicketInline projectId={3} epicNumber={8} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New child Ticket title' }),
+      'Pay by card{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: 3,
+      title: 'Pay by card',
+      epicNumber: 8,
+    });
+    expect(
+      screen.queryByRole('button', { name: 'Create Epic' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('creates a Ticket with the title on Enter', async () => {
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
     renderWithTheme(<NewTicketInline projectId={3} />);

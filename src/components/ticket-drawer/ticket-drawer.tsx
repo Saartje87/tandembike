@@ -46,12 +46,14 @@ import { BlockerEditor } from '../blocker-editor/blocker-editor';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
+import { EpicChildren } from '../epic-children/epic-children';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { StatusSelect } from '../status-select/status-select';
 import { TicketComments } from '../ticket-comments/ticket-comments';
+import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
 
@@ -613,6 +615,15 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 <FieldError id={projectErrorId} reason={errors.projectId} />
               </Stack>
             </Detail>
+            {ticket.type === 'Epic' ? (
+              <Detail name={<DetailName>Type</DetailName>}>
+                <Text>Epic</Text>
+              </Detail>
+            ) : (
+              <Detail name={<DetailName>Epic</DetailName>}>
+                <TicketEpic ticket={ticket} />
+              </Detail>
+            )}
             <Detail name={<DetailName>Cycle</DetailName>}>
               <CyclePlanner ticket={{ ...ticket, archived }} cycles={cycles} />
             </Detail>
@@ -665,6 +676,12 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               />
             </Detail>
           </Stack>
+          {ticket.type === 'Epic' && (
+            <EpicChildren
+              epic={{ ...ticket, archived }}
+              items={ticket.children}
+            />
+          )}
           <DescriptionField
             description={fields.description}
             onSave={save}
@@ -707,7 +724,8 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 
 /**
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
- * in-place editable heading, its Status, Project, Cycle, labels and Blockers, its Markdown
+ * in-place editable heading, its Status, Project, Epic (or that it is an
+ * Epic), Cycle, labels and Blockers, an Epic's child Tickets, its Markdown
  * description, acceptance criteria and comments, and a footer with its timestamps and Archive.
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. Closing

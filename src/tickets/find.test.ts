@@ -22,6 +22,8 @@ describe('Finding Tickets', () => {
           number: ticket.number,
           title: 'Fix the header',
           status: 'Todo',
+          type: 'Ticket',
+          epic: null,
           projectId: project.id,
           labels: ['bug'],
           blockedBy: [],

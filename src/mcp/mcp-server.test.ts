@@ -245,6 +245,7 @@ describe('Ticket tools', () => {
       description: _,
       position: __,
       acceptanceCriteria: ___,
+      children: ____,
       ...summary
     } = started;
     expect(resultJson(result)).toEqual({
