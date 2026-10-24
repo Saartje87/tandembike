@@ -247,23 +247,117 @@ describe('Ticket tools', () => {
       },
     });
 
-    const {
-      description: _,
-      position: __,
-      acceptanceCriteria: ___,
-      children: ____,
-      ...summary
-    } = started;
     expect(resultJson(result)).toEqual({
       tickets: [
         {
-          ...summary,
-          createdAt: iso(started.createdAt),
-          updatedAt: iso(started.updatedAt),
+          number: started.number,
+          title: 'Started',
+          status: 'In progress',
+          labels: [],
+          blocked: false,
         },
       ],
       nextCursor: null,
+      total: 1,
     });
+    await client.close();
+  });
+
+  it('lists whole Tickets in full detail, and only summaries by default', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      description: 'It overlaps the logo.',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const summary = await client.callTool({
+      name: 'list_tickets',
+      arguments: {},
+    });
+    const full = await client.callTool({
+      name: 'list_tickets',
+      arguments: { detail: 'full' },
+    });
+    const { tools } = await client.listTools();
+    const listTickets = tools.find(({ name }) => name === 'list_tickets');
+
+    expect(resultJson(summary)).toEqual({
+      tickets: [
+        {
+          number: ticket.number,
+          title: 'Fix the header',
+          status: 'Todo',
+          labels: [],
+          blocked: false,
+          projectId: project.id,
+        },
+      ],
+      nextCursor: null,
+      total: 1,
+    });
+    expect(resultJson(full)).toEqual({
+      tickets: [
+        {
+          ...ticket,
+          createdAt: iso(ticket.createdAt),
+          updatedAt: iso(ticket.updatedAt),
+        },
+      ],
+      nextCursor: null,
+      total: 1,
+    });
+    expect(Object.keys(listTickets?.inputSchema.properties ?? {})).toEqual(
+      expect.arrayContaining(['detail']),
+    );
+    expect(listTickets?.inputSchema.properties).not.toHaveProperty(
+      'includeDescription',
+    );
+    await client.close();
+  });
+
+  it('lists Tickets in any of several Statuses', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Waiting' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Finished',
+      status: 'Done',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Started',
+      status: 'In progress',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const open = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: ['Todo', 'In progress'] },
+    });
+    const empty = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: [] },
+    });
+    const unknown = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: ['Todo', 'Blocked'] },
+    });
+
+    expect(
+      (resultJson(open) as { tickets: { title: string }[] }).tickets.map(
+        ({ title }) => title,
+      ),
+    ).toEqual(['Waiting', 'Started']);
+    expect(empty.isError).toBe(true);
+    expect(resultText(empty)).toBe(
+      'Choose at least one Status, or leave status out.',
+    );
+    expect(unknown.isError).toBe(true);
+    expect(resultText(unknown)).toMatch(/status/);
     await client.close();
   });
 
@@ -395,6 +489,55 @@ describe('Ticket tools', () => {
     expect(
       tickets.listTickets({ projectId: project.id }).map(({ title }) => title),
     ).toEqual(['Fix the header']);
+    await client.close();
+  });
+
+  it('lists and creates Tickets by Project name', async () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    tickets.createProject({ name: 'App' });
+    const client = await connectMcpClient(tickets);
+
+    const created = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectName: 'website', title: 'Fix the header' },
+    });
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectName: 'WEBSITE' },
+    });
+    const stale = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectName: 'Ticket', title: 'Lost' },
+    });
+    const mismatched = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: website.id, projectName: 'App' },
+    });
+    const neither = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Nowhere' },
+    });
+
+    expect(resultJson(created)).toMatchObject({
+      title: 'Fix the header',
+      projectId: website.id,
+    });
+    expect(resultJson(listed)).toMatchObject({
+      tickets: [{ title: 'Fix the header' }],
+    });
+    expect(stale.isError).toBe(true);
+    expect(resultText(stale)).toBe(
+      'There is no Project named "Ticket". The Projects are: "App", "Website".',
+    );
+    expect(mismatched.isError).toBe(true);
+    expect(resultText(mismatched)).toBe(
+      `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+    );
+    expect(neither.isError).toBe(true);
+    expect(resultText(neither)).toBe(
+      'Choose a Project by projectId or projectName.',
+    );
     await client.close();
   });
 
@@ -644,11 +787,12 @@ describe('Label tools', () => {
     expect(resultJson(result)).toEqual({
       tickets: [expect.objectContaining({ title: 'Ready bug' })],
       nextCursor: null,
+      total: 1,
     });
     await client.close();
   });
 
-  it('searches and pages Tickets, with descriptions when asked', async () => {
+  it('searches and pages Tickets, with descriptions in full detail', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     for (const title of [
@@ -671,7 +815,7 @@ describe('Label tools', () => {
         query: 'header',
         limit: 1,
         cursor: 1,
-        includeDescription: true,
+        detail: 'full',
       },
     });
 
@@ -683,7 +827,48 @@ describe('Label tools', () => {
         }),
       ],
       nextCursor: 3,
+      total: 3,
     });
+    await client.close();
+  });
+
+  it('lists Tickets in Board order when asked', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['First', 'Second']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'Todo',
+      ticketNumbers: [2, 1],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const board = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, sort: 'position' },
+    });
+    const noProject = await client.callTool({
+      name: 'list_tickets',
+      arguments: { sort: 'position' },
+    });
+    const unknown = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, sort: 'updated' },
+    });
+
+    expect(
+      (resultJson(board) as { tickets: { title: string }[] }).tickets.map(
+        ({ title }) => title,
+      ),
+    ).toEqual(['Second', 'First']);
+    expect(noProject.isError).toBe(true);
+    expect(resultText(noProject)).toBe(
+      'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.',
+    );
+    expect(unknown.isError).toBe(true);
+    expect(resultText(unknown)).toMatch(/sort/);
     await client.close();
   });
 
@@ -1179,7 +1364,7 @@ describe('Blocker tools', () => {
     });
 
     expect(resultJson(ready)).toMatchObject({
-      tickets: [{ number: 1, blockedBy: [], blocked: false }],
+      tickets: [{ number: 1, blocked: false }],
     });
     await client.close();
   });

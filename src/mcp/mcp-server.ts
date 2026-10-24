@@ -15,6 +15,8 @@ import {
   maxCommentLength,
   maxPageSize,
   type Tickets,
+  ticketDetails,
+  ticketSorts,
   type UpdateTicketsResult,
 } from '../tickets/tickets';
 
@@ -233,14 +235,25 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one Status, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
           .describe(
             'Only list Tickets in this Project (id from list_projects).',
           ),
-        status: status.optional().describe('Only list Tickets in this Status.'),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+          ),
+        status: z
+          .union([status, z.array(status)])
+          .optional()
+          .describe(
+            'Only list Tickets in this Status, or with a list such as ["Todo", "In progress"], in any of those Statuses.',
+          ),
         labels: z
           .array(label)
           .optional()
@@ -281,11 +294,17 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'Continue after this Ticket number: the nextCursor of the previous page, with the same filters.',
           ),
-        includeDescription: z
-          .boolean()
+        detail: z
+          .enum(ticketDetails)
           .optional()
           .describe(
-            "Include each Ticket's Markdown description, acceptance criteria and Board position. Defaults to false.",
+            'How much of each Ticket to list. "summary", the default: number, title, status, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+          ),
+        sort: z
+          .enum(ticketSorts)
+          .optional()
+          .describe(
+            'The order to list Tickets in. "created", the default: oldest-created first. "position": Board order, the order the User ranks Tickets in, with the lanes Todo, In progress, Done in turn, each top to bottom; it needs projectId or projectName. Paging in Board order can skip or repeat a Ticket that moves on the Board between calls.',
           ),
         cycleId: cycleId
           .nullable()
@@ -358,11 +377,19 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Create Ticket',
       description:
-        'Create a Ticket in a Project and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
+        'Create a Ticket in a Project, given by projectId or projectName, and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
       inputSchema: {
-        projectId: projectId.describe(
-          'The Project the Ticket belongs to (id from list_projects).',
-        ),
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project the Ticket belongs to (id from list_projects). Give this or projectName.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'The name of the Project the Ticket belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+          ),
         ...newTicketFields,
         type: z
           .enum(ticketTypes)
@@ -377,7 +404,13 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
       },
     },
-    (input) => respond(() => tickets.createTicket(input)),
+    ({ projectId, projectName, ...input }) =>
+      respond(() =>
+        tickets.createTicket({
+          ...input,
+          projectId: tickets.resolveProjectId({ projectId, projectName }),
+        }),
+      ),
   );
 
   server.registerTool(

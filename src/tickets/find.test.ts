@@ -2,11 +2,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
-import { ValidationError } from './errors';
+import { NotFoundError, ValidationError } from './errors';
+import type { Status } from './status';
 import type { TicketPage } from './tickets';
 
 describe('Finding Tickets', () => {
-  it('finds Tickets without their descriptions by default', () => {
+  it('finds Ticket summaries by default', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -22,23 +23,33 @@ describe('Finding Tickets', () => {
           number: ticket.number,
           title: 'Fix the header',
           status: 'Todo',
-          type: 'Ticket',
-          epic: null,
-          projectId: project.id,
           labels: ['bug'],
-          blockedBy: [],
           blocked: false,
-          claim: null,
-          archived: false,
-          createdAt: ticket.createdAt,
-          updatedAt: ticket.updatedAt,
+          projectId: project.id,
         },
       ],
       nextCursor: null,
+      total: 1,
     });
   });
 
-  it('finds whole Tickets when descriptions are asked for', () => {
+  it('leaves the Project out of summaries filtered to one Project', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Header' });
+    tickets.createTicket({ projectId: project.id, title: 'Footer' });
+
+    const byId = tickets.findTickets({ projectId: project.id }).tickets;
+    const byName = tickets.findTickets({ projectName: 'Website' }).tickets;
+
+    expect(byId.map((row) => Object.keys(row))).toEqual([
+      ['number', 'title', 'status', 'labels', 'blocked'],
+      ['number', 'title', 'status', 'labels', 'blocked'],
+    ]);
+    expect(byName).toEqual(byId);
+  });
+
+  it('finds whole Tickets in full detail', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -46,11 +57,34 @@ describe('Finding Tickets', () => {
       title: 'Fix the header',
       description: 'It overlaps the logo.',
     });
+    tickets.claimTicket(ticket.number, { agentRunId: 'run-1' });
 
-    expect(tickets.findTickets({ includeDescription: true })).toEqual({
-      tickets: [ticket],
+    expect(tickets.findTickets({ detail: 'full' })).toEqual({
+      tickets: [tickets.getTicket(ticket.number)],
       nextCursor: null,
+      total: 1,
     });
+    expect(
+      tickets.findTickets({ detail: 'full', projectId: project.id }).tickets,
+    ).toEqual([tickets.getTicket(ticket.number)]);
+  });
+
+  it('filters and pages the same in either detail', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['Bug one', 'Chore', 'Bug two', 'Bug three']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+    const input = { query: 'bug', limit: 2 };
+
+    const summary = tickets.findTickets(input);
+    const full = tickets.findTickets({ ...input, detail: 'full' });
+
+    expect([numbers(full), full.nextCursor]).toEqual([
+      numbers(summary),
+      summary.nextCursor,
+    ]);
+    expect([numbers(summary), summary.nextCursor]).toEqual([[1, 3], 3]);
   });
 
   it('finds Tickets whose title or description contains the query, ignoring case', () => {
@@ -191,6 +225,7 @@ describe('Finding Tickets', () => {
     expect(tickets.findTickets({ query: 'footer' })).toEqual({
       tickets: [],
       nextCursor: null,
+      total: 0,
     });
   });
 
@@ -239,6 +274,310 @@ describe('Finding Tickets', () => {
   });
 });
 
+describe('Finding Tickets in several Statuses', () => {
+  it('finds Tickets in any of the given Statuses, oldest-created first', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Started',
+      status: 'In progress',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Finished',
+      status: 'Done',
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Waiting' });
+
+    expect(
+      titles(tickets.findTickets({ status: ['Todo', 'In progress'] })),
+    ).toEqual(['Started', 'Waiting']);
+    expect(titles(tickets.findTickets({ status: 'Done' }))).toEqual([
+      'Finished',
+    ]);
+  });
+
+  it('pages through Tickets in several Statuses', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const status of ['Todo', 'Done', 'In progress', 'Todo'] as const) {
+      tickets.createTicket({ projectId: project.id, title: status, status });
+    }
+    const status = ['Todo', 'In progress'] as const;
+
+    const first = tickets.findTickets({ status: [...status], limit: 2 });
+    const second = tickets.findTickets({
+      status: [...status],
+      limit: 2,
+      cursor: first.nextCursor ?? 0,
+    });
+
+    expect([numbers(first), first.nextCursor]).toEqual([[1, 3], 3]);
+    expect([numbers(second), second.nextCursor]).toEqual([[4], null]);
+  });
+
+  it.each([
+    ['an empty list', [], 'Choose at least one Status, or leave status out.'],
+    [
+      'an unknown Status',
+      ['Todo', 'Blocked'],
+      'Choose a Status: Todo, In progress or Done.',
+    ],
+  ])('refuses %s of Statuses', (_case, status, reason) => {
+    const tickets = createTestTickets();
+
+    expect(
+      errorFrom(() =>
+        tickets.findTickets({ status: status as unknown as Status[] }),
+      ),
+    ).toEqual(new ValidationError({ status: reason }));
+  });
+});
+
+describe('Finding Tickets by Project name', () => {
+  it('finds the Tickets of the Project with that name, ignoring case', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: website.id, title: 'Header' });
+    tickets.createTicket({ projectId: app.id, title: 'Login' });
+
+    expect(titles(tickets.findTickets({ projectName: ' website ' }))).toEqual([
+      'Header',
+    ]);
+    expect(
+      titles(tickets.findTickets({ projectId: app.id, projectName: 'APP' })),
+    ).toEqual(['Login']);
+  });
+
+  it('refuses an unknown name, naming the existing Projects', () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Tandembike' });
+    tickets.createProject({ name: 'Website' });
+
+    expect(
+      errorFrom(() => tickets.findTickets({ projectName: 'Ticket' })),
+    ).toEqual(
+      new NotFoundError(
+        'There is no Project named "Ticket". The Projects are: "Tandembike", "Website".',
+      ),
+    );
+  });
+
+  it('refuses an unknown name when there are no Projects', () => {
+    const tickets = createTestTickets();
+
+    expect(
+      errorFrom(() => tickets.findTickets({ projectName: 'Ticket' })),
+    ).toEqual(
+      new NotFoundError(
+        'There is no Project named "Ticket", and there are no Projects yet.',
+      ),
+    );
+  });
+
+  it('refuses a projectId and projectName that name different Projects', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    tickets.createProject({ name: 'App' });
+
+    expect(
+      errorFrom(() =>
+        tickets.findTickets({ projectId: website.id, projectName: 'App' }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        projectName: `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+      }),
+    );
+  });
+});
+
+describe('Resolving a Project', () => {
+  it('resolves a projectId, a projectName or both to the Project id', () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+
+    expect(tickets.resolveProjectId({ projectId: app.id })).toBe(app.id);
+    expect(tickets.resolveProjectId({ projectName: 'app' })).toBe(app.id);
+    expect(
+      tickets.resolveProjectId({ projectId: app.id, projectName: 'App' }),
+    ).toBe(app.id);
+  });
+
+  it('refuses neither a projectId nor a projectName', () => {
+    const tickets = createTestTickets();
+
+    expect(errorFrom(() => tickets.resolveProjectId({}))).toEqual(
+      new ValidationError({
+        projectId: 'Choose a Project by projectId or projectName.',
+      }),
+    );
+  });
+});
+
+describe('Counting matching Tickets', () => {
+  it('counts every matching Ticket across all pages, ignoring the cursor', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['One', 'Two', 'Three']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+
+    const first = tickets.findTickets({ limit: 2 });
+    const second = tickets.findTickets({ limit: 2, cursor: 2 });
+
+    expect([first.tickets.length, first.total]).toEqual([2, 3]);
+    expect([second.tickets.length, second.total]).toEqual([1, 3]);
+  });
+
+  it('counts 0 when nothing matches', () => {
+    const tickets = createTestTickets();
+
+    expect(tickets.findTickets().total).toBe(0);
+  });
+
+  it('counts by every filter', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    const wanted = {
+      projectId: website.id,
+      title: 'Header bug',
+      status: 'In progress' as const,
+      labels: ['bug'],
+    };
+    const blocker = tickets.createTicket({ ...wanted, title: 'Blocker' });
+    tickets.createTicket(wanted);
+    const blocked = tickets.createTicket(wanted);
+    tickets.addBlocker({ blocker: blocker.number, blocked: blocked.number });
+    const claimed = tickets.createTicket(wanted);
+    tickets.claimTicket(claimed.number, { agentRunId: 'run-1' });
+    tickets.createTicket({ ...wanted, projectId: app.id });
+    tickets.createTicket({ ...wanted, status: 'Done' });
+    tickets.createTicket({ ...wanted, labels: [] });
+    tickets.archiveTicket(tickets.createTicket(wanted).number);
+    const filter = {
+      projectId: website.id,
+      status: ['In progress' as const],
+      labels: ['bug'],
+      query: 'header',
+    };
+
+    expect(tickets.findTickets(filter).total).toBe(3);
+    expect(
+      tickets.findTickets({ ...filter, includeArchived: true }).total,
+    ).toBe(4);
+    expect(tickets.findTickets({ ...filter, blocked: true }).total).toBe(1);
+    expect(tickets.findTickets({ ...filter, claimed: false }).total).toBe(2);
+  });
+});
+
+describe('Sorting Tickets by Board position', () => {
+  /** A Project whose Board shows Todo: C, A; In progress: E, D; Done: B. */
+  function boardTickets() {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const add = (title: string, status: Status) =>
+      tickets.createTicket({ projectId: project.id, title, status }).number;
+    const a = add('A', 'Todo');
+    add('B', 'Done');
+    const c = add('C', 'Todo');
+    const d = add('D', 'In progress');
+    const e = add('E', 'In progress');
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'Todo',
+      ticketNumbers: [c, a],
+    });
+    tickets.reorderTickets({
+      projectId: project.id,
+      status: 'In progress',
+      ticketNumbers: [e, d],
+    });
+    return { tickets, project };
+  }
+
+  it('lists the lanes Todo, In progress, Done, each in Board order', () => {
+    const { tickets, project } = boardTickets();
+
+    expect(
+      titles(tickets.findTickets({ projectId: project.id, sort: 'position' })),
+    ).toEqual(['C', 'A', 'E', 'D', 'B']);
+    expect(
+      titles(tickets.findTickets({ projectName: 'website', sort: 'position' })),
+    ).toEqual(['C', 'A', 'E', 'D', 'B']);
+  });
+
+  it('lists oldest-created first by default', () => {
+    const { tickets, project } = boardTickets();
+
+    expect(
+      titles(tickets.findTickets({ projectId: project.id, sort: 'created' })),
+    ).toEqual(['A', 'B', 'C', 'D', 'E']);
+    expect(titles(tickets.findTickets({ projectId: project.id }))).toEqual([
+      'A',
+      'B',
+      'C',
+      'D',
+      'E',
+    ]);
+  });
+
+  it('pages through Board order without skipping or repeating Tickets', () => {
+    const { tickets, project } = boardTickets();
+    const input = {
+      projectId: project.id,
+      sort: 'position' as const,
+      limit: 2,
+    };
+
+    const pages: string[][] = [];
+    let cursor: number | undefined;
+    do {
+      const page = tickets.findTickets({ ...input, cursor });
+      pages.push(titles(page));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+
+    expect(pages).toEqual([['C', 'A'], ['E', 'D'], ['B']]);
+  });
+
+  it('combines with the other filters, archived Tickets included', () => {
+    const { tickets, project } = boardTickets();
+    tickets.archiveTicket(3);
+    const input = {
+      projectId: project.id,
+      sort: 'position' as const,
+      status: ['Todo', 'In progress'] as Status[],
+    };
+
+    expect(titles(tickets.findTickets(input))).toEqual(['A', 'E', 'D']);
+    expect(
+      titles(tickets.findTickets({ ...input, includeArchived: true })),
+    ).toEqual(['C', 'A', 'E', 'D']);
+    expect(
+      titles(tickets.findTickets({ ...input, query: 'd', detail: 'full' })),
+    ).toEqual(['D']);
+  });
+
+  it('refuses to sort by position without a Project', () => {
+    const tickets = createTestTickets();
+
+    expect(errorFrom(() => tickets.findTickets({ sort: 'position' }))).toEqual(
+      new ValidationError({
+        sort: 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.',
+      }),
+    );
+  });
+});
+
 function titles(page: TicketPage): string[] {
   return page.tickets.map(({ title }) => title);
+}
+
+function numbers(page: TicketPage): number[] {
+  return page.tickets.map(({ number }) => number);
 }

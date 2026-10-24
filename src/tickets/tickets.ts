@@ -1,4 +1,5 @@
 import {
+  type AnyColumn,
   and,
   asc,
   count,
@@ -11,6 +12,8 @@ import {
   not,
   notInArray,
   or,
+  type SQL,
+  type SQLWrapper,
   sql,
 } from 'drizzle-orm';
 
@@ -53,7 +56,7 @@ import {
 } from './errors';
 import { nextPosition } from './positions';
 import { checkTitle, throwFieldErrors } from './rules';
-import { isStatus, type Status, statusRule } from './status';
+import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 
 export type Project = {
@@ -65,6 +68,12 @@ export type Project = {
 export type CreateProjectInput = { name: string };
 
 export type RenameProjectInput = { name: string };
+
+/**
+ * A Project by its id, its name (ignoring case and surrounding spaces) or
+ * both, when they name the same Project.
+ */
+export type ProjectRef = { projectId?: number; projectName?: string };
 
 export type Tickets = ReturnType<typeof createTickets>;
 
@@ -241,7 +250,8 @@ export type ReorderTicketsInput = {
 
 export type ListTicketsFilter = {
   projectId?: number;
-  status?: Status;
+  /** Only Tickets in this Status, or in any of these Statuses. */
+  status?: Status | readonly Status[];
   /** Only Tickets that have every one of these labels, ignoring case. */
   labels?: string[];
   /** Also list archived Tickets, which are left out by default. */
@@ -264,35 +274,59 @@ export const defaultPageSize = 50;
 
 export const maxPageSize = 200;
 
-export type FindTicketsInput = ListTicketsFilter & {
-  /**
-   * Only Tickets whose title or description contains this, trimmed and
-   * ignoring (ASCII) case.
-   */
-  query?: string;
-  /** At most this many Tickets, from 1 to `maxPageSize`; `defaultPageSize` if left out. */
-  limit?: number;
-  /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
-  cursor?: number;
-  /** List whole Tickets rather than `TicketSummary`s. Defaults to false. */
-  includeDescription?: boolean;
-};
+/** `projectName` names the Project in place of, or as well as, `projectId`. */
+export type FindTicketsInput = ListTicketsFilter &
+  ProjectRef & {
+    /**
+     * Only Tickets whose title or description contains this, trimmed and
+     * ignoring (ASCII) case.
+     */
+    query?: string;
+    /** At most this many Tickets, from 1 to `maxPageSize`; `defaultPageSize` if left out. */
+    limit?: number;
+    /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
+    cursor?: number;
+    /** How much of each Ticket to list; defaults to `summary`. */
+    detail?: TicketDetail;
+    /** The order to list them in; defaults to `created`. */
+    sort?: TicketSort;
+  };
 
 /**
- * A Ticket as `findTickets` lists it: without its description, position,
- * acceptance criteria or children.
+ * The orders `findTickets` lists Tickets in: oldest-created first, or Board
+ * order, lane by lane in Status order. Board order needs one Project.
  */
-export type TicketSummary = Omit<
+export const ticketSorts = ['created', 'position'] as const;
+
+export type TicketSort = (typeof ticketSorts)[number];
+
+/**
+ * How much of each Ticket `findTickets` lists: a short `TicketSummary`, or
+ * the whole Ticket.
+ */
+export const ticketDetails = ['summary', 'full'] as const;
+
+export type TicketDetail = (typeof ticketDetails)[number];
+
+/**
+ * A Ticket as `findTickets` lists it by default: its number, title, Status,
+ * labels and whether it is blocked, plus its Project unless the search was
+ * for one Project.
+ */
+export type TicketSummary = Pick<
   Ticket,
-  'description' | 'position' | 'acceptanceCriteria' | 'children'
->;
+  'number' | 'title' | 'status' | 'labels' | 'blocked'
+> &
+  Partial<Pick<Ticket, 'projectId'>>;
 
 /** One page of `findTickets`. */
 export type TicketPage = {
-  /** Whole Tickets when `includeDescription` is set. */
+  /** Whole Tickets when `detail` is `full`. */
   tickets: TicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
+  /** How many Tickets match the filters, over all pages. */
+  total: number;
 };
 
 /** Who wrote a Comment: the UI writes `user`, MCP writes `agent`. */
@@ -674,7 +708,13 @@ const ticketColumns = {
   updatedAt: tickets.updatedAt,
 };
 
-const { description: _, position: __, ...summaryColumns } = ticketColumns;
+/** The columns `findTickets` turns into a `TicketSummary`. */
+const summaryColumns = {
+  number: tickets.number,
+  title: tickets.title,
+  status: tickets.status,
+  projectId: tickets.projectId,
+};
 
 const relatedTicketColumns = {
   number: tickets.number,
@@ -730,6 +770,20 @@ export function createTickets(
       return project;
     },
 
+    /**
+     * The id of the Project `ref` names. An unknown name is refused with the
+     * names of the existing Projects, so a stale one is caught at once.
+     */
+    resolveProjectId(ref: ProjectRef): number {
+      const projectId = resolvedProjectId(db, ref);
+      if (projectId === undefined) {
+        throw new ValidationError({
+          projectId: 'Choose a Project by projectId or projectName.',
+        });
+      }
+      return projectId;
+    },
+
     /** Creates a Project with a trimmed name, unique ignoring case. */
     createProject(input: CreateProjectInput): Project {
       const { name, nameKey } = availableProjectName(db, input.name);
@@ -783,43 +837,72 @@ export function createTickets(
      * filters of `listTickets`.
      */
     findTickets(input: FindTicketsInput = {}): TicketPage {
+      const filter = { ...input, projectId: resolvedProjectId(db, input) };
       const limit = input.limit ?? defaultPageSize;
       const query = input.query?.trim();
       const cursor =
         input.cursor === undefined
           ? undefined
           : db
-              .select({ number: tickets.number, createdAt: tickets.createdAt })
+              .select(orderColumns)
               .from(tickets)
               .where(eq(tickets.number, input.cursor))
               .get();
+      const order = input.sort === 'position' ? boardOrder : oldestCreatedOrder;
       throwFieldErrors({
         limit: checkLimit(limit),
+        status:
+          input.status === undefined
+            ? undefined
+            : checkStatusFilter(input.status),
         query: query === undefined ? undefined : checkQuery(query),
+        sort:
+          input.sort === 'position' && filter.projectId === undefined
+            ? 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.'
+            : undefined,
         cursor:
           input.cursor !== undefined && !cursor
             ? `There is no Ticket #${input.cursor} to continue after.`
             : undefined,
       });
-      const rows = db
-        .select(input.includeDescription ? ticketColumns : summaryColumns)
+      const matching = and(
+        matchingTickets(db, filter),
+        query === undefined ? undefined : titleOrDescriptionContains(query),
+      );
+      const numbers = db
+        .select({ number: tickets.number })
         .from(tickets)
         .where(
-          and(
-            matchingTickets(db, input),
-            query === undefined ? undefined : titleOrDescriptionContains(query),
-            cursor === undefined ? undefined : orderedAfter(cursor),
-          ),
+          and(matching, cursor === undefined ? undefined : order.after(cursor)),
         )
-        .orderBy(...oldestCreatedFirst)
+        .orderBy(...order.by)
         .limit(limit + 1)
-        .all();
-      const page = rows.slice(0, limit);
+        .all()
+        .map(({ number }) => number);
+      const page = numbers.slice(0, limit);
+      const inPage = inArray(tickets.number, page);
       return {
-        tickets: input.includeDescription
-          ? withRelations(db, page)
-          : withSummaryRelations(db, page),
-        nextCursor: rows.length > limit ? page[page.length - 1].number : null,
+        tickets:
+          input.detail === 'full'
+            ? withRelations(
+                db,
+                inOrder(
+                  page,
+                  db.select(ticketColumns).from(tickets).where(inPage).all(),
+                ),
+              )
+            : summaries(
+                db,
+                inOrder(
+                  page,
+                  db.select(summaryColumns).from(tickets).where(inPage).all(),
+                ),
+                filter.projectId === undefined,
+              ),
+        nextCursor: numbers.length > limit ? page[page.length - 1] : null,
+        total:
+          db.select({ total: count() }).from(tickets).where(matching).get()
+            ?.total ?? 0,
       };
     },
 
@@ -1675,7 +1758,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
     filter.projectId === undefined
       ? undefined
       : eq(tickets.projectId, filter.projectId),
-    filter.status === undefined ? undefined : eq(tickets.status, filter.status),
+    filter.status === undefined
+      ? undefined
+      : inArray(tickets.status, statusList(filter.status)),
     filter.includeArchived ? undefined : eq(tickets.archived, false),
     labels.length === 0
       ? undefined
@@ -1724,18 +1809,84 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
   );
 }
 
+/** `status` as a list: one Status, or the Statuses given. */
+function statusList(status: Status | readonly Status[]): Status[] {
+  return typeof status === 'string' ? [status] : [...status];
+}
+
+/** Why the Statuses to filter on break the rules, if they do. */
+function checkStatusFilter(status: Status | readonly Status[]) {
+  const list = statusList(status);
+  if (list.length === 0) {
+    return 'Choose at least one Status, or leave status out.';
+  }
+  return list.every(isStatus) ? undefined : statusRule;
+}
+
 /** Tickets in the order `listTickets` and `findTickets` list them. */
 const oldestCreatedFirst = [asc(tickets.createdAt), asc(tickets.number)];
 
-/** The condition for Tickets listed after Ticket `cursor`, by `oldestCreatedFirst`. */
-function orderedAfter(cursor: Pick<Ticket, 'number' | 'createdAt'>) {
-  return or(
-    gt(tickets.createdAt, cursor.createdAt),
-    and(
-      eq(tickets.createdAt, cursor.createdAt),
-      gt(tickets.number, cursor.number),
-    ),
-  );
+/** The columns a Ticket is ordered by, in every order of `findTickets`. */
+const orderColumns = {
+  number: tickets.number,
+  createdAt: tickets.createdAt,
+  status: tickets.status,
+  position: tickets.position,
+};
+
+type OrderKeys = { [Key in keyof typeof orderColumns]: Ticket[Key] };
+
+/**
+ * An order of `findTickets`: the `by` clauses, and the condition for the
+ * Tickets listed after a cursor Ticket in that order.
+ */
+type TicketOrder = {
+  by: SQL[];
+  after: (cursor: OrderKeys) => SQL | undefined;
+};
+
+/** `oldestCreatedFirst`, as an order of `findTickets`. */
+const oldestCreatedOrder: TicketOrder = {
+  by: oldestCreatedFirst,
+  after: (cursor) =>
+    listedAfter([
+      [tickets.createdAt, cursor.createdAt],
+      [tickets.number, cursor.number],
+    ]),
+};
+
+/** A Ticket's lane on the Board, counted from 0 in Status order. */
+const lane = sql<number>`case ${tickets.status} ${sql.join(
+  statuses.map((status, index) => sql`when ${status} then ${index}`),
+  sql` `,
+)} end`;
+
+/**
+ * Board order: lanes in Status order, each by position, ties by creation
+ * time then number, as the Board orders them.
+ */
+const boardOrder: TicketOrder = {
+  by: [asc(lane), asc(tickets.position), ...oldestCreatedFirst],
+  after: (cursor) =>
+    listedAfter([
+      [lane, statuses.indexOf(cursor.status)],
+      [tickets.position, cursor.position],
+      [tickets.createdAt, cursor.createdAt],
+      [tickets.number, cursor.number],
+    ]),
+};
+
+/**
+ * The condition for rows after `keys` in ascending order of their columns:
+ * greater in the first key, or equal in it and after the rest.
+ */
+function listedAfter(
+  keys: [SQLWrapper | AnyColumn, unknown][],
+): SQL | undefined {
+  const [[column, value], ...rest] = keys;
+  return rest.length === 0
+    ? gt(column, value)
+    : or(gt(column, value), and(eq(column, value), listedAfter(rest)));
 }
 
 /**
@@ -2039,7 +2190,40 @@ function withBlockers<Row extends { number: number }>(
   }));
 }
 
-/** The columns `withSummaryRelations` turns into a Ticket's claim and Epic. */
+/** `rows` in the order of their Ticket `numbers`. */
+function inOrder<Row extends { number: number }>(
+  numbers: readonly number[],
+  rows: Row[],
+): Row[] {
+  const order = new Map(numbers.map((number, index) => [number, index]));
+  return rows.sort(
+    (left, right) =>
+      (order.get(left.number) ?? 0) - (order.get(right.number) ?? 0),
+  );
+}
+
+/**
+ * `rows` as `TicketSummary`s, in one query each for labels and Blockers;
+ * with their Project only when `withProject`.
+ */
+function summaries(
+  db: DatabaseConnection,
+  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'projectId'>[],
+  withProject: boolean,
+): TicketSummary[] {
+  return withBlockers(db, withLabels(db, rows)).map(
+    ({ number, title, status, labels, blocked, projectId }) => ({
+      number,
+      title,
+      status,
+      labels,
+      blocked,
+      ...(withProject ? { projectId } : {}),
+    }),
+  );
+}
+
+/** The columns `withClaimAndLinks` turns into a Ticket's claim and Epic. */
 type RelationColumns = {
   claimAgentRunId: string | null;
   claimAgentName: string | null;
@@ -2056,15 +2240,12 @@ function withRelations<Row extends { number: number }>(
 ) {
   return withChildren(
     db,
-    withAcceptanceCriteria(db, withSummaryRelations(db, rows)),
+    withAcceptanceCriteria(db, withClaimAndLinks(db, rows)),
   );
 }
 
-/**
- * `rows` with each Ticket's claim, Epic, labels and Blockers, as summaries
- * list them.
- */
-function withSummaryRelations<Row extends { number: number }>(
+/** `rows` with each Ticket's claim, Epic, labels and Blockers. */
+function withClaimAndLinks<Row extends { number: number }>(
   db: DatabaseConnection,
   rows: (Row & RelationColumns)[],
 ) {
@@ -2138,6 +2319,52 @@ function withChildren<Row extends { number: number }>(
     ...row,
     children: childrenByNumber.get(row.number) ?? [],
   }));
+}
+
+/**
+ * The id of the Project `ref` names, or `undefined` when it names none.
+ * Throws when the name is unknown or names another Project than the id.
+ */
+function resolvedProjectId(
+  db: DatabaseConnection,
+  { projectId, projectName }: ProjectRef,
+): number | undefined {
+  if (projectName === undefined) {
+    return projectId;
+  }
+  const name = projectName.trim();
+  const named = db
+    .select({ id: projects.id })
+    .from(projects)
+    .where(eq(projects.nameKey, name.toLowerCase()))
+    .get();
+  if (!named) {
+    const names = db
+      .select({ name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name))
+      .all()
+      .map(({ name }) => `"${name}"`);
+    throw new NotFoundError(
+      names.length === 0
+        ? `There is no Project named "${name}", and there are no Projects yet.`
+        : `There is no Project named "${name}". The Projects are: ${names.join(', ')}.`,
+    );
+  }
+  if (projectId !== undefined && projectId !== named.id) {
+    const project = db
+      .select(projectColumns)
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+    if (!project) {
+      throw new NotFoundError(`There is no Project with id ${projectId}.`);
+    }
+    throw new ValidationError({
+      projectName: `Project ${projectId} is "${project.name}", not "${name}". Give projectId or projectName, or both for the same Project.`,
+    });
+  }
+  return named.id;
 }
 
 /**
