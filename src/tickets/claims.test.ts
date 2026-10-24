@@ -121,7 +121,7 @@ describe('Ticket claims', () => {
       blocked: false,
       claimed: false,
     });
-    const claimedPage = tickets.findTickets({ claimed: true });
+    const claimedPage = tickets.findTickets({ claimed: true, detail: 'full' });
 
     expect(unclaimedPage.tickets.map(({ number }) => number)).toEqual([
       unclaimed.number,
@@ -129,10 +129,9 @@ describe('Ticket claims', () => {
     expect(claimedPage.tickets.map(({ number }) => number)).toEqual([
       claimed.number,
     ]);
-    expect(claimedPage.tickets[0].claim).toEqual({
-      agentRunId: 'run-1',
-      agentName: null,
-    });
+    expect(claimedPage.tickets).toMatchObject([
+      { claim: { agentRunId: 'run-1', agentName: null } },
+    ]);
   });
 
   it('lets the User clear a Ticket claim', () => {

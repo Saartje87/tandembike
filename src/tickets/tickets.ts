@@ -283,22 +283,32 @@ export type FindTicketsInput = ListTicketsFilter & {
   limit?: number;
   /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
   cursor?: number;
-  /** List whole Tickets rather than `TicketSummary`s. Defaults to false. */
-  includeDescription?: boolean;
+  /** How much of each Ticket to list; defaults to `summary`. */
+  detail?: TicketDetail;
 };
 
 /**
- * A Ticket as `findTickets` lists it: without its description, position,
- * acceptance criteria or children.
+ * How much of each Ticket `findTickets` lists: a short `TicketSummary`, or
+ * the whole Ticket.
  */
-export type TicketSummary = Omit<
+export const ticketDetails = ['summary', 'full'] as const;
+
+export type TicketDetail = (typeof ticketDetails)[number];
+
+/**
+ * A Ticket as `findTickets` lists it by default: its number, title, Status,
+ * labels and whether it is blocked, plus its Project unless the search was
+ * for one Project.
+ */
+export type TicketSummary = Pick<
   Ticket,
-  'description' | 'position' | 'acceptanceCriteria' | 'children'
->;
+  'number' | 'title' | 'status' | 'labels' | 'blocked'
+> &
+  Partial<Pick<Ticket, 'projectId'>>;
 
 /** One page of `findTickets`. */
 export type TicketPage = {
-  /** Whole Tickets when `includeDescription` is set. */
+  /** Whole Tickets when `detail` is `full`. */
   tickets: TicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
@@ -683,7 +693,13 @@ const ticketColumns = {
   updatedAt: tickets.updatedAt,
 };
 
-const { description: _, position: __, ...summaryColumns } = ticketColumns;
+/** The columns `findTickets` turns into a `TicketSummary`. */
+const summaryColumns = {
+  number: tickets.number,
+  title: tickets.title,
+  status: tickets.status,
+  projectId: tickets.projectId,
+};
 
 const relatedTicketColumns = {
   number: tickets.number,
@@ -829,8 +845,8 @@ export function createTickets(
             ? `There is no Ticket #${input.cursor} to continue after.`
             : undefined,
       });
-      const rows = db
-        .select(input.includeDescription ? ticketColumns : summaryColumns)
+      const numbers = db
+        .select({ number: tickets.number })
         .from(tickets)
         .where(
           and(
@@ -841,13 +857,29 @@ export function createTickets(
         )
         .orderBy(...oldestCreatedFirst)
         .limit(limit + 1)
-        .all();
-      const page = rows.slice(0, limit);
+        .all()
+        .map(({ number }) => number);
+      const page = numbers.slice(0, limit);
+      const inPage = inArray(tickets.number, page);
       return {
-        tickets: input.includeDescription
-          ? withRelations(db, page)
-          : withSummaryRelations(db, page),
-        nextCursor: rows.length > limit ? page[page.length - 1].number : null,
+        tickets:
+          input.detail === 'full'
+            ? withRelations(
+                db,
+                inOrder(
+                  page,
+                  db.select(ticketColumns).from(tickets).where(inPage).all(),
+                ),
+              )
+            : summaries(
+                db,
+                inOrder(
+                  page,
+                  db.select(summaryColumns).from(tickets).where(inPage).all(),
+                ),
+                filter.projectId === undefined,
+              ),
+        nextCursor: numbers.length > limit ? page[page.length - 1] : null,
       };
     },
 
@@ -2081,6 +2113,39 @@ function withBlockers<Row extends { number: number }>(
       'blockedBy' | 'blocked'
     >),
   }));
+}
+
+/** `rows` in the order of their Ticket `numbers`. */
+function inOrder<Row extends { number: number }>(
+  numbers: readonly number[],
+  rows: Row[],
+): Row[] {
+  const order = new Map(numbers.map((number, index) => [number, index]));
+  return rows.sort(
+    (left, right) =>
+      (order.get(left.number) ?? 0) - (order.get(right.number) ?? 0),
+  );
+}
+
+/**
+ * `rows` as `TicketSummary`s, in one query each for labels and Blockers;
+ * with their Project only when `withProject`.
+ */
+function summaries(
+  db: DatabaseConnection,
+  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'projectId'>[],
+  withProject: boolean,
+): TicketSummary[] {
+  return withBlockers(db, withLabels(db, rows)).map(
+    ({ number, title, status, labels, blocked, projectId }) => ({
+      number,
+      title,
+      status,
+      labels,
+      blocked,
+      ...(withProject ? { projectId } : {}),
+    }),
+  );
 }
 
 /** The columns `withSummaryRelations` turns into a Ticket's claim and Epic. */

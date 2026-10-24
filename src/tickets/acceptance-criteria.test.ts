@@ -351,7 +351,7 @@ describe('Acceptance criteria', () => {
     const { tickets, ticket } = ticketWithCriteria();
 
     const [summary] = tickets.findTickets().tickets;
-    const [whole] = tickets.findTickets({ includeDescription: true }).tickets;
+    const [whole] = tickets.findTickets({ detail: 'full' }).tickets;
 
     expect(summary).not.toHaveProperty('acceptanceCriteria');
     expect(whole).toEqual(ticket);

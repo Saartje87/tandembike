@@ -247,23 +247,71 @@ describe('Ticket tools', () => {
       },
     });
 
-    const {
-      description: _,
-      position: __,
-      acceptanceCriteria: ___,
-      children: ____,
-      ...summary
-    } = started;
     expect(resultJson(result)).toEqual({
       tickets: [
         {
-          ...summary,
-          createdAt: iso(started.createdAt),
-          updatedAt: iso(started.updatedAt),
+          number: started.number,
+          title: 'Started',
+          status: 'In progress',
+          labels: [],
+          blocked: false,
         },
       ],
       nextCursor: null,
     });
+    await client.close();
+  });
+
+  it('lists whole Tickets in full detail, and only summaries by default', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      description: 'It overlaps the logo.',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const summary = await client.callTool({
+      name: 'list_tickets',
+      arguments: {},
+    });
+    const full = await client.callTool({
+      name: 'list_tickets',
+      arguments: { detail: 'full' },
+    });
+    const { tools } = await client.listTools();
+    const listTickets = tools.find(({ name }) => name === 'list_tickets');
+
+    expect(resultJson(summary)).toEqual({
+      tickets: [
+        {
+          number: ticket.number,
+          title: 'Fix the header',
+          status: 'Todo',
+          labels: [],
+          blocked: false,
+          projectId: project.id,
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(resultJson(full)).toEqual({
+      tickets: [
+        {
+          ...ticket,
+          createdAt: iso(ticket.createdAt),
+          updatedAt: iso(ticket.updatedAt),
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(Object.keys(listTickets?.inputSchema.properties ?? {})).toEqual(
+      expect.arrayContaining(['detail']),
+    );
+    expect(listTickets?.inputSchema.properties).not.toHaveProperty(
+      'includeDescription',
+    );
     await client.close();
   });
 
@@ -740,7 +788,7 @@ describe('Label tools', () => {
     await client.close();
   });
 
-  it('searches and pages Tickets, with descriptions when asked', async () => {
+  it('searches and pages Tickets, with descriptions in full detail', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     for (const title of [
@@ -763,7 +811,7 @@ describe('Label tools', () => {
         query: 'header',
         limit: 1,
         cursor: 1,
-        includeDescription: true,
+        detail: 'full',
       },
     });
 
@@ -1271,7 +1319,7 @@ describe('Blocker tools', () => {
     });
 
     expect(resultJson(ready)).toMatchObject({
-      tickets: [{ number: 1, blockedBy: [], blocked: false }],
+      tickets: [{ number: 1, blocked: false }],
     });
     await client.close();
   });

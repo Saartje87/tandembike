@@ -7,7 +7,7 @@ import type { Status } from './status';
 import type { TicketPage } from './tickets';
 
 describe('Finding Tickets', () => {
-  it('finds Tickets without their descriptions by default', () => {
+  it('finds Ticket summaries by default', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -23,23 +23,32 @@ describe('Finding Tickets', () => {
           number: ticket.number,
           title: 'Fix the header',
           status: 'Todo',
-          type: 'Ticket',
-          epic: null,
-          projectId: project.id,
           labels: ['bug'],
-          blockedBy: [],
           blocked: false,
-          claim: null,
-          archived: false,
-          createdAt: ticket.createdAt,
-          updatedAt: ticket.updatedAt,
+          projectId: project.id,
         },
       ],
       nextCursor: null,
     });
   });
 
-  it('finds whole Tickets when descriptions are asked for', () => {
+  it('leaves the Project out of summaries filtered to one Project', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Header' });
+    tickets.createTicket({ projectId: project.id, title: 'Footer' });
+
+    const byId = tickets.findTickets({ projectId: project.id }).tickets;
+    const byName = tickets.findTickets({ projectName: 'Website' }).tickets;
+
+    expect(byId.map((row) => Object.keys(row))).toEqual([
+      ['number', 'title', 'status', 'labels', 'blocked'],
+      ['number', 'title', 'status', 'labels', 'blocked'],
+    ]);
+    expect(byName).toEqual(byId);
+  });
+
+  it('finds whole Tickets in full detail', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -47,11 +56,33 @@ describe('Finding Tickets', () => {
       title: 'Fix the header',
       description: 'It overlaps the logo.',
     });
+    tickets.claimTicket(ticket.number, { agentRunId: 'run-1' });
 
-    expect(tickets.findTickets({ includeDescription: true })).toEqual({
-      tickets: [ticket],
+    expect(tickets.findTickets({ detail: 'full' })).toEqual({
+      tickets: [tickets.getTicket(ticket.number)],
       nextCursor: null,
     });
+    expect(
+      tickets.findTickets({ detail: 'full', projectId: project.id }).tickets,
+    ).toEqual([tickets.getTicket(ticket.number)]);
+  });
+
+  it('filters and pages the same in either detail', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const title of ['Bug one', 'Chore', 'Bug two', 'Bug three']) {
+      tickets.createTicket({ projectId: project.id, title });
+    }
+    const input = { query: 'bug', limit: 2 };
+
+    const summary = tickets.findTickets(input);
+    const full = tickets.findTickets({ ...input, detail: 'full' });
+
+    expect([numbers(full), full.nextCursor]).toEqual([
+      numbers(summary),
+      summary.nextCursor,
+    ]);
+    expect([numbers(summary), summary.nextCursor]).toEqual([[1, 3], 3]);
   });
 
   it('finds Tickets whose title or description contains the query, ignoring case', () => {
