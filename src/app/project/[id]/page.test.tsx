@@ -49,14 +49,19 @@ describe('ProjectPage', () => {
     notFound.mockClear();
   });
 
-  it("shows the Project's Backlog tab beside its Cycles' tabs", async () => {
+  it("shows the Backlog's Tickets, those in no Cycle, beside the Cycles' tabs", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     tickets.createCycle({ projectId: project.id, title: 'Launch' });
     const ticket = tickets.createTicket({
       projectId: project.id,
       title: 'Fix the header',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Planned',
+      cycleId: beta.id,
     });
     vi.mocked(appTickets).mockReturnValue(tickets);
 

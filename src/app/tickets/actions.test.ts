@@ -50,6 +50,28 @@ describe('Ticket actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
   });
 
+  it('plans a Ticket created on a Cycle tab into that Cycle', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      cycleId: cycle.id,
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([result.number]);
+    expect(revalidatePath).toHaveBeenCalledWith(
+      '/project/[id]/cycle/[cycleId]',
+      'page',
+    );
+  });
+
   it('revalidates the project-scoped Ticket page after updates and archiving', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

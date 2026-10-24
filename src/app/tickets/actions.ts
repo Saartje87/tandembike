@@ -13,7 +13,7 @@ import type {
   UpdateTicketInput,
 } from '../../tickets/tickets';
 import { type ActionResult, actionResult } from '../lib/action-result';
-import { boardRoute, projectPath, ticketRoute } from '../lib/paths';
+import { boardRoute, cycleRoute, projectPath, ticketRoute } from '../lib/paths';
 
 export type CreateTicketResult = ActionResult<{ number: number }>;
 
@@ -27,6 +27,8 @@ export async function createTicket(input: {
   projectId: number;
   title: string;
   description?: string;
+  /** The Cycle whose tab it was created on, to plan it into. */
+  cycleId?: number;
 }): Promise<CreateTicketResult> {
   return actionResult(() => {
     const ticket = appTickets().createTicket({
@@ -34,8 +36,12 @@ export async function createTicket(input: {
       title: String(input?.title ?? ''),
       description: String(input?.description ?? ''),
       labels: ['needs-triage'],
+      ...(input?.cycleId === undefined
+        ? {}
+        : { cycleId: Number(input.cycleId) }),
     });
     revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
     return { number: ticket.number };
   });
 }
@@ -68,6 +74,7 @@ export async function updateTicket(
     });
     // A moved Ticket leaves one Board for another, and its drawer shows it.
     revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return { projectId: ticket.projectId };
   });
@@ -99,13 +106,18 @@ export async function reorderTickets(
       });
     }
     const projectId = Number(input?.projectId);
+    const cycleId = input.cycleId;
     const reorder: ReorderTicketsInput = {
       projectId,
       status: input.status,
       ticketNumbers: input.ticketNumbers,
+      ...(cycleId === undefined
+        ? {}
+        : { cycleId: cycleId === null ? null : Number(cycleId) }),
     };
     appTickets().reorderTickets(reorder);
     revalidatePath(projectPath(projectId));
+    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -127,6 +139,7 @@ function setArchived(
       ? tickets.archiveTicket(number)
       : tickets.restoreTicket(number);
     revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return {};
   });
@@ -155,6 +168,7 @@ export async function clearTicketClaim(input: {
   return actionResult(() => {
     const ticket = appTickets().clearTicketClaim(Number(input?.number));
     revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return {};
   });
@@ -177,6 +191,7 @@ function changeLabel(
         ? tickets.addLabels(number, labels)
         : tickets.removeLabels(number, labels);
     revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return {};
   });
@@ -269,6 +284,7 @@ function changeBlocker(
       tickets.removeBlocker(relationship);
     }
     revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return {};
   });
@@ -301,6 +317,7 @@ function changeAcceptanceCriteria(
   return actionResult(() => {
     const ticket = change();
     revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
     revalidatePath(ticketRoute, 'page');
     return {};
   });

@@ -16,6 +16,19 @@ describe('NewTicketInline', () => {
     vi.mocked(createTicket).mockReset();
   });
 
+  it('plans a new Ticket into the Cycle whose tab it is on', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderWithTheme(<NewTicketInline projectId={3} cycleId={7} />);
+
+    await userEvent.type(titleField(), 'Fix the header{Enter}');
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: 3,
+      title: 'Fix the header',
+      cycleId: 7,
+    });
+  });
+
   it('creates a Ticket with the title on Enter', async () => {
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
     renderWithTheme(<NewTicketInline projectId={3} />);

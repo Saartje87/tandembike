@@ -51,10 +51,17 @@ export type BoardProps = {
   openTicket?: number;
   /** Shown under the Project's name: its tabs, and a Cycle's header. */
   header?: ReactNode;
+  /**
+   * The tab the Board shows: a Cycle by id, whose new Tickets are planned
+   * into it, or `null` for the Backlog. Lanes are reordered within it.
+   * Defaults to the whole Project.
+   */
+  cycleId?: number | null;
 };
 
 type StatusColumnProps = {
   projectId: number;
+  cycleId?: number | null;
   status: Status;
   tickets: Ticket[];
 };
@@ -72,6 +79,7 @@ const TicketCount: FC<TicketCountProps> = ({ count }) => (
 /** A Status lane; the Todo lane ends with a field to create a Ticket. */
 const StatusColumn: FC<StatusColumnProps> = ({
   projectId,
+  cycleId,
   status,
   tickets,
 }) => {
@@ -113,7 +121,12 @@ const StatusColumn: FC<StatusColumnProps> = ({
               ))}
             </Stack>
           )}
-          {status === 'Todo' && <NewTicketInline projectId={projectId} />}
+          {status === 'Todo' && (
+            <NewTicketInline
+              projectId={projectId}
+              cycleId={cycleId ?? undefined}
+            />
+          )}
         </Stack>
       </section>
     </Box>
@@ -214,6 +227,7 @@ export const Board: FC<BoardProps> = ({
   tickets,
   openTicket,
   header,
+  cycleId,
 }) => {
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [error, setError] = useState<string>();
@@ -255,6 +269,7 @@ export const Board: FC<BoardProps> = ({
         projectId: project.id,
         status,
         ticketNumbers,
+        ...(cycleId === undefined ? {} : { cycleId }),
       });
       if (!result.ok) {
         setError(result.error);
@@ -338,6 +353,7 @@ export const Board: FC<BoardProps> = ({
             <GridItem key={status} colSpan={[12, 4]}>
               <StatusColumn
                 projectId={project.id}
+                cycleId={cycleId}
                 status={status}
                 tickets={active
                   .filter((ticket) => ticket.status === status)

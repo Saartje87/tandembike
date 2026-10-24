@@ -17,6 +17,7 @@ const cycle = (
 ): Cycle => ({
   projectId: 3,
   state: 'Prepared',
+  ticketNumbers: [],
   createdAt: new Date('2026-01-01'),
   ...fields,
 });

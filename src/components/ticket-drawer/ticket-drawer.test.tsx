@@ -20,6 +20,10 @@ import type { Ticket } from '../../tickets/tickets';
 import { TicketDrawer } from './ticket-drawer';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
+vi.mock('../../app/cycles/actions', () => ({
+  planTicket: vi.fn(),
+  unplanTicket: vi.fn(),
+}));
 vi.mock('../../app/tickets/actions', () => ({
   addTicketBlocker: vi.fn(),
   removeTicketBlocker: vi.fn(),
@@ -159,6 +163,45 @@ describe('TicketDrawer', () => {
         inDrawer().getByText(/^Created/),
       ),
     ).toBe(true);
+  });
+
+  it('shows the Cycle the Ticket is planned into', () => {
+    renderWithTheme(
+      <TicketDrawer
+        ticket={ticket}
+        projects={projects}
+        cycles={[
+          {
+            id: 7,
+            projectId: 1,
+            title: 'Beta',
+            state: 'Prepared',
+            ticketNumbers: [4],
+            createdAt: new Date('2026-01-01'),
+          },
+        ]}
+      />,
+    );
+
+    expect(inDrawer().getByRole('link', { name: 'Beta' })).toHaveAttribute(
+      'href',
+      '/project/1/cycle/7',
+    );
+    expect(button('Remove from Cycle')).toBeInTheDocument();
+  });
+
+  it('closes to the tab it was opened over', async () => {
+    renderWithTheme(
+      <TicketDrawer
+        ticket={ticket}
+        projects={projects}
+        boardPath="/project/1/cycle/7"
+      />,
+    );
+
+    await userEvent.click(button('Close'));
+
+    expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1/cycle/7');
   });
 
   it("shows the Ticket's Status and Project", () => {

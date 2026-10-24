@@ -132,3 +132,24 @@ export const cycles = sqliteTable(
   },
   (table) => [index('cycles_project_id').on(table.projectId)],
 );
+
+/**
+ * Which Tickets each Cycle holds: one row per pair. The Tickets module keeps
+ * a Ticket in at most one Cycle that is not Archived; an Archived Cycle's
+ * rows are its final membership, kept as history.
+ */
+export const cycleTickets = sqliteTable(
+  'cycle_tickets',
+  {
+    cycleId: integer('cycle_id')
+      .notNull()
+      .references(() => cycles.id),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+  },
+  (table) => [
+    primaryKey({ columns: [table.cycleId, table.ticketNumber] }),
+    index('cycle_tickets_ticket_number').on(table.ticketNumber),
+  ],
+);

@@ -20,6 +20,7 @@ const prepared: Cycle = {
   projectId: 3,
   title: 'Launch the beta',
   state: 'Prepared',
+  ticketNumbers: [],
   createdAt: new Date('2026-01-01'),
 };
 
