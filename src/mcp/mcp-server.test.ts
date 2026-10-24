@@ -17,11 +17,13 @@ describe('MCP server', () => {
       'add_ticket_labels',
       'archive_cycle',
       'archive_ticket',
+      'attach_to_epic',
       'claim_ticket',
       'create_cycle',
       'create_project',
       'create_ticket',
       'create_tickets',
+      'detach_from_epic',
       'edit_comment',
       'get_ticket',
       'list_blockers',
@@ -63,6 +65,8 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/add_comment/);
     expect(instructions).toMatch(/add_blocker/);
     expect(instructions).toMatch(/create_tickets/);
+    expect(instructions).toMatch(/Epic/);
+    expect(instructions).toMatch(/attach_to_epic/);
     expect(instructions).toMatch(/claim_ticket/);
     expect(instructions).toMatch(/release_ticket_claim/);
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
@@ -827,6 +831,171 @@ describe('Batch create tool', () => {
     expect(result.isError).toBe(true);
     expect(resultText(result)).toBe('Ticket at position 1: Enter a title.');
     expect(tickets.listTickets()).toEqual([]);
+    await client.close();
+  });
+});
+
+describe('Epic tools', () => {
+  it('creates an Epic and a child under it, and gets both', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets);
+
+    const epic = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: {
+          projectId: project.id,
+          title: 'Checkout',
+          description: 'Shared context.',
+          type: 'Epic',
+        },
+      }),
+    );
+    const first = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { projectId: project.id, title: 'Pay', epicNumber: 1 },
+      }),
+    );
+    await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        epicNumber: 1,
+        tickets: [{ title: 'Refund' }],
+      },
+    });
+    tickets.addBlocker({ blocker: 2, blocked: 3 });
+
+    expect(epic).toMatchObject({ number: 1, type: 'Epic' });
+    expect(first).toMatchObject({
+      number: 2,
+      type: 'Ticket',
+      epic: { number: 1, title: 'Checkout' },
+    });
+    expect(
+      resultJson(
+        await client.callTool({ name: 'get_ticket', arguments: { number: 1 } }),
+      ),
+    ).toMatchObject({
+      description: 'Shared context.',
+      status: 'Todo',
+      children: [
+        {
+          number: 2,
+          title: 'Pay',
+          status: 'Todo',
+          archived: false,
+          blockedBy: [],
+          blocked: false,
+        },
+        {
+          number: 3,
+          title: 'Refund',
+          status: 'Todo',
+          archived: false,
+          blockedBy: [2],
+          blocked: true,
+        },
+      ],
+    });
+    expect(
+      resultJson(
+        await client.callTool({ name: 'get_ticket', arguments: { number: 3 } }),
+      ),
+    ).toMatchObject({ epic: { number: 1, title: 'Checkout' }, children: [] });
+    await client.close();
+  });
+
+  it('attaches and detaches a Ticket', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const attached = await client.callTool({
+      name: 'attach_to_epic',
+      arguments: { epic: epic.number, ticket: ticket.number },
+    });
+    expect(resultJson(attached)).toMatchObject({
+      number: ticket.number,
+      epic: { number: epic.number, title: 'Checkout' },
+    });
+
+    const detached = await client.callTool({
+      name: 'detach_from_epic',
+      arguments: { number: ticket.number },
+    });
+    expect(resultJson(detached)).toMatchObject({
+      number: ticket.number,
+      epic: null,
+    });
+    await client.close();
+  });
+
+  it("refuses an Epic's Status by hand and an Epic as a child, with clear errors", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const status = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: epic.number, status: 'Done' },
+    });
+    const attach = await client.callTool({
+      name: 'attach_to_epic',
+      arguments: { epic: epic.number, ticket: other.number },
+    });
+
+    expect(status.isError).toBe(true);
+    expect(resultText(status)).toBe(
+      `Ticket #${epic.number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+    );
+    expect(attach.isError).toBe(true);
+    expect(resultText(attach)).toBe(
+      `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+    );
+    await client.close();
+  });
+
+  it("keeps an Epic's type: update_ticket has no type to change", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const client = await connectMcpClient(tickets);
+
+    await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: epic.number, type: 'Ticket', title: 'Pay' },
+    });
+
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      type: 'Epic',
+      title: 'Pay',
+    });
     await client.close();
   });
 });
