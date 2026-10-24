@@ -53,6 +53,16 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 - Exempt: pure styling or copy changes.
 - Test runner is Vitest (`npm test`). Do not add a second runner.
 
+### Git workflow
+
+The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests on every PR and every push to `main`.
+
+- Do each Ticket on its own branch off `main`, named `ticket-<number>-<slug>` (e.g. `ticket-23-remove-blocker-missing`).
+- Push that branch and open a PR with `gh` freely; write the body with the `pr` skill.
+- Changes reach `main` through a merged PR. Ask the User before merging a PR or pushing to `main`.
+- Refer to a Ticket in commits and PRs as `Ticket #23`, without GitHub closing keywords (`Closes`, `Fixes`): GitHub resolves those numbers to its own issues, not Tickets.
+- When a Ticket's work is done, see `docs/agents/issue-tracker.md` for when to move it to `Done`.
+
 ### Before finishing
 
-Run `npm run check` (Biome, typecheck, tests). It must pass. A pre-commit hook runs the same checks.
+Run `npm run check` (Biome, typecheck, tests). It must pass. The pre-commit hook runs Biome on staged files and the typecheck; CI runs all three on the PR.
