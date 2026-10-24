@@ -78,6 +78,13 @@
       "when": 1792881690010,
       "tag": "0010_one_active_cycle_per_project",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1792881803769,
+      "tag": "0011_add_cycle_archived_at",
+      "breakpoints": true
     }
   ]
 }

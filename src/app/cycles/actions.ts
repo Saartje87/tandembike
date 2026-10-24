@@ -96,3 +96,14 @@ export async function startCycle(input: {
     return {};
   });
 }
+
+/** Archives an Active Cycle for the UI, returning domain errors as `error`. */
+export async function archiveCycle(input: {
+  cycleId: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().archiveCycle(Number(input?.cycleId));
+    revalidateProjects();
+    return {};
+  });
+}

@@ -4,6 +4,7 @@ import {
   boardRoute,
   cyclePath,
   cycleRoute,
+  cyclesPath,
   projectIdFromPath,
   projectPath,
   projectsPath,
@@ -23,6 +24,10 @@ describe('paths', () => {
 
   it('puts a Cycle under its Project', () => {
     expect(cyclePath(3, 7)).toBe('/project/3/cycle/7');
+  });
+
+  it("puts a Project's archived Cycles under a plural segment", () => {
+    expect(cyclesPath(3)).toBe('/project/3/cycles');
   });
 
   it('puts a Ticket under its Project', () => {

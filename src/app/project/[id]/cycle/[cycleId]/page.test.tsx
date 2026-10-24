@@ -92,6 +92,44 @@ describe('CyclePage', () => {
     });
   });
 
+  it("shows an archived Cycle's final Tickets read-only, under the History tab", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Shipped',
+      cycleId: cycle.id,
+    });
+    tickets.updateTicket(done.number, { status: 'Done' });
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    renderWithTheme(
+      <main>
+        {
+          await CyclePage({
+            params: Promise.resolve({
+              id: String(project.id),
+              cycleId: String(cycle.id),
+            }),
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('navigation')).toHaveTextContent(
+      'Tabs: Beta current history',
+    );
+    expect(
+      screen.queryByRole('region', { name: 'Website' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('list', { name: 'Tickets in this Cycle' }),
+    ).toHaveTextContent(`#${done.number}ShippedDone`);
+  });
+
   it("does not show another Project's Cycle", async () => {
     const tickets = createTestTickets();
     const requested = tickets.createProject({ name: 'Requested' });

@@ -28,6 +28,7 @@ describe('Cycles', () => {
       state: 'Prepared',
       ticketNumbers: [],
       createdAt: expect.any(Date),
+      archivedAt: null,
     });
     expect(tickets.getCycle(cycle.id)).toEqual(cycle);
   });
@@ -410,5 +411,129 @@ describe('Starting a Cycle', () => {
         'The Cycle "Public beta" is Active. Only a Prepared Cycle can be discarded.',
       ),
     );
+  });
+});
+
+describe('Archiving a Cycle', () => {
+  /** A Project with an Active Cycle holding a Todo, a Done and an archived Ticket. */
+  function activeCycle() {
+    const { tickets, project } = ticketsWithProject();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    for (const title of ['Open', 'Done', 'Archived']) {
+      tickets.createTicket({ projectId: project.id, title, cycleId: cycle.id });
+    }
+    tickets.updateTicket(2, { status: 'Done' });
+    tickets.archiveTicket(3);
+    tickets.startCycle(cycle.id);
+    return { tickets, project, cycle };
+  }
+
+  it('archives an Active Cycle, leaving its Tickets as they are', () => {
+    const { tickets, cycle } = activeCycle();
+    const before = [1, 2, 3].map((number) => tickets.getTicket(number));
+
+    const archived = tickets.archiveCycle(cycle.id);
+
+    expect(archived).toEqual({
+      ...cycle,
+      state: 'Archived',
+      ticketNumbers: [1, 2, 3],
+      archivedAt: expect.any(Date),
+    });
+    expect([1, 2, 3].map((number) => tickets.getTicket(number))).toEqual(
+      before,
+    );
+  });
+
+  it('archives an empty Active Cycle, but not a Prepared or Archived one', () => {
+    const { tickets, project } = ticketsWithProject();
+    const empty = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const prepared = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.startCycle(empty.id);
+
+    expect(tickets.archiveCycle(empty.id).state).toBe('Archived');
+    expect(errorFrom(() => tickets.archiveCycle(empty.id))).toEqual(
+      new NotAllowedError('The Cycle "Beta" is Archived already.'),
+    );
+    expect(errorFrom(() => tickets.archiveCycle(prepared.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Launch" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.',
+      ),
+    );
+  });
+
+  it('keeps an archived Cycle read-only', () => {
+    const { tickets, project, cycle } = activeCycle();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.archiveCycle(cycle.id);
+    const readOnly = new NotAllowedError(
+      'The Cycle "Beta" is Archived and cannot change.',
+    );
+
+    expect(
+      errorFrom(() => tickets.renameCycle(cycle.id, { title: 'Later' })),
+    ).toEqual(readOnly);
+    expect(
+      errorFrom(() =>
+        tickets.planTicket({ cycleId: cycle.id, number: ticket.number }),
+      ),
+    ).toEqual(readOnly);
+    expect(
+      errorFrom(() => tickets.unplanTicket({ cycleId: cycle.id, number: 1 })),
+    ).toEqual(readOnly);
+    expect(
+      errorFrom(() =>
+        tickets.createTicket({
+          projectId: project.id,
+          title: 'B',
+          cycleId: cycle.id,
+        }),
+      ),
+    ).toEqual(readOnly);
+    expect(errorFrom(() => tickets.startCycle(cycle.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Beta" is Archived. Only a Prepared Cycle can be started.',
+      ),
+    );
+    expect(errorFrom(() => tickets.discardCycle(cycle.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Beta" is Archived. Only a Prepared Cycle can be discarded.',
+      ),
+    );
+    expect(tickets.getCycle(cycle.id)).toMatchObject({
+      title: 'Beta',
+      ticketNumbers: [1, 2, 3],
+    });
+  });
+
+  it('returns its unfinished Tickets to the Backlog, to plan into a later Cycle', () => {
+    const { tickets, project, cycle } = activeCycle();
+    tickets.archiveCycle(cycle.id);
+
+    expect(
+      tickets
+        .listTickets({ projectId: project.id, cycleId: null })
+        .map(({ number }) => number),
+    ).toEqual([1, 2]);
+
+    const next = tickets.createCycle({ projectId: project.id, title: 'Next' });
+    tickets.planTicket({ cycleId: next.id, number: 1 });
+
+    expect(tickets.getCycle(next.id).ticketNumbers).toEqual([1]);
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([1, 2, 3]);
+    expect(
+      tickets.listTickets({ projectId: project.id, cycleId: null }),
+    ).toHaveLength(1);
+  });
+
+  it('lets the Project start another Cycle once it is archived', () => {
+    const { tickets, project, cycle } = activeCycle();
+    const next = tickets.createCycle({ projectId: project.id, title: 'Next' });
+    tickets.archiveCycle(cycle.id);
+
+    expect(tickets.startCycle(next.id).state).toBe('Active');
   });
 });

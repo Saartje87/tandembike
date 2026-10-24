@@ -178,6 +178,7 @@ describe('TicketDrawer', () => {
             state: 'Prepared',
             ticketNumbers: [4],
             createdAt: new Date('2026-01-01'),
+            archivedAt: null,
           },
         ]}
       />,

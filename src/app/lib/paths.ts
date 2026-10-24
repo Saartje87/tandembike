@@ -17,6 +17,11 @@ export function cyclePath(projectId: number, cycleId: number): string {
   return `${projectPath(projectId)}/cycle/${cycleId}`;
 }
 
+/** A Project's History: its archived Cycles. */
+export function cyclesPath(projectId: number): string {
+  return `${projectPath(projectId)}/cycles`;
+}
+
 export function ticketPath(projectId: number, number: number): string {
   return `${projectPath(projectId)}/ticket/${number}`;
 }

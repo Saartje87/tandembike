@@ -19,6 +19,7 @@ const cycle = (
   state: 'Prepared',
   ticketNumbers: [],
   createdAt: new Date('2026-01-01'),
+  archivedAt: null,
   ...fields,
 });
 
