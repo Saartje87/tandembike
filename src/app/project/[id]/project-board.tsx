@@ -59,6 +59,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
     cycleId,
     includeArchived: true,
   });
+  const cycles = tickets.listCycles(project.id);
   if (tab !== 'backlog' && tab.state === 'Archived') {
     return (
       <ProjectFrame project={project} current="history">
@@ -77,10 +78,16 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
         <>
           <ProjectTabs
             projectId={project.id}
-            cycles={tickets.listCycles(project.id)}
+            cycles={cycles}
             current={tab === 'backlog' ? 'backlog' : tab.id}
           />
-          {tab !== 'backlog' && <CycleHeader key={tab.id} cycle={tab} />}
+          {tab !== 'backlog' && (
+            <CycleHeader
+              key={tab.id}
+              cycle={tab}
+              activeCycle={cycles.find(({ state }) => state === 'Active')}
+            />
+          )}
         </>
       }
     />

@@ -93,7 +93,8 @@ describe('Cycle actions', () => {
     expect(tickets.getCycle(beta.id).state).toBe('Active');
     await expect(startCycle({ cycleId: launch.id })).resolves.toEqual({
       ok: false,
-      error: 'The Cycle "Beta" is Active. Archive it before starting another.',
+      error:
+        'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
     });
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
   });
@@ -115,6 +116,26 @@ describe('Cycle actions', () => {
       ok: false,
       error:
         'The Cycle "Launch" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.',
+    });
+  });
+
+  it('starts a Cycle over the Active one when the archive is confirmed', async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: beta.id, number: ticket.number });
+    tickets.startCycle(beta.id);
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+
+    await expect(
+      startCycle({ cycleId: launch.id, archiveActive: true }),
+    ).resolves.toEqual({ ok: true });
+    expect(tickets.getCycle(beta.id).state).toBe('Archived');
+    expect(tickets.getCycle(launch.id)).toMatchObject({
+      state: 'Active',
+      ticketNumbers: [ticket.number],
     });
   });
 

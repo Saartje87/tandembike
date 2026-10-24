@@ -163,14 +163,15 @@ describe('CycleHeader', () => {
   it('shows why starting was refused', async () => {
     vi.mocked(startCycle).mockResolvedValue({
       ok: false,
-      error: 'The Cycle "Beta" is Active. Archive it before starting another.',
+      error:
+        'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
     });
     renderWithTheme(<CycleHeader cycle={prepared} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start Cycle' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The Cycle "Beta" is Active. Archive it before starting another.',
+      'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
     );
   });
 
@@ -230,5 +231,43 @@ describe('CycleHeader', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/^Archived/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  describe('over an Active Cycle', () => {
+    const active: Cycle = {
+      ...prepared,
+      id: 6,
+      title: 'Beta',
+      state: 'Active',
+    };
+
+    it('asks to archive the Active Cycle, then starts with rollover', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.mocked(startCycle).mockResolvedValue({ ok: true });
+      renderWithTheme(<CycleHeader cycle={prepared} activeCycle={active} />);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Start Cycle' }),
+      );
+
+      expect(window.confirm).toHaveBeenCalledWith(
+        'Start "Launch the beta" and archive the Active Cycle "Beta"? Its open Tickets move to "Launch the beta".',
+      );
+      expect(startCycle).toHaveBeenCalledExactlyOnceWith({
+        cycleId: 7,
+        archiveActive: true,
+      });
+    });
+
+    it('changes nothing when the User declines', async () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      renderWithTheme(<CycleHeader cycle={prepared} activeCycle={active} />);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Start Cycle' }),
+      );
+
+      expect(startCycle).not.toHaveBeenCalled();
+    });
   });
 });
