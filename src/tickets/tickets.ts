@@ -26,14 +26,15 @@ import {
   tickets,
 } from '../db/schema';
 import { type ChangeChannel, createChangeChannel } from './changes';
+import { createCycles } from './cycles';
 import {
-  type FieldErrors,
   NameTakenError,
   NotAllowedError,
   NotFoundError,
   TicketsError,
   ValidationError,
 } from './errors';
+import { checkTitle, throwFieldErrors } from './rules';
 import { isStatus, type Status, statusRule } from './status';
 
 export type Project = {
@@ -263,22 +264,6 @@ export type EditCommentInput = {
 
 export type RemoveCommentInput = Pick<EditCommentInput, 'by'>;
 
-export const maxTitleLength = 200;
-
-/** Why a trimmed title breaks the rules, or `undefined` when it is fine. */
-function checkTitle(title: string): string | undefined {
-  if (title === '') {
-    return 'Enter a title.';
-  }
-  if (/[\r\n]/.test(title)) {
-    return 'Keep the title to one line.';
-  }
-  if (title.length > maxTitleLength) {
-    return `Keep the title to ${maxTitleLength} characters or fewer.`;
-  }
-  return undefined;
-}
-
 export const maxDescriptionLength = 50_000;
 
 function checkDescription(description: string): string | undefined {
@@ -397,19 +382,6 @@ function checkNewTicket(input: CreateTicketInput) {
     ),
   });
   return { values: { title, description, status }, labels, acceptanceCriteria };
-}
-
-/** Throws a `ValidationError` naming every field with a reason, if any. */
-function throwFieldErrors(reasons: Record<string, string | undefined>) {
-  const fieldErrors: FieldErrors = {};
-  for (const [field, reason] of Object.entries(reasons)) {
-    if (reason) {
-      fieldErrors[field] = reason;
-    }
-  }
-  if (Object.keys(fieldErrors).length > 0) {
-    throw new ValidationError(fieldErrors);
-  }
 }
 
 /** The fields of a Ticket row an update may set. */
@@ -569,6 +541,8 @@ export function createTickets(
   changes: ChangeChannel = createChangeChannel(),
 ) {
   return {
+    ...createCycles(db, changes),
+
     /** All Projects, oldest first. */
     listProjects(): Project[] {
       return db

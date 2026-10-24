@@ -22,6 +22,7 @@ import {
 import { useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
+  type ReactNode,
   useId,
   useOptimistic,
   useRef,
@@ -48,6 +49,8 @@ export type BoardProps = {
    * it is archived, the Board starts with the archived Tickets shown.
    */
   openTicket?: number;
+  /** Shown under the Project's name: its tabs, and a Cycle's header. */
+  header?: ReactNode;
 };
 
 type StatusColumnProps = {
@@ -206,7 +209,12 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
  * reordered by dragging or moved between Statuses; both changes save through
  * Server Actions and roll back optimistically if refused.
  */
-export const Board: FC<BoardProps> = ({ project, tickets, openTicket }) => {
+export const Board: FC<BoardProps> = ({
+  project,
+  tickets,
+  openTicket,
+  header,
+}) => {
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();
@@ -322,6 +330,7 @@ export const Board: FC<BoardProps> = ({ project, tickets, openTicket }) => {
   return (
     <Stack gap={4}>
       <RenameProjectInlineEdit key={project.id} project={project} />
+      {header}
       {error && <Alert intent="error">{error}</Alert>}
       <DndProvider onDragOver={rememberDropTarget} onDragEnd={finishDrag}>
         <Grid gap={3}>

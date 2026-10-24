@@ -6,6 +6,7 @@ import {
   text,
 } from 'drizzle-orm/sqlite-core';
 
+import { cycleStates } from '../tickets/cycle-state';
 import { statuses } from '../tickets/status';
 
 export const projects = sqliteTable('projects', {
@@ -112,4 +113,22 @@ export const ticketAcceptanceCriteria = sqliteTable(
   (table) => [
     index('ticket_acceptance_criteria_ticket_number').on(table.ticketNumber),
   ],
+);
+
+/**
+ * A Project's Cycles (ADR 0010): goal-led plans, each Prepared, Active or
+ * Archived. A discarded Prepared Cycle deletes its row.
+ */
+export const cycles = sqliteTable(
+  'cycles',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    title: text('title').notNull(),
+    state: text('state', { enum: cycleStates }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('cycles_project_id').on(table.projectId)],
 );

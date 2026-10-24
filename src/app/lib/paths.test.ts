@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boardRoute,
+  cyclePath,
+  cycleRoute,
   projectIdFromPath,
   projectPath,
   projectsPath,
@@ -19,6 +21,10 @@ describe('paths', () => {
     expect(projectPath(3)).toBe('/project/3');
   });
 
+  it('puts a Cycle under its Project', () => {
+    expect(cyclePath(3, 7)).toBe('/project/3/cycle/7');
+  });
+
   it('puts a Ticket under its Project', () => {
     expect(ticketPath(3, 12)).toBe('/project/3/ticket/12');
   });
@@ -29,6 +35,7 @@ describe('paths', () => {
 
   it('names the route patterns that revalidatePath takes', () => {
     expect(boardRoute).toBe('/project/[id]');
+    expect(cycleRoute).toBe('/project/[id]/cycle/[cycleId]');
     expect(ticketRoute).toBe('/project/[id]/ticket/[number]');
   });
 });
@@ -37,6 +44,7 @@ describe('projectIdFromPath', () => {
   it.each([
     ['/project/2', 2],
     ['/project/2/ticket/7', 2],
+    ['/project/2/cycle/4', 2],
     ['/projects', undefined],
     ['/projects/2', undefined],
     ['/ticket/7', undefined],
