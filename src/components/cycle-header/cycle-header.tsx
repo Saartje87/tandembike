@@ -15,7 +15,12 @@ import { useRouter } from 'next/navigation';
 import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { discardCycle, renameCycle } from '../../app/cycles/actions';
+import {
+  discardCycle,
+  renameCycle,
+  startCycle,
+} from '../../app/cycles/actions';
+import type { ActionResult } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { FieldError } from '../field-error/field-error';
@@ -119,31 +124,39 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
 };
 
 /**
- * The head of a Cycle's tab: its title, editable in place, its state, and
- * Discard Cycle for a Prepared one, which goes back to the Backlog.
+ * The head of a Cycle's tab: its title, editable in place, and its state.
+ * A Prepared Cycle can be started, or discarded, which goes back to the
+ * Backlog.
  */
 export const CycleHeader: FC<CycleHeaderProps> = ({ cycle }) => {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
 
-  const discard = () => {
-    if (
-      !window.confirm(
-        `Discard the Cycle "${cycle.title}"? Its Tickets go back to the Backlog.`,
-      )
-    ) {
-      return;
-    }
+  /** Runs a Cycle action, showing its refusal, then `onDone` if it succeeded. */
+  const run = (
+    action: (input: { cycleId: number }) => Promise<ActionResult>,
+    onDone?: () => void,
+  ) => {
     setError(undefined);
     startTransition(async () => {
-      const result = await discardCycle({ cycleId: cycle.id });
+      const result = await action({ cycleId: cycle.id });
       if (!result.ok) {
         setError(result.error);
         return;
       }
-      router.push(projectPath(cycle.projectId));
+      onDone?.();
     });
+  };
+
+  const discard = () => {
+    if (
+      window.confirm(
+        `Discard the Cycle "${cycle.title}"? Its Tickets go back to the Backlog.`,
+      )
+    ) {
+      run(discardCycle, () => router.push(projectPath(cycle.projectId)));
+    }
   };
 
   return (
@@ -156,16 +169,26 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle }) => {
           </Text>
         </Inline>
         {cycle.state === 'Prepared' && (
-          <Button
-            type="button"
-            variant="outline"
-            intent="neutral"
-            size="small"
-            disabled={pending}
-            onClick={discard}
-          >
-            Discard Cycle
-          </Button>
+          <Inline gap={2} alignY="center">
+            <Button
+              type="button"
+              variant="outline"
+              intent="neutral"
+              size="small"
+              disabled={pending}
+              onClick={discard}
+            >
+              Discard Cycle
+            </Button>
+            <Button
+              type="button"
+              size="small"
+              disabled={pending}
+              onClick={() => run(startCycle)}
+            >
+              Start Cycle
+            </Button>
+          </Inline>
         )}
       </Inline>
       {error && <Alert intent="error">{error}</Alert>}

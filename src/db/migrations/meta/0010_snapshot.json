@@ -1,0 +1,518 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "d79aa937-73f1-47c7-87fa-5a4ac922000c",
+  "prevId": "825ddd32-d9e8-4711-ab92-716a02b91212",
+  "tables": {
+    "cycle_tickets": {
+      "name": "cycle_tickets",
+      "columns": {
+        "cycle_id": {
+          "name": "cycle_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ticket_number": {
+          "name": "ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cycle_tickets_ticket_number": {
+          "name": "cycle_tickets_ticket_number",
+          "columns": ["ticket_number"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "cycle_tickets_cycle_id_cycles_id_fk": {
+          "name": "cycle_tickets_cycle_id_cycles_id_fk",
+          "tableFrom": "cycle_tickets",
+          "tableTo": "cycles",
+          "columnsFrom": ["cycle_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "cycle_tickets_ticket_number_tickets_number_fk": {
+          "name": "cycle_tickets_ticket_number_tickets_number_fk",
+          "tableFrom": "cycle_tickets",
+          "tableTo": "tickets",
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "cycle_tickets_cycle_id_ticket_number_pk": {
+          "columns": ["cycle_id", "ticket_number"],
+          "name": "cycle_tickets_cycle_id_ticket_number_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "cycles": {
+      "name": "cycles",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cycles_project_id": {
+          "name": "cycles_project_id",
+          "columns": ["project_id"],
+          "isUnique": false
+        },
+        "cycles_one_active_per_project": {
+          "name": "cycles_one_active_per_project",
+          "columns": ["project_id"],
+          "isUnique": true,
+          "where": "\"cycles\".\"state\" = 'Active'"
+        }
+      },
+      "foreignKeys": {
+        "cycles_project_id_projects_id_fk": {
+          "name": "cycles_project_id_projects_id_fk",
+          "tableFrom": "cycles",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "projects": {
+      "name": "projects",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "projects_name_key_unique": {
+          "name": "projects_name_key_unique",
+          "columns": ["name_key"],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ticket_acceptance_criteria": {
+      "name": "ticket_acceptance_criteria",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "ticket_number": {
+          "name": "ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "text": {
+          "name": "text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "checked": {
+          "name": "checked",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ticket_acceptance_criteria_ticket_number": {
+          "name": "ticket_acceptance_criteria_ticket_number",
+          "columns": ["ticket_number"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ticket_acceptance_criteria_ticket_number_tickets_number_fk": {
+          "name": "ticket_acceptance_criteria_ticket_number_tickets_number_fk",
+          "tableFrom": "ticket_acceptance_criteria",
+          "tableTo": "tickets",
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ticket_blockers": {
+      "name": "ticket_blockers",
+      "columns": {
+        "blocker_number": {
+          "name": "blocker_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blocked_number": {
+          "name": "blocked_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ticket_blockers_blocked_number": {
+          "name": "ticket_blockers_blocked_number",
+          "columns": ["blocked_number"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ticket_blockers_blocker_number_tickets_number_fk": {
+          "name": "ticket_blockers_blocker_number_tickets_number_fk",
+          "tableFrom": "ticket_blockers",
+          "tableTo": "tickets",
+          "columnsFrom": ["blocker_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ticket_blockers_blocked_number_tickets_number_fk": {
+          "name": "ticket_blockers_blocked_number_tickets_number_fk",
+          "tableFrom": "ticket_blockers",
+          "tableTo": "tickets",
+          "columnsFrom": ["blocked_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ticket_blockers_blocker_number_blocked_number_pk": {
+          "columns": ["blocker_number", "blocked_number"],
+          "name": "ticket_blockers_blocker_number_blocked_number_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ticket_comments": {
+      "name": "ticket_comments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "ticket_number": {
+          "name": "ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "edited_at": {
+          "name": "edited_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ticket_comments_ticket_number": {
+          "name": "ticket_comments_ticket_number",
+          "columns": ["ticket_number"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ticket_comments_ticket_number_tickets_number_fk": {
+          "name": "ticket_comments_ticket_number_tickets_number_fk",
+          "tableFrom": "ticket_comments",
+          "tableTo": "tickets",
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "ticket_labels": {
+      "name": "ticket_labels",
+      "columns": {
+        "ticket_number": {
+          "name": "ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ticket_labels_label": {
+          "name": "ticket_labels_label",
+          "columns": ["label"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "ticket_labels_ticket_number_tickets_number_fk": {
+          "name": "ticket_labels_ticket_number_tickets_number_fk",
+          "tableFrom": "ticket_labels",
+          "tableTo": "tickets",
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ticket_labels_ticket_number_label_pk": {
+          "columns": ["ticket_number", "label"],
+          "name": "ticket_labels_ticket_number_label_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "tickets": {
+      "name": "tickets",
+      "columns": {
+        "number": {
+          "name": "number",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "''"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "claim_agent_run_id": {
+          "name": "claim_agent_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim_agent_name": {
+          "name": "claim_agent_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "archived": {
+          "name": "archived",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "tickets_project_id": {
+          "name": "tickets_project_id",
+          "columns": ["project_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tickets_project_id_projects_id_fk": {
+          "name": "tickets_project_id_projects_id_fk",
+          "tableFrom": "tickets",
+          "tableTo": "projects",
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

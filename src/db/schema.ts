@@ -1,9 +1,11 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   integer,
   primaryKey,
   sqliteTable,
   text,
+  uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
 import { cycleStates } from '../tickets/cycle-state';
@@ -117,7 +119,8 @@ export const ticketAcceptanceCriteria = sqliteTable(
 
 /**
  * A Project's Cycles (ADR 0010): goal-led plans, each Prepared, Active or
- * Archived. A discarded Prepared Cycle deletes its row.
+ * Archived, with at most one Active per Project. A discarded Prepared Cycle
+ * deletes its row.
  */
 export const cycles = sqliteTable(
   'cycles',
@@ -130,7 +133,12 @@ export const cycles = sqliteTable(
     state: text('state', { enum: cycleStates }).notNull(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
-  (table) => [index('cycles_project_id').on(table.projectId)],
+  (table) => [
+    index('cycles_project_id').on(table.projectId),
+    uniqueIndex('cycles_one_active_per_project')
+      .on(table.projectId)
+      .where(sql`${table.state} = 'Active'`),
+  ],
 );
 
 /**
