@@ -66,11 +66,37 @@ function stateOf(ticket: RelatedTicket): string {
   return ticket.archived ? `${ticket.status} · Archived` : ticket.status;
 }
 
+type ReadinessProps = { blockers: RelatedTicket[] };
+
+/**
+ * Whether a Ticket with Blockers is blocked or ready to start; nothing for a
+ * Ticket without any.
+ */
+const Readiness: FC<ReadinessProps> = ({ blockers }) => {
+  if (blockers.length === 0) {
+    return null;
+  }
+  const blocked = blockers.some((ticket) => !ticket.resolved);
+
+  return (
+    <Text
+      tag="p"
+      fontSize="small"
+      fontWeight="medium"
+      color={blocked ? 'warning-800' : 'success-800'}
+    >
+      {blocked ? 'Blocked' : 'Ready to start'}
+    </Text>
+  );
+};
+
 /**
  * One side of a Ticket's blocking relationships: the Tickets it is blocked
  * by, or the Tickets it blocks, each linked with its Status and a button to
  * remove it, then a button that opens a field for another Ticket number. A
- * removal shows at once; an addition shows once the server saves it.
+ * removal shows at once; an addition shows once the server saves it. The
+ * Blocked by side first says whether the Ticket is blocked or ready to start,
+ * following the list as shown.
  */
 export const BlockerEditor: FC<BlockerEditorProps> = ({
   ticketNumber,
@@ -145,6 +171,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
 
   return (
     <Stack gap={2}>
+      {direction === 'blockedBy' && <Readiness blockers={shown} />}
       {shown.length > 0 ? (
         <Stack
           tag="ul"

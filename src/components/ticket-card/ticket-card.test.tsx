@@ -78,6 +78,55 @@ describe('TicketCard', () => {
     ).not.toBeInTheDocument();
   });
 
+  describe('blocked', () => {
+    const blocked = { name: 'Blocked by an unresolved Ticket' };
+
+    it('says so beside its labels when the Ticket is blocked', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, labels: ['bug'], blockedBy: [3], blocked: true }}
+        />,
+      );
+
+      const marker = screen.getByRole('img', blocked);
+      expect(marker).toHaveTextContent('Blocked');
+      expect(marker.parentElement).toContainElement(
+        screen.getByRole('list', { name: 'Labels' }),
+      );
+    });
+
+    it('says so for a blocked Ticket that is still Todo', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, status: 'Todo', blockedBy: [3], blocked: true }}
+        />,
+      );
+
+      expect(screen.getByRole('img', blocked)).toBeInTheDocument();
+    });
+
+    it('says nothing, not even ready, when it is not blocked', () => {
+      renderWithTheme(
+        <TicketCard ticket={{ ...ticket, blockedBy: [3], blocked: false }} />,
+      );
+
+      expect(screen.queryByRole('img', blocked)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/^(Blocked|Ready to start)$/),
+      ).not.toBeInTheDocument();
+    });
+
+    it('says nothing once the Ticket is Done, though a Blocker is unresolved', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, status: 'Done', blockedBy: [3], blocked: true }}
+        />,
+      );
+
+      expect(screen.queryByRole('img', blocked)).not.toBeInTheDocument();
+    });
+  });
+
   describe('acceptance-criteria progress', () => {
     const criteria = (...checked: boolean[]) =>
       checked.map((isChecked, index) => ({
