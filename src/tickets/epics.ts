@@ -1,8 +1,10 @@
-import { eq } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
-import { tickets } from '../db/schema';
-import { NotAllowedError, NotFoundError } from './errors';
+import { ticketBlockers, tickets } from '../db/schema';
+import { NotAllowedError, NotFoundError, ValidationError } from './errors';
+import { nextPosition } from './positions';
+import type { Status } from './status';
 import type { TicketType } from './ticket-type';
 
 /** A Ticket to attach to, or detach from, an Epic (ADR 0011). */
@@ -93,6 +95,139 @@ export function checkUngrouped(
   if (child) {
     throw new NotAllowedError(
       `Epic #${ticket.number} has child Tickets. Detach them before moving it to another Project.`,
+    );
+  }
+}
+
+/**
+ * An Epic's Status from its children's: Todo with none or all Todo, Done
+ * when all are Done, and In progress otherwise.
+ */
+export function derivedStatus(children: readonly Status[]): Status {
+  if (children.every((status) => status === 'Todo')) {
+    return 'Todo';
+  }
+  if (children.every((status) => status === 'Done')) {
+    return 'Done';
+  }
+  return 'In progress';
+}
+
+/**
+ * Sets Epic `epicNumber`'s Status from its children that are not archived,
+ * moving it to the end of a new Status lane. Run it in the transaction
+ * that changed a child. Returns whether the Status changed.
+ */
+export function syncEpicStatus(
+  db: DatabaseConnection,
+  epicNumber: number | null,
+): boolean {
+  if (epicNumber === null) {
+    return false;
+  }
+  const epic = db
+    .select({ status: tickets.status, projectId: tickets.projectId })
+    .from(tickets)
+    .where(eq(tickets.number, epicNumber))
+    .get();
+  if (!epic) {
+    return false;
+  }
+  const status = derivedStatus(
+    db
+      .select({ status: tickets.status })
+      .from(tickets)
+      .where(
+        and(eq(tickets.epicNumber, epicNumber), eq(tickets.archived, false)),
+      )
+      .all()
+      .map((child) => child.status),
+  );
+  if (status === epic.status) {
+    return false;
+  }
+  db.update(tickets)
+    .set({
+      status,
+      position: nextPosition(db, epic.projectId, status, epicNumber),
+      updatedAt: new Date(),
+    })
+    .where(eq(tickets.number, epicNumber))
+    .run();
+  return true;
+}
+
+/**
+ * Throws if `blocker` and `blocked` are an Epic and one of its own children,
+ * either way round: the children order themselves with Blockers among
+ * themselves (ADR 0011).
+ */
+export function checkNotEpicAndChild(
+  db: DatabaseConnection,
+  { blocker, blocked }: { blocker: number; blocked: number },
+) {
+  const child = db
+    .select({ number: tickets.number, epicNumber: tickets.epicNumber })
+    .from(tickets)
+    .where(
+      or(
+        and(eq(tickets.number, blocked), eq(tickets.epicNumber, blocker)),
+        and(eq(tickets.number, blocker), eq(tickets.epicNumber, blocked)),
+      ),
+    )
+    .get();
+  if (child) {
+    throw new ValidationError({
+      blocker: `#${child.number} is a child of Epic #${child.epicNumber}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
+    });
+  }
+}
+
+/**
+ * Throws if Ticket `child` blocks Epic `epic` or the other way round, so it
+ * cannot join that Epic.
+ */
+export function checkNoBlockerBetween(
+  db: DatabaseConnection,
+  { epic, child }: EpicChildInput,
+) {
+  const blocker = db
+    .select({
+      blocker: ticketBlockers.blockerNumber,
+      blocked: ticketBlockers.blockedNumber,
+    })
+    .from(ticketBlockers)
+    .where(
+      or(
+        and(
+          eq(ticketBlockers.blockerNumber, epic),
+          eq(ticketBlockers.blockedNumber, child),
+        ),
+        and(
+          eq(ticketBlockers.blockerNumber, child),
+          eq(ticketBlockers.blockedNumber, epic),
+        ),
+      ),
+    )
+    .get();
+  if (blocker) {
+    throw new NotAllowedError(
+      `#${blocker.blocker} blocks #${blocker.blocked}. An Epic and its own children cannot block each other; remove that Blocker first.`,
+    );
+  }
+}
+
+/** Throws if Epic `number` has children that are not archived. */
+export function checkNoLiveChildren(db: DatabaseConnection, number: number) {
+  const live = db
+    .select({ number: tickets.number })
+    .from(tickets)
+    .where(and(eq(tickets.epicNumber, number), eq(tickets.archived, false)))
+    .orderBy(asc(tickets.number))
+    .all();
+  if (live.length > 0) {
+    throw new NotAllowedError(
+      `Epic #${number} has child Tickets that are not archived: ${live.map((child) => `#${child.number}`).join(', ')}. Archive or detach them first.`,
     );
   }
 }

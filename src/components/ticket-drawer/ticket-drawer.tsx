@@ -567,25 +567,31 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
             <TitleField title={fields.title} onSave={save} />
           </Stack>
           <Stack gap={3}>
-            <Detail
-              name={
-                <Label htmlFor={statusId}>
-                  <DetailName>Status</DetailName>
-                </Label>
-              }
-            >
-              <Stack gap={1}>
-                <StatusSelect
-                  id={statusId}
-                  name="status"
-                  value={fields.status}
-                  onChange={(status) => saveDetail({ status })}
-                  aria-invalid={errors.status ? true : undefined}
-                  aria-describedby={errors.status ? statusErrorId : undefined}
-                />
-                <FieldError id={statusErrorId} reason={errors.status} />
-              </Stack>
-            </Detail>
+            {ticket.type === 'Epic' ? (
+              <Detail name={<DetailName>Status</DetailName>}>
+                <Text>{ticket.status} · follows its child Tickets</Text>
+              </Detail>
+            ) : (
+              <Detail
+                name={
+                  <Label htmlFor={statusId}>
+                    <DetailName>Status</DetailName>
+                  </Label>
+                }
+              >
+                <Stack gap={1}>
+                  <StatusSelect
+                    id={statusId}
+                    name="status"
+                    value={fields.status}
+                    onChange={(status) => saveDetail({ status })}
+                    aria-invalid={errors.status ? true : undefined}
+                    aria-describedby={errors.status ? statusErrorId : undefined}
+                  />
+                  <FieldError id={statusErrorId} reason={errors.status} />
+                </Stack>
+              </Detail>
+            )}
             <Detail
               name={
                 <Label htmlFor={projectId}>

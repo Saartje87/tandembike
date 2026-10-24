@@ -1071,6 +1071,17 @@ describe('TicketDrawer', () => {
       expect(inDrawer().getByText('Epic')).toBeInTheDocument();
     });
 
+    it("shows an Epic's Status as derived, with no control to set it", () => {
+      renderDrawer({ ...epic, status: 'In progress' });
+
+      expect(
+        inDrawer().queryByRole('combobox', { name: 'Status' }),
+      ).not.toBeInTheDocument();
+      expect(
+        inDrawer().getByText('In progress · follows its child Tickets'),
+      ).toBeInTheDocument();
+    });
+
     it('links a child to its Epic and lists no children', () => {
       renderDrawer({ ...ticket, epic: { number: 8, title: 'Checkout' } });
 

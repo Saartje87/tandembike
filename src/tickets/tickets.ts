@@ -7,7 +7,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  max,
   ne,
   not,
   notInArray,
@@ -32,7 +31,15 @@ import {
   leaveOpenCycles,
   planNewTicket,
 } from './cycles';
-import { checkEpicChild, checkUngrouped, type EpicChildInput } from './epics';
+import {
+  checkEpicChild,
+  checkNoBlockerBetween,
+  checkNoLiveChildren,
+  checkNotEpicAndChild,
+  checkUngrouped,
+  type EpicChildInput,
+  syncEpicStatus,
+} from './epics';
 import {
   NameTakenError,
   NotAllowedError,
@@ -40,6 +47,7 @@ import {
   TicketsError,
   ValidationError,
 } from './errors';
+import { nextPosition } from './positions';
 import { checkTitle, throwFieldErrors } from './rules';
 import { isStatus, type Status, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
@@ -418,7 +426,11 @@ function checkNewTicket(input: CreateTicketInput) {
   throwFieldErrors({
     title: checkTitle(title),
     description: checkDescription(description),
-    status: checkStatus(status),
+    status:
+      checkStatus(status) ??
+      (type === 'Epic' && status !== 'Todo'
+        ? "An Epic's Status follows its child Tickets. Leave the Status out."
+        : undefined),
     type: isTicketType(type) ? undefined : 'Choose a type: Ticket or Epic.',
     labels: checkLabels(labels),
     acceptanceCriteria: checkAcceptanceCriteria(
@@ -892,9 +904,15 @@ export function createTickets(
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
+        syncEpicStatus(db, input.epicNumber ?? null);
         return number;
       });
-      changes.publish({ type: 'ticket', number });
+      // A child changes its Epic's children, and maybe its Status.
+      changes.publish(
+        input.epicNumber === undefined
+          ? { type: 'ticket', number }
+          : { type: 'tickets', numbers: [number, input.epicNumber] },
+      );
       return getTicket(number);
     },
 
@@ -918,8 +936,12 @@ export function createTickets(
         }
       }
 
-      const leftCycles = applyTicketChanges(number, checked);
-      changes.publish({ type: 'ticket', number });
+      const { leftCycles, changedEpic } = applyTicketChanges(number, checked);
+      changes.publish(
+        changedEpic === null
+          ? { type: 'ticket', number }
+          : { type: 'tickets', numbers: [number, changedEpic] },
+      );
       for (const id of leftCycles) {
         changes.publish({ type: 'cycle', id });
       }
@@ -947,12 +969,16 @@ export function createTickets(
       });
 
       const changed: number[] = [];
+      const changedEpics = new Set<number>();
       const failed: UpdateTicketsResult['failed'] = [];
       try {
         for (const number of ticketNumbers) {
           try {
-            applyTicketChanges(number, checked);
+            const { changedEpic } = applyTicketChanges(number, checked);
             changed.push(number);
+            if (changedEpic !== null) {
+              changedEpics.add(changedEpic);
+            }
           } catch (error) {
             if (!(error instanceof TicketsError)) {
               throw error;
@@ -962,7 +988,13 @@ export function createTickets(
         }
       } finally {
         if (changed.length > 0) {
-          changes.publish({ type: 'tickets', numbers: changed });
+          changes.publish({
+            type: 'tickets',
+            numbers: [
+              ...changed,
+              ...[...changedEpics].filter((epic) => !changed.includes(epic)),
+            ],
+          });
         }
       }
       return { updated: changed.map(getTicket), failed };
@@ -1050,6 +1082,7 @@ export function createTickets(
       });
       db.transaction(() => {
         getTicket(blocker);
+        checkNotEpicAndChild(db, { blocker, blocked });
         const cycle = blockingPath(db, blocked, blocker);
         throwFieldErrors({
           blocker: cycle
@@ -1111,11 +1144,13 @@ export function createTickets(
         if (ticket.epicNumber === epic) {
           return false;
         }
+        checkNoBlockerBetween(db, { epic, child });
         db.update(tickets)
           .set({ epicNumber: epic, updatedAt: new Date() })
           .where(eq(tickets.number, child))
           .run();
         touchTicket(db, epic);
+        syncEpicStatus(db, epic);
         return true;
       });
       if (changed) {
@@ -1146,6 +1181,7 @@ export function createTickets(
           .where(eq(tickets.number, number))
           .run();
         touchTicket(db, ticket.epicNumber);
+        syncEpicStatus(db, ticket.epicNumber);
         return ticket.epicNumber;
       });
       if (epic !== null) {
@@ -1380,13 +1416,14 @@ export function createTickets(
    * Writes checked `changes` to Ticket `number` in one transaction, without
    * announcing them: removed labels go before added ones, a Ticket that
    * changes Project or Status goes to the end of its new lane, and one that
-   * changes Project leaves its Cycle unless that is Archived. Returns the
-   * ids of the Cycles it left.
+   * changes Project leaves its Cycle unless that is Archived. A child's
+   * Status change updates its Epic's. Returns the ids of the Cycles it left,
+   * and its Epic's number if that Epic's Status changed.
    */
   function applyTicketChanges(
     number: number,
     { values, addLabels, removeLabels, acceptanceCriteria }: TicketChanges,
-  ): number[] {
+  ): { leftCycles: number[]; changedEpic: number | null } {
     return db.transaction(() => {
       const existing = db
         .select(ticketColumns)
@@ -1400,6 +1437,11 @@ export function createTickets(
       const status = values.status ?? existing.status;
       const moved =
         projectId !== existing.projectId || status !== existing.status;
+      if (existing.type === 'Epic' && status !== existing.status) {
+        throw new ValidationError({
+          status: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+        });
+      }
       if (projectId !== existing.projectId) {
         checkUngrouped(db, existing);
       }
@@ -1425,22 +1467,39 @@ export function createTickets(
       if (acceptanceCriteria !== undefined) {
         replaceAcceptanceCriteria(db, number, acceptanceCriteria);
       }
-      return leftCycles;
+      const changedEpic =
+        status !== existing.status && syncEpicStatus(db, existing.epicNumber)
+          ? existing.epicNumber
+          : null;
+      return { leftCycles, changedEpic };
     });
   }
 
-  /** Sets only the archived flag (and updated time), and announces it. */
+  /**
+   * Sets only the archived flag (and updated time), and announces it. A
+   * child's Epic leaves out archived children, so its Status may change.
+   */
   function setArchived(number: number, archived: boolean): Ticket {
-    const ticket = db
-      .update(tickets)
-      .set({ archived, updatedAt: new Date() })
-      .where(eq(tickets.number, number))
-      .returning({ number: tickets.number })
-      .get();
-    if (!ticket) {
-      throw new NotFoundError(`There is no Ticket #${number}.`);
-    }
-    changes.publish({ type: 'ticket', number });
+    const changedEpic = db.transaction(() => {
+      if (archived) {
+        checkNoLiveChildren(db, number);
+      }
+      const ticket = db
+        .update(tickets)
+        .set({ archived, updatedAt: new Date() })
+        .where(eq(tickets.number, number))
+        .returning({ epicNumber: tickets.epicNumber })
+        .get();
+      if (!ticket) {
+        throw new NotFoundError(`There is no Ticket #${number}.`);
+      }
+      return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
+    });
+    changes.publish(
+      changedEpic === null
+        ? { type: 'ticket', number }
+        : { type: 'tickets', numbers: [number, changedEpic] },
+    );
     return getTicket(number);
   }
 }
@@ -1906,28 +1965,6 @@ function withChildren<Row extends { number: number }>(
     ...row,
     children: childrenByNumber.get(row.number) ?? [],
   }));
-}
-
-function nextPosition(
-  db: DatabaseConnection,
-  projectId: number,
-  status: Status,
-  exceptNumber?: number,
-): number {
-  const result = db
-    .select({ position: max(tickets.position) })
-    .from(tickets)
-    .where(
-      and(
-        eq(tickets.projectId, projectId),
-        eq(tickets.status, status),
-        exceptNumber === undefined
-          ? undefined
-          : ne(tickets.number, exceptNumber),
-      ),
-    )
-    .get();
-  return (result?.position ?? -1) + 1;
 }
 
 /**
