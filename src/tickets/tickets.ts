@@ -274,23 +274,23 @@ export const defaultPageSize = 50;
 
 export const maxPageSize = 200;
 
-export type FindTicketsInput = ListTicketsFilter & {
-  /** Only Tickets in the Project with this name; see `ProjectRef`. */
-  projectName?: string;
-  /**
-   * Only Tickets whose title or description contains this, trimmed and
-   * ignoring (ASCII) case.
-   */
-  query?: string;
-  /** At most this many Tickets, from 1 to `maxPageSize`; `defaultPageSize` if left out. */
-  limit?: number;
-  /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
-  cursor?: number;
-  /** How much of each Ticket to list; defaults to `summary`. */
-  detail?: TicketDetail;
-  /** The order to list them in; defaults to `created`. */
-  sort?: TicketSort;
-};
+/** `projectName` names the Project in place of, or as well as, `projectId`. */
+export type FindTicketsInput = ListTicketsFilter &
+  ProjectRef & {
+    /**
+     * Only Tickets whose title or description contains this, trimmed and
+     * ignoring (ASCII) case.
+     */
+    query?: string;
+    /** At most this many Tickets, from 1 to `maxPageSize`; `defaultPageSize` if left out. */
+    limit?: number;
+    /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
+    cursor?: number;
+    /** How much of each Ticket to list; defaults to `summary`. */
+    detail?: TicketDetail;
+    /** The order to list them in; defaults to `created`. */
+    sort?: TicketSort;
+  };
 
 /**
  * The orders `findTickets` lists Tickets in: oldest-created first, or Board
@@ -2223,7 +2223,7 @@ function summaries(
   );
 }
 
-/** The columns `withSummaryRelations` turns into a Ticket's claim and Epic. */
+/** The columns `withClaimAndLinks` turns into a Ticket's claim and Epic. */
 type RelationColumns = {
   claimAgentRunId: string | null;
   claimAgentName: string | null;
@@ -2240,15 +2240,12 @@ function withRelations<Row extends { number: number }>(
 ) {
   return withChildren(
     db,
-    withAcceptanceCriteria(db, withSummaryRelations(db, rows)),
+    withAcceptanceCriteria(db, withClaimAndLinks(db, rows)),
   );
 }
 
-/**
- * `rows` with each Ticket's claim, Epic, labels and Blockers, as summaries
- * list them.
- */
-function withSummaryRelations<Row extends { number: number }>(
+/** `rows` with each Ticket's claim, Epic, labels and Blockers. */
+function withClaimAndLinks<Row extends { number: number }>(
   db: DatabaseConnection,
   rows: (Row & RelationColumns)[],
 ) {
@@ -2337,7 +2334,7 @@ function resolvedProjectId(
   }
   const name = projectName.trim();
   const named = db
-    .select(projectColumns)
+    .select({ id: projects.id })
     .from(projects)
     .where(eq(projects.nameKey, name.toLowerCase()))
     .get();

@@ -66,3 +66,7 @@ The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) run
 ### Before finishing
 
 Run `npm run check` (Biome, typecheck, tests). It must pass. The pre-commit hook runs Biome on staged files and the typecheck; CI runs all three on the PR.
+
+### Process feedback
+
+While working with Tickets, the Tandembike MCP tools, the agent docs (`docs/agents/`, `AGENTS.md`, `CLAUDE.md`) or the User's request itself, note friction you actually hit: a missing tool or parameter, an unclear error, docs that contradict each other, a vague Ticket or missing acceptance criteria, an ambiguous request. At the end of the task, list each item in a short "Process feedback" section of your reply: what happened and what you would change. Raise an item mid-task only when it blocks the work or forces a guess. Suggest only: create a Ticket or edit a doc for an item once the User approves it. Leave the section out when nothing came up.

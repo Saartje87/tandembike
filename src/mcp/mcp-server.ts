@@ -43,12 +43,6 @@ const projectId = z
   .positive()
   .describe('The id of a Project, as returned by list_projects.');
 
-const projectName = z
-  .string()
-  .describe(
-    'The name of a Project, ignoring case and surrounding spaces, in place of its id. An unknown name is refused with the names of the existing Projects.',
-  );
-
 const ticketNumber = z
   .number()
   .int()
@@ -241,14 +235,15 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, Board position, archived flag and timestamps`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
           .describe(
             'Only list Tickets in this Project (id from list_projects).',
           ),
-        projectName: projectName
+        projectName: z
+          .string()
           .optional()
           .describe(
             'Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
@@ -389,7 +384,8 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'The Project the Ticket belongs to (id from list_projects). Give this or projectName.',
           ),
-        projectName: projectName
+        projectName: z
+          .string()
           .optional()
           .describe(
             'The name of the Project the Ticket belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
