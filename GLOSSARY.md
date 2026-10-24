@@ -16,6 +16,14 @@ _Avoid_: Ticket key, ticket ID, `WEB-12`-style keys
 A named group of Tickets. Every Ticket belongs to exactly one Project. A Project's name is unique, ignoring case and surrounding spaces; a Project can be renamed but not removed.
 _Avoid_: Workspace, sub-project
 
+**Cycle**:
+A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time.
+_Avoid_: Sprint
+
+**Epic**:
+A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them.
+_Avoid_: Feature, parent Ticket, story
+
 **Board**:
 The view of one Project's Tickets, laid out in one column per Status.
 _Avoid_: Kanban, dashboard, list

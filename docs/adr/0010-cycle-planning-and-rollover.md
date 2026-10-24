@@ -1,0 +1,3 @@
+# Cycles separate planning from Ticket progress
+
+Cycles are goal-led plans within one Project: multiple may be Prepared, but only one may be Active, and each Ticket belongs to at most one non-archived Cycle at a time. Starting a Prepared Cycle while another is Active requires confirmation to archive the current Cycle and rolls its unfinished, non-archived Tickets into the selected Cycle; archived Cycles retain their final membership as history. This keeps plans distinct from Ticket Status, allows the next plan to be prepared without conflicting assignments, and makes rollover deliberate while preserving unfinished work.
