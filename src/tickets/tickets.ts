@@ -66,6 +66,12 @@ export type CreateProjectInput = { name: string };
 
 export type RenameProjectInput = { name: string };
 
+/**
+ * A Project by its id, its name (ignoring case and surrounding spaces) or
+ * both, when they name the same Project.
+ */
+export type ProjectRef = { projectId?: number; projectName?: string };
+
 export type Tickets = ReturnType<typeof createTickets>;
 
 const projectColumns = {
@@ -266,6 +272,8 @@ export const defaultPageSize = 50;
 export const maxPageSize = 200;
 
 export type FindTicketsInput = ListTicketsFilter & {
+  /** Only Tickets in the Project with this name; see `ProjectRef`. */
+  projectName?: string;
   /**
    * Only Tickets whose title or description contains this, trimmed and
    * ignoring (ASCII) case.
@@ -731,6 +739,20 @@ export function createTickets(
       return project;
     },
 
+    /**
+     * The id of the Project `ref` names. An unknown name is refused with the
+     * names of the existing Projects, so a stale one is caught at once.
+     */
+    resolveProjectId(ref: ProjectRef): number {
+      const projectId = resolvedProjectId(db, ref);
+      if (projectId === undefined) {
+        throw new ValidationError({
+          projectId: 'Choose a Project by projectId or projectName.',
+        });
+      }
+      return projectId;
+    },
+
     /** Creates a Project with a trimmed name, unique ignoring case. */
     createProject(input: CreateProjectInput): Project {
       const { name, nameKey } = availableProjectName(db, input.name);
@@ -784,6 +806,7 @@ export function createTickets(
      * filters of `listTickets`.
      */
     findTickets(input: FindTicketsInput = {}): TicketPage {
+      const filter = { ...input, projectId: resolvedProjectId(db, input) };
       const limit = input.limit ?? defaultPageSize;
       const query = input.query?.trim();
       const cursor =
@@ -811,7 +834,7 @@ export function createTickets(
         .from(tickets)
         .where(
           and(
-            matchingTickets(db, input),
+            matchingTickets(db, filter),
             query === undefined ? undefined : titleOrDescriptionContains(query),
             cursor === undefined ? undefined : orderedAfter(cursor),
           ),
@@ -2159,6 +2182,52 @@ function withChildren<Row extends { number: number }>(
     ...row,
     children: childrenByNumber.get(row.number) ?? [],
   }));
+}
+
+/**
+ * The id of the Project `ref` names, or `undefined` when it names none.
+ * Throws when the name is unknown or names another Project than the id.
+ */
+function resolvedProjectId(
+  db: DatabaseConnection,
+  { projectId, projectName }: ProjectRef,
+): number | undefined {
+  if (projectName === undefined) {
+    return projectId;
+  }
+  const name = projectName.trim();
+  const named = db
+    .select(projectColumns)
+    .from(projects)
+    .where(eq(projects.nameKey, name.toLowerCase()))
+    .get();
+  if (!named) {
+    const names = db
+      .select({ name: projects.name })
+      .from(projects)
+      .orderBy(asc(projects.name))
+      .all()
+      .map(({ name }) => `"${name}"`);
+    throw new NotFoundError(
+      names.length === 0
+        ? `There is no Project named "${name}", and there are no Projects yet.`
+        : `There is no Project named "${name}". The Projects are: ${names.join(', ')}.`,
+    );
+  }
+  if (projectId !== undefined && projectId !== named.id) {
+    const project = db
+      .select(projectColumns)
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .get();
+    if (!project) {
+      throw new NotFoundError(`There is no Project with id ${projectId}.`);
+    }
+    throw new ValidationError({
+      projectName: `Project ${projectId} is "${project.name}", not "${name}". Give projectId or projectName, or both for the same Project.`,
+    });
+  }
+  return named.id;
 }
 
 /**

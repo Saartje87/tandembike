@@ -441,6 +441,55 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
+  it('lists and creates Tickets by Project name', async () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    tickets.createProject({ name: 'App' });
+    const client = await connectMcpClient(tickets);
+
+    const created = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectName: 'website', title: 'Fix the header' },
+    });
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectName: 'WEBSITE' },
+    });
+    const stale = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectName: 'Ticket', title: 'Lost' },
+    });
+    const mismatched = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: website.id, projectName: 'App' },
+    });
+    const neither = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Nowhere' },
+    });
+
+    expect(resultJson(created)).toMatchObject({
+      title: 'Fix the header',
+      projectId: website.id,
+    });
+    expect(resultJson(listed)).toMatchObject({
+      tickets: [{ title: 'Fix the header' }],
+    });
+    expect(stale.isError).toBe(true);
+    expect(resultText(stale)).toBe(
+      'There is no Project named "Ticket". The Projects are: "App", "Website".',
+    );
+    expect(mismatched.isError).toBe(true);
+    expect(resultText(mismatched)).toBe(
+      `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+    );
+    expect(neither.isError).toBe(true);
+    expect(resultText(neither)).toBe(
+      'Choose a Project by projectId or projectName.',
+    );
+    await client.close();
+  });
+
   it("returns the module's validation message for a bad Ticket", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

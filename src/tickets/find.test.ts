@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
-import { ValidationError } from './errors';
+import { NotFoundError, ValidationError } from './errors';
 import type { Status } from './status';
 import type { TicketPage } from './tickets';
 
@@ -298,6 +298,89 @@ describe('Finding Tickets in several Statuses', () => {
         tickets.findTickets({ status: status as unknown as Status[] }),
       ),
     ).toEqual(new ValidationError({ status: reason }));
+  });
+});
+
+describe('Finding Tickets by Project name', () => {
+  it('finds the Tickets of the Project with that name, ignoring case', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: website.id, title: 'Header' });
+    tickets.createTicket({ projectId: app.id, title: 'Login' });
+
+    expect(titles(tickets.findTickets({ projectName: ' website ' }))).toEqual([
+      'Header',
+    ]);
+    expect(
+      titles(tickets.findTickets({ projectId: app.id, projectName: 'APP' })),
+    ).toEqual(['Login']);
+  });
+
+  it('refuses an unknown name, naming the existing Projects', () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Tandembike' });
+    tickets.createProject({ name: 'Website' });
+
+    expect(
+      errorFrom(() => tickets.findTickets({ projectName: 'Ticket' })),
+    ).toEqual(
+      new NotFoundError(
+        'There is no Project named "Ticket". The Projects are: "Tandembike", "Website".',
+      ),
+    );
+  });
+
+  it('refuses an unknown name when there are no Projects', () => {
+    const tickets = createTestTickets();
+
+    expect(
+      errorFrom(() => tickets.findTickets({ projectName: 'Ticket' })),
+    ).toEqual(
+      new NotFoundError(
+        'There is no Project named "Ticket", and there are no Projects yet.',
+      ),
+    );
+  });
+
+  it('refuses a projectId and projectName that name different Projects', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    tickets.createProject({ name: 'App' });
+
+    expect(
+      errorFrom(() =>
+        tickets.findTickets({ projectId: website.id, projectName: 'App' }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        projectName: `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+      }),
+    );
+  });
+});
+
+describe('Resolving a Project', () => {
+  it('resolves a projectId, a projectName or both to the Project id', () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+
+    expect(tickets.resolveProjectId({ projectId: app.id })).toBe(app.id);
+    expect(tickets.resolveProjectId({ projectName: 'app' })).toBe(app.id);
+    expect(
+      tickets.resolveProjectId({ projectId: app.id, projectName: 'App' }),
+    ).toBe(app.id);
+  });
+
+  it('refuses neither a projectId nor a projectName', () => {
+    const tickets = createTestTickets();
+
+    expect(errorFrom(() => tickets.resolveProjectId({}))).toEqual(
+      new ValidationError({
+        projectId: 'Choose a Project by projectId or projectName.',
+      }),
+    );
   });
 });
 

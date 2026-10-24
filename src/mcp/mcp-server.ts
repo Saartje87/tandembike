@@ -41,6 +41,12 @@ const projectId = z
   .positive()
   .describe('The id of a Project, as returned by list_projects.');
 
+const projectName = z
+  .string()
+  .describe(
+    'The name of a Project, ignoring case and surrounding spaces, in place of its id. An unknown name is refused with the names of the existing Projects.',
+  );
+
 const ticketNumber = z
   .number()
   .int()
@@ -233,12 +239,17 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
+      description: `Find Tickets, oldest-created first, optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
       inputSchema: {
         projectId: projectId
           .optional()
           .describe(
             'Only list Tickets in this Project (id from list_projects).',
+          ),
+        projectName: projectName
+          .optional()
+          .describe(
+            'Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
           ),
         status: z
           .union([status, z.array(status)])
@@ -363,11 +374,18 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Create Ticket',
       description:
-        'Create a Ticket in a Project and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
+        'Create a Ticket in a Project, given by projectId or projectName, and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
       inputSchema: {
-        projectId: projectId.describe(
-          'The Project the Ticket belongs to (id from list_projects).',
-        ),
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project the Ticket belongs to (id from list_projects). Give this or projectName.',
+          ),
+        projectName: projectName
+          .optional()
+          .describe(
+            'The name of the Project the Ticket belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+          ),
         ...newTicketFields,
         type: z
           .enum(ticketTypes)
@@ -382,7 +400,13 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
       },
     },
-    (input) => respond(() => tickets.createTicket(input)),
+    ({ projectId, projectName, ...input }) =>
+      respond(() =>
+        tickets.createTicket({
+          ...input,
+          projectId: tickets.resolveProjectId({ projectId, projectName }),
+        }),
+      ),
   );
 
   server.registerTool(
