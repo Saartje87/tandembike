@@ -221,12 +221,53 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      * Tickets go back to the Backlog.
      */
     discardCycle(id: number): void {
-      cycleRow(id);
+      const cycle = cycleRow(id);
+      if (cycle.state !== 'Prepared') {
+        throw new NotAllowedError(
+          `The Cycle "${cycle.title}" is ${cycle.state}. Only a Prepared Cycle can be discarded.`,
+        );
+      }
       db.transaction(() => {
         db.delete(cycleTickets).where(eq(cycleTickets.cycleId, id)).run();
         db.delete(cycles).where(eq(cycles.id, id)).run();
       });
       changes.publish({ type: 'cycle', id });
+    },
+
+    /**
+     * Makes Prepared Cycle `id` its Project's Active Cycle, whatever its
+     * Tickets' Statuses. It is refused while another Cycle is Active.
+     */
+    startCycle(id: number): Cycle {
+      db.transaction(() => {
+        const cycle = cycleRow(id);
+        if (cycle.state !== 'Prepared') {
+          throw new NotAllowedError(
+            `The Cycle "${cycle.title}" is ${cycle.state} already.`,
+          );
+        }
+        const active = db
+          .select({ title: cycles.title })
+          .from(cycles)
+          .where(
+            and(
+              eq(cycles.projectId, cycle.projectId),
+              eq(cycles.state, 'Active'),
+            ),
+          )
+          .get();
+        if (active) {
+          throw new NotAllowedError(
+            `The Cycle "${active.title}" is Active. Archive it before starting another.`,
+          );
+        }
+        db.update(cycles)
+          .set({ state: 'Active' })
+          .where(eq(cycles.id, id))
+          .run();
+      });
+      changes.publish({ type: 'cycle', id });
+      return getCycle(id);
     },
 
     /**

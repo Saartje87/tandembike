@@ -85,3 +85,14 @@ export async function unplanTicket(input: {
     return {};
   });
 }
+
+/** Starts a Prepared Cycle for the UI, returning domain errors as `error`. */
+export async function startCycle(input: {
+  cycleId: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().startCycle(Number(input?.cycleId));
+    revalidateProjects();
+    return {};
+  });
+}

@@ -342,3 +342,73 @@ describe('Planning Tickets into a Cycle', () => {
     expect(tickets.listTickets({ projectId: other.id })).toEqual([]);
   });
 });
+
+describe('Starting a Cycle', () => {
+  it('makes a Prepared Cycle Active, Done members and all', () => {
+    const { tickets, project } = ticketsWithProject();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Done already',
+      cycleId: beta.id,
+    });
+    tickets.updateTicket(done.number, { status: 'Done' });
+
+    const started = tickets.startCycle(beta.id);
+
+    expect(started).toEqual({
+      ...beta,
+      state: 'Active',
+      ticketNumbers: [done.number],
+    });
+    expect(tickets.getCycle(beta.id).state).toBe('Active');
+  });
+
+  it('refuses to start a Cycle while another in its Project is Active', () => {
+    const { tickets, project } = ticketsWithProject();
+    const other = tickets.createProject({ name: 'App' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    const elsewhere = tickets.createCycle({
+      projectId: other.id,
+      title: 'Elsewhere',
+    });
+    tickets.startCycle(beta.id);
+
+    expect(errorFrom(() => tickets.startCycle(launch.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Beta" is Active. Archive it before starting another.',
+      ),
+    );
+    expect(tickets.getCycle(launch.id).state).toBe('Prepared');
+    expect(tickets.startCycle(elsewhere.id).state).toBe('Active');
+    expect(errorFrom(() => tickets.startCycle(beta.id))).toEqual(
+      new NotAllowedError('The Cycle "Beta" is Active already.'),
+    );
+  });
+
+  it('keeps an Active Cycle editable, but not discardable', () => {
+    const { tickets, project } = ticketsWithProject();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.startCycle(beta.id);
+
+    tickets.renameCycle(beta.id, { title: 'Public beta' });
+    tickets.planTicket({ cycleId: beta.id, number: ticket.number });
+    expect(tickets.getCycle(beta.id)).toMatchObject({
+      title: 'Public beta',
+      ticketNumbers: [ticket.number],
+    });
+    tickets.unplanTicket({ cycleId: beta.id, number: ticket.number });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+
+    expect(errorFrom(() => tickets.discardCycle(beta.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "Public beta" is Active. Only a Prepared Cycle can be discarded.',
+      ),
+    );
+  });
+});

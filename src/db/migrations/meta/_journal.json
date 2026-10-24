@@ -71,6 +71,13 @@
       "when": 1792881311882,
       "tag": "0009_create_cycle_tickets",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1792881690010,
+      "tag": "0010_one_active_cycle_per_project",
+      "breakpoints": true
     }
   ]
 }

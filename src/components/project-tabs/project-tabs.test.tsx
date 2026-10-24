@@ -59,6 +59,26 @@ describe('ProjectTabs', () => {
     ]);
   });
 
+  it('puts the Active Cycle first and leaves Archived ones out', () => {
+    renderWithTheme(
+      <ProjectTabs
+        projectId={3}
+        cycles={[
+          cycle({ id: 6, title: 'Old', state: 'Archived' }),
+          cycle({ id: 7, title: 'Beta' }),
+          cycle({ id: 8, title: 'Launch', state: 'Active' }),
+        ]}
+        current="backlog"
+      />,
+    );
+
+    expect(tabs().map(({ name }) => name)).toEqual([
+      'Backlog',
+      'Launch',
+      'Beta',
+    ]);
+  });
+
   it('marks the Backlog tab current on the Backlog', () => {
     renderWithTheme(
       <ProjectTabs projectId={3} cycles={[]} current="backlog" />,

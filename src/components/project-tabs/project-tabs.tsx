@@ -116,8 +116,8 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 };
 
 /**
- * A Project's views as tabs: its Backlog, then each Prepared or Active
- * Cycle, with a New Cycle button that adds one.
+ * A Project's views as tabs: its Backlog, its Active Cycle, then each
+ * Prepared one, with a New Cycle button that adds one.
  */
 export const ProjectTabs: FC<ProjectTabsProps> = ({
   projectId,
@@ -133,17 +133,18 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           <Tab href={projectPath(projectId)} current={current === 'backlog'}>
             Backlog
           </Tab>
-          {cycles
-            .filter((cycle) => cycle.state !== 'Archived')
-            .map((cycle) => (
-              <Tab
-                key={cycle.id}
-                href={cyclePath(projectId, cycle.id)}
-                current={current === cycle.id}
-              >
-                {cycle.title}
-              </Tab>
-            ))}
+          {[
+            ...cycles.filter((cycle) => cycle.state === 'Active'),
+            ...cycles.filter((cycle) => cycle.state === 'Prepared'),
+          ].map((cycle) => (
+            <Tab
+              key={cycle.id}
+              href={cyclePath(projectId, cycle.id)}
+              current={current === cycle.id}
+            >
+              {cycle.title}
+            </Tab>
+          ))}
         </Inline>
       </nav>
       {adding ? (

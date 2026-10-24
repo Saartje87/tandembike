@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `cycles_one_active_per_project` ON `cycles` (`project_id`) WHERE "cycles"."state" = 'Active';

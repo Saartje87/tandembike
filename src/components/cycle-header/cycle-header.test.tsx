@@ -3,7 +3,11 @@ import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { discardCycle, renameCycle } from '../../app/cycles/actions';
+import {
+  discardCycle,
+  renameCycle,
+  startCycle,
+} from '../../app/cycles/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
@@ -13,6 +17,7 @@ vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../../app/cycles/actions', () => ({
   discardCycle: vi.fn(),
   renameCycle: vi.fn(),
+  startCycle: vi.fn(),
 }));
 
 const prepared: Cycle = {
@@ -32,6 +37,7 @@ describe('CycleHeader', () => {
     vi.mocked(useRouter).mockReturnValue(router);
     vi.mocked(renameCycle).mockReset();
     vi.mocked(discardCycle).mockReset();
+    vi.mocked(startCycle).mockReset();
     vi.restoreAllMocks();
   });
 
@@ -139,5 +145,41 @@ describe('CycleHeader', () => {
       'There is no Cycle with id 7.',
     );
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('starts a Prepared Cycle', async () => {
+    vi.mocked(startCycle).mockResolvedValue({ ok: true });
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start Cycle' }));
+
+    expect(startCycle).toHaveBeenCalledExactlyOnceWith({ cycleId: 7 });
+  });
+
+  it('shows why starting was refused', async () => {
+    vi.mocked(startCycle).mockResolvedValue({
+      ok: false,
+      error: 'The Cycle "Beta" is Active. Archive it before starting another.',
+    });
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start Cycle' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Cycle "Beta" is Active. Archive it before starting another.',
+    );
+  });
+
+  it('keeps an Active Cycle renameable, with no Start or Discard', () => {
+    renderWithTheme(<CycleHeader cycle={{ ...prepared, state: 'Active' }} />);
+
+    expect(screen.getByText('Active')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Start Cycle' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Discard Cycle' }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -10,6 +10,7 @@ import {
   discardCycle,
   planTicket,
   renameCycle,
+  startCycle,
   unplanTicket,
 } from './actions';
 
@@ -74,6 +75,25 @@ describe('Cycle actions', () => {
       unplanTicket({ cycleId: cycle.id, number: ticket.number }),
     ).resolves.toEqual({ ok: true });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it('starts a Cycle, and returns why a second one may not start', async () => {
+    const { tickets, project } = appWithTicket();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+
+    await expect(startCycle({ cycleId: beta.id })).resolves.toEqual({
+      ok: true,
+    });
+    expect(tickets.getCycle(beta.id).state).toBe('Active');
+    await expect(startCycle({ cycleId: launch.id })).resolves.toEqual({
+      ok: false,
+      error: 'The Cycle "Beta" is Active. Archive it before starting another.',
+    });
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
   });
 
