@@ -88,16 +88,22 @@ export async function unplanTicket(input: {
 
 /**
  * Starts a Prepared Cycle for the UI; `archiveActive` is the User's
- * confirmation to archive the Active Cycle and roll its open Tickets over.
+ * confirmation to archive the Active Cycle `activeCycleId` and roll its open
+ * Tickets over.
  * Domain errors come back as `error`.
  */
 export async function startCycle(input: {
   cycleId: number;
   archiveActive?: boolean;
+  /** The Active Cycle the User confirmed archiving. */
+  activeCycleId?: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
     appTickets().startCycle(Number(input?.cycleId), {
       archiveActive: input?.archiveActive === true,
+      ...(input?.activeCycleId === undefined
+        ? {}
+        : { activeCycleId: Number(input.activeCycleId) }),
     });
     revalidateProjects();
     return {};

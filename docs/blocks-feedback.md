@@ -442,6 +442,10 @@ accident of the types, so a Blocks release could drop it without a type error.
 `acceptance-criteria-editor.tsx` does the same for its `Stack tag="ul"` named by
 the "Acceptance criteria" heading.
 
+`cycle-history.tsx` ("Archived Cycles") and `cycle-ticket-list.tsx` ("Tickets
+in this Cycle") name their `Stack tag="ul"` lists with `aria-label` the same
+way.
+
 **Also no `span` tag or `role`.** A Board card's acceptance-criteria count is
 an icon plus `2/4`, read as one image named "Acceptance criteria: 2 of 4
 checked". `Inline` would lay it out, but its `tag` allows only `div`, `ul`,
@@ -742,6 +746,39 @@ or fails.
 
 **Question.** Should Blocks ship a live region or an `announce` hook, so
 that in-place confirmations are announced the same way everywhere?
+
+## 25. No tabs or tab-link navigation
+
+**Problem.** A Project's views (its Backlog, each Prepared or Active Cycle
+and its History) are pages, shown as a row of tabs with the current one
+marked. Blocks has no `Tabs` component, and no link variant for a selected
+navigation item, so each tab is assembled from `Box asChild` (background,
+radius, padding) around an `<li>` holding an `AppLink` with
+`aria-current="page"`. The current tab can only be told apart by a
+background, since there are no single-side border atoms (6) for an
+underline.
+
+**Repro.**
+
+```tsx
+<Tabs aria-label="Project views">
+  <Tab href="/project/3" current>Backlog</Tab>
+  <Tab href="/project/3/cycle/7">Launch the beta</Tab>
+</Tabs>
+// No such export in @blockle/blocks.
+```
+
+**Expected.** A tab-link navigation (a `nav` of links, current one marked
+with `aria-current` and a theme style), and possibly an in-page `Tabs` with
+`tablist`/`tab`/`tabpanel` roles for content that is not a route.
+
+**Workaround.** `src/components/project-tabs/project-tabs.tsx`: a `<nav
+aria-label="Project views">` around `Inline tag="ul"` (with a `listStyle:
+none` class, 8), each tab a `Box asChild` `<li>` with `primary-100` behind
+the current one.
+
+**Question.** Is a link-based tab navigation in scope for Blocks, and should
+it share its look with an in-page `Tabs`?
 
 ## Notes (lower priority)
 

@@ -641,3 +641,73 @@ describe('Starting a Cycle with rollover', () => {
     ]);
   });
 });
+
+describe('Review fixes', () => {
+  it('refuses to unplan a Ticket that is not in the Cycle', () => {
+    const { tickets, project } = ticketsWithProject();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.createTicket({ projectId: project.id, title: 'A' });
+
+    expect(
+      errorFrom(() => tickets.unplanTicket({ cycleId: cycle.id, number: 1 })),
+    ).toEqual(
+      new NotAllowedError('Ticket #1 is not planned into the Cycle "Beta".'),
+    );
+    expect(
+      errorFrom(() => tickets.unplanTicket({ cycleId: cycle.id, number: 99 })),
+    ).toEqual(new NotFoundError('There is no Ticket #99.'));
+  });
+
+  it('refuses a rollover when another Cycle is Active than the one confirmed', () => {
+    const { tickets, project } = ticketsWithProject();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.startCycle(beta.id);
+
+    expect(
+      errorFrom(() =>
+        tickets.startCycle(launch.id, {
+          archiveActive: true,
+          activeCycleId: launch.id + 1,
+        }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        'The Active Cycle is now "Beta", not the one you confirmed archiving. Check it and try again.',
+      ),
+    );
+    expect(tickets.getCycle(beta.id).state).toBe('Active');
+    expect(
+      tickets.startCycle(launch.id, {
+        archiveActive: true,
+        activeCycleId: beta.id,
+      }).state,
+    ).toBe('Active');
+  });
+
+  it('announces the Cycle a Ticket leaves when it moves Project', () => {
+    const changes = createChangeChannel();
+    const listener = vi.fn();
+    changes.subscribe(listener);
+    const tickets = createTestTickets(changes);
+    const project = tickets.createProject({ name: 'Website' });
+    const other = tickets.createProject({ name: 'App' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+      cycleId: cycle.id,
+    });
+    listener.mockClear();
+
+    tickets.updateTicket(1, { projectId: other.id });
+
+    expect(listener.mock.calls).toEqual([
+      [{ type: 'ticket', number: 1 }],
+      [{ type: 'cycle', id: cycle.id }],
+    ]);
+  });
+});

@@ -15,6 +15,13 @@ Tickets and Projects live in the local Tandembike app. Use its MCP server at `ht
 - `list_comments`, `add_comment`, `edit_comment`, `remove_comment`: read and write comments on a Ticket. Comments you add are authored `agent`; you can edit or remove only those, never the User's. Removing a comment deletes it permanently.
 - `list_blockers`, `add_blocker`, `remove_blocker`: read and change which Tickets block which. `add_blocker` and `remove_blocker` take `blocker` (the Ticket that must be resolved first) and `blocked` (the Ticket that waits for it). A Blocker is resolved once it is Done or archived. Every Ticket carries `blockedBy` (its Blockers' numbers) and `blocked` (whether any is unresolved); `list_tickets` with `blocked: false` finds Tickets that are ready to start.
 - `archive_ticket`, `restore_ticket`: archive or restore a Ticket. Tickets cannot be deleted.
+- Cycles (ADR 0010): goal-led plans of a Project's Tickets, each `Prepared`, `Active` (at most one per Project) or `Archived` (read-only history).
+  - `list_cycles`: a Project's Cycles, oldest first, each with its `state` and `ticketNumbers`.
+  - `create_cycle`, `rename_cycle`: a new Cycle starts `Prepared` and empty; an `Archived` one cannot be renamed.
+  - `plan_ticket`, `unplan_ticket`: put a Ticket into a Prepared or Active Cycle of its Project, or take it out. Only open (not `Done`), non-archived Tickets can be planned, and a Ticket is in at most one Cycle that is not `Archived`. A member that becomes `Done` or is archived stays in its Cycle.
+  - `list_tickets` with `cycleId`: the Tickets of one Cycle, or with `cycleId: null` the Backlog, the Tickets in no Prepared or Active Cycle.
+  - `start_cycle`: make a Prepared Cycle `Active`. While another Cycle is Active it is refused; pass `confirmArchiveActive: true` only after the User agrees, which archives the Active Cycle and rolls its open, non-archived Tickets into the started one in one step.
+  - `archive_cycle`: archive the Active Cycle, finished or not. Its Tickets keep their Status; its unfinished ones return to the Backlog.
 
 Ticket Statuses are `Todo`, `In progress`, and `Done`. Move a Ticket to `In progress` when starting work and `Done` when finishing it. When completing a Ticket, remove its active triage state label (`needs-triage`, `needs-info`, `ready-for-agent`, or `ready-for-human`) in the same `update_ticket` call that sets the Status to `Done`. Preserve category labels such as `bug` and `enhancement`; do not remove `wontfix` as part of this completion rule. Refer to Tickets as `#<number>`.
 

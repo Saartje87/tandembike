@@ -28,6 +28,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. A Blocker is resolved once it is Done or archived; list_tickets with blocked: false finds Tickets that are ready to start.
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them. A Ticket is in at most one Cycle that is not Archived, and only open, non-archived Tickets can be planned. The Backlog is the Tickets in no Prepared or Active Cycle: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
 - Errors explain what was wrong with the input; fix it and try again.`;
 
 const projectId = z
@@ -97,6 +98,18 @@ const newCriterion = z.object({
     .optional()
     .describe('Whether it is met already. Defaults to false.'),
 });
+
+const cycleId = z
+  .number()
+  .int()
+  .positive()
+  .describe('The id of a Cycle, as returned by list_cycles or create_cycle.');
+
+const cycleTitle = z
+  .string()
+  .describe(
+    "The Cycle's goal as its title: one line of at most 200 characters. It is trimmed and may not be empty.",
+  );
 
 const status = z
   .enum(statuses)
@@ -247,6 +260,12 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             "Include each Ticket's Markdown description, acceptance criteria and Board position. Defaults to false.",
+          ),
+        cycleId: cycleId
+          .nullable()
+          .optional()
+          .describe(
+            'Only list the Tickets planned into this Cycle, or with null, only those in no Prepared or Active Cycle: the Backlog, Done ones included.',
           ),
       },
       annotations: { readOnlyHint: true },
@@ -599,6 +618,101 @@ export function createMcpServer(tickets: Tickets): McpServer {
       annotations: { idempotentHint: true },
     },
     ({ number }) => respond(() => tickets.restoreTicket(number)),
+  );
+
+  server.registerTool(
+    'list_cycles',
+    {
+      title: 'List Cycles',
+      description:
+        "List a Project's Cycles, oldest first, each with its id, title (its goal), state (Prepared, Active or Archived), ticketNumbers (the Tickets planned into it; an Archived Cycle's are its final membership), createdAt and archivedAt (null unless Archived).",
+      inputSchema: { projectId },
+      annotations: { readOnlyHint: true },
+    },
+    ({ projectId }) => respond(() => tickets.listCycles(projectId)),
+  );
+
+  server.registerTool(
+    'create_cycle',
+    {
+      title: 'Create Cycle',
+      description:
+        'Create an empty, Prepared Cycle in a Project and return it. A Project can have several Prepared Cycles.',
+      inputSchema: { projectId, title: cycleTitle },
+    },
+    ({ projectId, title }) =>
+      respond(() => tickets.createCycle({ projectId, title })),
+  );
+
+  server.registerTool(
+    'rename_cycle',
+    {
+      title: 'Rename Cycle',
+      description:
+        'Rename a Prepared or Active Cycle and return it. An Archived Cycle cannot change.',
+      inputSchema: { id: cycleId, title: cycleTitle },
+      annotations: { idempotentHint: true },
+    },
+    ({ id, title }) => respond(() => tickets.renameCycle(id, { title })),
+  );
+
+  server.registerTool(
+    'plan_ticket',
+    {
+      title: 'Plan Ticket into Cycle',
+      description:
+        "Plan a Ticket into a Prepared or Active Cycle of its Project and return the Cycle. Only open (not Done), non-archived Tickets can be planned, and a Ticket is in at most one Cycle that is not Archived: unplan_ticket it from its current one first. Planning doesn't change its Status.",
+      inputSchema: { cycleId, number: ticketNumber },
+      annotations: { idempotentHint: true },
+    },
+    ({ cycleId, number }) =>
+      respond(() => tickets.planTicket({ cycleId, number })),
+  );
+
+  server.registerTool(
+    'unplan_ticket',
+    {
+      title: 'Unplan Ticket from Cycle',
+      description:
+        'Take a Ticket out of a Prepared or Active Cycle, back to the Backlog, and return the Cycle. An Archived Cycle cannot change.',
+      inputSchema: { cycleId, number: ticketNumber },
+      annotations: { idempotentHint: true },
+    },
+    ({ cycleId, number }) =>
+      respond(() => tickets.unplanTicket({ cycleId, number })),
+  );
+
+  server.registerTool(
+    'start_cycle',
+    {
+      title: 'Start Cycle',
+      description:
+        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step.",
+      inputSchema: {
+        id: cycleId,
+        confirmArchiveActive: z
+          .boolean()
+          .optional()
+          .describe(
+            "Archive the Project's Active Cycle and roll its open Tickets into this one. Set it only once the User has agreed. Defaults to false.",
+          ),
+      },
+    },
+    ({ id, confirmArchiveActive }) =>
+      respond(() =>
+        tickets.startCycle(id, { archiveActive: confirmArchiveActive }),
+      ),
+  );
+
+  server.registerTool(
+    'archive_cycle',
+    {
+      title: 'Archive Cycle',
+      description:
+        'Archive the Active Cycle, finished or not, and return it. Only the Cycle changes: its Tickets keep their Status, it keeps its membership as read-only history, and its unfinished Tickets return to the Backlog.',
+      inputSchema: { id: cycleId },
+    },
+    ({ id }) => respond(() => tickets.archiveCycle(id)),
   );
 
   return server;

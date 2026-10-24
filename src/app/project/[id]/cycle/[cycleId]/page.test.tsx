@@ -111,8 +111,15 @@ describe('CyclePage', () => {
       cycleId: cycle.id,
     });
     tickets.updateTicket(done.number, { status: 'Done' });
+    const moved = tickets.createTicket({
+      projectId: project.id,
+      title: 'Moved',
+      cycleId: cycle.id,
+    });
     tickets.startCycle(cycle.id);
     tickets.archiveCycle(cycle.id);
+    const other = tickets.createProject({ name: 'App' });
+    tickets.updateTicket(moved.number, { projectId: other.id });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     renderWithTheme(
@@ -136,7 +143,7 @@ describe('CyclePage', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
-    ).toHaveTextContent(`#${done.number}ShippedDone`);
+    ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedTodo`);
   });
 
   it("tells a Prepared Cycle's header which Cycle is Active", async () => {
