@@ -26,7 +26,6 @@ const BlockedMarker: FC = () => (
     asChild
     display="flex"
     alignItems="center"
-    alignSelf="flex-start"
     gap={1}
     backgroundColor="warning-100"
     borderRadius="full"
@@ -78,6 +77,8 @@ export const TicketCard: FC<TicketCardProps> = ({
   dragHandleRef,
 }) => {
   const changed = useTicketChanged(ticket.number);
+  // A Done Ticket's work is finished, so an open Blocker no longer matters here.
+  const showBlocked = ticket.blocked && ticket.status !== 'Done';
 
   return (
     <Box
@@ -116,8 +117,12 @@ export const TicketCard: FC<TicketCardProps> = ({
               </AppLink>
             </Text>
 
-            {ticket.blocked && ticket.status !== 'Done' && <BlockedMarker />}
-            <LabelList labels={ticket.labels} />
+            {showBlocked || ticket.labels.length > 0 ? (
+              <Inline gap={1} alignY="center" flexWrap="wrap">
+                {showBlocked && <BlockedMarker />}
+                <LabelList labels={ticket.labels} />
+              </Inline>
+            ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
           </Stack>
         </Inline>

@@ -841,6 +841,30 @@ describe('TicketDrawer', () => {
       ).toBe(true);
     });
 
+    it('says it is ready to start once every Blocker is resolved', () => {
+      renderWithTheme(
+        <TicketDrawer
+          ticket={{ ...ticket, blockedBy: [2], blocked: false }}
+          projects={projects}
+          blockers={{
+            blockedBy: [
+              {
+                number: 2,
+                title: 'Design the header',
+                status: 'Done',
+                projectId: 1,
+                archived: false,
+                resolved: true,
+              },
+            ],
+            blocks: [],
+          }}
+        />,
+      );
+
+      expect(inDrawer().getByText('Ready to start')).toBeInTheDocument();
+    });
+
     it('says nothing about readiness without Blockers', () => {
       renderDrawer();
 

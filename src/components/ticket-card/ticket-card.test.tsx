@@ -81,12 +81,28 @@ describe('TicketCard', () => {
   describe('blocked', () => {
     const blocked = { name: 'Blocked by an unresolved Ticket' };
 
-    it('says so when the Ticket is blocked', () => {
+    it('says so beside its labels when the Ticket is blocked', () => {
       renderWithTheme(
-        <TicketCard ticket={{ ...ticket, blockedBy: [3], blocked: true }} />,
+        <TicketCard
+          ticket={{ ...ticket, labels: ['bug'], blockedBy: [3], blocked: true }}
+        />,
       );
 
-      expect(screen.getByRole('img', blocked)).toHaveTextContent('Blocked');
+      const marker = screen.getByRole('img', blocked);
+      expect(marker).toHaveTextContent('Blocked');
+      expect(marker.parentElement).toContainElement(
+        screen.getByRole('list', { name: 'Labels' }),
+      );
+    });
+
+    it('says so for a blocked Ticket that is still Todo', () => {
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, status: 'Todo', blockedBy: [3], blocked: true }}
+        />,
+      );
+
+      expect(screen.getByRole('img', blocked)).toBeInTheDocument();
     });
 
     it('says nothing, not even ready, when it is not blocked', () => {
@@ -95,7 +111,9 @@ describe('TicketCard', () => {
       );
 
       expect(screen.queryByRole('img', blocked)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Blocked|Ready/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/^(Blocked|Ready to start)$/),
+      ).not.toBeInTheDocument();
     });
 
     it('says nothing once the Ticket is Done, though a Blocker is unresolved', () => {
