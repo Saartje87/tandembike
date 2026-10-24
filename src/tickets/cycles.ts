@@ -1,10 +1,10 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
-import { cycles, projects } from '../db/schema';
+import { cycles, cycleTickets, projects, tickets } from '../db/schema';
 import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
-import { NotFoundError } from './errors';
+import { NotAllowedError, NotFoundError } from './errors';
 import { checkTitle, throwFieldErrors } from './rules';
 
 /** A goal-led plan within one Project (ADR 0010). */
@@ -14,12 +14,17 @@ export type Cycle = {
   /** One line, trimmed: the goal it works towards. */
   title: string;
   state: CycleState;
+  /** The numbers of the Tickets planned into it, sorted. */
+  ticketNumbers: number[];
   createdAt: Date;
 };
 
 export type CreateCycleInput = { projectId: number; title: string };
 
 export type RenameCycleInput = { title: string };
+
+/** A Ticket to plan into, or out of, a Cycle. */
+export type CycleTicketInput = { cycleId: number; number: number };
 
 const cycleColumns = {
   id: cycles.id,
@@ -28,6 +33,8 @@ const cycleColumns = {
   state: cycles.state,
   createdAt: cycles.createdAt,
 };
+
+type CycleRow = Omit<Cycle, 'ticketNumbers'>;
 
 /** A trimmed Cycle title, or a `ValidationError` when it breaks the rules. */
 function checkedCycleTitle(rawTitle: string): string {
@@ -48,12 +55,110 @@ function checkProjectExists(db: DatabaseConnection, id: number) {
   }
 }
 
+/** `rows` with each Cycle's sorted Ticket numbers, in one query. */
+function withTicketNumbers(db: DatabaseConnection, rows: CycleRow[]): Cycle[] {
+  const numbersById = new Map<number, number[]>(
+    rows.map((row) => [row.id, []]),
+  );
+  if (rows.length > 0) {
+    const memberRows = db
+      .select({
+        cycleId: cycleTickets.cycleId,
+        number: cycleTickets.ticketNumber,
+      })
+      .from(cycleTickets)
+      .where(inArray(cycleTickets.cycleId, [...numbersById.keys()]))
+      .orderBy(asc(cycleTickets.ticketNumber))
+      .all();
+    for (const { cycleId, number } of memberRows) {
+      numbersById.get(cycleId)?.push(number);
+    }
+  }
+  return rows.map((row) => ({
+    ...row,
+    ticketNumbers: numbersById.get(row.id) ?? [],
+  }));
+}
+
+/**
+ * A subquery of the Ticket numbers in Cycle `cycleId`, or with `null`, in
+ * any Cycle that is not Archived: what `listTickets` filters by.
+ */
+export function cycleMembers(db: DatabaseConnection, cycleId: number | null) {
+  return db
+    .select({ number: cycleTickets.ticketNumber })
+    .from(cycleTickets)
+    .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+    .where(
+      cycleId === null
+        ? ne(cycles.state, 'Archived')
+        : eq(cycleTickets.cycleId, cycleId),
+    );
+}
+
+/**
+ * Plans just-created Ticket `number` of Project `projectId` into Cycle
+ * `cycleId`, which must be that Project's. Run it in the creating
+ * transaction, so a refusal creates nothing.
+ */
+export function planNewTicket(
+  db: DatabaseConnection,
+  { cycleId, number }: CycleTicketInput,
+  projectId: number,
+) {
+  const cycle = db
+    .select({ projectId: cycles.projectId, title: cycles.title })
+    .from(cycles)
+    .where(eq(cycles.id, cycleId))
+    .get();
+  if (!cycle) {
+    throw new NotFoundError(`There is no Cycle with id ${cycleId}.`);
+  }
+  if (cycle.projectId !== projectId) {
+    throw new NotAllowedError(
+      `The Cycle "${cycle.title}" is in another Project. A Cycle holds only its own Project's Tickets.`,
+    );
+  }
+  db.insert(cycleTickets).values({ cycleId, ticketNumber: number }).run();
+}
+
+/**
+ * Takes Ticket `number` out of every Cycle that is not Archived, as when it
+ * moves to another Project: a plan holds only its own Project's Tickets.
+ * Returns the ids of the Cycles it left.
+ */
+export function leaveOpenCycles(
+  db: DatabaseConnection,
+  number: number,
+): number[] {
+  const left = db
+    .select({ id: cycleTickets.cycleId })
+    .from(cycleTickets)
+    .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+    .where(
+      and(eq(cycleTickets.ticketNumber, number), ne(cycles.state, 'Archived')),
+    )
+    .all()
+    .map(({ id }) => id);
+  if (left.length > 0) {
+    db.delete(cycleTickets)
+      .where(
+        and(
+          eq(cycleTickets.ticketNumber, number),
+          inArray(cycleTickets.cycleId, left),
+        ),
+      )
+      .run();
+  }
+  return left;
+}
+
 /**
  * The Tickets module's Cycle functions, spread into `createTickets`: they
  * share its database and change channel.
  */
 export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
-  function getCycle(id: number): Cycle {
+  function cycleRow(id: number): CycleRow {
     const cycle = db
       .select(cycleColumns)
       .from(cycles)
@@ -65,25 +170,30 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     return cycle;
   }
 
+  function getCycle(id: number): Cycle {
+    return withTicketNumbers(db, [cycleRow(id)])[0];
+  }
+
   return {
     getCycle,
 
     /** Every Cycle of Project `projectId`, oldest first. */
     listCycles(projectId: number): Cycle[] {
       checkProjectExists(db, projectId);
-      return db
+      const rows = db
         .select(cycleColumns)
         .from(cycles)
         .where(eq(cycles.projectId, projectId))
         .orderBy(asc(cycles.id))
         .all();
+      return withTicketNumbers(db, rows);
     },
 
     /** Creates an empty, Prepared Cycle in a Project. */
     createCycle(input: CreateCycleInput): Cycle {
       const title = checkedCycleTitle(input.title);
       checkProjectExists(db, input.projectId);
-      const cycle = db
+      const { id } = db
         .insert(cycles)
         .values({
           projectId: input.projectId,
@@ -91,33 +201,108 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           state: 'Prepared',
           createdAt: new Date(),
         })
-        .returning(cycleColumns)
+        .returning({ id: cycles.id })
         .get();
-      changes.publish({ type: 'cycle', id: cycle.id });
-      return cycle;
+      changes.publish({ type: 'cycle', id });
+      return getCycle(id);
     },
 
     /** Renames Cycle `id` by the rules for creating one. */
     renameCycle(id: number, input: RenameCycleInput): Cycle {
       const title = checkedCycleTitle(input.title);
-      const cycle = db
-        .update(cycles)
-        .set({ title })
-        .where(eq(cycles.id, id))
-        .returning(cycleColumns)
-        .get();
-      if (!cycle) {
-        throw new NotFoundError(`There is no Cycle with id ${id}.`);
-      }
+      cycleRow(id);
+      db.update(cycles).set({ title }).where(eq(cycles.id, id)).run();
       changes.publish({ type: 'cycle', id });
-      return cycle;
+      return getCycle(id);
     },
 
-    /** Deletes Prepared Cycle `id`: a plan the User no longer wants. */
+    /**
+     * Deletes Prepared Cycle `id`, a plan the User no longer wants; its
+     * Tickets go back to the Backlog.
+     */
     discardCycle(id: number): void {
-      getCycle(id);
-      db.delete(cycles).where(eq(cycles.id, id)).run();
+      cycleRow(id);
+      db.transaction(() => {
+        db.delete(cycleTickets).where(eq(cycleTickets.cycleId, id)).run();
+        db.delete(cycles).where(eq(cycles.id, id)).run();
+      });
       changes.publish({ type: 'cycle', id });
+    },
+
+    /**
+     * Plans Ticket `number` into Cycle `cycleId`; planning a member again
+     * changes nothing. Only an open, non-archived Ticket of the Cycle's
+     * Project can be planned, and only while it is in no other Cycle that is
+     * not Archived.
+     */
+    planTicket({ cycleId, number }: CycleTicketInput): Cycle {
+      db.transaction(() => {
+        const cycle = cycleRow(cycleId);
+        const ticket = db
+          .select({
+            projectId: tickets.projectId,
+            status: tickets.status,
+            archived: tickets.archived,
+          })
+          .from(tickets)
+          .where(eq(tickets.number, number))
+          .get();
+        if (!ticket) {
+          throw new NotFoundError(`There is no Ticket #${number}.`);
+        }
+        const current = db
+          .select({ id: cycles.id, title: cycles.title })
+          .from(cycleTickets)
+          .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+          .where(
+            and(
+              eq(cycleTickets.ticketNumber, number),
+              ne(cycles.state, 'Archived'),
+            ),
+          )
+          .get();
+        if (current?.id === cycleId) {
+          return;
+        }
+        if (ticket.projectId !== cycle.projectId) {
+          throw new NotAllowedError(
+            `Ticket #${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+          );
+        }
+        if (ticket.archived) {
+          throw new NotAllowedError(
+            `Ticket #${number} is archived. Restore it before planning it into a Cycle.`,
+          );
+        }
+        if (ticket.status === 'Done') {
+          throw new NotAllowedError(
+            `Ticket #${number} is Done. Only open Tickets can be planned into a Cycle.`,
+          );
+        }
+        if (current) {
+          throw new NotAllowedError(
+            `Ticket #${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
+          );
+        }
+        db.insert(cycleTickets).values({ cycleId, ticketNumber: number }).run();
+      });
+      changes.publish({ type: 'cycle', id: cycleId });
+      return getCycle(cycleId);
+    },
+
+    /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
+    unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
+      cycleRow(cycleId);
+      db.delete(cycleTickets)
+        .where(
+          and(
+            eq(cycleTickets.cycleId, cycleId),
+            eq(cycleTickets.ticketNumber, number),
+          ),
+        )
+        .run();
+      changes.publish({ type: 'cycle', id: cycleId });
+      return getCycle(cycleId);
     },
   };
 }

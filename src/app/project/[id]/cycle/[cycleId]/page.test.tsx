@@ -56,13 +56,19 @@ describe('CyclePage', () => {
     notFound.mockClear();
   });
 
-  it("shows the Cycle as a tab of its Project's Board", async () => {
+  it("shows the Cycle's Tickets as a tab of its Project's Board", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     tickets.createCycle({ projectId: project.id, title: 'Beta' });
     const cycle = tickets.createCycle({
       projectId: project.id,
       title: 'Launch',
+    });
+    tickets.createTicket({ projectId: project.id, title: 'In the Backlog' });
+    const planned = tickets.createTicket({
+      projectId: project.id,
+      title: 'Planned',
+      cycleId: cycle.id,
     });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
@@ -78,6 +84,9 @@ describe('CyclePage', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Launch' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
+      `Tickets: #${planned.number}`,
+    );
     await expect(generateMetadata({ params })).resolves.toEqual({
       title: 'Launch · Website',
     });

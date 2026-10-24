@@ -55,3 +55,33 @@ export async function discardCycle(input: {
     return {};
   });
 }
+
+/** Plans a Ticket into a Cycle for the UI, returning domain errors as `error`. */
+export async function planTicket(input: {
+  cycleId: number;
+  number: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().planTicket({
+      cycleId: Number(input?.cycleId),
+      number: Number(input?.number),
+    });
+    revalidateProjects();
+    return {};
+  });
+}
+
+/** Takes a Ticket out of a Cycle for the UI, returning domain errors as `error`. */
+export async function unplanTicket(input: {
+  cycleId: number;
+  number: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().unplanTicket({
+      cycleId: Number(input?.cycleId),
+      number: Number(input?.number),
+    });
+    revalidateProjects();
+    return {};
+  });
+}

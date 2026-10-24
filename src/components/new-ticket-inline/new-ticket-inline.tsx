@@ -18,16 +18,22 @@ import { Icon } from '../icon/icon';
 export type NewTicketInlineProps = {
   /** The Project the new Ticket goes in. */
   projectId: number;
+  /** The Cycle to plan it into, on that Cycle's tab. */
+  cycleId?: number;
 };
 
 /**
- * A title field that creates a Ticket in Todo in `projectId` on Enter, or
+ * A title field that creates a Ticket in Todo in `projectId`, planned into
+ * `cycleId` when given, on Enter, or
  * with its Create Ticket button, and clears for the next one; Escape clears
  * it without creating. The module validates, and its reason shows under the
  * field. On success the Server Action revalidates the Board, which shows the
  * new Ticket.
  */
-export const NewTicketInline: FC<NewTicketInlineProps> = ({ projectId }) => {
+export const NewTicketInline: FC<NewTicketInlineProps> = ({
+  projectId,
+  cycleId,
+}) => {
   const titleId = useId();
   const errorId = useId();
   const {
@@ -40,7 +46,11 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({ projectId }) => {
   const reason = errors.title?.message ?? errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ title }) => {
-    const result = await createTicket({ projectId, title });
+    const result = await createTicket({
+      projectId,
+      title,
+      ...(cycleId === undefined ? {} : { cycleId }),
+    });
     if (!result.ok) {
       const titleReason = result.fieldErrors?.title;
       if (titleReason) {

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import type { FC } from 'react';
 
-import { Board } from '../../../../../components/board/board';
-import { ProjectTabs } from '../../../../../components/project-tabs/project-tabs';
 import { TicketDrawer } from '../../../../../components/ticket-drawer/ticket-drawer';
+import { cyclePath, projectPath } from '../../../../lib/paths';
+import { ProjectBoard } from '../../project-board';
 import { loadProjectTicket, type ProjectTicketPageProps } from './ticket-data';
 
 export async function generateMetadata({
@@ -13,24 +13,20 @@ export async function generateMetadata({
   return { title: `#${ticket.number} ${ticket.title}` };
 }
 
+/** A Ticket in its drawer over its tab: its Cycle's, or the Backlog. */
 const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
   const { ticket, project, tickets } = await loadProjectTicket(params);
+  const cycles = tickets.listCycles(project.id);
+  const cycle = cycles.find(
+    ({ state, ticketNumbers }) =>
+      state !== 'Archived' && ticketNumbers.includes(ticket.number),
+  );
   return (
     <>
-      <Board
+      <ProjectBoard
         project={project}
-        tickets={tickets.listTickets({
-          projectId: project.id,
-          includeArchived: true,
-        })}
+        tab={cycle ?? 'backlog'}
         openTicket={ticket.number}
-        header={
-          <ProjectTabs
-            projectId={project.id}
-            cycles={tickets.listCycles(project.id)}
-            current="backlog"
-          />
-        }
       />
       <TicketDrawer
         ticket={ticket}
@@ -38,6 +34,10 @@ const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
         allLabels={tickets.listLabels()}
         comments={tickets.listComments(ticket.number)}
         blockers={tickets.listBlockers(ticket.number)}
+        cycles={cycles}
+        boardPath={
+          cycle ? cyclePath(project.id, cycle.id) : projectPath(project.id)
+        }
       />
     </>
   );

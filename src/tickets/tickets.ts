@@ -26,7 +26,12 @@ import {
   tickets,
 } from '../db/schema';
 import { type ChangeChannel, createChangeChannel } from './changes';
-import { createCycles } from './cycles';
+import {
+  createCycles,
+  cycleMembers,
+  leaveOpenCycles,
+  planNewTicket,
+} from './cycles';
 import {
   NameTakenError,
   NotAllowedError,
@@ -105,6 +110,8 @@ export type CreateTicketInput = {
   labels?: string[];
   /** In order; defaults to none. Each starts unchecked unless `checked`. */
   acceptanceCriteria?: NewAcceptanceCriterion[];
+  /** A Cycle of the same Project to plan it into; defaults to none. */
+  cycleId?: number;
 };
 
 export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
@@ -167,6 +174,12 @@ export type ReorderTicketsInput = {
   projectId: number;
   status: Status;
   ticketNumbers: number[];
+  /**
+   * Reorder only the lane as a Cycle's tab shows it, or with `null`, as the
+   * Backlog shows it; see `ListTicketsFilter.cycleId`. Defaults to the whole
+   * Project's lane.
+   */
+  cycleId?: number | null;
 };
 
 export type ListTicketsFilter = {
@@ -183,6 +196,11 @@ export type ListTicketsFilter = {
   blocked?: boolean;
   /** Only Tickets that are claimed when true, or unclaimed when false. */
   claimed?: boolean;
+  /**
+   * Only the Tickets planned into this Cycle, or with `null`, only those in
+   * no Prepared or Active Cycle: the Backlog, Done ones included.
+   */
+  cycleId?: number | null;
 };
 
 export const defaultPageSize = 50;
@@ -832,6 +850,9 @@ export function createTickets(
           .get();
         insertLabels(db, number, labels);
         insertAcceptanceCriteria(db, number, acceptanceCriteria);
+        if (input.cycleId !== undefined) {
+          planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
+        }
         return number;
       });
       changes.publish({ type: 'ticket', number });
@@ -1050,12 +1071,13 @@ export function createTickets(
     },
 
     /**
-     * Sets the order of the active Tickets in a Project's Status lane.
-     * Archived Tickets keep their slots. The complete active lane must be
+     * Sets the order of the active Tickets in a Project's Status lane, or in
+     * the part of it a Cycle or the Backlog shows. Archived Tickets, and
+     * Tickets outside that part, keep their slots. The complete lane must be
      * supplied so stale Board data cannot silently lose a Ticket.
      */
     reorderTickets(input: ReorderTicketsInput): void {
-      const { projectId, status, ticketNumbers } = input;
+      const { projectId, status, ticketNumbers, cycleId } = input;
       if (!isStatus(status)) {
         throw new ValidationError({ status: statusRule });
       }
@@ -1095,9 +1117,18 @@ export function createTickets(
           asc(tickets.number),
         )
         .all();
-      const activeNumbers = lane
-        .filter((ticket) => !ticket.archived)
-        .map((ticket) => ticket.number);
+      const members =
+        cycleId === undefined
+          ? undefined
+          : new Set(
+              cycleMembers(db, cycleId)
+                .all()
+                .map(({ number }) => number),
+            );
+      const movable = ({ number, archived }: (typeof lane)[number]) =>
+        !archived &&
+        (members === undefined || members.has(number) === (cycleId !== null));
+      const activeNumbers = lane.filter(movable).map((ticket) => ticket.number);
       if (
         activeNumbers.length !== ticketNumbers.length ||
         activeNumbers.some((number) => !ticketNumbers.includes(number))
@@ -1110,7 +1141,7 @@ export function createTickets(
       const reordered = [...ticketNumbers];
       let activeIndex = 0;
       const orderedLane = lane.map((ticket) =>
-        ticket.archived ? ticket.number : reordered[activeIndex++],
+        movable(ticket) ? reordered[activeIndex++] : ticket.number,
       );
       if (orderedLane.every((number, index) => number === lane[index].number)) {
         return;
@@ -1238,8 +1269,9 @@ export function createTickets(
 
   /**
    * Writes checked `changes` to Ticket `number` in one transaction, without
-   * announcing them: removed labels go before added ones, and a Ticket that
-   * changes Project or Status goes to the end of its new lane.
+   * announcing them: removed labels go before added ones, a Ticket that
+   * changes Project or Status goes to the end of its new lane, and one that
+   * changes Project leaves its Cycle unless that is Archived.
    */
   function applyTicketChanges(
     number: number,
@@ -1273,6 +1305,9 @@ export function createTickets(
         })
         .where(eq(tickets.number, number))
         .run();
+      if (projectId !== existing.projectId) {
+        leaveOpenCycles(db, number);
+      }
       deleteLabels(db, number, removeLabels);
       insertLabels(db, number, addLabels);
       if (acceptanceCriteria !== undefined) {
@@ -1335,6 +1370,12 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
       : filter.claimed
         ? isNotNull(tickets.claimAgentRunId)
         : isNull(tickets.claimAgentRunId),
+    filter.cycleId === undefined
+      ? undefined
+      : (filter.cycleId === null ? notInArray : inArray)(
+          tickets.number,
+          cycleMembers(db, filter.cycleId),
+        ),
   );
 }
 

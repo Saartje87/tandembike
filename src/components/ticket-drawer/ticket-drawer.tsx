@@ -39,10 +39,12 @@ import {
   restoreTicket,
   updateTicket,
 } from '../../app/tickets/actions';
+import type { Cycle } from '../../tickets/cycles';
 import type { Blockers, Comment, Project, Ticket } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
+import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
@@ -63,8 +65,15 @@ export type TicketDrawerProps = {
   comments?: Comment[];
   /** The Ticket's blocking relationships. Defaults to none. */
   blockers?: Blockers;
+  /** The Cycles of the Ticket's Project, to plan it into. Defaults to none. */
+  cycles?: Cycle[];
   /** Use browser history to close when the drawer is intercepted over a Board. */
   closeWithBack?: boolean;
+  /**
+   * Where closing goes without `closeWithBack`: the tab the Ticket is on.
+   * Defaults to its Project's Backlog, as it does after a move.
+   */
+  boardPath?: string;
 };
 
 /** The fields the drawer saves one at a time. */
@@ -405,6 +414,8 @@ const DetailName: FC<DetailNameProps> = ({ children }) => (
 
 const noBlockers: Blockers = { blockedBy: [], blocks: [] };
 
+const noCycles: Cycle[] = [];
+
 /** The drawer itself, with its edits, for as long as it is shown. */
 const OpenDrawer: FC<TicketDrawerProps> = ({
   ticket,
@@ -412,7 +423,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   allLabels = [],
   comments = [],
   blockers = noBlockers,
+  cycles = noCycles,
   closeWithBack = false,
+  boardPath,
 }) => {
   const router = useRouter();
   const statusId = useId();
@@ -439,7 +452,11 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     if (shouldCloseWithBack) {
       router.back();
     } else {
-      router.push(projectPath(currentProjectId));
+      router.push(
+        boardPath !== undefined && currentProjectId === ticket.projectId
+          ? boardPath
+          : projectPath(currentProjectId),
+      );
     }
   };
   const requestClose = () => {
@@ -596,6 +613,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 <FieldError id={projectErrorId} reason={errors.projectId} />
               </Stack>
             </Detail>
+            <Detail name={<DetailName>Cycle</DetailName>}>
+              <CyclePlanner ticket={{ ...ticket, archived }} cycles={cycles} />
+            </Detail>
             <Detail name={<DetailName>Labels</DetailName>}>
               <LabelEditor
                 ticketNumber={ticket.number}
@@ -687,7 +707,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 
 /**
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
- * in-place editable heading, its Status, Project, labels and Blockers, its Markdown
+ * in-place editable heading, its Status, Project, Cycle, labels and Blockers, its Markdown
  * description, acceptance criteria and comments, and a footer with its timestamps and Archive.
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. Closing

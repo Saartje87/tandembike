@@ -17,6 +17,7 @@ export const TicketDrawerSlot: FC<ProjectTicketPageProps> = async ({
       allLabels={tickets.listLabels()}
       comments={tickets.listComments(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
+      cycles={tickets.listCycles(ticket.projectId)}
       closeWithBack
     />
   );

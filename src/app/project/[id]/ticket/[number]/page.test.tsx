@@ -78,6 +78,36 @@ describe('ProjectTicketPage', () => {
     });
   });
 
+  it("shows a planned Ticket over its Cycle's tab", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'In the Backlog' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      cycleId: cycle.id,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    renderWithTheme(
+      <main>
+        {
+          await TicketPage({
+            params: Promise.resolve({
+              id: String(project.id),
+              number: String(ticket.number),
+            }),
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
+      `#${ticket.number} open #${ticket.number}`,
+    );
+  });
+
   it('does not show a Ticket under a different Project', async () => {
     const tickets = createTestTickets();
     const requestedProject = tickets.createProject({ name: 'Requested' });

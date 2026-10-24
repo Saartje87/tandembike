@@ -2,7 +2,11 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { reorderTickets, updateTicket } from '../../app/tickets/actions';
+import {
+  createTicket,
+  reorderTickets,
+  updateTicket,
+} from '../../app/tickets/actions';
 import { keyboardDrag, stubDragAndDrop } from '../../test/drag-and-drop';
 import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
@@ -206,6 +210,36 @@ describe('Board', () => {
     expect(
       screen.queryByRole('button', { name: 'New Ticket' }),
     ).not.toBeInTheDocument();
+  });
+
+  it("plans a Ticket created on a Cycle's tab into that Cycle", async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 9 });
+    renderWithTheme(<Board project={project} tickets={[]} cycleId={7} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Fix the header{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      title: 'Fix the header',
+      cycleId: 7,
+    });
+  });
+
+  it('shows its header under the Project name', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[]}
+        header={<nav aria-label="Project views" />}
+      />,
+    );
+
+    expect(
+      screen.getByRole('navigation', { name: 'Project views' }),
+    ).toBeInTheDocument();
   });
 
   it('does not show a Status dropdown on Ticket cards', () => {
