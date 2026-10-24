@@ -35,6 +35,11 @@ export type StartCycleInput = {
    * Defaults to false, which refuses to start while another is Active.
    */
   archiveActive?: boolean;
+  /**
+   * The Active Cycle the confirmation was given for. When another Cycle is
+   * Active by now, the start is refused rather than archive that one.
+   */
+  activeCycleId?: number;
 };
 
 /** A Ticket to plan into, or out of, a Cycle. */
@@ -272,7 +277,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     startCycle(
       id: number,
-      { archiveActive = false }: StartCycleInput = {},
+      { archiveActive = false, activeCycleId }: StartCycleInput = {},
     ): Cycle {
       const archivedId = db.transaction(() => {
         const cycle = cycleRow(id);
@@ -299,6 +304,15 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         if (active && !archiveActive) {
           throw new NotAllowedError(
             `The Cycle "${active.title}" is Active. Starting another archives it, so confirm that first.`,
+          );
+        }
+        if (
+          active &&
+          activeCycleId !== undefined &&
+          active.id !== activeCycleId
+        ) {
+          throw new NotAllowedError(
+            `The Active Cycle is now "${active.title}", not the one you confirmed archiving. Check it and try again.`,
           );
         }
         if (active) {
@@ -431,15 +445,30 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
     /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
     unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      checkChangeable(cycleRow(cycleId));
-      db.delete(cycleTickets)
+      const cycle = cycleRow(cycleId);
+      checkChangeable(cycle);
+      const removed = db
+        .delete(cycleTickets)
         .where(
           and(
             eq(cycleTickets.cycleId, cycleId),
             eq(cycleTickets.ticketNumber, number),
           ),
         )
-        .run();
+        .returning({ number: cycleTickets.ticketNumber })
+        .get();
+      if (!removed) {
+        const ticket = db
+          .select({ number: tickets.number })
+          .from(tickets)
+          .where(eq(tickets.number, number))
+          .get();
+        throw ticket
+          ? new NotAllowedError(
+              `Ticket #${number} is not planned into the Cycle "${cycle.title}".`,
+            )
+          : new NotFoundError(`There is no Ticket #${number}.`);
+      }
       changes.publish({ type: 'cycle', id: cycleId });
       return getCycle(cycleId);
     },

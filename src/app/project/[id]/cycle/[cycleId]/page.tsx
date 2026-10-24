@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import type { FC } from 'react';
 
-import { ProjectBoard } from '../../project-board';
+import { ProjectBoard } from '../../project-board/project-board';
 import { type CyclePageProps, loadProjectCycle } from '../../project-data';
 
 export async function generateMetadata({

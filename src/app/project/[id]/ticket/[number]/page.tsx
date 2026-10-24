@@ -3,7 +3,7 @@ import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../../components/ticket-drawer/ticket-drawer';
 import { cyclePath, projectPath } from '../../../../lib/paths';
-import { ProjectBoard } from '../../project-board';
+import { ProjectBoard } from '../../project-board/project-board';
 import { loadProjectTicket, type ProjectTicketPageProps } from './ticket-data';
 
 export async function generateMetadata({

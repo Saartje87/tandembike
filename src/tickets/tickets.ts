@@ -879,8 +879,11 @@ export function createTickets(
         }
       }
 
-      applyTicketChanges(number, checked);
+      const leftCycles = applyTicketChanges(number, checked);
       changes.publish({ type: 'ticket', number });
+      for (const id of leftCycles) {
+        changes.publish({ type: 'cycle', id });
+      }
       return getTicket(number);
     },
 
@@ -1271,13 +1274,14 @@ export function createTickets(
    * Writes checked `changes` to Ticket `number` in one transaction, without
    * announcing them: removed labels go before added ones, a Ticket that
    * changes Project or Status goes to the end of its new lane, and one that
-   * changes Project leaves its Cycle unless that is Archived.
+   * changes Project leaves its Cycle unless that is Archived. Returns the
+   * ids of the Cycles it left.
    */
   function applyTicketChanges(
     number: number,
     { values, addLabels, removeLabels, acceptanceCriteria }: TicketChanges,
-  ) {
-    db.transaction(() => {
+  ): number[] {
+    return db.transaction(() => {
       const existing = db
         .select(ticketColumns)
         .from(tickets)
@@ -1305,14 +1309,14 @@ export function createTickets(
         })
         .where(eq(tickets.number, number))
         .run();
-      if (projectId !== existing.projectId) {
-        leaveOpenCycles(db, number);
-      }
+      const leftCycles =
+        projectId === existing.projectId ? [] : leaveOpenCycles(db, number);
       deleteLabels(db, number, removeLabels);
       insertLabels(db, number, addLabels);
       if (acceptanceCriteria !== undefined) {
         replaceAcceptanceCriteria(db, number, acceptanceCriteria);
       }
+      return leftCycles;
     });
   }
 

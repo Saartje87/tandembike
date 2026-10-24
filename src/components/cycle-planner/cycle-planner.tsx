@@ -34,8 +34,8 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const selectId = useId();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const open = cycles.filter((cycle) => cycle.state !== 'Archived');
-  const current = open.find((cycle) =>
+  const plannable = cycles.filter((cycle) => cycle.state !== 'Archived');
+  const current = plannable.find((cycle) =>
     cycle.ticketNumbers.includes(ticket.number),
   );
 
@@ -77,7 +77,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
         Only open Tickets can be planned into a Cycle.
       </Text>
     );
-  } else if (open.length === 0) {
+  } else if (plannable.length === 0) {
     control = <Text color="text-600">Not planned</Text>;
   } else {
     control = (
@@ -98,7 +98,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           }}
         >
           <option value="">Not planned</option>
-          {open.map((cycle) => (
+          {plannable.map((cycle) => (
             <option key={cycle.id} value={cycle.id}>
               {cycle.title}
             </option>

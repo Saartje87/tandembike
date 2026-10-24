@@ -256,6 +256,7 @@ describe('CycleHeader', () => {
       expect(startCycle).toHaveBeenCalledExactlyOnceWith({
         cycleId: 7,
         archiveActive: true,
+        activeCycleId: 6,
       });
     });
 

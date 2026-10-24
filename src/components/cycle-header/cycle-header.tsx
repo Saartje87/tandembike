@@ -171,7 +171,13 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
         `Start "${cycle.title}" and archive the Active Cycle "${activeCycle.title}"? Its open Tickets move to "${cycle.title}".`,
       )
     ) {
-      run(({ cycleId }) => startCycle({ cycleId, archiveActive: true }));
+      run(({ cycleId }) =>
+        startCycle({
+          cycleId,
+          archiveActive: true,
+          activeCycleId: activeCycle.id,
+        }),
+      );
     }
   };
 
