@@ -233,14 +233,19 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one Status, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
+      description: `Find Tickets, oldest-created first, optionally only those in one Project, in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor }: a page of at most limit Tickets, and the cursor for the next page, or null on the last page. An empty tickets list means nothing matched. Each Ticket has its number, title, Status, type (Ticket or Epic), epic (the Epic it is a child of, or null), projectId, labels, blockedBy (its Blockers' numbers), blocked (whether any Blocker is unresolved), claim (the Agent run holding it, or null), archived flag and timestamps; set includeDescription for whole Tickets, or call get_ticket for one Ticket's description and acceptance criteria.`,
       inputSchema: {
         projectId: projectId
           .optional()
           .describe(
             'Only list Tickets in this Project (id from list_projects).',
           ),
-        status: status.optional().describe('Only list Tickets in this Status.'),
+        status: z
+          .union([status, z.array(status)])
+          .optional()
+          .describe(
+            'Only list Tickets in this Status, or with a list such as ["Todo", "In progress"], in any of those Statuses.',
+          ),
         labels: z
           .array(label)
           .optional()

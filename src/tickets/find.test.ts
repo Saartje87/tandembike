@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import { ValidationError } from './errors';
+import type { Status } from './status';
 import type { TicketPage } from './tickets';
 
 describe('Finding Tickets', () => {
@@ -239,6 +240,71 @@ describe('Finding Tickets', () => {
   });
 });
 
+describe('Finding Tickets in several Statuses', () => {
+  it('finds Tickets in any of the given Statuses, oldest-created first', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Started',
+      status: 'In progress',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Finished',
+      status: 'Done',
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Waiting' });
+
+    expect(
+      titles(tickets.findTickets({ status: ['Todo', 'In progress'] })),
+    ).toEqual(['Started', 'Waiting']);
+    expect(titles(tickets.findTickets({ status: 'Done' }))).toEqual([
+      'Finished',
+    ]);
+  });
+
+  it('pages through Tickets in several Statuses', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    for (const status of ['Todo', 'Done', 'In progress', 'Todo'] as const) {
+      tickets.createTicket({ projectId: project.id, title: status, status });
+    }
+    const status = ['Todo', 'In progress'] as const;
+
+    const first = tickets.findTickets({ status: [...status], limit: 2 });
+    const second = tickets.findTickets({
+      status: [...status],
+      limit: 2,
+      cursor: first.nextCursor ?? 0,
+    });
+
+    expect([numbers(first), first.nextCursor]).toEqual([[1, 3], 3]);
+    expect([numbers(second), second.nextCursor]).toEqual([[4], null]);
+  });
+
+  it.each([
+    ['an empty list', [], 'Choose at least one Status, or leave status out.'],
+    [
+      'an unknown Status',
+      ['Todo', 'Blocked'],
+      'Choose a Status: Todo, In progress or Done.',
+    ],
+  ])('refuses %s of Statuses', (_case, status, reason) => {
+    const tickets = createTestTickets();
+
+    expect(
+      errorFrom(() =>
+        tickets.findTickets({ status: status as unknown as Status[] }),
+      ),
+    ).toEqual(new ValidationError({ status: reason }));
+  });
+});
+
 function titles(page: TicketPage): string[] {
   return page.tickets.map(({ title }) => title);
+}
+
+function numbers(page: TicketPage): number[] {
+  return page.tickets.map(({ number }) => number);
 }

@@ -267,6 +267,49 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
+  it('lists Tickets in any of several Statuses', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Waiting' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Finished',
+      status: 'Done',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Started',
+      status: 'In progress',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const open = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: ['Todo', 'In progress'] },
+    });
+    const empty = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: [] },
+    });
+    const unknown = await client.callTool({
+      name: 'list_tickets',
+      arguments: { status: ['Todo', 'Blocked'] },
+    });
+
+    expect(
+      (resultJson(open) as { tickets: { title: string }[] }).tickets.map(
+        ({ title }) => title,
+      ),
+    ).toEqual(['Waiting', 'Started']);
+    expect(empty.isError).toBe(true);
+    expect(resultText(empty)).toBe(
+      'Choose at least one Status, or leave status out.',
+    );
+    expect(unknown.isError).toBe(true);
+    expect(resultText(unknown)).toMatch(/status/);
+    await client.close();
+  });
+
   it('lists only unclaimed Tickets when finding ready work', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

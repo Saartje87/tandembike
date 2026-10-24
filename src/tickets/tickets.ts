@@ -241,7 +241,8 @@ export type ReorderTicketsInput = {
 
 export type ListTicketsFilter = {
   projectId?: number;
-  status?: Status;
+  /** Only Tickets in this Status, or in any of these Statuses. */
+  status?: Status | readonly Status[];
   /** Only Tickets that have every one of these labels, ignoring case. */
   labels?: string[];
   /** Also list archived Tickets, which are left out by default. */
@@ -795,6 +796,10 @@ export function createTickets(
               .get();
       throwFieldErrors({
         limit: checkLimit(limit),
+        status:
+          input.status === undefined
+            ? undefined
+            : checkStatusFilter(input.status),
         query: query === undefined ? undefined : checkQuery(query),
         cursor:
           input.cursor !== undefined && !cursor
@@ -1675,7 +1680,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
     filter.projectId === undefined
       ? undefined
       : eq(tickets.projectId, filter.projectId),
-    filter.status === undefined ? undefined : eq(tickets.status, filter.status),
+    filter.status === undefined
+      ? undefined
+      : inArray(tickets.status, statusList(filter.status)),
     filter.includeArchived ? undefined : eq(tickets.archived, false),
     labels.length === 0
       ? undefined
@@ -1722,6 +1729,20 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
           cycleMembers(db, filter.cycleId),
         ),
   );
+}
+
+/** `status` as a list: one Status, or the Statuses given. */
+function statusList(status: Status | readonly Status[]): Status[] {
+  return typeof status === 'string' ? [status] : [...status];
+}
+
+/** Why the Statuses to filter on break the rules, if they do. */
+function checkStatusFilter(status: Status | readonly Status[]) {
+  const list = statusList(status);
+  if (list.length === 0) {
+    return 'Choose at least one Status, or leave status out.';
+  }
+  return list.every(isStatus) ? undefined : statusRule;
 }
 
 /** Tickets in the order `listTickets` and `findTickets` list them. */
