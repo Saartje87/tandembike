@@ -527,3 +527,115 @@ describe('Blockers and Epics', () => {
     );
   });
 });
+
+describe('Claiming an Epic', () => {
+  const run1 = { agentRunId: 'run-1', agentName: 'Frontend Agent' };
+  const run2 = { agentRunId: 'run-2' };
+
+  const epicWithChildren = () => {
+    const { tickets, project, epic } = setUp();
+    const [first, second] = ['First', 'Second'].map((title) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        epicNumber: epic.number,
+      }),
+    );
+    return { tickets, project, epic, first, second };
+  };
+
+  it('covers its children: another run cannot claim one', () => {
+    const { tickets, epic, first } = epicWithChildren();
+    tickets.claimTicket(epic.number, run1);
+
+    expect(errorFrom(() => tickets.claimTicket(first.number, run2))).toEqual(
+      new NotAllowedError(
+        `Ticket #${first.number} is in Epic #${epic.number}, which is claimed by Frontend Agent (run-1). Claiming an Epic covers its children.`,
+      ),
+    );
+    expect(tickets.getTicket(first.number).claim).toBeNull();
+  });
+
+  it("lets the Epic's own run claim a child too", () => {
+    const { tickets, epic, first } = epicWithChildren();
+    tickets.claimTicket(epic.number, run1);
+
+    expect(tickets.claimTicket(first.number, run1).claim).toEqual(run1);
+  });
+
+  it('lets a child be claimed alone while its Epic is unclaimed', () => {
+    const { tickets, first } = epicWithChildren();
+
+    expect(tickets.claimTicket(first.number, run2).claim).toEqual({
+      agentRunId: 'run-2',
+      agentName: null,
+    });
+  });
+
+  it('is refused while another run holds a child', () => {
+    const { tickets, epic, first } = epicWithChildren();
+    tickets.claimTicket(first.number, run2);
+
+    expect(errorFrom(() => tickets.claimTicket(epic.number, run1))).toEqual(
+      new NotAllowedError(
+        `Epic #${epic.number} has child Ticket #${first.number} claimed by Agent run run-2. Claiming an Epic covers its children, so that claim must be released first.`,
+      ),
+    );
+  });
+
+  it('is released when the Epic reaches Done', () => {
+    const { tickets, epic, first, second } = epicWithChildren();
+    tickets.claimTicket(epic.number, run1);
+
+    tickets.updateTicket(first.number, { status: 'Done' });
+    expect(tickets.getTicket(epic.number).claim).toEqual(run1);
+
+    tickets.updateTicket(second.number, { status: 'Done' });
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      status: 'Done',
+      claim: null,
+    });
+  });
+
+  it('is refused when all its children are Done', () => {
+    const { tickets, epic, first, second } = epicWithChildren();
+    tickets.updateTickets({
+      ticketNumbers: [first.number, second.number],
+      status: 'Done',
+    });
+
+    expect(errorFrom(() => tickets.claimTicket(epic.number, run1))).toEqual(
+      new NotAllowedError(
+        `Epic #${epic.number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
+      ),
+    );
+  });
+
+  it("frees its children when the User clears the Epic's claim", () => {
+    const { tickets, epic, first } = epicWithChildren();
+    tickets.claimTicket(epic.number, run1);
+
+    tickets.clearTicketClaim(epic.number);
+
+    expect(tickets.claimTicket(first.number, run2).claim?.agentRunId).toBe(
+      'run-2',
+    );
+  });
+
+  it("counts a claimed Epic's children as claimed when finding work", () => {
+    const { tickets, project, epic, first, second } = epicWithChildren();
+    const loose = tickets.createTicket({
+      projectId: project.id,
+      title: 'Loose',
+    });
+    tickets.claimTicket(epic.number, run1);
+
+    const numbers = (claimed: boolean) =>
+      tickets
+        .listTickets({ projectId: project.id, claimed })
+        .map(({ number }) => number);
+
+    expect(numbers(false)).toEqual([loose.number]);
+    expect(numbers(true)).toEqual([epic.number, first.number, second.number]);
+  });
+});

@@ -1,7 +1,9 @@
-import { and, asc, eq, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, ne, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { DatabaseConnection } from '../db/connection';
 import { ticketBlockers, tickets } from '../db/schema';
+import { claimOwner } from './claim-owner';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
 import { nextPosition } from './positions';
 import type { Status } from './status';
@@ -150,6 +152,10 @@ export function syncEpicStatus(
     .set({
       status,
       position: nextPosition(db, epic.projectId, status, epicNumber),
+      // Reaching Done releases the Claim, as moving a Ticket there does.
+      ...(status === 'Done'
+        ? { claimAgentRunId: null, claimAgentName: null }
+        : {}),
       updatedAt: new Date(),
     })
     .where(eq(tickets.number, epicNumber))
@@ -229,5 +235,86 @@ export function checkNoLiveChildren(db: DatabaseConnection, number: number) {
     throw new NotAllowedError(
       `Epic #${number} has child Tickets that are not archived: ${live.map((child) => `#${child.number}`).join(', ')}. Archive or detach them first.`,
     );
+  }
+}
+
+const epics = alias(tickets, 'epics');
+
+/**
+ * A subquery of the numbers of claimed Epics, whose Claims cover their
+ * children: what `listTickets` filters by.
+ */
+export function claimedEpics(db: DatabaseConnection) {
+  return db
+    .select({ number: epics.number })
+    .from(epics)
+    .where(and(eq(epics.type, 'Epic'), isNotNull(epics.claimAgentRunId)));
+}
+
+/**
+ * Throws unless Agent run `agentRunId` may claim Ticket `number` as far as
+ * Epics go (ADR 0011): a Done Epic has nothing left to claim, an Epic's
+ * Claim covers its children, so neither may be held by another run when
+ * the other is claimed. Run it in the claiming transaction.
+ */
+export function checkEpicClaimable(
+  db: DatabaseConnection,
+  number: number,
+  agentRunId: string,
+) {
+  const ticket = db
+    .select({
+      type: tickets.type,
+      status: tickets.status,
+      epicNumber: tickets.epicNumber,
+    })
+    .from(tickets)
+    .where(eq(tickets.number, number))
+    .get();
+  if (!ticket) {
+    return;
+  }
+  if (ticket.type === 'Epic' && ticket.status === 'Done') {
+    throw new NotAllowedError(
+      `Epic #${number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
+    );
+  }
+  if (ticket.epicNumber !== null) {
+    const epic = db
+      .select({
+        claimAgentRunId: tickets.claimAgentRunId,
+        claimAgentName: tickets.claimAgentName,
+      })
+      .from(tickets)
+      .where(eq(tickets.number, ticket.epicNumber))
+      .get();
+    if (epic?.claimAgentRunId != null && epic.claimAgentRunId !== agentRunId) {
+      throw new NotAllowedError(
+        `Ticket #${number} is in Epic #${ticket.epicNumber}, which is claimed by ${claimOwner(epic.claimAgentRunId, epic.claimAgentName)}. Claiming an Epic covers its children.`,
+      );
+    }
+  }
+  if (ticket.type === 'Epic') {
+    const child = db
+      .select({
+        number: tickets.number,
+        claimAgentRunId: tickets.claimAgentRunId,
+        claimAgentName: tickets.claimAgentName,
+      })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.epicNumber, number),
+          isNotNull(tickets.claimAgentRunId),
+          ne(tickets.claimAgentRunId, agentRunId),
+        ),
+      )
+      .orderBy(asc(tickets.number))
+      .get();
+    if (child) {
+      throw new NotAllowedError(
+        `Epic #${number} has child Ticket #${child.number} claimed by ${claimOwner(child.claimAgentRunId, child.claimAgentName)}. Claiming an Epic covers its children, so that claim must be released first.`,
+      );
+    }
   }
 }

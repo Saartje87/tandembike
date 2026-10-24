@@ -25,6 +25,7 @@ import {
   tickets,
 } from '../db/schema';
 import { type ChangeChannel, createChangeChannel } from './changes';
+import { claimOwner } from './claim-owner';
 import {
   createCycles,
   cycleMembers,
@@ -33,10 +34,12 @@ import {
 } from './cycles';
 import {
   checkEpicChild,
+  checkEpicClaimable,
   checkNoBlockerBetween,
   checkNoLiveChildren,
   checkNotEpicAndChild,
   checkUngrouped,
+  claimedEpics,
   type EpicChildInput,
   syncEpicStatus,
 } from './epics';
@@ -369,15 +372,6 @@ function checkedAgentRunId(rawAgentRunId: string): string {
         : undefined,
   });
   return agentRunId;
-}
-
-function claimOwner(agentRunId: string | null, agentName: string | null) {
-  if (agentRunId === null) {
-    throw new Error('A claimed Ticket must have an Agent run id.');
-  }
-  return agentName === null
-    ? `Agent run ${agentRunId}`
-    : `${agentName} (${agentRunId})`;
 }
 
 function checkStatus(status: string): string | undefined {
@@ -851,6 +845,7 @@ export function createTickets(
       const agentName = input.agentName?.trim() || null;
 
       const changed = db.transaction(() => {
+        checkEpicClaimable(db, number, agentRunId);
         const claimed = db
           .update(tickets)
           .set({
@@ -1709,8 +1704,17 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
     filter.claimed === undefined
       ? undefined
       : filter.claimed
-        ? isNotNull(tickets.claimAgentRunId)
-        : isNull(tickets.claimAgentRunId),
+        ? or(
+            isNotNull(tickets.claimAgentRunId),
+            inArray(tickets.epicNumber, claimedEpics(db)),
+          )
+        : and(
+            isNull(tickets.claimAgentRunId),
+            or(
+              isNull(tickets.epicNumber),
+              notInArray(tickets.epicNumber, claimedEpics(db)),
+            ),
+          ),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
