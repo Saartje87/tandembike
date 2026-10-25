@@ -136,9 +136,12 @@ describe('EpicChildren', () => {
     expect(
       await screen.findByText('There is no Ticket #5.'),
     ).toBeInTheDocument();
-    expect(
-      within(childList()).getByRole('link', { name: '#5 Pay by card' }),
-    ).toBeInTheDocument();
+    // The refusal and the rolled-back child can commit in separate renders.
+    await waitFor(() =>
+      expect(
+        within(childList()).getByRole('link', { name: '#5 Pay by card' }),
+      ).toBeInTheDocument(),
+    );
   });
 
   it('detaches a child at once', async () => {
