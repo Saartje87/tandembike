@@ -10,6 +10,7 @@ import {
   Switch,
   Text,
 } from '@blockle/blocks';
+import { useDroppable } from '@dnd-kit/react';
 import { type FC, useId, useRef, useState } from 'react';
 
 import { ticketOnBoardPath } from '../../app/lib/paths';
@@ -30,26 +31,42 @@ export type EpicChipsProps = {
   boardPath: string;
 };
 
+/** The drop-target id of Epic `number`'s chip, for a card dragged onto it. */
+export function epicDropTarget(number: number): string {
+  return `epic:${number}`;
+}
+
+/** The Epic whose chip drop-target id `id` is, if it is one. */
+export function epicOfDropTarget(id: unknown): number | undefined {
+  const match = typeof id === 'string' ? /^epic:(\d+)$/.exec(id) : null;
+  return match ? Number(match[1]) : undefined;
+}
+
 type EpicChipProps = { epic: Ticket; boardPath: string };
 
 /**
  * One Epic: its number, title and how many of its children that are not
- * archived are Done, as a link that opens its drawer.
+ * archived are Done, as a link that opens its drawer. A card dropped on it
+ * joins the Epic.
  */
 const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
+  const { ref, isDropTarget } = useDroppable({
+    id: epicDropTarget(epic.number),
+    collisionPriority: 2,
+  });
   const live = epic.children.filter((child) => !child.archived);
   const done = live.filter((child) => child.status === 'Done');
 
   return (
     <Box
       asChild
-      backgroundColor="neutral-100"
+      backgroundColor={isDropTarget ? 'primary-100' : 'neutral-100'}
       borderRadius="full"
       paddingBlock={1}
       paddingInline={3}
       className={styles.chip}
     >
-      <li>
+      <li ref={ref} data-drop-target={isDropTarget ? '' : undefined}>
         <Text fontSize="small" wordBreak="break-word">
           <AppLink
             href={ticketOnBoardPath(boardPath, epic.number)}

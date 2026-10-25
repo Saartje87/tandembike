@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
+  attachTicketToEpic,
   createTicket,
   reorderTickets,
   updateTicket,
@@ -14,6 +15,7 @@ import { Board } from './board';
 
 vi.mock('../../app/projects/actions', () => ({ renameProject: vi.fn() }));
 vi.mock('../../app/tickets/actions', () => ({
+  attachTicketToEpic: vi.fn(),
   createTicket: vi.fn(),
   reorderTickets: vi.fn(),
   updateTicket: vi.fn(),
@@ -589,5 +591,183 @@ describe('Board with archived Tickets', () => {
     await showArchived();
 
     expect(archivedList()).not.toBeInTheDocument();
+  });
+});
+
+describe('Dropping a card on an Epic', () => {
+  const child = (number: number, title: string) => ({
+    number,
+    title,
+    status: 'Todo' as const,
+    archived: false,
+    blockedBy: [],
+    blocked: false,
+  });
+  const checkout = ticket({
+    number: 10,
+    title: 'Checkout',
+    type: 'Epic',
+    children: [child(11, 'Pay by card')],
+  });
+  const search = ticket({ number: 20, title: 'Search', type: 'Epic' });
+  const payByCard = ticket({
+    number: 11,
+    title: 'Pay by card',
+    epic: { number: 10, title: 'Checkout' },
+  });
+  const header = ticket({ number: 4, title: 'Fix the header', position: 1 });
+  const chips = () =>
+    within(screen.getByRole('list', { name: 'Epics' }))
+      .queryAllByRole('link')
+      .map((link) => link.textContent);
+
+  /**
+   * Lays out the Board so Epic `epicNumber`'s chip is where a card dragged
+   * right lands. Call it before rendering: dnd-kit measures on mount.
+   */
+  const mockEpicBounds = (epicNumber: number) => {
+    const isChip = (element: HTMLElement) =>
+      element.tagName === 'LI' &&
+      element.querySelector(`a[href$="?ticket=${epicNumber}"]`) !== null &&
+      element.querySelector('button[aria-label^="Drag Ticket"]') === null;
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (isChip(this)) {
+          return new DOMRect(60, 0, 100, 40);
+        }
+        if (
+          this.tagName === 'LI' &&
+          this.querySelector('button[aria-label^="Drag Ticket"]')
+        ) {
+          return new DOMRect(0, 0, 100, 100);
+        }
+        // Away from the chip: the other Epics' chips and the columns, not
+        // the row that holds the chip, which would clip it out of view.
+        if (
+          (this.tagName === 'SECTION' || this.tagName === 'LI') &&
+          ![...this.querySelectorAll('li')].some(isChip)
+        ) {
+          return new DOMRect(500, 500, 100, 100);
+        }
+        return new DOMRect(0, 0, 800, 700);
+      });
+    onTestFinished(() => bounds.mockRestore());
+  };
+
+  /** Drags card `number` by keyboard onto Epic `epicNumber`'s chip. */
+  const dragTicketOntoEpic = async (number: number, epicNumber: number) => {
+    const chip = screen.getByRole('link', {
+      name: new RegExp(`^#${epicNumber} `),
+    });
+    const elementFromPoint = Object.getOwnPropertyDescriptor(
+      document,
+      'elementFromPoint',
+    );
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => chip,
+    });
+    onTestFinished(() => {
+      if (elementFromPoint) {
+        Object.defineProperty(document, 'elementFromPoint', elementFromPoint);
+      } else {
+        Reflect.deleteProperty(document, 'elementFromPoint');
+      }
+    });
+    await keyboardDrag(
+      screen.getByRole('button', {
+        name: `Drag Ticket #${number} to another Status`,
+      }),
+      '{ArrowRight}',
+    );
+  };
+
+  beforeEach(() => {
+    vi.mocked(attachTicketToEpic).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('attaches the Ticket to the Epic at once, leaving its Status and place alone', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(attachTicketToEpic).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(4, 20);
+
+    expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
+      epic: 20,
+      child: 4,
+    });
+    expect(updateTicket).not.toHaveBeenCalled();
+    expect(reorderTickets).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/1 Done']),
+    );
+    expect(cardsIn('Todo')).toEqual(['Pay by card', 'Fix the header']);
+    expect(
+      screen.getByRole('link', { name: 'Epic #20 Search' }),
+    ).toBeInTheDocument();
+  });
+
+  it('moves a child of another Epic to the dropped-on one', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(attachTicketToEpic).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(11, 20);
+
+    expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
+      epic: 20,
+      child: 11,
+    });
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/0 Done', '#20 Search 0/1 Done']),
+    );
+  });
+
+  it('puts the Ticket back and explains when attaching is refused', async () => {
+    vi.mocked(attachTicketToEpic).mockResolvedValue({
+      ok: false,
+      error: 'Epic #20 is archived. Restore it before adding Tickets to it.',
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(4, 20);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Epic #20 is archived. Restore it before adding Tickets to it.',
+    );
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']),
+    );
   });
 });

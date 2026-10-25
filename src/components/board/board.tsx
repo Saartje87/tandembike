@@ -31,11 +31,15 @@ import {
 } from 'react';
 
 import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
-import { reorderTickets, updateTicket } from '../../app/tickets/actions';
+import {
+  attachTicketToEpic,
+  reorderTickets,
+  updateTicket,
+} from '../../app/tickets/actions';
 import { isStatus, type Status, statuses } from '../../tickets/status';
-import type { Project, Ticket } from '../../tickets/tickets';
+import type { EpicLink, Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { EpicChips } from '../epic-chips/epic-chips';
+import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
 import { TicketCard } from '../ticket-card/ticket-card';
@@ -220,9 +224,17 @@ type StatusMove = { number: number; status: Status };
 
 type BoardChange =
   | (StatusMove & { position: number })
-  | { status: Status; ticketNumbers: number[] };
+  | { status: Status; ticketNumbers: number[] }
+  | { number: number; epic: EpicLink };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
+  if ('epic' in change) {
+    return tickets.map((ticket) =>
+      ticket.number === change.number
+        ? { ...ticket, epic: change.epic }
+        : ticket,
+    );
+  }
   if ('ticketNumbers' in change) {
     const positions = new Map(
       change.ticketNumbers.map((number, position) => [number, position]),
@@ -243,6 +255,21 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   );
 };
 
+type EpicJoin = { child: Ticket; epicNumber: number };
+
+/** `epics` with `child` taken out of its Epic and into Epic `epicNumber`. */
+const applyEpicJoin = (epics: Ticket[], { child, epicNumber }: EpicJoin) =>
+  epics.map((epic) => {
+    const children = epic.children.filter(
+      (candidate) => candidate.number !== child.number,
+    );
+    if (epic.number === epicNumber) {
+      const { number, title, status, archived, blockedBy, blocked } = child;
+      children.push({ number, title, status, archived, blockedBy, blocked });
+    }
+    return { ...epic, children };
+  });
+
 /**
  * A Project's Board: its header, its Epics' row, and one column per Status
  * holding its active normal Tickets, plus a
@@ -261,6 +288,7 @@ export const Board: FC<BoardProps> = ({
 }) => {
   const boardPath = boardPathOf(project.id, cycleId ?? null);
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
+  const [shownEpics, showEpicJoin] = useOptimistic(epics, applyEpicJoin);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();
   const [showArchived, setShowArchived] = useState(() =>
@@ -274,10 +302,10 @@ export const Board: FC<BoardProps> = ({
   const planned = new Set(tickets.map((ticket) => ticket.number));
   const rowEpics =
     typeof cycleId === 'number'
-      ? epics.filter((epic) =>
+      ? shownEpics.filter((epic) =>
           epic.children.some((child) => planned.has(child.number)),
         )
-      : epics;
+      : shownEpics;
   const archived = shownTickets.filter((ticket) => ticket.archived);
 
   const changeStatus = (number: number, status: Status) => {
@@ -317,6 +345,28 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
+  const joinEpic = (ticket: Ticket, epicNumber: number) => {
+    const epic = shownEpics.find(({ number }) => number === epicNumber);
+    if (!epic || ticket.epic?.number === epicNumber) {
+      return;
+    }
+    setError(undefined);
+    startTransition(async () => {
+      showChange({
+        number: ticket.number,
+        epic: { number: epic.number, title: epic.title },
+      });
+      showEpicJoin({ child: ticket, epicNumber });
+      const result = await attachTicketToEpic({
+        epic: epicNumber,
+        child: ticket.number,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const rememberDropTarget = (event: DragOverEvent) => {
     const sourceId = event.operation.source?.id;
     const targetId = event.operation.target?.id;
@@ -343,6 +393,11 @@ export const Board: FC<BoardProps> = ({
       (candidate) => candidate.number === sourceId,
     );
     if (!ticket || ticket.archived) {
+      return;
+    }
+    const epicNumber = epicOfDropTarget(targetId);
+    if (epicNumber !== undefined) {
+      joinEpic(ticket, epicNumber);
       return;
     }
     const targetTicket =
