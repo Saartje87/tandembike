@@ -25,21 +25,70 @@ separate setup step.
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:3000/api/mcp`. To register it with Claude Code:
-
-```bash
-claude mcp add --transport http tandembike http://localhost:3000/api/mcp
-```
+`http://localhost:3000/api/mcp`. This repository's `.mcp.json` registers it
+for Claude Code in this checkout; to reach it from every repository, register
+it once at user level as described in the next section.
 
 Keep `npm run dev` (or `npm run start`) running while the Agent works. The
-server's instructions ask Agents to move a Ticket to In progress when they
-start it and to Done when they finish, to reuse existing Projects, and to
-refer to Tickets as `#42`.
+server's instructions explain the tracker to Agents: moving a Ticket to In
+progress and Done, Claims, acceptance criteria, Blockers, Epics and Cycles,
+using the Project their repository names, and referring to Tickets as `#42`.
 
 An Agent session keeps the tools it loaded when it connected. After you pull
 or merge changes to the MCP tools, reconnect the server (`/mcp` in Claude
 Code) or start a new session; see "When the MCP tools change" in
 `docs/agents/issue-tracker.md`.
+
+## Use Tandembike from another repository
+
+One running app serves every repository on this machine: give each repository
+its own Project, and its Agents keep their Tickets there. The MCP server's
+instructions explain how the tracker works, so a repository only needs to
+name its Project (see `docs/adr/0014-server-explains-tracker.md`).
+
+**1. Register the server once, for all repositories.** Keep the app running
+on `localhost:3000`, then register it at user level for each client you use:
+
+- **Claude Code:**
+
+  ```bash
+  claude mcp add --scope user --transport http tandembike http://localhost:3000/api/mcp
+  ```
+
+- **GitHub Copilot CLI:**
+
+  ```bash
+  copilot mcp add --transport http tandembike http://localhost:3000/api/mcp
+  ```
+
+  This writes `~/.copilot/mcp-config.json` (or `$COPILOT_HOME/mcp-config.json`).
+
+- **GitHub Copilot in VS Code:** run **MCP: Add Server** from the Command
+  Palette, choose **HTTP**, enter `http://localhost:3000/api/mcp` and the ID
+  `tandembike`, then **Global** and **Copilot Global**. That writes the same
+  `~/.copilot/mcp-config.json`, so a server added in either Copilot client
+  shows up in the other.
+
+After registering, start a new session (or reconnect, `/mcp` in Claude Code)
+so the client loads the tools.
+
+**2. Name the repository's Project in its `AGENTS.md`.** Add one line, with
+the Project's name as it shows in the app:
+
+```markdown
+Tickets for this repository live in the Tandembike Project `Shop` (MCP server `tandembike`).
+```
+
+Copilot reads `AGENTS.md` itself. Claude Code reads `CLAUDE.md`, so a
+repository that has no `CLAUDE.md` yet gets one containing just:
+
+```markdown
+@AGENTS.md
+```
+
+Anything else about how that repository works with Tickets (branches, when a
+Ticket is done, triage) belongs in its own `AGENTS.md`;
+`docs/agents/issue-tracker.md` is this repository's example.
 
 ## Where data lives
 

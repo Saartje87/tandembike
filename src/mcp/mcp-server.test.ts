@@ -79,6 +79,46 @@ describe('MCP server', () => {
     await client.close();
   });
 
+  it("explains the tracker to any client in any repository, leaving each repository's process to it", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const instructions = client.getInstructions() ?? '';
+    const { tools } = await client.listTools();
+    const archive = tools.find((tool) => tool.name === 'archive_ticket');
+
+    // Which Project: the repository's own instructions name it (ADR 0014).
+    expect(instructions).toMatch(/repository's instructions name a Project/);
+    // General rules that used to live only in one repository's docs.
+    expect(instructions).toMatch(/never as a checklist in the description/);
+    expect(instructions).toMatch(/one level deep/);
+    expect(instructions).toMatch(/stays in its Cycle/);
+    expect(instructions).toMatch(/reconnect/);
+    expect(instructions).toMatch(/not direct database access/);
+    // Process belongs to each repository, and no client is assumed.
+    expect(instructions).not.toMatch(/branch|pull request|\bPR\b/i);
+    expect(instructions).not.toMatch(/Claude|Copilot/);
+    expect(archive?.description).toMatch(
+      /Agents cannot delete Tickets; the User can, from the app/,
+    );
+    // Facts that only one repository's docs used to state (#63).
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
+    expect(archive?.description).toMatch(
+      /An Epic cannot be archived while any child is not archived/,
+    );
+    expect(describe('add_blocker')).toMatch(
+      /Blockers between an Epic and its own children are refused/,
+    );
+    for (const name of ['list_tickets', 'create_ticket', 'create_tickets']) {
+      expect(describe(name)).toMatch(
+        /Giving both is refused unless they name the same Project/,
+      );
+    }
+    expect(instructions).toMatch(/Todo with none or all Todo/);
+    expect(instructions).toMatch(/missing from your list may still exist/);
+    await client.close();
+  });
+
   it('refuses a request for a host other than localhost', async () => {
     const response = await handleMcpRequest(
       new Request('http://localhost:3000/api/mcp', {
