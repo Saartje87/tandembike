@@ -4,7 +4,12 @@ import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
 import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
-import { NotAllowedError, NotFoundError, TicketsError } from './errors';
+import {
+  type BatchFailure,
+  NotAllowedError,
+  NotFoundError,
+  TicketsError,
+} from './errors';
 import { checkBatchNumbers, checkTitle, throwFieldErrors } from './rules';
 
 /** A goal-led plan within one Project (ADR 0010). */
@@ -57,7 +62,7 @@ export type CycleTicketsResult = {
   /** The Tickets planned or unplanned, in the order given. */
   updated: number[];
   /** The Tickets left as they were, in the order given. */
-  failed: { number: number; error: string }[];
+  failed: BatchFailure[];
   /** The Cycle after the batch. */
   cycle: Cycle;
 };
@@ -319,7 +324,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
     const cycle = changeableCycle(cycleId);
     const updated: number[] = [];
-    const failed: CycleTicketsResult['failed'] = [];
+    const failed: BatchFailure[] = [];
     try {
       for (const number of ticketNumbers) {
         try {

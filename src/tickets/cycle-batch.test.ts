@@ -37,7 +37,7 @@ describe('Planning several Tickets into a Cycle at once', () => {
     expect(tickets.getTicket(3).status).toBe('Done');
   });
 
-  it("reports each Ticket plan_ticket's rules refuse and still plans the rest", () => {
+  it("reports each Ticket planTicket's rules refuse and still plans the rest", () => {
     const { tickets, project, cycle } = planningWith(3);
     const other = tickets.createProject({ name: 'App' });
     const elsewhere = tickets.createTicket({
@@ -98,7 +98,7 @@ describe('Unplanning several Tickets from a Cycle at once', () => {
     });
   });
 
-  it("reports each Ticket unplan_ticket's rules refuse and still unplans the rest", () => {
+  it("reports each Ticket unplanTicket's rules refuse and still unplans the rest", () => {
     const { tickets, cycle } = planningWith(2);
     tickets.planTicket({ cycleId: cycle.id, number: 1 });
 

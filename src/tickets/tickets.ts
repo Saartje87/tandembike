@@ -48,6 +48,7 @@ import {
   syncEpicStatus,
 } from './epics';
 import {
+  type BatchFailure,
   NameTakenError,
   NotAllowedError,
   NotFoundError,
@@ -236,7 +237,7 @@ export type UpdateTicketsResult = {
   /** The changed Tickets, in the order given. */
   updated: Ticket[];
   /** The Tickets left unchanged, in the order given. */
-  failed: { number: number; error: string }[];
+  failed: BatchFailure[];
 };
 
 export type ReorderTicketsInput = {
@@ -1196,7 +1197,7 @@ export function createTickets(
 
       const changed: number[] = [];
       const changedEpics = new Set<number>();
-      const failed: UpdateTicketsResult['failed'] = [];
+      const failed: BatchFailure[] = [];
       try {
         for (const number of ticketNumbers) {
           try {

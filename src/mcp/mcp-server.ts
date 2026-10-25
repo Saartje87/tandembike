@@ -4,7 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { isAllowedHost } from '../http/allowed-host';
-import { TicketsError } from '../tickets/errors';
+import { type BatchFailure, TicketsError } from '../tickets/errors';
 import { maxBatchSize } from '../tickets/rules';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
@@ -110,7 +110,7 @@ const cycleId = z
   .positive()
   .describe('The id of a Cycle, as returned by list_cycles or create_cycle.');
 
-const cycleTicketNumbers = z
+const batchTicketNumbers = z
   .array(ticketNumber)
   .describe(
     `The Ticket numbers, each once, from 1 to ${maxBatchSize} of them.`,
@@ -177,7 +177,7 @@ function respond(call: () => unknown): CallToolResult {
  * Like `respond`, but for a batch result: it is a tool error, still listing
  * what changed, when any Ticket in `failed` was left unchanged.
  */
-function respondBatch(call: () => { failed: unknown[] }): CallToolResult {
+function respondBatch(call: () => { failed: BatchFailure[] }): CallToolResult {
   try {
     const batch = call();
     return { ...jsonResult(batch), isError: batch.failed.length > 0 };
@@ -514,11 +514,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
       title: 'Update Tickets',
       description: `Apply the same Status and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: the changed Tickets, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
-        ticketNumbers: z
-          .array(ticketNumber)
-          .describe(
-            `The Ticket numbers to change, each once, from 1 to ${maxBatchSize} of them.`,
-          ),
+        ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
         addLabels,
         removeLabels,
@@ -816,7 +812,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Plan Tickets into Cycle',
       description: `Plan each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, into one Prepared or Active Cycle, by the rules of plan_ticket; a Ticket already in that Cycle counts as planned. Each Ticket's change is atomic; the batch is not. Returns { updated, failed, cycle }: the planned Ticket numbers, the number and error of each Ticket left unplanned, and the Cycle. If any Ticket failed the result is an error, but the Tickets in updated were still planned. A missing or Archived Cycle, or a bad list of numbers, is refused and changes nothing.`,
-      inputSchema: { cycleId, ticketNumbers: cycleTicketNumbers },
+      inputSchema: { cycleId, ticketNumbers: batchTicketNumbers },
       annotations: { idempotentHint: true },
     },
     ({ cycleId, ticketNumbers }) =>
@@ -828,7 +824,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Unplan Tickets from Cycle',
       description: `Take each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, out of one Prepared or Active Cycle, back to the Backlog, by the rules of unplan_ticket. Returns { updated, failed, cycle } as plan_tickets does, and is an error when any Ticket failed, though the Tickets in updated were still unplanned. A missing or Archived Cycle, or a bad list of numbers, is refused and changes nothing.`,
-      inputSchema: { cycleId, ticketNumbers: cycleTicketNumbers },
+      inputSchema: { cycleId, ticketNumbers: batchTicketNumbers },
       annotations: { idempotentHint: true },
     },
     ({ cycleId, ticketNumbers }) =>
