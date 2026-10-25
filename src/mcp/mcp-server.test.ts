@@ -100,6 +100,22 @@ describe('MCP server', () => {
     expect(archive?.description).toMatch(
       /Agents cannot delete Tickets; the User can, from the app/,
     );
+    // Facts that only one repository's docs used to state (#63).
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
+    expect(archive?.description).toMatch(
+      /An Epic cannot be archived while any child is not archived/,
+    );
+    expect(describe('add_blocker')).toMatch(
+      /Blockers between an Epic and its own children are refused/,
+    );
+    for (const name of ['list_tickets', 'create_ticket', 'create_tickets']) {
+      expect(describe(name)).toMatch(
+        /Giving both is refused unless they name the same Project/,
+      );
+    }
+    expect(instructions).toMatch(/Todo with none or all Todo/);
+    expect(instructions).toMatch(/missing from your list may still exist/);
     await client.close();
   });
 

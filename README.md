@@ -25,16 +25,14 @@ separate setup step.
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:3000/api/mcp`. To register it with Claude Code:
-
-```bash
-claude mcp add --transport http tandembike http://localhost:3000/api/mcp
-```
+`http://localhost:3000/api/mcp`. This repository's `.mcp.json` registers it
+for Claude Code in this checkout; to reach it from every repository, register
+it once at user level as described in the next section.
 
 Keep `npm run dev` (or `npm run start`) running while the Agent works. The
-server's instructions ask Agents to move a Ticket to In progress when they
-start it and to Done when they finish, to reuse existing Projects, and to
-refer to Tickets as `#42`.
+server's instructions explain the tracker to Agents: moving a Ticket to In
+progress and Done, Claims, acceptance criteria, Blockers, Epics and Cycles,
+using the Project their repository names, and referring to Tickets as `#42`.
 
 An Agent session keeps the tools it loaded when it connected. After you pull
 or merge changes to the MCP tools, reconnect the server (`/mcp` in Claude

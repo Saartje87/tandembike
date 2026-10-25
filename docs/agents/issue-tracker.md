@@ -1,18 +1,14 @@
 # Issue tracker: Local Tandembike app (MCP)
 
-This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike`. Reach it through its MCP server at `http://localhost:3000/api/mcp` with an MCP-capable client; the app must be running. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them.
+This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike`: use it for all work on this codebase, and do not create a second one. Reach it through its MCP server at `http://localhost:3000/api/mcp` with an MCP-capable client; the app must be running. Use its tools, not `gh`, `glab` or `.scratch/` files, even where a skill describes another tracker. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them.
 
 ## When the MCP tools change
 
 A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm run dev`, and only after `npm run build` and a restart under `npm run start`. Once it has, ask the User to reconnect the MCP server (`/mcp` in Claude Code) or start a new session, as the server's instructions say; until then your loaded tool descriptions may be out of date.
 
-## Completing a Ticket
-
-When moving a Ticket to `Done`, remove its active triage state label (`needs-triage`, `needs-info`, `ready-for-agent` or `ready-for-human`) in the same `update_ticket` call. Keep category labels such as `bug` and `enhancement`, and `wontfix`. When a Ticket counts as done is in the next section.
-
 ## Development work in this repository
 
-Use the existing Project named `Tandembike` for software-development work on this codebase. Pass it as `projectName: "Tandembike"`, or resolve its id with `list_projects`; do not create a second Project for repository work. Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), post its link as a comment on the Ticket with `add_comment`. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below). Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
+Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), post its link as a comment on the Ticket with `add_comment`. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below); remove its triage state label in the same call, by the completion rule in `triage-labels.md`. Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
 
 A Claim covers the work of one Agent run, not the wait for a merge:
 
@@ -24,15 +20,15 @@ A Claim covers the work of one Agent run, not the wait for a merge:
 
 An Epic is handed off, worked and delivered as one unit:
 
-1. `get_ticket` the Epic: its description is the shared context for every child, and `children` lists them with their Blockers. Move the Epic's own Status nowhere; it follows the children.
-2. Claim the Epic once with `claim_ticket`. Leave the children unclaimed: the Epic's Claim covers them.
+1. `get_ticket` the Epic and claim it once with `claim_ticket`, as the server's instructions describe.
+2. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`Ticket #42`).
 4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
 5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
 
 ## Triage and Blockers
 
-Record triage roles as labels: one category label (`bug` or `enhancement`) and one state label; the allowed state roles are listed in `triage-labels.md`. When moving a Ticket to a new triage state, swap the state labels in one `update_ticket` call with `removeLabels` and `addLabels` (plus any other field changes, such as the description). Post triage notes as a comment with `add_comment`, starting with `> *This was generated by AI during triage.*`; leave the description alone unless the triage changes what the Ticket asks for. Older Tickets may still have a `## Triage notes` section in the description; leave it in place. Record blocking relationships with `add_blocker`, not in the description. Older Tickets may still have a `Blocked by: #<number>` line in the description; when you touch one, add those Blockers with `add_blocker` and delete the line, preserving the rest of the description. Represent `wontfix` with the `wontfix` label and keep the Ticket active.
+Record triage roles as labels: one category label (`bug` or `enhancement`) and one state label; the allowed state roles are listed in `triage-labels.md`. When moving a Ticket to a new triage state, swap the state labels in one `update_ticket` call with `removeLabels` and `addLabels` (plus any other field changes, such as the description). Post triage notes as a comment with `add_comment`, starting with `> *This was generated by AI during triage.*`; leave the description alone unless the triage changes what the Ticket asks for. Older Tickets may still have a `## Triage notes` section in the description; leave it in place. Older Tickets may still have a `Blocked by: #<number>` line in the description; when you touch one, add those Blockers with `add_blocker` and delete the line, preserving the rest of the description. Represent `wontfix` with the `wontfix` label and keep the Ticket active.
 
 ## When an idea outgrows one Ticket
 
@@ -45,11 +41,11 @@ An idea Ticket that grilling, for example in `/triage`, shows to be a multi-sess
 
 ## Acceptance criteria
 
-Store a Ticket's acceptance criteria in its `acceptanceCriteria` field, never as a `- [ ]` checklist in the description or in a comment. When a skill's template (such as a `to-tickets` issue or a `triage` agent brief) has an acceptance-criteria checklist, pass those items as `acceptanceCriteria` on `create_ticket` or `update_ticket` and leave that section out of the description or comment. Confirm with `get_ticket` that they were stored.
+When a skill's template (such as a `to-tickets` issue or a `triage` agent brief) has an acceptance-criteria checklist, pass those items as `acceptanceCriteria` on `create_ticket` or `update_ticket` and leave that section out of the description or comment. Confirm with `get_ticket` that they were stored.
 
 Older Tickets may still carry an acceptance-criteria checklist in the description; when you touch one, move those items into `acceptanceCriteria` (keeping their checked state) and delete the checklist, preserving the rest of the description.
 
-While working a Ticket, check off each criterion with `set_acceptance_criteria_checked` as you verify it. Move the Ticket to `Done` only once every criterion is checked; if one is deliberately left unmet, say why in a comment first.
+Move a Ticket to `Done` only once every criterion is checked; if one is deliberately left unmet, say why in a comment first.
 
 ## When a skill says “publish to the issue tracker”
 

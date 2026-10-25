@@ -33,9 +33,9 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them, and plan_tickets and unplan_tickets change up to ${maxBatchSize} Tickets of one Cycle in one call. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. A member that becomes Done or is archived stays in its Cycle. The Backlog is the Tickets in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise) and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
 - To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
-- Your client keeps this tool list, the tool descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to reconnect the server or start a new session, and until then treat what you loaded as possibly out of date.
+- Your client keeps this tool list, the tool descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to reconnect the server or start a new session; until then treat what you loaded as possibly out of date, and a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.
 - Errors explain what was wrong with the input; fix it and try again.`;
 
@@ -254,7 +254,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .string()
           .optional()
           .describe(
-            'Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+            'Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
           ),
         status: z
           .union([status, z.array(status)])
@@ -396,7 +396,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .string()
           .optional()
           .describe(
-            'The name of the Project the Ticket belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+            'The name of the Project the Ticket belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
           ),
         ...newTicketFields,
         type: z
@@ -436,7 +436,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .string()
           .optional()
           .describe(
-            'The name of the Project the Tickets belong to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+            'The name of the Project the Tickets belong to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
           ),
         epicNumber: ticketNumber
           .optional()
@@ -652,7 +652,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Add Blocker',
       description:
-        'Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start, and return the blocked Ticket. The two may be in different Projects. A Ticket cannot block itself, and a Blocker that would make a cycle is refused. Adding one that exists already changes nothing.',
+        'Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start, and return the blocked Ticket. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing.',
       inputSchema: {
         blocker: ticketNumber.describe(
           'The Ticket that must be resolved first, e.g. 41 for #41.',
@@ -742,7 +742,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Archive Ticket',
       description:
-        'Archive a Ticket and return it. It leaves the Board and list_tickets (unless includeArchived is set) but keeps everything; restore_ticket brings it back. Agents cannot delete Tickets; the User can, from the app.',
+        'Archive a Ticket and return it. It leaves the Board and list_tickets (unless includeArchived is set) but keeps everything; restore_ticket brings it back. An Epic cannot be archived while any child is not archived. Agents cannot delete Tickets; the User can, from the app.',
       inputSchema: { number: ticketNumber },
       annotations: { idempotentHint: true },
     },
