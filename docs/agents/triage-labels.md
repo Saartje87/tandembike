@@ -17,3 +17,5 @@ Post triage notes as a comment with `add_comment`, not in the description. Start
 Older Tickets may still carry `Triage category:` and `Triage state:` lines in their description. When you triage one, move those values to labels and delete the lines.
 
 When completing a Ticket, remove its active triage state label (`needs-triage`, `needs-info`, `ready-for-agent`, or `ready-for-human`) in the same `update_ticket` call that sets its Status to `Done`. Preserve category labels such as `bug` and `enhancement`. Do not remove `wontfix` as part of this completion rule.
+
+An Epic's Status follows its children and cannot be set, so that call never happens for one. Once an Epic's derived Status is `Done`, remove its state label with its own `update_ticket` call, giving `removeLabels` and no Status; its category labels and `wontfix` stay. See step 5 of "Working an Epic" in `issue-tracker.md`.
