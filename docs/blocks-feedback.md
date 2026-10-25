@@ -883,6 +883,34 @@ icon grid in `src/components/project-style-picker/project-style-picker.tsx`.
 
 **Question.** Would a `ToggleGroup` (or `SegmentedControl`) fit Blocks?
 
+## 29. `Popover` is always centred on its anchor and can leave the screen
+
+**Problem.** `getPopoverPosition` centres the popover on the anchor across
+the axis it does not open along, and only flips between the two sides of
+the other one. A wide popover under an icon near the left edge starts off
+screen, and one opened to the `right` of an icon near the top runs off the
+top. There is no `align` (start, centre, end) and no clamping to the
+viewport.
+
+**Repro.**
+
+```tsx
+// Anchor at x = 70px; the popover is 350px wide.
+<Popover anchorElement={iconRef} position="bottom" open onRequestClose={close}>
+  …
+</Popover>
+// left = 70 - (350 - 32) / 2 ≈ -89px
+```
+
+**Expected.** An `align` prop (`start` / `center` / `end`), and the popover
+kept inside the viewport, as floating-ui's `shift` does.
+
+**Workaround.** `src/components/project-style-picker/project-style-picker.css.ts`:
+`translate: 50% 0` on the popover, so it starts at the anchor's centre.
+`transform` cannot be used: the theme animates it.
+
+**Question.** Should `Popover` take an `align` and keep itself on screen?
+
 ## Notes (lower priority)
 
 Not needed by the current consumer, recorded for completeness.
