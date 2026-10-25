@@ -191,6 +191,8 @@ export type CreateTicketBatchInput = {
   epicNumber?: number;
   /** The Ticket they were all split from, in any Project. */
   originNumber?: number;
+  /** A Cycle of the same Project to plan them all into. */
+  cycleId?: number;
   /** In order, from 1 to `maxBatchSize` of them. */
   tickets: BatchTicketInput[];
 };
@@ -1128,7 +1130,8 @@ export function createTickets(
     /**
      * Creates every Ticket in `input.tickets` in one Project, in order, by
      * the rules for creating one, with the Blockers each names by position
-     * among the earlier ones, and under an Epic when `epicNumber` is given.
+     * among the earlier ones, under an Epic when `epicNumber` is given, and
+     * planned into a Cycle when `cycleId` is.
      * All or nothing: a refusal names the offending Ticket by position and
      * creates none. The new Tickets are announced once.
      */
@@ -1183,6 +1186,9 @@ export function createTickets(
                 })),
               )
               .run();
+          }
+          if (input.cycleId !== undefined) {
+            planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
           }
           created.push(number);
         }

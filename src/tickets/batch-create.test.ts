@@ -105,6 +105,27 @@ describe('Creating Tickets in a batch', () => {
       },
     ]);
   });
+
+  it('plans every Ticket into a Cycle of its Project', () => {
+    const { tickets, project } = setUp();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const created = tickets.createTicketBatch({
+      projectId: project.id,
+      cycleId: cycle.id,
+      tickets: [
+        { title: 'Design' },
+        { title: 'Build', blockedByPositions: [0] },
+      ],
+    });
+
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual(
+      created.map(({ number }) => number),
+    );
+    expect(tickets.getTicket(created[1].number).blockedBy).toEqual([
+      created[0].number,
+    ]);
+  });
 });
 
 describe('Refusing a batch', () => {
@@ -189,6 +210,38 @@ describe('Refusing a batch', () => {
         }),
       ),
     ).toEqual(new ValidationError({ tickets: reason }));
+  });
+
+  it('refuses a missing, Archived or other-Project Cycle, creating nothing', () => {
+    const { tickets, project } = setUp();
+    const other = tickets.createProject({ name: 'App' });
+    const elsewhere = tickets.createCycle({
+      projectId: other.id,
+      title: 'App',
+    });
+    const archived = tickets.createCycle({
+      projectId: project.id,
+      title: 'Old',
+    });
+    tickets.startCycle(archived.id);
+    tickets.archiveCycle(archived.id);
+    const create = (cycleId: number) => () =>
+      tickets.createTicketBatch({
+        projectId: project.id,
+        cycleId,
+        tickets: [{ title: 'A' }, { title: 'B' }],
+      });
+
+    expect(errorFrom(create(99))).toEqual(
+      new NotFoundError('There is no Cycle with id 99.'),
+    );
+    expect(errorFrom(create(archived.id))).toBeInstanceOf(NotAllowedError);
+    expect(errorFrom(create(elsewhere.id))).toEqual(
+      new NotAllowedError(
+        'The Cycle "App" is in another Project. A Cycle holds only its own Project\'s Tickets.',
+      ),
+    );
+    expect(tickets.listTickets()).toEqual([]);
   });
 
   it('refuses a missing Project or an unusable Epic, creating nothing', () => {

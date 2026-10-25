@@ -400,7 +400,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Create Ticket',
       description:
-        'Create a Ticket in a Project, given by projectId or projectName, and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
+        'Create a Ticket in a Project, given by projectId or projectName, optionally planned into a Cycle, and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
       inputSchema: {
         projectId: projectId
           .optional()
@@ -426,6 +426,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
             'Create the Ticket as a child of this Epic, which must be in the same Project.',
           ),
         originNumber: originNumber.optional(),
+        cycleId: cycleId
+          .optional()
+          .describe(
+            'Plan the Ticket into this Cycle, by the rules of plan_ticket: it must be Prepared or Active and in the same Project. A refused Cycle creates nothing.',
+          ),
       },
     },
     ({ projectId, projectName, ...input }) =>
@@ -441,7 +446,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each, optionally planned into a Cycle. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -463,6 +468,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             'The Ticket they were all split from, such as the spec they came out of, in any Project.',
+          ),
+        cycleId: cycleId
+          .optional()
+          .describe(
+            'Plan every Ticket into this Cycle, by the rules of plan_ticket: it must be Prepared or Active and in the same Project. A refused Cycle creates none.',
           ),
         tickets: z
           .array(

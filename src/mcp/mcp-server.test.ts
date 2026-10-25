@@ -2064,4 +2064,64 @@ describe('Cycle tools', () => {
     expect(resultText(missing)).toBe('There is no Cycle with id 99.');
     await client.close();
   });
+
+  it('creates Tickets straight into a Cycle with create_ticket and create_tickets', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const one = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectId: project.id, title: 'Four', cycleId: cycle.id },
+    });
+    const batch = await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        cycleId: cycle.id,
+        tickets: [{ title: 'Five' }, { title: 'Six' }],
+      },
+    });
+    const { tools } = await client.listTools();
+
+    expect(resultJson(one)).toMatchObject({ number: 4 });
+    expect(resultJson(batch)).toEqual({ numbers: [5, 6] });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([4, 5, 6]);
+    for (const name of ['create_ticket', 'create_tickets']) {
+      expect(
+        JSON.stringify(tools.find((tool) => tool.name === name)),
+        name,
+      ).toMatch(/Plan .* into this Cycle/);
+    }
+    await client.close();
+  });
+
+  it('refuses a create_ticket or create_tickets call with an unusable Cycle, creating nothing', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const other = tickets.createProject({ name: 'App' });
+    const elsewhere = tickets.createCycle({
+      projectId: other.id,
+      title: 'App',
+    });
+
+    const one = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectId: project.id, title: 'Four', cycleId: 99 },
+    });
+    const batch = await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        cycleId: elsewhere.id,
+        tickets: [{ title: 'Five' }, { title: 'Six' }],
+      },
+    });
+
+    expect([one, batch].map((result) => result.isError)).toEqual([true, true]);
+    expect(resultText(one)).toBe('There is no Cycle with id 99.');
+    expect(resultText(batch)).toBe(
+      'The Cycle "App" is in another Project. A Cycle holds only its own Project\'s Tickets.',
+    );
+    expect(tickets.listTickets()).toHaveLength(3);
+    await client.close();
+  });
 });
