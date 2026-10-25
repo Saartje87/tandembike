@@ -1356,6 +1356,20 @@ describe('Blocker tools', () => {
     await client.close();
   });
 
+  it('refuses to remove a Blocker that does not exist', async () => {
+    const { tickets } = ticketsWithThree();
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'remove_blocker',
+      arguments: { blocker: 9999, blocked: 1 },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe('There is no Ticket #9999.');
+    await client.close();
+  });
+
   it('lists only unblocked Tickets, to find work that is ready', async () => {
     const { tickets } = ticketsWithThree();
     tickets.addBlocker({ blocker: 1, blocked: 2 });
