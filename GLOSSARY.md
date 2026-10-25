@@ -66,7 +66,11 @@ _Avoid_: History, event, audit log, changelog
 
 **Archived**:
 A Ticket taken out of the normal views without being destroyed; it can be restored.
-_Avoid_: Deleted, removed, trashed, closed
+_Avoid_: Removed, trashed, closed
+
+**Deleted**:
+A Ticket the User has destroyed for good; it cannot be restored, and its number is never used again. Only the User deletes; an Agent archives instead.
+_Avoid_: Archived, removed, purged
 
 ## Actors
 
