@@ -5,9 +5,12 @@ import { createTestTickets, errorFrom } from '../test/tickets';
 import { createChangeChannel } from './changes';
 import { NotFoundError, ValidationError } from './errors';
 
-/** A Tickets module with one Project and Tickets #1 to #`count`. */
-function ticketsWith(count: number) {
-  const tickets = createTestTickets();
+/**
+ * A Tickets module with one Project and Tickets #1 to #`count`, announcing
+ * on `changes` when given.
+ */
+function ticketsWith(count: number, changes = createChangeChannel()) {
+  const tickets = createTestTickets(changes);
   const project = tickets.createProject({ name: 'Website' });
   for (let index = 1; index <= count; index++) {
     tickets.createTicket({ projectId: project.id, title: `Ticket ${index}` });
@@ -152,20 +155,23 @@ describe('Blockers', () => {
   });
 
   it('refuses to remove a Blocker that does not exist, and changes nothing', () => {
-    const changes = createChangeChannel();
-    const tickets = createTestTickets(changes);
-    const project = tickets.createProject({ name: 'Website' });
-    tickets.createTicket({ projectId: project.id, title: 'Ticket 1' });
-    tickets.createTicket({ projectId: project.id, title: 'Ticket 2' });
-    const before = tickets.addBlocker({ blocker: 1, blocked: 2 });
-    const listener = vi.fn();
-    changes.subscribe(listener);
+    vi.useFakeTimers({ now: new Date('2026-03-01T09:00:00Z') });
+    try {
+      const changes = createChangeChannel();
+      const { tickets } = ticketsWith(2, changes);
+      const before = tickets.addBlocker({ blocker: 1, blocked: 2 });
+      const listener = vi.fn();
+      changes.subscribe(listener);
+      vi.setSystemTime(new Date('2026-03-01T10:00:00Z'));
 
-    expect(
-      errorFrom(() => tickets.removeBlocker({ blocker: 99, blocked: 2 })),
-    ).toEqual(new NotFoundError('There is no Ticket #99.'));
-    expect(tickets.getTicket(2)).toEqual(before);
-    expect(listener).not.toHaveBeenCalled();
+      expect(
+        errorFrom(() => tickets.removeBlocker({ blocker: 99, blocked: 2 })),
+      ).toEqual(new NotFoundError('There is no Ticket #99.'));
+      expect(tickets.getTicket(2)).toEqual(before);
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('names the blocker first when neither Ticket exists, as adding does', () => {
