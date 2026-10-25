@@ -1328,11 +1328,12 @@ export function createTickets(
 
     /**
      * Stops Ticket `blocker` blocking Ticket `blocked`, ignoring a Blocker it
-     * does not have, and bumps the blocked Ticket's updated time. Returns the
-     * blocked Ticket.
+     * does not have, and bumps the blocked Ticket's updated time. Both
+     * Tickets must exist. Returns the blocked Ticket.
      */
     removeBlocker({ blocker, blocked }: BlockerInput): Ticket {
       db.transaction(() => {
+        getTicket(blocker);
         touchTicket(db, blocked);
         db.delete(ticketBlockers)
           .where(

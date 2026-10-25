@@ -151,6 +151,45 @@ describe('Blockers', () => {
     ).toEqual(new NotFoundError('There is no Ticket #7.'));
   });
 
+  it('refuses to remove a Blocker that does not exist, and changes nothing', () => {
+    const changes = createChangeChannel();
+    const tickets = createTestTickets(changes);
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Ticket 1' });
+    tickets.createTicket({ projectId: project.id, title: 'Ticket 2' });
+    const before = tickets.addBlocker({ blocker: 1, blocked: 2 });
+    const listener = vi.fn();
+    changes.subscribe(listener);
+
+    expect(
+      errorFrom(() => tickets.removeBlocker({ blocker: 99, blocked: 2 })),
+    ).toEqual(new NotFoundError('There is no Ticket #99.'));
+    expect(tickets.getTicket(2)).toEqual(before);
+    expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('names the blocker first when neither Ticket exists, as adding does', () => {
+    const { tickets } = ticketsWith(0);
+
+    expect(
+      errorFrom(() => tickets.removeBlocker({ blocker: 98, blocked: 99 })),
+    ).toEqual(new NotFoundError('There is no Ticket #98.'));
+    expect(
+      errorFrom(() => tickets.addBlocker({ blocker: 98, blocked: 99 })),
+    ).toEqual(new NotFoundError('There is no Ticket #98.'));
+  });
+
+  it('removes an archived Blocker', () => {
+    const { tickets } = ticketsWith(2);
+    tickets.addBlocker({ blocker: 1, blocked: 2 });
+    tickets.archiveTicket(1);
+
+    expect(tickets.removeBlocker({ blocker: 1, blocked: 2 })).toMatchObject({
+      number: 2,
+      blockedBy: [],
+    });
+  });
+
   it('lists the Tickets a Ticket is blocked by and the Tickets it blocks', () => {
     const { tickets, project } = ticketsWith(4);
     tickets.addBlocker({ blocker: 1, blocked: 2 });
