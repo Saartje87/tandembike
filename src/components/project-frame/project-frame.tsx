@@ -3,8 +3,8 @@ import type { FC, ReactNode } from 'react';
 
 import type { Cycle } from '../../tickets/cycles';
 import type { Project } from '../../tickets/tickets';
+import { ProjectHeader } from '../project-header/project-header';
 import { ProjectTabs } from '../project-tabs/project-tabs';
-import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
 
 export type ProjectFrameProps = {
   project: Project;
@@ -14,8 +14,8 @@ export type ProjectFrameProps = {
 };
 
 /**
- * A History page of a Project, which is not a Board: its name and tabs,
- * with the History tab current, above `children`.
+ * A History page of a Project, which is not a Board: its header with its
+ * tabs, the History tab current, above `children`.
  */
 export const ProjectFrame: FC<ProjectFrameProps> = ({
   project,
@@ -23,8 +23,9 @@ export const ProjectFrame: FC<ProjectFrameProps> = ({
   children,
 }) => (
   <Stack gap={4}>
-    <RenameProjectInlineEdit key={project.id} project={project} />
-    <ProjectTabs projectId={project.id} cycles={cycles} current="history" />
+    <ProjectHeader project={project}>
+      <ProjectTabs projectId={project.id} cycles={cycles} current="history" />
+    </ProjectHeader>
     {children}
   </Stack>
 );

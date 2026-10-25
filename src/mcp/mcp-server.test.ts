@@ -240,6 +240,12 @@ describe('Project tools', () => {
     });
 
     expect(resultJson(result)).toMatchObject({ name: 'Website' });
+    // Colour and icon belong to the User's UI, not to Agents.
+    expect(Object.keys(resultJson(result) as object)).toEqual([
+      'id',
+      'name',
+      'createdAt',
+    ]);
     expect(tickets.listProjects().map(({ name }) => name)).toEqual(['Website']);
     await client.close();
   });
@@ -271,9 +277,10 @@ describe('Project tools', () => {
       arguments: { id: project.id, name: 'Marketing site' },
     });
 
-    expect(resultJson(result)).toMatchObject({
+    expect(resultJson(result)).toEqual({
       id: project.id,
       name: 'Marketing site',
+      createdAt: project.createdAt.toISOString(),
     });
     expect(tickets.listProjects().map(({ name }) => name)).toEqual([
       'Marketing site',

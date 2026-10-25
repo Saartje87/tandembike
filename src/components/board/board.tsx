@@ -41,7 +41,7 @@ import type { EpicLink, Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
-import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
+import { ProjectHeader } from '../project-header/project-header';
 import { TicketCard } from '../ticket-card/ticket-card';
 import * as styles from './board.css';
 
@@ -439,8 +439,7 @@ export const Board: FC<BoardProps> = ({
 
   return (
     <Stack gap={4}>
-      <RenameProjectInlineEdit key={project.id} project={project} />
-      {header}
+      <ProjectHeader project={project}>{header}</ProjectHeader>
       {error && <Alert intent="error">{error}</Alert>}
       <DndProvider onDragOver={rememberDropTarget} onDragEnd={finishDrag}>
         <EpicChips

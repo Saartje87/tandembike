@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createProject } from '../../app/projects/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
+import type { Project } from '../../tickets/tickets';
 import { ProjectDirectory } from './project-directory';
 
 vi.mock('../../app/projects/actions', () => ({ createProject: vi.fn() }));
@@ -16,9 +17,21 @@ const renderDirectory = (pending: Promise<typeof projects>) =>
     renderWithTheme(<ProjectDirectory projects={pending} />);
   });
 
-const projects = [
-  { id: 1, name: 'Website', createdAt: new Date('2026-01-01') },
-  { id: 2, name: 'App', createdAt: new Date('2026-01-02') },
+const projects: Project[] = [
+  {
+    id: 1,
+    name: 'Website',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-01'),
+  },
+  {
+    id: 2,
+    name: 'App',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-02'),
+  },
 ];
 
 describe('ProjectDirectory', () => {
@@ -28,6 +41,20 @@ describe('ProjectDirectory', () => {
     vi.mocked(createProject).mockReset();
     router = mockRouter();
     vi.mocked(useRouter).mockReturnValue(router);
+  });
+
+  it("shows each Project's icon in its colour", async () => {
+    await renderDirectory(
+      Promise.resolve([{ ...projects[0], color: 'pink', icon: 'star' }]),
+    );
+
+    const link = within(
+      await screen.findByRole('list', { name: 'Projects' }),
+    ).getByRole('link', { name: 'Website' });
+    expect(link.querySelector('[data-color="pink"]')).not.toBeNull();
+    expect(
+      link.querySelector<HTMLElement>('[role="presentation"]')?.style.maskImage,
+    ).toBe('url("/heroicons/outline/star.svg")');
   });
 
   it('lists Projects in oldest-first order, linking each to its Board', async () => {

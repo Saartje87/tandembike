@@ -10,6 +10,8 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 import { cycleStates } from '../tickets/cycle-state';
+import { paletteColors } from '../tickets/palette';
+import { projectIcons } from '../tickets/project-icons';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 
@@ -18,6 +20,10 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull(),
   /** The name trimmed and lower-cased, so uniqueness ignores case. */
   nameKey: text('name_key').notNull().unique(),
+  /** A colour from the palette, or null for none. */
+  color: text('color', { enum: paletteColors }),
+  /** One of the Project icons, or null for the default. */
+  icon: text('icon', { enum: projectIcons }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

@@ -5,6 +5,8 @@ import { homeRedirect } from './home-redirect';
 const project = (id: number, name: string) => ({
   id,
   name,
+  color: null,
+  icon: null,
   createdAt: new Date('2026-01-01'),
 });
 

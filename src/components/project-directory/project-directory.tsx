@@ -1,10 +1,11 @@
-import { Heading, Stack, Text } from '@blockle/blocks';
+import { Heading, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, Suspense, use } from 'react';
 
 import { projectPath } from '../../app/lib/paths';
 import type { Project } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { NewProjectDialog } from '../new-project-dialog/new-project-dialog';
+import { ProjectIcon } from '../project-icon/project-icon';
 
 export type ProjectDirectoryProps = {
   projects: Promise<Project[]>;
@@ -20,7 +21,10 @@ const ProjectList: FC<ProjectListProps> = ({ projects: pending }) => {
       {projects.map((project) => (
         <li key={project.id}>
           <AppLink href={projectPath(project.id)} variant="inherit">
-            {project.name}
+            <Inline gap={2} alignY="center" flexWrap="nowrap">
+              <ProjectIcon project={project} size="small" />
+              {project.name}
+            </Inline>
           </AppLink>
         </li>
       ))}

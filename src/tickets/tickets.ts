@@ -63,7 +63,13 @@ import {
   type SplitOffTicket,
   withOrigins,
 } from './origins';
+import { isPaletteColor, type PaletteColor, paletteRule } from './palette';
 import { nextPosition } from './positions';
+import {
+  isProjectIcon,
+  type ProjectIcon,
+  projectIconRule,
+} from './project-icons';
 import {
   checkBatchNumbers,
   checkTitle,
@@ -76,12 +82,22 @@ import { isTicketType, type TicketType } from './ticket-type';
 export type Project = {
   id: number;
   name: string;
+  /** A colour from the palette, set by the User, or `null` for none. */
+  color: PaletteColor | null;
+  /** One of the Project icons, set by the User, or `null` for the default. */
+  icon: ProjectIcon | null;
   createdAt: Date;
 };
 
 export type CreateProjectInput = { name: string };
 
 export type RenameProjectInput = { name: string };
+
+/** A new colour and/or icon for a Project; `null` clears one. */
+export type StyleProjectInput = {
+  color?: PaletteColor | null;
+  icon?: ProjectIcon | null;
+};
 
 /**
  * A Project by its id, its name (ignoring case and surrounding spaces) or
@@ -94,6 +110,8 @@ export type Tickets = ReturnType<typeof createTickets>;
 const projectColumns = {
   id: projects.id,
   name: projects.name,
+  color: projects.color,
+  icon: projects.icon,
   createdAt: projects.createdAt,
 };
 
@@ -835,6 +853,46 @@ export function createTickets(
         .where(eq(projects.id, id))
         .returning(projectColumns)
         .get();
+      if (!project) {
+        throw new NotFoundError(`There is no Project with id ${id}.`);
+      }
+      changes.publish({ type: 'project', id });
+      return project;
+    },
+
+    /**
+     * Sets a Project's colour and/or icon from the fixed sets, or clears one
+     * with `null`; fields left out stay as they are.
+     */
+    styleProject(id: number, input: StyleProjectInput): Project {
+      const { color, icon } = input;
+      throwFieldErrors({
+        color:
+          color === undefined || color === null || isPaletteColor(color)
+            ? undefined
+            : paletteRule,
+        icon:
+          icon === undefined || icon === null || isProjectIcon(icon)
+            ? undefined
+            : projectIconRule,
+      });
+      const values = {
+        ...(color === undefined ? {} : { color }),
+        ...(icon === undefined ? {} : { icon }),
+      };
+      const project =
+        Object.keys(values).length === 0
+          ? db
+              .select(projectColumns)
+              .from(projects)
+              .where(eq(projects.id, id))
+              .get()
+          : db
+              .update(projects)
+              .set(values)
+              .where(eq(projects.id, id))
+              .returning(projectColumns)
+              .get();
       if (!project) {
         throw new NotFoundError(`There is no Project with id ${id}.`);
       }

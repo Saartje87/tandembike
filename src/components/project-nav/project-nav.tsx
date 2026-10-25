@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Heading, Stack, Text } from '@blockle/blocks';
+import { Box, Heading, Inline, Stack, Text } from '@blockle/blocks';
 import { usePathname } from 'next/navigation';
 import type { FC } from 'react';
 
@@ -8,6 +8,7 @@ import { projectIdFromPath, projectPath } from '../../app/lib/paths';
 import type { Project } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { NewProjectDialog } from '../new-project-dialog/new-project-dialog';
+import { ProjectIcon } from '../project-icon/project-icon';
 
 export type ProjectNavProps = {
   projects: Project[];
@@ -32,7 +33,10 @@ export const ProjectNav: FC<ProjectNavProps> = ({ projects }) => {
                     variant="inherit"
                     aria-current={project.id === currentId ? 'page' : undefined}
                   >
-                    {project.name}
+                    <Inline gap={2} alignY="center" flexWrap="nowrap">
+                      <ProjectIcon project={project} size="small" />
+                      {project.name}
+                    </Inline>
                   </AppLink>
                 </li>
               ))}

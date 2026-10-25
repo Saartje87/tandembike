@@ -14,6 +14,7 @@ import {
   maxAcceptanceCriterionLength,
   maxCommentLength,
   maxPageSize,
+  type Project,
   type Tickets,
   ticketDetails,
   ticketSorts,
@@ -161,6 +162,14 @@ const newTicketFields = {
     ),
 };
 
+/**
+ * A Project as Agents see it: its colour and icon are the User's, set and
+ * seen only in the UI.
+ */
+function agentProject({ id, name, createdAt }: Project) {
+  return { id, name, createdAt };
+}
+
 /** `value` as a tool result of pretty-printed JSON text. */
 function jsonResult(value: unknown): CallToolResult {
   return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
@@ -214,7 +223,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
         'List all Projects, oldest first, with their id, name and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools.',
       annotations: { readOnlyHint: true },
     },
-    () => respond(() => tickets.listProjects()),
+    () => respond(() => tickets.listProjects().map(agentProject)),
   );
 
   server.registerTool(
@@ -229,7 +238,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe('The Project name. Surrounding spaces are trimmed.'),
       },
     },
-    ({ name }) => respond(() => tickets.createProject({ name })),
+    ({ name }) => respond(() => agentProject(tickets.createProject({ name }))),
   );
 
   server.registerTool(
@@ -246,7 +255,8 @@ export function createMcpServer(tickets: Tickets): McpServer {
       },
       annotations: { idempotentHint: true },
     },
-    ({ id, name }) => respond(() => tickets.renameProject(id, { name })),
+    ({ id, name }) =>
+      respond(() => agentProject(tickets.renameProject(id, { name }))),
   );
 
   server.registerTool(

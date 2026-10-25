@@ -47,8 +47,20 @@ vi.mock('../../app/tickets/actions', () => ({
 }));
 
 const projects = [
-  { id: 1, name: 'Website', createdAt: new Date('2026-01-01') },
-  { id: 2, name: 'App', createdAt: new Date('2026-01-02') },
+  {
+    id: 1,
+    name: 'Website',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-01'),
+  },
+  {
+    id: 2,
+    name: 'App',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-02'),
+  },
 ];
 
 const ticket: Ticket = {

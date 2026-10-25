@@ -204,9 +204,8 @@ describe('CyclePage', () => {
     expect(screen.getByRole('navigation')).toHaveTextContent(
       'Tabs: Beta current history',
     );
-    expect(
-      screen.queryByRole('region', { name: 'Website' }),
-    ).not.toBeInTheDocument();
+    // The mocked Board lists its Tickets; the History page has no Board.
+    expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
     ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedDone`);

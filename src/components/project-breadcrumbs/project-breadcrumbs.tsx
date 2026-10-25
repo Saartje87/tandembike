@@ -5,6 +5,7 @@ import { projectsPath } from '../../app/lib/paths';
 import { appTickets } from '../../tickets/app-tickets';
 import { NotFoundError } from '../../tickets/errors';
 import { Breadcrumbs } from '../breadcrumbs/breadcrumbs';
+import { ProjectIcon } from '../project-icon/project-icon';
 
 export type ProjectBreadcrumbsProps = {
   params: Promise<{ id: string }>;
@@ -28,6 +29,7 @@ export const ProjectBreadcrumbs: FC<ProjectBreadcrumbsProps> = async ({
       <Breadcrumbs
         ancestors={[{ label: 'Projects', href: projectsPath() }]}
         current={project.name}
+        currentIcon={<ProjectIcon project={project} size="small" />}
       />
     );
   } catch (error) {

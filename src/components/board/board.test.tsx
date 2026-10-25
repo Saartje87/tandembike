@@ -13,7 +13,10 @@ import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
 
-vi.mock('../../app/projects/actions', () => ({ renameProject: vi.fn() }));
+vi.mock('../../app/projects/actions', () => ({
+  renameProject: vi.fn(),
+  styleProject: vi.fn(),
+}));
 vi.mock('../../app/tickets/actions', () => ({
   attachTicketToEpic: vi.fn(),
   createTicket: vi.fn(),
@@ -22,7 +25,13 @@ vi.mock('../../app/tickets/actions', () => ({
 }));
 stubDragAndDrop();
 
-const project = { id: 1, name: 'Website', createdAt: new Date('2026-01-01') };
+const project = {
+  id: 1,
+  name: 'Website',
+  color: null,
+  icon: null,
+  createdAt: new Date('2026-01-01'),
+};
 
 const ticket = (
   fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,

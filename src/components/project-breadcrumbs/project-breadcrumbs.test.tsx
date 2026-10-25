@@ -37,6 +37,30 @@ describe('ProjectBreadcrumbs', () => {
     );
   });
 
+  it("shows the Project's icon in its colour beside its name", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.styleProject(project.id, { color: 'amber', icon: 'beaker' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    renderWithTheme(
+      <header>
+        {
+          await ProjectBreadcrumbs({
+            params: Promise.resolve({ id: String(project.id) }),
+          })
+        }
+      </header>,
+    );
+
+    const trail = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(trail.querySelector('[data-color="amber"]')).not.toBeNull();
+    expect(
+      trail.querySelector<HTMLElement>('[role="presentation"]')?.style
+        .maskImage,
+    ).toBe('url("/heroicons/outline/beaker.svg")');
+  });
+
   it.each(['999', 'abc'])(
     'shows no trail for a Project that does not exist (%s)',
     async (id) => {

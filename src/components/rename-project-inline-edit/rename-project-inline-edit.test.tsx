@@ -6,9 +6,18 @@ import { renameProject } from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
 import { RenameProjectInlineEdit } from './rename-project-inline-edit';
 
-vi.mock('../../app/projects/actions', () => ({ renameProject: vi.fn() }));
+vi.mock('../../app/projects/actions', () => ({
+  renameProject: vi.fn(),
+  styleProject: vi.fn(),
+}));
 
-const project = { id: 3, name: 'Website', createdAt: new Date('2026-01-01') };
+const project = {
+  id: 3,
+  name: 'Website',
+  color: null,
+  icon: null,
+  createdAt: new Date('2026-01-01'),
+};
 
 const openInlineEditor = async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Rename' }));
