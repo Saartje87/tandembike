@@ -234,6 +234,12 @@ export type UpdateTicketsInput = Pick<
   ticketNumbers: number[];
 };
 
+/** How `deleteTicket` treats an Epic's children. */
+export type DeleteTicketOptions = {
+  /** Delete the children too, instead of detaching them. Defaults to false. */
+  withChildren?: boolean;
+};
+
 /** Which Tickets a batch update changed and which it did not, and why. */
 export type UpdateTicketsResult = {
   /** The changed Tickets, in the order given. */
@@ -1609,52 +1615,51 @@ export function createTickets(
      * Destroys Ticket `number` for good (ADR 0012), whatever its Status,
      * archived or claimed; its number is never used again. Its labels,
      * Comments, acceptance criteria and Blockers on both sides go with it,
-     * and it leaves every Cycle, Archived ones' history included. The Tickets
-     * it blocked and its Epic are bumped, and the Epic's Status is derived
-     * again. An Epic that still has children is refused. Only the User
-     * deletes: no MCP tool calls this.
+     * and it leaves every Cycle, Archived ones included. The Tickets it
+     * blocked and its Epic are bumped, and the Epic's Status is derived
+     * again. An Epic's children, archived ones included, are detached and
+     * kept, or with `withChildren` deleted by the same rules, all in one
+     * transaction. Only the User deletes: no MCP tool calls this.
      */
-    deleteTicket(number: number): void {
-      const { unblocked, epic, leftCycles } = db.transaction(() => {
+    deleteTicket(
+      number: number,
+      { withChildren = false }: DeleteTicketOptions = {},
+    ): void {
+      const { children, unblocked, epic, leftCycles } = db.transaction(() => {
         const { epic, children } = getTicket(number);
-        if (children.length > 0) {
-          throw new NotAllowedError(
-            `Epic #${number} still has children. Detach them before deleting it.`,
-          );
+        const childNumbers = children.map((child) => child.number);
+        if (!withChildren) {
+          db.update(tickets)
+            .set({ epicNumber: null, updatedAt: new Date() })
+            .where(eq(tickets.epicNumber, number))
+            .run();
         }
-        db.delete(ticketLabels)
-          .where(eq(ticketLabels.ticketNumber, number))
-          .run();
-        db.delete(ticketComments)
-          .where(eq(ticketComments.ticketNumber, number))
-          .run();
-        db.delete(ticketAcceptanceCriteria)
-          .where(eq(ticketAcceptanceCriteria.ticketNumber, number))
-          .run();
-        db.delete(ticketBlockers)
-          .where(eq(ticketBlockers.blockedNumber, number))
-          .run();
-        const unblocked = db
-          .delete(ticketBlockers)
-          .where(eq(ticketBlockers.blockerNumber, number))
-          .returning({ number: ticketBlockers.blockedNumber })
-          .all()
-          .map(({ number: blocked }) => blocked);
+        const deleted = withChildren ? [...childNumbers, number] : [number];
+        const removals = deleted.map((doomed) => removeTicket(db, doomed));
+        const unblocked = [
+          ...new Set(removals.flatMap((removal) => removal.unblocked)),
+        ].filter((blocked) => !deleted.includes(blocked));
         for (const blocked of unblocked) {
           touchTicket(db, blocked);
         }
-        const leftCycles = leaveAllCycles(db, number);
-        db.delete(tickets).where(eq(tickets.number, number)).run();
         if (epic !== null) {
           touchTicket(db, epic.number);
           syncEpicStatus(db, epic.number);
         }
-        return { unblocked, epic, leftCycles };
+        return {
+          children: childNumbers,
+          unblocked,
+          epic,
+          leftCycles: [
+            ...new Set(removals.flatMap((removal) => removal.leftCycles)),
+          ],
+        };
       });
       changes.publish({
         type: 'tickets',
         numbers: [
           number,
+          ...children,
           ...unblocked,
           ...(epic === null ? [] : [epic.number]),
         ],
@@ -1960,6 +1965,34 @@ function checkedLabels(labels: readonly string[]): string[] {
       normalized.length === 0 ? 'Enter a label.' : checkLabels(normalized),
   });
   return normalized;
+}
+
+/**
+ * Deletes Ticket `number`'s row with everything attached to it: labels,
+ * Comments, acceptance criteria, Blockers on both sides and Cycle
+ * membership. Run it in the deleting transaction. Returns the Tickets it
+ * blocked and the Cycles it left, for the caller to bump and announce.
+ */
+function removeTicket(db: DatabaseConnection, number: number) {
+  db.delete(ticketLabels).where(eq(ticketLabels.ticketNumber, number)).run();
+  db.delete(ticketComments)
+    .where(eq(ticketComments.ticketNumber, number))
+    .run();
+  db.delete(ticketAcceptanceCriteria)
+    .where(eq(ticketAcceptanceCriteria.ticketNumber, number))
+    .run();
+  db.delete(ticketBlockers)
+    .where(eq(ticketBlockers.blockedNumber, number))
+    .run();
+  const unblocked = db
+    .delete(ticketBlockers)
+    .where(eq(ticketBlockers.blockerNumber, number))
+    .returning({ number: ticketBlockers.blockedNumber })
+    .all()
+    .map(({ number: blocked }) => blocked);
+  const leftCycles = leaveAllCycles(db, number);
+  db.delete(tickets).where(eq(tickets.number, number)).run();
+  return { unblocked, leftCycles };
 }
 
 /** Bumps Ticket `number`'s updated time, or says it does not exist. */

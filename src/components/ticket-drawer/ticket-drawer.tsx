@@ -51,7 +51,10 @@ import { BlockerEditor } from '../blocker-editor/blocker-editor';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
-import { DeleteTicketDialog } from '../delete-ticket-dialog/delete-ticket-dialog';
+import {
+  type ChildDeletion,
+  DeleteTicketDialog,
+} from '../delete-ticket-dialog/delete-ticket-dialog';
 import { EpicChildren } from '../epic-children/epic-children';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
@@ -78,6 +81,11 @@ export type TicketDrawerProps = {
   cycles?: Cycle[];
   /** The Claim on the Ticket's Epic, which covers it too. Defaults to none. */
   epicClaim?: TicketClaim | null;
+  /**
+   * An Epic's children with their Claims and the Tickets they block, for
+   * deleting them along with it. Defaults to none.
+   */
+  epicChildren?: ChildDeletion[];
   /**
    * The URL of the Board the drawer is open over, without `?ticket=`: where
    * closing goes. Defaults to the Ticket's Project's Backlog, as it does
@@ -415,6 +423,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   blockers = noBlockers,
   cycles = noCycles,
   epicClaim = null,
+  epicChildren,
   boardPath,
 }) => {
   const router = useRouter();
@@ -720,6 +729,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                   ticket={{ ...ticket, claim }}
                   blocks={blockers.blocks}
                   epicClaim={epicClaim}
+                  epicChildren={epicChildren}
                   onDeleted={close}
                 />
               </Inline>

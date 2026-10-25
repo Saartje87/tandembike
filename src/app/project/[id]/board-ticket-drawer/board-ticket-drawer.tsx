@@ -44,6 +44,12 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
           ? null
           : tickets.getTicket(ticket.epic.number).claim
       }
+      epicChildren={ticket.children.map((child) => ({
+        number: child.number,
+        title: child.title,
+        claim: tickets.getTicket(child.number).claim,
+        blocks: tickets.listBlockers(child.number).blocks,
+      }))}
       boardPath={boardPath}
     />
   );

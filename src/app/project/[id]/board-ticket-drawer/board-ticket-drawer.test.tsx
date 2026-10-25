@@ -13,12 +13,14 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     ticket,
     comments,
     boardPath,
+    epicChildren,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
     boardPath: string;
+    epicChildren: unknown;
   }) => (
-    <div role="dialog">
+    <div role="dialog" data-epic-children={JSON.stringify(epicChildren)}>
       {`Ticket drawer #${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')}`}
     </div>
   ),
@@ -83,5 +85,46 @@ describe('BoardTicketDrawer', () => {
         boardPath: '/project/1',
       }),
     ).toBeNull();
+  });
+
+  it("gives an Epic's drawer each child's Claim and the Tickets it blocks", async () => {
+    const { tickets, website } = setUp();
+    const epic = tickets.createTicket({
+      projectId: website.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: website.id,
+      title: 'Build',
+      epicNumber: epic.number,
+    });
+    tickets.claimTicket(child.number, { agentRunId: 'run-1' });
+    tickets.addBlocker({ blocker: child.number, blocked: 1 });
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: epic.number,
+            boardPath: '/project/1',
+          })
+        }
+      </div>,
+    );
+
+    expect(
+      JSON.parse(
+        screen.getByRole('dialog').getAttribute('data-epic-children') ?? '',
+      ),
+    ).toEqual([
+      {
+        number: child.number,
+        title: 'Build',
+        claim: { agentRunId: 'run-1', agentName: null },
+        blocks: [expect.objectContaining({ number: 1 })],
+      },
+    ]);
   });
 });

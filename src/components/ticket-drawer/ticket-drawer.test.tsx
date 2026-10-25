@@ -1222,7 +1222,10 @@ describe('TicketDrawer', () => {
         screen.getByRole('button', { name: `Delete #${ticket.number}` }),
       );
 
-      expect(deleteTicket).toHaveBeenCalledWith({ number: ticket.number });
+      expect(deleteTicket).toHaveBeenCalledWith({
+        number: ticket.number,
+        withChildren: false,
+      });
       expect(router.replace).toHaveBeenCalledExactlyOnceWith(
         '/project/1/cycle/7',
         { scroll: false },
