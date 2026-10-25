@@ -35,7 +35,13 @@ Ticket Statuses are `Todo`, `In progress`, and `Done`. Move a Ticket to `In prog
 
 ## Development work in this repository
 
-Use the existing Project named `Tandembike` for software-development work on this codebase. Pass it as `projectName: "Tandembike"`, or resolve its id with `list_projects`; do not create a second Project for repository work. Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), post its link as a comment on the Ticket with `add_comment`. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below). Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
+Use the existing Project named `Tandembike` for software-development work on this codebase. Pass it as `projectName: "Tandembike"`, or resolve its id with `list_projects`; do not create a second Project for repository work. Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), post its link as a comment on the Ticket with `add_comment`. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below). Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
+
+A Claim covers the work of one Agent run, not the wait for a merge:
+
+- Right after posting the PR link, release the Claim with `release_ticket_claim`. The Ticket stays `In progress`; that and the PR comment show it is taken.
+- A later Agent run that works on the open PR, for example to fix review findings, claims the Ticket for that work and releases it again when done.
+- After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose linked PR is merged with CI green does; failing both, the User does.
 
 ## Working an Epic
 
@@ -44,8 +50,8 @@ An Epic is handed off, worked and delivered as one unit:
 1. `get_ticket` the Epic: its description is the shared context for every child, and `children` lists them with their Blockers. Move the Epic's own Status nowhere; it follows the children.
 2. Claim the Epic once with `claim_ticket`. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`Ticket #42`).
-4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic.
-5. Once the PR is merged with CI green, move every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them, which releases its Claim. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
+4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
+5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
 
 ## Triage and Blockers
 
