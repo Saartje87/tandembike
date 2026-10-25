@@ -79,6 +79,30 @@ describe('MCP server', () => {
     await client.close();
   });
 
+  it("explains the tracker to any client in any repository, leaving each repository's process to it", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const instructions = client.getInstructions() ?? '';
+    const { tools } = await client.listTools();
+    const archive = tools.find((tool) => tool.name === 'archive_ticket');
+
+    // Which Project: the repository's own instructions name it (ADR 0014).
+    expect(instructions).toMatch(/repository's instructions name a Project/);
+    // General rules that used to live only in one repository's docs.
+    expect(instructions).toMatch(/never as a checklist in the description/);
+    expect(instructions).toMatch(/one level deep/);
+    expect(instructions).toMatch(/stays in its Cycle/);
+    expect(instructions).toMatch(/reconnect/);
+    expect(instructions).toMatch(/not direct database access/);
+    // Process belongs to each repository, and no client is assumed.
+    expect(instructions).not.toMatch(/branch|pull request|\bPR\b/i);
+    expect(instructions).not.toMatch(/Claude|Copilot/);
+    expect(archive?.description).toMatch(
+      /Agents cannot delete Tickets; the User can, from the app/,
+    );
+    await client.close();
+  });
+
   it('refuses a request for a host other than localhost', async () => {
     const response = await handleMcpRequest(
       new Request('http://localhost:3000/api/mcp', {
