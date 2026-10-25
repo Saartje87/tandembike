@@ -2,6 +2,10 @@
 
 Tickets and Projects live in the local Tandembike app. Use its MCP server at `http://localhost:3000/api/mcp` through an MCP-capable client; the app must be running on `localhost:3000`. The endpoint uses stateless Streamable HTTP. Use the MCP tools, not `gh`, `glab`, `.scratch/` files, direct database access, or hand-written HTTP requests.
 
+## When the MCP tools change
+
+Your session keeps the tool list, tool descriptions and server instructions it loaded when it connected, and the stateless server cannot notify it when they change. A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm run dev`, and only after `npm run build` and a restart under `npm run start`. Once it has, ask the User to reconnect the MCP server (`/mcp` in Claude Code) or start a new session. Until they do, treat your loaded descriptions as possibly stale, and a tool missing from your list as possibly existing on the server.
+
 ## Available operations
 
 - `list_projects`: find an existing Project and its id before creating one.

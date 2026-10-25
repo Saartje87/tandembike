@@ -36,6 +36,11 @@ server's instructions ask Agents to move a Ticket to In progress when they
 start it and to Done when they finish, to reuse existing Projects, and to
 refer to Tickets as `#42`.
 
+An Agent session keeps the tools it loaded when it connected. After you pull
+or merge changes to the MCP tools, reconnect the server (`/mcp` in Claude
+Code) or start a new session; see "When the MCP tools change" in
+`docs/agents/issue-tracker.md`.
+
 ## Where data lives
 
 All data is stored in a single SQLite file in the `data/` folder at the repo
