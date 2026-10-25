@@ -469,6 +469,12 @@ gap={1}` around a plain `<span role="img" aria-label="…">`.
 criterion?" confirm cancels on Escape. `<Stack onKeyDown={…}>` is a type error
 (the prop does reach the element at runtime), so
 `acceptance-criteria-editor.tsx` puts the handler on the surrounding `<li>`.
+The Board clears its card selection on a click on empty Board space, so its
+outer column needs `onClick`; `board.tsx` uses `Box asChild display="flex"
+flexDirection="column" gap={4}` around a plain `<div onClick={…}>` where a
+`Stack gap={4}` would otherwise do. The Board's selection bar is a
+`role="toolbar"` row, so `selection-bar.tsx` is a `Box asChild display="flex"`
+around a `<div role="toolbar">`.
 
 **Question.** Should `Inline` and `Stack` forward HTML attributes, or support
 `asChild` like `Box`? If forwarding `aria-*` is intended, can the types say so?
@@ -713,7 +719,8 @@ at its default `1`, so in any flex row the box gives up width to the text.
 `Radio` and `Switch`, if they share the pattern).
 
 **Workaround.** `acceptance-criteria-editor.css.ts` passes a `checkbox` class
-with `flexShrink: 0` through `className`, which reaches the root. Since atoms
+with `flexShrink: 0` through `className`, which reaches the root. A Board
+card's select checkbox (`ticket-card.css.ts`, `selectBox`) does the same. Since atoms
 cannot be set on `Checkbox`, the `flexShrink` atom is not an option.
 
 **Question.** Should fixed-size form controls not shrink by default?

@@ -1008,6 +1008,25 @@ describe('Selecting cards', () => {
     expect(selectionBar()).toHaveTextContent('1 selected');
   });
 
+  it('leaves a Ticket that left the Board unselected when it comes back', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await user.click(checkbox(7, 'Write the copy'));
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[header, { ...copy, archived: true }]}
+      />,
+    );
+    rerender(<Board project={project} tickets={board} />);
+
+    expect(selectedTitles()).toEqual([]);
+    expect(selectionBar()).not.toBeInTheDocument();
+  });
+
   it('drags the whole selection to a column, in Board order, and saves it as one move', async () => {
     const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
     vi.mocked(moveTickets).mockReturnValue(promise);

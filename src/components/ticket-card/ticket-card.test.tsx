@@ -1,5 +1,6 @@
 import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { userEvent } from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
 
 import { renderWithTheme } from '../../test/render';
 import { TicketCard } from './ticket-card';
@@ -250,5 +251,61 @@ describe('TicketCard', () => {
         screen.queryByRole('link', { name: /^Epic/ }),
       ).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('Selecting a TicketCard', () => {
+  const selectable = (selected = false) => {
+    const onSelect = vi.fn();
+    renderWithTheme(
+      <TicketCard
+        ticket={ticket}
+        boardPath="/project/1"
+        selected={selected}
+        onSelect={onSelect}
+      />,
+    );
+    return onSelect;
+  };
+
+  it('offers no checkbox on a card that cannot be selected', () => {
+    renderWithTheme(<TicketCard ticket={ticket} boardPath="/project/1" />);
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('has a checkbox named after the Ticket, checked when selected', () => {
+    selectable(true);
+
+    expect(
+      screen.getByRole('checkbox', { name: 'Select #4 Fix the header' }),
+    ).toBeChecked();
+  });
+
+  it('toggles with a Cmd-click or Ctrl-click on the card and asks for a range with a Shift-click', async () => {
+    const user = userEvent.setup();
+    const onSelect = selectable();
+    const title = screen.getByRole('link', { name: 'Fix the header' });
+
+    for (const key of ['Meta', 'Control', 'Shift']) {
+      await user.keyboard(`{${key}>}`);
+      await user.click(title);
+      await user.keyboard(`{/${key}}`);
+    }
+
+    expect(onSelect.mock.calls).toEqual([['toggle'], ['toggle'], ['range']]);
+  });
+
+  it('toggles with its checkbox, or asks for a range with a Shift-click on it', async () => {
+    const user = userEvent.setup();
+    const onSelect = selectable();
+    const checkbox = screen.getByRole('checkbox');
+
+    await user.click(checkbox);
+    await user.keyboard('{Shift>}');
+    await user.click(checkbox);
+    await user.keyboard('{/Shift}');
+
+    expect(onSelect.mock.calls).toEqual([['toggle'], ['range']]);
   });
 });

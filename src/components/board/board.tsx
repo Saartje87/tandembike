@@ -24,6 +24,7 @@ import {
   type FC,
   type MouseEvent,
   type ReactNode,
+  useCallback,
   useEffect,
   useId,
   useOptimistic,
@@ -311,11 +312,11 @@ const applyEpicJoin = (epics: Ticket[], { child, epicNumber }: EpicJoin) =>
   });
 
 /** Clicks inside these are not on empty Board space. */
-const notEmptySpace =
+const notEmptySpaceSelector =
   'a, button, input, textarea, select, label, form, li, [role="toolbar"], dialog, [role="dialog"]';
 
 /** Where Escape belongs to the control, not to the selection. */
-const ownsEscape =
+const escapeOwnerSelector =
   'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]';
 
 /**
@@ -376,15 +377,20 @@ export const Board: FC<BoardProps> = ({
       ),
   );
   const laneOf = (status: Status) => lanes[statuses.indexOf(status)];
-  // In Board order; a Ticket that left the Board drops out.
+  // In Board order.
   const selection = lanes
     .flat()
     .filter((ticket) => selected.has(ticket.number));
   const selectedOnBoard = new Set(selection.map(({ number }) => number));
-  const clearSelection = () => {
+  if (selectedOnBoard.size < selected.size) {
+    // A Ticket that left the Board drops out, so it is not selected if it
+    // comes back.
+    setSelected(selectedOnBoard);
+  }
+  const clearSelection = useCallback(() => {
     setSelected(new Set());
     selectionAnchor.current = undefined;
-  };
+  }, []);
 
   useEffect(() => {
     if (selected.size === 0) {
@@ -395,16 +401,16 @@ export const Board: FC<BoardProps> = ({
         event.key !== 'Escape' ||
         event.defaultPrevented ||
         dragging.current ||
-        (event.target instanceof Element && event.target.closest(ownsEscape))
+        (event.target instanceof Element &&
+          event.target.closest(escapeOwnerSelector))
       ) {
         return;
       }
-      setSelected(new Set());
-      selectionAnchor.current = undefined;
+      clearSelection();
     };
     document.addEventListener('keydown', clearOnEscape);
     return () => document.removeEventListener('keydown', clearOnEscape);
-  }, [selected]);
+  }, [selected, clearSelection]);
 
   const select = (ticket: Ticket, mode: SelectMode) => {
     const lane = laneOf(ticket.status).map(({ number }) => number);
@@ -434,7 +440,7 @@ export const Board: FC<BoardProps> = ({
     if (
       selected.size > 0 &&
       event.target instanceof Element &&
-      !event.target.closest(notEmptySpace)
+      !event.target.closest(notEmptySpaceSelector)
     ) {
       clearSelection();
     }
@@ -543,6 +549,14 @@ export const Board: FC<BoardProps> = ({
     if (targetId !== undefined && targetId !== sourceId) {
       lastDropTarget.current = targetId;
     }
+    // dnd-kit would move the card's element into the other column's list,
+    // which React then fails to remove from its own list on the drop.
+    const statusOf = (id: unknown) =>
+      shownTickets.find((ticket) => ticket.number === id)?.status;
+    const targetStatus = statusOf(targetId);
+    if (targetStatus !== undefined && targetStatus !== statusOf(sourceId)) {
+      event.preventDefault();
+    }
   };
 
   const finishDrag = (event: DragEndEvent) => {
@@ -617,7 +631,7 @@ export const Board: FC<BoardProps> = ({
   };
 
   return (
-    // `Stack` takes no `onClick` and has no `asChild` (docs/blocks-feedback.md).
+    // `Stack` takes no `onClick` and has no `asChild` (docs/blocks-feedback.md, 15).
     <Box asChild display="flex" flexDirection="column" gap={4}>
       {/* A click on empty Board space clears the selection, a pointer
           shortcut: Escape and the bar's Clear button do it by keyboard. */}

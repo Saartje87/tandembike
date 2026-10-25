@@ -35,6 +35,10 @@ export type SelectMode = 'toggle' | 'range';
 const isSelectClick = (event: MouseEvent) =>
   event.metaKey || event.ctrlKey || event.shiftKey;
 
+/** A Shift-click selects a range; any other select click toggles. */
+const selectModeOf = (event: Event | MouseEvent): SelectMode =>
+  'shiftKey' in event && event.shiftKey ? 'range' : 'toggle';
+
 type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
 /** A pill that says the Ticket is blocked by an unresolved Blocker. */
@@ -114,7 +118,7 @@ export const TicketCard: FC<TicketCardProps> = ({
       return;
     }
     event.preventDefault();
-    onSelect(event.shiftKey ? 'range' : 'toggle');
+    onSelect(selectModeOf(event));
   };
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
@@ -192,12 +196,8 @@ export const TicketCard: FC<TicketCardProps> = ({
                 className={styles.selectBox}
                 checked={selected}
                 onChange={(event) =>
-                  onSelect(
-                    event.nativeEvent instanceof globalThis.MouseEvent &&
-                      event.nativeEvent.shiftKey
-                      ? 'range'
-                      : 'toggle',
-                  )
+                  // A checkbox's change comes from its click, with its keys.
+                  onSelect(selectModeOf(event.nativeEvent))
                 }
               />
             </Box>

@@ -48,6 +48,7 @@ import {
   checkUngrouped,
   claimedEpics,
   type EpicChildInput,
+  epicStatusRule,
   syncEpicStatus,
 } from './epics';
 import {
@@ -1789,7 +1790,7 @@ export function createTickets(
           }
           if (ticket.type === 'Epic') {
             throw new ValidationError({
-              ticketNumbers: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+              ticketNumbers: epicStatusRule(number),
             });
           }
           return { number, ...ticket };
@@ -2145,7 +2146,7 @@ export function createTickets(
         projectId !== existing.projectId || status !== existing.status;
       if (existing.type === 'Epic' && status !== existing.status) {
         throw new ValidationError({
-          status: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+          status: epicStatusRule(number),
         });
       }
       if (values.color !== undefined && existing.type !== 'Epic') {
