@@ -497,7 +497,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Update Ticket',
       description:
-        'Change any subset of a Ticket\'s title, description, Status, Project, Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
+        'Change any subset of a Ticket\'s title, description, Status, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -519,6 +519,12 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             'Move the Ticket to this Project (id from list_projects). A child, or an Epic with children, cannot move.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'Move the Ticket to the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
           ),
         originNumber: originNumber
           .nullable()
@@ -547,8 +553,17 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
       },
     },
-    ({ number, ...changes }) =>
-      respond(() => tickets.updateTicket(number, changes)),
+    ({ number, projectId, projectName, ...changes }) =>
+      respond(() =>
+        tickets.updateTicket(number, {
+          ...changes,
+          ...(projectId === undefined && projectName === undefined
+            ? {}
+            : {
+                projectId: tickets.resolveProjectId({ projectId, projectName }),
+              }),
+        }),
+      ),
   );
 
   server.registerTool(
@@ -793,11 +808,28 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'List Cycles',
       description:
-        "List a Project's Cycles, oldest first, each with its id, title (its goal), state (Prepared, Active or Archived), ticketNumbers (the Tickets planned into it; an Archived Cycle's are its final membership), createdAt and archivedAt (null unless Archived).",
-      inputSchema: { projectId },
+        "List a Project's Cycles, given by projectId or projectName, oldest first, each with its id, title (its goal), state (Prepared, Active or Archived), ticketNumbers (the Tickets planned into it; an Archived Cycle's are its final membership), createdAt and archivedAt (null unless Archived).",
+      inputSchema: {
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project to list the Cycles of (id from list_projects). Give this or projectName.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'The name of the Project to list the Cycles of, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
+          ),
+      },
       annotations: { readOnlyHint: true },
     },
-    ({ projectId }) => respond(() => tickets.listCycles(projectId)),
+    ({ projectId, projectName }) =>
+      respond(() =>
+        tickets.listCycles(
+          tickets.resolveProjectId({ projectId, projectName }),
+        ),
+      ),
   );
 
   server.registerTool(
@@ -805,11 +837,29 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Create Cycle',
       description:
-        'Create an empty, Prepared Cycle in a Project and return it. A Project can have several Prepared Cycles.',
-      inputSchema: { projectId, title: cycleTitle },
+        'Create an empty, Prepared Cycle in a Project, given by projectId or projectName, and return it. A Project can have several Prepared Cycles.',
+      inputSchema: {
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project the Cycle belongs to (id from list_projects). Give this or projectName.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'The name of the Project the Cycle belongs to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
+          ),
+        title: cycleTitle,
+      },
     },
-    ({ projectId, title }) =>
-      respond(() => tickets.createCycle({ projectId, title })),
+    ({ projectId, projectName, title }) =>
+      respond(() =>
+        tickets.createCycle({
+          projectId: tickets.resolveProjectId({ projectId, projectName }),
+          title,
+        }),
+      ),
   );
 
   server.registerTool(
