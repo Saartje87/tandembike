@@ -22,7 +22,9 @@ import {
 import { useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
+  type MouseEvent,
   type ReactNode,
+  useEffect,
   useId,
   useOptimistic,
   useRef,
@@ -33,6 +35,7 @@ import {
 import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import {
   attachTicketToEpic,
+  moveTickets,
   reorderTickets,
   updateTicket,
 } from '../../app/tickets/actions';
@@ -47,8 +50,10 @@ import { AppLink } from '../app-link/app-link';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { ProjectHeader } from '../project-header/project-header';
-import { TicketCard } from '../ticket-card/ticket-card';
+import { SelectionBar } from '../selection-bar/selection-bar';
+import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
 import * as styles from './board.css';
+import { selectionDrop } from './selection-drop';
 
 export type BoardProps = {
   project: Project;
@@ -86,6 +91,8 @@ type StatusColumnProps = {
   boardPath: string;
   status: Status;
   tickets: Ticket[];
+  selected: ReadonlySet<number>;
+  onSelect: (ticket: Ticket, mode: SelectMode) => void;
 };
 
 type TicketCountProps = { count: number };
@@ -105,6 +112,8 @@ const StatusColumn: FC<StatusColumnProps> = ({
   boardPath,
   status,
   tickets,
+  selected,
+  onSelect,
 }) => {
   const { ref, isDropTarget } = useDroppable({
     id: status,
@@ -141,6 +150,9 @@ const StatusColumn: FC<StatusColumnProps> = ({
                   ticket={ticket}
                   index={index}
                   boardPath={boardPath}
+                  selected={selected.has(ticket.number)}
+                  selecting={selected.size > 0}
+                  onSelect={(mode) => onSelect(ticket, mode)}
                 />
               ))}
             </Stack>
@@ -161,12 +173,18 @@ type SortableTicketCardProps = {
   ticket: Ticket;
   index: number;
   boardPath: string;
+  selected: boolean;
+  selecting: boolean;
+  onSelect: (mode: SelectMode) => void;
 };
 
 const SortableTicketCard: FC<SortableTicketCardProps> = ({
   ticket,
   index,
   boardPath,
+  selected,
+  selecting,
+  onSelect,
 }) => {
   const { ref, handleRef } = useSortable({
     id: ticket.number,
@@ -181,6 +199,9 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       boardPath={boardPath}
       cardRef={ref}
       dragHandleRef={handleRef}
+      selected={selected}
+      selecting={selecting}
+      onSelect={onSelect}
     />
   );
 };
@@ -231,9 +252,22 @@ type StatusMove = { number: number; status: Status };
 type BoardChange =
   | (StatusMove & { position: number })
   | { status: Status; ticketNumbers: number[] }
+  | { status: Status; laneOrder: number[] }
   | { number: number; epic: EpicLink };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
+  if ('laneOrder' in change) {
+    // A selection moved into a lane: every Ticket in it takes its Status.
+    const positions = new Map(
+      change.laneOrder.map((number, position) => [number, position]),
+    );
+    return tickets.map((ticket) => {
+      const position = positions.get(ticket.number);
+      return position === undefined
+        ? ticket
+        : { ...ticket, status: change.status, position };
+    });
+  }
   if ('epic' in change) {
     return tickets.map((ticket) =>
       ticket.number === change.number
@@ -276,6 +310,14 @@ const applyEpicJoin = (epics: Ticket[], { child, epicNumber }: EpicJoin) =>
     return { ...epic, children };
   });
 
+/** Clicks inside these are not on empty Board space. */
+const notEmptySpace =
+  'a, button, input, textarea, select, label, form, li, [role="toolbar"], dialog, [role="dialog"]';
+
+/** Where Escape belongs to the control, not to the selection. */
+const ownsEscape =
+  'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]';
+
 /**
  * A Project's Board: its header, its Epics' row, and one column per Status
  * holding its active normal Tickets, plus a
@@ -283,6 +325,11 @@ const applyEpicJoin = (epics: Ticket[], { child, epicNumber }: EpicJoin) =>
  * below. Tickets can be reordered by dragging or moved between Statuses; both
  * changes save through Server Actions and roll back optimistically if
  * refused.
+ *
+ * Cards can be selected with Cmd-click or Ctrl-click, a Shift-click range in
+ * one column, or their checkboxes; a bar then shows the selection. Dragging
+ * a selected card moves the whole selection. The selection lives only in
+ * this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
   project,
@@ -301,6 +348,9 @@ export const Board: FC<BoardProps> = ({
     tickets.some((ticket) => ticket.number === openTicket && ticket.archived),
   );
   const lastDropTarget = useRef<string | number | undefined>(undefined);
+  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+  const selectionAnchor = useRef<number | undefined>(undefined);
+  const dragging = useRef(false);
   const switchId = useId();
   const active = shownTickets.filter(
     (ticket) => !ticket.archived && ticket.type !== 'Epic',
@@ -317,6 +367,78 @@ export const Board: FC<BoardProps> = ({
         )
       : shownEpics;
   const archived = shownTickets.filter((ticket) => ticket.archived);
+  const lanes = statuses.map((status) =>
+    active
+      .filter((ticket) => ticket.status === status)
+      .sort(
+        (left, right) =>
+          left.position - right.position || left.number - right.number,
+      ),
+  );
+  const laneOf = (status: Status) => lanes[statuses.indexOf(status)];
+  // In Board order; a Ticket that left the Board drops out.
+  const selection = lanes
+    .flat()
+    .filter((ticket) => selected.has(ticket.number));
+  const selectedOnBoard = new Set(selection.map(({ number }) => number));
+  const clearSelection = () => {
+    setSelected(new Set());
+    selectionAnchor.current = undefined;
+  };
+
+  useEffect(() => {
+    if (selected.size === 0) {
+      return;
+    }
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        dragging.current ||
+        (event.target instanceof Element && event.target.closest(ownsEscape))
+      ) {
+        return;
+      }
+      setSelected(new Set());
+      selectionAnchor.current = undefined;
+    };
+    document.addEventListener('keydown', clearOnEscape);
+    return () => document.removeEventListener('keydown', clearOnEscape);
+  }, [selected]);
+
+  const select = (ticket: Ticket, mode: SelectMode) => {
+    const lane = laneOf(ticket.status).map(({ number }) => number);
+    const from =
+      mode === 'range' && selectionAnchor.current !== undefined
+        ? lane.indexOf(selectionAnchor.current)
+        : -1;
+    if (from >= 0) {
+      const to = lane.indexOf(ticket.number);
+      const range = lane.slice(Math.min(from, to), Math.max(from, to) + 1);
+      setSelected((current) => new Set([...current, ...range]));
+      return;
+    }
+    selectionAnchor.current = ticket.number;
+    setSelected((current) => {
+      const next = new Set(current);
+      if (mode === 'toggle' && next.has(ticket.number)) {
+        next.delete(ticket.number);
+      } else {
+        next.add(ticket.number);
+      }
+      return next;
+    });
+  };
+
+  const clearOnEmptyClick = (event: MouseEvent) => {
+    if (
+      selected.size > 0 &&
+      event.target instanceof Element &&
+      !event.target.closest(notEmptySpace)
+    ) {
+      clearSelection();
+    }
+  };
 
   const changeStatus = (number: number, status: Status) => {
     setError(undefined);
@@ -355,6 +477,44 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
+  /**
+   * Moves the selection, carried by card `sourceId`, into `status`'s lane
+   * where it was dropped on `targetId` (see `selectionDrop`).
+   */
+  const moveSelection = (
+    status: Status,
+    sourceId: number,
+    targetId: string | number | undefined,
+  ) => {
+    const moving = selection.map(({ number }) => number);
+    const lane = laneOf(status).map(({ number }) => number);
+    const { before, laneOrder } = selectionDrop(
+      lane,
+      moving,
+      sourceId,
+      typeof targetId === 'number' ? targetId : undefined,
+    );
+    if (
+      selection.every((ticket) => ticket.status === status) &&
+      laneOrder.every((number, index) => number === lane[index])
+    ) {
+      return;
+    }
+    setError(undefined);
+    startTransition(async () => {
+      showChange({ status, laneOrder });
+      const result = await moveTickets({
+        projectId: project.id,
+        ticketNumbers: moving,
+        status,
+        before,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const joinEpic = (ticket: Ticket, epicNumber: number) => {
     const epic = shownEpics.find(({ number }) => number === epicNumber);
     if (!epic || ticket.epic?.number === epicNumber) {
@@ -386,6 +546,7 @@ export const Board: FC<BoardProps> = ({
   };
 
   const finishDrag = (event: DragEndEvent) => {
+    dragging.current = false;
     const sourceId = event.operation.source?.id;
     const operationTargetId = event.operation.target?.id;
     // Dropped back on its own slot: take the card it was last over, but not
@@ -422,6 +583,10 @@ export const Board: FC<BoardProps> = ({
     if (!status) {
       return;
     }
+    if (selectedOnBoard.has(sourceId) && selection.length > 1) {
+      moveSelection(status, sourceId, targetId);
+      return;
+    }
     if (ticket.status !== status) {
       changeStatus(sourceId, status);
       return;
@@ -452,48 +617,60 @@ export const Board: FC<BoardProps> = ({
   };
 
   return (
-    <Stack gap={4}>
-      <ProjectHeader project={project}>{header}</ProjectHeader>
-      {error && <Alert intent="error">{error}</Alert>}
-      <DndProvider onDragOver={rememberDropTarget} onDragEnd={finishDrag}>
-        <EpicChips
-          epics={rowEpics}
-          projectId={project.id}
-          cycleId={cycleId ?? undefined}
-          boardPath={boardPath}
-          hideDone={typeof cycleId !== 'number'}
-        />
-        <Grid gap={3}>
-          {statuses.map((status) => (
-            <GridItem key={status} colSpan={[12, 4]}>
-              <StatusColumn
-                projectId={project.id}
-                cycleId={cycleId}
-                boardPath={boardPath}
-                status={status}
-                tickets={active
-                  .filter((ticket) => ticket.status === status)
-                  .sort(
-                    (left, right) =>
-                      left.position - right.position ||
-                      left.number - right.number,
-                  )}
-              />
-            </GridItem>
-          ))}
-        </Grid>
-      </DndProvider>
-      <Inline gap={2} alignY="center">
-        <Switch
-          id={switchId}
-          checked={showArchived}
-          onChange={setShowArchived}
-        />
-        <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
-      </Inline>
-      {showArchived && (
-        <ArchivedTickets tickets={archived} boardPath={boardPath} />
-      )}
-    </Stack>
+    // `Stack` takes no `onClick` and has no `asChild` (docs/blocks-feedback.md).
+    <Box asChild display="flex" flexDirection="column" gap={4}>
+      {/* A click on empty Board space clears the selection, a pointer
+          shortcut: Escape and the bar's Clear button do it by keyboard. */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: see above */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
+      <div onClick={clearOnEmptyClick}>
+        <ProjectHeader project={project}>{header}</ProjectHeader>
+        {error && <Alert intent="error">{error}</Alert>}
+        <DndProvider
+          onDragStart={() => {
+            dragging.current = true;
+          }}
+          onDragOver={rememberDropTarget}
+          onDragEnd={finishDrag}
+        >
+          <EpicChips
+            epics={rowEpics}
+            projectId={project.id}
+            cycleId={cycleId ?? undefined}
+            boardPath={boardPath}
+            hideDone={typeof cycleId !== 'number'}
+          />
+          <Grid gap={3}>
+            {statuses.map((status) => (
+              <GridItem key={status} colSpan={[12, 4]}>
+                <StatusColumn
+                  projectId={project.id}
+                  cycleId={cycleId}
+                  boardPath={boardPath}
+                  status={status}
+                  tickets={laneOf(status)}
+                  selected={selectedOnBoard}
+                  onSelect={select}
+                />
+              </GridItem>
+            ))}
+          </Grid>
+        </DndProvider>
+        {selection.length > 0 && (
+          <SelectionBar count={selection.length} onClear={clearSelection} />
+        )}
+        <Inline gap={2} alignY="center">
+          <Switch
+            id={switchId}
+            checked={showArchived}
+            onChange={setShowArchived}
+          />
+          <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
+        </Inline>
+        {showArchived && (
+          <ArchivedTickets tickets={archived} boardPath={boardPath} />
+        )}
+      </div>
+    </Box>
   );
 };

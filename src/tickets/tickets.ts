@@ -328,6 +328,18 @@ export type ReorderTicketsInput = {
   cycleId?: number | null;
 };
 
+export type MoveTicketsInput = {
+  projectId: number;
+  /** The Tickets to move, each once, at most `maxBatchSize`, in the order they land in. */
+  ticketNumbers: number[];
+  status: Status;
+  /**
+   * The Ticket in the `status` lane they land just before, or `null` for the
+   * end of the lane.
+   */
+  before: number | null;
+};
+
 export type ListTicketsFilter = {
   projectId?: number;
   /** Only Tickets in this Status, or in any of these Statuses. */
@@ -1730,6 +1742,117 @@ export function createTickets(
       for (const number of orderedLane) {
         changes.publish({ type: 'ticket', number });
       }
+    },
+
+    /**
+     * Moves active normal Tickets of Project `projectId` into its `status`
+     * lane, next to each other in the order given, just before Ticket
+     * `before` or at the end of the lane. The other Tickets in the lane keep
+     * their order. All or nothing: if any Ticket cannot move, none does.
+     * Moving to Done releases a Claim, and a child's move updates its Epic's
+     * Status, as `updateTicket` does. The change is announced once.
+     */
+    moveTickets(input: MoveTicketsInput): void {
+      const { projectId, ticketNumbers, status, before } = input;
+      throwFieldErrors({
+        ticketNumbers: checkBatchNumbers(ticketNumbers),
+        status: isStatus(status) ? undefined : statusRule,
+      });
+
+      const changedEpics = new Set<number>();
+      db.transaction(() => {
+        checkProjectWritable(db, projectId);
+        const moving = ticketNumbers.map((number) => {
+          const ticket = db
+            .select({
+              projectId: tickets.projectId,
+              status: tickets.status,
+              type: tickets.type,
+              archived: tickets.archived,
+              epicNumber: tickets.epicNumber,
+            })
+            .from(tickets)
+            .where(eq(tickets.number, number))
+            .get();
+          if (!ticket) {
+            throw new NotFoundError(`There is no Ticket #${number}.`);
+          }
+          if (ticket.projectId !== projectId) {
+            throw new ValidationError({
+              ticketNumbers: `Ticket #${number} is not in this Project.`,
+            });
+          }
+          if (ticket.archived) {
+            throw new ValidationError({
+              ticketNumbers: `Ticket #${number} is archived. Restore it before moving it.`,
+            });
+          }
+          if (ticket.type === 'Epic') {
+            throw new ValidationError({
+              ticketNumbers: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+            });
+          }
+          return { number, ...ticket };
+        });
+
+        const rest = db
+          .select({ number: tickets.number })
+          .from(tickets)
+          .where(
+            and(eq(tickets.projectId, projectId), eq(tickets.status, status)),
+          )
+          .orderBy(
+            asc(tickets.position),
+            asc(tickets.createdAt),
+            asc(tickets.number),
+          )
+          .all()
+          .map(({ number }) => number)
+          .filter((number) => !ticketNumbers.includes(number));
+        const insertAt = before === null ? rest.length : rest.indexOf(before);
+        if (insertAt < 0) {
+          throw new ValidationError({
+            before: 'Refresh the Board and try moving the Tickets again.',
+          });
+        }
+        rest.splice(insertAt, 0, ...ticketNumbers);
+
+        const now = new Date();
+        rest.forEach((number, position) => {
+          const moved = moving.find((ticket) => ticket.number === number);
+          db.update(tickets)
+            .set({
+              position,
+              ...(moved && moved.status !== status
+                ? {
+                    status,
+                    updatedAt: now,
+                    ...(status === 'Done'
+                      ? { claimAgentRunId: null, claimAgentName: null }
+                      : {}),
+                  }
+                : {}),
+            })
+            .where(eq(tickets.number, number))
+            .run();
+        });
+        for (const ticket of moving) {
+          if (
+            ticket.status !== status &&
+            syncEpicStatus(db, ticket.epicNumber) &&
+            ticket.epicNumber !== null
+          ) {
+            changedEpics.add(ticket.epicNumber);
+          }
+        }
+      });
+      changes.publish({
+        type: 'tickets',
+        numbers: [
+          ...ticketNumbers,
+          ...[...changedEpics].filter((epic) => !ticketNumbers.includes(epic)),
+        ],
+      });
     },
 
     /** The comments on Ticket `number`, oldest first. */
