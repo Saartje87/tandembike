@@ -106,12 +106,18 @@ describe('Creating Tickets in a batch', () => {
     ]);
   });
 
-  it('plans every Ticket into a Cycle of its Project', () => {
+  it('plans every Ticket into a Cycle of its Project, under an Epic too', () => {
     const { tickets, project } = setUp();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      type: 'Epic',
+    });
 
     const created = tickets.createTicketBatch({
       projectId: project.id,
+      epicNumber: epic.number,
       cycleId: cycle.id,
       tickets: [
         { title: 'Design' },
@@ -125,6 +131,9 @@ describe('Creating Tickets in a batch', () => {
     expect(tickets.getTicket(created[1].number).blockedBy).toEqual([
       created[0].number,
     ]);
+    expect(
+      tickets.getTicket(epic.number).children.map(({ number }) => number),
+    ).toEqual(created.map(({ number }) => number));
   });
 });
 

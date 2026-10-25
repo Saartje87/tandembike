@@ -446,7 +446,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each, optionally planned into a Cycle. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
         projectId: projectId
           .optional()
