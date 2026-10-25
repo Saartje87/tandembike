@@ -89,6 +89,7 @@ describe('MCP server', () => {
     // General rules that used to live only in one repository's docs.
     expect(instructions).toMatch(/never as a checklist in the description/);
     expect(instructions).toMatch(/one level deep/);
+    expect(instructions).toMatch(/its description holds their shared context/);
     expect(instructions).toMatch(/reconnect/);
     expect(instructions).toMatch(/not direct database access/);
     // Process belongs to each repository, and no client is assumed.
@@ -135,6 +136,7 @@ describe('MCP server', () => {
       ['edit_comment', /only edit comments written by an Agent/],
       ['remove_comment', /only remove comments written by an Agent/],
       ['get_ticket', /an Epic lists its children/],
+      ['attach_to_epic', /detach_from_epic it first/],
       ['update_ticket', /An Epic's follows its children and cannot be set/],
       [
         'create_ticket',
@@ -143,6 +145,7 @@ describe('MCP server', () => {
       ['list_cycles', /state \(Prepared, Active or Archived\), ticketNumbers/],
       ['plan_ticket', /at most one Cycle that is not Archived/],
       ['plan_ticket', /Done ones included/],
+      ['plan_ticket', /unplan_ticket it from its current one first/],
       ['plan_ticket', /a member that becomes Done or is archived stays in it/],
       ['plan_tickets', /at most 50 per call/],
       ['unplan_tickets', /at most 50 per call/],
