@@ -4,8 +4,8 @@ import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
 import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
-import { NotAllowedError, NotFoundError } from './errors';
-import { checkTitle, throwFieldErrors } from './rules';
+import { NotAllowedError, NotFoundError, TicketsError } from './errors';
+import { checkBatchNumbers, checkTitle, throwFieldErrors } from './rules';
 
 /** A goal-led plan within one Project (ADR 0010). */
 export type Cycle = {
@@ -44,6 +44,23 @@ export type StartCycleInput = {
 
 /** A Ticket to plan into, or out of, a Cycle. */
 export type CycleTicketInput = { cycleId: number; number: number };
+
+/** Tickets to plan into, or out of, one Cycle. */
+export type CycleTicketsInput = {
+  cycleId: number;
+  /** Explicit Ticket numbers, each once, at most `maxBatchSize`. */
+  ticketNumbers: number[];
+};
+
+/** Which Tickets a batch planned or unplanned and which it did not, and why. */
+export type CycleTicketsResult = {
+  /** The Tickets planned or unplanned, in the order given. */
+  updated: number[];
+  /** The Tickets left as they were, in the order given. */
+  failed: { number: number; error: string }[];
+  /** The Cycle after the batch. */
+  cycle: Cycle;
+};
 
 const cycleColumns = {
   id: cycles.id,
@@ -206,6 +223,121 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
   function getCycle(id: number): Cycle {
     return withTicketNumbers(db, [cycleRow(id)])[0];
+  }
+
+  /** Cycle `id`, unless it is missing or Archived. */
+  function changeableCycle(id: number): CycleRow {
+    const cycle = cycleRow(id);
+    checkChangeable(cycle);
+    return cycle;
+  }
+
+  /** Plans Ticket `number` into changeable `cycle`, by `planTicket`'s rules. */
+  function planInto(cycle: CycleRow, number: number) {
+    db.transaction(() => {
+      const ticket = db
+        .select({
+          projectId: tickets.projectId,
+          archived: tickets.archived,
+        })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      if (!ticket) {
+        throw new NotFoundError(`There is no Ticket #${number}.`);
+      }
+      const current = db
+        .select({ id: cycles.id, title: cycles.title })
+        .from(cycleTickets)
+        .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+        .where(
+          and(
+            eq(cycleTickets.ticketNumber, number),
+            ne(cycles.state, 'Archived'),
+          ),
+        )
+        .get();
+      if (current?.id === cycle.id) {
+        return;
+      }
+      if (ticket.projectId !== cycle.projectId) {
+        throw new NotAllowedError(
+          `Ticket #${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+        );
+      }
+      if (ticket.archived) {
+        throw new NotAllowedError(
+          `Ticket #${number} is archived. Restore it before planning it into a Cycle.`,
+        );
+      }
+      if (current) {
+        throw new NotAllowedError(
+          `Ticket #${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
+        );
+      }
+      db.insert(cycleTickets)
+        .values({ cycleId: cycle.id, ticketNumber: number })
+        .run();
+    });
+  }
+
+  /** Takes Ticket `number` out of changeable `cycle`, which must hold it. */
+  function unplanFrom(cycle: CycleRow, number: number) {
+    const removed = db
+      .delete(cycleTickets)
+      .where(
+        and(
+          eq(cycleTickets.cycleId, cycle.id),
+          eq(cycleTickets.ticketNumber, number),
+        ),
+      )
+      .returning({ number: cycleTickets.ticketNumber })
+      .get();
+    if (!removed) {
+      const ticket = db
+        .select({ number: tickets.number })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      throw ticket
+        ? new NotAllowedError(
+            `Ticket #${number} is not planned into the Cycle "${cycle.title}".`,
+          )
+        : new NotFoundError(`There is no Ticket #${number}.`);
+    }
+  }
+
+  /**
+   * Applies `change` to each of `ticketNumbers` in Cycle `cycleId`,
+   * collecting the Tickets it refuses, and announces the Cycle once when any
+   * changed.
+   */
+  function applyToEach(
+    { cycleId, ticketNumbers }: CycleTicketsInput,
+    change: (cycle: CycleRow, number: number) => void,
+  ): CycleTicketsResult {
+    throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
+    const cycle = changeableCycle(cycleId);
+    const updated: number[] = [];
+    const failed: CycleTicketsResult['failed'] = [];
+    try {
+      for (const number of ticketNumbers) {
+        try {
+          change(cycle, number);
+          updated.push(number);
+        } catch (error) {
+          if (!(error instanceof TicketsError)) {
+            throw error;
+          }
+          failed.push({ number, error: error.message });
+        }
+      }
+    } finally {
+      if (updated.length > 0) {
+        changes.publish({ type: 'cycle', id: cycleId });
+      }
+    }
+    return { updated, failed, cycle: getCycle(cycleId) };
   }
 
   return {
@@ -389,83 +521,36 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      * work; rollover leaves it in its Cycle.
      */
     planTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      db.transaction(() => {
-        const cycle = cycleRow(cycleId);
-        checkChangeable(cycle);
-        const ticket = db
-          .select({
-            projectId: tickets.projectId,
-            archived: tickets.archived,
-          })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        if (!ticket) {
-          throw new NotFoundError(`There is no Ticket #${number}.`);
-        }
-        const current = db
-          .select({ id: cycles.id, title: cycles.title })
-          .from(cycleTickets)
-          .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
-          .where(
-            and(
-              eq(cycleTickets.ticketNumber, number),
-              ne(cycles.state, 'Archived'),
-            ),
-          )
-          .get();
-        if (current?.id === cycleId) {
-          return;
-        }
-        if (ticket.projectId !== cycle.projectId) {
-          throw new NotAllowedError(
-            `Ticket #${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
-          );
-        }
-        if (ticket.archived) {
-          throw new NotAllowedError(
-            `Ticket #${number} is archived. Restore it before planning it into a Cycle.`,
-          );
-        }
-        if (current) {
-          throw new NotAllowedError(
-            `Ticket #${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
-          );
-        }
-        db.insert(cycleTickets).values({ cycleId, ticketNumber: number }).run();
-      });
+      planInto(changeableCycle(cycleId), number);
       changes.publish({ type: 'cycle', id: cycleId });
       return getCycle(cycleId);
     },
 
     /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
     unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      const cycle = cycleRow(cycleId);
-      checkChangeable(cycle);
-      const removed = db
-        .delete(cycleTickets)
-        .where(
-          and(
-            eq(cycleTickets.cycleId, cycleId),
-            eq(cycleTickets.ticketNumber, number),
-          ),
-        )
-        .returning({ number: cycleTickets.ticketNumber })
-        .get();
-      if (!removed) {
-        const ticket = db
-          .select({ number: tickets.number })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        throw ticket
-          ? new NotAllowedError(
-              `Ticket #${number} is not planned into the Cycle "${cycle.title}".`,
-            )
-          : new NotFoundError(`There is no Ticket #${number}.`);
-      }
+      unplanFrom(changeableCycle(cycleId), number);
       changes.publish({ type: 'cycle', id: cycleId });
       return getCycle(cycleId);
+    },
+
+    /**
+     * Plans each Ticket in `ticketNumbers` into Cycle `cycleId` by the rules
+     * of `planTicket`. Each Ticket's change is atomic, but the batch is not:
+     * a Ticket that cannot be planned is reported in `failed` and the others
+     * are still planned. An invalid batch, or a missing or Archived Cycle, is
+     * refused as a whole. The Cycle is announced once.
+     */
+    planTickets(input: CycleTicketsInput): CycleTicketsResult {
+      return applyToEach(input, planInto);
+    },
+
+    /**
+     * Takes each Ticket in `ticketNumbers` out of Cycle `cycleId` by the
+     * rules of `unplanTicket`, reporting the ones it cannot as `planTickets`
+     * does.
+     */
+    unplanTickets(input: CycleTicketsInput): CycleTicketsResult {
+      return applyToEach(input, unplanFrom);
     },
   };
 }

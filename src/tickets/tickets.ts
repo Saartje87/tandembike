@@ -55,7 +55,12 @@ import {
   ValidationError,
 } from './errors';
 import { nextPosition } from './positions';
-import { checkTitle, throwFieldErrors } from './rules';
+import {
+  checkBatchNumbers,
+  checkTitle,
+  maxBatchSize,
+  throwFieldErrors,
+} from './rules';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 
@@ -233,8 +238,6 @@ export type UpdateTicketsResult = {
   /** The Tickets left unchanged, in the order given. */
   failed: { number: number; error: string }[];
 };
-
-export const maxBatchSize = 50;
 
 export type ReorderTicketsInput = {
   projectId: number;
@@ -673,23 +676,6 @@ function checkQuery(query: string): string | undefined {
   return query === ''
     ? 'Enter text to search for, or leave the query out.'
     : undefined;
-}
-
-/** Why `ticketNumbers` is not a valid batch, if it is not. */
-function checkBatchNumbers(ticketNumbers: readonly number[]) {
-  if (ticketNumbers.length === 0) {
-    return 'Choose at least one Ticket.';
-  }
-  if (ticketNumbers.length > maxBatchSize) {
-    return `Choose at most ${maxBatchSize} Tickets at a time.`;
-  }
-  const duplicate = ticketNumbers.find(
-    (number, index) => ticketNumbers.indexOf(number) !== index,
-  );
-  if (duplicate !== undefined) {
-    return `Choose each Ticket once: #${duplicate} is given twice.`;
-  }
-  return undefined;
 }
 
 const ticketColumns = {
