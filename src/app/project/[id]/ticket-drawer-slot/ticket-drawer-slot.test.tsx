@@ -63,4 +63,27 @@ describe('TicketDrawerSlot', () => {
       `Ticket drawer #${ticket.number} comments: Started.`,
     );
   });
+
+  it('renders nothing once its Ticket is deleted', async () => {
+    // After deleting from the drawer, Next keeps this slot's last state on
+    // the redirect to the Board; a not-found here would 404 the whole page.
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    tickets.deleteTicket(ticket.number);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const slot = await TicketDrawerSlot({
+      params: Promise.resolve({
+        id: String(project.id),
+        number: String(ticket.number),
+      }),
+    });
+
+    expect(slot).toBeNull();
+    expect(notFound).not.toHaveBeenCalled();
+  });
 });

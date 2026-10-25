@@ -2,14 +2,20 @@ import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import {
-  loadProjectTicket,
+  findProjectTicket,
   type ProjectTicketPageProps,
 } from '../ticket/[number]/ticket-data';
 
 export const TicketDrawerSlot: FC<ProjectTicketPageProps> = async ({
   params,
 }) => {
-  const { ticket, tickets, epicClaim } = await loadProjectTicket(params);
+  // On the redirect after deleting from this drawer, Next keeps the slot's
+  // last state: render nothing rather than a not-found for the whole page.
+  const found = await findProjectTicket(params);
+  if (found === null) {
+    return null;
+  }
+  const { ticket, tickets, epicClaim } = found;
   return (
     <TicketDrawer
       ticket={ticket}
