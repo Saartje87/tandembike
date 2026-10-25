@@ -82,6 +82,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
     <Board
       project={project}
       tickets={shown}
+      epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
       cycleId={cycleId}
       openTicket={openTicket}
       header={

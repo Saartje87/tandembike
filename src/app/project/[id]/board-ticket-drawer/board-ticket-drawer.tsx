@@ -3,6 +3,7 @@ import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { epicLinkOf } from '../../../../tickets/tickets';
 import { findBoardTicket } from '../project-data';
 
 export type BoardTicketDrawerProps = {
@@ -39,6 +40,9 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
       comments={tickets.listComments(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
       cycles={tickets.listCycles(ticket.projectId)}
+      epics={tickets
+        .listTickets({ projectId: ticket.projectId, type: 'Epic' })
+        .map(epicLinkOf)}
       epicClaim={
         ticket.epic === null
           ? null

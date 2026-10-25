@@ -240,6 +240,12 @@ describe('Project tools', () => {
     });
 
     expect(resultJson(result)).toMatchObject({ name: 'Website' });
+    // Colour and icon belong to the User's UI, not to Agents.
+    expect(Object.keys(resultJson(result) as object)).toEqual([
+      'id',
+      'name',
+      'createdAt',
+    ]);
     expect(tickets.listProjects().map(({ name }) => name)).toEqual(['Website']);
     await client.close();
   });
@@ -271,9 +277,10 @@ describe('Project tools', () => {
       arguments: { id: project.id, name: 'Marketing site' },
     });
 
-    expect(resultJson(result)).toMatchObject({
+    expect(resultJson(result)).toEqual({
       id: project.id,
       name: 'Marketing site',
+      createdAt: project.createdAt.toISOString(),
     });
     expect(tickets.listProjects().map(({ name }) => name)).toEqual([
       'Marketing site',
@@ -1206,6 +1213,84 @@ describe('Batch create tool', () => {
 });
 
 describe('Epic tools', () => {
+  it("sets and returns an Epic's colour, and refuses one on a normal Ticket", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets);
+
+    const epic = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: {
+          projectId: project.id,
+          title: 'Checkout',
+          type: 'Epic',
+          color: 'teal',
+        },
+      }),
+    );
+    const other = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { projectId: project.id, title: 'Search', type: 'Epic' },
+      }),
+    );
+    const recoloured = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 1, color: 'pink' },
+      }),
+    );
+    tickets.createTicket({ projectId: project.id, title: 'Fix it' });
+    const batch = await client.callTool({
+      name: 'update_tickets',
+      arguments: { ticketNumbers: [2, 3], color: 'blue' },
+    });
+    const listed = resultJson(
+      await client.callTool({
+        name: 'list_tickets',
+        arguments: { projectId: project.id, detail: 'full' },
+      }),
+    ) as { tickets: { number: number; color: string | null }[] };
+
+    expect(epic).toMatchObject({ color: 'teal' });
+    expect(other).toMatchObject({ color: 'red' });
+    expect(recoloured).toMatchObject({ color: 'pink' });
+    expect(batch.isError).toBe(true);
+    expect(listed.tickets.map(({ number, color }) => [number, color])).toEqual([
+      [1, 'pink'],
+      [2, 'blue'],
+      [3, null],
+    ]);
+    expect(
+      resultText(
+        await client.callTool({
+          name: 'update_ticket',
+          arguments: { number: 3, color: 'teal' },
+        }),
+      ),
+    ).toMatch(/Ticket #3 is not an Epic. Only an Epic has a colour./);
+    await client.close();
+  });
+
+  it('describes Epic colours in the tools that set and show them', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
+
+    for (const name of ['create_ticket', 'update_ticket', 'update_tickets']) {
+      expect(describe(name), name).toMatch(
+        /fewest live Epics|Only an Epic has a colour/,
+      );
+      expect(describe(name), name).toMatch(/"color"/);
+    }
+    expect(describe('get_ticket')).toMatch(/color/);
+    expect(describe('list_tickets')).toMatch(/color/);
+    await client.close();
+  });
+
   it('creates an Epic and a child under it, and gets both', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -1242,7 +1327,7 @@ describe('Epic tools', () => {
     expect(first).toMatchObject({
       number: 2,
       type: 'Ticket',
-      epic: { number: 1, title: 'Checkout' },
+      epic: { number: 1, title: 'Checkout', color: 'red' },
     });
     expect(
       resultJson(

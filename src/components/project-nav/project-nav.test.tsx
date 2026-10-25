@@ -15,8 +15,20 @@ vi.mock('next/navigation', () => ({
 }));
 
 const projects = [
-  { id: 1, name: 'Website', createdAt: new Date('2026-01-01') },
-  { id: 2, name: 'App', createdAt: new Date('2026-01-02') },
+  {
+    id: 1,
+    name: 'Website',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-01'),
+  },
+  {
+    id: 2,
+    name: 'App',
+    color: null,
+    icon: null,
+    createdAt: new Date('2026-01-02'),
+  },
 ];
 
 describe('ProjectNav', () => {
@@ -39,6 +51,29 @@ describe('ProjectNav', () => {
       '/project/1',
       '/project/2',
     ]);
+  });
+
+  it("shows each Project's icon in its colour, or a folder", () => {
+    renderWithTheme(
+      <ProjectNav
+        projects={[
+          { ...projects[0], color: 'teal', icon: 'rocket-launch' },
+          projects[1],
+        ]}
+      />,
+    );
+
+    const [website, app] = within(
+      screen.getByRole('navigation', { name: 'Projects' }),
+    ).getAllByRole('link');
+    expect(website.querySelector('[data-color="teal"]')).not.toBeNull();
+    expect(
+      website.querySelector<HTMLElement>('[role="presentation"]')?.style
+        .maskImage,
+    ).toBe('url("/heroicons/outline/rocket-launch.svg")');
+    expect(
+      app.querySelector<HTMLElement>('[role="presentation"]')?.style.maskImage,
+    ).toBe('url("/heroicons/outline/folder.svg")');
   });
 
   it.each([

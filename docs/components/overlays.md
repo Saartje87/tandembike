@@ -97,6 +97,11 @@ export function HelpPopover() {
 }
 ```
 
+Under jsdom an open popover counts as hidden, so a component test that opens
+one calls `showOpenPopovers()` from `src/test/popover.ts` first
+(`docs/blocks-feedback.md`, 27). Blocks' `Popover` renders a plain `div`;
+pass `role="dialog"` and an `aria-label` when it holds controls.
+
 Keep focus, accessible names, and dismissal behavior in mind when choosing an
 overlay. Do not use a tooltip for essential information or a modal dialog for
 content that can be read inline.

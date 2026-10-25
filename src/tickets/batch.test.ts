@@ -81,7 +81,7 @@ describe('Updating several Tickets at once', () => {
     [
       'no change',
       { ticketNumbers: [1] },
-      { change: 'Give a Status, addLabels or removeLabels to change.' },
+      { change: 'Give a Status, color, addLabels or removeLabels to change.' },
     ],
     [
       'a bad label',

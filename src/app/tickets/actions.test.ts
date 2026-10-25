@@ -9,6 +9,7 @@ import {
   addTicketComment,
   addTicketLabel,
   archiveTicket,
+  attachTicketToEpic,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
   createTicket,
@@ -69,6 +70,53 @@ describe('Ticket actions', () => {
     expect(
       tickets.listTickets({ projectId: project.id }).map(({ title }) => title),
     ).toEqual(['Kept child']);
+  });
+
+  it('moves a Ticket from its Epic to another and refreshes the Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const from = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const to = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: from.number,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await attachTicketToEpic({
+      epic: to.number,
+      child: child.number,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getTicket(child.number).epic?.number).toBe(to.number);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+  });
+
+  it("changes an Epic's colour and refreshes the Boards", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await updateTicket({ number: epic.number, color: 'teal' });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(epic.number).color).toBe('teal');
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
   });
 
   it('returns a refused deletion as an error', async () => {

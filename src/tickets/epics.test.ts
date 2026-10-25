@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestTickets, errorFrom } from '../test/tickets';
 import type { Change } from './changes';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
+import type { PaletteColor } from './palette';
 import type { Status } from './status';
 
 const setUp = () => {
@@ -35,6 +36,26 @@ describe('Creating an Epic', () => {
   });
 });
 
+describe('Listing Epics', () => {
+  it("lists only a Project's Epics, oldest-created first", () => {
+    const { tickets, project, epic } = setUp();
+    tickets.createTicket({ projectId: project.id, title: 'Fix the header' });
+    const later = tickets.createTicket({
+      projectId: project.id,
+      title: 'Search',
+      type: 'Epic',
+    });
+    const other = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: other.id, title: 'Login', type: 'Epic' });
+
+    expect(
+      tickets
+        .listTickets({ projectId: project.id, type: 'Epic' })
+        .map(({ number }) => number),
+    ).toEqual([epic.number, later.number]);
+  });
+});
+
 describe('Creating a Ticket under an Epic', () => {
   it('links the child to its Epic and lists it as a child', () => {
     const { tickets, project, epic } = setUp();
@@ -45,7 +66,11 @@ describe('Creating a Ticket under an Epic', () => {
       epicNumber: epic.number,
     });
 
-    expect(child.epic).toEqual({ number: epic.number, title: 'Checkout' });
+    expect(child.epic).toEqual({
+      number: epic.number,
+      title: 'Checkout',
+      color: 'red',
+    });
     expect(tickets.getTicket(epic.number).children).toEqual([
       {
         number: child.number,
@@ -145,7 +170,11 @@ describe('Attaching and detaching', () => {
       child: ticket.number,
     });
 
-    expect(attached.epic).toEqual({ number: epic.number, title: 'Checkout' });
+    expect(attached.epic).toEqual({
+      number: epic.number,
+      title: 'Checkout',
+      color: 'red',
+    });
     expect(
       tickets.getTicket(epic.number).children.map(({ number }) => number),
     ).toEqual([ticket.number]);
@@ -199,6 +228,98 @@ describe('Attaching refusals', () => {
         `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
       ),
     );
+  });
+});
+
+describe('Moving a Ticket to an Epic', () => {
+  it('attaches a Ticket in no Epic', () => {
+    const { tickets, project, epic } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+
+    const moved = tickets.moveToEpic({
+      epic: epic.number,
+      child: ticket.number,
+    });
+
+    expect(moved.epic).toEqual({
+      number: epic.number,
+      title: 'Checkout',
+      color: 'red',
+    });
+  });
+
+  it('takes a Ticket out of its Epic into another, and both Statuses follow', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+      status: 'In progress',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.moveToEpic({ epic: epic.number, child: child.number });
+
+    expect(tickets.getTicket(child.number).epic?.number).toBe(epic.number);
+    expect(tickets.getTicket(other.number)).toMatchObject({
+      status: 'Todo',
+      children: [],
+    });
+    expect(tickets.getTicket(epic.number).status).toBe('In progress');
+    expect(changes).toContainEqual({
+      type: 'tickets',
+      numbers: [other.number, epic.number, child.number],
+    });
+  });
+
+  it('checks the rules of attaching', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+
+    expect(
+      errorFrom(() =>
+        tickets.moveToEpic({ epic: epic.number, child: other.number }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+      ),
+    );
+  });
+
+  it('refuses a Blocker between the Ticket and its new Epic, leaving it where it was', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+    });
+    tickets.addBlocker({ blocker: child.number, blocked: epic.number });
+
+    expect(
+      errorFrom(() =>
+        tickets.moveToEpic({ epic: epic.number, child: child.number }),
+      ),
+    ).toBeInstanceOf(NotAllowedError);
+    expect(tickets.getTicket(child.number).epic?.number).toBe(other.number);
   });
 });
 
@@ -671,5 +792,127 @@ describe('Archived children', () => {
       ),
     );
     expect(tickets.getTicket(child.number).archived).toBe(true);
+  });
+});
+
+describe('Epic colours', () => {
+  const newEpic = (
+    tickets: ReturnType<typeof setUp>['tickets'],
+    projectId: number,
+    color?: PaletteColor,
+  ) =>
+    tickets.createTicket({
+      projectId,
+      title: 'Epic',
+      type: 'Epic',
+      ...(color === undefined ? {} : { color }),
+    });
+
+  it('gives a new Epic the colour fewest live Epics in its Project use, in palette order', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createProject({ name: 'App' });
+    newEpic(tickets, other.id, 'orange');
+    const archived = newEpic(tickets, project.id, 'orange');
+    tickets.archiveTicket(archived.number);
+
+    expect(epic.color).toBe('red');
+    expect(newEpic(tickets, project.id).color).toBe('orange');
+    expect(newEpic(tickets, project.id, 'red').color).toBe('red');
+    expect(newEpic(tickets, project.id).color).toBe('amber');
+  });
+
+  it('gives normal Tickets none, and refuses one', () => {
+    const { tickets, project } = setUp();
+
+    expect(
+      tickets.createTicket({ projectId: project.id, title: 'Fix it' }).color,
+    ).toBeNull();
+    expect(
+      errorFrom(() =>
+        tickets.createTicket({
+          projectId: project.id,
+          title: 'Fix it',
+          color: 'teal',
+        }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        color: 'Only an Epic has a colour. Leave the colour out.',
+      }),
+    );
+  });
+
+  it('refuses a colour outside the palette', () => {
+    const { tickets, project, epic } = setUp();
+    const rule = new ValidationError({
+      color:
+        'Choose one of these colours: red, orange, amber, green, teal, blue, indigo, purple, pink, grey.',
+    });
+
+    expect(
+      errorFrom(() => newEpic(tickets, project.id, 'beige' as PaletteColor)),
+    ).toEqual(rule);
+    expect(
+      errorFrom(() =>
+        tickets.updateTicket(epic.number, { color: 'beige' as PaletteColor }),
+      ),
+    ).toEqual(rule);
+  });
+
+  it("changes an Epic's colour, which its children's Epic link carries", () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+
+    expect(tickets.updateTicket(epic.number, { color: 'teal' }).color).toBe(
+      'teal',
+    );
+    expect(tickets.getTicket(child.number).epic).toEqual({
+      number: epic.number,
+      title: 'Checkout',
+      color: 'teal',
+    });
+  });
+
+  it('refuses to colour a normal Ticket', () => {
+    const { tickets, project } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix it',
+    });
+
+    expect(
+      errorFrom(() => tickets.updateTicket(ticket.number, { color: 'teal' })),
+    ).toEqual(
+      new ValidationError({
+        color: `Ticket #${ticket.number} is not an Epic. Only an Epic has a colour.`,
+      }),
+    );
+  });
+
+  it('colours the Epics of a batch and fails its normal Tickets', () => {
+    const { tickets, project, epic } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix it',
+    });
+
+    const result = tickets.updateTickets({
+      ticketNumbers: [epic.number, ticket.number],
+      color: 'pink',
+    });
+
+    expect(result.updated.map(({ number, color }) => [number, color])).toEqual([
+      [epic.number, 'pink'],
+    ]);
+    expect(result.failed).toEqual([
+      {
+        number: ticket.number,
+        error: `Ticket #${ticket.number} is not an Epic. Only an Epic has a colour.`,
+      },
+    ]);
   });
 });

@@ -39,12 +39,14 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
-import type {
-  Blockers,
-  Comment,
-  Project,
-  Ticket,
-  TicketClaim,
+import {
+  type Blockers,
+  type Comment,
+  type EpicLink,
+  epicLinkOf,
+  type Project,
+  type Ticket,
+  type TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
@@ -56,6 +58,7 @@ import {
   DeleteTicketDialog,
 } from '../delete-ticket-dialog/delete-ticket-dialog';
 import { EpicChildren } from '../epic-children/epic-children';
+import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { LabelEditor } from '../label-editor/label-editor';
@@ -81,6 +84,11 @@ export type TicketDrawerProps = {
   blockers?: Blockers;
   /** The Cycles of the Ticket's Project, to plan it into. Defaults to none. */
   cycles?: Cycle[];
+  /**
+   * The live Epics of the Ticket's Project, to attach it to. Defaults to
+   * none.
+   */
+  epics?: EpicLink[];
   /** The Claim on the Ticket's Epic, which covers it too. Defaults to none. */
   epicClaim?: TicketClaim | null;
   /**
@@ -424,6 +432,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   comments = [],
   blockers = noBlockers,
   cycles = noCycles,
+  epics,
   epicClaim = null,
   epicChildren,
   boardPath,
@@ -628,12 +637,22 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               </Stack>
             </Detail>
             {ticket.type === 'Epic' ? (
-              <Detail name={<DetailName>Type</DetailName>}>
-                <Text>Epic</Text>
-              </Detail>
+              <>
+                <Detail name={<DetailName>Type</DetailName>}>
+                  <Text>Epic</Text>
+                </Detail>
+                <Detail name={<DetailName>Colour</DetailName>}>
+                  <EpicColorPicker
+                    epic={{
+                      number: ticket.number,
+                      color: epicLinkOf(ticket).color,
+                    }}
+                  />
+                </Detail>
+              </>
             ) : (
               <Detail name={<DetailName>Epic</DetailName>}>
-                <TicketEpic ticket={ticket} />
+                <TicketEpic ticket={ticket} epics={epics} />
               </Detail>
             )}
             <Detail name={<DetailName>Origin</DetailName>}>

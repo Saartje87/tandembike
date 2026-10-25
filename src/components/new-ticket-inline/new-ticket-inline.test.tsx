@@ -29,18 +29,28 @@ describe('NewTicketInline', () => {
     });
   });
 
-  it('creates an Epic with the title from its own button', async () => {
+  it('creates an Epic instead when asked to', async () => {
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
-    renderWithTheme(<NewTicketInline projectId={3} />);
+    renderWithTheme(<NewTicketInline projectId={3} type="Epic" />);
 
-    await userEvent.type(titleField(), 'Checkout');
-    await userEvent.click(screen.getByRole('button', { name: 'Create Epic' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Epic title' }),
+      'Checkout{Enter}',
+    );
 
     expect(createTicket).toHaveBeenCalledExactlyOnceWith({
       projectId: 3,
       title: 'Checkout',
       type: 'Epic',
     });
+  });
+
+  it('offers no way to create an Epic from a Ticket field', () => {
+    renderWithTheme(<NewTicketInline projectId={3} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Create Epic' }),
+    ).not.toBeInTheDocument();
   });
 
   it('creates a child Ticket under an Epic, with no Epic button', async () => {

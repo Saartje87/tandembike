@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
+  attachTicketToEpic,
   createTicket,
   reorderTickets,
   updateTicket,
@@ -12,15 +13,25 @@ import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
 
-vi.mock('../../app/projects/actions', () => ({ renameProject: vi.fn() }));
+vi.mock('../../app/projects/actions', () => ({
+  renameProject: vi.fn(),
+  styleProject: vi.fn(),
+}));
 vi.mock('../../app/tickets/actions', () => ({
+  attachTicketToEpic: vi.fn(),
   createTicket: vi.fn(),
   reorderTickets: vi.fn(),
   updateTicket: vi.fn(),
 }));
 stubDragAndDrop();
 
-const project = { id: 1, name: 'Website', createdAt: new Date('2026-01-01') };
+const project = {
+  id: 1,
+  name: 'Website',
+  color: null,
+  icon: null,
+  createdAt: new Date('2026-01-01'),
+};
 
 const ticket = (
   fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
@@ -34,6 +45,7 @@ const ticket = (
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
+  color: null,
   epic: null,
   children: [],
   origin: null,
@@ -49,7 +61,9 @@ const ticket = (
 const cardsIn = (column: string) =>
   within(screen.getByRole('region', { name: column }))
     .queryAllByRole('listitem')
-    .map((card) => within(card).getByRole('link').getAttribute('aria-label'));
+    .map((card) =>
+      within(card).getAllByRole('link')[0].getAttribute('aria-label'),
+    );
 
 const mockBoardBounds = (targetStatus: string) =>
   vi
@@ -391,6 +405,155 @@ describe('Board', () => {
   });
 });
 
+describe('Board with Epics', () => {
+  const checkout = ticket({
+    number: 10,
+    title: 'Checkout',
+    type: 'Epic',
+    children: [
+      {
+        number: 11,
+        title: 'Pay by card',
+        status: 'Todo',
+        archived: false,
+        blockedBy: [],
+        blocked: false,
+      },
+    ],
+  });
+  const search = ticket({ number: 20, title: 'Search', type: 'Epic' });
+  const payByCard = ticket({
+    number: 11,
+    title: 'Pay by card',
+    epic: { number: 10, title: 'Checkout', color: 'teal' },
+  });
+  const chips = () =>
+    within(screen.getByRole('list', { name: 'Epics' }))
+      .queryAllByRole('link')
+      .map((link) => link.textContent);
+
+  it('leaves Epics out of the columns and their counts, keeping their children', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[checkout, payByCard, search]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    expect(cardsIn('Todo')).toEqual(['Pay by card']);
+    expect(
+      within(screen.getByRole('region', { name: 'Todo' })).getByText(
+        (_, element) => element?.textContent === '1 Ticket',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lists the Project's Epics above the columns", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard]}
+        epics={[checkout, search]}
+        cycleId={null}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']);
+  });
+
+  it("lists on a Cycle's Board an Epic with a child planned into it, and not one with nothing in it", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+  });
+
+  it("leaves out of a Cycle's row an Epic whose only planned child is archived", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[{ ...payByCard, archived: true }]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual([]);
+  });
+
+  it("lists on a Cycle's Board an Epic planned into it itself", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[search]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+  });
+
+  it("shows a Cycle's done Epics with no toggle, but hides them on the Project Board", () => {
+    const done = { ...search, status: 'Done' as const };
+    const { unmount } = renderWithTheme(
+      <Board
+        project={project}
+        tickets={[done]}
+        epics={[checkout, done]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+    expect(
+      screen.queryByRole('checkbox', { name: /Show done Epics/ }),
+    ).not.toBeInTheDocument();
+    unmount();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[]}
+        epics={[checkout, done]}
+        cycleId={null}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+    expect(
+      screen.getByRole('checkbox', { name: 'Show done Epics (1)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('offers to create an Epic from the row, not from the Todo lane', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 9 });
+    renderWithTheme(<Board project={project} tickets={[]} cycleId={7} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Create Epic' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'New Epic' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Epic title' }),
+      'Checkout{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      title: 'Checkout',
+      cycleId: 7,
+      type: 'Epic',
+    });
+  });
+});
+
 describe('Board with archived Tickets', () => {
   const tickets = [
     ticket({ number: 4, title: 'Fix the header' }),
@@ -495,5 +658,183 @@ describe('Board with archived Tickets', () => {
     await showArchived();
 
     expect(archivedList()).not.toBeInTheDocument();
+  });
+});
+
+describe('Dropping a card on an Epic', () => {
+  const child = (number: number, title: string) => ({
+    number,
+    title,
+    status: 'Todo' as const,
+    archived: false,
+    blockedBy: [],
+    blocked: false,
+  });
+  const checkout = ticket({
+    number: 10,
+    title: 'Checkout',
+    type: 'Epic',
+    children: [child(11, 'Pay by card')],
+  });
+  const search = ticket({ number: 20, title: 'Search', type: 'Epic' });
+  const payByCard = ticket({
+    number: 11,
+    title: 'Pay by card',
+    epic: { number: 10, title: 'Checkout', color: 'teal' },
+  });
+  const header = ticket({ number: 4, title: 'Fix the header', position: 1 });
+  const chips = () =>
+    within(screen.getByRole('list', { name: 'Epics' }))
+      .queryAllByRole('link')
+      .map((link) => link.textContent);
+
+  /**
+   * Lays out the Board so Epic `epicNumber`'s chip is where a card dragged
+   * right lands. Call it before rendering: dnd-kit measures on mount.
+   */
+  const mockEpicBounds = (epicNumber: number) => {
+    const isChip = (element: HTMLElement) =>
+      element.tagName === 'LI' &&
+      element.querySelector(`a[href$="?ticket=${epicNumber}"]`) !== null &&
+      element.querySelector('button[aria-label^="Drag Ticket"]') === null;
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (isChip(this)) {
+          return new DOMRect(60, 0, 100, 40);
+        }
+        if (
+          this.tagName === 'LI' &&
+          this.querySelector('button[aria-label^="Drag Ticket"]')
+        ) {
+          return new DOMRect(0, 0, 100, 100);
+        }
+        // Away from the chip: the other Epics' chips and the columns, not
+        // the row that holds the chip, which would clip it out of view.
+        if (
+          (this.tagName === 'SECTION' || this.tagName === 'LI') &&
+          ![...this.querySelectorAll('li')].some(isChip)
+        ) {
+          return new DOMRect(500, 500, 100, 100);
+        }
+        return new DOMRect(0, 0, 800, 700);
+      });
+    onTestFinished(() => bounds.mockRestore());
+  };
+
+  /** Drags card `number` by keyboard onto Epic `epicNumber`'s chip. */
+  const dragTicketOntoEpic = async (number: number, epicNumber: number) => {
+    const chip = screen.getByRole('link', {
+      name: new RegExp(`^#${epicNumber} `),
+    });
+    const elementFromPoint = Object.getOwnPropertyDescriptor(
+      document,
+      'elementFromPoint',
+    );
+    Object.defineProperty(document, 'elementFromPoint', {
+      configurable: true,
+      value: () => chip,
+    });
+    onTestFinished(() => {
+      if (elementFromPoint) {
+        Object.defineProperty(document, 'elementFromPoint', elementFromPoint);
+      } else {
+        Reflect.deleteProperty(document, 'elementFromPoint');
+      }
+    });
+    await keyboardDrag(
+      screen.getByRole('button', {
+        name: `Drag Ticket #${number} to another Status`,
+      }),
+      '{ArrowRight}',
+    );
+  };
+
+  beforeEach(() => {
+    vi.mocked(attachTicketToEpic).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('attaches the Ticket to the Epic at once, leaving its Status and place alone', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(attachTicketToEpic).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(4, 20);
+
+    expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
+      epic: 20,
+      child: 4,
+    });
+    expect(updateTicket).not.toHaveBeenCalled();
+    expect(reorderTickets).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/1 Done']),
+    );
+    expect(cardsIn('Todo')).toEqual(['Pay by card', 'Fix the header']);
+    expect(
+      screen.getByRole('link', { name: 'Epic #20 Search' }),
+    ).toBeInTheDocument();
+  });
+
+  it('moves a child of another Epic to the dropped-on one', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(attachTicketToEpic).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(11, 20);
+
+    expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
+      epic: 20,
+      child: 11,
+    });
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/0 Done', '#20 Search 0/1 Done']),
+    );
+  });
+
+  it('puts the Ticket back and explains when attaching is refused', async () => {
+    vi.mocked(attachTicketToEpic).mockResolvedValue({
+      ok: false,
+      error: 'Epic #20 is archived. Restore it before adding Tickets to it.',
+    });
+    mockEpicBounds(20);
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    await dragTicketOntoEpic(4, 20);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Epic #20 is archived. Restore it before adding Tickets to it.',
+    );
+    await waitFor(() =>
+      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']),
+    );
   });
 });

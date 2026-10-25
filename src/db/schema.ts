@@ -10,6 +10,8 @@ import {
 } from 'drizzle-orm/sqlite-core';
 
 import { cycleStates } from '../tickets/cycle-state';
+import { paletteColors } from '../tickets/palette';
+import { projectIcons } from '../tickets/project-icons';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 
@@ -18,6 +20,10 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull(),
   /** The name trimmed and lower-cased, so uniqueness ignores case. */
   nameKey: text('name_key').notNull().unique(),
+  /** A colour from the palette, or null for none. */
+  color: text('color', { enum: paletteColors }),
+  /** One of the Project icons, or null for the default. */
+  icon: text('icon', { enum: projectIcons }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -31,6 +37,8 @@ export const tickets = sqliteTable(
     status: text('status', { enum: statuses }).notNull(),
     /** Fixed at creation. An Epic's Status is derived from its children. */
     type: text('type', { enum: ticketTypes }).notNull().default('Ticket'),
+    /** An Epic's colour from the palette; null for a normal Ticket. */
+    color: text('color', { enum: paletteColors }),
     /** The Epic this Ticket is a child of, in the same Project, or null. */
     epicNumber: integer('epic_number').references(
       (): AnySQLiteColumn => tickets.number,

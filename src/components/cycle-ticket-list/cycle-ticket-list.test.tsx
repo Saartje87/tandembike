@@ -17,6 +17,7 @@ const ticket = (
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
+  color: null,
   epic: null,
   children: [],
   origin: null,

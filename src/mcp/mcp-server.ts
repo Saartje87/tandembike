@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { isAllowedHost } from '../http/allowed-host';
 import { type BatchFailure, TicketsError } from '../tickets/errors';
+import { paletteColors } from '../tickets/palette';
 import { maxBatchSize } from '../tickets/rules';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
@@ -14,6 +15,7 @@ import {
   maxAcceptanceCriterionLength,
   maxCommentLength,
   maxPageSize,
+  type Project,
   type Tickets,
   ticketDetails,
   ticketSorts,
@@ -135,6 +137,12 @@ const originNumber = ticketNumber.describe(
   'The Ticket it was split from, such as the spec it came out of, in any Project. An Origin chain cannot loop.',
 );
 
+const epicColor = z
+  .enum(paletteColors)
+  .describe(
+    `An Epic's colour, one of ${paletteColors.join(', ')}, which marks its children on the Board. Only an Epic has a colour.`,
+  );
+
 const status = z
   .enum(statuses)
   .describe('The Status: "Todo", "In progress" or "Done".');
@@ -160,6 +168,14 @@ const newTicketFields = {
       `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome.`,
     ),
 };
+
+/**
+ * A Project as Agents see it: its colour and icon are the User's, set and
+ * seen only in the UI.
+ */
+function agentProject({ id, name, createdAt }: Project) {
+  return { id, name, createdAt };
+}
 
 /** `value` as a tool result of pretty-printed JSON text. */
 function jsonResult(value: unknown): CallToolResult {
@@ -214,7 +230,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
         'List all Projects, oldest first, with their id, name and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools.',
       annotations: { readOnlyHint: true },
     },
-    () => respond(() => tickets.listProjects()),
+    () => respond(() => tickets.listProjects().map(agentProject)),
   );
 
   server.registerTool(
@@ -229,7 +245,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe('The Project name. Surrounding spaces are trimmed.'),
       },
     },
-    ({ name }) => respond(() => tickets.createProject({ name })),
+    ({ name }) => respond(() => agentProject(tickets.createProject({ name }))),
   );
 
   server.registerTool(
@@ -246,14 +262,15 @@ export function createMcpServer(tickets: Tickets): McpServer {
       },
       annotations: { idempotentHint: true },
     },
-    ({ id, name }) => respond(() => tickets.renameProject(id, { name })),
+    ({ id, name }) =>
+      respond(() => agentProject(tickets.renameProject(id, { name }))),
   );
 
   server.registerTool(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -346,7 +363,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic; epic is the Epic it is a child of ({ number, title }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. Read it before starting work on the Ticket.',
+        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. Read it before starting work on the Ticket.',
       inputSchema: { number: ticketNumber },
       annotations: { readOnlyHint: true },
     },
@@ -419,6 +436,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise), so give it none.",
+          ),
+        color: epicColor
+          .optional()
+          .describe(
+            `For an Epic: its colour, one of ${paletteColors.join(', ')}. Left out, it gets the colour fewest live Epics in the Project use. Only an Epic has a colour.`,
           ),
         epicNumber: ticketNumber
           .optional()
@@ -507,7 +529,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Update Ticket',
       description:
-        'Change any subset of a Ticket\'s title, description, Status, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
+        'Change any subset of a Ticket\'s title, description, Status, an Epic\'s color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -524,6 +546,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             "The new Status. An Epic's follows its children and cannot be set.",
+          ),
+        color: epicColor
+          .optional()
+          .describe(
+            `An Epic's new colour, one of ${paletteColors.join(', ')}. Only an Epic has a colour.`,
           ),
         projectId: projectId
           .optional()
@@ -580,10 +607,15 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_tickets',
     {
       title: 'Update Tickets',
-      description: `Apply the same Status and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: the changed Tickets, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
+      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: the changed Tickets, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
         ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
+        color: epicColor
+          .optional()
+          .describe(
+            'A new colour for each Epic given. Only an Epic has a colour, so a normal Ticket given fails.',
+          ),
         addLabels,
         removeLabels,
       },

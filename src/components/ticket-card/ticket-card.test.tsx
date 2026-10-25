@@ -16,6 +16,7 @@ const ticket = {
   blockedBy: [],
   blocked: false,
   type: 'Ticket' as const,
+  color: null,
   epic: null,
   children: [],
   origin: null,
@@ -208,46 +209,14 @@ describe('TicketCard', () => {
   });
 
   describe('Epics', () => {
-    const child = (
-      number: number,
-      status: 'Todo' | 'In progress' | 'Done',
-      archived = false,
-    ) => ({
-      number,
-      title: `Child ${number}`,
-      status,
-      archived,
-      blockedBy: [],
-      blocked: false,
-    });
-
-    it('marks an Epic and counts its children that are Done', () => {
+    it('links a child to its Epic', () => {
       renderWithTheme(
         <TicketCard
           boardPath="/project/1/cycle/7"
           ticket={{
             ...ticket,
-            type: 'Epic',
-            children: [
-              child(5, 'Done'),
-              child(6, 'In progress'),
-              child(7, 'Todo'),
-              child(8, 'Done', true),
-            ],
+            epic: { number: 2, title: 'Checkout', color: 'teal' },
           }}
-        />,
-      );
-
-      expect(
-        screen.getByRole('img', { name: 'Epic: 1 of 3 child Tickets Done' }),
-      ).toHaveTextContent('Epic1/3');
-    });
-
-    it('links a child to its Epic', () => {
-      renderWithTheme(
-        <TicketCard
-          boardPath="/project/1/cycle/7"
-          ticket={{ ...ticket, epic: { number: 2, title: 'Checkout' } }}
         />,
       );
 
@@ -256,14 +225,27 @@ describe('TicketCard', () => {
       ).toHaveAttribute('href', '/ticket/2');
     });
 
-    it('shows neither for a Ticket outside any Epic', () => {
+    it("shows the Epic link as a badge in the Epic's colour", () => {
+      renderWithTheme(
+        <TicketCard
+          boardPath="/project/1/cycle/7"
+          ticket={{
+            ...ticket,
+            epic: { number: 2, title: 'Checkout', color: 'amber' },
+          }}
+        />,
+      );
+
+      expect(
+        screen.getByRole('link', { name: 'Epic #2 Checkout' }),
+      ).toHaveAttribute('data-color', 'amber');
+    });
+
+    it('shows no Epic link for a Ticket outside any Epic', () => {
       renderWithTheme(
         <TicketCard ticket={ticket} boardPath="/project/1/cycle/7" />,
       );
 
-      expect(
-        screen.queryByRole('img', { name: /^Epic/ }),
-      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('link', { name: /^Epic/ }),
       ).not.toBeInTheDocument();

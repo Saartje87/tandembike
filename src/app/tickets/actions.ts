@@ -71,7 +71,7 @@ export async function updateTicket(
   >,
 ): Promise<UpdateTicketResult> {
   return actionResult(() => {
-    const { title, description, status, projectId } = input ?? {};
+    const { title, description, status, projectId, color } = input ?? {};
     if (status !== undefined && !isStatus(status)) {
       throw new ValidationError({ status: statusRule });
     }
@@ -82,6 +82,8 @@ export async function updateTicket(
         : { description: String(description) }),
       ...(status === undefined ? {} : { status }),
       ...(projectId === undefined ? {} : { projectId: Number(projectId) }),
+      // The module checks the colour against the palette.
+      ...(color === undefined ? {} : { color }),
     });
     // A moved Ticket leaves one Board for another, and its drawer shows it.
     revalidatePath(boardRoute, 'page');
@@ -408,12 +410,15 @@ function changeEpic(change: () => void): TicketEpicResult {
   });
 }
 
-/** Makes an existing Ticket a child of an Epic, for the UI. */
+/**
+ * Makes an existing Ticket a child of an Epic for the UI, taking it out of
+ * the Epic it is in, if any.
+ */
 export async function attachTicketToEpic(
   input: EpicChildInput,
 ): Promise<TicketEpicResult> {
   return changeEpic(() =>
-    appTickets().attachToEpic({
+    appTickets().moveToEpic({
       epic: Number(input?.epic),
       child: Number(input?.child),
     }),

@@ -798,6 +798,119 @@ the current one.
 **Question.** Is a link-based tab navigation in scope for Blocks, and should
 it share its look with an in-page `Tabs`?
 
+## 26. No decorative colour palette, and no dark mode for one
+
+**Problem.** A Project and an Epic each get a colour from ten named hues
+(red, orange, amber, green, teal, blue, indigo, purple, pink, grey), used as
+a soft tint behind a header or badge with a strong shade for its icon or
+text. The theme's palettes are semantic (`primary`, `secondary`, `success`,
+`warning`, `danger`, `info`, `neutral`, plus `background` and `text`), so
+only about five hues exist, each tied to a meaning: a red Project would read
+as an error. The `color` and `backgroundColor` atoms only take those
+palettes, and momotaro has no dark variant to theme a palette for.
+
+**Repro.**
+
+```tsx
+<Box backgroundColor="teal-100">
+  <Icon name="folder" color="teal-700" />
+</Box>
+// 'teal-100' is not a valid color atom value.
+```
+
+**Expected.** A set of decorative, non-semantic hues in the theme (for
+example `vars.color['teal-100']`, or a separate `vars.decorative.teal`),
+with light and dark values, and accepted by the colour atoms.
+
+**Workaround.** `src/components/palette/palette.css.ts`: our own theme
+contract with a `tint` and a `strong` value per hue, as hex for light and
+for dark (the dark values apply under `[data-color-scheme="dark"]`, which
+nothing sets yet), and `styleVariants` classes in place of atoms.
+
+**Question.** Should Blocks ship a decorative palette, and should the theme
+contract gain dark-mode values so consumers can theme their own tokens the
+same way?
+
+## 27. `Popover` cannot be shown under jsdom
+
+**Problem.** `Popover` opens with `showPopover()` and closes with
+`hidePopover()`. jsdom 29 has neither: opening only logs a warning, closing
+throws `hidePopover is not a function`, and jsdom's default styles hide every
+`[popover]` that does not match `:popover-open`. Testing Library then treats
+an open popover's content as hidden, so `getByRole` finds nothing in it.
+
+**Repro.**
+
+```tsx
+render(<Popover open anchorElement={ref} onRequestClose={close}>
+  <button>Inside</button>
+</Popover>);
+screen.getByRole('button', { name: 'Inside' }); // throws under jsdom
+```
+
+**Expected.** A documented way to test an open `Popover` under jsdom, or a
+`data-open` hook the docs say to rely on.
+
+**Workaround.** `src/test/popover.ts`: no-op `showPopover` and
+`hidePopover`, and a test stylesheet that shows `[popover][data-open]`,
+which Blocks sets while open.
+
+**Question.** Could Blocks' test setup docs cover this, or `Popover` fall
+back to plain visibility where the Popover API is missing?
+
+## 28. No toggle-button group or swatch picker
+
+**Problem.** Picking one colour or one icon from a set is a row of buttons,
+the picked one pressed. Blocks has `Radio` but no button-styled choice group
+or colour swatch, so each group is a `Box asChild` `<fieldset>` (border,
+padding and margin reset by atoms) with a `legend` and `Button`s with
+`aria-pressed`, and the icon grid's auto-fill columns need their own class.
+
+**Repro.**
+
+```tsx
+<ToggleGroup aria-label="Colour" value={color} onChange={setColor}>
+  <ToggleGroupItem value="teal" aria-label="Teal" />
+</ToggleGroup>
+// No such export in @blockle/blocks.
+```
+
+**Expected.** A single-choice toggle group with roving focus and a pressed
+style from the theme; possibly a `swatch` variant.
+
+**Workaround.** `src/components/color-swatches/color-swatches.tsx` and the
+icon grid in `src/components/project-style-picker/project-style-picker.tsx`.
+
+**Question.** Would a `ToggleGroup` (or `SegmentedControl`) fit Blocks?
+
+## 29. `Popover` is always centred on its anchor and can leave the screen
+
+**Problem.** `getPopoverPosition` centres the popover on the anchor across
+the axis it does not open along, and only flips between the two sides of
+the other one. A wide popover under an icon near the left edge starts off
+screen, and one opened to the `right` of an icon near the top runs off the
+top. There is no `align` (start, centre, end) and no clamping to the
+viewport.
+
+**Repro.**
+
+```tsx
+// Anchor at x = 70px; the popover is 350px wide.
+<Popover anchorElement={iconRef} position="bottom" open onRequestClose={close}>
+  …
+</Popover>
+// left = 70 - (350 - 32) / 2 ≈ -89px
+```
+
+**Expected.** An `align` prop (`start` / `center` / `end`), and the popover
+kept inside the viewport, as floating-ui's `shift` does.
+
+**Workaround.** `src/components/project-style-picker/project-style-picker.css.ts`:
+`translate: 50% 0` on the popover, so it starts at the anchor's centre.
+`transform` cannot be used: the theme animates it.
+
+**Question.** Should `Popover` take an `align` and keep itself on screen?
+
 ## Notes (lower priority)
 
 Not needed by the current consumer, recorded for completeness.

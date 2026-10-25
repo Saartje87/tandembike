@@ -22,15 +22,18 @@ vi.mock('../../../../../components/board/board', () => ({
   Board: ({
     project,
     tickets,
+    epics,
     header,
   }: {
     project: { name: string };
     tickets: { number: number }[];
+    epics: { number: number }[];
     header: ReactNode;
   }) => (
     <section aria-label={project.name}>
       {header}
       {`Tickets: ${tickets.map((ticket) => `#${ticket.number}`).join(',')}`}
+      <p>{`Epics: ${epics.map((epic) => `#${epic.number}`).join(',')}`}</p>
     </section>
   ),
 }));
@@ -121,6 +124,46 @@ describe('CyclePage', () => {
     });
   });
 
+  it("gives the Board every live Epic of the Project, planned or not, to pick the Cycle's from", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      cycleId: cycle.id,
+    });
+    const archived = tickets.createTicket({
+      projectId: project.id,
+      title: 'Old',
+      type: 'Epic',
+    });
+    tickets.archiveTicket(archived.number);
+    tickets.createTicket({ projectId: project.id, title: 'Not an Epic' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({
+      id: String(project.id),
+      cycleId: String(cycle.id),
+    });
+    renderWithTheme(
+      <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.getByText(/^Epics:/)).toHaveTextContent(
+      `Epics: #${epic.number}`,
+    );
+  });
+
   it("shows an archived Cycle's final Tickets read-only, under the History tab", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -161,9 +204,8 @@ describe('CyclePage', () => {
     expect(screen.getByRole('navigation')).toHaveTextContent(
       'Tabs: Beta current history',
     );
-    expect(
-      screen.queryByRole('region', { name: 'Website' }),
-    ).not.toBeInTheDocument();
+    // The mocked Board lists its Tickets; the History page has no Board.
+    expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
     ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedDone`);
