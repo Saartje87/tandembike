@@ -3,7 +3,7 @@
 import { Box, Button, Inline, Stack, Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
-import { ticketPath } from '../../app/lib/paths';
+import { ticketByNumberPath, ticketOnBoardPath } from '../../app/lib/paths';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
@@ -13,6 +13,8 @@ import * as styles from './ticket-card.css';
 
 export type TicketCardProps = {
   ticket: Ticket;
+  /** The URL of the Board the card is on, which its drawer opens over. */
+  boardPath: string;
   cardRef?: (element: Element | null) => void;
   dragHandleRef?: (element: Element | null) => void;
 };
@@ -114,6 +116,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
  */
 export const TicketCard: FC<TicketCardProps> = ({
   ticket,
+  boardPath,
   cardRef,
   dragHandleRef,
 }) => {
@@ -147,7 +150,8 @@ export const TicketCard: FC<TicketCardProps> = ({
           <Stack gap={2} paddingBlock={3} className={styles.cardContent}>
             <Text wordBreak="break-word" className={styles.title}>
               <AppLink
-                href={ticketPath(ticket.projectId, ticket.number)}
+                href={ticketOnBoardPath(boardPath, ticket.number)}
+                scroll={false}
                 variant="inherit"
                 aria-label={ticket.title}
               >
@@ -162,7 +166,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             {ticket.epic && (
               <Text fontSize="xsmall" color="text-600" wordBreak="break-word">
                 <AppLink
-                  href={ticketPath(ticket.projectId, ticket.epic.number)}
+                  href={ticketByNumberPath(ticket.epic.number)}
                   variant="inherit"
                   aria-label={`Epic #${ticket.epic.number} ${ticket.epic.title}`}
                 >

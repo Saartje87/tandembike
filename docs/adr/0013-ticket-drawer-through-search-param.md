@@ -4,4 +4,4 @@ A Ticket used to open as an intercepted route in an `@ticket` parallel slot over
 
 We traded away the URL rule that a single item gets its own path segment, and a server re-render of the Board when its drawer opens, for removing a class of stale-slot bugs and the code that worked around them.
 
-**Status:** accepted, built by #66. Until it lands, the intercepted drawer and `/project/3/ticket/12` remain.
+**Status:** accepted and built (#66). The drawer opens with `scroll={false}` and closes with `router.replace(…, { scroll: false })`, so the Board keeps its scroll position: Next scrolls to the top on navigation by default.

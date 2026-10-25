@@ -30,7 +30,7 @@ import {
   useTransition,
 } from 'react';
 
-import { ticketPath } from '../../app/lib/paths';
+import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import { reorderTickets, updateTicket } from '../../app/tickets/actions';
 import { isStatus, type Status, statuses } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
@@ -62,6 +62,8 @@ export type BoardProps = {
 type StatusColumnProps = {
   projectId: number;
   cycleId?: number | null;
+  /** The Board's own URL, which a card's drawer opens over. */
+  boardPath: string;
   status: Status;
   tickets: Ticket[];
 };
@@ -80,6 +82,7 @@ const TicketCount: FC<TicketCountProps> = ({ count }) => (
 const StatusColumn: FC<StatusColumnProps> = ({
   projectId,
   cycleId,
+  boardPath,
   status,
   tickets,
 }) => {
@@ -117,6 +120,7 @@ const StatusColumn: FC<StatusColumnProps> = ({
                   key={ticket.number}
                   ticket={ticket}
                   index={index}
+                  boardPath={boardPath}
                 />
               ))}
             </Stack>
@@ -136,9 +140,14 @@ const StatusColumn: FC<StatusColumnProps> = ({
 type SortableTicketCardProps = {
   ticket: Ticket;
   index: number;
+  boardPath: string;
 };
 
-const SortableTicketCard: FC<SortableTicketCardProps> = ({ ticket, index }) => {
+const SortableTicketCard: FC<SortableTicketCardProps> = ({
+  ticket,
+  index,
+  boardPath,
+}) => {
   const { ref, handleRef } = useSortable({
     id: ticket.number,
     index,
@@ -146,13 +155,20 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({ ticket, index }) => {
     collisionPriority: 3,
   });
 
-  return <TicketCard ticket={ticket} cardRef={ref} dragHandleRef={handleRef} />;
+  return (
+    <TicketCard
+      ticket={ticket}
+      boardPath={boardPath}
+      cardRef={ref}
+      dragHandleRef={handleRef}
+    />
+  );
 };
 
-type ArchivedTicketsProps = { tickets: Ticket[] };
+type ArchivedTicketsProps = { tickets: Ticket[]; boardPath: string };
 
 /** The Project's archived Tickets, each a link that opens it in the drawer. */
-const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets }) => {
+const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets, boardPath }) => {
   const headingId = useId();
 
   return (
@@ -174,7 +190,8 @@ const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets }) => {
                 </Text>{' '}
                 <Text wordBreak="break-word">
                   <AppLink
-                    href={ticketPath(ticket.projectId, ticket.number)}
+                    href={ticketOnBoardPath(boardPath, ticket.number)}
+                    scroll={false}
                     variant="inherit"
                   >
                     {ticket.title}
@@ -229,6 +246,7 @@ export const Board: FC<BoardProps> = ({
   header,
   cycleId,
 }) => {
+  const boardPath = boardPathOf(project.id, cycleId ?? null);
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();
@@ -354,6 +372,7 @@ export const Board: FC<BoardProps> = ({
               <StatusColumn
                 projectId={project.id}
                 cycleId={cycleId}
+                boardPath={boardPath}
                 status={status}
                 tickets={active
                   .filter((ticket) => ticket.status === status)
@@ -375,7 +394,9 @@ export const Board: FC<BoardProps> = ({
         />
         <Label htmlFor={switchId}>Show archived</Label>
       </Inline>
-      {showArchived && <ArchivedTickets tickets={archived} />}
+      {showArchived && (
+        <ArchivedTickets tickets={archived} boardPath={boardPath} />
+      )}
     </Stack>
   );
 };

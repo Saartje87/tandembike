@@ -43,7 +43,7 @@ describe('ProjectNav', () => {
 
   it.each([
     ['/project/2', 'App'],
-    ['/project/2/ticket/7', 'App'],
+    ['/project/2/cycle/7', 'App'],
     ['/projects', null],
     ['/', null],
   ])('marks the current Project at %s', (pathname, current) => {

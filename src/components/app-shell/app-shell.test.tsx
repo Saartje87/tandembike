@@ -13,7 +13,7 @@ describe('AppShell', () => {
     '/',
     '/projects',
     '/project/42',
-    '/project/42/ticket/7',
+    '/project/42/cycle/7',
     '/ticket/7',
   ])('puts the navigation behind the header menu at %s', async (pathname) => {
     vi.mocked(usePathname).mockReturnValue(pathname);

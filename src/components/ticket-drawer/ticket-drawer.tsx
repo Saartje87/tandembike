@@ -24,7 +24,6 @@ import {
   type ReactNode,
   useEffect,
   useId,
-  useLayoutEffect,
   useOptimistic,
   useRef,
   useState,
@@ -32,7 +31,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { projectPath, ticketPath } from '../../app/lib/paths';
+import { projectPath, ticketOnBoardPath } from '../../app/lib/paths';
 import {
   archiveTicket,
   clearTicketClaim,
@@ -63,6 +62,7 @@ import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
+import { useIsShown } from './use-is-shown';
 
 export type TicketDrawerProps = {
   ticket: Ticket;
@@ -78,11 +78,10 @@ export type TicketDrawerProps = {
   cycles?: Cycle[];
   /** The Claim on the Ticket's Epic, which covers it too. Defaults to none. */
   epicClaim?: TicketClaim | null;
-  /** Use browser history to close when the drawer is intercepted over a Board. */
-  closeWithBack?: boolean;
   /**
-   * Where closing goes without `closeWithBack`: the tab the Ticket is on.
-   * Defaults to its Project's Backlog, as it does after a move.
+   * The URL of the Board the drawer is open over, without `?ticket=`: where
+   * closing goes. Defaults to the Ticket's Project's Backlog, as it does
+   * after a move.
    */
   boardPath?: string;
 };
@@ -115,26 +114,6 @@ function fieldsOf(ticket: Ticket): Fields {
 function fieldOf(edit: Edit): keyof Fields {
   return Object.keys(edit)[0] as keyof Fields;
 }
-
-/**
- * Whether the drawer is on screen: `false` on the server, during hydration
- * and while Next.js keeps the route hidden in an `<Activity>` after the User
- * navigates away; `true` otherwise. Effects run only for a visible route, so
- * the layout effect turns it on and its cleanup turns it off.
- *
- * Blocks' `Drawer` opens with `showModal()`, which throws on a dialog that is
- * already open, and it neither closes on hide nor accepts a server-rendered
- * `<dialog open>`. Rendering it only while shown gives every reveal a fresh
- * dialog and takes a hidden one out of the top layer.
- */
-const useIsShown = () => {
-  const [shown, setShown] = useState(false);
-  useLayoutEffect(() => {
-    setShown(true);
-    return () => setShown(false);
-  }, []);
-  return shown;
-};
 
 type TitleFieldProps = {
   title: string;
@@ -436,7 +415,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   blockers = noBlockers,
   cycles = noCycles,
   epicClaim = null,
-  closeWithBack = false,
   boardPath,
 }) => {
   const router = useRouter();
@@ -445,7 +423,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   const projectId = useId();
   const projectErrorId = useId();
   const [currentProjectId, setCurrentProjectId] = useState(ticket.projectId);
-  const [shouldCloseWithBack, setShouldCloseWithBack] = useState(closeWithBack);
   const [fields, showEdit] = useOptimistic(
     fieldsOf(ticket),
     (current, edit: Edit): Fields => ({ ...current, ...edit }),
@@ -460,16 +437,15 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
 
+  // Closing replaces the URL (ADR 0013), so Back does not reopen the drawer,
+  // and keeps the Board's scroll position, which Next resets by default.
   const close = () => {
-    if (shouldCloseWithBack) {
-      router.back();
-    } else {
-      router.push(
-        boardPath !== undefined && currentProjectId === ticket.projectId
-          ? boardPath
-          : projectPath(currentProjectId),
-      );
-    }
+    router.replace(
+      boardPath !== undefined && currentProjectId === ticket.projectId
+        ? boardPath
+        : projectPath(currentProjectId),
+      { scroll: false },
+    );
   };
   const requestClose = () => {
     // The Blocks `Drawer` does not join `Dialog`'s nesting, so an Escape or
@@ -501,8 +477,11 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
       }
       if (result.projectId !== currentProjectId) {
         setCurrentProjectId(result.projectId);
-        setShouldCloseWithBack(false);
-        router.replace(ticketPath(result.projectId, ticket.number));
+        // It left every Cycle, so its own Board is the new Project's Backlog.
+        router.replace(
+          ticketOnBoardPath(projectPath(result.projectId), ticket.number),
+          { scroll: false },
+        );
       }
     });
   };
@@ -741,6 +720,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                   ticket={{ ...ticket, claim }}
                   blocks={blockers.blocks}
                   epicClaim={epicClaim}
+                  onDeleted={close}
                 />
               </Inline>
             </Inline>

@@ -86,8 +86,8 @@ const renderBoardCards = () =>
   renderWithTheme(
     <LiveUpdates>
       <ul>
-        <TicketCard ticket={ticket(4)} />
-        <TicketCard ticket={ticket(5)} />
+        <TicketCard ticket={ticket(4)} boardPath="/project/1" />
+        <TicketCard ticket={ticket(5)} boardPath="/project/1" />
       </ul>
     </LiveUpdates>,
   );

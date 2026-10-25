@@ -17,29 +17,57 @@ export function cyclePath(projectId: number, cycleId: number): string {
   return `${projectPath(projectId)}/cycle/${cycleId}`;
 }
 
+/** The Board of a Project's Backlog, or with `cycleId`, of that Cycle. */
+export function boardPathOf(projectId: number, cycleId: number | null): string {
+  return cycleId === null
+    ? projectPath(projectId)
+    : cyclePath(projectId, cycleId);
+}
+
 /** A Project's History: its archived Cycles. */
 export function cyclesPath(projectId: number): string {
   return `${projectPath(projectId)}/cycles`;
 }
 
-export function ticketPath(projectId: number, number: number): string {
-  return `${projectPath(projectId)}/ticket/${number}`;
+/**
+ * Board `boardPath` with Ticket `number` open in its drawer (ADR 0013). Open
+ * it with `scroll={false}`, so the Board keeps its scroll position.
+ */
+export function ticketOnBoardPath(boardPath: string, number: number): string {
+  return `${boardPath}?ticket=${number}`;
 }
 
-/** Finds a Ticket by number alone and redirects to its `ticketPath`. */
+/**
+ * The Ticket a Board's `?ticket=` parameter opens, or `undefined` unless it
+ * is one positive whole number.
+ */
+export function openTicketNumber(
+  value: string | string[] | undefined,
+): number | undefined {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value)) {
+    return undefined;
+  }
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : undefined;
+}
+
+/**
+ * Finds a Ticket by number alone and opens it on its own Board: its open
+ * Cycle's, or the Backlog (ADR 0013). Every link to another Ticket uses it.
+ */
 export function ticketByNumberPath(number: number): string {
   return `/ticket/${number}`;
 }
 
 /**
- * Route patterns, for revalidating every Board, Cycle or Ticket page. A
+ * Route patterns, for revalidating every Backlog or Cycle Board, and with
+ * them the Ticket drawers they open (ADR 0013). A
  * `revalidatePath(boardRoute, 'layout')` covers every page of a Project.
  */
 export const boardRoute = '/project/[id]';
 export const cycleRoute = '/project/[id]/cycle/[cycleId]';
-export const ticketRoute = '/project/[id]/ticket/[number]';
 
-/** The id of the Project whose Board or Ticket is on screen, if any. */
+/** The id of the Project whose Board is on screen, if any. */
 export function projectIdFromPath(pathname: string): number | undefined {
   const match = /^\/project\/(\d+)(?:\/|$)/.exec(pathname);
   return match ? Number(match[1]) : undefined;

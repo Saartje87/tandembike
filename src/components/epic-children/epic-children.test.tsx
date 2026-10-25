@@ -52,7 +52,7 @@ describe('EpicChildren', () => {
     const items = within(childList()).getAllByRole('listitem');
     expect(
       within(items[0]).getByRole('link', { name: '#5 Pay by card' }),
-    ).toHaveAttribute('href', '/project/1/ticket/5');
+    ).toHaveAttribute('href', '/ticket/5');
     expect(items[0]).toHaveTextContent('In progress');
     expect(items[1]).toHaveTextContent('Todo · Blocked');
   });

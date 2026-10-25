@@ -23,6 +23,8 @@ export type DeleteTicketDialogProps = {
   blocks: RelatedTicket[];
   /** The Claim on its Epic, which covers it too, or `null`. */
   epicClaim: TicketClaim | null;
+  /** Called once the Ticket is deleted, for example to close its drawer. */
+  onDeleted?: () => void;
 };
 
 const ownerOf = ({ agentRunId, agentName }: TicketClaim) =>
@@ -31,13 +33,14 @@ const ownerOf = ({ agentRunId, agentName }: TicketClaim) =>
 /**
  * A Delete button that asks before destroying a Ticket for good (ADR 0012),
  * naming it, the Tickets it will stop blocking and any Agent holding a Claim
- * on it. Once confirmed, the Server Action sends the User to the Ticket's
- * Board; a refusal is shown in the dialog.
+ * on it. Once deleted it calls `onDeleted`; a refusal is shown in the
+ * dialog.
  */
 export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
   ticket,
   blocks,
   epicClaim,
+  onDeleted,
 }) => {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string>();
@@ -63,7 +66,9 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
     setError(undefined);
     startDelete(async () => {
       const result = await deleteTicket({ number: ticket.number });
-      if (!result.ok) {
+      if (result.ok) {
+        onDeleted?.();
+      } else {
         setError(result.error);
       }
     });

@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  boardPathOf,
   boardRoute,
   cyclePath,
   cycleRoute,
   cyclesPath,
+  openTicketNumber,
   projectIdFromPath,
   projectPath,
   projectsPath,
   ticketByNumberPath,
-  ticketPath,
-  ticketRoute,
+  ticketOnBoardPath,
 } from './paths';
 
 describe('paths', () => {
@@ -30,10 +31,6 @@ describe('paths', () => {
     expect(cyclesPath(3)).toBe('/project/3/cycles');
   });
 
-  it('puts a Ticket under its Project', () => {
-    expect(ticketPath(3, 12)).toBe('/project/3/ticket/12');
-  });
-
   it('finds a Ticket by its number alone', () => {
     expect(ticketByNumberPath(12)).toBe('/ticket/12');
   });
@@ -41,14 +38,13 @@ describe('paths', () => {
   it('names the route patterns that revalidatePath takes', () => {
     expect(boardRoute).toBe('/project/[id]');
     expect(cycleRoute).toBe('/project/[id]/cycle/[cycleId]');
-    expect(ticketRoute).toBe('/project/[id]/ticket/[number]');
   });
 });
 
 describe('projectIdFromPath', () => {
   it.each([
     ['/project/2', 2],
-    ['/project/2/ticket/7', 2],
+    ['/project/2/cycles', 2],
     ['/project/2/cycle/4', 2],
     ['/projects', undefined],
     ['/projects/2', undefined],
@@ -56,5 +52,29 @@ describe('projectIdFromPath', () => {
     ['/', undefined],
   ])('reads the Project on screen from %s', (pathname, id) => {
     expect(projectIdFromPath(pathname)).toBe(id);
+  });
+
+  it("names a Backlog's or a Cycle's Board", () => {
+    expect(boardPathOf(3, null)).toBe('/project/3');
+    expect(boardPathOf(3, 7)).toBe('/project/3/cycle/7');
+  });
+
+  it('opens a Ticket on a Board through a ?ticket= parameter', () => {
+    expect(ticketOnBoardPath('/project/3', 12)).toBe('/project/3?ticket=12');
+    expect(ticketOnBoardPath('/project/3/cycle/7', 12)).toBe(
+      '/project/3/cycle/7?ticket=12',
+    );
+  });
+
+  it.each([
+    ['12', 12],
+    [undefined, undefined],
+    ['', undefined],
+    ['abc', undefined],
+    ['1.5', undefined],
+    ['-2', undefined],
+    [['12', '13'], undefined],
+  ])('reads ?ticket=%j as %j', (value, expected) => {
+    expect(openTicketNumber(value)).toBe(expected);
   });
 });

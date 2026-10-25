@@ -1,7 +1,7 @@
 import { Inline, Stack, Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
-import { ticketPath } from '../../app/lib/paths';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import * as styles from './cycle-ticket-list.css';
@@ -35,7 +35,7 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({ tickets }) =>
             </Text>
             <Text wordBreak="break-word">
               <AppLink
-                href={ticketPath(ticket.projectId, ticket.number)}
+                href={ticketByNumberPath(ticket.number)}
                 variant="inherit"
               >
                 {ticket.title}

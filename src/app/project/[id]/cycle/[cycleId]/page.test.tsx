@@ -60,6 +60,22 @@ vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
   ),
 }));
 
+vi.mock('../../board-ticket-drawer/board-ticket-drawer', () => ({
+  BoardTicketDrawer: ({
+    number,
+    boardPath,
+  }: {
+    number: number;
+    boardPath: string;
+  }) => <div role="dialog">{`Drawer #${number} over ${boardPath}`}</div>,
+}));
+vi.mock(
+  '../../../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton',
+  () => ({ TicketDrawerSkeleton: () => null }),
+);
+
+const noSearch = Promise.resolve({});
+
 describe('CyclePage', () => {
   beforeEach(() => {
     notFound.mockClear();
@@ -85,7 +101,9 @@ describe('CyclePage', () => {
       id: String(project.id),
       cycleId: String(cycle.id),
     });
-    renderWithTheme(<main>{await CyclePage({ params })}</main>);
+    renderWithTheme(
+      <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+    );
 
     expect(screen.getByRole('navigation')).toHaveTextContent(
       `Tabs: Beta,Launch current ${cycle.id}`,
@@ -96,7 +114,9 @@ describe('CyclePage', () => {
     expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
       `Tickets: #${planned.number}`,
     );
-    await expect(generateMetadata({ params })).resolves.toEqual({
+    await expect(
+      generateMetadata({ params, searchParams: noSearch }),
+    ).resolves.toEqual({
       title: 'Launch · Website',
     });
   });
@@ -130,6 +150,7 @@ describe('CyclePage', () => {
               id: String(project.id),
               cycleId: String(cycle.id),
             }),
+            searchParams: noSearch,
           })
         }
       </main>,
@@ -165,6 +186,7 @@ describe('CyclePage', () => {
               id: String(project.id),
               cycleId: String(launch.id),
             }),
+            searchParams: noSearch,
           })
         }
       </main>,
@@ -186,6 +208,7 @@ describe('CyclePage', () => {
           id: String(requested.id),
           cycleId: String(cycle.id),
         }),
+        searchParams: noSearch,
       }),
     ).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalledOnce();
@@ -202,8 +225,37 @@ describe('CyclePage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     await expect(
-      CyclePage({ params: Promise.resolve({ id, cycleId }) }),
+      CyclePage({
+        params: Promise.resolve({ id, cycleId }),
+        searchParams: noSearch,
+      }),
     ).rejects.toThrow('NEXT_NOT_FOUND');
     expect(notFound).toHaveBeenCalledOnce();
+  });
+
+  it("opens ?ticket= in a drawer that closes to the Cycle's tab", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Ship it',
+      cycleId: cycle.id,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({
+      id: String(project.id),
+      cycleId: String(cycle.id),
+    });
+    const searchParams = Promise.resolve({ ticket: String(ticket.number) });
+
+    renderWithTheme(<main>{await CyclePage({ params, searchParams })}</main>);
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      `Drawer #${ticket.number} over /project/${project.id}/cycle/${cycle.id}`,
+    );
+    await expect(generateMetadata({ params, searchParams })).resolves.toEqual({
+      title: `#${ticket.number} Ship it`,
+    });
   });
 });
