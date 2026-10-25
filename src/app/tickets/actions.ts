@@ -178,12 +178,16 @@ export type DeleteTicketResult = ActionResult;
  */
 export async function deleteTicket(input: {
   number: number;
+  /** For an Epic: delete its children too, instead of detaching them. */
+  withChildren?: boolean;
 }): Promise<DeleteTicketResult> {
   return actionResult(() => {
     const tickets = appTickets();
     const number = Number(input?.number);
     const { projectId } = tickets.getTicket(number);
-    tickets.deleteTicket(number);
+    tickets.deleteTicket(number, {
+      withChildren: input?.withChildren === true,
+    });
     revalidatePath(projectPath(projectId));
     revalidatePath(cycleRoute, 'page');
     return {};

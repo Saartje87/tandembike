@@ -42,6 +42,34 @@ describe('Ticket actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
   });
 
+  it('deletes an Epic and detaches its children, or deletes them too when asked', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epicWith = (title: string) => {
+      const epic = tickets.createTicket({
+        projectId: project.id,
+        title,
+        type: 'Epic',
+      });
+      const child = tickets.createTicket({
+        projectId: project.id,
+        title: `${title} child`,
+        epicNumber: epic.number,
+      });
+      return { epic, child };
+    };
+    const kept = epicWith('Kept');
+    const gone = epicWith('Gone');
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await deleteTicket({ number: kept.epic.number });
+    await deleteTicket({ number: gone.epic.number, withChildren: true });
+
+    expect(
+      tickets.listTickets({ projectId: project.id }).map(({ title }) => title),
+    ).toEqual(['Kept child']);
+  });
+
   it('returns a refused deletion as an error', async () => {
     const tickets = createTestTickets();
     vi.mocked(appTickets).mockReturnValue(tickets);

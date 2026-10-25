@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import { createChangeChannel } from './changes';
-import { NotAllowedError, NotFoundError } from './errors';
+import { NotFoundError } from './errors';
 
 /** A Tickets module with one Project and Tickets #1 to #`count`. */
 function ticketsWith(count: number) {
@@ -122,34 +122,111 @@ describe('Deleting a Ticket', () => {
     });
   });
 
-  it('refuses an Epic that still has children, archived ones included', () => {
+  /** An Epic "Launch" with an open child, an archived child and a Blocker. */
+  function epicWithChildren() {
     const { tickets, project } = ticketsWith(0);
     const epic = tickets.createTicket({
       projectId: project.id,
       title: 'Launch',
       type: 'Epic',
     });
-    const child = tickets.createTicket({
-      projectId: project.id,
-      title: 'Child',
-      epicNumber: epic.number,
-    });
-    tickets.archiveTicket(child.number);
-    const before = tickets.getTicket(epic.number);
-
-    expect(errorFrom(() => tickets.deleteTicket(epic.number))).toEqual(
-      new NotAllowedError(
-        `Epic #${epic.number} still has children. Detach them before deleting it.`,
-      ),
+    const [open, archived] = ['Open', 'Archived'].map((title) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        epicNumber: epic.number,
+        labels: ['bug'],
+      }),
     );
-    expect(tickets.getTicket(epic.number)).toEqual(before);
+    tickets.archiveTicket(archived.number);
+    const outside = tickets.createTicket({
+      projectId: project.id,
+      title: 'Outside',
+    });
+    tickets.addBlocker({ blocker: open.number, blocked: outside.number });
+    tickets.addBlocker({ blocker: open.number, blocked: archived.number });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: open.number });
+    return { tickets, epic, open, archived, outside, cycle };
+  }
 
-    tickets.detachFromEpic(child.number);
+  it('deletes an Epic and keeps its children as normal Tickets in no Epic', () => {
+    const { tickets, epic, open, archived, outside, cycle } =
+      epicWithChildren();
+
     tickets.deleteTicket(epic.number);
 
     expect(errorFrom(() => tickets.getTicket(epic.number))).toEqual(
       new NotFoundError(`There is no Ticket #${epic.number}.`),
     );
+    for (const child of [open, archived]) {
+      expect(tickets.getTicket(child.number)).toMatchObject({
+        epic: null,
+        status: child.status,
+        labels: ['bug'],
+      });
+    }
+    expect(tickets.getTicket(archived.number)).toMatchObject({
+      archived: true,
+      blockedBy: [open.number],
+    });
+    expect(tickets.getTicket(outside.number).blockedBy).toEqual([open.number]);
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([open.number]);
+  });
+
+  it('deletes an Epic with every child, archived ones included, when asked', () => {
+    const { tickets, epic, open, archived, outside, cycle } =
+      epicWithChildren();
+
+    tickets.deleteTicket(epic.number, { withChildren: true });
+
+    for (const number of [epic.number, open.number, archived.number]) {
+      expect(errorFrom(() => tickets.getTicket(number))).toEqual(
+        new NotFoundError(`There is no Ticket #${number}.`),
+      );
+    }
+    expect(tickets.getTicket(outside.number)).toMatchObject({
+      blockedBy: [],
+      blocked: false,
+    });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
+  });
+
+  it('announces an Epic deleted with its children once, without the deleted ones as unblocked', () => {
+    const changes = createChangeChannel();
+    const tickets = createTestTickets(changes);
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const [first, second] = ['First', 'Second'].map((title) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        epicNumber: epic.number,
+      }),
+    );
+    const outside = tickets.createTicket({
+      projectId: project.id,
+      title: 'Outside',
+    });
+    tickets.addBlocker({ blocker: first.number, blocked: second.number });
+    tickets.addBlocker({ blocker: second.number, blocked: outside.number });
+    const listener = vi.fn();
+    changes.subscribe(listener);
+
+    tickets.deleteTicket(epic.number, { withChildren: true });
+
+    expect(listener.mock.calls).toEqual([
+      [
+        {
+          type: 'tickets',
+          numbers: [epic.number, first.number, second.number, outside.number],
+        },
+      ],
+    ]);
   });
 
   it('announces the Tickets and Cycles it touched, and nothing when refused', () => {
@@ -176,7 +253,7 @@ describe('Deleting a Ticket', () => {
     const listener = vi.fn();
     changes.subscribe(listener);
 
-    errorFrom(() => tickets.deleteTicket(epic.number));
+    errorFrom(() => tickets.deleteTicket(999));
     tickets.deleteTicket(child.number);
 
     expect(listener.mock.calls).toEqual([
