@@ -2,7 +2,7 @@
   "mcpServers": {
     "tandembike": {
       "type": "http",
-      "url": "http://localhost:3000/api/mcp"
+      "url": "http://localhost:4747/api/mcp"
     }
   }
 }

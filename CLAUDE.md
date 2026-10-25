@@ -4,7 +4,7 @@
 
 ### Issue tracker
 
-Tickets live in the local Tandembike app through MCP at `http://localhost:3000/api/mcp`; use its `Tandembike` Project for this codebase's development. See `docs/agents/issue-tracker.md` for matching Tickets and status workflow.
+Tickets live in the local Tandembike app through MCP at `http://localhost:4747/api/mcp`; use its `Tandembike` Project for this codebase's development. See `docs/agents/issue-tracker.md` for matching Tickets and status workflow.
 
 ### Triage labels
 
