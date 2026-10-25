@@ -27,6 +27,7 @@ import {
   ticketLabels,
   tickets,
 } from '../db/schema';
+import { checkProjectWritable, checkTicketWritable } from './archived-projects';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { claimOwner } from './claim-owner';
 import {
@@ -91,6 +92,8 @@ export type Project = {
   color: PaletteColor | null;
   /** One of the Project icons, set by the User, or `null` for the default. */
   icon: ProjectIcon | null;
+  /** Hidden from the normal views, and read-only with its Tickets. */
+  archived: boolean;
   createdAt: Date;
 };
 
@@ -117,6 +120,7 @@ const projectColumns = {
   name: projects.name,
   color: projects.color,
   icon: projects.icon,
+  archived: projects.archived,
   createdAt: projects.createdAt,
 };
 
@@ -330,7 +334,10 @@ export type ListTicketsFilter = {
   status?: Status | readonly Status[];
   /** Only Tickets that have every one of these labels, ignoring case. */
   labels?: string[];
-  /** Also list archived Tickets, which are left out by default. */
+  /**
+   * Also list archived Tickets, and Tickets of archived Projects, which are
+   * left out by default unless `projectId` names their Project.
+   */
   includeArchived?: boolean;
   /**
    * Only Tickets with an unresolved Blocker when true, or only Tickets with
@@ -919,6 +926,7 @@ export function createTickets(
      * casing of its own name is allowed.
      */
     renameProject(id: number, input: RenameProjectInput): Project {
+      checkProjectWritable(db, id);
       const { name, nameKey } = availableProjectName(db, input.name, id);
       const project = db
         .update(projects)
@@ -938,6 +946,7 @@ export function createTickets(
      * with `null`; fields left out stay as they are.
      */
     styleProject(id: number, input: StyleProjectInput): Project {
+      checkProjectWritable(db, id);
       const { color, icon } = input;
       throwFieldErrors({
         color:
@@ -971,6 +980,20 @@ export function createTickets(
       }
       changes.publish({ type: 'project', id });
       return project;
+    },
+
+    /**
+     * Archives Project `id`: it and its Tickets leave the normal views and
+     * become read-only, but nothing is lost and its name stays reserved.
+     * Its Tickets are not changed. Archiving it again changes nothing.
+     */
+    archiveProject(id: number): Project {
+      return setProjectArchived(id, true);
+    },
+
+    /** Brings archived Project `id` back, its Tickets exactly as they were. */
+    restoreProject(id: number): Project {
+      return setProjectArchived(id, false);
     },
 
     /** Calls `listener` after every change; returns an unsubscribe. */
@@ -1087,6 +1110,7 @@ export function createTickets(
       const agentName = input.agentName?.trim() || null;
 
       const changed = db.transaction(() => {
+        checkTicketWritable(db, number);
         checkEpicClaimable(db, number, agentRunId);
         const claimed = db
           .update(tickets)
@@ -1141,6 +1165,7 @@ export function createTickets(
     ): Ticket {
       const agentRunId = checkedAgentRunId(input.agentRunId);
       const changed = db.transaction(() => {
+        checkTicketWritable(db, number);
         const released = db
           .update(tickets)
           .set({
@@ -1192,6 +1217,7 @@ export function createTickets(
 
     /** Clears any claim on Ticket `number` for the User. */
     clearTicketClaim(number: number): Ticket {
+      checkTicketWritable(db, number);
       const cleared = db
         .update(tickets)
         .set({
@@ -1212,16 +1238,8 @@ export function createTickets(
 
     createTicket(input: CreateTicketInput): Ticket {
       const { values, labels, acceptanceCriteria } = checkNewTicket(input);
-      const project = db
-        .select({ id: projects.id })
-        .from(projects)
-        .where(eq(projects.id, input.projectId))
-        .get();
-      if (!project) {
-        throw new NotFoundError(
-          `There is no Project with id ${input.projectId}.`,
-        );
-      }
+      checkProjectWritable(db, input.projectId);
+      const project = { id: input.projectId };
 
       // better-sqlite3 runs every statement on this one connection, so
       // statements on `db` inside the callback are part of the transaction.
@@ -1278,16 +1296,8 @@ export function createTickets(
               : undefined,
       });
       const checked = input.tickets.map(checkBatchTicket);
-      const project = db
-        .select({ id: projects.id })
-        .from(projects)
-        .where(eq(projects.id, input.projectId))
-        .get();
-      if (!project) {
-        throw new NotFoundError(
-          `There is no Project with id ${input.projectId}.`,
-        );
-      }
+      checkProjectWritable(db, input.projectId);
+      const project = { id: input.projectId };
       const epicNumber = input.epicNumber ?? null;
       const originNumber = input.originNumber ?? null;
 
@@ -1349,17 +1359,9 @@ export function createTickets(
      */
     updateTicket(number: number, input: UpdateTicketInput): Ticket {
       const checked = checkTicketChanges(input);
+      checkTicketWritable(db, number);
       if (checked.values.projectId !== undefined) {
-        const project = db
-          .select({ id: projects.id })
-          .from(projects)
-          .where(eq(projects.id, checked.values.projectId))
-          .get();
-        if (!project) {
-          throw new NotFoundError(
-            `There is no Project with id ${checked.values.projectId}.`,
-          );
-        }
+        checkProjectWritable(db, checked.values.projectId);
       }
 
       const { leftCycles, changedEpic, changedOrigins } = applyTicketChanges(
@@ -1438,6 +1440,7 @@ export function createTickets(
     addLabels(number: number, labels: string[]): Ticket {
       const added = checkedLabels(labels);
       db.transaction(() => {
+        checkTicketWritable(db, number);
         touchTicket(db, number);
         insertLabels(db, number, added);
       });
@@ -1452,6 +1455,7 @@ export function createTickets(
     removeLabels(number: number, labels: string[]): Ticket {
       const removed = checkedLabels(labels);
       db.transaction(() => {
+        checkTicketWritable(db, number);
         touchTicket(db, number);
         deleteLabels(db, number, removed);
       });
@@ -1475,6 +1479,7 @@ export function createTickets(
             : checkCriterionIds(criteria),
       });
       db.transaction(() => {
+        checkTicketWritable(db, number);
         touchTicket(db, number);
         for (const { id, checked } of criteria) {
           const criterion = db
@@ -1513,6 +1518,7 @@ export function createTickets(
       });
       db.transaction(() => {
         getTicket(blocker);
+        checkTicketWritable(db, blocked);
         checkNotEpicAndChild(db, { blocker, blocked });
         const cycle = blockingPath(db, blocked, blocker);
         throwFieldErrors({
@@ -1538,6 +1544,7 @@ export function createTickets(
     removeBlocker({ blocker, blocked }: BlockerInput): Ticket {
       db.transaction(() => {
         getTicket(blocker);
+        checkTicketWritable(db, blocked);
         touchTicket(db, blocked);
         db.delete(ticketBlockers)
           .where(
@@ -1576,6 +1583,7 @@ export function createTickets(
      */
     detachFromEpic(number: number): Ticket {
       const epic = db.transaction(() => {
+        checkTicketWritable(db, number);
         const ticket = db
           .select({ epicNumber: tickets.epicNumber })
           .from(tickets)
@@ -1648,14 +1656,7 @@ export function createTickets(
         });
       }
 
-      const project = db
-        .select({ id: projects.id })
-        .from(projects)
-        .where(eq(projects.id, projectId))
-        .get();
-      if (!project) {
-        throw new NotFoundError(`There is no Project with id ${projectId}.`);
-      }
+      checkProjectWritable(db, projectId);
 
       const lane = db
         .select({
@@ -1732,6 +1733,7 @@ export function createTickets(
     addComment(number: number, input: AddCommentInput): Comment {
       const body = checkedCommentBody(input.body);
       getTicket(number);
+      checkTicketWritable(db, number);
       const comment = db
         .insert(ticketComments)
         .values({
@@ -1753,6 +1755,7 @@ export function createTickets(
     editComment(id: number, input: EditCommentInput): Comment {
       const body = checkedCommentBody(input.body);
       const { ticketNumber } = editableComment(id, input.by);
+      checkTicketWritable(db, ticketNumber);
       const comment = db
         .update(ticketComments)
         .set({ body, editedAt: new Date() })
@@ -1769,6 +1772,7 @@ export function createTickets(
      */
     removeComment(id: number, { by }: RemoveCommentInput): void {
       const { ticketNumber } = editableComment(id, by);
+      checkTicketWritable(db, ticketNumber);
       db.delete(ticketComments).where(eq(ticketComments.id, id)).run();
       changes.publish({ type: 'ticket', number: ticketNumber });
     },
@@ -1803,6 +1807,7 @@ export function createTickets(
     ): void {
       const { children, unblocked, epic, leftCycles, unlinked } =
         db.transaction(() => {
+          checkTicketWritable(db, number);
           const { epic, children } = getTicket(number);
           const childNumbers = children.map((child) => child.number);
           if (!withChildren) {
@@ -1886,6 +1891,7 @@ export function createTickets(
     { move }: { move: boolean },
   ): Ticket {
     const changed = db.transaction(() => {
+      checkTicketWritable(db, child);
       const ticket = db
         .select({
           type: tickets.type,
@@ -1987,6 +1993,7 @@ export function createTickets(
     changedOrigins: (number | null)[];
   } {
     return db.transaction(() => {
+      checkTicketWritable(db, number);
       const existing = db
         .select(ticketColumns)
         .from(tickets)
@@ -2055,12 +2062,35 @@ export function createTickets(
     });
   }
 
+  /** Sets Project `id`'s archived flag, announcing it only when it changed. */
+  function setProjectArchived(id: number, archived: boolean): Project {
+    const changed = db
+      .update(projects)
+      .set({ archived })
+      .where(and(eq(projects.id, id), ne(projects.archived, archived)))
+      .returning({ id: projects.id })
+      .get();
+    const project = db
+      .select(projectColumns)
+      .from(projects)
+      .where(eq(projects.id, id))
+      .get();
+    if (!project) {
+      throw new NotFoundError(`There is no Project with id ${id}.`);
+    }
+    if (changed) {
+      changes.publish({ type: 'project', id });
+    }
+    return project;
+  }
+
   /**
    * Sets only the archived flag (and updated time), and announces it. A
    * child's Epic leaves out archived children, so its Status may change.
    */
   function setArchived(number: number, archived: boolean): Ticket {
     const changedEpic = db.transaction(() => {
+      checkTicketWritable(db, number);
       if (archived) {
         checkChildrenArchived(db, number);
       } else {
@@ -2093,6 +2123,15 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
       ? undefined
       : inArray(tickets.status, statusList(filter.status)),
     filter.includeArchived ? undefined : eq(tickets.archived, false),
+    filter.includeArchived || filter.projectId !== undefined
+      ? undefined
+      : notInArray(
+          tickets.projectId,
+          db
+            .select({ id: projects.id })
+            .from(projects)
+            .where(eq(projects.archived, true)),
+        ),
     labels.length === 0
       ? undefined
       : inArray(

@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
+import { checkProjectWritable } from './archived-projects';
 import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
 import {
@@ -329,6 +330,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   /** Cycle `id`, unless it is missing or Archived. */
   function changeableCycle(id: number): CycleRow {
     const cycle = cycleRow(id);
+    checkProjectWritable(db, cycle.projectId);
     checkChangeable(cycle);
     return cycle;
   }
@@ -459,7 +461,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     /** Creates an empty, Prepared Cycle in a Project. */
     createCycle(input: CreateCycleInput): Cycle {
       const title = checkedCycleTitle(input.title);
-      checkProjectExists(db, input.projectId);
+      checkProjectWritable(db, input.projectId);
       const { id } = db
         .insert(cycles)
         .values({
@@ -477,7 +479,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     /** Renames Cycle `id` by the rules for creating one. */
     renameCycle(id: number, input: RenameCycleInput): Cycle {
       const title = checkedCycleTitle(input.title);
-      checkChangeable(cycleRow(id));
+      changeableCycle(id);
       db.update(cycles).set({ title }).where(eq(cycles.id, id)).run();
       changes.publish({ type: 'cycle', id });
       return getCycle(id);
@@ -489,6 +491,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     discardCycle(id: number): void {
       const cycle = cycleRow(id);
+      checkProjectWritable(db, cycle.projectId);
       if (cycle.state !== 'Prepared') {
         throw new NotAllowedError(
           `The Cycle "${cycle.title}" is ${cycle.state}. Only a Prepared Cycle can be discarded.`,
@@ -514,6 +517,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     ): Cycle {
       const archivedId = db.transaction(() => {
         const cycle = cycleRow(id);
+        checkProjectWritable(db, cycle.projectId);
         if (cycle.state === 'Active') {
           throw new NotAllowedError(
             `The Cycle "${cycle.title}" is Active already.`,
@@ -598,6 +602,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     archiveCycle(id: number): Cycle {
       const cycle = cycleRow(id);
+      checkProjectWritable(db, cycle.projectId);
       if (cycle.state === 'Archived') {
         throw new NotAllowedError(
           `The Cycle "${cycle.title}" is Archived already.`,

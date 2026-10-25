@@ -499,7 +499,9 @@ named remove button sized to the pill.
 **Workaround.** `src/components/label-list/label-list.tsx` composes the parts
 above; the card's `BlockedMarker` (`src/components/ticket-card/ticket-card.tsx`)
 does too, with `warning` shades and an `Icon`, as does its `EpicProgress`
-with `primary` shades.
+with `primary` shades. The archived Project notice's "Archived" marker
+next to the Project name is plain `Text fontSize="small" fontWeight="strong"
+color="text-600"` rather than a fourth hand-built pill.
 
 **Question.** Is a `Badge` (or `Tag`) with an optional remove action in scope
 for Blocks?
@@ -630,7 +632,11 @@ the end of the banner.
 and an `action` slot placed at the end, like the close button.
 
 **Workaround.** `Alert intent="info"` with an `Inline` of `Text` and an
-outline `Button` as its children (`ticket-drawer.tsx`).
+outline `Button` as its children (`ticket-drawer.tsx`). An archived
+Project's Board shows the same kind of lasting notice with Restore; there it
+skips `Alert` for plain `Heading`, `Text` and `Button` in a `Stack`
+(`src/components/archived-project-notice/archived-project-notice.tsx`), so
+it is neither announced as urgent nor styled as a banner.
 
 **Question.** Should `Alert` take a `role` (or `live`) prop and an `action`
 slot?

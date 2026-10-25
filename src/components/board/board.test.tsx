@@ -30,6 +30,7 @@ const project = {
   name: 'Website',
   color: null,
   icon: null,
+  archived: false,
   createdAt: new Date('2026-01-01'),
 };
 

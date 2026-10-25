@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  archivedProjectsPath,
   boardPathOf,
   boardRoute,
   cyclePath,
@@ -17,6 +18,10 @@ import {
 describe('paths', () => {
   it('puts the Projects list under a plural segment', () => {
     expect(projectsPath()).toBe('/projects');
+  });
+
+  it('puts the archived Projects under the Projects list', () => {
+    expect(archivedProjectsPath()).toBe('/projects/archived');
   });
 
   it("puts a Project's Board under a singular segment", () => {

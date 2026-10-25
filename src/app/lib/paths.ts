@@ -7,6 +7,11 @@ export function projectsPath(): string {
   return '/projects';
 }
 
+/** The archived Projects, which can be restored from there. */
+export function archivedProjectsPath(): string {
+  return `${projectsPath()}/archived`;
+}
+
 /** A Project's Board. */
 export function projectPath(projectId: number): string {
   return `/project/${projectId}`;

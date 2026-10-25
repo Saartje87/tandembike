@@ -225,8 +225,66 @@ describe('Project tools', () => {
     const result = await client.callTool({ name: 'list_projects' });
 
     expect(resultJson(result)).toEqual([
-      { id: website.id, name: 'Website', createdAt: iso(website.createdAt) },
+      {
+        id: website.id,
+        name: 'Website',
+        archived: false,
+        createdAt: iso(website.createdAt),
+      },
     ]);
+    await client.close();
+  });
+
+  it('lists archived Projects too, flagged', async () => {
+    const tickets = createTestTickets();
+    const old = tickets.createProject({ name: 'Old site' });
+    tickets.archiveProject(old.id);
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({ name: 'list_projects' });
+
+    expect(resultJson(result)).toEqual([
+      expect.objectContaining({ name: 'Old site', archived: true }),
+    ]);
+    await client.close();
+  });
+
+  it('hides Tickets of archived Projects unless their Project is named', async () => {
+    const tickets = createTestTickets();
+    const old = tickets.createProject({ name: 'Old site' });
+    const ticket = tickets.createTicket({ projectId: old.id, title: 'Hidden' });
+    tickets.archiveProject(old.id);
+    const client = await connectMcpClient(tickets);
+
+    const all = await client.callTool({ name: 'list_tickets' });
+    const named = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectName: 'Old site' },
+    });
+
+    expect(resultJson(all)).toMatchObject({ tickets: [], total: 0 });
+    expect(resultJson(named)).toMatchObject({
+      tickets: [{ number: ticket.number }],
+    });
+    await client.close();
+  });
+
+  it('refuses changing a Ticket of an archived Project with a clear error', async () => {
+    const tickets = createTestTickets();
+    const old = tickets.createProject({ name: 'Old site' });
+    const ticket = tickets.createTicket({ projectId: old.id, title: 'Frozen' });
+    tickets.archiveProject(old.id);
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: ticket.number, status: 'Done' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain(
+      `Ticket #${ticket.number} is in the archived Project \\"Old site\\". Restore the Project before changing its Tickets.`,
+    );
     await client.close();
   });
 
@@ -244,6 +302,7 @@ describe('Project tools', () => {
     expect(Object.keys(resultJson(result) as object)).toEqual([
       'id',
       'name',
+      'archived',
       'createdAt',
     ]);
     expect(tickets.listProjects().map(({ name }) => name)).toEqual(['Website']);
@@ -280,6 +339,7 @@ describe('Project tools', () => {
     expect(resultJson(result)).toEqual({
       id: project.id,
       name: 'Marketing site',
+      archived: false,
       createdAt: project.createdAt.toISOString(),
     });
     expect(tickets.listProjects().map(({ name }) => name)).toEqual([

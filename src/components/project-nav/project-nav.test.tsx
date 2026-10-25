@@ -20,6 +20,7 @@ const projects = [
     name: 'Website',
     color: null,
     icon: null,
+    archived: false,
     createdAt: new Date('2026-01-01'),
   },
   {
@@ -27,6 +28,7 @@ const projects = [
     name: 'App',
     color: null,
     icon: null,
+    archived: false,
     createdAt: new Date('2026-01-02'),
   },
 ];
@@ -74,6 +76,31 @@ describe('ProjectNav', () => {
     expect(
       app.querySelector<HTMLElement>('[role="presentation"]')?.style.maskImage,
     ).toBe('url("/heroicons/outline/folder.svg")');
+  });
+
+  it('leaves out archived Projects', () => {
+    renderWithTheme(
+      <ProjectNav
+        projects={[
+          ...projects,
+          {
+            id: 3,
+            name: 'Old site',
+            color: null,
+            icon: null,
+            archived: true,
+            createdAt: new Date('2026-01-03'),
+          },
+        ]}
+      />,
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Projects' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Website', 'App']);
   });
 
   it.each([
