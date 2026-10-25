@@ -1669,9 +1669,9 @@ describe('Cycle tools', () => {
   it("returns the module's message when a Cycle change is refused", async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    tickets.updateTicket(3, { status: 'Done' });
+    tickets.archiveTicket(3);
 
-    const done = await client.callTool({
+    const archived = await client.callTool({
       name: 'plan_ticket',
       arguments: { cycleId: cycle.id, number: 3 },
     });
@@ -1684,13 +1684,11 @@ describe('Cycle tools', () => {
       arguments: { id: 99 },
     });
 
-    expect([done, untitled, missing].map((result) => result.isError)).toEqual([
-      true,
-      true,
-      true,
-    ]);
-    expect(resultText(done)).toBe(
-      'Ticket #3 is Done. Only open Tickets can be planned into a Cycle.',
+    expect(
+      [archived, untitled, missing].map((result) => result.isError),
+    ).toEqual([true, true, true]);
+    expect(resultText(archived)).toBe(
+      'Ticket #3 is archived. Restore it before planning it into a Cycle.',
     );
     expect(resultText(untitled)).toBe('Enter a title.');
     expect(resultText(missing)).toBe('There is no Cycle with id 99.');

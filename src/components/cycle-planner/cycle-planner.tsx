@@ -27,8 +27,9 @@ export type CyclePlannerProps = {
 
 /**
  * Which Cycle a Ticket is planned into, in the Ticket drawer: a link to it
- * with Remove from Cycle, or, for an open Ticket in none, a select of the
- * Project's Prepared and Active Cycles to plan it into.
+ * with Remove from Cycle, or, for a non-archived Ticket in none, whatever
+ * its Status, a select of the Project's Prepared and Active Cycles to plan
+ * it into.
  */
 export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const selectId = useId();
@@ -71,11 +72,9 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
         </Button>
       </Inline>
     );
-  } else if (ticket.status === 'Done' || ticket.archived) {
+  } else if (ticket.archived) {
     control = (
-      <Text color="text-600">
-        Only open Tickets can be planned into a Cycle.
-      </Text>
+      <Text color="text-600">Restore this Ticket to plan it into a Cycle.</Text>
     );
   } else if (plannable.length === 0) {
     control = <Text color="text-600">Not planned</Text>;

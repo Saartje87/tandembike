@@ -25,7 +25,7 @@ Tickets and Projects live in the local Tandembike app. Use its MCP server at `ht
 - Cycles (ADR 0010): goal-led plans of a Project's Tickets, each `Prepared`, `Active` (at most one per Project) or `Archived` (read-only history).
   - `list_cycles`: a Project's Cycles, oldest first, each with its `state` and `ticketNumbers`.
   - `create_cycle`, `rename_cycle`: a new Cycle starts `Prepared` and empty; an `Archived` one cannot be renamed.
-  - `plan_ticket`, `unplan_ticket`: put a Ticket into a Prepared or Active Cycle of its Project, or take it out. Only open (not `Done`), non-archived Tickets can be planned, and a Ticket is in at most one Cycle that is not `Archived`. A member that becomes `Done` or is archived stays in its Cycle.
+  - `plan_ticket`, `unplan_ticket`: put a Ticket into a Prepared or Active Cycle of its Project, or take it out. Any non-archived Ticket can be planned, `Done` ones included to record finished work, and a Ticket is in at most one Cycle that is not `Archived`. A member that becomes `Done` or is archived stays in its Cycle.
   - `list_tickets` with `cycleId`: the Tickets of one Cycle, or with `cycleId: null` the Backlog, the Tickets in no Prepared or Active Cycle.
   - `start_cycle`: make a Prepared Cycle `Active`. While another Cycle is Active it is refused; pass `confirmArchiveActive: true` only after the User agrees, which archives the Active Cycle and rolls its open, non-archived Tickets into the started one in one step.
   - `archive_cycle`: archive the Active Cycle, finished or not. Its Tickets keep their Status; its unfinished ones return to the Backlog.

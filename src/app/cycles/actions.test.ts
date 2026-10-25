@@ -142,7 +142,7 @@ describe('Cycle actions', () => {
   it("returns the module's reason a change was refused", async () => {
     const { tickets, project, ticket } = appWithTicket();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    tickets.updateTicket(ticket.number, { status: 'Done' });
+    tickets.archiveTicket(ticket.number);
 
     await expect(
       createCycle({ projectId: project.id, title: '' }),
@@ -155,7 +155,7 @@ describe('Cycle actions', () => {
       planTicket({ cycleId: cycle.id, number: ticket.number }),
     ).resolves.toEqual({
       ok: false,
-      error: `Ticket #${ticket.number} is Done. Only open Tickets can be planned into a Cycle.`,
+      error: `Ticket #${ticket.number} is archived. Restore it before planning it into a Cycle.`,
     });
   });
 });

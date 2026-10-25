@@ -100,20 +100,37 @@ describe('CyclePlanner', () => {
     ).toBeInTheDocument();
   });
 
-  it.each([
-    ['Done', { ...open, status: 'Done' as const }],
-    ['archived', { ...open, archived: true }],
-  ])('does not offer to plan a %s Ticket', (_kind, ticket) => {
+  it('plans a Done Ticket, to record finished work', async () => {
+    vi.mocked(planTicket).mockResolvedValue({ ok: true });
     renderWithTheme(
       <CyclePlanner
-        ticket={ticket}
+        ticket={{ ...open, status: 'Done' }}
+        cycles={[cycle({ id: 7, title: 'Beta' })]}
+      />,
+    );
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Plan into a Cycle' }),
+      'Beta',
+    );
+
+    expect(planTicket).toHaveBeenCalledExactlyOnceWith({
+      cycleId: 7,
+      number: 12,
+    });
+  });
+
+  it('does not offer to plan an archived Ticket', () => {
+    renderWithTheme(
+      <CyclePlanner
+        ticket={{ ...open, archived: true }}
         cycles={[cycle({ id: 7, title: 'Beta' })]}
       />,
     );
 
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Only open Tickets can be planned into a Cycle.'),
+      screen.getByText('Restore this Ticket to plan it into a Cycle.'),
     ).toBeInTheDocument();
   });
 
@@ -128,7 +145,7 @@ describe('CyclePlanner', () => {
     vi.mocked(planTicket).mockResolvedValue({
       ok: false,
       error:
-        'Ticket #12 is Done. Only open Tickets can be planned into a Cycle.',
+        'Ticket #12 is archived. Restore it before planning it into a Cycle.',
     });
     renderWithTheme(
       <CyclePlanner ticket={open} cycles={[cycle({ id: 7, title: 'Beta' })]} />,
@@ -140,7 +157,7 @@ describe('CyclePlanner', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Ticket #12 is Done. Only open Tickets can be planned into a Cycle.',
+      'Ticket #12 is archived. Restore it before planning it into a Cycle.',
     );
   });
 });
