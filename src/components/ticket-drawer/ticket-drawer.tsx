@@ -60,9 +60,11 @@ import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
+import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
+import { TicketOrigin } from '../ticket-origin/ticket-origin';
 import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
 import { useIsShown } from './use-is-shown';
@@ -634,6 +636,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 <TicketEpic ticket={ticket} />
               </Detail>
             )}
+            <Detail name={<DetailName>Origin</DetailName>}>
+              <TicketOrigin ticket={ticket} />
+            </Detail>
             <Detail name={<DetailName>Cycle</DetailName>}>
               <CyclePlanner ticket={{ ...ticket, archived }} cycles={cycles} />
             </Detail>
@@ -692,6 +697,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               items={ticket.children}
             />
           )}
+          {ticket.splitOff.length > 0 && (
+            <SplitOffTickets items={ticket.splitOff} />
+          )}
           <DescriptionField
             description={fields.description}
             onSave={save}
@@ -744,7 +752,8 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 /**
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
  * in-place editable heading, its Status, Project, Epic (or that it is an
- * Epic), Cycle, labels and Blockers, an Epic's child Tickets, its Markdown
+ * Epic), Origin, Cycle, labels and Blockers, an Epic's child Tickets, the
+ * Tickets split from it, its Markdown
  * description, acceptance criteria and comments, and a footer with its
  * timestamps, Archive and Delete.
  * Each field saves on its own when the User finishes with it, shows the new

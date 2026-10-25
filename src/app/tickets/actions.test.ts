@@ -18,6 +18,7 @@ import {
   removeTicketLabel,
   restoreTicket,
   setTicketAcceptanceCriteria,
+  setTicketOrigin,
   updateTicket,
 } from './actions';
 
@@ -397,6 +398,52 @@ describe('Ticket actions', () => {
       fieldErrors: {
         acceptanceCriteria: 'Enter text for each acceptance criterion.',
       },
+    });
+  });
+
+  it("sets and clears a Ticket's Origin and refreshes the Boards whose drawers show it", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const set = await setTicketOrigin({
+      number: ticket.number,
+      originNumber: spec.number,
+    });
+    const origin = tickets.getTicket(ticket.number).origin;
+    const cleared = await setTicketOrigin({
+      number: ticket.number,
+      originNumber: null,
+    });
+
+    expect(set).toEqual({ ok: true });
+    expect(origin?.number).toBe(spec.number);
+    expect(cleared).toEqual({ ok: true });
+    expect(tickets.getTicket(ticket.number).origin).toBeNull();
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(revalidatePath).toHaveBeenCalledWith(
+      '/project/[id]/cycle/[cycleId]',
+      'page',
+    );
+  });
+
+  it('returns why an Origin was refused', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setTicketOrigin({
+      number: ticket.number,
+      originNumber: ticket.number,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'A Ticket cannot be its own Origin.',
+      fieldErrors: { originNumber: 'A Ticket cannot be its own Origin.' },
     });
   });
 });

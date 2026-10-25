@@ -59,6 +59,8 @@ const ticket = (number: number): Ticket => ({
   type: 'Ticket',
   epic: null,
   children: [],
+  origin: null,
+  splitOff: [],
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-01-01'),

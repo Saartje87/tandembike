@@ -35,6 +35,13 @@ export const tickets = sqliteTable(
     epicNumber: integer('epic_number').references(
       (): AnySQLiteColumn => tickets.number,
     ),
+    /**
+     * The Ticket this one was split from, in any Project, or null. The
+     * Tickets module keeps Origin chains from looping.
+     */
+    originNumber: integer('origin_number').references(
+      (): AnySQLiteColumn => tickets.number,
+    ),
     projectId: integer('project_id')
       .notNull()
       .references(() => projects.id),
@@ -48,6 +55,7 @@ export const tickets = sqliteTable(
   (table) => [
     index('tickets_project_id').on(table.projectId),
     index('tickets_epic_number').on(table.epicNumber),
+    index('tickets_origin_number').on(table.originNumber),
   ],
 );
 

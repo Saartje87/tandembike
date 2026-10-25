@@ -18,6 +18,8 @@ const ticket = {
   type: 'Ticket' as const,
   epic: null,
   children: [],
+  origin: null,
+  splitOff: [],
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-01-01'),

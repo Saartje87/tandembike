@@ -74,6 +74,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
     expect(instructions).toMatch(/list_cycles/);
     expect(instructions).toMatch(/plan_tickets/);
+    expect(instructions).toMatch(/split.*originNumber/);
     await client.close();
   });
 
@@ -1318,6 +1319,134 @@ describe('Epic tools', () => {
       type: 'Epic',
       title: 'Pay',
     });
+    await client.close();
+  });
+});
+
+describe('Origin tools', () => {
+  it('creates Tickets split from an Origin, one by one and in a batch, and gets both sides', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const spec = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout spec',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const first = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: {
+          projectId: project.id,
+          title: 'Pay',
+          originNumber: spec.number,
+        },
+      }),
+    );
+    await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        originNumber: spec.number,
+        tickets: [{ title: 'Refund' }],
+      },
+    });
+
+    expect(first).toMatchObject({
+      origin: { number: spec.number, title: 'Checkout spec', status: 'Todo' },
+    });
+    expect(
+      resultJson(
+        await client.callTool({
+          name: 'get_ticket',
+          arguments: { number: spec.number },
+        }),
+      ),
+    ).toMatchObject({
+      origin: null,
+      splitOff: [
+        { number: 2, title: 'Pay', status: 'Todo', archived: false },
+        { number: 3, title: 'Refund', status: 'Todo', archived: false },
+      ],
+    });
+    await client.close();
+  });
+
+  it('changes and clears an Origin with update_ticket', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    tickets.createTicket({ projectId: project.id, title: 'Other spec' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay',
+      originNumber: 1,
+    });
+    const client = await connectMcpClient(tickets);
+
+    const moved = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 3, originNumber: 2 },
+      }),
+    );
+    const cleared = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 3, originNumber: null },
+      }),
+    );
+
+    expect(moved).toMatchObject({ origin: { number: 2 } });
+    expect(cleared).toMatchObject({ origin: null });
+    await client.close();
+  });
+
+  it('finds the ready Tickets split from an Origin', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    tickets.createTicketBatch({
+      projectId: project.id,
+      originNumber: 1,
+      tickets: [{ title: 'Pay' }, { title: 'Refund', status: 'Done' }],
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Unrelated' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'list_tickets',
+      arguments: { originNumber: 1, status: 'Todo' },
+    });
+
+    expect(
+      (resultJson(result) as { tickets: { number: number }[] }).tickets.map(
+        ({ number }) => number,
+      ),
+    ).toEqual([2]);
+    await client.close();
+  });
+
+  it('refuses an Origin chain that would loop', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay',
+      originNumber: 1,
+    });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 1, originNumber: 2 },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(
+      /#2 cannot be the Origin of #1, because #1 is already an Origin of #2/,
+    );
     await client.close();
   });
 });
