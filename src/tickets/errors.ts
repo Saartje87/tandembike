@@ -8,6 +8,9 @@ export class TicketsError extends Error {
 
 export type FieldErrors = Record<string, string>;
 
+/** A Ticket a batch left unchanged, and the message saying why. */
+export type BatchFailure = { number: number; error: string };
+
 /** The input broke one or more rules; `fieldErrors` says which and why. */
 export class ValidationError extends TicketsError {
   override name = 'ValidationError';

@@ -4,20 +4,19 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { isAllowedHost } from '../http/allowed-host';
-import { TicketsError } from '../tickets/errors';
+import { type BatchFailure, TicketsError } from '../tickets/errors';
+import { maxBatchSize } from '../tickets/rules';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 import {
   defaultPageSize,
   maxAcceptanceCriteria,
   maxAcceptanceCriterionLength,
-  maxBatchSize,
   maxCommentLength,
   maxPageSize,
   type Tickets,
   ticketDetails,
   ticketSorts,
-  type UpdateTicketsResult,
 } from '../tickets/tickets';
 
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
@@ -32,7 +31,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - To create several related Tickets at once, use create_tickets: list them in dependency order and give each one's Blockers as blockedByPositions, the positions of earlier Tickets in the list. It creates all of them or none.
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
-- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. The Backlog is the Tickets in no Prepared or Active Cycle: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them, and plan_tickets and unplan_tickets change up to ${maxBatchSize} Tickets of one Cycle in one call. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. The Backlog is the Tickets in no Prepared or Active Cycle: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
 - To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go. Deliver the whole Epic on one branch and PR named after the Epic.
 - Errors explain what was wrong with the input; fix it and try again.`;
@@ -111,6 +110,12 @@ const cycleId = z
   .positive()
   .describe('The id of a Cycle, as returned by list_cycles or create_cycle.');
 
+const batchTicketNumbers = z
+  .array(ticketNumber)
+  .describe(
+    `The Ticket numbers, each once, from 1 to ${maxBatchSize} of them.`,
+  );
+
 const cycleTitle = z
   .string()
   .describe(
@@ -172,7 +177,7 @@ function respond(call: () => unknown): CallToolResult {
  * Like `respond`, but for a batch result: it is a tool error, still listing
  * what changed, when any Ticket in `failed` was left unchanged.
  */
-function respondBatch(call: () => UpdateTicketsResult): CallToolResult {
+function respondBatch(call: () => { failed: BatchFailure[] }): CallToolResult {
   try {
     const batch = call();
     return { ...jsonResult(batch), isError: batch.failed.length > 0 };
@@ -509,11 +514,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
       title: 'Update Tickets',
       description: `Apply the same Status and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: the changed Tickets, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
-        ticketNumbers: z
-          .array(ticketNumber)
-          .describe(
-            `The Ticket numbers to change, each once, from 1 to ${maxBatchSize} of them.`,
-          ),
+        ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
         addLabels,
         removeLabels,
@@ -804,6 +805,30 @@ export function createMcpServer(tickets: Tickets): McpServer {
     },
     ({ cycleId, number }) =>
       respond(() => tickets.unplanTicket({ cycleId, number })),
+  );
+
+  server.registerTool(
+    'plan_tickets',
+    {
+      title: 'Plan Tickets into Cycle',
+      description: `Plan each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, into one Prepared or Active Cycle, by the rules of plan_ticket; a Ticket already in that Cycle counts as planned. Each Ticket's change is atomic; the batch is not. Returns { updated, failed, cycle }: the planned Ticket numbers, the number and error of each Ticket left unplanned, and the Cycle. If any Ticket failed the result is an error, but the Tickets in updated were still planned. A missing or Archived Cycle, or a bad list of numbers, is refused and changes nothing.`,
+      inputSchema: { cycleId, ticketNumbers: batchTicketNumbers },
+      annotations: { idempotentHint: true },
+    },
+    ({ cycleId, ticketNumbers }) =>
+      respondBatch(() => tickets.planTickets({ cycleId, ticketNumbers })),
+  );
+
+  server.registerTool(
+    'unplan_tickets',
+    {
+      title: 'Unplan Tickets from Cycle',
+      description: `Take each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, out of one Prepared or Active Cycle, back to the Backlog, by the rules of unplan_ticket. Returns { updated, failed, cycle } as plan_tickets does, and is an error when any Ticket failed, though the Tickets in updated were still unplanned. A missing or Archived Cycle, or a bad list of numbers, is refused and changes nothing.`,
+      inputSchema: { cycleId, ticketNumbers: batchTicketNumbers },
+      annotations: { idempotentHint: true },
+    },
+    ({ cycleId, ticketNumbers }) =>
+      respondBatch(() => tickets.unplanTickets({ cycleId, ticketNumbers })),
   );
 
   server.registerTool(

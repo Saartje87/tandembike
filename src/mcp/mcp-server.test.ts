@@ -33,6 +33,7 @@ describe('MCP server', () => {
       'list_projects',
       'list_tickets',
       'plan_ticket',
+      'plan_tickets',
       'release_ticket_claim',
       'remove_blocker',
       'remove_comment',
@@ -43,6 +44,7 @@ describe('MCP server', () => {
       'set_acceptance_criteria_checked',
       'start_cycle',
       'unplan_ticket',
+      'unplan_tickets',
       'update_ticket',
       'update_tickets',
     ]);
@@ -72,6 +74,8 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
     expect(instructions).toMatch(/list_cycles/);
     expect(instructions).toMatch(/confirmArchiveActive/);
+    expect(instructions).toMatch(/plan_tickets/);
+    expect(instructions).toMatch(/unplan_tickets/);
     await client.close();
   });
 
@@ -1610,6 +1614,69 @@ describe('Cycle tools', () => {
     expect(resultJson(unplanned)).toMatchObject({ ticketNumbers: [1] });
     expect(await numbers(cycle.id)).toEqual([1]);
     expect(await numbers(null)).toEqual([2, 3]);
+    await client.close();
+  });
+
+  it('plans and unplans several Tickets in one call each', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const planned = await client.callTool({
+      name: 'plan_tickets',
+      arguments: { cycleId: cycle.id, ticketNumbers: [3, 1, 2] },
+    });
+    const unplanned = await client.callTool({
+      name: 'unplan_tickets',
+      arguments: { cycleId: cycle.id, ticketNumbers: [2] },
+    });
+
+    expect(planned.isError).toBe(false);
+    expect(resultJson(planned)).toMatchObject({
+      updated: [3, 1, 2],
+      failed: [],
+      cycle: { id: cycle.id, ticketNumbers: [1, 2, 3] },
+    });
+    expect(resultJson(unplanned)).toMatchObject({
+      updated: [2],
+      failed: [],
+      cycle: { id: cycle.id, ticketNumbers: [1, 3] },
+    });
+    await client.close();
+  });
+
+  it('reports a partly failed plan_tickets or unplan_tickets call as an error', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const planned = await client.callTool({
+      name: 'plan_tickets',
+      arguments: { cycleId: cycle.id, ticketNumbers: [1, 42] },
+    });
+    const unplanned = await client.callTool({
+      name: 'unplan_tickets',
+      arguments: { cycleId: cycle.id, ticketNumbers: [2, 1] },
+    });
+    const refused = await client.callTool({
+      name: 'plan_tickets',
+      arguments: { cycleId: 99, ticketNumbers: [1] },
+    });
+
+    expect(planned.isError).toBe(true);
+    expect(JSON.parse(resultText(planned))).toMatchObject({
+      updated: [1],
+      failed: [{ number: 42, error: 'There is no Ticket #42.' }],
+      cycle: { ticketNumbers: [1] },
+    });
+    expect(unplanned.isError).toBe(true);
+    expect(JSON.parse(resultText(unplanned))).toMatchObject({
+      updated: [1],
+      failed: [
+        { number: 2, error: 'Ticket #2 is not planned into the Cycle "Beta".' },
+      ],
+      cycle: { ticketNumbers: [] },
+    });
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toBe('There is no Cycle with id 99.');
     await client.close();
   });
 
