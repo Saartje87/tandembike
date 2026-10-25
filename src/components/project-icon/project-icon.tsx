@@ -1,3 +1,5 @@
+'use client';
+
 import { Box } from '@blockle/blocks';
 import type { FC } from 'react';
 
