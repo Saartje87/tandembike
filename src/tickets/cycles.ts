@@ -132,6 +132,20 @@ function withTicketNumbers(db: DatabaseConnection, rows: CycleRow[]): Cycle[] {
 }
 
 /**
+ * The Cycle among `cycles` that Ticket `number` is planned into and that is
+ * not Archived: the tab it shows on. `undefined` when it is in the Backlog.
+ */
+export function openCycleOf(
+  cycles: readonly Cycle[],
+  number: number,
+): Cycle | undefined {
+  return cycles.find(
+    ({ state, ticketNumbers }) =>
+      state !== 'Archived' && ticketNumbers.includes(number),
+  );
+}
+
+/**
  * A subquery of the Ticket numbers in Cycle `cycleId`, or with `null`, in
  * any Cycle that is not Archived: what `listTickets` filters by.
  */

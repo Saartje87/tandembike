@@ -194,7 +194,8 @@ marker-free ordered list.
 
 **Workaround.** `board.css.ts`, `breadcrumbs.css.ts`, `label-list.css.ts`,
 `ticket-comments.css.ts`, `blocker-editor.css.ts`,
-`acceptance-criteria-editor.css.ts` and `epic-children.css.ts` each use
+`acceptance-criteria-editor.css.ts`, `epic-children.css.ts` and
+`delete-ticket-dialog.css.ts` each use
 `style({ listStyle: 'none' })`, passed as `className` to the list component.
 
 **Question.** Should `Stack`/`Inline` with a list `tag` drop the markers by
@@ -373,7 +374,8 @@ the title (which turns into an input), the description's Save and Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
 banner's Restore all need it. The header's copy button for the Ticket
 number (#34, `copy-ticket-number.tsx`) swaps its text and icon on click and
-calls it too.
+calls it too. The delete dialog's Cancel (#60, `delete-ticket-dialog.tsx`)
+unmounts the dialog's content inside the drawer, so it calls it as well.
 
 **Question.** Should `useClickOutside` decide from where the interaction
 began, so unmounting the target is safe?
@@ -537,7 +539,9 @@ The header's Project drawer (#30) does nest one: `ProjectNav`'s "New Project"
 unmount the dialog with it. `AppHeader` works around it: its
 `onRequestClose` does nothing while a `dialog[open]` is open inside the
 drawer, relying on the drawer's `document` listener running before the
-dialog's, because the drawer opened first.
+dialog's, because the drawer opened first. The ticket drawer does the same
+for its Delete confirmation (#60): `requestClose` returns early while
+`dialog[data-ticket-drawer] dialog[open]` matches.
 
 **Question.** Should overlays listen for Escape on themselves, pass a reason
 to `onRequestClose`, and should `Drawer` join `Dialog`'s nesting context?

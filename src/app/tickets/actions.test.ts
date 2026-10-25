@@ -23,7 +23,10 @@ import {
 } from './actions';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  redirect: vi.fn(),
+  RedirectType: { push: 'push', replace: 'replace' },
+}));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 describe('Ticket actions', () => {
@@ -46,8 +49,8 @@ describe('Ticket actions', () => {
 
     expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
     expect(vi.mocked(redirect).mock.calls).toEqual([
-      [`/project/${project.id}/cycle/${cycle.id}`],
-      [`/project/${project.id}`],
+      [`/project/${project.id}/cycle/${cycle.id}`, 'replace'],
+      [`/project/${project.id}`, 'replace'],
     ]);
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
   });

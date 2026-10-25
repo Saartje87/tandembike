@@ -1200,6 +1200,16 @@ describe('TicketDrawer', () => {
         ).toBeInTheDocument();
       },
     );
+
+    it('stays open while the Delete dialog takes an Escape', async () => {
+      renderDrawer();
+
+      await userEvent.click(button('Delete'));
+      await userEvent.keyboard('{Escape}');
+
+      expect(router.push).not.toHaveBeenCalled();
+      expect(router.back).not.toHaveBeenCalled();
+    });
   });
 
   it("closes to the Ticket's Board", async () => {

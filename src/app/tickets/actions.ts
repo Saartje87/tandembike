@@ -1,9 +1,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
+import { RedirectType, redirect } from 'next/navigation';
 
 import { appTickets } from '../../tickets/app-tickets';
+import { openCycleOf } from '../../tickets/cycles';
 import type { EpicChildInput } from '../../tickets/epics';
 import { ValidationError } from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
@@ -183,10 +184,10 @@ export type DeleteTicketResult = ActionResult;
 
 /**
  * Deletes a Ticket for good as the User (ADR 0012) and sends them to the
- * Board it was on: its open Cycle's, or the Backlog. Redirecting, rather
- * than navigating once the result is back, keeps the page from rendering
- * the deleted Ticket first. A refusal comes back as `error`, like
- * `createTicket`.
+ * Board it was on: its open Cycle's, or the Backlog, in place of the
+ * Ticket's URL. Redirecting, rather than navigating once the result is back,
+ * keeps the page from rendering the deleted Ticket first. A refusal comes
+ * back as `error`, like `createTicket`.
  */
 export async function deleteTicket(input: {
   number: number;
@@ -195,12 +196,7 @@ export async function deleteTicket(input: {
     const tickets = appTickets();
     const number = Number(input?.number);
     const { projectId } = tickets.getTicket(number);
-    const cycle = tickets
-      .listCycles(projectId)
-      .find(
-        ({ state, ticketNumbers }) =>
-          state !== 'Archived' && ticketNumbers.includes(number),
-      );
+    const cycle = openCycleOf(tickets.listCycles(projectId), number);
     tickets.deleteTicket(number);
     revalidatePath(projectPath(projectId));
     revalidatePath(cycleRoute, 'page');
@@ -212,7 +208,8 @@ export async function deleteTicket(input: {
     };
   });
   if (result.ok) {
-    redirect(result.boardPath);
+    // Replace the deleted Ticket's URL, so Back does not lead to it.
+    redirect(result.boardPath, RedirectType.replace);
   }
   return result;
 }

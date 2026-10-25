@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../../components/ticket-drawer/ticket-drawer';
+import { openCycleOf } from '../../../../../tickets/cycles';
 import { cyclePath, projectPath } from '../../../../lib/paths';
 import { ProjectBoard } from '../../project-board/project-board';
 import { loadProjectTicket, type ProjectTicketPageProps } from './ticket-data';
@@ -18,10 +19,7 @@ const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
   const { ticket, project, tickets, epicClaim } =
     await loadProjectTicket(params);
   const cycles = tickets.listCycles(project.id);
-  const cycle = cycles.find(
-    ({ state, ticketNumbers }) =>
-      state !== 'Archived' && ticketNumbers.includes(ticket.number),
-  );
+  const cycle = openCycleOf(cycles, ticket.number);
   return (
     <>
       <ProjectBoard
