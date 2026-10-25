@@ -126,16 +126,3 @@ export function withOrigins<
     splitOff: splitOffByNumber.get(row.number) ?? [],
   }));
 }
-
-/** The Ticket numbers whose Origin is Ticket `number`. */
-export function splitOffNumbers(
-  db: DatabaseConnection,
-  number: number,
-): number[] {
-  return db
-    .select({ number: tickets.number })
-    .from(tickets)
-    .where(eq(tickets.originNumber, number))
-    .all()
-    .map((split) => split.number);
-}

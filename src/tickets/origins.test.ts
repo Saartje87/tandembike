@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import type { Change } from './changes';
@@ -358,5 +358,109 @@ describe('Finding the Tickets split from an Origin', () => {
     ]);
     expect(ready.tickets.map(({ number }) => number)).toEqual([card.number]);
     expect(ready.total).toBe(1);
+  });
+});
+
+describe("Bumping an Origin's updated time", () => {
+  const at = (hour: number) =>
+    new Date(`2026-03-01T${String(hour).padStart(2, '0')}:00:00Z`);
+
+  it('bumps the Origin whenever its split-off Tickets change', () => {
+    vi.useFakeTimers({ now: at(9) });
+    try {
+      const { tickets, project, spec } = setUp();
+      const other = tickets.createTicket({
+        projectId: project.id,
+        title: 'Invoice spec',
+      });
+      vi.setSystemTime(at(10));
+      const split = tickets.createTicket({
+        projectId: project.id,
+        title: 'Pay by card',
+        originNumber: spec.number,
+      });
+      expect(tickets.getTicket(spec.number).updatedAt).toEqual(at(10));
+
+      vi.setSystemTime(at(11));
+      tickets.updateTicket(split.number, { originNumber: other.number });
+      expect(tickets.getTicket(spec.number).updatedAt).toEqual(at(11));
+      expect(tickets.getTicket(other.number).updatedAt).toEqual(at(11));
+
+      vi.setSystemTime(at(12));
+      tickets.createTicketBatch({
+        projectId: project.id,
+        originNumber: spec.number,
+        tickets: [{ title: 'Refund' }],
+      });
+      expect(tickets.getTicket(spec.number).updatedAt).toEqual(at(12));
+
+      vi.setSystemTime(at(13));
+      tickets.deleteTicket(split.number);
+      expect(tickets.getTicket(other.number).updatedAt).toEqual(at(13));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('What an Origin leaves alone', () => {
+  it('lets an Epic have an Origin and be one', () => {
+    const { tickets, project, spec } = setUp();
+
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+      originNumber: spec.number,
+    });
+    const split = tickets.createTicket({
+      projectId: project.id,
+      title: 'Card form',
+      originNumber: epic.number,
+    });
+
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      origin: { number: spec.number },
+      splitOff: [{ number: split.number }],
+      status: 'Todo',
+      children: [],
+    });
+  });
+
+  it("keeps a split-off Ticket's Status and Claim to itself", () => {
+    const { tickets, project, spec } = setUp();
+    const split = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      originNumber: spec.number,
+    });
+
+    tickets.claimTicket(spec.number, { agentRunId: 'run-1' });
+    tickets.updateTicket(spec.number, { status: 'Done' });
+    tickets.claimTicket(split.number, { agentRunId: 'run-2' });
+
+    expect(tickets.getTicket(split.number)).toMatchObject({
+      status: 'Todo',
+      claim: { agentRunId: 'run-2' },
+      blocked: false,
+    });
+  });
+
+  it('announces the Origin of a deleted split-off Ticket', () => {
+    const { tickets, project, spec } = setUp();
+    const split = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      originNumber: spec.number,
+    });
+    const announced: Change[] = [];
+    tickets.subscribe((change) => announced.push(change));
+
+    tickets.deleteTicket(split.number);
+
+    expect(announced).toEqual([
+      { type: 'tickets', numbers: [split.number, spec.number] },
+    ]);
+    expect(tickets.getTicket(spec.number).splitOff).toEqual([]);
   });
 });

@@ -753,9 +753,8 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
  * in-place editable heading, its Status, Project, Epic (or that it is an
  * Epic), Origin, Cycle, labels and Blockers, an Epic's child Tickets, the
- * Tickets split from it, its Markdown
- * description, acceptance criteria and comments, and a footer with its
- * timestamps, Archive and Delete.
+ * Tickets split from it, its Markdown description, acceptance criteria and
+ * comments, and a footer with its timestamps, Archive and Delete.
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. Closing
  * (the Close button, Escape or a click outside) goes to the Ticket's Board,

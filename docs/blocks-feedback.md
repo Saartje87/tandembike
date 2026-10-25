@@ -194,9 +194,11 @@ marker-free ordered list.
 
 **Workaround.** `board.css.ts`, `breadcrumbs.css.ts`, `label-list.css.ts`,
 `ticket-comments.css.ts`, `blocker-editor.css.ts`,
-`acceptance-criteria-editor.css.ts`, `epic-children.css.ts` and
-`delete-ticket-dialog.css.ts` each use
-`style({ listStyle: 'none' })`, passed as `className` to the list component.
+`acceptance-criteria-editor.css.ts`, `epic-children.css.ts`,
+`delete-ticket-dialog.css.ts`, `cycle-history.css.ts`,
+`cycle-ticket-list.css.ts`, `project-tabs.css.ts` and
+`split-off-tickets.css.ts` each use `style({ listStyle: 'none' })`, passed as
+`className` to the list component.
 
 **Question.** Should `Stack`/`Inline` with a list `tag` drop the markers by
 default, or should Blocks add a `listStyle` atom (`none`)?

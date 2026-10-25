@@ -1113,10 +1113,14 @@ export function createTickets(
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
+        if (input.originNumber !== undefined) {
+          touchTicket(db, input.originNumber);
+        }
         syncEpicStatus(db, input.epicNumber ?? null);
         return number;
       });
-      // A child changes its Epic's children, and maybe its Status.
+      // A child changes its Epic's children, and maybe its Status; a split-off
+      // Ticket changes its Origin's.
       publishWith(number, input.epicNumber ?? null, input.originNumber ?? null);
       return getTicket(number);
     },
@@ -1181,6 +1185,9 @@ export function createTickets(
               .run();
           }
           created.push(number);
+        }
+        if (originNumber !== null) {
+          touchTicket(db, originNumber);
         }
         syncEpicStatus(db, epicNumber);
         return created;
@@ -1688,6 +1695,11 @@ export function createTickets(
           for (const blocked of unblocked) {
             touchTicket(db, blocked);
           }
+          for (const { origin } of removals) {
+            if (origin != null && !deleted.includes(origin)) {
+              touchTicket(db, origin);
+            }
+          }
           if (epic !== null) {
             touchTicket(db, epic.number);
             syncEpicStatus(db, epic.number);
@@ -1701,8 +1713,10 @@ export function createTickets(
             ],
             // Split-off Tickets that stay, and Origins that lose one.
             unlinked: removals
-              .flatMap((removal) => [...removal.unlinked, removal.origin ?? []])
-              .flat()
+              .flatMap(({ unlinked, origin }) => [
+                ...unlinked,
+                ...(origin == null ? [] : [origin]),
+              ])
               .filter((other) => !deleted.includes(other)),
           };
         });
@@ -1821,6 +1835,11 @@ export function createTickets(
         values.originNumber === existing.originNumber
           ? []
           : [existing.originNumber, values.originNumber];
+      for (const origin of changedOrigins) {
+        if (origin !== null) {
+          touchTicket(db, origin);
+        }
+      }
       db.update(tickets)
         .set({
           ...values,
@@ -2048,8 +2067,8 @@ function checkedLabels(labels: readonly string[]): string[] {
  * Comments, acceptance criteria, Blockers on both sides and Cycle
  * membership. The Tickets split from it lose their Origin and are bumped.
  * Run it in the deleting transaction. Returns the Tickets it blocked, the
- * Cycles it left, the Tickets split from it and its own Origin, for the
- * caller to bump and announce.
+ * Cycles it left, the Tickets split from it and its own Origin: the caller
+ * announces them all, and bumps the ones it blocked and its Origin.
  */
 function removeTicket(db: DatabaseConnection, number: number) {
   db.delete(ticketLabels).where(eq(ticketLabels.ticketNumber, number)).run();
