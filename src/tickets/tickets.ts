@@ -1628,36 +1628,19 @@ export function createTickets(
       const { children, unblocked, epic, leftCycles } = db.transaction(() => {
         const { epic, children } = getTicket(number);
         const childNumbers = children.map((child) => child.number);
-        const removed = new Set([
-          number,
-          ...(withChildren ? childNumbers : []),
-        ]);
-        const unblocked = new Set<number>();
-        const leftCycles = new Set<number>();
-        const remove = (doomed: number) => {
-          const gone = removeTicket(db, doomed);
-          for (const blocked of gone.unblocked) {
-            unblocked.add(blocked);
-          }
-          for (const id of gone.leftCycles) {
-            leftCycles.add(id);
-          }
-        };
-        if (withChildren) {
-          childNumbers.forEach(remove);
-        } else if (childNumbers.length > 0) {
+        if (!withChildren) {
           db.update(tickets)
             .set({ epicNumber: null, updatedAt: new Date() })
             .where(eq(tickets.epicNumber, number))
             .run();
         }
-        remove(number);
+        const deleted = withChildren ? [...childNumbers, number] : [number];
+        const removals = deleted.map((doomed) => removeTicket(db, doomed));
+        const unblocked = [
+          ...new Set(removals.flatMap((removal) => removal.unblocked)),
+        ].filter((blocked) => !deleted.includes(blocked));
         for (const blocked of unblocked) {
-          if (removed.has(blocked)) {
-            unblocked.delete(blocked);
-          } else {
-            touchTicket(db, blocked);
-          }
+          touchTicket(db, blocked);
         }
         if (epic !== null) {
           touchTicket(db, epic.number);
@@ -1665,9 +1648,11 @@ export function createTickets(
         }
         return {
           children: childNumbers,
-          unblocked: [...unblocked],
+          unblocked,
           epic,
-          leftCycles: [...leftCycles],
+          leftCycles: [
+            ...new Set(removals.flatMap((removal) => removal.leftCycles)),
+          ],
         };
       });
       changes.publish({
@@ -1982,7 +1967,6 @@ function checkedLabels(labels: readonly string[]): string[] {
   return normalized;
 }
 
-/** Bumps Ticket `number`'s updated time, or says it does not exist. */
 /**
  * Deletes Ticket `number`'s row with everything attached to it: labels,
  * Comments, acceptance criteria, Blockers on both sides and Cycle
@@ -2011,6 +1995,7 @@ function removeTicket(db: DatabaseConnection, number: number) {
   return { unblocked, leftCycles };
 }
 
+/** Bumps Ticket `number`'s updated time, or says it does not exist. */
 function touchTicket(db: DatabaseConnection, number: number) {
   const ticket = db
     .update(tickets)

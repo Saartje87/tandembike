@@ -136,6 +136,7 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
               <Checkbox
                 name="withChildren"
                 checked={withChildren}
+                disabled={pending}
                 onChange={(event) =>
                   setWithChildren(event.currentTarget.checked)
                 }

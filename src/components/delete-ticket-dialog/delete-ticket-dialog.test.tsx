@@ -85,7 +85,7 @@ describe('DeleteTicketDialog', () => {
   it('deletes on confirm, and shows a refusal in the dialog', async () => {
     vi.mocked(deleteTicket).mockResolvedValue({
       ok: false,
-      error: 'Epic #42 still has children. Detach them before deleting it.',
+      error: 'There is no Ticket #42.',
     });
     renderWithTheme(
       <DeleteTicketDialog ticket={ticket} blocks={[]} epicClaim={null} />,
@@ -101,7 +101,7 @@ describe('DeleteTicketDialog', () => {
       withChildren: false,
     });
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Epic #42 still has children. Detach them before deleting it.',
+      'There is no Ticket #42.',
     );
   });
 

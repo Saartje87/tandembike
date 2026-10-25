@@ -677,7 +677,9 @@ useful `name`), which makes sense inside a form but not for a control that
 saves on its own.
 
 **Workaround.** `acceptance-criteria-editor.tsx` passes a made-up
-`name={`criterion-${criterion.id}`}`.
+`name={`criterion-${criterion.id}`}`, and the delete dialog's "Also delete
+its children" checkbox (#62, `delete-ticket-dialog.tsx`) passes
+`name="withChildren"`.
 
 **Question.** Is `name` required on purpose? If so, can the docs say why?
 
