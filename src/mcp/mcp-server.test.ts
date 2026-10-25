@@ -677,7 +677,11 @@ describe('Ticket tools', () => {
 
     const created = await client.callTool({
       name: 'create_ticket',
-      arguments: { projectName: 'website', title: 'Fix the header' },
+      arguments: {
+        projectName: 'website',
+        title: 'Fix the header',
+        detail: 'full',
+      },
     });
     const listed = await client.callTool({
       name: 'list_tickets',
@@ -751,7 +755,6 @@ describe('Ticket tools', () => {
     expect(resultJson(result)).toMatchObject({
       number: 1,
       title: 'Fix the header',
-      description: 'It overlaps the logo.',
       status: 'In progress',
     });
     expect(tickets.getTicket(1)).toMatchObject({
@@ -771,7 +774,7 @@ describe('Ticket tools', () => {
     const move = (args: Record<string, unknown>) =>
       client.callTool({
         name: 'update_ticket',
-        arguments: { number: 1, ...args },
+        arguments: { number: 1, detail: 'full', ...args },
       });
 
     const stale = await move({ projectName: 'Ticket' });
@@ -1286,19 +1289,25 @@ describe('Epic tools', () => {
           title: 'Checkout',
           type: 'Epic',
           color: 'teal',
+          detail: 'full',
         },
       }),
     );
     const other = resultJson(
       await client.callTool({
         name: 'create_ticket',
-        arguments: { projectId: project.id, title: 'Search', type: 'Epic' },
+        arguments: {
+          projectId: project.id,
+          title: 'Search',
+          type: 'Epic',
+          detail: 'full',
+        },
       }),
     );
     const recoloured = resultJson(
       await client.callTool({
         name: 'update_ticket',
-        arguments: { number: 1, color: 'pink' },
+        arguments: { number: 1, color: 'pink', detail: 'full' },
       }),
     );
     tickets.createTicket({ projectId: project.id, title: 'Fix it' });
@@ -1364,13 +1373,19 @@ describe('Epic tools', () => {
           title: 'Checkout',
           description: 'Shared context.',
           type: 'Epic',
+          detail: 'full',
         },
       }),
     );
     const first = resultJson(
       await client.callTool({
         name: 'create_ticket',
-        arguments: { projectId: project.id, title: 'Pay', epicNumber: 1 },
+        arguments: {
+          projectId: project.id,
+          title: 'Pay',
+          epicNumber: 1,
+          detail: 'full',
+        },
       }),
     );
     await client.callTool({
@@ -1532,6 +1547,7 @@ describe('Origin tools', () => {
           projectId: project.id,
           title: 'Pay',
           originNumber: spec.number,
+          detail: 'full',
         },
       }),
     );
@@ -1579,13 +1595,13 @@ describe('Origin tools', () => {
     const moved = resultJson(
       await client.callTool({
         name: 'update_ticket',
-        arguments: { number: 3, originNumber: 2 },
+        arguments: { number: 3, originNumber: 2, detail: 'full' },
       }),
     );
     const cleared = resultJson(
       await client.callTool({
         name: 'update_ticket',
-        arguments: { number: 3, originNumber: null },
+        arguments: { number: 3, originNumber: null, detail: 'full' },
       }),
     );
 
@@ -1886,6 +1902,7 @@ describe('Acceptance criteria tools', () => {
           { text: 'The logo is centred' },
           { text: 'The menu collapses on phones', checked: true },
         ],
+        detail: 'full',
       },
     });
     const got = await client.callTool({
@@ -1927,6 +1944,7 @@ describe('Acceptance criteria tools', () => {
           { text: 'The search box is visible' },
           { id: logo.id, text: 'The logo is centred' },
         ],
+        detail: 'full',
       },
     });
 
@@ -2373,6 +2391,256 @@ describe('Cycle tools', () => {
       'The Cycle "App" is in another Project. A Cycle holds only its own Project\'s Tickets.',
     );
     expect(tickets.listTickets()).toHaveLength(3);
+    await client.close();
+  });
+});
+
+describe('Write tool responses', () => {
+  /** A Project with Ticket #1, which has a description and two criteria. */
+  function ticketsWithOne() {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      description: 'A long spec the Agent already holds.',
+      labels: ['bug'],
+      acceptanceCriteria: [{ text: 'Logo visible' }, { text: 'No overlap' }],
+    });
+    return { tickets, project };
+  }
+
+  it('answers update_ticket with a summary, or the whole Ticket in full detail', async () => {
+    const { tickets } = ticketsWithOne();
+    const client = await connectMcpClient(tickets);
+
+    const summary = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 1, status: 'In progress' },
+    });
+    const full = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 1, title: 'Fix the site header', detail: 'full' },
+    });
+
+    expect(resultJson(summary)).toEqual({
+      number: 1,
+      title: 'Fix the header',
+      status: 'In progress',
+      labels: ['bug'],
+      blocked: false,
+    });
+    expect(resultJson(full)).toEqual(
+      JSON.parse(JSON.stringify(tickets.getTicket(1))),
+    );
+    expect(resultJson(full)).toMatchObject({
+      title: 'Fix the site header',
+      description: 'A long spec the Agent already holds.',
+    });
+    await client.close();
+  });
+
+  it('answers create_ticket and the label tools with only a summary', async () => {
+    const { tickets, project } = ticketsWithOne();
+    const client = await connectMcpClient(tickets);
+    const summary = (number: number, labels: string[]) => ({
+      number,
+      title: number === 1 ? 'Fix the header' : 'Fix the footer',
+      status: 'Todo',
+      labels,
+      blocked: false,
+    });
+
+    const created = await client.callTool({
+      name: 'create_ticket',
+      arguments: {
+        projectId: project.id,
+        title: 'Fix the footer',
+        description: 'Long text.',
+      },
+    });
+    const added = await client.callTool({
+      name: 'add_ticket_labels',
+      arguments: { number: 1, labels: ['ui'] },
+    });
+    const removed = await client.callTool({
+      name: 'remove_ticket_labels',
+      arguments: { number: 1, labels: ['bug'] },
+    });
+
+    expect(resultJson(created)).toEqual(summary(2, []));
+    expect(resultJson(added)).toEqual(summary(1, ['bug', 'ui']));
+    expect(resultJson(removed)).toEqual(summary(1, ['ui']));
+    await client.close();
+  });
+
+  it('adds the field a call changed when the summary does not show it', async () => {
+    const { tickets, project } = ticketsWithOne();
+    const blocker = tickets.createTicket({
+      projectId: project.id,
+      title: 'Design the logo',
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      type: 'Epic',
+    });
+    const client = await connectMcpClient(tickets);
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const {
+        number: _number,
+        title: _title,
+        status: _status,
+        labels: _labels,
+        blocked,
+        ...extra
+      } = resultJson(
+        await client.callTool({ name, arguments: args }),
+      ) as Record<string, unknown>;
+      return { blocked, ...extra };
+    };
+
+    expect(
+      await call('add_blocker', { blocker: blocker.number, blocked: 1 }),
+    ).toEqual({
+      blocked: true,
+      blockedBy: [blocker.number],
+    });
+    expect(
+      await call('remove_blocker', { blocker: blocker.number, blocked: 1 }),
+    ).toEqual({ blocked: false, blockedBy: [] });
+    expect(
+      await call('claim_ticket', { number: 1, agentRunId: 'run-1' }),
+    ).toEqual({
+      blocked: false,
+      claim: { agentRunId: 'run-1', agentName: null },
+    });
+    expect(
+      await call('release_ticket_claim', { number: 1, agentRunId: 'run-1' }),
+    ).toEqual({ blocked: false, claim: null });
+    expect(
+      await call('attach_to_epic', { epic: epic.number, ticket: 1 }),
+    ).toEqual({
+      blocked: false,
+      epic: { number: epic.number, title: 'Header', color: epic.color },
+    });
+    expect(await call('detach_from_epic', { number: 1 })).toEqual({
+      blocked: false,
+      epic: null,
+    });
+    expect(await call('archive_ticket', { number: 1 })).toEqual({
+      blocked: false,
+      archived: true,
+    });
+    expect(await call('restore_ticket', { number: 1 })).toEqual({
+      blocked: false,
+      archived: false,
+    });
+    await client.close();
+  });
+
+  it('answers set_acceptance_criteria_checked with only the criteria it named', async () => {
+    const { tickets } = ticketsWithOne();
+    const [first] = tickets.getTicket(1).acceptanceCriteria;
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'set_acceptance_criteria_checked',
+      arguments: { number: 1, criteria: [{ id: first.id, checked: true }] },
+    });
+
+    expect(resultJson(result)).toEqual({
+      number: 1,
+      title: 'Fix the header',
+      status: 'Todo',
+      labels: ['bug'],
+      blocked: false,
+      acceptanceCriteria: [
+        { id: first.id, text: 'Logo visible', checked: true },
+      ],
+    });
+    await client.close();
+  });
+
+  it('lists a summary per changed Ticket from update_tickets, or whole Tickets in full detail', async () => {
+    const { tickets, project } = ticketsWithOne();
+    tickets.createTicket({ projectId: project.id, title: 'Fix the footer' });
+    const client = await connectMcpClient(tickets);
+
+    const summary = await client.callTool({
+      name: 'update_tickets',
+      arguments: { ticketNumbers: [1, 99], status: 'In progress' },
+    });
+    const full = await client.callTool({
+      name: 'update_tickets',
+      arguments: { ticketNumbers: [2], status: 'Done', detail: 'full' },
+    });
+
+    expect(summary.isError).toBe(true);
+    expect(JSON.parse(resultText(summary))).toEqual({
+      updated: [
+        {
+          number: 1,
+          title: 'Fix the header',
+          status: 'In progress',
+          labels: ['bug'],
+          blocked: false,
+        },
+      ],
+      failed: [{ number: 99, error: 'There is no Ticket #99.' }],
+    });
+    expect(resultJson(full)).toEqual({
+      updated: [JSON.parse(JSON.stringify(tickets.getTicket(2)))],
+      failed: [],
+    });
+    await client.close();
+  });
+
+  it('says what each tool that changes a Ticket answers with', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const description = (name: string) =>
+      tools.find((tool) => tool.name === name)?.description ?? '';
+
+    expect(client.getInstructions()).toMatch(
+      /Tools that change a Ticket return its summary; get_ticket reads the whole Ticket\./,
+    );
+    const extras: [tool: string, field: string][] = [
+      ['create_ticket', 'summary'],
+      ['update_ticket', 'summary'],
+      ['update_tickets', 'summary'],
+      ['add_ticket_labels', 'summary'],
+      ['remove_ticket_labels', 'summary'],
+      ['claim_ticket', 'claim'],
+      ['release_ticket_claim', 'claim'],
+      ['attach_to_epic', 'epic'],
+      ['detach_from_epic', 'epic'],
+      ['add_blocker', 'blockedBy'],
+      ['remove_blocker', 'blockedBy'],
+      ['archive_ticket', 'archived'],
+      ['restore_ticket', 'archived'],
+      ['set_acceptance_criteria_checked', 'acceptanceCriteria'],
+    ];
+    for (const [tool, field] of extras) {
+      expect(description(tool), tool).toMatch(/summary/);
+      expect(description(tool), tool).toContain(field);
+      expect(description(tool), tool).toContain('detail: "full"');
+      expect(description(tool), tool).not.toMatch(/and return (it|the)/);
+    }
+    await client.close();
+  });
+
+  it('keeps refusals as they were', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 42, status: 'Done', detail: 'summary' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe('There is no Ticket #42.');
     await client.close();
   });
 });

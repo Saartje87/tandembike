@@ -406,6 +406,20 @@ export type TicketSummary = Pick<
 > &
   Partial<Pick<Ticket, 'projectId'>>;
 
+/** `ticket` as a `TicketSummary`, without its Project. */
+export function ticketSummary({
+  number,
+  title,
+  status,
+  labels,
+  blocked,
+}: Pick<
+  Ticket,
+  'number' | 'title' | 'status' | 'labels' | 'blocked'
+>): TicketSummary {
+  return { number, title, status, labels, blocked };
+}
+
 /** One page of `findTickets`. */
 export type TicketPage = {
   /** Whole Tickets when `detail` is `full`. */
@@ -2628,16 +2642,10 @@ function summaries(
   rows: Pick<Ticket, 'number' | 'title' | 'status' | 'projectId'>[],
   withProject: boolean,
 ): TicketSummary[] {
-  return withBlockers(db, withLabels(db, rows)).map(
-    ({ number, title, status, labels, blocked, projectId }) => ({
-      number,
-      title,
-      status,
-      labels,
-      blocked,
-      ...(withProject ? { projectId } : {}),
-    }),
-  );
+  return withBlockers(db, withLabels(db, rows)).map((row) => ({
+    ...ticketSummary(row),
+    ...(withProject ? { projectId: row.projectId } : {}),
+  }));
 }
 
 /** The columns `withClaimAndLinks` turns into a Ticket's claim and Epic. */
