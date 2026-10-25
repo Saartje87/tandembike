@@ -25,7 +25,7 @@ A Project's Tickets that are in no Prepared or Active Cycle, the work not yet pl
 _Avoid_: Inbox, unplanned list
 
 **Epic**:
-A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them.
+A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out.
 _Avoid_: Feature, parent Ticket, story
 
 **Origin**:
@@ -33,7 +33,7 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in one column per Status.
+The view of one Project's Tickets, laid out in one column per Status. Epics are not in the columns; the Board lists them apart, with their progress.
 _Avoid_: Kanban, dashboard, list
 
 **Status**:
