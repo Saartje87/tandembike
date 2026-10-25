@@ -1,6 +1,6 @@
 # Issue tracker: Local Tandembike app (MCP)
 
-This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike`: use it for all work on this codebase, and do not create a second one. Reach it through its MCP server at `http://localhost:3000/api/mcp` with an MCP-capable client; the app must be running. Use its tools, not `gh`, `glab` or `.scratch/` files, even where a skill describes another tracker. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them.
+This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike`: use it for all work on this codebase, and do not create a second one. Reach it through its MCP server at `http://localhost:4747/api/mcp` with an MCP-capable client; the app must be running. Use its tools, not `gh`, `glab` or `.scratch/` files, even where a skill describes another tracker. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them.
 
 ## When the MCP tools change
 

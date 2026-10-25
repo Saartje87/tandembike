@@ -18,14 +18,22 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser. The
+Open [http://localhost:4747](http://localhost:4747) in your browser. The
 database is created and migrated automatically on first use; there is no
 separate setup step.
+
+The app runs on port 4747 by default, so it does not clash with other Next.js
+projects on the default 3000. To run it on another port once, pass it after
+`--`, for example `npm run dev -- -p 4848` (the same works for
+`npm run start`). If the port is taken, the server stops with an
+"address in use" error instead of moving to another port, because the MCP URL
+is fixed: when you change the port, register the MCP server with the same
+port (`http://localhost:<port>/api/mcp`).
 
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:3000/api/mcp`. This repository's `.mcp.json` registers it
+`http://localhost:4747/api/mcp`. This repository's `.mcp.json` registers it
 for Claude Code in this checkout; to reach it from every repository, register
 it once at user level as described in the next section.
 
@@ -47,24 +55,24 @@ instructions explain how the tracker works, so a repository only needs to
 name its Project (see `docs/adr/0014-server-explains-tracker.md`).
 
 **1. Register the server once, for all repositories.** Keep the app running
-on `localhost:3000`, then register it at user level for each client you use:
+on `localhost:4747`, then register it at user level for each client you use:
 
 - **Claude Code:**
 
   ```bash
-  claude mcp add --scope user --transport http tandembike http://localhost:3000/api/mcp
+  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp
   ```
 
 - **GitHub Copilot CLI:**
 
   ```bash
-  copilot mcp add --transport http tandembike http://localhost:3000/api/mcp
+  copilot mcp add --transport http tandembike http://localhost:4747/api/mcp
   ```
 
   This writes `~/.copilot/mcp-config.json` (or `$COPILOT_HOME/mcp-config.json`).
 
 - **GitHub Copilot in VS Code:** run **MCP: Add Server** from the Command
-  Palette, choose **HTTP**, enter `http://localhost:3000/api/mcp` and the ID
+  Palette, choose **HTTP**, enter `http://localhost:4747/api/mcp` and the ID
   `tandembike`, then **Global** and **Copilot Global**. That writes the same
   `~/.copilot/mcp-config.json`, so a server added in either Copilot client
   shows up in the other.
@@ -100,9 +108,9 @@ up, copy the folder; to start fresh, stop the app and delete it.
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Start the local development server (localhost only) |
+| `npm run dev` | Start the local development server on `localhost:4747` |
 | `npm run build` | Create a production build |
-| `npm run start` | Serve the production build |
+| `npm run start` | Serve the production build on `localhost:4747` |
 | `npm test` | Run the tests once |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run ts` | Check TypeScript types |
