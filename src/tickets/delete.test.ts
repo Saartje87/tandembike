@@ -81,6 +81,8 @@ describe('Deleting a Ticket', () => {
     const { tickets, project } = ticketsWith(2);
     const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 2] });
+    // Done, so both stay with Beta once it is archived.
+    tickets.updateTickets({ ticketNumbers: [1, 2], status: 'Done' });
     tickets.startCycle(beta.id);
     tickets.archiveCycle(beta.id);
     const launch = tickets.createCycle({

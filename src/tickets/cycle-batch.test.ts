@@ -153,6 +153,8 @@ describe.each(['planTickets', 'unplanTickets'] as const)(
     it('refuses a Cycle that does not exist, or is Archived', () => {
       const { tickets, cycle } = planningWith(2);
       tickets.planTicket({ cycleId: cycle.id, number: 2 });
+      // Done, so it stays a member once the Cycle is archived.
+      tickets.updateTicket(2, { status: 'Done' });
       tickets.startCycle(cycle.id);
       tickets.archiveCycle(cycle.id);
 

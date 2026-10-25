@@ -21,7 +21,7 @@ A goal-led set of Tickets within one Project, not defined by a fixed duration. A
 _Avoid_: Sprint
 
 **Backlog**:
-A Project's Tickets that are in no Prepared or Active Cycle, the work not yet planned. Tickets of an Archived Cycle that are still open return to it.
+A Project's Tickets that are in no Prepared or Active Cycle, the work not yet planned. An Archived Cycle's unfinished Tickets leave it and return here as it is archived; its Done Tickets stay with it and are not in the Backlog.
 _Avoid_: Inbox, unplanned list
 
 **Epic**:

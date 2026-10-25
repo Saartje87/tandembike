@@ -61,4 +61,45 @@ describe('TicketByNumberPage', () => {
     ).rejects.toThrow('NEXT_NOT_FOUND');
     expect(redirect).not.toHaveBeenCalled();
   });
+
+  it('opens a Done Ticket over the last Archived Cycle that holds it, unless an open Cycle does', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const done = tickets.createTicket({ projectId: project.id, title: 'Done' });
+    const open = tickets.createTicket({ projectId: project.id, title: 'Open' });
+    tickets.updateTicket(done.number, { status: 'Done' });
+    const archive = (title: string) => {
+      const cycle = tickets.createCycle({ projectId: project.id, title });
+      tickets.planTickets({
+        cycleId: cycle.id,
+        ticketNumbers: [done.number, open.number],
+      });
+      tickets.startCycle(cycle.id, { archiveActive: true });
+      tickets.archiveCycle(cycle.id);
+      return cycle;
+    };
+    tickets.updateTicket(done.number, { status: 'Todo' });
+    archive('Beta');
+    tickets.updateTicket(done.number, { status: 'Done' });
+    const launch = archive('Launch');
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const resolve = (number: number) =>
+      TicketByNumberPage({
+        params: Promise.resolve({ number: String(number) }),
+      });
+
+    await expect(resolve(done.number)).rejects.toThrow(
+      `NEXT_REDIRECT:/project/${project.id}/cycle/${launch.id}?ticket=${done.number}`,
+    );
+    await expect(resolve(open.number)).rejects.toThrow(
+      `NEXT_REDIRECT:/project/${project.id}?ticket=${open.number}`,
+    );
+
+    const next = tickets.createCycle({ projectId: project.id, title: 'Next' });
+    tickets.planTicket({ cycleId: next.id, number: done.number });
+
+    await expect(resolve(done.number)).rejects.toThrow(
+      `NEXT_REDIRECT:/project/${project.id}/cycle/${next.id}?ticket=${done.number}`,
+    );
+  });
 });

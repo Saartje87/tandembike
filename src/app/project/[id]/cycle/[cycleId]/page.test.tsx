@@ -136,6 +136,8 @@ describe('CyclePage', () => {
       title: 'Moved',
       cycleId: cycle.id,
     });
+    // Done, so it stays with the Cycle once archived, then moves Project.
+    tickets.updateTicket(moved.number, { status: 'Done' });
     tickets.startCycle(cycle.id);
     tickets.archiveCycle(cycle.id);
     const other = tickets.createProject({ name: 'App' });
@@ -164,7 +166,7 @@ describe('CyclePage', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
-    ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedTodo`);
+    ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedDone`);
   });
 
   it("tells a Prepared Cycle's header which Cycle is Active", async () => {

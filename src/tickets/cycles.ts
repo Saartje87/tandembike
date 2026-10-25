@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
@@ -11,6 +11,7 @@ import {
   TicketsError,
 } from './errors';
 import { checkBatchNumbers, checkTitle, throwFieldErrors } from './rules';
+import type { Status } from './status';
 
 /** A goal-led plan within one Project (ADR 0010). */
 export type Cycle = {
@@ -146,19 +147,84 @@ export function openCycleOf(
 }
 
 /**
- * A subquery of the Ticket numbers in Cycle `cycleId`, or with `null`, in
- * any Cycle that is not Archived: what `listTickets` filters by.
+ * The Cycle among `cycles` whose Board Ticket `ticket` shows on: the one it
+ * is planned into that is not Archived, else for a Done Ticket the most
+ * recently archived one that holds it, by the rule of `outOfBacklog`.
+ * `undefined` means the Backlog.
  */
-export function cycleMembers(db: DatabaseConnection, cycleId: number | null) {
+export function boardCycleOf(
+  cycles: readonly Cycle[],
+  ticket: { number: number; status: Status },
+): Cycle | undefined {
+  const open = openCycleOf(cycles, ticket.number);
+  if (open !== undefined || ticket.status !== 'Done') {
+    return open;
+  }
+  return cycles
+    .filter(
+      ({ state, ticketNumbers }) =>
+        state === 'Archived' && ticketNumbers.includes(ticket.number),
+    )
+    .sort(
+      (left, right) =>
+        (right.archivedAt?.getTime() ?? 0) -
+          (left.archivedAt?.getTime() ?? 0) || right.id - left.id,
+    )[0];
+}
+
+/** A subquery of the numbers of the Tickets in Cycle `cycleId`. */
+export function cycleMembers(db: DatabaseConnection, cycleId: number) {
+  return db
+    .select({ number: cycleTickets.ticketNumber })
+    .from(cycleTickets)
+    .where(eq(cycleTickets.cycleId, cycleId));
+}
+
+/**
+ * A subquery of the numbers of the Tickets kept out of the Backlog: those in
+ * a Cycle that is not Archived, and the Done ones of an Archived Cycle of
+ * their own Project, which stay with it. Archiving takes a Cycle's
+ * unfinished Tickets out of it (`dropUnfinished`); Cycles archived before
+ * that still hold some, so the Status counts here too. `boardCycleOf` keeps
+ * the same rule for the resolver.
+ */
+export function outOfBacklog(db: DatabaseConnection) {
   return db
     .select({ number: cycleTickets.ticketNumber })
     .from(cycleTickets)
     .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+    .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
     .where(
-      cycleId === null
-        ? ne(cycles.state, 'Archived')
-        : eq(cycleTickets.cycleId, cycleId),
+      or(
+        ne(cycles.state, 'Archived'),
+        and(
+          eq(tickets.status, 'Done'),
+          eq(tickets.projectId, cycles.projectId),
+        ),
+      ),
     );
+}
+
+/**
+ * Takes Cycle `cycleId`'s unfinished Tickets out of it as it is archived, so
+ * an Archived Cycle holds only the work done in it; they return to the
+ * Backlog.
+ */
+function dropUnfinished(db: DatabaseConnection, cycleId: number) {
+  db.delete(cycleTickets)
+    .where(
+      and(
+        eq(cycleTickets.cycleId, cycleId),
+        inArray(
+          cycleTickets.ticketNumber,
+          db
+            .select({ number: tickets.number })
+            .from(tickets)
+            .where(ne(tickets.status, 'Done')),
+        ),
+      ),
+    )
+    .run();
 }
 
 /**
@@ -499,6 +565,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
             .set({ state: 'Archived', archivedAt: new Date() })
             .where(eq(cycles.id, active.id))
             .run();
+          dropUnfinished(db, active.id);
           if (rolledOver.length > 0) {
             db.insert(cycleTickets)
               .values(
@@ -524,9 +591,10 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     },
 
     /**
-     * Archives Active Cycle `id`, finished or not. Only the Cycle changes:
-     * its Tickets keep their Status and archived flag, and its membership
-     * stays as history while unfinished Tickets return to the Backlog.
+     * Archives Active Cycle `id`, finished or not. Its Tickets keep their
+     * Status and archived flag; its Done ones stay with it as a record of
+     * the work done in it, and its unfinished ones leave it, back to the
+     * Backlog.
      */
     archiveCycle(id: number): Cycle {
       const cycle = cycleRow(id);
@@ -540,10 +608,13 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           `The Cycle "${cycle.title}" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.`,
         );
       }
-      db.update(cycles)
-        .set({ state: 'Archived', archivedAt: new Date() })
-        .where(eq(cycles.id, id))
-        .run();
+      db.transaction(() => {
+        db.update(cycles)
+          .set({ state: 'Archived', archivedAt: new Date() })
+          .where(eq(cycles.id, id))
+          .run();
+        dropUnfinished(db, id);
+      });
       changes.publish({ type: 'cycle', id });
       return getCycle(id);
     },
