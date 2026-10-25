@@ -45,7 +45,7 @@ An Epic is handed off, worked and delivered as one unit:
 2. Claim the Epic once with `claim_ticket`. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`Ticket #42`).
 4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic.
-5. Once the PR is merged with CI green, move every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them, which releases its Claim.
+5. Once the PR is merged with CI green, move every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them, which releases its Claim. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
 
 ## Triage and Blockers
 
