@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
-import { handleMcpRequest } from './mcp-server';
+import { handleMcpRequest, maxInstructionsLength } from './mcp-server';
 
 describe('MCP server', () => {
   it('lists every tool with a description', async () => {
@@ -73,9 +73,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/release_ticket_claim/);
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
     expect(instructions).toMatch(/list_cycles/);
-    expect(instructions).toMatch(/confirmArchiveActive/);
     expect(instructions).toMatch(/plan_tickets/);
-    expect(instructions).toMatch(/unplan_tickets/);
     await client.close();
   });
 
@@ -91,7 +89,6 @@ describe('MCP server', () => {
     // General rules that used to live only in one repository's docs.
     expect(instructions).toMatch(/never as a checklist in the description/);
     expect(instructions).toMatch(/one level deep/);
-    expect(instructions).toMatch(/stays in its Cycle/);
     expect(instructions).toMatch(/reconnect/);
     expect(instructions).toMatch(/not direct database access/);
     // Process belongs to each repository, and no client is assumed.
@@ -114,8 +111,64 @@ describe('MCP server', () => {
         /Giving both is refused unless they name the same Project/,
       );
     }
-    expect(instructions).toMatch(/Todo with none or all Todo/);
     expect(instructions).toMatch(/missing from your list may still exist/);
+    await client.close();
+  });
+
+  it('keeps each rule left out of the instructions in the tool it concerns', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
+
+    const moved: [tool: string, rule: RegExp][] = [
+      ['create_project', /names must be unique, ignoring case/],
+      ['create_tickets', /All or nothing/],
+      ['create_tickets', /Only earlier positions can be named/],
+      ['add_blocker', /must be resolved \(Done or archived\)/],
+      ['update_ticket', /To only check or uncheck criteria/],
+      [
+        'set_acceptance_criteria_checked',
+        /the Ticket's Status stay as they are/,
+      ],
+      ['edit_comment', /only edit comments written by an Agent/],
+      ['remove_comment', /only remove comments written by an Agent/],
+      ['get_ticket', /an Epic lists its children/],
+      ['update_ticket', /An Epic's follows its children and cannot be set/],
+      [
+        'create_ticket',
+        /Todo with none or all Todo, Done when all are Done, In progress otherwise/,
+      ],
+      ['list_cycles', /state \(Prepared, Active or Archived\), ticketNumbers/],
+      ['plan_ticket', /at most one Cycle that is not Archived/],
+      ['plan_ticket', /Done ones included/],
+      ['plan_ticket', /a member that becomes Done or is archived stays in it/],
+      ['plan_tickets', /at most 50 per call/],
+      ['unplan_tickets', /at most 50 per call/],
+      ['list_tickets', /with null, the Backlog/],
+      ['start_cycle', /refused, unless confirmArchiveActive is true/],
+      ['start_cycle', /Set it only once the User has agreed/],
+    ];
+    for (const [tool, rule] of moved) {
+      expect(describe(tool), tool).toMatch(rule);
+    }
+    await client.close();
+  });
+
+  it('keeps the instructions and every tool description within the cap clients read whole', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const instructions = client.getInstructions() ?? '';
+    const { tools } = await client.listTools();
+
+    expect(maxInstructionsLength).toBe(3500);
+    expect(instructions.length).toBeLessThanOrEqual(maxInstructionsLength);
+    for (const tool of tools) {
+      expect(tool.description?.length, tool.name).toBeLessThanOrEqual(
+        maxInstructionsLength,
+      );
+    }
     await client.close();
   });
 
@@ -1706,9 +1759,6 @@ describe('Cycle tools', () => {
         tools.find((tool) => tool.name === 'list_tickets')?.inputSchema,
       ),
     ).toMatch(/Done Tickets of an Archived Cycle/);
-    expect(client.getInstructions()).toMatch(
-      /Done Tickets of an Archived Cycle/,
-    );
     await client.close();
   });
 

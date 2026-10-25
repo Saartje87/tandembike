@@ -19,25 +19,30 @@ import {
   ticketSorts,
 } from '../tickets/tickets';
 
+/**
+ * The most characters the instructions may render to. Claude Code (2.1.310)
+ * cuts server instructions, and each tool description, at 4,096 characters;
+ * VS Code's Copilot agent passes them whole. The margin leaves room for new
+ * rules, and the most important rules come first in case a client cuts more.
+ */
+export const maxInstructionsLength = 3500;
+
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
 - When you start working on a Ticket, move it to In progress. When you finish it, move it to Done. The User follows your progress this way.
-- When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits. Project names are unique, ignoring case.
+- When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
+- Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
+- Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description.
+- Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
+- To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
+- A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access or hand-written requests.
 - Refer to Tickets by number with a hash, like #42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
-- Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. You can edit or remove only comments written by an Agent.
-- Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
-- Record that one Ticket must be finished before another can start with add_blocker, not in the description. A Blocker is resolved once it is Done or archived; list_tickets with blocked: false finds Tickets that are ready to start.
-- To create several related Tickets at once, use create_tickets: list them in dependency order and give each one's Blockers as blockedByPositions, the positions of earlier Tickets in the list. It creates all of them or none.
-- Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
-- A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
-- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them, and plan_tickets and unplan_tickets change up to ${maxBatchSize} Tickets of one Cycle in one call. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. A member that becomes Done or is archived stays in its Cycle. The Backlog is the Tickets in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise) and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
-- To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets.
 - Your client keeps this tool list, the tool descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to reconnect the server or start a new session; until then treat what you loaded as possibly out of date, and a tool missing from your list may still exist.
-- Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.
-- Errors explain what was wrong with the input; fix it and try again.`;
+- Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;
 
 const projectId = z
   .number()
@@ -403,7 +408,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .enum(ticketTypes)
           .optional()
           .describe(
-            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children, so give it none.",
+            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise), so give it none.",
           ),
         epicNumber: ticketNumber
           .optional()
@@ -802,7 +807,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Plan Ticket into Cycle',
       description:
-        "Plan a Ticket into a Prepared or Active Cycle of its Project and return the Cycle. Any non-archived Ticket can be planned, Done ones included to record finished work, and a Ticket is in at most one Cycle that is not Archived: unplan_ticket it from its current one first. Planning doesn't change its Status.",
+        "Plan a Ticket into a Prepared or Active Cycle of its Project and return the Cycle. Any non-archived Ticket can be planned, Done ones included to record finished work, and a Ticket is in at most one Cycle that is not Archived: unplan_ticket it from its current one first. Planning doesn't change its Status, and a member that becomes Done or is archived stays in it.",
       inputSchema: { cycleId, number: ticketNumber },
       annotations: { idempotentHint: true },
     },
