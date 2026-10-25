@@ -235,9 +235,10 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 
 /**
  * A Project's Board: its header and one column per active Status, plus a
- * "Show archived" switch that lists archived Tickets below. Tickets can be
- * reordered by dragging or moved between Statuses; both changes save through
- * Server Actions and roll back optimistically if refused.
+ * "Show archived" switch, with their count, that lists archived Tickets
+ * below. Tickets can be reordered by dragging or moved between Statuses; both
+ * changes save through Server Actions and roll back optimistically if
+ * refused.
  */
 export const Board: FC<BoardProps> = ({
   project,
@@ -392,7 +393,7 @@ export const Board: FC<BoardProps> = ({
           checked={showArchived}
           onChange={setShowArchived}
         />
-        <Label htmlFor={switchId}>Show archived</Label>
+        <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
       </Inline>
       {showArchived && (
         <ArchivedTickets tickets={archived} boardPath={boardPath} />
