@@ -620,7 +620,7 @@ describe('Archiving and restoring Tickets', () => {
     ]);
   });
 
-  it('offers no way to delete a Ticket', () => {
+  it('deletes a Ticket only through deleteTicket, for the User (ADR 0012)', () => {
     const { tickets } = setUp();
 
     expect(
@@ -628,6 +628,6 @@ describe('Archiving and restoring Tickets', () => {
         (name) =>
           /delete|remove/i.test(name) && !/label|comment|blocker/i.test(name),
       ),
-    ).toEqual([]);
+    ).toEqual(['deleteTicket']);
   });
 });

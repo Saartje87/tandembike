@@ -33,6 +33,7 @@ vi.mock('../../app/tickets/actions', () => ({
   addTicketLabel: vi.fn(),
   removeTicketLabel: vi.fn(),
   clearTicketClaim: vi.fn(),
+  deleteTicket: vi.fn(),
   updateTicket: vi.fn(),
   archiveTicket: vi.fn(),
   restoreTicket: vi.fn(),
@@ -1189,12 +1190,25 @@ describe('TicketDrawer', () => {
       ).toBe(true);
     });
 
-    it('has no way to delete the Ticket', () => {
+    it.each([false, true])(
+      'offers Delete in the footer, archived: %s (ADR 0012)',
+      (archived) => {
+        renderDrawer({ ...ticket, archived });
+
+        expect(
+          inDrawer().getByRole('button', { name: 'Delete' }),
+        ).toBeInTheDocument();
+      },
+    );
+
+    it('stays open while the Delete dialog takes an Escape', async () => {
       renderDrawer();
 
-      expect(
-        inDrawer().queryByRole('button', { name: /delete/i }),
-      ).not.toBeInTheDocument();
+      await userEvent.click(button('Delete'));
+      await userEvent.keyboard('{Escape}');
+
+      expect(router.push).not.toHaveBeenCalled();
+      expect(router.back).not.toHaveBeenCalled();
     });
   });
 

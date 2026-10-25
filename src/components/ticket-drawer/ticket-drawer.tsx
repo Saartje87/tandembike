@@ -40,12 +40,19 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
-import type { Blockers, Comment, Project, Ticket } from '../../tickets/tickets';
+import type {
+  Blockers,
+  Comment,
+  Project,
+  Ticket,
+  TicketClaim,
+} from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
+import { DeleteTicketDialog } from '../delete-ticket-dialog/delete-ticket-dialog';
 import { EpicChildren } from '../epic-children/epic-children';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
@@ -69,6 +76,8 @@ export type TicketDrawerProps = {
   blockers?: Blockers;
   /** The Cycles of the Ticket's Project, to plan it into. Defaults to none. */
   cycles?: Cycle[];
+  /** The Claim on the Ticket's Epic, which covers it too. Defaults to none. */
+  epicClaim?: TicketClaim | null;
   /** Use browser history to close when the drawer is intercepted over a Board. */
   closeWithBack?: boolean;
   /**
@@ -426,6 +435,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   comments = [],
   blockers = noBlockers,
   cycles = noCycles,
+  epicClaim = null,
   closeWithBack = false,
   boardPath,
 }) => {
@@ -462,6 +472,12 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     }
   };
   const requestClose = () => {
+    // The Blocks `Drawer` does not join `Dialog`'s nesting, so an Escape or
+    // outside click meant for a dialog in it (Delete) reaches the drawer
+    // first. Leave that one to the dialog (docs/blocks-feedback.md, 17).
+    if (document.querySelector('dialog[data-ticket-drawer] dialog[open]')) {
+      return;
+    }
     if (
       unsavedDescription &&
       !window.confirm('Discard changes to the description?')
@@ -705,21 +721,28 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 Created <DateTime date={ticket.createdAt} /> · Updated{' '}
                 <DateTime date={ticket.updatedAt} />
               </Text>
-              {!archived && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  intent="neutral"
-                  size="small"
-                  disabled={archivePending}
-                  onClick={(event) => {
-                    keepDrawerOpen(event);
-                    toggleArchived();
-                  }}
-                >
-                  Archive
-                </Button>
-              )}
+              <Inline gap={2} alignY="center">
+                {!archived && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    intent="neutral"
+                    size="small"
+                    disabled={archivePending}
+                    onClick={(event) => {
+                      keepDrawerOpen(event);
+                      toggleArchived();
+                    }}
+                  >
+                    Archive
+                  </Button>
+                )}
+                <DeleteTicketDialog
+                  ticket={{ ...ticket, claim }}
+                  blocks={blockers.blocks}
+                  epicClaim={epicClaim}
+                />
+              </Inline>
             </Inline>
           </Stack>
         </Stack>
@@ -732,7 +755,8 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
  * in-place editable heading, its Status, Project, Epic (or that it is an
  * Epic), Cycle, labels and Blockers, an Epic's child Tickets, its Markdown
- * description, acceptance criteria and comments, and a footer with its timestamps and Archive.
+ * description, acceptance criteria and comments, and a footer with its
+ * timestamps, Archive and Delete.
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. Closing
  * (the Close button, Escape or a click outside) goes to the Ticket's Board,
