@@ -42,6 +42,7 @@ import type { Cycle } from '../../tickets/cycles';
 import type {
   Blockers,
   Comment,
+  EpicLink,
   Project,
   Ticket,
   TicketClaim,
@@ -81,6 +82,11 @@ export type TicketDrawerProps = {
   blockers?: Blockers;
   /** The Cycles of the Ticket's Project, to plan it into. Defaults to none. */
   cycles?: Cycle[];
+  /**
+   * The live Epics of the Ticket's Project, to attach it to. Defaults to
+   * none.
+   */
+  epics?: EpicLink[];
   /** The Claim on the Ticket's Epic, which covers it too. Defaults to none. */
   epicClaim?: TicketClaim | null;
   /**
@@ -424,6 +430,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   comments = [],
   blockers = noBlockers,
   cycles = noCycles,
+  epics,
   epicClaim = null,
   epicChildren,
   boardPath,
@@ -633,7 +640,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               </Detail>
             ) : (
               <Detail name={<DetailName>Epic</DetailName>}>
-                <TicketEpic ticket={ticket} />
+                <TicketEpic ticket={ticket} epics={epics} />
               </Detail>
             )}
             <Detail name={<DetailName>Origin</DetailName>}>

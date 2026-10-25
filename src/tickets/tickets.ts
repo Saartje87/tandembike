@@ -1421,37 +1421,16 @@ export function createTickets(
      * nothing; a Ticket in another Epic must be detached first. Returns the
      * child.
      */
-    attachToEpic({ epic, child }: EpicChildInput): Ticket {
-      const changed = db.transaction(() => {
-        const ticket = db
-          .select({
-            type: tickets.type,
-            projectId: tickets.projectId,
-            epicNumber: tickets.epicNumber,
-          })
-          .from(tickets)
-          .where(eq(tickets.number, child))
-          .get();
-        if (!ticket) {
-          throw new NotFoundError(`There is no Ticket #${child}.`);
-        }
-        checkEpicChild(db, epic, { number: child, ...ticket });
-        if (ticket.epicNumber === epic) {
-          return false;
-        }
-        checkNoBlockerBetween(db, { epic, child });
-        db.update(tickets)
-          .set({ epicNumber: epic, updatedAt: new Date() })
-          .where(eq(tickets.number, child))
-          .run();
-        touchTicket(db, epic);
-        syncEpicStatus(db, epic);
-        return true;
-      });
-      if (changed) {
-        changes.publish({ type: 'tickets', numbers: [epic, child] });
-      }
-      return getTicket(child);
+    attachToEpic(input: EpicChildInput): Ticket {
+      return joinEpic(input, { move: false });
+    },
+
+    /**
+     * `attachToEpic`, but a Ticket in another Epic leaves it for `epic`, and
+     * that Epic's Status follows too. Returns the child.
+     */
+    moveToEpic(input: EpicChildInput): Ticket {
+      return joinEpic(input, { move: true });
     },
 
     /**
@@ -1759,6 +1738,62 @@ export function createTickets(
         ? { type: 'ticket', number }
         : { type: 'tickets', numbers: [number, ...others] },
     );
+  }
+
+  /**
+   * Makes `child` a child of `epic`, by the rules of `attachToEpic`; with
+   * `move`, a child of another Epic leaves that one first.
+   */
+  function joinEpic(
+    { epic, child }: EpicChildInput,
+    { move }: { move: boolean },
+  ): Ticket {
+    const changed = db.transaction(() => {
+      const ticket = db
+        .select({
+          type: tickets.type,
+          projectId: tickets.projectId,
+          epicNumber: tickets.epicNumber,
+        })
+        .from(tickets)
+        .where(eq(tickets.number, child))
+        .get();
+      if (!ticket) {
+        throw new NotFoundError(`There is no Ticket #${child}.`);
+      }
+      const previous = ticket.epicNumber;
+      checkEpicChild(db, epic, {
+        number: child,
+        ...ticket,
+        epicNumber: move ? null : previous,
+      });
+      if (previous === epic) {
+        return null;
+      }
+      checkNoBlockerBetween(db, { epic, child });
+      db.update(tickets)
+        .set({ epicNumber: epic, updatedAt: new Date() })
+        .where(eq(tickets.number, child))
+        .run();
+      touchTicket(db, epic);
+      syncEpicStatus(db, epic);
+      if (previous !== null) {
+        touchTicket(db, previous);
+        syncEpicStatus(db, previous);
+      }
+      return { previous };
+    });
+    if (changed) {
+      changes.publish({
+        type: 'tickets',
+        numbers: [
+          ...(changed.previous === null ? [] : [changed.previous]),
+          epic,
+          child,
+        ],
+      });
+    }
+    return getTicket(child);
   }
 
   function getTicket(number: number): Ticket {

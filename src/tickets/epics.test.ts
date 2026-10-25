@@ -222,6 +222,94 @@ describe('Attaching refusals', () => {
   });
 });
 
+describe('Moving a Ticket to an Epic', () => {
+  it('attaches a Ticket in no Epic', () => {
+    const { tickets, project, epic } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+
+    const moved = tickets.moveToEpic({
+      epic: epic.number,
+      child: ticket.number,
+    });
+
+    expect(moved.epic).toEqual({ number: epic.number, title: 'Checkout' });
+  });
+
+  it('takes a Ticket out of its Epic into another, and both Statuses follow', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+      status: 'In progress',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.moveToEpic({ epic: epic.number, child: child.number });
+
+    expect(tickets.getTicket(child.number).epic?.number).toBe(epic.number);
+    expect(tickets.getTicket(other.number)).toMatchObject({
+      status: 'Todo',
+      children: [],
+    });
+    expect(tickets.getTicket(epic.number).status).toBe('In progress');
+    expect(changes).toContainEqual({
+      type: 'tickets',
+      numbers: [other.number, epic.number, child.number],
+    });
+  });
+
+  it('checks the rules of attaching', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+
+    expect(
+      errorFrom(() =>
+        tickets.moveToEpic({ epic: epic.number, child: other.number }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+      ),
+    );
+  });
+
+  it('refuses a Blocker between the Ticket and its new Epic, leaving it where it was', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+    });
+    tickets.addBlocker({ blocker: child.number, blocked: epic.number });
+
+    expect(
+      errorFrom(() =>
+        tickets.moveToEpic({ epic: epic.number, child: child.number }),
+      ),
+    ).toBeInstanceOf(NotAllowedError);
+    expect(tickets.getTicket(child.number).epic?.number).toBe(other.number);
+  });
+});
+
 describe('Moving a grouped Ticket to another Project', () => {
   it('refuses to move a child', () => {
     const { tickets, project, epic } = setUp();

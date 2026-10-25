@@ -39,6 +39,9 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
       comments={tickets.listComments(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
       cycles={tickets.listCycles(ticket.projectId)}
+      epics={tickets
+        .listTickets({ projectId: ticket.projectId, type: 'Epic' })
+        .map(({ number, title }) => ({ number, title }))}
       epicClaim={
         ticket.epic === null
           ? null

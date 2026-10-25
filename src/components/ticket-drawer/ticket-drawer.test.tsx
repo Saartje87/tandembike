@@ -1092,6 +1092,30 @@ describe('TicketDrawer', () => {
       ).toBeInTheDocument();
     });
 
+    it("offers a normal Ticket the Project's Epics to attach it to, but not an Epic", () => {
+      const epics = [{ number: 8, title: 'Checkout' }];
+      const { unmount } = renderWithTheme(
+        <TicketDrawer ticket={ticket} projects={projects} epics={epics} />,
+      );
+
+      expect(
+        inDrawer().getByRole('combobox', { name: 'Attach to Epic' }),
+      ).toBeInTheDocument();
+      unmount();
+
+      renderWithTheme(
+        <TicketDrawer
+          ticket={{ ...epic, number: 10 }}
+          projects={projects}
+          epics={epics}
+        />,
+      );
+
+      expect(
+        inDrawer().queryByRole('combobox', { name: 'Attach to Epic' }),
+      ).not.toBeInTheDocument();
+    });
+
     it('links a child to its Epic and lists no children', () => {
       renderDrawer({ ...ticket, epic: { number: 8, title: 'Checkout' } });
 

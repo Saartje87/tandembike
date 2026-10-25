@@ -408,12 +408,15 @@ function changeEpic(change: () => void): TicketEpicResult {
   });
 }
 
-/** Makes an existing Ticket a child of an Epic, for the UI. */
+/**
+ * Makes an existing Ticket a child of an Epic for the UI, taking it out of
+ * the Epic it is in, if any.
+ */
 export async function attachTicketToEpic(
   input: EpicChildInput,
 ): Promise<TicketEpicResult> {
   return changeEpic(() =>
-    appTickets().attachToEpic({
+    appTickets().moveToEpic({
       epic: Number(input?.epic),
       child: Number(input?.child),
     }),

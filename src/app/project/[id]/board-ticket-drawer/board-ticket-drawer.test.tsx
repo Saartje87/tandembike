@@ -13,14 +13,20 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     ticket,
     comments,
     boardPath,
+    epics,
     epicChildren,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
     boardPath: string;
+    epics: unknown;
     epicChildren: unknown;
   }) => (
-    <div role="dialog" data-epic-children={JSON.stringify(epicChildren)}>
+    <div
+      role="dialog"
+      data-epics={JSON.stringify(epics)}
+      data-epic-children={JSON.stringify(epicChildren)}
+    >
       {`Ticket drawer #${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')}`}
     </div>
   ),
@@ -60,6 +66,37 @@ describe('BoardTicketDrawer', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `Ticket drawer #${ticket.number} over /project/1/cycle/7 comments: Started.`,
     );
+  });
+
+  it("offers the Project's live Epics to attach the Ticket to", async () => {
+    const { tickets, website, ticket } = setUp();
+    const epic = tickets.createTicket({
+      projectId: website.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const archived = tickets.createTicket({
+      projectId: website.id,
+      title: 'Old',
+      type: 'Epic',
+    });
+    tickets.archiveTicket(archived.number);
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: ticket.number,
+            boardPath: '/project/1',
+          })
+        }
+      </div>,
+    );
+
+    expect(
+      JSON.parse(screen.getByRole('dialog').dataset.epics ?? 'null'),
+    ).toEqual([{ number: epic.number, title: 'Checkout' }]);
   });
 
   it('renders nothing for a Ticket that does not exist (any more)', async () => {
