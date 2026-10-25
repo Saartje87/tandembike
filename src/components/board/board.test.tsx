@@ -462,11 +462,11 @@ describe('Board with Epics', () => {
     expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']);
   });
 
-  it("lists on a Cycle's Board only the Epics with a child planned into it", () => {
+  it("lists on a Cycle's Board an Epic with a child planned into it, and not one with nothing in it", () => {
     renderWithTheme(
       <Board
         project={project}
-        tickets={[payByCard, search]}
+        tickets={[payByCard]}
         epics={[checkout, search]}
         cycleId={7}
       />,
@@ -486,6 +486,50 @@ describe('Board with Epics', () => {
     );
 
     expect(chips()).toEqual([]);
+  });
+
+  it("lists on a Cycle's Board an Epic planned into it itself", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[search]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+  });
+
+  it("shows a Cycle's done Epics with no toggle, but hides them on the Project Board", () => {
+    const done = { ...search, status: 'Done' as const };
+    const { unmount } = renderWithTheme(
+      <Board
+        project={project}
+        tickets={[done]}
+        epics={[checkout, done]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+    expect(
+      screen.queryByRole('checkbox', { name: /Show done Epics/ }),
+    ).not.toBeInTheDocument();
+    unmount();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[]}
+        epics={[checkout, done]}
+        cycleId={null}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+    expect(
+      screen.getByRole('checkbox', { name: 'Show done Epics (1)' }),
+    ).toBeInTheDocument();
   });
 
   it('offers to create an Epic from the row, not from the Todo lane', async () => {

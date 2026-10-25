@@ -30,6 +30,11 @@ export type EpicChipsProps = {
   cycleId?: number;
   /** The Board's own URL, which an Epic's drawer opens over. */
   boardPath: string;
+  /**
+   * Hide done Epics behind a "Show done Epics" switch, as the Project Board
+   * does; a Cycle's Board shows them all. Defaults to true.
+   */
+  hideDone?: boolean;
 };
 
 /** The drop-target id of Epic `number`'s chip, for a card dragged onto it. */
@@ -91,7 +96,8 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
 
 /**
  * The Board's Epics, apart from its Status columns: a row of chips, done
- * Epics hidden behind a "Show done Epics" switch, and a New Epic button
+ * Epics hidden behind a "Show done Epics" switch unless `hideDone` is off,
+ * and a New Epic button
  * that opens a title field to create one.
  */
 export const EpicChips: FC<EpicChipsProps> = ({
@@ -99,16 +105,20 @@ export const EpicChips: FC<EpicChipsProps> = ({
   projectId,
   cycleId,
   boardPath,
+  hideDone = true,
 }) => {
   const headingId = useId();
   const switchId = useId();
   const newEpicButton = useRef<HTMLButtonElement>(null);
   const [showDone, setShowDone] = useState(false);
   const [adding, setAdding] = useState(false);
-  const doneCount = epics.filter((epic) => epic.status === 'Done').length;
-  const shown = showDone
-    ? epics
-    : epics.filter((epic) => epic.status !== 'Done');
+  const doneCount = hideDone
+    ? epics.filter((epic) => epic.status === 'Done').length
+    : 0;
+  const shown =
+    showDone || !hideDone
+      ? epics
+      : epics.filter((epic) => epic.status !== 'Done');
 
   const closeNewEpic = () => {
     setAdding(false);

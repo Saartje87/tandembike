@@ -59,7 +59,8 @@ export type BoardProps = {
   tickets: Ticket[];
   /**
    * The Project's live Epics, oldest-created first, for the row above the
-   * columns; a Cycle's Board lists only those with a child in `tickets`.
+   * columns. A Cycle's Board lists only those in `tickets` or with a child
+   * in it, done ones included.
    * Defaults to none.
    */
   epics?: Ticket[];
@@ -309,8 +310,10 @@ export const Board: FC<BoardProps> = ({
   );
   const rowEpics =
     typeof cycleId === 'number'
-      ? shownEpics.filter((epic) =>
-          epic.children.some((child) => planned.has(child.number)),
+      ? shownEpics.filter(
+          (epic) =>
+            planned.has(epic.number) ||
+            epic.children.some((child) => planned.has(child.number)),
         )
       : shownEpics;
   const archived = shownTickets.filter((ticket) => ticket.archived);
@@ -458,6 +461,7 @@ export const Board: FC<BoardProps> = ({
           projectId={project.id}
           cycleId={cycleId ?? undefined}
           boardPath={boardPath}
+          hideDone={typeof cycleId !== 'number'}
         />
         <Grid gap={3}>
           {statuses.map((status) => (
