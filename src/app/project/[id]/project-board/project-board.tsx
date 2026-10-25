@@ -64,6 +64,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
       <ProjectFrame project={project} cycles={cycles}>
         <CycleHeader key={tab.id} cycle={tab} />
         <CycleTicketList
+          cycle={tab}
           tickets={tickets.listTickets({
             cycleId: tab.id,
             includeArchived: true,

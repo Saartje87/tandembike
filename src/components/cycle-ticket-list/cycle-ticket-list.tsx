@@ -1,21 +1,33 @@
 import { Inline, Stack, Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
-import { ticketByNumberPath } from '../../app/lib/paths';
+import {
+  cyclePath,
+  ticketByNumberPath,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
+import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import * as styles from './cycle-ticket-list.css';
 
 export type CycleTicketListProps = {
-  /** An archived Cycle's final Tickets, archived ones included. */
+  /** The archived Cycle shown. */
+  cycle: Pick<Cycle, 'id' | 'projectId'>;
+  /** Its final Tickets, archived ones included. */
   tickets: Ticket[];
 };
 
 /**
  * An archived Cycle's Tickets, read-only: each with its number, a link that
- * opens it in the drawer, and its Status now.
+ * opens it in the drawer, and its Status now. A Ticket still in the Cycle's
+ * Project opens over the Cycle, staying in its History; one moved to
+ * another Project since opens over its own Board.
  */
-export const CycleTicketList: FC<CycleTicketListProps> = ({ tickets }) =>
+export const CycleTicketList: FC<CycleTicketListProps> = ({
+  cycle,
+  tickets,
+}) =>
   tickets.length === 0 ? (
     <Text tag="p" color="text-600">
       No Tickets in this Cycle
@@ -35,7 +47,15 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({ tickets }) =>
             </Text>
             <Text wordBreak="break-word">
               <AppLink
-                href={ticketByNumberPath(ticket.number)}
+                href={
+                  ticket.projectId === cycle.projectId
+                    ? ticketOnBoardPath(
+                        cyclePath(cycle.projectId, cycle.id),
+                        ticket.number,
+                      )
+                    : ticketByNumberPath(ticket.number)
+                }
+                scroll={ticket.projectId !== cycle.projectId}
                 variant="inherit"
               >
                 {ticket.title}

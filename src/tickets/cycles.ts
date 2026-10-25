@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
@@ -11,6 +11,7 @@ import {
   TicketsError,
 } from './errors';
 import { checkBatchNumbers, checkTitle, throwFieldErrors } from './rules';
+import type { Status } from './status';
 
 /** A goal-led plan within one Project (ADR 0010). */
 export type Cycle = {
@@ -146,17 +147,46 @@ export function openCycleOf(
 }
 
 /**
- * A subquery of the Ticket numbers in Cycle `cycleId`, or with `null`, in
- * any Cycle that is not Archived: what `listTickets` filters by.
+ * The Cycle among `cycles` whose Board Ticket `ticket` shows on: the one it
+ * is planned into that is not Archived, else for a finished Ticket the most
+ * recently archived one that holds it, since those stay in its History.
+ * `undefined` means the Backlog.
+ */
+export function boardCycleOf(
+  cycles: readonly Cycle[],
+  ticket: { number: number; status: Status },
+): Cycle | undefined {
+  const open = openCycleOf(cycles, ticket.number);
+  if (open !== undefined || ticket.status !== 'Done') {
+    return open;
+  }
+  return cycles
+    .filter(
+      ({ state, ticketNumbers }) =>
+        state === 'Archived' && ticketNumbers.includes(ticket.number),
+    )
+    .sort(
+      (left, right) =>
+        (right.archivedAt?.getTime() ?? 0) -
+          (left.archivedAt?.getTime() ?? 0) || right.id - left.id,
+    )[0];
+}
+
+/**
+ * A subquery of the Ticket numbers in Cycle `cycleId`, or with `null`, of
+ * the Tickets kept out of the Backlog: those in a Cycle that is not
+ * Archived, and the finished ones of an Archived Cycle, which stay in its
+ * History. What `listTickets` filters by.
  */
 export function cycleMembers(db: DatabaseConnection, cycleId: number | null) {
   return db
     .select({ number: cycleTickets.ticketNumber })
     .from(cycleTickets)
     .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+    .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
     .where(
       cycleId === null
-        ? ne(cycles.state, 'Archived')
+        ? or(ne(cycles.state, 'Archived'), eq(tickets.status, 'Done'))
         : eq(cycleTickets.cycleId, cycleId),
     );
 }

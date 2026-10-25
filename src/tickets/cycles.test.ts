@@ -515,11 +515,12 @@ describe('Archiving a Cycle', () => {
     const { tickets, project, cycle } = activeCycle();
     tickets.archiveCycle(cycle.id);
 
+    // #2 is Done, so it stays in the Cycle's History (#69).
     expect(
       tickets
         .listTickets({ projectId: project.id, cycleId: null })
         .map(({ number }) => number),
-    ).toEqual([1, 2]);
+    ).toEqual([1]);
 
     const next = tickets.createCycle({ projectId: project.id, title: 'Next' });
     tickets.planTicket({ cycleId: next.id, number: 1 });
@@ -528,7 +529,7 @@ describe('Archiving a Cycle', () => {
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([1, 2, 3]);
     expect(
       tickets.listTickets({ projectId: project.id, cycleId: null }),
-    ).toHaveLength(1);
+    ).toEqual([]);
   });
 
   it('lets the Project start another Cycle once it is archived', () => {
@@ -732,5 +733,79 @@ describe('Review fixes', () => {
       [{ type: 'ticket', number: 1 }],
       [{ type: 'cycle', id: cycle.id }],
     ]);
+  });
+});
+
+describe('The Backlog', () => {
+  /** Tickets #1 to #`count` in a Project, and a way to list its Backlog. */
+  function backlogWith(count: number) {
+    const { tickets, project } = ticketsWithProject();
+    for (let index = 1; index <= count; index++) {
+      tickets.createTicket({ projectId: project.id, title: `Ticket ${index}` });
+    }
+    const backlog = () =>
+      tickets
+        .listTickets({ projectId: project.id, cycleId: null })
+        .map(({ number }) => number);
+    /** Plans `numbers` into a new Cycle, then starts and archives it. */
+    const archivedCycle = (title: string, numbers: number[]) => {
+      const cycle = tickets.createCycle({ projectId: project.id, title });
+      tickets.planTickets({ cycleId: cycle.id, ticketNumbers: numbers });
+      tickets.startCycle(cycle.id, { archiveActive: true });
+      tickets.archiveCycle(cycle.id);
+      return cycle;
+    };
+    return { tickets, project, backlog, archivedCycle };
+  }
+
+  it("leaves out an Archived Cycle's finished Tickets but keeps its unfinished ones", () => {
+    const { tickets, backlog, archivedCycle } = backlogWith(3);
+    tickets.updateTicket(1, { status: 'Done' });
+
+    archivedCycle('Beta', [1, 2]);
+
+    expect(backlog()).toEqual([2, 3]);
+  });
+
+  it('keeps a Done Ticket that was never planned', () => {
+    const { tickets, backlog } = backlogWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+
+    expect(backlog()).toEqual([1]);
+  });
+
+  it('leaves out a Ticket finished after its Cycle was archived', () => {
+    const { tickets, backlog, archivedCycle } = backlogWith(1);
+    archivedCycle('Beta', [1]);
+
+    tickets.updateTicket(1, { status: 'Done' });
+
+    expect(backlog()).toEqual([]);
+  });
+
+  it('leaves out finished Tickets of every Archived Cycle', () => {
+    const { tickets, backlog, archivedCycle } = backlogWith(3);
+    tickets.updateTicket(1, { status: 'Done' });
+    tickets.updateTicket(2, { status: 'Done' });
+
+    archivedCycle('Beta', [1]);
+    archivedCycle('Launch', [2, 3]);
+
+    expect(backlog()).toEqual([3]);
+  });
+
+  it('still shows a finished Ticket while it is planned into an open Cycle', () => {
+    const { tickets, project, archivedCycle } = backlogWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1]);
+    const next = tickets.createCycle({ projectId: project.id, title: 'Next' });
+
+    tickets.planTicket({ cycleId: next.id, number: 1 });
+
+    expect(
+      tickets
+        .listTickets({ projectId: project.id, cycleId: next.id })
+        .map(({ number }) => number),
+    ).toEqual([1]);
   });
 });

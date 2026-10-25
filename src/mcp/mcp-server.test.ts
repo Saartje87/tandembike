@@ -1605,6 +1605,36 @@ describe('Cycle tools', () => {
     await client.close();
   });
 
+  it("keeps an Archived Cycle's finished Tickets out of the Backlog", async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTickets({ cycleId: cycle.id, ticketNumbers: [1, 2] });
+    tickets.updateTicket(1, { status: 'Done' });
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, cycleId: null },
+    });
+    const { tools } = await client.listTools();
+
+    expect(
+      (resultJson(listed) as { tickets: { number: number }[] }).tickets.map(
+        ({ number }) => number,
+      ),
+    ).toEqual([2, 3]);
+    expect(
+      JSON.stringify(
+        tools.find((tool) => tool.name === 'list_tickets')?.inputSchema,
+      ),
+    ).toMatch(/finished Tickets of an Archived Cycle/);
+    expect(client.getInstructions()).toMatch(
+      /finished Tickets of an Archived Cycle/,
+    );
+    await client.close();
+  });
+
   it('plans a Ticket out of a Cycle, and lists the Tickets of a Cycle or the Backlog', async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
