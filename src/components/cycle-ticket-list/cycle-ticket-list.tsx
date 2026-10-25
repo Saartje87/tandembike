@@ -21,7 +21,7 @@ export type CycleTicketListProps = {
 /**
  * An archived Cycle's Tickets, read-only: each with its number, a link that
  * opens it in the drawer, and its Status now. A Ticket still in the Cycle's
- * Project opens over the Cycle, staying in its History; one moved to
+ * Project opens over the Cycle, so the User stays there; one moved to
  * another Project since opens over its own Board.
  */
 export const CycleTicketList: FC<CycleTicketListProps> = ({
@@ -39,34 +39,37 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
       className={styles.ticketList}
       aria-label="Tickets in this Cycle"
     >
-      {tickets.map((ticket) => (
-        <li key={ticket.number}>
-          <Inline gap={2} alignY="center">
-            <Text color="text-600" fontSize="small">
-              #{ticket.number}
-            </Text>
-            <Text wordBreak="break-word">
-              <AppLink
-                href={
-                  ticket.projectId === cycle.projectId
-                    ? ticketOnBoardPath(
-                        cyclePath(cycle.projectId, cycle.id),
-                        ticket.number,
-                      )
-                    : ticketByNumberPath(ticket.number)
-                }
-                scroll={ticket.projectId !== cycle.projectId}
-                variant="inherit"
-              >
-                {ticket.title}
-              </AppLink>
-            </Text>
-            <Text color="text-600" fontSize="small">
-              {ticket.status}
-              {ticket.archived && ' · archived'}
-            </Text>
-          </Inline>
-        </li>
-      ))}
+      {tickets.map((ticket) => {
+        const stillHere = ticket.projectId === cycle.projectId;
+        return (
+          <li key={ticket.number}>
+            <Inline gap={2} alignY="center">
+              <Text color="text-600" fontSize="small">
+                #{ticket.number}
+              </Text>
+              <Text wordBreak="break-word">
+                <AppLink
+                  href={
+                    stillHere
+                      ? ticketOnBoardPath(
+                          cyclePath(cycle.projectId, cycle.id),
+                          ticket.number,
+                        )
+                      : ticketByNumberPath(ticket.number)
+                  }
+                  scroll={!stillHere}
+                  variant="inherit"
+                >
+                  {ticket.title}
+                </AppLink>
+              </Text>
+              <Text color="text-600" fontSize="small">
+                {ticket.status}
+                {ticket.archived && ' · archived'}
+              </Text>
+            </Inline>
+          </li>
+        );
+      })}
     </Stack>
   );

@@ -34,6 +34,7 @@ import {
   cycleMembers,
   leaveAllCycles,
   leaveOpenCycles,
+  outOfBacklog,
   planNewTicket,
 } from './cycles';
 import {
@@ -1495,7 +1496,7 @@ export function createTickets(
         cycleId === undefined
           ? undefined
           : new Set(
-              cycleMembers(db, cycleId)
+              (cycleId === null ? outOfBacklog(db) : cycleMembers(db, cycleId))
                 .all()
                 .map(({ number }) => number),
             );
@@ -1852,7 +1853,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
           tickets.number,
-          cycleMembers(db, filter.cycleId),
+          filter.cycleId === null
+            ? outOfBacklog(db)
+            : cycleMembers(db, filter.cycleId),
         ),
   );
 }

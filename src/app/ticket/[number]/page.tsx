@@ -12,7 +12,7 @@ type TicketByNumberPageProps = {
 
 /**
  * Opens a Ticket by number alone over its own Board: its open Cycle's, else
- * for a finished Ticket its last Archived Cycle's, else the Backlog's
+ * for a Done Ticket its last Archived Cycle's, else the Backlog's
  * (ADR 0013). Every link to another Ticket goes through here, so
  * it resolves the Board when followed.
  */

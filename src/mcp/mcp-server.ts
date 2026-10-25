@@ -31,7 +31,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - To create several related Tickets at once, use create_tickets: list them in dependency order and give each one's Blockers as blockedByPositions, the positions of earlier Tickets in the list. It creates all of them or none.
 - Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Check each off with set_acceptance_criteria_checked as you verify it; rewrite the list with update_ticket. Checking criteria does not change the Status.
-- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them, and plan_tickets and unplan_tickets change up to ${maxBatchSize} Tickets of one Cycle in one call. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. The Backlog is the Tickets in no Prepared or Active Cycle, except the finished Tickets of an Archived Cycle, which stay in its history: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows each Cycle's state and ticketNumbers; plan_ticket and unplan_ticket change them, and plan_tickets and unplan_tickets change up to ${maxBatchSize} Tickets of one Cycle in one call. A Ticket is in at most one Cycle that is not Archived, and any non-archived Ticket can be planned, Done ones included. The Backlog is the Tickets in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it: list_tickets with cycleId: null. start_cycle refuses while another Cycle is Active; pass confirmArchiveActive: true only when the User has agreed to archive that Cycle and roll its open Tickets over.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project so they are handed off as one unit. Create children with create_ticket or create_tickets and epicNumber, or move existing Tickets in with attach_to_epic and out with detach_from_epic. Its Status follows its children and cannot be set by hand. get_ticket on an Epic returns its description, the shared context, and its children with their Status, blockedBy and blocked.
 - To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go. Deliver the whole Epic on one branch and PR named after the Epic.
 - Errors explain what was wrong with the input; fix it and try again.`;
@@ -315,7 +315,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .nullable()
           .optional()
           .describe(
-            'Only list the Tickets planned into this Cycle, or with null, the Backlog: those in no Prepared or Active Cycle, except the finished Tickets of an Archived Cycle, which stay in its history.',
+            'Only list the Tickets planned into this Cycle, or with null, the Backlog: those in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it.',
           ),
       },
       annotations: { readOnlyHint: true },
@@ -858,7 +858,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Archive Cycle',
       description:
-        'Archive the Active Cycle, finished or not, and return it. Only the Cycle changes: its Tickets keep their Status, it keeps its membership as read-only history, and its unfinished Tickets return to the Backlog, while its finished ones stay in its history.',
+        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history.',
       inputSchema: { id: cycleId },
     },
     ({ id }) => respond(() => tickets.archiveCycle(id)),

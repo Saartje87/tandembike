@@ -1628,9 +1628,9 @@ describe('Cycle tools', () => {
       JSON.stringify(
         tools.find((tool) => tool.name === 'list_tickets')?.inputSchema,
       ),
-    ).toMatch(/finished Tickets of an Archived Cycle/);
+    ).toMatch(/Done Tickets of an Archived Cycle/);
     expect(client.getInstructions()).toMatch(
-      /finished Tickets of an Archived Cycle/,
+      /Done Tickets of an Archived Cycle/,
     );
     await client.close();
   });

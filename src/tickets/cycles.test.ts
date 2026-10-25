@@ -430,16 +430,17 @@ describe('Archiving a Cycle', () => {
     return { tickets, project, cycle };
   }
 
-  it('archives an Active Cycle, leaving its Tickets as they are', () => {
+  it('archives an Active Cycle, keeping only its Done Tickets and leaving every Ticket as it is', () => {
     const { tickets, cycle } = activeCycle();
     const before = [1, 2, 3].map((number) => tickets.getTicket(number));
 
     const archived = tickets.archiveCycle(cycle.id);
 
+    // #1 is Todo and #3 an archived Todo: unfinished, so they leave it.
     expect(archived).toEqual({
       ...cycle,
       state: 'Archived',
-      ticketNumbers: [1, 2, 3],
+      ticketNumbers: [2],
       archivedAt: expect.any(Date),
     });
     expect([1, 2, 3].map((number) => tickets.getTicket(number))).toEqual(
@@ -507,7 +508,7 @@ describe('Archiving a Cycle', () => {
     );
     expect(tickets.getCycle(cycle.id)).toMatchObject({
       title: 'Beta',
-      ticketNumbers: [1, 2, 3],
+      ticketNumbers: [2],
     });
   });
 
@@ -515,7 +516,7 @@ describe('Archiving a Cycle', () => {
     const { tickets, project, cycle } = activeCycle();
     tickets.archiveCycle(cycle.id);
 
-    // #2 is Done, so it stays in the Cycle's History (#69).
+    // #2 is Done, so it stays with the archived Cycle (#69).
     expect(
       tickets
         .listTickets({ projectId: project.id, cycleId: null })
@@ -526,7 +527,7 @@ describe('Archiving a Cycle', () => {
     tickets.planTicket({ cycleId: next.id, number: 1 });
 
     expect(tickets.getCycle(next.id).ticketNumbers).toEqual([1]);
-    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([1, 2, 3]);
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([2]);
     expect(
       tickets.listTickets({ projectId: project.id, cycleId: null }),
     ).toEqual([]);
@@ -594,7 +595,7 @@ describe('Starting a Cycle with rollover', () => {
     });
     expect(tickets.getCycle(beta.id)).toMatchObject({
       state: 'Archived',
-      ticketNumbers: [1, 2, 3, 4],
+      ticketNumbers: [3],
       archivedAt: expect.any(Date),
     });
     expect(tickets.getTicket(3).status).toBe('Done');
@@ -614,10 +615,7 @@ describe('Starting a Cycle with rollover', () => {
 
     expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([1, 2, 5]);
     expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([
-      1,
-      2,
       3,
-      4,
       finished.number,
     ]);
   });
@@ -774,13 +772,29 @@ describe('The Backlog', () => {
     expect(backlog()).toEqual([1]);
   });
 
-  it('leaves out a Ticket finished after its Cycle was archived', () => {
+  it('keeps a Ticket finished after its Cycle was archived: it was not done in that Cycle', () => {
     const { tickets, backlog, archivedCycle } = backlogWith(1);
-    archivedCycle('Beta', [1]);
+    const beta = archivedCycle('Beta', [1]);
 
     tickets.updateTicket(1, { status: 'Done' });
 
-    expect(backlog()).toEqual([]);
+    expect(backlog()).toEqual([1]);
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+  });
+
+  it("shows a Done Ticket in its new Project's Backlog after a move", () => {
+    const { tickets, archivedCycle } = backlogWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1]);
+    const other = tickets.createProject({ name: 'App' });
+
+    tickets.updateTicket(1, { projectId: other.id });
+
+    expect(
+      tickets
+        .listTickets({ projectId: other.id, cycleId: null })
+        .map(({ number }) => number),
+    ).toEqual([1]);
   });
 
   it('leaves out finished Tickets of every Archived Cycle', () => {

@@ -62,7 +62,7 @@ describe('TicketByNumberPage', () => {
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it('opens a finished Ticket over the last Archived Cycle that holds it, unless an open Cycle does', async () => {
+  it('opens a Done Ticket over the last Archived Cycle that holds it, unless an open Cycle does', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const done = tickets.createTicket({ projectId: project.id, title: 'Done' });
