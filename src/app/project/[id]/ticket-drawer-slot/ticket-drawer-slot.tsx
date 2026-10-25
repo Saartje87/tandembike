@@ -9,7 +9,7 @@ import {
 export const TicketDrawerSlot: FC<ProjectTicketPageProps> = async ({
   params,
 }) => {
-  const { ticket, tickets } = await loadProjectTicket(params);
+  const { ticket, tickets, epicClaim } = await loadProjectTicket(params);
   return (
     <TicketDrawer
       ticket={ticket}
@@ -18,6 +18,7 @@ export const TicketDrawerSlot: FC<ProjectTicketPageProps> = async ({
       comments={tickets.listComments(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
       cycles={tickets.listCycles(ticket.projectId)}
+      epicClaim={epicClaim}
       closeWithBack
     />
   );

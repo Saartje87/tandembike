@@ -8,7 +8,10 @@ export type ProjectTicketPageProps = {
   params: Promise<{ id: string; number: string }>;
 };
 
-/** The Ticket and owning Project for a project-scoped ticket route. */
+/**
+ * The Ticket and owning Project for a project-scoped ticket route, with the
+ * Claim on its Epic, which covers it too.
+ */
 export async function loadProjectTicket(
   params: ProjectTicketPageProps['params'],
 ) {
@@ -27,7 +30,9 @@ export async function loadProjectTicket(
     if (ticket.projectId !== project.id) {
       notFound();
     }
-    return { ticket, project, tickets };
+    const epicClaim =
+      ticket.epic === null ? null : tickets.getTicket(ticket.epic.number).claim;
+    return { ticket, project, tickets, epicClaim };
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();

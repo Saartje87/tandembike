@@ -32,6 +32,7 @@ import { claimOwner } from './claim-owner';
 import {
   createCycles,
   cycleMembers,
+  leaveAllCycles,
   leaveOpenCycles,
   planNewTicket,
 } from './cycles';
@@ -1601,6 +1602,65 @@ export function createTickets(
     /** Brings archived Ticket `number` back exactly as it was. */
     restoreTicket(number: number): Ticket {
       return setArchived(number, false);
+    },
+
+    /**
+     * Destroys Ticket `number` for good (ADR 0012), whatever its Status,
+     * archived or claimed; its number is never used again. Its labels,
+     * Comments, acceptance criteria and Blockers on both sides go with it,
+     * and it leaves every Cycle, Archived ones' history included. The Tickets
+     * it blocked and its Epic are bumped, and the Epic's Status is derived
+     * again. An Epic that still has children is refused. Only the User
+     * deletes: no MCP tool calls this.
+     */
+    deleteTicket(number: number): void {
+      const { unblocked, epic, leftCycles } = db.transaction(() => {
+        const { epic, children } = getTicket(number);
+        if (children.length > 0) {
+          throw new NotAllowedError(
+            `Epic #${number} still has children. Detach them before deleting it.`,
+          );
+        }
+        db.delete(ticketLabels)
+          .where(eq(ticketLabels.ticketNumber, number))
+          .run();
+        db.delete(ticketComments)
+          .where(eq(ticketComments.ticketNumber, number))
+          .run();
+        db.delete(ticketAcceptanceCriteria)
+          .where(eq(ticketAcceptanceCriteria.ticketNumber, number))
+          .run();
+        db.delete(ticketBlockers)
+          .where(eq(ticketBlockers.blockedNumber, number))
+          .run();
+        const unblocked = db
+          .delete(ticketBlockers)
+          .where(eq(ticketBlockers.blockerNumber, number))
+          .returning({ number: ticketBlockers.blockedNumber })
+          .all()
+          .map(({ number: blocked }) => blocked);
+        for (const blocked of unblocked) {
+          touchTicket(db, blocked);
+        }
+        const leftCycles = leaveAllCycles(db, number);
+        db.delete(tickets).where(eq(tickets.number, number)).run();
+        if (epic !== null) {
+          touchTicket(db, epic.number);
+          syncEpicStatus(db, epic.number);
+        }
+        return { unblocked, epic, leftCycles };
+      });
+      changes.publish({
+        type: 'tickets',
+        numbers: [
+          number,
+          ...unblocked,
+          ...(epic === null ? [] : [epic.number]),
+        ],
+      });
+      for (const id of leftCycles) {
+        changes.publish({ type: 'cycle', id });
+      }
     },
   };
 

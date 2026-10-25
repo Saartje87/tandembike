@@ -210,6 +210,22 @@ export function leaveOpenCycles(
 }
 
 /**
+ * Takes Ticket `number` out of every Cycle, Archived ones' history included,
+ * as when it is deleted (ADR 0012). Returns the ids of the Cycles it left.
+ */
+export function leaveAllCycles(
+  db: DatabaseConnection,
+  number: number,
+): number[] {
+  return db
+    .delete(cycleTickets)
+    .where(eq(cycleTickets.ticketNumber, number))
+    .returning({ id: cycleTickets.cycleId })
+    .all()
+    .map(({ id }) => id);
+}
+
+/**
  * The Tickets module's Cycle functions, spread into `createTickets`: they
  * share its database and change channel.
  */

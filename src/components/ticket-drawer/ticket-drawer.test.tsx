@@ -33,6 +33,7 @@ vi.mock('../../app/tickets/actions', () => ({
   addTicketLabel: vi.fn(),
   removeTicketLabel: vi.fn(),
   clearTicketClaim: vi.fn(),
+  deleteTicket: vi.fn(),
   updateTicket: vi.fn(),
   archiveTicket: vi.fn(),
   restoreTicket: vi.fn(),
@@ -1189,13 +1190,16 @@ describe('TicketDrawer', () => {
       ).toBe(true);
     });
 
-    it('has no way to delete the Ticket', () => {
-      renderDrawer();
+    it.each([false, true])(
+      'offers Delete in the footer, archived: %s (ADR 0012)',
+      (archived) => {
+        renderDrawer({ ...ticket, archived });
 
-      expect(
-        inDrawer().queryByRole('button', { name: /delete/i }),
-      ).not.toBeInTheDocument();
-    });
+        expect(
+          inDrawer().getByRole('button', { name: 'Delete' }),
+        ).toBeInTheDocument();
+      },
+    );
   });
 
   it("closes to the Ticket's Board", async () => {

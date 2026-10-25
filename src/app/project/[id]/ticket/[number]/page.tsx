@@ -15,7 +15,8 @@ export async function generateMetadata({
 
 /** A Ticket in its drawer over its tab: its Cycle's, or the Backlog. */
 const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
-  const { ticket, project, tickets } = await loadProjectTicket(params);
+  const { ticket, project, tickets, epicClaim } =
+    await loadProjectTicket(params);
   const cycles = tickets.listCycles(project.id);
   const cycle = cycles.find(
     ({ state, ticketNumbers }) =>
@@ -35,6 +36,7 @@ const TicketPage: FC<ProjectTicketPageProps> = async ({ params }) => {
         comments={tickets.listComments(ticket.number)}
         blockers={tickets.listBlockers(ticket.number)}
         cycles={cycles}
+        epicClaim={epicClaim}
         boardPath={
           cycle ? cyclePath(project.id, cycle.id) : projectPath(project.id)
         }

@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets } from '../../test/tickets';
@@ -12,6 +13,7 @@ import {
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
   createTicket,
+  deleteTicket,
   editTicketComment,
   removeTicketComment,
   removeTicketLabel,
@@ -21,11 +23,43 @@ import {
 } from './actions';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 describe('Ticket actions', () => {
   beforeEach(() => {
     vi.mocked(revalidatePath).mockClear();
+    vi.mocked(redirect).mockClear();
+  });
+
+  it('deletes a Ticket and sends the User to the Board it was on', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const backlog = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const planned = tickets.createTicket({ projectId: project.id, title: 'B' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: planned.number });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await deleteTicket({ number: planned.number });
+    await deleteTicket({ number: backlog.number });
+
+    expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
+    expect(vi.mocked(redirect).mock.calls).toEqual([
+      [`/project/${project.id}/cycle/${cycle.id}`],
+      [`/project/${project.id}`],
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+  });
+
+  it('returns a refused deletion as an error and stays put', async () => {
+    const tickets = createTestTickets();
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await deleteTicket({ number: 42 });
+
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket #42.' });
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it('creates a Todo Ticket with needs-triage and refreshes its Board', async () => {

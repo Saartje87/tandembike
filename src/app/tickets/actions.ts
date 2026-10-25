@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { redirect } from 'next/navigation';
 
 import { appTickets } from '../../tickets/app-tickets';
 import type { EpicChildInput } from '../../tickets/epics';
@@ -15,7 +16,13 @@ import type {
   UpdateTicketInput,
 } from '../../tickets/tickets';
 import { type ActionResult, actionResult } from '../lib/action-result';
-import { boardRoute, cycleRoute, projectPath, ticketRoute } from '../lib/paths';
+import {
+  boardRoute,
+  cyclePath,
+  cycleRoute,
+  projectPath,
+  ticketRoute,
+} from '../lib/paths';
 
 export type CreateTicketResult = ActionResult<{ number: number }>;
 
@@ -170,6 +177,44 @@ export async function restoreTicket(input: {
   number: number;
 }): Promise<ArchiveTicketResult> {
   return setArchived(input, false);
+}
+
+export type DeleteTicketResult = ActionResult;
+
+/**
+ * Deletes a Ticket for good as the User (ADR 0012) and sends them to the
+ * Board it was on: its open Cycle's, or the Backlog. Redirecting, rather
+ * than navigating once the result is back, keeps the page from rendering
+ * the deleted Ticket first. A refusal comes back as `error`, like
+ * `createTicket`.
+ */
+export async function deleteTicket(input: {
+  number: number;
+}): Promise<DeleteTicketResult> {
+  const result = actionResult(() => {
+    const tickets = appTickets();
+    const number = Number(input?.number);
+    const { projectId } = tickets.getTicket(number);
+    const cycle = tickets
+      .listCycles(projectId)
+      .find(
+        ({ state, ticketNumbers }) =>
+          state !== 'Archived' && ticketNumbers.includes(number),
+      );
+    tickets.deleteTicket(number);
+    revalidatePath(projectPath(projectId));
+    revalidatePath(cycleRoute, 'page');
+    revalidatePath(ticketRoute, 'page');
+    return {
+      boardPath: cycle
+        ? cyclePath(projectId, cycle.id)
+        : projectPath(projectId),
+    };
+  });
+  if (result.ok) {
+    redirect(result.boardPath);
+  }
+  return result;
 }
 
 export type TicketLabelResult = ActionResult;
