@@ -108,11 +108,20 @@ describe('MCP server', () => {
     expect(describe('add_blocker')).toMatch(
       /Blockers between an Epic and its own children are refused/,
     );
-    for (const name of ['list_tickets', 'create_ticket', 'create_tickets']) {
-      expect(describe(name)).toMatch(
+    for (const name of [
+      'list_tickets',
+      'create_ticket',
+      'create_tickets',
+      'update_ticket',
+      'list_cycles',
+      'create_cycle',
+    ]) {
+      expect(describe(name), name).toMatch(
         /Giving both is refused unless they name the same Project/,
       );
     }
+    // The name there would read as the Project's new name (#105).
+    expect(describe('rename_project')).not.toMatch(/projectName/);
     expect(instructions).toMatch(/missing from your list may still exist/);
     await client.close();
   });
@@ -682,6 +691,44 @@ describe('Ticket tools', () => {
       title: 'Fix the header',
       description: 'It overlaps the logo.',
       status: 'In progress',
+    });
+    await client.close();
+  });
+
+  it('moves a Ticket to a Project given by name', async () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: website.id, title: 'Fix the header' });
+    const client = await connectMcpClient(tickets);
+    const move = (args: Record<string, unknown>) =>
+      client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 1, ...args },
+      });
+
+    const stale = await move({ projectName: 'Ticket' });
+    const mismatched = await move({
+      projectId: website.id,
+      projectName: 'App',
+    });
+    const moved = await move({ projectName: 'app' });
+
+    expect(resultText(stale)).toBe(
+      'There is no Project named "Ticket". The Projects are: "App", "Website".',
+    );
+    expect(resultText(mismatched)).toBe(
+      `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+    );
+    for (const refused of [stale, mismatched]) {
+      expect(refused.isError).toBe(true);
+    }
+    expect(resultJson(moved)).toMatchObject({ projectId: app.id });
+    expect(
+      resultJson(await move({ projectId: website.id, projectName: 'WEBSITE' })),
+    ).toMatchObject({ projectId: website.id });
+    expect(resultJson(await move({ projectId: app.id }))).toMatchObject({
+      projectId: app.id,
     });
     await client.close();
   });
@@ -1864,6 +1911,65 @@ describe('Cycle tools', () => {
         archivedAt: null,
       },
     ]);
+    await client.close();
+  });
+
+  it('creates and lists Cycles in a Project given by name', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    tickets.createProject({ name: 'App' });
+    const call = (name: string, args: Record<string, unknown>) =>
+      client.callTool({ name, arguments: args });
+
+    const created = await call('create_cycle', {
+      projectName: 'website',
+      title: 'Beta',
+    });
+    const listed = await call('list_cycles', { projectName: 'Website' });
+    const stale = await call('create_cycle', {
+      projectName: 'Ticket',
+      title: 'Beta',
+    });
+    const staleList = await call('list_cycles', { projectName: 'Ticket' });
+    const mismatched = await call('create_cycle', {
+      projectId: project.id,
+      projectName: 'App',
+      title: 'Beta',
+    });
+    const mismatchedList = await call('list_cycles', {
+      projectId: project.id,
+      projectName: 'App',
+    });
+    const neither = await call('create_cycle', { title: 'Beta' });
+    const neitherList = await call('list_cycles', {});
+
+    expect(resultJson(created)).toMatchObject({ projectId: project.id });
+    expect(resultJson(listed)).toMatchObject([{ title: 'Beta' }]);
+    for (const result of [stale, staleList]) {
+      expect(resultText(result)).toBe(
+        'There is no Project named "Ticket". The Projects are: "App", "Website".',
+      );
+    }
+    for (const result of [mismatched, mismatchedList]) {
+      expect(resultText(result)).toBe(
+        `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+      );
+    }
+    for (const result of [neither, neitherList]) {
+      expect(resultText(result)).toBe(
+        'Choose a Project by projectId or projectName.',
+      );
+    }
+    for (const refused of [
+      stale,
+      staleList,
+      mismatched,
+      mismatchedList,
+      neither,
+      neitherList,
+    ]) {
+      expect(refused.isError).toBe(true);
+    }
+    expect(tickets.listCycles(project.id)).toHaveLength(1);
     await client.close();
   });
 
