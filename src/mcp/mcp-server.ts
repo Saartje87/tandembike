@@ -422,11 +422,19 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
-        projectId: projectId.describe(
-          'The Project the Tickets belong to (id from list_projects).',
-        ),
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project the Tickets belong to (id from list_projects). Give this or projectName.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'The name of the Project the Tickets belong to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects.',
+          ),
         epicNumber: ticketNumber
           .optional()
           .describe(
@@ -449,9 +457,14 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
       },
     },
-    (input) =>
+    ({ projectId, projectName, ...input }) =>
       respond(() => ({
-        numbers: tickets.createTicketBatch(input).map(({ number }) => number),
+        numbers: tickets
+          .createTicketBatch({
+            ...input,
+            projectId: tickets.resolveProjectId({ projectId, projectName }),
+          })
+          .map(({ number }) => number),
       })),
   );
 

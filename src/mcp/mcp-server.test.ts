@@ -973,6 +973,43 @@ describe('Batch tools', () => {
 });
 
 describe('Batch create tool', () => {
+  it('creates several Tickets in a Project given by name', async () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    tickets.createProject({ name: 'App' });
+    const client = await connectMcpClient(tickets);
+    const call = (args: Record<string, unknown>) =>
+      client.callTool({
+        name: 'create_tickets',
+        arguments: { ...args, tickets: [{ title: 'One' }, { title: 'Two' }] },
+      });
+
+    const created = await call({ projectName: 'website' });
+    const stale = await call({ projectName: 'Ticket' });
+    const mismatched = await call({
+      projectId: website.id,
+      projectName: 'App',
+    });
+    const neither = await call({});
+
+    expect(resultJson(created)).toEqual({ numbers: [1, 2] });
+    expect(tickets.getTicket(1).projectId).toBe(website.id);
+    expect(resultText(stale)).toBe(
+      'There is no Project named "Ticket". The Projects are: "App", "Website".',
+    );
+    expect(resultText(mismatched)).toBe(
+      `Project ${website.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+    );
+    expect(resultText(neither)).toBe(
+      'Choose a Project by projectId or projectName.',
+    );
+    for (const refused of [stale, mismatched, neither]) {
+      expect(refused.isError).toBe(true);
+    }
+    expect(tickets.listTickets({})).toHaveLength(2);
+    await client.close();
+  });
+
   it('creates several Tickets with Blockers by position and lists their numbers', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
