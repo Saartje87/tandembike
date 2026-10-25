@@ -35,6 +35,7 @@ import { reorderTickets, updateTicket } from '../../app/tickets/actions';
 import { isStatus, type Status, statuses } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { EpicChips } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
 import { TicketCard } from '../ticket-card/ticket-card';
@@ -42,8 +43,17 @@ import * as styles from './board.css';
 
 export type BoardProps = {
   project: Project;
-  /** The Project's Tickets, archived ones included, oldest-created first. */
+  /**
+   * The Board's Tickets, archived ones included, oldest-created first. Its
+   * Epics stay out of the columns.
+   */
   tickets: Ticket[];
+  /**
+   * The Project's live Epics, oldest-created first, for the row above the
+   * columns; a Cycle's Board lists only those with a child in `tickets`.
+   * Defaults to none.
+   */
+  epics?: Ticket[];
   /**
    * The number of the Ticket open in the drawer over the Board, if any. When
    * it is archived, the Board starts with the archived Tickets shown.
@@ -234,7 +244,8 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 };
 
 /**
- * A Project's Board: its header and one column per active Status, plus a
+ * A Project's Board: its header, its Epics' row, and one column per Status
+ * holding its active normal Tickets, plus a
  * "Show archived" switch, with their count, that lists archived Tickets
  * below. Tickets can be reordered by dragging or moved between Statuses; both
  * changes save through Server Actions and roll back optimistically if
@@ -243,6 +254,7 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 export const Board: FC<BoardProps> = ({
   project,
   tickets,
+  epics = [],
   openTicket,
   header,
   cycleId,
@@ -256,7 +268,16 @@ export const Board: FC<BoardProps> = ({
   );
   const lastDropTarget = useRef<string | number | undefined>(undefined);
   const switchId = useId();
-  const active = shownTickets.filter((ticket) => !ticket.archived);
+  const active = shownTickets.filter(
+    (ticket) => !ticket.archived && ticket.type !== 'Epic',
+  );
+  const planned = new Set(tickets.map((ticket) => ticket.number));
+  const rowEpics =
+    typeof cycleId === 'number'
+      ? epics.filter((epic) =>
+          epic.children.some((child) => planned.has(child.number)),
+        )
+      : epics;
   const archived = shownTickets.filter((ticket) => ticket.archived);
 
   const changeStatus = (number: number, status: Status) => {
@@ -367,6 +388,12 @@ export const Board: FC<BoardProps> = ({
       {header}
       {error && <Alert intent="error">{error}</Alert>}
       <DndProvider onDragOver={rememberDropTarget} onDragEnd={finishDrag}>
+        <EpicChips
+          epics={rowEpics}
+          projectId={project.id}
+          cycleId={cycleId ?? undefined}
+          boardPath={boardPath}
+        />
         <Grid gap={3}>
           {statuses.map((status) => (
             <GridItem key={status} colSpan={[12, 4]}>

@@ -49,7 +49,9 @@ const ticket = (
 const cardsIn = (column: string) =>
   within(screen.getByRole('region', { name: column }))
     .queryAllByRole('listitem')
-    .map((card) => within(card).getByRole('link').getAttribute('aria-label'));
+    .map((card) =>
+      within(card).getAllByRole('link')[0].getAttribute('aria-label'),
+    );
 
 const mockBoardBounds = (targetStatus: string) =>
   vi
@@ -388,6 +390,98 @@ describe('Board', () => {
     // The alert can show one render before the optimistic move is undone.
     await waitFor(() => expect(cardsIn('Todo')).toEqual(['Fix the header']));
     expect(cardsIn('Done')).toEqual([]);
+  });
+});
+
+describe('Board with Epics', () => {
+  const checkout = ticket({
+    number: 10,
+    title: 'Checkout',
+    type: 'Epic',
+    children: [
+      {
+        number: 11,
+        title: 'Pay by card',
+        status: 'Todo',
+        archived: false,
+        blockedBy: [],
+        blocked: false,
+      },
+    ],
+  });
+  const search = ticket({ number: 20, title: 'Search', type: 'Epic' });
+  const payByCard = ticket({
+    number: 11,
+    title: 'Pay by card',
+    epic: { number: 10, title: 'Checkout' },
+  });
+  const chips = () =>
+    within(screen.getByRole('list', { name: 'Epics' }))
+      .queryAllByRole('link')
+      .map((link) => link.textContent);
+
+  it('leaves Epics out of the columns and their counts, keeping their children', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[checkout, payByCard, search]}
+        epics={[checkout, search]}
+      />,
+    );
+
+    expect(cardsIn('Todo')).toEqual(['Pay by card']);
+    expect(
+      within(screen.getByRole('region', { name: 'Todo' })).getByText(
+        (_, element) => element?.textContent === '1 Ticket',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lists the Project's Epics above the columns", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard]}
+        epics={[checkout, search]}
+        cycleId={null}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']);
+  });
+
+  it("lists on a Cycle's Board only the Epics with a child planned into it", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, search]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+  });
+
+  it('offers to create an Epic from the row, not from the Todo lane', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 9 });
+    renderWithTheme(<Board project={project} tickets={[]} cycleId={7} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Create Epic' }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'New Epic' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Epic title' }),
+      'Checkout{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      title: 'Checkout',
+      cycleId: 7,
+      type: 'Epic',
+    });
   });
 });
 

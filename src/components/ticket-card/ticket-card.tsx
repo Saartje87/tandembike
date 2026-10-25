@@ -42,46 +42,6 @@ const BlockedMarker: FC = () => (
   </Box>
 );
 
-type EpicProgressProps = {
-  /** The Epic's children. */
-  items: Ticket['children'];
-};
-
-/**
- * A pill that says the Ticket is an Epic, with how many of its children
- * that are not archived are Done, as `2/4`.
- */
-const EpicProgress: FC<EpicProgressProps> = ({ items }) => {
-  const live = items.filter((child) => !child.archived);
-  const done = live.filter((child) => child.status === 'Done');
-
-  // `Inline` takes no `role` and cannot render a `span` (docs/blocks-feedback.md, 15).
-  return (
-    <Box
-      asChild
-      display="flex"
-      alignItems="center"
-      gap={1}
-      backgroundColor="primary-100"
-      borderRadius="full"
-      paddingInline={2}
-    >
-      <span
-        role="img"
-        aria-label={`Epic: ${done.length} of ${live.length} child Tickets Done`}
-      >
-        <Icon name="rectangle-stack" size="small" color="primary-800" />
-        <Text fontSize="xsmall" color="primary-800">
-          Epic
-        </Text>
-        <Text fontSize="xsmall" color="primary-800">
-          {done.length}/{live.length}
-        </Text>
-      </span>
-    </Box>
-  );
-};
-
 /** How many acceptance criteria are checked, as `2/4`; nothing without any. */
 const CriteriaProgress: FC<CriteriaProgressProps> = ({
   acceptanceCriteria,
@@ -109,9 +69,9 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
 };
 
 /**
- * A Ticket on the Board: its number, title, whether it is an Epic and how
- * far along, or a link to its Epic, whether it is blocked (unless it is
- * Done), labels and acceptance-criteria progress, and a drag handle.
+ * A normal Ticket on the Board: its number, title, a link to its Epic,
+ * whether it is blocked (unless it is Done), labels and acceptance-criteria
+ * progress, and a drag handle.
  * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
  */
 export const TicketCard: FC<TicketCardProps> = ({
@@ -123,7 +83,6 @@ export const TicketCard: FC<TicketCardProps> = ({
   const changed = useTicketChanged(ticket.number);
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
-  const isEpic = ticket.type === 'Epic';
 
   return (
     <Box
@@ -174,9 +133,8 @@ export const TicketCard: FC<TicketCardProps> = ({
                 </AppLink>
               </Text>
             )}
-            {isEpic || showBlocked || ticket.labels.length > 0 ? (
+            {showBlocked || ticket.labels.length > 0 ? (
               <Inline gap={1} alignY="center" flexWrap="wrap">
-                {isEpic && <EpicProgress items={ticket.children} />}
                 {showBlocked && <BlockedMarker />}
                 <LabelList labels={ticket.labels} />
               </Inline>

@@ -208,41 +208,6 @@ describe('TicketCard', () => {
   });
 
   describe('Epics', () => {
-    const child = (
-      number: number,
-      status: 'Todo' | 'In progress' | 'Done',
-      archived = false,
-    ) => ({
-      number,
-      title: `Child ${number}`,
-      status,
-      archived,
-      blockedBy: [],
-      blocked: false,
-    });
-
-    it('marks an Epic and counts its children that are Done', () => {
-      renderWithTheme(
-        <TicketCard
-          boardPath="/project/1/cycle/7"
-          ticket={{
-            ...ticket,
-            type: 'Epic',
-            children: [
-              child(5, 'Done'),
-              child(6, 'In progress'),
-              child(7, 'Todo'),
-              child(8, 'Done', true),
-            ],
-          }}
-        />,
-      );
-
-      expect(
-        screen.getByRole('img', { name: 'Epic: 1 of 3 child Tickets Done' }),
-      ).toHaveTextContent('Epic1/3');
-    });
-
     it('links a child to its Epic', () => {
       renderWithTheme(
         <TicketCard
@@ -256,14 +221,11 @@ describe('TicketCard', () => {
       ).toHaveAttribute('href', '/ticket/2');
     });
 
-    it('shows neither for a Ticket outside any Epic', () => {
+    it('shows no Epic link for a Ticket outside any Epic', () => {
       renderWithTheme(
         <TicketCard ticket={ticket} boardPath="/project/1/cycle/7" />,
       );
 
-      expect(
-        screen.queryByRole('img', { name: /^Epic/ }),
-      ).not.toBeInTheDocument();
       expect(
         screen.queryByRole('link', { name: /^Epic/ }),
       ).not.toBeInTheDocument();

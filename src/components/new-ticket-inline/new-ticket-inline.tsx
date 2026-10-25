@@ -23,13 +23,19 @@ export type NewTicketInlineProps = {
   cycleId?: number;
   /** The Epic to create it under, in that Epic's drawer. */
   epicNumber?: number;
+  /** What to create; defaults to a normal Ticket. */
+  type?: TicketType;
+  /** Focus the field as it appears. */
+  autoFocus?: boolean;
+  /** Called after a Ticket is created, and when Escape clears the field. */
+  onDone?: () => void;
 };
 
 /**
  * A title field that creates a Ticket in Todo in `projectId`, planned into
  * `cycleId` or under `epicNumber` when given, on Enter or with its Create
  * Ticket button, and clears for the next one; Escape clears it without
- * creating. Outside an Epic, its Create Epic button creates an Epic instead.
+ * creating; both call `onDone`. With `type` Epic it creates an Epic instead.
  * The module validates, and its reason shows under the field. On success
  * the Server Action revalidates the Board, which shows the new Ticket.
  */
@@ -37,6 +43,9 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
   projectId,
   cycleId,
   epicNumber,
+  type = 'Ticket',
+  autoFocus,
+  onDone,
 }) => {
   const titleId = useId();
   const errorId = useId();
@@ -49,27 +58,26 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
   } = useForm<{ title: string }>({ defaultValues: { title: '' } });
   const reason = errors.title?.message ?? errors.root?.server?.message;
 
-  const create = (type: TicketType) =>
-    handleSubmit(async ({ title }) => {
-      const result = await createTicket({
-        projectId,
-        title,
-        ...(cycleId === undefined ? {} : { cycleId }),
-        ...(epicNumber === undefined ? {} : { epicNumber }),
-        ...(type === 'Epic' ? { type } : {}),
-      });
-      if (!result.ok) {
-        const titleReason = result.fieldErrors?.title;
-        if (titleReason) {
-          setError('title', { type: 'server', message: titleReason });
-        } else {
-          setError('root.server', { message: result.error });
-        }
-        return;
-      }
-      reset();
+  const submit = handleSubmit(async ({ title }) => {
+    const result = await createTicket({
+      projectId,
+      title,
+      ...(cycleId === undefined ? {} : { cycleId }),
+      ...(epicNumber === undefined ? {} : { epicNumber }),
+      ...(type === 'Epic' ? { type } : {}),
     });
-  const submit = create('Ticket');
+    if (!result.ok) {
+      const titleReason = result.fieldErrors?.title;
+      if (titleReason) {
+        setError('title', { type: 'server', message: titleReason });
+      } else {
+        setError('root.server', { message: result.error });
+      }
+      return;
+    }
+    reset();
+    onDone?.();
+  });
 
   // While a Ticket saves, the field is read-only and ignores Enter and
   // Escape, so a Ticket is created once and what was saved is what clears.
@@ -86,9 +94,11 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       <Stack gap={1}>
         <Label htmlFor={titleId}>
           <VisuallyHidden>
-            {epicNumber === undefined
-              ? 'New Ticket title'
-              : 'New child Ticket title'}
+            {type === 'Epic'
+              ? 'New Epic title'
+              : epicNumber === undefined
+                ? 'New Ticket title'
+                : 'New child Ticket title'}
           </VisuallyHidden>
         </Label>
         <TextInput
@@ -99,37 +109,29 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
               event.preventDefault();
               reset();
               event.currentTarget.blur();
+              onDone?.();
             }
           }}
           placeholder={
-            epicNumber === undefined ? 'Add a Ticket…' : 'Add a child Ticket…'
+            type === 'Epic'
+              ? 'Add an Epic…'
+              : epicNumber === undefined
+                ? 'Add a Ticket…'
+                : 'Add a child Ticket…'
           }
+          autoFocus={autoFocus}
           autoComplete="off"
           readOnly={isSubmitting}
           endSlot={
-            <>
-              {epicNumber === undefined && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  disabled={isSubmitting}
-                  aria-label="Create Epic"
-                  onClick={() => void create('Epic')()}
-                >
-                  <Icon name="rectangle-stack" size="small" />
-                </Button>
-              )}
-              <Button
-                type="submit"
-                variant="ghost"
-                size="small"
-                loading={isSubmitting}
-                aria-label="Create Ticket"
-              >
-                <Icon name="plus" size="small" />
-              </Button>
-            </>
+            <Button
+              type="submit"
+              variant="ghost"
+              size="small"
+              loading={isSubmitting}
+              aria-label={type === 'Epic' ? 'Create Epic' : 'Create Ticket'}
+            >
+              <Icon name="plus" size="small" />
+            </Button>
           }
           aria-invalid={errors.title ? true : undefined}
           aria-describedby={reason ? errorId : undefined}

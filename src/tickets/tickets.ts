@@ -300,6 +300,8 @@ export type ListTicketsFilter = {
   cycleId?: number | null;
   /** Only the Tickets split from this Ticket: whose Origin it is. */
   originNumber?: number;
+  /** Only normal Tickets, or only Epics. */
+  type?: TicketType;
 };
 
 export const defaultPageSize = 50;
@@ -1955,6 +1957,7 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
     filter.originNumber === undefined
       ? undefined
       : eq(tickets.originNumber, filter.originNumber),
+    filter.type === undefined ? undefined : eq(tickets.type, filter.type),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(

@@ -35,6 +35,26 @@ describe('Creating an Epic', () => {
   });
 });
 
+describe('Listing Epics', () => {
+  it("lists only a Project's Epics, oldest-created first", () => {
+    const { tickets, project, epic } = setUp();
+    tickets.createTicket({ projectId: project.id, title: 'Fix the header' });
+    const later = tickets.createTicket({
+      projectId: project.id,
+      title: 'Search',
+      type: 'Epic',
+    });
+    const other = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: other.id, title: 'Login', type: 'Epic' });
+
+    expect(
+      tickets
+        .listTickets({ projectId: project.id, type: 'Epic' })
+        .map(({ number }) => number),
+    ).toEqual([epic.number, later.number]);
+  });
+});
+
 describe('Creating a Ticket under an Epic', () => {
   it('links the child to its Epic and lists it as a child', () => {
     const { tickets, project, epic } = setUp();
