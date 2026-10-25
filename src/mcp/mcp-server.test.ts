@@ -724,6 +724,12 @@ describe('Ticket tools', () => {
       expect(refused.isError).toBe(true);
     }
     expect(resultJson(moved)).toMatchObject({ projectId: app.id });
+    expect(
+      resultJson(await move({ projectId: website.id, projectName: 'WEBSITE' })),
+    ).toMatchObject({ projectId: website.id });
+    expect(resultJson(await move({ projectId: app.id }))).toMatchObject({
+      projectId: app.id,
+    });
     await client.close();
   });
 
@@ -1919,30 +1925,50 @@ describe('Cycle tools', () => {
       title: 'Beta',
     });
     const listed = await call('list_cycles', { projectName: 'Website' });
-    const refused = [
-      await call('create_cycle', { projectName: 'Ticket', title: 'Beta' }),
-      await call('list_cycles', { projectName: 'Ticket' }),
-      await call('create_cycle', {
-        projectId: project.id,
-        projectName: 'App',
-        title: 'Beta',
-      }),
-      await call('list_cycles', { projectId: project.id, projectName: 'App' }),
-      await call('list_cycles', {}),
-    ];
+    const stale = await call('create_cycle', {
+      projectName: 'Ticket',
+      title: 'Beta',
+    });
+    const staleList = await call('list_cycles', { projectName: 'Ticket' });
+    const mismatched = await call('create_cycle', {
+      projectId: project.id,
+      projectName: 'App',
+      title: 'Beta',
+    });
+    const mismatchedList = await call('list_cycles', {
+      projectId: project.id,
+      projectName: 'App',
+    });
+    const neither = await call('create_cycle', { title: 'Beta' });
+    const neitherList = await call('list_cycles', {});
 
     expect(resultJson(created)).toMatchObject({ projectId: project.id });
     expect(resultJson(listed)).toMatchObject([{ title: 'Beta' }]);
-    expect(refused.map((result) => result.isError)).toEqual(
-      refused.map(() => true),
-    );
-    expect(refused.map(resultText)).toEqual([
-      'There is no Project named "Ticket". The Projects are: "App", "Website".',
-      'There is no Project named "Ticket". The Projects are: "App", "Website".',
-      `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
-      `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
-      'Choose a Project by projectId or projectName.',
-    ]);
+    for (const result of [stale, staleList]) {
+      expect(resultText(result)).toBe(
+        'There is no Project named "Ticket". The Projects are: "App", "Website".',
+      );
+    }
+    for (const result of [mismatched, mismatchedList]) {
+      expect(resultText(result)).toBe(
+        `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+      );
+    }
+    for (const result of [neither, neitherList]) {
+      expect(resultText(result)).toBe(
+        'Choose a Project by projectId or projectName.',
+      );
+    }
+    for (const refused of [
+      stale,
+      staleList,
+      mismatched,
+      mismatchedList,
+      neither,
+      neitherList,
+    ]) {
+      expect(refused.isError).toBe(true);
+    }
     expect(tickets.listCycles(project.id)).toHaveLength(1);
     await client.close();
   });
