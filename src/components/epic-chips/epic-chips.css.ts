@@ -15,3 +15,12 @@ export const chip = style({
 export const newEpic = style({
   maxInlineSize: `calc(${vars.space[8]} * 8)`,
 });
+
+/**
+ * A card is over the chip: an outline, since the background is the Epic's
+ * colour.
+ */
+export const dropTarget = style({
+  outline: `${vars.borderWidth.thick} solid ${vars.color['primary-500']}`,
+  outlineOffset: vars.borderWidth.thick,
+});

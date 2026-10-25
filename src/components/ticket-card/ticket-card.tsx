@@ -9,6 +9,7 @@ import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
+import { tinted } from '../palette/palette.css';
 import * as styles from './ticket-card.css';
 
 export type TicketCardProps = {
@@ -69,7 +70,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
 };
 
 /**
- * A normal Ticket on the Board: its number, title, a link to its Epic,
+ * A normal Ticket on the Board: its number, title, a badge in its Epic's
+ * colour linking to it,
  * whether it is blocked (unless it is Done), labels and acceptance-criteria
  * progress, and a drag handle.
  * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
@@ -123,11 +125,13 @@ export const TicketCard: FC<TicketCardProps> = ({
             </Text>
 
             {ticket.epic && (
-              <Text fontSize="xsmall" color="text-600" wordBreak="break-word">
+              <Text fontSize="xsmall" className={styles.epicLine}>
                 <AppLink
                   href={ticketByNumberPath(ticket.epic.number)}
                   variant="inherit"
                   aria-label={`Epic #${ticket.epic.number} ${ticket.epic.title}`}
+                  data-color={ticket.epic.color}
+                  className={`${styles.epicBadge} ${tinted[ticket.epic.color]}`}
                 >
                   #{ticket.epic.number} {ticket.epic.title}
                 </AppLink>

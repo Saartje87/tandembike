@@ -96,7 +96,7 @@ describe('BoardTicketDrawer', () => {
 
     expect(
       JSON.parse(screen.getByRole('dialog').dataset.epics ?? 'null'),
-    ).toEqual([{ number: epic.number, title: 'Checkout' }]);
+    ).toEqual([{ number: epic.number, title: 'Checkout', color: 'red' }]);
   });
 
   it('renders nothing for a Ticket that does not exist (any more)', async () => {

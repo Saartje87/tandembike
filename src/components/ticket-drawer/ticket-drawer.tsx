@@ -39,13 +39,14 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
-import type {
-  Blockers,
-  Comment,
-  EpicLink,
-  Project,
-  Ticket,
-  TicketClaim,
+import {
+  type Blockers,
+  type Comment,
+  type EpicLink,
+  epicLinkOf,
+  type Project,
+  type Ticket,
+  type TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
@@ -57,6 +58,7 @@ import {
   DeleteTicketDialog,
 } from '../delete-ticket-dialog/delete-ticket-dialog';
 import { EpicChildren } from '../epic-children/epic-children';
+import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { LabelEditor } from '../label-editor/label-editor';
@@ -635,9 +637,19 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               </Stack>
             </Detail>
             {ticket.type === 'Epic' ? (
-              <Detail name={<DetailName>Type</DetailName>}>
-                <Text>Epic</Text>
-              </Detail>
+              <>
+                <Detail name={<DetailName>Type</DetailName>}>
+                  <Text>Epic</Text>
+                </Detail>
+                <Detail name={<DetailName>Colour</DetailName>}>
+                  <EpicColorPicker
+                    epic={{
+                      number: ticket.number,
+                      color: epicLinkOf(ticket).color,
+                    }}
+                  />
+                </Detail>
+              </>
             ) : (
               <Detail name={<DetailName>Epic</DetailName>}>
                 <TicketEpic ticket={ticket} epics={epics} />

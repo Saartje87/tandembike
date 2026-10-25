@@ -17,7 +17,7 @@ import {
 } from '../../app/tickets/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
-import type { Ticket } from '../../tickets/tickets';
+import type { EpicLink, Ticket } from '../../tickets/tickets';
 import { TicketDrawer } from './ticket-drawer';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
@@ -75,6 +75,7 @@ const ticket: Ticket = {
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
+  color: null,
   epic: null,
   children: [],
   origin: null,
@@ -1093,6 +1094,20 @@ describe('TicketDrawer', () => {
       expect(inDrawer().getByText('Epic')).toBeInTheDocument();
     });
 
+    it("offers an Epic's colour, and no colour for a normal Ticket", () => {
+      const { unmount } = renderDrawer({ ...epic, color: 'indigo' });
+
+      expect(
+        inDrawer().getByRole('button', { name: 'Epic colour: Indigo' }),
+      ).toBeInTheDocument();
+      unmount();
+      renderDrawer(ticket);
+
+      expect(
+        inDrawer().queryByRole('button', { name: /^Epic colour/ }),
+      ).not.toBeInTheDocument();
+    });
+
     it("shows an Epic's Status as derived, with no control to set it", () => {
       renderDrawer({ ...epic, status: 'In progress' });
 
@@ -1105,7 +1120,9 @@ describe('TicketDrawer', () => {
     });
 
     it("offers a normal Ticket the Project's Epics to attach it to, but not an Epic", () => {
-      const epics = [{ number: 8, title: 'Checkout' }];
+      const epics: EpicLink[] = [
+        { number: 8, title: 'Checkout', color: 'teal' },
+      ];
       const { unmount } = renderWithTheme(
         <TicketDrawer ticket={ticket} projects={projects} epics={epics} />,
       );
@@ -1129,7 +1146,10 @@ describe('TicketDrawer', () => {
     });
 
     it('links a child to its Epic and lists no children', () => {
-      renderDrawer({ ...ticket, epic: { number: 8, title: 'Checkout' } });
+      renderDrawer({
+        ...ticket,
+        epic: { number: 8, title: 'Checkout', color: 'teal' },
+      });
 
       expect(
         inDrawer().getByRole('link', { name: '#8 Checkout' }),

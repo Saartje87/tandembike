@@ -16,6 +16,7 @@ const ticket = {
   blockedBy: [],
   blocked: false,
   type: 'Ticket' as const,
+  color: null,
   epic: null,
   children: [],
   origin: null,
@@ -212,13 +213,32 @@ describe('TicketCard', () => {
       renderWithTheme(
         <TicketCard
           boardPath="/project/1/cycle/7"
-          ticket={{ ...ticket, epic: { number: 2, title: 'Checkout' } }}
+          ticket={{
+            ...ticket,
+            epic: { number: 2, title: 'Checkout', color: 'teal' },
+          }}
         />,
       );
 
       expect(
         screen.getByRole('link', { name: 'Epic #2 Checkout' }),
       ).toHaveAttribute('href', '/ticket/2');
+    });
+
+    it("shows the Epic link as a badge in the Epic's colour", () => {
+      renderWithTheme(
+        <TicketCard
+          boardPath="/project/1/cycle/7"
+          ticket={{
+            ...ticket,
+            epic: { number: 2, title: 'Checkout', color: 'amber' },
+          }}
+        />,
+      );
+
+      expect(
+        screen.getByRole('link', { name: 'Epic #2 Checkout' }),
+      ).toHaveAttribute('data-color', 'amber');
     });
 
     it('shows no Epic link for a Ticket outside any Epic', () => {

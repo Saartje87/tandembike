@@ -102,6 +102,23 @@ describe('Ticket actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
   });
 
+  it("changes an Epic's colour and refreshes the Boards", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await updateTicket({ number: epic.number, color: 'teal' });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(epic.number).color).toBe('teal');
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+  });
+
   it('returns a refused deletion as an error', async () => {
     const tickets = createTestTickets();
     vi.mocked(appTickets).mockReturnValue(tickets);

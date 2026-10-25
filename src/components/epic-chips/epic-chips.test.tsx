@@ -32,6 +32,7 @@ const epic = (
   blockedBy: [],
   blocked: false,
   type: 'Epic',
+  color: 'teal',
   epic: null,
   children: [],
   origin: null,
@@ -171,5 +172,19 @@ describe('EpicChips', () => {
     expect(
       screen.queryByRole('textbox', { name: 'New Epic title' }),
     ).not.toBeInTheDocument();
+  });
+
+  it("colours each chip with its Epic's colour", () => {
+    renderWithTheme(
+      <EpicChips
+        projectId={1}
+        boardPath="/project/1"
+        epics={[epic({ number: 4, title: 'Checkout', color: 'pink' })]}
+      />,
+    );
+
+    expect(
+      screen.getByRole('link', { name: /Checkout/ }).closest('li'),
+    ).toHaveAttribute('data-color', 'pink');
   });
 });

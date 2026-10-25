@@ -37,7 +37,12 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import { isStatus, type Status, statuses } from '../../tickets/status';
-import type { EpicLink, Project, Ticket } from '../../tickets/tickets';
+import {
+  type EpicLink,
+  epicLinkOf,
+  type Project,
+  type Ticket,
+} from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
@@ -354,7 +359,7 @@ export const Board: FC<BoardProps> = ({
     startTransition(async () => {
       showChange({
         number: ticket.number,
-        epic: { number: epic.number, title: epic.title },
+        epic: epicLinkOf(epic),
       });
       showEpicJoin({ child: ticket, epicNumber });
       const result = await attachTicketToEpic({

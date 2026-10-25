@@ -7,6 +7,7 @@ import {
   detachTicketFromEpic,
 } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
+import type { EpicLink } from '../../tickets/tickets';
 import { TicketEpic } from './ticket-epic';
 
 vi.mock('../../app/tickets/actions', () => ({
@@ -17,7 +18,7 @@ vi.mock('../../app/tickets/actions', () => ({
 const child = {
   number: 5,
   projectId: 1,
-  epic: { number: 4, title: 'Checkout' },
+  epic: { number: 4, title: 'Checkout', color: 'teal' } as EpicLink,
 };
 
 describe('TicketEpic', () => {
@@ -59,9 +60,9 @@ describe('TicketEpic', () => {
   });
 
   describe('picking an Epic', () => {
-    const epics = [
-      { number: 4, title: 'Checkout' },
-      { number: 8, title: 'Search' },
+    const epics: EpicLink[] = [
+      { number: 4, title: 'Checkout', color: 'teal' },
+      { number: 8, title: 'Search', color: 'teal' },
     ];
     const options = (name: string) =>
       screen
@@ -158,7 +159,7 @@ describe('TicketEpic', () => {
       renderWithTheme(
         <TicketEpic
           ticket={child}
-          epics={[{ number: 4, title: 'Checkout' }]}
+          epics={[{ number: 4, title: 'Checkout', color: 'teal' }]}
         />,
       );
 

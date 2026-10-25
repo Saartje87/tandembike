@@ -63,7 +63,12 @@ import {
   type SplitOffTicket,
   withOrigins,
 } from './origins';
-import { isPaletteColor, type PaletteColor, paletteRule } from './palette';
+import {
+  isPaletteColor,
+  type PaletteColor,
+  paletteColors,
+  paletteRule,
+} from './palette';
 import { nextPosition } from './positions';
 import {
   isProjectIcon,
@@ -123,6 +128,8 @@ export type Ticket = {
   status: Status;
   /** Fixed at creation: a normal Ticket, or an Epic grouping children. */
   type: TicketType;
+  /** An Epic's colour from the palette; always `null` for a normal Ticket. */
+  color: PaletteColor | null;
   /** The Epic this Ticket is a child of, or `null` when it has none. */
   epic: EpicLink | null;
   /**
@@ -152,7 +159,21 @@ export type Ticket = {
 };
 
 /** The Epic a child Ticket belongs to. */
-export type EpicLink = Pick<Ticket, 'number' | 'title'>;
+export type EpicLink = Pick<Ticket, 'number' | 'title'> & {
+  color: PaletteColor;
+};
+
+/**
+ * Epic `epic` as its children link to it. Every Epic has a colour; grey
+ * only stands in should one ever lack it.
+ */
+export function epicLinkOf({
+  number,
+  title,
+  color,
+}: Pick<Ticket, 'number' | 'title' | 'color'>): EpicLink {
+  return { number, title, color: color ?? 'grey' };
+}
 
 /** A child Ticket as its Epic lists it. */
 export type EpicChild = Pick<
@@ -191,6 +212,11 @@ export type CreateTicketInput = {
   cycleId?: number;
   /** Fixed once created. Defaults to a normal Ticket. */
   type?: TicketType;
+  /**
+   * An Epic's colour. Defaults to the colour fewest live Epics in the
+   * Project use; a normal Ticket has none.
+   */
+  color?: PaletteColor;
   /** An Epic of the same Project to create it under; defaults to none. */
   epicNumber?: number;
   /** The Ticket it was split from, in any Project; defaults to none. */
@@ -233,6 +259,8 @@ export type UpdateTicketInput = {
   description?: string;
   status?: Status;
   projectId?: number;
+  /** An Epic's new colour; a normal Ticket has none. */
+  color?: PaletteColor;
   /** The Ticket it was split from, in any Project, or `null` for none. */
   originNumber?: number | null;
   /** Labels to add, after `removeLabels` are removed. */
@@ -264,7 +292,7 @@ export type AcceptanceCriterionCheckedInput = Pick<
 /** The same Status and label change for each of `ticketNumbers`. */
 export type UpdateTicketsInput = Pick<
   UpdateTicketInput,
-  'status' | 'addLabels' | 'removeLabels'
+  'status' | 'color' | 'addLabels' | 'removeLabels'
 > & {
   /** Explicit Ticket numbers, each once, at most `maxBatchSize`. */
   ticketNumbers: number[];
@@ -534,13 +562,21 @@ function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
         ? "An Epic's Status follows its child Tickets. Leave the Status out."
         : undefined),
     type: isTicketType(type) ? undefined : 'Choose a type: Ticket or Epic.',
+    color:
+      input.color === undefined
+        ? undefined
+        : !isPaletteColor(input.color)
+          ? paletteRule
+          : type === 'Epic'
+            ? undefined
+            : 'Only an Epic has a colour. Leave the colour out.',
     labels: checkLabels(labels),
     acceptanceCriteria: checkAcceptanceCriteria(
       acceptanceCriteria.map(({ text }) => text),
     ),
   });
   return {
-    values: { title, description, status, type },
+    values: { title, description, status, type, color: input.color },
     labels,
     acceptanceCriteria,
   };
@@ -628,6 +664,10 @@ function insertTicket(
     .insert(tickets)
     .values({
       ...values,
+      color:
+        values.type === 'Epic'
+          ? (values.color ?? leastUsedColor(db, row.projectId))
+          : null,
       ...row,
       position: nextPosition(db, row.projectId, values.status),
       updatedAt: row.createdAt,
@@ -639,10 +679,39 @@ function insertTicket(
   return number;
 }
 
+/**
+ * The palette colour fewest live Epics in Project `projectId` use, the
+ * earliest in the palette on a tie, for a new Epic.
+ */
+function leastUsedColor(
+  db: DatabaseConnection,
+  projectId: number,
+): PaletteColor {
+  const uses = new Map(
+    db
+      .select({ color: tickets.color, uses: count() })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.projectId, projectId),
+          eq(tickets.type, 'Epic'),
+          eq(tickets.archived, false),
+          isNotNull(tickets.color),
+        ),
+      )
+      .groupBy(tickets.color)
+      .all()
+      .map(({ color, uses }) => [color, uses]),
+  );
+  return paletteColors.reduce((least, color) =>
+    (uses.get(color) ?? 0) < (uses.get(least) ?? 0) ? color : least,
+  );
+}
+
 /** The fields of a Ticket row an update may set. */
 type TicketValues = Pick<
   UpdateTicketInput,
-  'title' | 'description' | 'status' | 'projectId' | 'originNumber'
+  'title' | 'description' | 'status' | 'projectId' | 'color' | 'originNumber'
 >;
 
 /**
@@ -663,7 +732,7 @@ type TicketChanges = {
  */
 function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
   const title = input.title?.trim();
-  const { description, status, projectId, originNumber } = input;
+  const { description, status, projectId, color, originNumber } = input;
   const addLabels = normalizeLabels(input.addLabels ?? []);
   const removeLabels = normalizeLabels(input.removeLabels ?? []);
   const inBoth = addLabels.filter((label) => removeLabels.includes(label));
@@ -677,6 +746,8 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
     description:
       description === undefined ? undefined : checkDescription(description),
     status: status === undefined ? undefined : checkStatus(status),
+    color:
+      color === undefined || isPaletteColor(color) ? undefined : paletteRule,
     addLabels: checkLabels(addLabels),
     removeLabels: checkLabels(removeLabels),
     labels:
@@ -696,6 +767,7 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
       description,
       status,
       projectId,
+      color,
       originNumber,
     }).filter(([, value]) => value !== undefined),
   ) as TicketValues;
@@ -742,6 +814,7 @@ const ticketColumns = {
   description: tickets.description,
   status: tickets.status,
   type: tickets.type,
+  color: tickets.color,
   epicNumber: tickets.epicNumber,
   originNumber: tickets.originNumber,
   projectId: tickets.projectId,
@@ -1308,15 +1381,21 @@ export function createTickets(
      * or change is refused as a whole. The changed Tickets are announced once.
      */
     updateTickets(input: UpdateTicketsInput): UpdateTicketsResult {
-      const { ticketNumbers, status, addLabels, removeLabels } = input;
-      const checked = checkTicketChanges({ status, addLabels, removeLabels });
+      const { ticketNumbers, status, color, addLabels, removeLabels } = input;
+      const checked = checkTicketChanges({
+        status,
+        color,
+        addLabels,
+        removeLabels,
+      });
       throwFieldErrors({
         ticketNumbers: checkBatchNumbers(ticketNumbers),
         change:
           checked.values.status === undefined &&
+          checked.values.color === undefined &&
           checked.addLabels.length === 0 &&
           checked.removeLabels.length === 0
-            ? 'Give a Status, addLabels or removeLabels to change.'
+            ? 'Give a Status, color, addLabels or removeLabels to change.'
             : undefined,
       });
 
@@ -1923,6 +2002,11 @@ export function createTickets(
       if (existing.type === 'Epic' && status !== existing.status) {
         throw new ValidationError({
           status: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+        });
+      }
+      if (values.color !== undefined && existing.type !== 'Epic') {
+        throw new ValidationError({
+          color: `Ticket #${number} is not an Epic. Only an Epic has a colour.`,
         });
       }
       if (projectId !== existing.projectId) {
@@ -2568,11 +2652,15 @@ function withEpics<Row extends { epicNumber: number | null }>(
     epicNumbers.length === 0
       ? []
       : db
-          .select({ number: tickets.number, title: tickets.title })
+          .select({
+            number: tickets.number,
+            title: tickets.title,
+            color: tickets.color,
+          })
           .from(tickets)
           .where(inArray(tickets.number, epicNumbers))
           .all()
-          .map((epic) => [epic.number, epic]),
+          .map((epic) => [epic.number, epicLinkOf(epic)]),
   );
   return rows.map(({ epicNumber, ...row }) => ({
     ...row,

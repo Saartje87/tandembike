@@ -45,6 +45,7 @@ const ticket = (
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
+  color: null,
   epic: null,
   children: [],
   origin: null,
@@ -424,7 +425,7 @@ describe('Board with Epics', () => {
   const payByCard = ticket({
     number: 11,
     title: 'Pay by card',
-    epic: { number: 10, title: 'Checkout' },
+    epic: { number: 10, title: 'Checkout', color: 'teal' },
   });
   const chips = () =>
     within(screen.getByRole('list', { name: 'Epics' }))
@@ -622,7 +623,7 @@ describe('Dropping a card on an Epic', () => {
   const payByCard = ticket({
     number: 11,
     title: 'Pay by card',
-    epic: { number: 10, title: 'Checkout' },
+    epic: { number: 10, title: 'Checkout', color: 'teal' },
   });
   const header = ticket({ number: 4, title: 'Fix the header', position: 1 });
   const chips = () =>

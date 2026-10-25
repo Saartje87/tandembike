@@ -14,10 +14,11 @@ import { useDroppable } from '@dnd-kit/react';
 import { type FC, useId, useRef, useState } from 'react';
 
 import { ticketOnBoardPath } from '../../app/lib/paths';
-import type { Ticket } from '../../tickets/tickets';
+import { epicLinkOf, type Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
+import { tinted } from '../palette/palette.css';
 import * as styles from './epic-chips.css';
 
 export type EpicChipsProps = {
@@ -45,9 +46,9 @@ export function epicOfDropTarget(id: unknown): number | undefined {
 type EpicChipProps = { epic: Ticket; boardPath: string };
 
 /**
- * One Epic: its number, title and how many of its children that are not
- * archived are Done, as a link that opens its drawer. A card dropped on it
- * joins the Epic.
+ * One Epic in its colour: its number, title and how many of its children
+ * that are not archived are Done, as a link that opens its drawer. A card
+ * dropped on it joins the Epic, and it is outlined while one is over it.
  */
 const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
   const { ref, isDropTarget } = useDroppable({
@@ -56,25 +57,29 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
   });
   const live = epic.children.filter((child) => !child.archived);
   const done = live.filter((child) => child.status === 'Done');
+  const { color } = epicLinkOf(epic);
 
   return (
     <Box
       asChild
-      backgroundColor={isDropTarget ? 'primary-100' : 'neutral-100'}
       borderRadius="full"
       paddingBlock={1}
       paddingInline={3}
-      className={styles.chip}
+      className={`${styles.chip} ${tinted[color]} ${isDropTarget ? styles.dropTarget : ''}`}
     >
-      <li ref={ref} data-drop-target={isDropTarget ? '' : undefined}>
+      <li
+        ref={ref}
+        data-color={color}
+        data-drop-target={isDropTarget ? '' : undefined}
+      >
         <Text fontSize="small" wordBreak="break-word">
           <AppLink
             href={ticketOnBoardPath(boardPath, epic.number)}
             scroll={false}
             variant="inherit"
           >
-            <Text color="text-600">#{epic.number}</Text> {epic.title}{' '}
-            <Text color="text-600">
+            <Text fontWeight="medium">#{epic.number}</Text> {epic.title}{' '}
+            <Text fontWeight="medium">
               {done.length}/{live.length} Done
             </Text>
           </AppLink>

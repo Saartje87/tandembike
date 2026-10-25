@@ -37,6 +37,8 @@ export const tickets = sqliteTable(
     status: text('status', { enum: statuses }).notNull(),
     /** Fixed at creation. An Epic's Status is derived from its children. */
     type: text('type', { enum: ticketTypes }).notNull().default('Ticket'),
+    /** An Epic's colour from the palette; null for a normal Ticket. */
+    color: text('color', { enum: paletteColors }),
     /** The Epic this Ticket is a child of, in the same Project, or null. */
     epicNumber: integer('epic_number').references(
       (): AnySQLiteColumn => tickets.number,

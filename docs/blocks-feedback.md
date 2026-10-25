@@ -833,11 +833,11 @@ same way?
 
 ## 27. `Popover` cannot be shown under jsdom
 
-**Problem.** `Popover` opens with `showPopover()`. jsdom 29 has the method,
-but calling it does not make the element match `:popover-open`, and jsdom's
-default styles hide every `[popover]` that does not. Testing Library then
-treats an open popover's content as hidden, so `getByRole` finds nothing in
-it.
+**Problem.** `Popover` opens with `showPopover()` and closes with
+`hidePopover()`. jsdom 29 has neither: opening only logs a warning, closing
+throws `hidePopover is not a function`, and jsdom's default styles hide every
+`[popover]` that does not match `:popover-open`. Testing Library then treats
+an open popover's content as hidden, so `getByRole` finds nothing in it.
 
 **Repro.**
 
@@ -851,11 +851,12 @@ screen.getByRole('button', { name: 'Inside' }); // throws under jsdom
 **Expected.** A documented way to test an open `Popover` under jsdom, or a
 `data-open` hook the docs say to rely on.
 
-**Workaround.** `src/test/popover.ts`: a test stylesheet that shows
-`[popover][data-open]`, which Blocks sets while open.
+**Workaround.** `src/test/popover.ts`: no-op `showPopover` and
+`hidePopover`, and a test stylesheet that shows `[popover][data-open]`,
+which Blocks sets while open.
 
 **Question.** Could Blocks' test setup docs cover this, or `Popover` fall
-back to plain visibility where `:popover-open` is not supported?
+back to plain visibility where the Popover API is missing?
 
 ## 28. No toggle-button group or swatch picker
 
