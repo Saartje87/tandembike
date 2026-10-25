@@ -396,7 +396,7 @@ describe('Board with archived Tickets', () => {
     ticket({ number: 6, title: 'Shipped', status: 'Done', archived: true }),
   ];
   const showArchived = () =>
-    userEvent.click(screen.getByRole('checkbox', { name: 'Show archived' }));
+    userEvent.click(screen.getByRole('checkbox', { name: /^Show archived/ }));
   const archivedList = () =>
     screen.queryByRole('region', { name: 'Archived Tickets' });
 
@@ -407,11 +407,31 @@ describe('Board with archived Tickets', () => {
     expect(cardsIn('Done')).toEqual([]);
   });
 
+  it('counts the archived Tickets beside the switch, zero included', () => {
+    const { unmount } = renderWithTheme(
+      <Board project={project} tickets={tickets} />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Show archived (2)' }),
+    ).toBeInTheDocument();
+    unmount();
+
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={tickets.filter((ticket) => !ticket.archived)}
+      />,
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Show archived (0)' }),
+    ).toBeInTheDocument();
+  });
+
   it('hides the archived Tickets until the User asks for them', () => {
     renderWithTheme(<Board project={project} tickets={tickets} />);
 
     expect(
-      screen.getByRole('checkbox', { name: 'Show archived' }),
+      screen.getByRole('checkbox', { name: 'Show archived (2)' }),
     ).not.toBeChecked();
     expect(archivedList()).not.toBeInTheDocument();
   });
@@ -453,7 +473,7 @@ describe('Board with archived Tickets', () => {
     );
 
     expect(
-      screen.getByRole('checkbox', { name: 'Show archived' }),
+      screen.getByRole('checkbox', { name: 'Show archived (2)' }),
     ).toBeChecked();
     expect(archivedList()).toBeInTheDocument();
   });
