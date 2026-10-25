@@ -30,7 +30,7 @@ import {
   useTransition,
 } from 'react';
 
-import { cyclePath, projectPath, ticketOnBoardPath } from '../../app/lib/paths';
+import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import { reorderTickets, updateTicket } from '../../app/tickets/actions';
 import { isStatus, type Status, statuses } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
@@ -246,8 +246,7 @@ export const Board: FC<BoardProps> = ({
   header,
   cycleId,
 }) => {
-  const boardPath =
-    cycleId == null ? projectPath(project.id) : cyclePath(project.id, cycleId);
+  const boardPath = boardPathOf(project.id, cycleId ?? null);
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();

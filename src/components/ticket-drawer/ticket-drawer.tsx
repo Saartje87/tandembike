@@ -24,7 +24,6 @@ import {
   type ReactNode,
   useEffect,
   useId,
-  useLayoutEffect,
   useOptimistic,
   useRef,
   useState,
@@ -63,6 +62,7 @@ import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
+import { useIsShown } from './use-is-shown';
 
 export type TicketDrawerProps = {
   ticket: Ticket;
@@ -114,26 +114,6 @@ function fieldsOf(ticket: Ticket): Fields {
 function fieldOf(edit: Edit): keyof Fields {
   return Object.keys(edit)[0] as keyof Fields;
 }
-
-/**
- * Whether the drawer is on screen: `false` on the server, during hydration
- * and while Next.js keeps the route hidden in an `<Activity>` after the User
- * navigates away; `true` otherwise. Effects run only for a visible route, so
- * the layout effect turns it on and its cleanup turns it off.
- *
- * Blocks' `Drawer` opens with `showModal()`, which throws on a dialog that is
- * already open, and it neither closes on hide nor accepts a server-rendered
- * `<dialog open>`. Rendering it only while shown gives every reveal a fresh
- * dialog and takes a hidden one out of the top layer.
- */
-const useIsShown = () => {
-  const [shown, setShown] = useState(false);
-  useLayoutEffect(() => {
-    setShown(true);
-    return () => setShown(false);
-  }, []);
-  return shown;
-};
 
 type TitleFieldProps = {
   title: string;

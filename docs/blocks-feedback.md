@@ -267,6 +267,12 @@ widens it with a `globalStyle` on `dialog[data-ticket-drawer]` (unlayered, so
 it beats the Drawer's layered `width`), with a hard-coded `min(40rem, 100%)`
 because there is no size token.
 
+The Ticket drawer's loading skeleton (#66, `ticket-drawer-skeleton.tsx`) is
+a second Drawer that needs both workarounds: it renders only while
+`useIsShown` (now shared in `ticket-drawer/use-is-shown.ts`) says it is
+shown, and it takes the drawer's width through the same `data-ticket-drawer`
+attribute.
+
 The redesigned drawer (#16) still needs the same width workaround: the
 details grid, the title input and the description textarea want about
 `40rem`, and there is still no `size` prop.

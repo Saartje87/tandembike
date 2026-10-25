@@ -17,6 +17,13 @@ export function cyclePath(projectId: number, cycleId: number): string {
   return `${projectPath(projectId)}/cycle/${cycleId}`;
 }
 
+/** The Board of a Project's Backlog, or with `cycleId`, of that Cycle. */
+export function boardPathOf(projectId: number, cycleId: number | null): string {
+  return cycleId === null
+    ? projectPath(projectId)
+    : cyclePath(projectId, cycleId);
+}
+
 /** A Project's History: its archived Cycles. */
 export function cyclesPath(projectId: number): string {
   return `${projectPath(projectId)}/cycles`;

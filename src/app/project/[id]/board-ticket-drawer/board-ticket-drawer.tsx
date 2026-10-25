@@ -3,7 +3,7 @@ import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import { appTickets } from '../../../../tickets/app-tickets';
-import { NotFoundError } from '../../../../tickets/errors';
+import { findBoardTicket } from '../project-data';
 
 export type BoardTicketDrawerProps = {
   /** The Project whose Board it opens over. */
@@ -26,11 +26,11 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
 }) => {
   // Request-time data, so it streams after the Board inside its Suspense.
   await connection();
-  const tickets = appTickets();
-  const ticket = findTicket(number);
-  if (ticket === null || ticket.projectId !== projectId) {
+  const ticket = findBoardTicket(projectId, number);
+  if (ticket === null) {
     return null;
   }
+  const tickets = appTickets();
   return (
     <TicketDrawer
       ticket={ticket}
@@ -48,15 +48,3 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
     />
   );
 };
-
-/** Ticket `number`, or `null` when there is none. */
-function findTicket(number: number) {
-  try {
-    return appTickets().getTicket(number);
-  } catch (error) {
-    if (error instanceof NotFoundError) {
-      return null;
-    }
-    throw error;
-  }
-}

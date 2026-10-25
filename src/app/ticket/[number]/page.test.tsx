@@ -49,4 +49,16 @@ describe('TicketByNumberPage', () => {
       `NEXT_REDIRECT:/project/${project.id}/cycle/${cycle.id}?ticket=${planned.number}`,
     );
   });
+
+  it.each([
+    ['a missing', '999'],
+    ['a malformed', 'abc'],
+  ])('shows not-found for %s number', async (_case, number) => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    await expect(
+      TicketByNumberPage({ params: Promise.resolve({ number }) }),
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(redirect).not.toHaveBeenCalled();
+  });
 });

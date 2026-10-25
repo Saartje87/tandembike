@@ -53,7 +53,6 @@ export async function createTicket(input: {
     });
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
-    // A child shows in its Epic's drawer.
     return { number: ticket.number };
   });
 }

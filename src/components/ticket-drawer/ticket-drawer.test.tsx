@@ -10,6 +10,7 @@ import {
   archiveTicket,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
+  deleteTicket,
   restoreTicket,
   type UpdateTicketResult,
   updateTicket,
@@ -1205,6 +1206,28 @@ describe('TicketDrawer', () => {
         ).toBeInTheDocument();
       },
     );
+
+    it('closes to its Board by replacing the URL once the Ticket is deleted', async () => {
+      vi.mocked(deleteTicket).mockResolvedValue({ ok: true });
+      renderWithTheme(
+        <TicketDrawer
+          ticket={ticket}
+          projects={projects}
+          boardPath="/project/1/cycle/7"
+        />,
+      );
+
+      await userEvent.click(button('Delete'));
+      await userEvent.click(
+        screen.getByRole('button', { name: `Delete #${ticket.number}` }),
+      );
+
+      expect(deleteTicket).toHaveBeenCalledWith({ number: ticket.number });
+      expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+        '/project/1/cycle/7',
+        { scroll: false },
+      );
+    });
 
     it('stays open while the Delete dialog takes an Escape', async () => {
       renderDrawer();

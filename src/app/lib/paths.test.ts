@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  boardPathOf,
   boardRoute,
   cyclePath,
   cycleRoute,
@@ -51,6 +52,11 @@ describe('projectIdFromPath', () => {
     ['/', undefined],
   ])('reads the Project on screen from %s', (pathname, id) => {
     expect(projectIdFromPath(pathname)).toBe(id);
+  });
+
+  it("names a Backlog's or a Cycle's Board", () => {
+    expect(boardPathOf(3, null)).toBe('/project/3');
+    expect(boardPathOf(3, 7)).toBe('/project/3/cycle/7');
   });
 
   it('opens a Ticket on a Board through a ?ticket= parameter', () => {

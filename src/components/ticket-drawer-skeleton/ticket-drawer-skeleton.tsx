@@ -4,6 +4,8 @@ import { Box, Drawer, Spinner } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
 import type { FC } from 'react';
 
+import { useIsShown } from '../ticket-drawer/use-is-shown';
+
 export type TicketDrawerSkeletonProps = {
   /** The Board's own URL, without `?ticket=`: where closing goes. */
   boardPath: string;
@@ -18,6 +20,11 @@ export const TicketDrawerSkeleton: FC<TicketDrawerSkeletonProps> = ({
   boardPath,
 }) => {
   const router = useRouter();
+  // Like the drawer itself, only while shown (docs/blocks-feedback.md, 10).
+  const shown = useIsShown();
+  if (!shown) {
+    return null;
+  }
   return (
     <Drawer
       open

@@ -3,7 +3,7 @@ import type { FC } from 'react';
 
 import { appTickets } from '../../../tickets/app-tickets';
 import { openCycleOf } from '../../../tickets/cycles';
-import { cyclePath, projectPath, ticketOnBoardPath } from '../../lib/paths';
+import { boardPathOf, ticketOnBoardPath } from '../../lib/paths';
 import { loadTicketByNumber } from './ticket-data';
 
 type TicketByNumberPageProps = {
@@ -23,9 +23,7 @@ const TicketByNumberPage: FC<TicketByNumberPageProps> = async ({ params }) => {
   );
   redirect(
     ticketOnBoardPath(
-      cycle
-        ? cyclePath(ticket.projectId, cycle.id)
-        : projectPath(ticket.projectId),
+      boardPathOf(ticket.projectId, cycle?.id ?? null),
       ticket.number,
     ),
   );

@@ -44,17 +44,22 @@ export async function boardPageTitle(
   searchParams: BoardSearchParams,
 ): Promise<string> {
   const number = openTicketNumber((await searchParams).ticket);
-  if (number === undefined) {
-    return boardTitle;
-  }
+  const ticket =
+    number === undefined ? null : findBoardTicket(projectId, number);
+  return ticket ? `#${ticket.number} ${ticket.title}` : boardTitle;
+}
+
+/**
+ * Ticket `number`, if it exists and belongs to Project `projectId`, so its
+ * Board can open it; `null` otherwise, and the Board shows on its own.
+ */
+export function findBoardTicket(projectId: number, number: number) {
   try {
     const ticket = appTickets().getTicket(number);
-    return ticket.projectId === projectId
-      ? `#${ticket.number} ${ticket.title}`
-      : boardTitle;
+    return ticket.projectId === projectId ? ticket : null;
   } catch (error) {
     if (error instanceof NotFoundError) {
-      return boardTitle;
+      return null;
     }
     throw error;
   }

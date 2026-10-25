@@ -9,7 +9,7 @@ import { TicketDrawerSkeleton } from '../../../../components/ticket-drawer-skele
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
 import type { Project } from '../../../../tickets/tickets';
-import { cyclePath, projectPath } from '../../../lib/paths';
+import { boardPathOf } from '../../../lib/paths';
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
 
 export type ProjectBoardProps = {
@@ -32,8 +32,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   tab,
   openTicket,
 }) => {
-  const boardPath =
-    tab === 'backlog' ? projectPath(project.id) : cyclePath(project.id, tab.id);
+  const boardPath = boardPathOf(project.id, tab === 'backlog' ? null : tab.id);
   const drawer = openTicket !== undefined && (
     <Suspense
       key={openTicket}
