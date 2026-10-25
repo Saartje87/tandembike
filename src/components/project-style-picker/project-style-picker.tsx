@@ -57,7 +57,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
       <Popover
         anchorElement={anchor}
         open={open}
-        position="bottom"
+        position="right"
         onRequestClose={() => setOpen(false)}
         role="dialog"
         aria-label="Colour and icon"
@@ -82,7 +82,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                   aria-pressed={style.icon === null}
                   onClick={() => onPick({ icon: null })}
                 >
-                  <Icon name="no-symbol" size="small" color="text-600" />
+                  <Icon name="no-symbol" size="medium" color="text-600" />
                 </Button>
                 {projectIcons.map((icon) => (
                   <Button
@@ -94,7 +94,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                     aria-pressed={style.icon === icon}
                     onClick={() => onPick({ icon })}
                   >
-                    <Icon name={icon} size="small" />
+                    <Icon name={icon} size="medium" />
                   </Button>
                 ))}
               </Box>

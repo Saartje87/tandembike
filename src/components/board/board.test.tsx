@@ -475,6 +475,19 @@ describe('Board with Epics', () => {
     expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
   });
 
+  it("leaves out of a Cycle's row an Epic whose only planned child is archived", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[{ ...payByCard, archived: true }]}
+        epics={[checkout, search]}
+        cycleId={7}
+      />,
+    );
+
+    expect(chips()).toEqual([]);
+  });
+
   it('offers to create an Epic from the row, not from the Todo lane', async () => {
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 9 });
     renderWithTheme(<Board project={project} tickets={[]} cycleId={7} />);

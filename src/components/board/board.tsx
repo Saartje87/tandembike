@@ -304,7 +304,9 @@ export const Board: FC<BoardProps> = ({
   const active = shownTickets.filter(
     (ticket) => !ticket.archived && ticket.type !== 'Epic',
   );
-  const planned = new Set(tickets.map((ticket) => ticket.number));
+  const planned = new Set(
+    tickets.filter((ticket) => !ticket.archived).map(({ number }) => number),
+  );
   const rowEpics =
     typeof cycleId === 'number'
       ? shownEpics.filter((epic) =>
@@ -383,8 +385,12 @@ export const Board: FC<BoardProps> = ({
   const finishDrag = (event: DragEndEvent) => {
     const sourceId = event.operation.source?.id;
     const operationTargetId = event.operation.target?.id;
+    // Dropped back on its own slot: take the card it was last over, but not
+    // a chip it passed on the way, or it would join that Epic.
     const targetId =
-      sourceId === operationTargetId && lastDropTarget.current !== undefined
+      sourceId === operationTargetId &&
+      lastDropTarget.current !== undefined &&
+      epicOfDropTarget(lastDropTarget.current) === undefined
         ? lastDropTarget.current
         : operationTargetId;
     lastDropTarget.current = undefined;

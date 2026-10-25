@@ -31,6 +31,16 @@ export type NewTicketInlineProps = {
   onDone?: () => void;
 };
 
+/** What the field is called and says when empty, by what it creates. */
+const copy = {
+  ticket: { label: 'New Ticket title', placeholder: 'Add a Ticket…' },
+  child: {
+    label: 'New child Ticket title',
+    placeholder: 'Add a child Ticket…',
+  },
+  epic: { label: 'New Epic title', placeholder: 'Add an Epic…' },
+};
+
 /**
  * A title field that creates a Ticket in Todo in `projectId`, planned into
  * `cycleId` or under `epicNumber` when given, on Enter or with its Create
@@ -57,6 +67,10 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
     setError,
   } = useForm<{ title: string }>({ defaultValues: { title: '' } });
   const reason = errors.title?.message ?? errors.root?.server?.message;
+  const { label, placeholder } =
+    copy[
+      type === 'Epic' ? 'epic' : epicNumber === undefined ? 'ticket' : 'child'
+    ];
 
   const submit = handleSubmit(async ({ title }) => {
     const result = await createTicket({
@@ -93,13 +107,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
     >
       <Stack gap={1}>
         <Label htmlFor={titleId}>
-          <VisuallyHidden>
-            {type === 'Epic'
-              ? 'New Epic title'
-              : epicNumber === undefined
-                ? 'New Ticket title'
-                : 'New child Ticket title'}
-          </VisuallyHidden>
+          <VisuallyHidden>{label}</VisuallyHidden>
         </Label>
         <TextInput
           {...register('title')}
@@ -112,13 +120,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
               onDone?.();
             }
           }}
-          placeholder={
-            type === 'Epic'
-              ? 'Add an Epic…'
-              : epicNumber === undefined
-                ? 'Add a Ticket…'
-                : 'Add a child Ticket…'
-          }
+          placeholder={placeholder}
           autoFocus={autoFocus}
           autoComplete="off"
           readOnly={isSubmitting}

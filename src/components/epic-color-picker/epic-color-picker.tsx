@@ -1,15 +1,17 @@
 'use client';
 
-import { Alert, Box, Button, Popover, Stack } from '@blockle/blocks';
+import { Alert, Button, Popover, Stack } from '@blockle/blocks';
 import { type FC, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { updateTicket } from '../../app/tickets/actions';
 import type { PaletteColor } from '../../tickets/palette';
 import type { EpicLink } from '../../tickets/tickets';
-import { ColorSwatches, colorName } from '../color-swatches/color-swatches';
-import { tinted } from '../palette/palette.css';
+import {
+  ColorSwatches,
+  colorName,
+  Swatch,
+} from '../color-swatches/color-swatches';
 import { claimEscape } from '../ticket-drawer/keep-drawer-open';
-import * as styles from './epic-color-picker.css';
 
 export type EpicColorPickerProps = {
   epic: Pick<EpicLink, 'number' | 'color'>;
@@ -61,10 +63,7 @@ export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
       >
-        <Box
-          borderRadius="full"
-          className={`${styles.swatch} ${tinted[color]}`}
-        />
+        <Swatch color={color} />
       </Button>
       <Popover
         anchorElement={anchor}

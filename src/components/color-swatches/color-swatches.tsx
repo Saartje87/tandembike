@@ -17,6 +17,13 @@ export type ColorSwatchesProps = {
   disabled?: boolean;
 };
 
+type SwatchProps = { color: PaletteColor };
+
+/** A colour as a round tint ringed in its strong shade. Decorative. */
+export const Swatch: FC<SwatchProps> = ({ color }) => (
+  <Box borderRadius="full" className={`${styles.swatch} ${tinted[color]}`} />
+);
+
 /** `teal` as `Teal`, for a swatch's name. */
 export function colorName(color: PaletteColor): string {
   return color[0].toUpperCase() + color.slice(1);
