@@ -28,6 +28,10 @@ _Avoid_: Inbox, unplanned list
 A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them.
 _Avoid_: Feature, parent Ticket, story
 
+**Origin**:
+The Ticket another Ticket was split from, such as the spec a build Ticket came out of. A Ticket has at most one Origin, possibly in another Project; the Tickets split from one Origin form a group whose members are each worked on their own. It records provenance only: it does not affect Status, Claims or Blockers.
+_Avoid_: Parent, source, spec link
+
 **Board**:
 The view of one Project's Tickets, laid out in one column per Status.
 _Avoid_: Kanban, dashboard, list

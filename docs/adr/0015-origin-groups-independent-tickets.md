@@ -1,0 +1,3 @@
+# Origin groups independent Tickets; Epics stay one-unit
+
+Tickets split from a spec belong together but are worked on their own, by several Agents in parallel, so an Epic (ADR 0011: one Claim, one branch, one PR) does not fit them. We record the split as an Origin, a provenance link from each Ticket to the one it was split from, and treat the Tickets sharing an Origin as their group; Epics keep their one-unit handoff. We rejected a parallel mode on Epics, which would make a Claim's reach depend on a flag and give "Epic" two meanings, and a separate group container, a third way to say "these belong together" next to Epics and Labels (#107).
