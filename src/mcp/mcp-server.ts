@@ -16,9 +16,12 @@ import {
   maxCommentLength,
   maxPageSize,
   type Project,
+  type Ticket,
+  type TicketDetail,
   type Tickets,
   ticketDetails,
   ticketSorts,
+  ticketSummary,
 } from '../tickets/tickets';
 
 /**
@@ -41,6 +44,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access or hand-written requests.
+- Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a hash, like #42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
@@ -148,6 +152,27 @@ const status = z
   .enum(statuses)
   .describe('The Status: "Todo", "In progress" or "Done".');
 
+const detail = z
+  .enum(ticketDetails)
+  .optional()
+  .describe(
+    'How much of the Ticket to return. "summary", the default: the short answer this tool describes. "full": the whole Ticket, as get_ticket returns it.',
+  );
+
+/**
+ * How a tool that changes a Ticket describes its answer: the summary of
+ * `ticket`, plus `extra` when the summary does not show the change (ADR 0014).
+ */
+function returnsSummary({
+  ticket = 'the Ticket',
+  extra,
+}: {
+  ticket?: string;
+  extra?: string;
+} = {}) {
+  return `Returns ${ticket}'s summary: number, title, status, labels and blocked${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
+}
+
 /** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
 const newTicketFields = {
   title: z.string().describe('A one-line title, at most 200 characters.'),
@@ -202,6 +227,24 @@ function respond(call: () => unknown): CallToolResult {
   } catch (error) {
     return errorResult(error);
   }
+}
+
+/**
+ * Runs a Tickets module call that changes a Ticket and answers with it as
+ * `detail` asks: whole when "full", otherwise its summary plus `changed`, the
+ * fields the call changed that the summary does not show (ADR 0014).
+ */
+function respondTicket(
+  detail: TicketDetail | undefined,
+  call: () => Ticket,
+  changed: (ticket: Ticket) => Partial<Ticket> = () => ({}),
+): CallToolResult {
+  return respond(() => {
+    const ticket = call();
+    return detail === 'full'
+      ? ticket
+      : { ...ticketSummary(ticket), ...changed(ticket) };
+  });
 }
 
 /**
@@ -378,8 +421,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'claim_ticket',
     {
       title: 'Claim Ticket',
-      description:
-        'Atomically claim a Ticket for one Agent run. A repeated claim by the same Agent run succeeds; another run cannot take an existing claim and is told who holds it. Claiming an Epic covers its children: no other run can claim them meanwhile, and an Epic is refused while another run holds a child, or once it is Done.',
+      description: `Atomically claim a Ticket for one Agent run. A repeated claim by the same Agent run succeeds; another run cannot take an existing claim and is told who holds it. Claiming an Epic covers its children: no other run can claim them meanwhile, and an Epic is refused while another run holds a child, or once it is Done. ${returnsSummary({ extra: 'its claim' })}`,
       inputSchema: {
         number: ticketNumber,
         agentRunId: z
@@ -391,37 +433,45 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'An optional display name for the Agent holding the claim.',
           ),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ number, agentRunId, agentName }) =>
-      respond(() => tickets.claimTicket(number, { agentRunId, agentName })),
+    ({ number, agentRunId, agentName, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.claimTicket(number, { agentRunId, agentName }),
+        ({ claim }) => ({ claim }),
+      ),
   );
 
   server.registerTool(
     'release_ticket_claim',
     {
       title: 'Release Ticket claim',
-      description:
-        "Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim.",
+      description: `Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim. ${returnsSummary({ extra: 'its claim, now null' })}`,
       inputSchema: {
         number: ticketNumber,
         agentRunId: z
           .string()
           .describe('The unique identifier used when claiming this Ticket.'),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ number, agentRunId }) =>
-      respond(() => tickets.releaseTicketClaim(number, { agentRunId })),
+    ({ number, agentRunId, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.releaseTicketClaim(number, { agentRunId }),
+        ({ claim }) => ({ claim }),
+      ),
   );
 
   server.registerTool(
     'create_ticket',
     {
       title: 'Create Ticket',
-      description:
-        'Create a Ticket in a Project, given by projectId or projectName, optionally planned into a Cycle, and return it with its new Ticket number. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo.',
+      description: `Create a Ticket in a Project, given by projectId or projectName, optionally planned into a Cycle. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo. ${returnsSummary({ ticket: 'the new Ticket' })} The summary's number is the new Ticket number.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -457,10 +507,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'Plan the Ticket into this Cycle, by the rules of plan_ticket: it must be Prepared or Active and in the same Project. A refused Cycle creates nothing.',
           ),
+        detail,
       },
     },
-    ({ projectId, projectName, ...input }) =>
-      respond(() =>
+    ({ projectId, projectName, detail, ...input }) =>
+      respondTicket(detail, () =>
         tickets.createTicket({
           ...input,
           projectId: tickets.resolveProjectId({ projectId, projectName }),
@@ -532,8 +583,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_ticket',
     {
       title: 'Update Ticket',
-      description:
-        'Change any subset of a Ticket\'s title, description, Status, an Epic\'s color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -592,10 +642,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             `The Ticket's whole new list of acceptance criteria, in order, at most ${maxAcceptanceCriteria}. Criteria left out are removed; an empty list removes them all. To only check or uncheck criteria, use set_acceptance_criteria_checked.`,
           ),
+        detail,
       },
     },
-    ({ number, projectId, projectName, ...changes }) =>
-      respond(() =>
+    ({ number, projectId, projectName, detail, ...changes }) =>
+      respondTicket(detail, () =>
         tickets.updateTicket(number, {
           ...changes,
           ...(projectId === undefined && projectName === undefined
@@ -611,7 +662,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_tickets',
     {
       title: 'Update Tickets',
-      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: the changed Tickets, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
+      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (number, title, status, labels and blocked), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
         ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
@@ -622,47 +673,61 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
         addLabels,
         removeLabels,
+        detail,
       },
     },
-    (input) => respondBatch(() => tickets.updateTickets(input)),
+    ({ detail, ...input }) =>
+      respondBatch(() => {
+        const batch = tickets.updateTickets(input);
+        return detail === 'full'
+          ? batch
+          : { ...batch, updated: batch.updated.map(ticketSummary) };
+      }),
   );
 
   server.registerTool(
     'attach_to_epic',
     {
       title: 'Attach Ticket to Epic',
-      description:
-        'Make an existing normal Ticket a child of an Epic in the same Project, and return the child. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing.',
+      description: `Make an existing normal Ticket a child of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing. ${returnsSummary({ ticket: 'the child', extra: 'its epic' })}`,
       inputSchema: {
         epic: ticketNumber.describe('The Epic, e.g. 41 for #41.'),
         ticket: ticketNumber.describe(
           'The Ticket to make its child, e.g. 42 for #42.',
         ),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ epic, ticket }) =>
-      respond(() => tickets.attachToEpic({ epic, child: ticket })),
+    ({ epic, ticket, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.attachToEpic({ epic, child: ticket }),
+        ({ epic }) => ({ epic }),
+      ),
   );
 
   server.registerTool(
     'detach_from_epic',
     {
       title: 'Detach Ticket from Epic',
-      description:
-        'Take a Ticket out of its Epic, and return it. A Ticket in no Epic stays as it is.',
-      inputSchema: { number: ticketNumber },
+      description: `Take a Ticket out of its Epic. A Ticket in no Epic stays as it is. ${returnsSummary({ extra: 'its epic, now null' })}`,
+      inputSchema: { number: ticketNumber, detail },
       annotations: { idempotentHint: true },
     },
-    ({ number }) => respond(() => tickets.detachFromEpic(number)),
+    ({ number, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.detachFromEpic(number),
+        ({ epic }) => ({ epic }),
+      ),
   );
 
   server.registerTool(
     'set_acceptance_criteria_checked',
     {
       title: 'Check acceptance criteria',
-      description:
-        "Check or uncheck some of a Ticket's acceptance criteria by id, and return the Ticket. Its other criteria, their order and the Ticket's Status stay as they are.",
+      description: `Check or uncheck some of a Ticket's acceptance criteria by id. Its other criteria, their order and the Ticket's Status stay as they are. ${returnsSummary({ extra: 'acceptanceCriteria holding only the criteria named in the call' })}`,
       inputSchema: {
         number: ticketNumber,
         criteria: z
@@ -675,11 +740,20 @@ export function createMcpServer(tickets: Tickets): McpServer {
             }),
           )
           .describe('The criteria to change, each once, at least one.'),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ number, criteria }) =>
-      respond(() => tickets.setAcceptanceCriteriaChecked(number, criteria)),
+    ({ number, criteria, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.setAcceptanceCriteriaChecked(number, criteria),
+        ({ acceptanceCriteria }) => ({
+          acceptanceCriteria: acceptanceCriteria.filter(({ id }) =>
+            criteria.some((criterion) => criterion.id === id),
+          ),
+        }),
+      ),
   );
 
   server.registerTool(
@@ -697,30 +771,32 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'add_ticket_labels',
     {
       title: 'Add Ticket labels',
-      description:
-        'Add labels to a Ticket and return it. Labels are trimmed and lower-cased; ones the Ticket already has are kept once.',
+      description: `Add labels to a Ticket. Labels are trimmed and lower-cased; ones the Ticket already has are kept once. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         labels: z.array(label).describe('The labels to add, at least one.'),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ number, labels }) => respond(() => tickets.addLabels(number, labels)),
+    ({ number, labels, detail }) =>
+      respondTicket(detail, () => tickets.addLabels(number, labels)),
   );
 
   server.registerTool(
     'remove_ticket_labels',
     {
       title: 'Remove Ticket labels',
-      description:
-        'Remove labels from a Ticket and return it. Matching ignores case; labels the Ticket does not have are ignored.',
+      description: `Remove labels from a Ticket. Matching ignores case; labels the Ticket does not have are ignored. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         labels: z.array(label).describe('The labels to remove, at least one.'),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ number, labels }) => respond(() => tickets.removeLabels(number, labels)),
+    ({ number, labels, detail }) =>
+      respondTicket(detail, () => tickets.removeLabels(number, labels)),
   );
 
   server.registerTool(
@@ -739,8 +815,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'add_blocker',
     {
       title: 'Add Blocker',
-      description:
-        'Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start, and return the blocked Ticket. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing.',
+      description: `Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing. ${returnsSummary({ ticket: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
           'The Ticket that must be resolved first, e.g. 41 for #41.',
@@ -748,18 +823,23 @@ export function createMcpServer(tickets: Tickets): McpServer {
         blocked: ticketNumber.describe(
           'The Ticket that waits for it, e.g. 42 for #42.',
         ),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    (input) => respond(() => tickets.addBlocker(input)),
+    ({ detail, ...input }) =>
+      respondTicket(
+        detail,
+        () => tickets.addBlocker(input),
+        ({ blockedBy }) => ({ blockedBy }),
+      ),
   );
 
   server.registerTool(
     'remove_blocker',
     {
       title: 'Remove Blocker',
-      description:
-        'Stop the blocker Ticket blocking the blocked Ticket, and return the blocked Ticket. Removing a Blocker the Ticket does not have changes nothing.',
+      description: `Stop the blocker Ticket blocking the blocked Ticket. Removing a Blocker the Ticket does not have changes nothing. ${returnsSummary({ ticket: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that still block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
           'The Ticket that blocks, e.g. 41 for #41.',
@@ -767,10 +847,16 @@ export function createMcpServer(tickets: Tickets): McpServer {
         blocked: ticketNumber.describe(
           'The Ticket it blocks, e.g. 42 for #42.',
         ),
+        detail,
       },
       annotations: { idempotentHint: true },
     },
-    (input) => respond(() => tickets.removeBlocker(input)),
+    ({ detail, ...input }) =>
+      respondTicket(
+        detail,
+        () => tickets.removeBlocker(input),
+        ({ blockedBy }) => ({ blockedBy }),
+      ),
   );
 
   server.registerTool(
@@ -829,24 +915,32 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'archive_ticket',
     {
       title: 'Archive Ticket',
-      description:
-        'Archive a Ticket and return it. It leaves the Board and list_tickets (unless includeArchived is set) but keeps everything; restore_ticket brings it back. An Epic cannot be archived while any child is not archived. Agents cannot delete Tickets; the User can, from the app.',
-      inputSchema: { number: ticketNumber },
+      description: `Archive a Ticket. It leaves the Board and list_tickets (unless includeArchived is set) but keeps everything; restore_ticket brings it back. An Epic cannot be archived while any child is not archived. Agents cannot delete Tickets; the User can, from the app. ${returnsSummary({ extra: 'archived' })}`,
+      inputSchema: { number: ticketNumber, detail },
       annotations: { idempotentHint: true },
     },
-    ({ number }) => respond(() => tickets.archiveTicket(number)),
+    ({ number, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.archiveTicket(number),
+        ({ archived }) => ({ archived }),
+      ),
   );
 
   server.registerTool(
     'restore_ticket',
     {
       title: 'Restore Ticket',
-      description:
-        'Bring an archived Ticket back onto the Board exactly as it was, and return it.',
-      inputSchema: { number: ticketNumber },
+      description: `Bring an archived Ticket back onto the Board exactly as it was. ${returnsSummary({ extra: 'archived' })}`,
+      inputSchema: { number: ticketNumber, detail },
       annotations: { idempotentHint: true },
     },
-    ({ number }) => respond(() => tickets.restoreTicket(number)),
+    ({ number, detail }) =>
+      respondTicket(
+        detail,
+        () => tickets.restoreTicket(number),
+        ({ archived }) => ({ archived }),
+      ),
   );
 
   server.registerTool(
