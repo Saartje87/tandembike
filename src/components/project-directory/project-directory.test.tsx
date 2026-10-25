@@ -23,6 +23,7 @@ const projects: Project[] = [
     name: 'Website',
     color: null,
     icon: null,
+    archived: false,
     createdAt: new Date('2026-01-01'),
   },
   {
@@ -30,6 +31,7 @@ const projects: Project[] = [
     name: 'App',
     color: null,
     icon: null,
+    archived: false,
     createdAt: new Date('2026-01-02'),
   },
 ];

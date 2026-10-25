@@ -33,6 +33,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 
 - When you start working on a Ticket, move it to In progress. When you finish it, move it to Done. The User follows your progress this way.
 - When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
+- Only the User archives and restores Projects. An archived Project is read-only: its Tickets can be read, but any change to them, or to its Cycles, is refused until it is restored.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
 - Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
@@ -227,7 +228,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'List Projects',
       description:
-        'List all Projects, oldest first, with their id, name and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools.',
+        'List all Projects, oldest first, with their id, name, archived flag and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools. An archived Project is read-only, with its Tickets and Cycles, until the User restores it; its name stays taken.',
       annotations: { readOnlyHint: true },
     },
     () => respond(() => tickets.listProjects().map(agentProject)),
@@ -253,7 +254,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Rename Project',
       description:
-        "Rename a Project and return it. Names must be unique, ignoring case and surrounding spaces; changing only the casing of the Project's own name is allowed.",
+        "Rename a Project and return it. Names must be unique, ignoring case and surrounding spaces; changing only the casing of the Project's own name is allowed. An archived Project cannot be renamed.",
       inputSchema: {
         id: projectId,
         name: z
@@ -298,7 +299,9 @@ export function createMcpServer(tickets: Tickets): McpServer {
         includeArchived: z
           .boolean()
           .optional()
-          .describe('Also list archived Tickets. Defaults to false.'),
+          .describe(
+            'Also list archived Tickets, and Tickets of archived Projects. Defaults to false. Naming an archived Project by projectId or projectName lists its Tickets without this.',
+          ),
         blocked: z
           .boolean()
           .optional()

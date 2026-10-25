@@ -24,6 +24,8 @@ export const projects = sqliteTable('projects', {
   color: text('color', { enum: paletteColors }),
   /** One of the Project icons, or null for the default. */
   icon: text('icon', { enum: projectIcons }),
+  /** An archived Project and its Tickets are hidden and read-only. */
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
