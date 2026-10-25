@@ -159,18 +159,22 @@ const detail = z
     'How much of the Ticket to return. "summary", the default: the short answer this tool describes. "full": the whole Ticket, as get_ticket returns it.',
   );
 
+/** The fields of a `TicketSummary`, as tool descriptions list them. */
+const summaryFields = 'number, title, status, labels and blocked';
+
 /**
- * How a tool that changes a Ticket describes its answer: the summary of
- * `ticket`, plus `extra` when the summary does not show the change (ADR 0014).
+ * How a tool that changes a Ticket describes its answer: the summary of the
+ * Ticket `subject` names, plus `extra` when the summary does not show the
+ * change (ADR 0014).
  */
 function returnsSummary({
-  ticket = 'the Ticket',
+  subject = 'the Ticket',
   extra,
 }: {
-  ticket?: string;
+  subject?: string;
   extra?: string;
 } = {}) {
-  return `Returns ${ticket}'s summary: number, title, status, labels and blocked${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
+  return `Returns ${subject}'s summary: ${summaryFields}${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
 }
 
 /** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
@@ -471,7 +475,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'create_ticket',
     {
       title: 'Create Ticket',
-      description: `Create a Ticket in a Project, given by projectId or projectName, optionally planned into a Cycle. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo. ${returnsSummary({ ticket: 'the new Ticket' })} The summary's number is the new Ticket number.`,
+      description: `Create a Ticket in a Project, given by projectId or projectName, optionally planned into a Cycle. The title is required, one line and at most 200 characters; the description is optional Markdown of at most 50,000 characters; the Status defaults to Todo. ${returnsSummary({ subject: 'the new Ticket' })} The summary's number is the new Ticket number.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -662,7 +666,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_tickets',
     {
       title: 'Update Tickets',
-      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (number, title, status, labels and blocked), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
+      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (${summaryFields}), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
         ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
@@ -689,7 +693,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'attach_to_epic',
     {
       title: 'Attach Ticket to Epic',
-      description: `Make an existing normal Ticket a child of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing. ${returnsSummary({ ticket: 'the child', extra: 'its epic' })}`,
+      description: `Make an existing normal Ticket a child of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing. ${returnsSummary({ subject: 'the child', extra: 'its epic' })}`,
       inputSchema: {
         epic: ticketNumber.describe('The Epic, e.g. 41 for #41.'),
         ticket: ticketNumber.describe(
@@ -815,7 +819,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'add_blocker',
     {
       title: 'Add Blocker',
-      description: `Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing. ${returnsSummary({ ticket: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that block it' })}`,
+      description: `Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing. ${returnsSummary({ subject: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
           'The Ticket that must be resolved first, e.g. 41 for #41.',
@@ -839,7 +843,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'remove_blocker',
     {
       title: 'Remove Blocker',
-      description: `Stop the blocker Ticket blocking the blocked Ticket. Removing a Blocker the Ticket does not have changes nothing. ${returnsSummary({ ticket: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that still block it' })}`,
+      description: `Stop the blocker Ticket blocking the blocked Ticket. Removing a Blocker the Ticket does not have changes nothing. ${returnsSummary({ subject: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that still block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
           'The Ticket that blocks, e.g. 41 for #41.',
