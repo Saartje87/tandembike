@@ -101,6 +101,11 @@ export function checkUngrouped(
   }
 }
 
+/** Why Epic `number`'s Status cannot be set by hand. */
+export function epicStatusRule(number: number) {
+  return `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`;
+}
+
 /**
  * An Epic's Status from its children's: Todo with none or all Todo, Done
  * when all are Done, and In progress otherwise.

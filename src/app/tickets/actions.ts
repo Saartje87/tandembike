@@ -10,6 +10,7 @@ import type { TicketType } from '../../tickets/ticket-type';
 import type {
   AcceptanceCriterionInput,
   BlockerInput,
+  MoveTicketsInput,
   ReorderTicketsInput,
   Ticket,
   UpdateTicketInput,
@@ -128,6 +129,33 @@ export async function reorderTickets(
         : { cycleId: cycleId === null ? null : Number(cycleId) }),
     };
     appTickets().reorderTickets(reorder);
+    revalidatePath(projectPath(projectId));
+    revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}
+
+/**
+ * Moves a selection of Tickets into one Status lane together, all or
+ * nothing, and refreshes the Boards. Domain errors come back as `error`,
+ * like `createTicket`.
+ */
+export async function moveTickets(
+  input: MoveTicketsInput,
+): Promise<ActionResult> {
+  return actionResult(() => {
+    if (!isStatus(input?.status)) {
+      throw new ValidationError({ status: statusRule });
+    }
+    const projectId = Number(input?.projectId);
+    appTickets().moveTickets({
+      projectId,
+      ticketNumbers: Array.isArray(input?.ticketNumbers)
+        ? input.ticketNumbers.map(Number)
+        : [],
+      status: input.status,
+      before: input.before == null ? null : Number(input.before),
+    });
     revalidatePath(projectPath(projectId));
     revalidatePath(cycleRoute, 'page');
     return {};

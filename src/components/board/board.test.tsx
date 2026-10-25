@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   attachTicketToEpic,
   createTicket,
+  moveTickets,
   reorderTickets,
   updateTicket,
 } from '../../app/tickets/actions';
@@ -20,6 +21,7 @@ vi.mock('../../app/projects/actions', () => ({
 vi.mock('../../app/tickets/actions', () => ({
   attachTicketToEpic: vi.fn(),
   createTicket: vi.fn(),
+  moveTickets: vi.fn(),
   reorderTickets: vi.fn(),
   updateTicket: vi.fn(),
 }));
@@ -837,5 +839,279 @@ describe('Dropping a card on an Epic', () => {
     await waitFor(() =>
       expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']),
     );
+  });
+});
+
+describe('Selecting cards', () => {
+  const header = ticket({ number: 4, title: 'Fix the header', position: 0 });
+  const copy = ticket({ number: 7, title: 'Write the copy', position: 1 });
+  const logo = ticket({ number: 9, title: 'Draw the logo', position: 2 });
+  const footer = ticket({ number: 12, title: 'Fix the footer', position: 3 });
+  const deploy = ticket({
+    number: 15,
+    title: 'Deploy',
+    status: 'In progress',
+  });
+  const board = [header, copy, logo, footer, deploy];
+
+  const cardLink = (title: string) => screen.getByRole('link', { name: title });
+  const checkbox = (number: number, title: string) =>
+    screen.getByRole('checkbox', { name: `Select #${number} ${title}` });
+  const selectedTitles = () =>
+    screen
+      .queryAllByRole('checkbox', { name: /^Select #/, checked: true })
+      .map((box) => box.getAttribute('aria-label'));
+  const selectionBar = () =>
+    screen.queryByRole('toolbar', { name: 'Selection' });
+
+  /** Clicks `title`'s card while holding `key`. */
+  const clickWith = async (
+    user: ReturnType<typeof userEvent.setup>,
+    key: 'Meta' | 'Control' | 'Shift',
+    title: string,
+  ) => {
+    await user.keyboard(`{${key}>}`);
+    await user.click(cardLink(title));
+    await user.keyboard(`{/${key}}`);
+  };
+
+  beforeEach(() => {
+    vi.mocked(moveTickets).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('adds a card with Cmd-click or Ctrl-click and takes it out again', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    expect(selectionBar()).not.toBeInTheDocument();
+
+    await clickWith(user, 'Meta', 'Fix the header');
+    await clickWith(user, 'Control', 'Draw the logo');
+
+    expect(selectedTitles()).toEqual([
+      'Select #4 Fix the header',
+      'Select #9 Draw the logo',
+    ]);
+    expect(selectionBar()).toHaveTextContent('2 selected');
+
+    await clickWith(user, 'Meta', 'Fix the header');
+
+    expect(selectedTitles()).toEqual(['Select #9 Draw the logo']);
+    expect(selectionBar()).toHaveTextContent('1 selected');
+  });
+
+  it('selects the range in its column from the last card clicked with Shift-click', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    await clickWith(user, 'Meta', 'Write the copy');
+    await clickWith(user, 'Shift', 'Fix the footer');
+
+    expect(selectedTitles()).toEqual([
+      'Select #7 Write the copy',
+      'Select #9 Draw the logo',
+      'Select #12 Fix the footer',
+    ]);
+  });
+
+  it('only adds a card Shift-clicked in another column', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    await clickWith(user, 'Meta', 'Fix the header');
+    await clickWith(user, 'Shift', 'Deploy');
+
+    expect(selectedTitles()).toEqual([
+      'Select #4 Fix the header',
+      'Select #15 Deploy',
+    ]);
+  });
+
+  it("selects with each card's checkbox, by pointer or by keyboard", async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    await user.click(checkbox(4, 'Fix the header'));
+    checkbox(7, 'Write the copy').focus();
+    await user.keyboard(' ');
+
+    expect(selectedTitles()).toEqual([
+      'Select #4 Fix the header',
+      'Select #7 Write the copy',
+    ]);
+
+    await user.keyboard(' ');
+
+    expect(selectedTitles()).toEqual(['Select #4 Fix the header']);
+  });
+
+  it('offers no checkbox on archived Tickets', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          header,
+          ticket({ number: 5, title: 'Old idea', archived: true }),
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: /Show archived/ }));
+
+    expect(
+      screen.queryByRole('checkbox', { name: /^Select #5/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('empties the selection with Clear, Escape or a click on empty Board space', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    const select = () => user.click(checkbox(4, 'Fix the header'));
+
+    await select();
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(selectedTitles()).toEqual([]);
+    expect(selectionBar()).not.toBeInTheDocument();
+
+    await select();
+    await user.keyboard('{Escape}');
+    expect(selectedTitles()).toEqual([]);
+
+    await select();
+    await user.click(screen.getByRole('region', { name: 'Done' }));
+    expect(selectedTitles()).toEqual([]);
+  });
+
+  it('keeps the selection through live updates, dropping a Ticket that left the Board', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(7, 'Write the copy'));
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[
+          { ...header, title: 'Fix the page header' },
+          { ...copy, archived: true },
+          logo,
+        ]}
+      />,
+    );
+
+    expect(selectedTitles()).toEqual(['Select #4 Fix the page header']);
+    expect(selectionBar()).toHaveTextContent('1 selected');
+  });
+
+  it('leaves a Ticket that left the Board unselected when it comes back', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await user.click(checkbox(7, 'Write the copy'));
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[header, { ...copy, archived: true }]}
+      />,
+    );
+    rerender(<Board project={project} tickets={board} />);
+
+    expect(selectedTitles()).toEqual([]);
+    expect(selectionBar()).not.toBeInTheDocument();
+  });
+
+  it('drags the whole selection to a column, in Board order, and saves it as one move', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(moveTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    // Dropping into a column that holds cards trips jsdom over dnd-kit's own
+    // DOM moves, so this drops into the empty Done column; where a selection
+    // lands among cards is covered in `selection-drop.test.ts`.
+    const bounds = mockBoardBounds('Done');
+    onTestFinished(() => bounds.mockRestore());
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(9, 'Draw the logo'));
+    await user.click(checkbox(15, 'Deploy'));
+    await user.click(checkbox(4, 'Fix the header'));
+
+    await dragTicketTo(9, 'Done');
+
+    expect(moveTickets).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      ticketNumbers: [4, 9, 15],
+      status: 'Done',
+      before: null,
+    });
+    expect(updateTicket).not.toHaveBeenCalled();
+    expect(cardsIn('Todo')).toEqual(['Write the copy', 'Fix the footer']);
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(cardsIn('Done')).toEqual([
+      'Fix the header',
+      'Draw the logo',
+      'Deploy',
+    ]);
+    expect(selectedTitles()).toEqual([
+      'Select #4 Fix the header',
+      'Select #9 Draw the logo',
+      'Select #15 Deploy',
+    ]);
+  });
+
+  it('puts the cards back and explains when the move is refused', async () => {
+    vi.mocked(moveTickets).mockResolvedValue({
+      ok: false,
+      error: 'Ticket #9 is archived. Restore it before moving it.',
+    });
+    const bounds = mockBoardBounds('Done');
+    onTestFinished(() => bounds.mockRestore());
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(9, 'Draw the logo'));
+
+    await dragTicketTo(4, 'Done');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ticket #9 is archived. Restore it before moving it.',
+    );
+    await waitFor(() =>
+      expect(cardsIn('Todo')).toEqual([
+        'Fix the header',
+        'Write the copy',
+        'Draw the logo',
+        'Fix the footer',
+      ]),
+    );
+    expect(cardsIn('Done')).toEqual([]);
+  });
+
+  it('drags an unselected card on its own', async () => {
+    vi.mocked(updateTicket).mockResolvedValue({
+      ok: true,
+      projectId: project.id,
+    });
+    const bounds = mockBoardBounds('Done');
+    onTestFinished(() => bounds.mockRestore());
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+
+    await dragTicketTo(7, 'Done');
+
+    expect(moveTickets).not.toHaveBeenCalled();
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 7,
+      status: 'Done',
+    });
   });
 });

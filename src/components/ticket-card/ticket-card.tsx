@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Button, Inline, Stack, Text } from '@blockle/blocks';
-import type { FC } from 'react';
+import { Box, Button, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
+import type { FC, MouseEvent } from 'react';
 
 import { ticketByNumberPath, ticketOnBoardPath } from '../../app/lib/paths';
 import type { Ticket } from '../../tickets/tickets';
@@ -18,7 +18,26 @@ export type TicketCardProps = {
   boardPath: string;
   cardRef?: (element: Element | null) => void;
   dragHandleRef?: (element: Element | null) => void;
+  /** Whether the card is selected. Leave it out for a card that cannot be. */
+  selected?: boolean;
+  /** Whether any card on the Board is selected, which shows every checkbox. */
+  selecting?: boolean;
+  /**
+   * Selects or unselects the card: `toggle` for a Cmd-click, Ctrl-click or
+   * its checkbox, `range` for a Shift-click.
+   */
+  onSelect?: (mode: SelectMode) => void;
 };
+
+export type SelectMode = 'toggle' | 'range';
+
+/** Whether a click asks to select rather than open the drawer. */
+const isSelectClick = (event: MouseEvent) =>
+  event.metaKey || event.ctrlKey || event.shiftKey;
+
+/** A Shift-click selects a range; any other select click toggles. */
+const selectModeOf = (event: Event | MouseEvent): SelectMode =>
+  'shiftKey' in event && event.shiftKey ? 'range' : 'toggle';
 
 type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
@@ -81,22 +100,46 @@ export const TicketCard: FC<TicketCardProps> = ({
   boardPath,
   cardRef,
   dragHandleRef,
+  selected,
+  selecting = false,
+  onSelect,
 }) => {
   const changed = useTicketChanged(ticket.number);
+  const selectable = selected !== undefined && onSelect !== undefined;
+
+  // Runs before the link's own click, so it neither navigates nor opens a tab.
+  const selectByClick = (event: MouseEvent<HTMLLIElement>) => {
+    if (
+      !selectable ||
+      !isSelectClick(event) ||
+      (event.target instanceof HTMLInputElement &&
+        event.target.type === 'checkbox')
+    ) {
+      return;
+    }
+    event.preventDefault();
+    onSelect(selectModeOf(event));
+  };
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
 
   return (
     <Box
       asChild
-      backgroundColor={changed ? 'primary-100' : 'background-100'}
+      backgroundColor={changed || selected ? 'primary-100' : 'background-100'}
       borderRadius={2}
       boxShadow={1}
       paddingBlock={0}
       paddingInlineEnd={3}
       transition="slow"
     >
-      <li ref={cardRef} data-changed={changed ? '' : undefined}>
+      <li
+        ref={cardRef}
+        data-changed={changed ? '' : undefined}
+        data-selecting={selecting ? '' : undefined}
+        className={styles.card}
+        onClickCapture={selectByClick}
+      >
         <Inline gap={2} alignY="stretch">
           <Button
             ref={dragHandleRef}
@@ -145,6 +188,20 @@ export const TicketCard: FC<TicketCardProps> = ({
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
           </Stack>
+          {selectable && (
+            <Box paddingBlock={3}>
+              <Checkbox
+                name={`select-${ticket.number}`}
+                aria-label={`Select #${ticket.number} ${ticket.title}`}
+                className={styles.selectBox}
+                checked={selected}
+                onChange={(event) =>
+                  // A checkbox's change comes from its click, with its keys.
+                  onSelect(selectModeOf(event.nativeEvent))
+                }
+              />
+            </Box>
+          )}
         </Inline>
       </li>
     </Box>

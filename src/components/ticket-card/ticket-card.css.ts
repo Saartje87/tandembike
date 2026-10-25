@@ -1,6 +1,24 @@
 import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
+/** A card, whose checkbox shows when it is hovered or focused. */
+export const card = style({});
+
+/**
+ * A card's select checkbox: hidden until its card is hovered or focused, or
+ * anything on the Board is selected, yet still reachable by Tab. Blocks'
+ * Checkbox shrinks beside text that wraps (docs/blocks-feedback.md, 22).
+ */
+export const selectBox = style({
+  flexShrink: 0,
+  opacity: 0,
+  selectors: {
+    [`${card}:hover &, ${card}:focus-within &, ${card}[data-selecting] &`]: {
+      opacity: 1,
+    },
+  },
+});
+
 export const cardContent = style({
   flex: 1,
   minInlineSize: 0,

@@ -15,6 +15,7 @@ import {
   createTicket,
   deleteTicket,
   editTicketComment,
+  moveTickets,
   removeTicketComment,
   removeTicketLabel,
   restoreTicket,
@@ -42,6 +43,46 @@ describe('Ticket actions', () => {
     expect(result).toEqual({ ok: true });
     expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+  });
+
+  it('moves several Tickets into a lane and refreshes the Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const [a, b] = ['A', 'B'].map(
+      (title) => tickets.createTicket({ projectId: project.id, title }).number,
+    );
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await moveTickets({
+      projectId: project.id,
+      ticketNumbers: [b, a],
+      status: 'Done',
+      before: null,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      tickets
+        .listTickets({ projectId: project.id, status: 'Done' })
+        .sort((left, right) => left.position - right.position)
+        .map(({ number }) => number),
+    ).toEqual([b, a]);
+    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+  });
+
+  it('refuses a move with the reason the Tickets module gives', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await moveTickets({
+      projectId: project.id,
+      ticketNumbers: [42],
+      status: 'Done',
+      before: null,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket #42.' });
   });
 
   it('deletes an Epic and detaches its children, or deletes them too when asked', async () => {
