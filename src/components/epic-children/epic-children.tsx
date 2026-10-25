@@ -16,6 +16,10 @@ import { useForm } from 'react-hook-form';
 
 import { ticketByNumberPath } from '../../app/lib/paths';
 import {
+  parseTicketNumber,
+  ticketNumberRule,
+} from '../../app/lib/ticket-number';
+import {
   attachTicketToEpic,
   detachTicketFromEpic,
 } from '../../app/tickets/actions';
@@ -32,15 +36,6 @@ export type EpicChildrenProps = {
   /** The Epic's children, by Ticket number. */
   items: EpicChild[];
 };
-
-const ticketNumberRule = 'Enter a Ticket number, like 42.';
-
-/** The Ticket number in `text`, written `42` or `#42`, if it holds one. */
-function parseTicketNumber(text: string): number | undefined {
-  const match = /^#?(\d+)$/.exec(text.trim());
-  const number = match ? Number(match[1]) : Number.NaN;
-  return Number.isSafeInteger(number) && number > 0 ? number : undefined;
-}
 
 /** A child's Status, and whether it is blocked or archived, as shown. */
 function describeChild(child: EpicChild): string {

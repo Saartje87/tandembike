@@ -35,7 +35,7 @@ Record triage roles as labels: one category label (`bug` or `enhancement`) and o
 An idea Ticket that grilling, for example in `/triage`, shows to be a multi-session build becomes an Epic of Tickets:
 
 1. Stop triaging it, tell the User, and continue in the same session with `/to-spec`, then `/to-tickets`.
-2. `/to-spec` publishes the spec as a new Epic (`create_ticket` with `type: "Epic"`) in the idea Ticket's Project, with the spec as its description and the `ready-for-agent` label. The idea Ticket itself cannot become the Epic: a Ticket's type is fixed at creation.
+2. `/to-spec` publishes the spec as a new Epic (`create_ticket` with `type: "Epic"`) in the idea Ticket's Project, with the spec as its description, the idea Ticket as its `originNumber` and the `ready-for-agent` label. The idea Ticket itself cannot become the Epic: a Ticket's type is fixed at creation.
 3. `/to-tickets` creates the Epic's children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. "Working an Epic" then applies.
 4. Comment `Refined into Epic #<number>` on the idea Ticket, remove its triage state label, and archive it with `archive_ticket`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
 
@@ -50,6 +50,8 @@ Move a Ticket to `Done` only once every criterion is checked; if one is delibera
 ## When a skill says “publish to the issue tracker”
 
 Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in one `create_tickets` call, in dependency order, with each dependency in `blockedByPositions`; for more than 50 items, or a dependency on an existing Ticket, use further calls and `add_blocker`.
+
+When the items are split from an existing Ticket that is not an Epic, such as a spec, pass that Ticket as `originNumber` so they form its Origin group (ADR 0015). Then move the split Ticket to `Done`, removing its triage state label, and do not archive it: its drawer lists the split-off Tickets and stays on the Board as the group's view. Each split-off Ticket is then worked on its own, by "Development work in this repository".
 
 ## When a skill says “fetch the relevant ticket”
 

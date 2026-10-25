@@ -426,3 +426,25 @@ export async function detachTicketFromEpic(input: {
 }): Promise<TicketEpicResult> {
   return changeEpic(() => appTickets().detachFromEpic(Number(input?.number)));
 }
+
+export type TicketOriginResult = ActionResult;
+
+/**
+ * Sets the Ticket a Ticket was split from, or clears it with `null`, for the
+ * UI, and refreshes the Boards whose drawers show both sides. Domain errors
+ * come back as `error`, like `createTicket`.
+ */
+export async function setTicketOrigin(input: {
+  number: number;
+  originNumber: number | null;
+}): Promise<TicketOriginResult> {
+  return actionResult(() => {
+    appTickets().updateTicket(Number(input?.number), {
+      originNumber:
+        input?.originNumber === null ? null : Number(input?.originNumber),
+    });
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}

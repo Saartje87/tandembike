@@ -35,6 +35,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
+- When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access or hand-written requests.
 - Refer to Tickets by number with a hash, like #42, the same way the User does.
@@ -129,6 +130,10 @@ const cycleTitle = z
   .describe(
     "The Cycle's goal as its title: one line of at most 200 characters. It is trimmed and may not be empty.",
   );
+
+const originNumber = ticketNumber.describe(
+  'The Ticket it was split from, such as the spec it came out of, in any Project. An Origin chain cannot loop.',
+);
 
 const status = z
   .enum(statuses)
@@ -248,7 +253,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, epic, blockedBy, claim, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -319,6 +324,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'The order to list Tickets in. "created", the default: oldest-created first. "position": Board order, the order the User ranks Tickets in, with the lanes Todo, In progress, Done in turn, each top to bottom; it needs projectId or projectName. Paging in Board order can skip or repeat a Ticket that moves on the Board between calls.',
           ),
+        originNumber: originNumber
+          .optional()
+          .describe(
+            'Only list the Tickets split from this Ticket: those whose Origin it is.',
+          ),
         cycleId: cycleId
           .nullable()
           .optional()
@@ -336,7 +346,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic; epic is the Epic it is a child of ({ number, title }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. Read it before starting work on the Ticket.',
+        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic; epic is the Epic it is a child of ({ number, title }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. Read it before starting work on the Ticket.',
       inputSchema: { number: ticketNumber },
       annotations: { readOnlyHint: true },
     },
@@ -415,6 +425,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .describe(
             'Create the Ticket as a child of this Epic, which must be in the same Project.',
           ),
+        originNumber: originNumber.optional(),
       },
     },
     ({ projectId, projectName, ...input }) =>
@@ -447,6 +458,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             'Create every Ticket as a child of this Epic, which must be in the same Project.',
+          ),
+        originNumber: originNumber
+          .optional()
+          .describe(
+            'The Ticket they were all split from, such as the spec they came out of, in any Project.',
           ),
         tickets: z
           .array(
@@ -481,7 +497,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Update Ticket',
       description:
-        'Change any subset of a Ticket\'s title, description, Status, Project, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
+        'Change any subset of a Ticket\'s title, description, Status, Project, Origin, labels and acceptance criteria in one atomic change, and return the updated Ticket. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket.',
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -503,6 +519,12 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             'Move the Ticket to this Project (id from list_projects). A child, or an Epic with children, cannot move.',
+          ),
+        originNumber: originNumber
+          .nullable()
+          .optional()
+          .describe(
+            'The Ticket it was split from, in any Project, or null to clear it. A Ticket cannot be its own Origin, and an Origin chain cannot loop.',
           ),
         addLabels,
         removeLabels,

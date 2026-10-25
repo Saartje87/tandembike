@@ -57,6 +57,12 @@ import {
   TicketsError,
   ValidationError,
 } from './errors';
+import {
+  checkOrigin,
+  type OriginLink,
+  type SplitOffTicket,
+  withOrigins,
+} from './origins';
 import { nextPosition } from './positions';
 import {
   checkBatchNumbers,
@@ -106,6 +112,10 @@ export type Ticket = {
    * empty for a normal Ticket.
    */
   children: EpicChild[];
+  /** The Ticket this one was split from (ADR 0015), or `null`. */
+  origin: OriginLink | null;
+  /** The Tickets split from this one, archived ones included, by number. */
+  splitOff: SplitOffTicket[];
   projectId: number;
   position: number;
   archived: boolean;
@@ -165,6 +175,8 @@ export type CreateTicketInput = {
   type?: TicketType;
   /** An Epic of the same Project to create it under; defaults to none. */
   epicNumber?: number;
+  /** The Ticket it was split from, in any Project; defaults to none. */
+  originNumber?: number;
 };
 
 export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
@@ -177,6 +189,8 @@ export type CreateTicketBatchInput = {
   projectId: number;
   /** An Epic of the same Project to create them all under. */
   epicNumber?: number;
+  /** The Ticket they were all split from, in any Project. */
+  originNumber?: number;
   /** In order, from 1 to `maxBatchSize` of them. */
   tickets: BatchTicketInput[];
 };
@@ -199,6 +213,8 @@ export type UpdateTicketInput = {
   description?: string;
   status?: Status;
   projectId?: number;
+  /** The Ticket it was split from, in any Project, or `null` for none. */
+  originNumber?: number | null;
   /** Labels to add, after `removeLabels` are removed. */
   addLabels?: string[];
   /** Labels to remove, ignoring case and ones the Ticket does not have. */
@@ -280,6 +296,8 @@ export type ListTicketsFilter = {
    * no Prepared or Active Cycle: the Backlog, Done ones included.
    */
   cycleId?: number | null;
+  /** Only the Tickets split from this Ticket: whose Origin it is. */
+  originNumber?: number;
 };
 
 export const defaultPageSize = 50;
@@ -577,7 +595,12 @@ function checkBlockedByPositions(
 function insertTicket(
   db: DatabaseConnection,
   { values, labels, acceptanceCriteria }: CheckedNewTicket,
-  row: { projectId: number; epicNumber: number | null; createdAt: Date },
+  row: {
+    projectId: number;
+    epicNumber: number | null;
+    originNumber: number | null;
+    createdAt: Date;
+  },
 ): number {
   const { number } = db
     .insert(tickets)
@@ -597,7 +620,7 @@ function insertTicket(
 /** The fields of a Ticket row an update may set. */
 type TicketValues = Pick<
   UpdateTicketInput,
-  'title' | 'description' | 'status' | 'projectId'
+  'title' | 'description' | 'status' | 'projectId' | 'originNumber'
 >;
 
 /**
@@ -618,7 +641,7 @@ type TicketChanges = {
  */
 function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
   const title = input.title?.trim();
-  const { description, status, projectId } = input;
+  const { description, status, projectId, originNumber } = input;
   const addLabels = normalizeLabels(input.addLabels ?? []);
   const removeLabels = normalizeLabels(input.removeLabels ?? []);
   const inBoth = addLabels.filter((label) => removeLabels.includes(label));
@@ -646,9 +669,13 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
           ) ?? checkCriterionIds(acceptanceCriteria)),
   });
   const values = Object.fromEntries(
-    Object.entries({ title, description, status, projectId }).filter(
-      ([, value]) => value !== undefined,
-    ),
+    Object.entries({
+      title,
+      description,
+      status,
+      projectId,
+      originNumber,
+    }).filter(([, value]) => value !== undefined),
   ) as TicketValues;
   return { values, addLabels, removeLabels, acceptanceCriteria };
 }
@@ -694,6 +721,7 @@ const ticketColumns = {
   status: tickets.status,
   type: tickets.type,
   epicNumber: tickets.epicNumber,
+  originNumber: tickets.originNumber,
   projectId: tickets.projectId,
   claimAgentRunId: tickets.claimAgentRunId,
   claimAgentName: tickets.claimAgentName,
@@ -1069,23 +1097,31 @@ export function createTickets(
             projectId: project.id,
           });
         }
+        if (input.originNumber !== undefined) {
+          checkOrigin(db, input.originNumber);
+        }
         const number = insertTicket(
           db,
           { values, labels, acceptanceCriteria },
           {
             projectId: project.id,
             epicNumber: input.epicNumber ?? null,
+            originNumber: input.originNumber ?? null,
             createdAt: new Date(),
           },
         );
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
+        if (input.originNumber !== undefined) {
+          touchTicket(db, input.originNumber);
+        }
         syncEpicStatus(db, input.epicNumber ?? null);
         return number;
       });
-      // A child changes its Epic's children, and maybe its Status.
-      publishWithEpic(number, input.epicNumber ?? null);
+      // A child changes its Epic's children, and maybe its Status; a split-off
+      // Ticket changes its Origin's.
+      publishWith(number, input.epicNumber ?? null, input.originNumber ?? null);
       return getTicket(number);
     },
 
@@ -1117,6 +1153,7 @@ export function createTickets(
         );
       }
       const epicNumber = input.epicNumber ?? null;
+      const originNumber = input.originNumber ?? null;
 
       const numbers = db.transaction(() => {
         if (epicNumber !== null) {
@@ -1125,12 +1162,16 @@ export function createTickets(
             projectId: project.id,
           });
         }
+        if (originNumber !== null) {
+          checkOrigin(db, originNumber);
+        }
         const createdAt = new Date();
         const created: number[] = [];
         for (const { ticket, blockedByPositions } of checked) {
           const number = insertTicket(db, ticket, {
             projectId: project.id,
             epicNumber,
+            originNumber,
             createdAt,
           });
           if (blockedByPositions.length > 0) {
@@ -1145,12 +1186,19 @@ export function createTickets(
           }
           created.push(number);
         }
+        if (originNumber !== null) {
+          touchTicket(db, originNumber);
+        }
         syncEpicStatus(db, epicNumber);
         return created;
       });
       changes.publish({
         type: 'tickets',
-        numbers: epicNumber === null ? numbers : [...numbers, epicNumber],
+        numbers: [
+          ...numbers,
+          ...(epicNumber === null ? [] : [epicNumber]),
+          ...(originNumber === null ? [] : [originNumber]),
+        ],
       });
       return numbers.map(getTicket);
     },
@@ -1175,8 +1223,11 @@ export function createTickets(
         }
       }
 
-      const { leftCycles, changedEpic } = applyTicketChanges(number, checked);
-      publishWithEpic(number, changedEpic);
+      const { leftCycles, changedEpic, changedOrigins } = applyTicketChanges(
+        number,
+        checked,
+      );
+      publishWith(number, changedEpic, ...changedOrigins);
       for (const id of leftCycles) {
         changes.publish({ type: 'cycle', id });
       }
@@ -1617,7 +1668,8 @@ export function createTickets(
      * Comments, acceptance criteria and Blockers on both sides go with it,
      * and it leaves every Cycle, Archived ones included. The Tickets it
      * blocked and its Epic are bumped, and the Epic's Status is derived
-     * again. An Epic's children, archived ones included, are detached and
+     * again. The Tickets split from it lose their Origin and stay. An Epic's
+     * children, archived ones included, are detached and
      * kept, or with `withChildren` deleted by the same rules, all in one
      * transaction. Only the User deletes: no MCP tool calls this.
      */
@@ -1625,43 +1677,59 @@ export function createTickets(
       number: number,
       { withChildren = false }: DeleteTicketOptions = {},
     ): void {
-      const { children, unblocked, epic, leftCycles } = db.transaction(() => {
-        const { epic, children } = getTicket(number);
-        const childNumbers = children.map((child) => child.number);
-        if (!withChildren) {
-          db.update(tickets)
-            .set({ epicNumber: null, updatedAt: new Date() })
-            .where(eq(tickets.epicNumber, number))
-            .run();
-        }
-        const deleted = withChildren ? [...childNumbers, number] : [number];
-        const removals = deleted.map((doomed) => removeTicket(db, doomed));
-        const unblocked = [
-          ...new Set(removals.flatMap((removal) => removal.unblocked)),
-        ].filter((blocked) => !deleted.includes(blocked));
-        for (const blocked of unblocked) {
-          touchTicket(db, blocked);
-        }
-        if (epic !== null) {
-          touchTicket(db, epic.number);
-          syncEpicStatus(db, epic.number);
-        }
-        return {
-          children: childNumbers,
-          unblocked,
-          epic,
-          leftCycles: [
-            ...new Set(removals.flatMap((removal) => removal.leftCycles)),
-          ],
-        };
-      });
+      const { children, unblocked, epic, leftCycles, unlinked } =
+        db.transaction(() => {
+          const { epic, children } = getTicket(number);
+          const childNumbers = children.map((child) => child.number);
+          if (!withChildren) {
+            db.update(tickets)
+              .set({ epicNumber: null, updatedAt: new Date() })
+              .where(eq(tickets.epicNumber, number))
+              .run();
+          }
+          const deleted = withChildren ? [...childNumbers, number] : [number];
+          const removals = deleted.map((doomed) => removeTicket(db, doomed));
+          const unblocked = [
+            ...new Set(removals.flatMap((removal) => removal.unblocked)),
+          ].filter((blocked) => !deleted.includes(blocked));
+          for (const blocked of unblocked) {
+            touchTicket(db, blocked);
+          }
+          for (const { origin } of removals) {
+            if (origin != null && !deleted.includes(origin)) {
+              touchTicket(db, origin);
+            }
+          }
+          if (epic !== null) {
+            touchTicket(db, epic.number);
+            syncEpicStatus(db, epic.number);
+          }
+          return {
+            children: childNumbers,
+            unblocked,
+            epic,
+            leftCycles: [
+              ...new Set(removals.flatMap((removal) => removal.leftCycles)),
+            ],
+            // Split-off Tickets that stay, and Origins that lose one.
+            unlinked: removals
+              .flatMap(({ unlinked, origin }) => [
+                ...unlinked,
+                ...(origin == null ? [] : [origin]),
+              ])
+              .filter((other) => !deleted.includes(other)),
+          };
+        });
       changes.publish({
         type: 'tickets',
         numbers: [
-          number,
-          ...children,
-          ...unblocked,
-          ...(epic === null ? [] : [epic.number]),
+          ...new Set([
+            number,
+            ...children,
+            ...unblocked,
+            ...(epic === null ? [] : [epic.number]),
+            ...unlinked,
+          ]),
         ],
       });
       for (const id of leftCycles) {
@@ -1670,12 +1738,18 @@ export function createTickets(
     },
   };
 
-  /** Announces Ticket `number`'s change, together with Epic `epic`'s if given. */
-  function publishWithEpic(number: number, epic: number | null) {
+  /**
+   * Announces Ticket `number`'s change, together with that of each of the
+   * `related` Tickets given, such as its Epic or Origin.
+   */
+  function publishWith(number: number, ...related: (number | null)[]) {
+    const others = [
+      ...new Set(related.filter((other) => other !== null && other !== number)),
+    ] as number[];
     changes.publish(
-      epic === null
+      others.length === 0
         ? { type: 'ticket', number }
-        : { type: 'tickets', numbers: [number, epic] },
+        : { type: 'tickets', numbers: [number, ...others] },
     );
   }
 
@@ -1721,12 +1795,17 @@ export function createTickets(
    * changes Project or Status goes to the end of its new lane, and one that
    * changes Project leaves its Cycle unless that is Archived. A child's
    * Status change updates its Epic's. Returns the ids of the Cycles it left,
-   * and its Epic's number if that Epic's Status changed.
+   * its Epic's number if that Epic's Status changed, and its old and new
+   * Origin if the Origin changed.
    */
   function applyTicketChanges(
     number: number,
     { values, addLabels, removeLabels, acceptanceCriteria }: TicketChanges,
-  ): { leftCycles: number[]; changedEpic: number | null } {
+  ): {
+    leftCycles: number[];
+    changedEpic: number | null;
+    changedOrigins: (number | null)[];
+  } {
     return db.transaction(() => {
       const existing = db
         .select(ticketColumns)
@@ -1747,6 +1826,19 @@ export function createTickets(
       }
       if (projectId !== existing.projectId) {
         checkUngrouped(db, existing);
+      }
+      if (values.originNumber != null) {
+        checkOrigin(db, values.originNumber, number);
+      }
+      const changedOrigins =
+        values.originNumber === undefined ||
+        values.originNumber === existing.originNumber
+          ? []
+          : [existing.originNumber, values.originNumber];
+      for (const origin of changedOrigins) {
+        if (origin !== null) {
+          touchTicket(db, origin);
+        }
       }
       db.update(tickets)
         .set({
@@ -1774,7 +1866,7 @@ export function createTickets(
         status !== existing.status && syncEpicStatus(db, existing.epicNumber)
           ? existing.epicNumber
           : null;
-      return { leftCycles, changedEpic };
+      return { leftCycles, changedEpic, changedOrigins };
     });
   }
 
@@ -1800,7 +1892,7 @@ export function createTickets(
       }
       return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
     });
-    publishWithEpic(number, changedEpic);
+    publishWith(number, changedEpic);
     return getTicket(number);
   }
 }
@@ -1854,6 +1946,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
               notInArray(tickets.epicNumber, claimedEpics(db)),
             ),
           ),
+    filter.originNumber === undefined
+      ? undefined
+      : eq(tickets.originNumber, filter.originNumber),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
@@ -1970,8 +2065,10 @@ function checkedLabels(labels: readonly string[]): string[] {
 /**
  * Deletes Ticket `number`'s row with everything attached to it: labels,
  * Comments, acceptance criteria, Blockers on both sides and Cycle
- * membership. Run it in the deleting transaction. Returns the Tickets it
- * blocked and the Cycles it left, for the caller to bump and announce.
+ * membership. The Tickets split from it lose their Origin and are bumped.
+ * Run it in the deleting transaction. Returns the Tickets it blocked, the
+ * Cycles it left, the Tickets split from it and its own Origin: the caller
+ * announces them all, and bumps the ones it blocked and its Origin.
  */
 function removeTicket(db: DatabaseConnection, number: number) {
   db.delete(ticketLabels).where(eq(ticketLabels.ticketNumber, number)).run();
@@ -1991,8 +2088,19 @@ function removeTicket(db: DatabaseConnection, number: number) {
     .all()
     .map(({ number: blocked }) => blocked);
   const leftCycles = leaveAllCycles(db, number);
-  db.delete(tickets).where(eq(tickets.number, number)).run();
-  return { unblocked, leftCycles };
+  const unlinked = db
+    .update(tickets)
+    .set({ originNumber: null, updatedAt: new Date() })
+    .where(eq(tickets.originNumber, number))
+    .returning({ number: tickets.number })
+    .all()
+    .map((split) => split.number);
+  const removed = db
+    .delete(tickets)
+    .where(eq(tickets.number, number))
+    .returning({ originNumber: tickets.originNumber })
+    .get();
+  return { unblocked, leftCycles, unlinked, origin: removed?.originNumber };
 }
 
 /** Bumps Ticket `number`'s updated time, or says it does not exist. */
@@ -2312,19 +2420,20 @@ type RelationColumns = {
   claimAgentRunId: string | null;
   claimAgentName: string | null;
   epicNumber: number | null;
+  originNumber: number | null;
 };
 
 /**
  * `rows` with each Ticket's claim, Epic, labels, Blockers, acceptance
- * criteria and children.
+ * criteria, children, Origin and split-off Tickets.
  */
 function withRelations<Row extends { number: number }>(
   db: DatabaseConnection,
   rows: (Row & RelationColumns)[],
 ) {
-  return withChildren(
+  return withOrigins(
     db,
-    withAcceptanceCriteria(db, withClaimAndLinks(db, rows)),
+    withChildren(db, withAcceptanceCriteria(db, withClaimAndLinks(db, rows))),
   );
 }
 

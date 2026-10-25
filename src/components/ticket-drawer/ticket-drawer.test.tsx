@@ -43,6 +43,7 @@ vi.mock('../../app/tickets/actions', () => ({
   removeTicketComment: vi.fn(),
   checkTicketAcceptanceCriterion: vi.fn(),
   setTicketAcceptanceCriteria: vi.fn(),
+  setTicketOrigin: vi.fn(),
 }));
 
 const projects = [
@@ -64,6 +65,8 @@ const ticket: Ticket = {
   type: 'Ticket',
   epic: null,
   children: [],
+  origin: null,
+  splitOff: [],
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-03-01T09:00:00Z'),
@@ -1098,6 +1101,39 @@ describe('TicketDrawer', () => {
       expect(
         inDrawer().queryByRole('heading', { name: 'Child Tickets' }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Origins', () => {
+    it('links a Ticket to its Origin and lists no split-off Tickets', () => {
+      renderDrawer({
+        ...ticket,
+        origin: { number: 2, title: 'Checkout spec', status: 'Done' },
+      });
+
+      expect(
+        inDrawer().getByRole('link', { name: '#2 Checkout spec' }),
+      ).toHaveAttribute('href', '/ticket/2');
+      expect(button('Change Origin')).toBeInTheDocument();
+      expect(
+        inDrawer().queryByRole('heading', { name: 'Split-off Tickets' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("lists an Origin's split-off Tickets with their Status", () => {
+      renderDrawer({
+        ...ticket,
+        splitOff: [
+          { number: 9, title: 'Pay by card', status: 'Todo', archived: false },
+        ],
+      });
+
+      const list = inDrawer().getByRole('list', { name: 'Split-off Tickets' });
+      expect(
+        within(list).getByRole('link', { name: '#9 Pay by card' }),
+      ).toBeInTheDocument();
+      expect(list).toHaveTextContent('Todo');
+      expect(button('Set Origin')).toBeInTheDocument();
     });
   });
 
