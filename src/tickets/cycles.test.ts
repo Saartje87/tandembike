@@ -146,23 +146,25 @@ describe('Planning Tickets into a Cycle', () => {
     expect(tickets.listCycles(cycle.projectId)).toEqual([unplanned]);
   });
 
-  it('refuses to newly plan a Done or archived Ticket', () => {
-    const { tickets, cycle } = planningWith(2);
+  it('plans a Done Ticket, to record finished work in a Cycle', () => {
+    const { tickets, cycle } = planningWith(1);
     tickets.updateTicket(1, { status: 'Done' });
-    tickets.archiveTicket(2);
+
+    expect(
+      tickets.planTicket({ cycleId: cycle.id, number: 1 }).ticketNumbers,
+    ).toEqual([1]);
+    expect(tickets.getTicket(1).status).toBe('Done');
+  });
+
+  it('refuses to newly plan an archived Ticket', () => {
+    const { tickets, cycle } = planningWith(1);
+    tickets.archiveTicket(1);
 
     expect(
       errorFrom(() => tickets.planTicket({ cycleId: cycle.id, number: 1 })),
     ).toEqual(
       new NotAllowedError(
-        'Ticket #1 is Done. Only open Tickets can be planned into a Cycle.',
-      ),
-    );
-    expect(
-      errorFrom(() => tickets.planTicket({ cycleId: cycle.id, number: 2 })),
-    ).toEqual(
-      new NotAllowedError(
-        'Ticket #2 is archived. Restore it before planning it into a Cycle.',
+        'Ticket #1 is archived. Restore it before planning it into a Cycle.',
       ),
     );
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
@@ -596,6 +598,27 @@ describe('Starting a Cycle with rollover', () => {
     });
     expect(tickets.getTicket(3).status).toBe('Done');
     expect(tickets.getTicket(4).archived).toBe(true);
+  });
+
+  it('keeps a Done Ticket planned into the Active Cycle out of the rollover', () => {
+    const { tickets, project, beta, launch } = withActiveAndNext();
+    const finished = tickets.createTicket({
+      projectId: project.id,
+      title: 'Finished',
+    });
+    tickets.updateTicket(finished.number, { status: 'Done' });
+    tickets.planTicket({ cycleId: beta.id, number: finished.number });
+
+    tickets.startCycle(launch.id, { archiveActive: true });
+
+    expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([1, 2, 5]);
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([
+      1,
+      2,
+      3,
+      4,
+      finished.number,
+    ]);
   });
 
   it('starts as usual when confirmed with no Active Cycle', () => {

@@ -383,9 +383,10 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
     /**
      * Plans Ticket `number` into Cycle `cycleId`; planning a member again
-     * changes nothing. Only an open, non-archived Ticket of the Cycle's
-     * Project can be planned, and only while it is in no other Cycle that is
-     * not Archived.
+     * changes nothing. Only a non-archived Ticket of the Cycle's Project can
+     * be planned, whatever its Status, and only while it is in no other Cycle
+     * that is not Archived. A Done Ticket can be planned to record finished
+     * work; rollover leaves it in its Cycle.
      */
     planTicket({ cycleId, number }: CycleTicketInput): Cycle {
       db.transaction(() => {
@@ -394,7 +395,6 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         const ticket = db
           .select({
             projectId: tickets.projectId,
-            status: tickets.status,
             archived: tickets.archived,
           })
           .from(tickets)
@@ -425,11 +425,6 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         if (ticket.archived) {
           throw new NotAllowedError(
             `Ticket #${number} is archived. Restore it before planning it into a Cycle.`,
-          );
-        }
-        if (ticket.status === 'Done') {
-          throw new NotAllowedError(
-            `Ticket #${number} is Done. Only open Tickets can be planned into a Cycle.`,
           );
         }
         if (current) {
