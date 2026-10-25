@@ -37,7 +37,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain language (Project, Ticket, Status, User, Agent) and `docs/adr/` for the decisions behind the design before changing behaviour.
 
 - `src/app/`: pages, layouts, Server Actions and route handlers, including the MCP route (`src/app/api/mcp/`) and the events route (`src/app/api/events/`). Give each page a `metadata` title.
-- URLs: a single item gets a singular segment, a collection a plural one (`/projects`, `/project/3`, `/project/3/ticket/12`). Build every path, and every `revalidatePath` pattern, with `src/app/lib/paths.ts`; never write one out by hand.
+- URLs: a single item gets a singular segment, a collection a plural one (`/projects`, `/project/3`, `/project/3/cycle/7`). A Ticket has no page of its own: it opens as a drawer through `?ticket=12` on the Board it is shown over (`/project/3?ticket=12`), and `/ticket/12` opens it over its own Board (ADR 0013). Build every path, and every `revalidatePath` pattern, with `src/app/lib/paths.ts`; never write one out by hand.
 - `src/tickets/`: the Tickets module, the only code that reads or writes Projects and Tickets, with its tests next to it.
 - `src/db/`: the Drizzle schema, migrations and database connection.
 - `src/components/`: UI components.

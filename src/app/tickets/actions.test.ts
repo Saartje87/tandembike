@@ -1,7 +1,6 @@
 // @vitest-environment node
 
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets } from '../../test/tickets';
@@ -23,46 +22,33 @@ import {
 } from './actions';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('next/navigation', () => ({
-  redirect: vi.fn(),
-  RedirectType: { push: 'push', replace: 'replace' },
-}));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 describe('Ticket actions', () => {
   beforeEach(() => {
     vi.mocked(revalidatePath).mockClear();
-    vi.mocked(redirect).mockClear();
   });
 
-  it('deletes a Ticket and sends the User to the Board it was on', async () => {
+  it('deletes a Ticket and refreshes its Boards, leaving navigation to the drawer', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    const backlog = tickets.createTicket({ projectId: project.id, title: 'A' });
-    const planned = tickets.createTicket({ projectId: project.id, title: 'B' });
-    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    tickets.planTicket({ cycleId: cycle.id, number: planned.number });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    await deleteTicket({ number: planned.number });
-    await deleteTicket({ number: backlog.number });
+    const result = await deleteTicket({ number: ticket.number });
 
+    expect(result).toEqual({ ok: true });
     expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
-    expect(vi.mocked(redirect).mock.calls).toEqual([
-      [`/project/${project.id}/cycle/${cycle.id}`, 'replace'],
-      [`/project/${project.id}`, 'replace'],
-    ]);
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
   });
 
-  it('returns a refused deletion as an error and stays put', async () => {
+  it('returns a refused deletion as an error', async () => {
     const tickets = createTestTickets();
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const result = await deleteTicket({ number: 42 });
 
     expect(result).toEqual({ ok: false, error: 'There is no Ticket #42.' });
-    expect(redirect).not.toHaveBeenCalled();
   });
 
   it('creates a Todo Ticket with needs-triage and refreshes its Board', async () => {
@@ -109,7 +95,7 @@ describe('Ticket actions', () => {
     );
   });
 
-  it('revalidates the project-scoped Ticket page after updates and archiving', async () => {
+  it('revalidates the Cycle Boards, whose drawers show the Ticket, after updates and archiving', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -126,12 +112,12 @@ describe('Ticket actions', () => {
       vi
         .mocked(revalidatePath)
         .mock.calls.filter(
-          ([path]) => path === '/project/[id]/ticket/[number]',
+          ([path]) => path === '/project/[id]/cycle/[cycleId]',
         ),
     ).toEqual([
-      ['/project/[id]/ticket/[number]', 'page'],
-      ['/project/[id]/ticket/[number]', 'page'],
-      ['/project/[id]/ticket/[number]', 'page'],
+      ['/project/[id]/cycle/[cycleId]', 'page'],
+      ['/project/[id]/cycle/[cycleId]', 'page'],
+      ['/project/[id]/cycle/[cycleId]', 'page'],
     ]);
   });
 
@@ -154,7 +140,7 @@ describe('Ticket actions', () => {
     expect(tickets.getTicket(ticket.number).claim).toBeNull();
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
     expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/ticket/[number]',
+      '/project/[id]/cycle/[cycleId]',
       'page',
     );
   });
@@ -192,7 +178,7 @@ describe('Ticket actions', () => {
     expect(tickets.getTicket(ticket.number).labels).toEqual(['bug']);
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
     expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/ticket/[number]',
+      '/project/[id]/cycle/[cycleId]',
       'page',
     );
 
@@ -241,7 +227,7 @@ describe('Ticket actions', () => {
     const [comment] = tickets.listComments(ticket.number);
     expect(comment).toMatchObject({ author: 'user', body: 'Looks good.' });
     expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/ticket/[number]',
+      '/project/[id]/cycle/[cycleId]',
       'page',
     );
 
@@ -333,7 +319,7 @@ describe('Ticket actions', () => {
     ]);
     expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
     expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/ticket/[number]',
+      '/project/[id]/cycle/[cycleId]',
       'page',
     );
   });

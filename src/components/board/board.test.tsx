@@ -429,8 +429,8 @@ describe('Board with archived Tickets', () => {
       'Shipped',
     ]);
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/project/1/ticket/5',
-      '/project/1/ticket/6',
+      '/project/1?ticket=5',
+      '/project/1?ticket=6',
     ]);
     expect(
       within(list as HTMLElement).getByText('#5', { exact: false }),

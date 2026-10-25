@@ -69,14 +69,8 @@ const ticket: Ticket = {
   updatedAt: new Date('2026-03-02T10:30:00Z'),
 };
 
-const renderDrawer = (shown: Ticket = ticket, closeWithBack = false) =>
-  renderWithTheme(
-    <TicketDrawer
-      ticket={shown}
-      projects={projects}
-      closeWithBack={closeWithBack}
-    />,
-  );
+const renderDrawer = (shown: Ticket = ticket) =>
+  renderWithTheme(<TicketDrawer ticket={shown} projects={projects} />);
 
 const drawer = () => screen.getByRole('dialog');
 const inDrawer = () => within(drawer());
@@ -209,7 +203,10 @@ describe('TicketDrawer', () => {
 
     await userEvent.click(button('Close'));
 
-    expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1/cycle/7');
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith(
+      '/project/1/cycle/7',
+      { scroll: false },
+    );
   });
 
   it("shows the Ticket's Status and Project", () => {
@@ -362,20 +359,22 @@ describe('TicketDrawer', () => {
       );
     });
 
-    it('updates its URL and close destination when moved to another Project', async () => {
+    it("reopens over its new Project's Backlog when moved, and closes there", async () => {
       vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 2 });
-      renderDrawer(ticket, true);
+      renderDrawer(ticket);
 
       await userEvent.selectOptions(field('Project'), 'App');
 
       expect(router.replace).toHaveBeenCalledExactlyOnceWith(
-        '/project/2/ticket/4',
+        '/project/2?ticket=4',
+        { scroll: false },
       );
 
       await userEvent.click(button('Close'));
 
-      expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/2');
-      expect(router.back).not.toHaveBeenCalled();
+      expect(router.replace).toHaveBeenLastCalledWith('/project/2', {
+        scroll: false,
+      });
     });
   });
 
@@ -452,7 +451,7 @@ describe('TicketDrawer', () => {
       expect(keys).not.toHaveBeenCalled();
       expect(updateTicket).not.toHaveBeenCalled();
       expect(titleButton()).toHaveFocus();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
       expect(router.back).not.toHaveBeenCalled();
     });
 
@@ -606,7 +605,7 @@ describe('TicketDrawer', () => {
       expect(updateTicket).not.toHaveBeenCalled();
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
       expect(button('Edit description')).toHaveFocus();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('cancels from the Cancel button', async () => {
@@ -756,7 +755,7 @@ describe('TicketDrawer', () => {
         expect(asked).toHaveBeenCalledExactlyOnceWith(
           'Discard changes to the description?',
         );
-        expect(router.push).not.toHaveBeenCalled();
+        expect(router.replace).not.toHaveBeenCalled();
         expect(descriptionInput()).toHaveValue('It overlaps the **logo**.!');
       });
 
@@ -770,7 +769,7 @@ describe('TicketDrawer', () => {
         await userEvent.keyboard('{Escape}');
 
         expect(asked).toHaveBeenCalledOnce();
-        expect(router.push).not.toHaveBeenCalled();
+        expect(router.replace).not.toHaveBeenCalled();
       });
 
       it('closes when the User agrees to discard them', async () => {
@@ -781,7 +780,9 @@ describe('TicketDrawer', () => {
         await userEvent.type(descriptionInput(), '!');
         await userEvent.click(button('Close'));
 
-        expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1');
+        expect(router.replace).toHaveBeenCalledExactlyOnceWith('/project/1', {
+          scroll: false,
+        });
       });
 
       it('closes without asking when the description is typed back to how it was', async () => {
@@ -794,7 +795,9 @@ describe('TicketDrawer', () => {
         await userEvent.click(button('Close'));
 
         expect(asked).not.toHaveBeenCalled();
-        expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1');
+        expect(router.replace).toHaveBeenCalledExactlyOnceWith('/project/1', {
+          scroll: false,
+        });
       });
 
       it('asks again after a refused description reopens with its text', async () => {
@@ -812,7 +815,7 @@ describe('TicketDrawer', () => {
         await userEvent.click(button('Close'));
 
         expect(asked).toHaveBeenCalledOnce();
-        expect(router.push).not.toHaveBeenCalled();
+        expect(router.replace).not.toHaveBeenCalled();
       });
 
       it('closes without asking when the description is unchanged', async () => {
@@ -823,7 +826,9 @@ describe('TicketDrawer', () => {
         await userEvent.click(button('Close'));
 
         expect(asked).not.toHaveBeenCalled();
-        expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1');
+        expect(router.replace).toHaveBeenCalledExactlyOnceWith('/project/1', {
+          scroll: false,
+        });
       });
     });
   });
@@ -975,7 +980,7 @@ describe('TicketDrawer', () => {
       });
       expect(select).toBeInTheDocument();
       expect(drawer()).toBeInTheDocument();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
     });
   });
 
@@ -1024,7 +1029,7 @@ describe('TicketDrawer', () => {
       expect(updateTicket).not.toHaveBeenCalled();
       expect(field('Status')).toHaveValue('In progress');
       expect(drawer()).toBeInTheDocument();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('sets the Status to Done with criteria still unchecked', async () => {
@@ -1088,7 +1093,7 @@ describe('TicketDrawer', () => {
 
       expect(
         inDrawer().getByRole('link', { name: '#8 Checkout' }),
-      ).toHaveAttribute('href', '/project/1/ticket/8');
+      ).toHaveAttribute('href', '/ticket/8');
       expect(
         inDrawer().queryByRole('heading', { name: 'Child Tickets' }),
       ).not.toBeInTheDocument();
@@ -1107,7 +1112,7 @@ describe('TicketDrawer', () => {
 
       expect(archiveTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
       expect(restoreTicket).not.toHaveBeenCalled();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('says an archived Ticket is archived and restores it from the banner', async () => {
@@ -1125,7 +1130,7 @@ describe('TicketDrawer', () => {
 
       expect(restoreTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
       expect(archiveTicket).not.toHaveBeenCalled();
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('keeps an archived Ticket editable', async () => {
@@ -1207,26 +1212,21 @@ describe('TicketDrawer', () => {
       await userEvent.click(button('Delete'));
       await userEvent.keyboard('{Escape}');
 
-      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
       expect(router.back).not.toHaveBeenCalled();
     });
   });
 
-  it("closes to the Ticket's Board", async () => {
+  it("closes to its Project's Backlog by replacing the URL, keeping the Board's scroll", async () => {
     renderDrawer();
 
     await userEvent.click(button('Close'));
 
-    expect(router.push).toHaveBeenCalledExactlyOnceWith('/project/1');
-  });
-
-  it('uses browser history to close an intercepted Ticket drawer', async () => {
-    renderDrawer(ticket, true);
-
-    await userEvent.click(button('Close'));
-
-    expect(router.back).toHaveBeenCalledExactlyOnceWith();
+    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/project/1', {
+      scroll: false,
+    });
     expect(router.push).not.toHaveBeenCalled();
+    expect(router.back).not.toHaveBeenCalled();
   });
 
   // Next.js keeps a route the User left in a hidden <Activity>, and shows it

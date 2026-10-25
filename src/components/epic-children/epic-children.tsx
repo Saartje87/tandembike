@@ -14,7 +14,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { ticketPath } from '../../app/lib/paths';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import {
   attachTicketToEpic,
   detachTicketFromEpic,
@@ -126,7 +126,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
           {shown.map((child) => (
             <li key={child.number}>
               <Inline gap={2} alignY="center" flexWrap="wrap">
-                <AppLink href={ticketPath(epic.projectId, child.number)}>
+                <AppLink href={ticketByNumberPath(child.number)}>
                   #{child.number} {child.title}
                 </AppLink>
                 <Text fontSize="xsmall" color="text-600">

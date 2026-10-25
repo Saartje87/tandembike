@@ -101,4 +101,24 @@ describe('DeleteTicketDialog', () => {
       'Epic #42 still has children. Detach them before deleting it.',
     );
   });
+
+  it('tells its owner once the Ticket is deleted', async () => {
+    vi.mocked(deleteTicket).mockResolvedValue({ ok: true });
+    const onDeleted = vi.fn();
+    renderWithTheme(
+      <DeleteTicketDialog
+        ticket={ticket}
+        blocks={[]}
+        epicClaim={null}
+        onDeleted={onDeleted}
+      />,
+    );
+    const dialog = await openDialog();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete #42' }),
+    );
+
+    expect(onDeleted).toHaveBeenCalledOnce();
+  });
 });

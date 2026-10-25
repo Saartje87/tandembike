@@ -1,10 +1,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { RedirectType, redirect } from 'next/navigation';
 
 import { appTickets } from '../../tickets/app-tickets';
-import { openCycleOf } from '../../tickets/cycles';
 import type { EpicChildInput } from '../../tickets/epics';
 import { ValidationError } from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
@@ -17,13 +15,7 @@ import type {
   UpdateTicketInput,
 } from '../../tickets/tickets';
 import { type ActionResult, actionResult } from '../lib/action-result';
-import {
-  boardRoute,
-  cyclePath,
-  cycleRoute,
-  projectPath,
-  ticketRoute,
-} from '../lib/paths';
+import { boardRoute, cycleRoute, projectPath } from '../lib/paths';
 
 export type CreateTicketResult = ActionResult<{ number: number }>;
 
@@ -62,7 +54,6 @@ export async function createTicket(input: {
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
     // A child shows in its Epic's drawer.
-    revalidatePath(ticketRoute, 'page');
     return { number: ticket.number };
   });
 }
@@ -96,7 +87,6 @@ export async function updateTicket(
     // A moved Ticket leaves one Board for another, and its drawer shows it.
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return { projectId: ticket.projectId };
   });
 }
@@ -161,7 +151,6 @@ function setArchived(
       : tickets.restoreTicket(number);
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }
@@ -183,35 +172,23 @@ export async function restoreTicket(input: {
 export type DeleteTicketResult = ActionResult;
 
 /**
- * Deletes a Ticket for good as the User (ADR 0012) and sends them to the
- * Board it was on: its open Cycle's, or the Backlog, in place of the
- * Ticket's URL. Redirecting, rather than navigating once the result is back,
- * keeps the page from rendering the deleted Ticket first. A refusal comes
- * back as `error`, like `createTicket`.
+ * Deletes a Ticket for good as the User (ADR 0012) and refreshes its Boards.
+ * The drawer it was deleted from then closes to its Board; a `?ticket=` for
+ * a deleted Ticket shows the Board alone (ADR 0013). A refusal comes back
+ * as `error`, like `createTicket`.
  */
 export async function deleteTicket(input: {
   number: number;
 }): Promise<DeleteTicketResult> {
-  const result = actionResult(() => {
+  return actionResult(() => {
     const tickets = appTickets();
     const number = Number(input?.number);
     const { projectId } = tickets.getTicket(number);
-    const cycle = openCycleOf(tickets.listCycles(projectId), number);
     tickets.deleteTicket(number);
     revalidatePath(projectPath(projectId));
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
-    return {
-      boardPath: cycle
-        ? cyclePath(projectId, cycle.id)
-        : projectPath(projectId),
-    };
+    return {};
   });
-  if (result.ok) {
-    // Replace the deleted Ticket's URL, so Back does not lead to it.
-    redirect(result.boardPath, RedirectType.replace);
-  }
-  return result;
 }
 
 export type TicketLabelResult = ActionResult;
@@ -224,7 +201,6 @@ export async function clearTicketClaim(input: {
     const ticket = appTickets().clearTicketClaim(Number(input?.number));
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }
@@ -247,7 +223,6 @@ function changeLabel(
         : tickets.removeLabels(number, labels);
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }
@@ -277,7 +252,8 @@ export type TicketCommentResult = ActionResult;
 function changeComment(change: () => void): TicketCommentResult {
   return actionResult(() => {
     change();
-    revalidatePath(ticketRoute, 'page');
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -340,7 +316,6 @@ function changeBlocker(
     }
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }
@@ -373,7 +348,6 @@ function changeAcceptanceCriteria(
     const ticket = change();
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }
@@ -427,7 +401,6 @@ function changeEpic(change: () => void): TicketEpicResult {
     change();
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
-    revalidatePath(ticketRoute, 'page');
     return {};
   });
 }

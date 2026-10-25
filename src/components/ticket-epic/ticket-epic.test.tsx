@@ -26,7 +26,7 @@ describe('TicketEpic', () => {
 
     expect(screen.getByRole('link', { name: '#4 Checkout' })).toHaveAttribute(
       'href',
-      '/project/1/ticket/4',
+      '/ticket/4',
     );
   });
 

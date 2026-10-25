@@ -23,25 +23,30 @@ describe('TicketByNumberPage', () => {
     redirect.mockClear();
   });
 
-  it('redirects a number-only link to the Project-scoped URL', async () => {
+  it("opens a number-only link over the Ticket's own Board", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    const ticket = tickets.createTicket({
+    const backlog = tickets.createTicket({
       projectId: project.id,
       title: 'Fix the header',
     });
+    const planned = tickets.createTicket({
+      projectId: project.id,
+      title: 'Ship it',
+    });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: planned.number });
     vi.mocked(appTickets).mockReturnValue(tickets);
-
-    await expect(
+    const open = (number: number) =>
       TicketByNumberPage({
-        params: Promise.resolve({ number: String(ticket.number) }),
-      }),
-    ).rejects.toThrow(
-      `NEXT_REDIRECT:/project/${project.id}/ticket/${ticket.number}`,
-    );
+        params: Promise.resolve({ number: String(number) }),
+      });
 
-    expect(redirect).toHaveBeenCalledExactlyOnceWith(
-      `/project/${project.id}/ticket/${ticket.number}`,
+    await expect(open(backlog.number)).rejects.toThrow(
+      `NEXT_REDIRECT:/project/${project.id}?ticket=${backlog.number}`,
+    );
+    await expect(open(planned.number)).rejects.toThrow(
+      `NEXT_REDIRECT:/project/${project.id}/cycle/${cycle.id}?ticket=${planned.number}`,
     );
   });
 });

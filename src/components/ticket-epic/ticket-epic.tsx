@@ -3,7 +3,7 @@
 import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useOptimistic, useState, useTransition } from 'react';
 
-import { ticketPath } from '../../app/lib/paths';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import { detachTicketFromEpic } from '../../app/tickets/actions';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
@@ -37,7 +37,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket }) => {
     <Stack gap={1}>
       {epic ? (
         <Inline gap={2} alignY="center" flexWrap="wrap">
-          <AppLink href={ticketPath(ticket.projectId, epic.number)}>
+          <AppLink href={ticketByNumberPath(epic.number)}>
             #{epic.number} {epic.title}
           </AppLink>
           <Button

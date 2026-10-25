@@ -43,7 +43,7 @@ describe('CycleTicketList', () => {
     expect(items).toHaveLength(2);
     expect(
       within(items[0]).getByRole('link', { name: 'Ship it' }),
-    ).toHaveAttribute('href', '/project/3/ticket/2');
+    ).toHaveAttribute('href', '/ticket/2');
     expect(items[0]).toHaveTextContent('#2');
     expect(items[0]).toHaveTextContent('Done');
     expect(items[1]).toHaveTextContent('Todo · archived');
