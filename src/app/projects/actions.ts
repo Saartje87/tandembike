@@ -24,6 +24,31 @@ export async function createProject(input: {
   });
 }
 
+/**
+ * Archives a Project for the UI: it and its Tickets leave every view and
+ * become read-only until restored. Domain errors come back as `error`.
+ */
+export async function archiveProject(input: {
+  projectId: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().archiveProject(Number(input?.projectId));
+    revalidatePath('/', 'layout');
+    return {};
+  });
+}
+
+/** Restores an archived Project for the UI, returning domain errors. */
+export async function restoreProject(input: {
+  projectId: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets().restoreProject(Number(input?.projectId));
+    revalidatePath('/', 'layout');
+    return {};
+  });
+}
+
 export type RenameProjectResult = ActionResult<{ name: string }>;
 
 /** Renames a Project for the UI, returning domain errors as `error`. */

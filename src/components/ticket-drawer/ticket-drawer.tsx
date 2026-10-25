@@ -74,7 +74,7 @@ import { useIsShown } from './use-is-shown';
 
 export type TicketDrawerProps = {
   ticket: Ticket;
-  /** Every Project, to move the Ticket to. */
+  /** Every Project, to move the Ticket to; archived ones are not offered. */
   projects: Project[];
   /** Every label in use, suggested when adding one. Defaults to none. */
   allLabels?: string[];
@@ -627,11 +627,13 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                     errors.projectId ? projectErrorId : undefined
                   }
                 >
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>
-                      {project.name}
-                    </option>
-                  ))}
+                  {projects
+                    .filter((project) => !project.archived)
+                    .map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
                 </Select>
                 <FieldError id={projectErrorId} reason={errors.projectId} />
               </Stack>

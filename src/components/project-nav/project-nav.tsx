@@ -14,8 +14,10 @@ export type ProjectNavProps = {
   projects: Project[];
 };
 
-export const ProjectNav: FC<ProjectNavProps> = ({ projects }) => {
+/** The active Projects, each linking to its Board; archived ones are left out. */
+export const ProjectNav: FC<ProjectNavProps> = ({ projects: all }) => {
   const currentId = projectIdFromPath(usePathname());
+  const projects = all.filter((project) => !project.archived);
 
   return (
     <Box asChild padding={4}>

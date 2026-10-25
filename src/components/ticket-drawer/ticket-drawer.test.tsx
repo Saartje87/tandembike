@@ -235,6 +235,31 @@ describe('TicketDrawer', () => {
     expect(field('Project')).toHaveDisplayValue('Website');
   });
 
+  it('offers no archived Project to move the Ticket to', () => {
+    renderWithTheme(
+      <TicketDrawer
+        ticket={ticket}
+        projects={[
+          ...projects,
+          {
+            id: 3,
+            name: 'Old site',
+            color: null,
+            icon: null,
+            archived: true,
+            createdAt: new Date('2026-01-03'),
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      within(field('Project'))
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Website', 'App']);
+  });
+
   it('shows who claimed the Ticket and lets the User clear the claim', async () => {
     vi.mocked(clearTicketClaim).mockResolvedValue({ ok: true });
     renderDrawer({

@@ -3,13 +3,16 @@ import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createProject } from '../../app/projects/actions';
+import { archiveProject, createProject } from '../../app/projects/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Project } from '../../tickets/tickets';
 import { ProjectDirectory } from './project-directory';
 
-vi.mock('../../app/projects/actions', () => ({ createProject: vi.fn() }));
+vi.mock('../../app/projects/actions', () => ({
+  archiveProject: vi.fn(),
+  createProject: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 
 const renderDirectory = (pending: Promise<typeof projects>) =>
@@ -36,11 +39,21 @@ const projects: Project[] = [
   },
 ];
 
+const oldSite = {
+  id: 3,
+  name: 'Old site',
+  color: null,
+  icon: null,
+  archived: true,
+  createdAt: new Date('2026-01-03'),
+};
+
 describe('ProjectDirectory', () => {
   let router: ReturnType<typeof mockRouter>;
 
   beforeEach(() => {
     vi.mocked(createProject).mockReset();
+    vi.mocked(archiveProject).mockReset();
     router = mockRouter();
     vi.mocked(useRouter).mockReturnValue(router);
   });
@@ -69,6 +82,40 @@ describe('ProjectDirectory', () => {
       '/project/1',
       '/project/2',
     ]);
+  });
+
+  it('leaves out archived Projects and links to them with their count', async () => {
+    await renderDirectory(Promise.resolve([...projects, oldSite]));
+
+    const list = await screen.findByRole('list', { name: 'Projects' });
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Website', 'App']);
+    expect(
+      screen.getByRole('link', { name: 'Archived Projects (1)' }),
+    ).toHaveAttribute('href', '/projects/archived');
+  });
+
+  it('has no archived Projects link while none is archived', async () => {
+    await renderDirectory(Promise.resolve(projects));
+
+    await screen.findByRole('list', { name: 'Projects' });
+    expect(
+      screen.queryByRole('link', { name: /Archived Projects/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('archives a Project from the list', async () => {
+    vi.mocked(archiveProject).mockResolvedValue({ ok: true });
+    await renderDirectory(Promise.resolve(projects));
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Archive App' }),
+    );
+
+    expect(archiveProject).toHaveBeenCalledExactlyOnceWith({ projectId: 2 });
   });
 
   it('creates a Project from the New Project flow', async () => {

@@ -78,6 +78,31 @@ describe('ProjectNav', () => {
     ).toBe('url("/heroicons/outline/folder.svg")');
   });
 
+  it('leaves out archived Projects', () => {
+    renderWithTheme(
+      <ProjectNav
+        projects={[
+          ...projects,
+          {
+            id: 3,
+            name: 'Old site',
+            color: null,
+            icon: null,
+            archived: true,
+            createdAt: new Date('2026-01-03'),
+          },
+        ]}
+      />,
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Projects' });
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((link) => link.textContent),
+    ).toEqual(['Website', 'App']);
+  });
+
   it.each([
     ['/project/2', 'App'],
     ['/project/2/cycle/7', 'App'],

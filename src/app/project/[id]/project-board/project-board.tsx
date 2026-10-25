@@ -1,5 +1,6 @@
 import { type FC, Suspense } from 'react';
 
+import { ArchivedProjectNotice } from '../../../../components/archived-project-notice/archived-project-notice';
 import { Board } from '../../../../components/board/board';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
@@ -32,6 +33,10 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   tab,
   openTicket,
 }) => {
+  if (project.archived) {
+    // Its Tickets are hidden, drawers included, until it is restored.
+    return <ArchivedProjectNotice project={project} />;
+  }
   const boardPath = boardPathOf(project.id, tab === 'backlog' ? null : tab.id);
   const drawer = openTicket !== undefined && (
     <Suspense

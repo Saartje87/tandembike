@@ -302,6 +302,7 @@ describe('Project tools', () => {
     expect(Object.keys(resultJson(result) as object)).toEqual([
       'id',
       'name',
+      'archived',
       'createdAt',
     ]);
     expect(tickets.listProjects().map(({ name }) => name)).toEqual(['Website']);
@@ -338,6 +339,7 @@ describe('Project tools', () => {
     expect(resultJson(result)).toEqual({
       id: project.id,
       name: 'Marketing site',
+      archived: false,
       createdAt: project.createdAt.toISOString(),
     });
     expect(tickets.listProjects().map(({ name }) => name)).toEqual([

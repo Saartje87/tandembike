@@ -172,10 +172,11 @@ const newTicketFields = {
 
 /**
  * A Project as Agents see it: its colour and icon are the User's, set and
- * seen only in the UI.
+ * seen only in the UI. Whether it is archived they see, since it is then
+ * read-only.
  */
-function agentProject({ id, name, createdAt }: Project) {
-  return { id, name, createdAt };
+function agentProject({ id, name, archived, createdAt }: Project) {
+  return { id, name, archived, createdAt };
 }
 
 /** `value` as a tool result of pretty-printed JSON text. */

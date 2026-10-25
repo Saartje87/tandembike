@@ -13,7 +13,7 @@ The number that identifies a Ticket across the whole app, written `#42`. It neve
 _Avoid_: Ticket key, ticket ID, `WEB-12`-style keys
 
 **Project**:
-A named group of Tickets. Every Ticket belongs to exactly one Project. A Project's name is unique, ignoring case and surrounding spaces; a Project can be renamed but not removed. The User can give a Project a colour and an icon, from fixed sets, to tell it apart at a glance.
+A named group of Tickets. Every Ticket belongs to exactly one Project. A Project's name is unique, ignoring case and surrounding spaces; a Project can be renamed and archived, but never deleted. The User can give a Project a colour and an icon, from fixed sets, to tell it apart at a glance.
 _Avoid_: Workspace, sub-project
 
 **Cycle**:
@@ -69,7 +69,7 @@ A Ticket's record of the changes made to it, one **Activity entry** per change. 
 _Avoid_: History, event, audit log, changelog
 
 **Archived**:
-A Ticket taken out of the normal views without being destroyed; it can be restored.
+A Ticket or Project taken out of the normal views without being destroyed; it can be restored. An archived Project hides its Tickets and keeps them, and itself, read-only until it is restored; only the User archives a Project.
 _Avoid_: Removed, trashed, closed
 
 **Deleted**:
