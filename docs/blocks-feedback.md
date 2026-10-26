@@ -607,8 +607,8 @@ Blocks has no component for this, so the app builds its own `InlineEdit`
 />
 ```
 
-**Textarea variant, with links at rest.** The description (and later each
-comment) edits in a `Textarea` with ✓ and ✗ below it, Enter for a new line
+**Textarea variant, with links at rest.** The description and each comment
+edit in a `Textarea` with ✓ and ✗ below it, Enter for a new line
 and Cmd/Ctrl+Enter to save, which the app wires up itself in `onKeyDown`
 with `form.requestSubmit()`. At rest it shows rendered Markdown, which can
 hold links, so it cannot be a `<button>` (no interactive content inside, and
@@ -648,9 +648,11 @@ express:
 - Biome's `noAutofocus` flags `autoFocus` on the plain `<button>`, which
   returns focus to the text after an edit, though not on Blocks' `Button`.
 
-While a criterion is edited its drag handle and remove ✗ are hidden, so the
-component tells its caller through `onEditingChange`; an inline-edit
-component in Blocks would need the same.
+While a criterion is edited its drag handle and remove ✗ are hidden, and
+while a comment is edited its Remove button is, so the component tells its
+caller through `onEditingChange`; an inline-edit component in Blocks would
+need the same, and a `rows` for its textarea (a comment edits in 4 lines, a
+description in 12).
 
 **Faint until hovered.** Each criterion's drag handle is at `opacity: 0.4`
 until its row is hovered or focused. The `opacity` atom has only `0` and `1`,

@@ -31,6 +31,7 @@ import type { Comment } from '../../tickets/tickets';
 import { ActivityEntry, actorNames } from '../activity-entry/activity-entry';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
+import { InlineEdit } from '../inline-edit/inline-edit';
 import { Markdown } from '../markdown/markdown';
 import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 import * as styles from './ticket-comments.css';
@@ -67,11 +68,12 @@ const noActivity: Entry[] = [];
 type CommentItemProps = { comment: Comment };
 
 /**
- * One comment: who wrote it and when, and its Markdown body, with buttons
- * to edit it in place or remove it after a confirmation.
+ * One comment: who wrote it and when, and its Markdown body, which edits in
+ * place, with a button to remove it after a confirmation.
  */
 const CommentItem: FC<CommentItemProps> = ({ comment }) => {
-  const [mode, setMode] = useState<'show' | 'edit' | 'remove'>('show');
+  const [mode, setMode] = useState<'show' | 'remove'>('show');
+  const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
   const [removing, startRemove] = useTransition();
 
@@ -79,6 +81,11 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
     keepDrawerOpen(event);
     setError(undefined);
     setMode(next);
+  };
+
+  const saveBody = async (body: string) => {
+    const result = await editTicketComment({ id: comment.id, body });
+    return result.ok ? undefined : (result.fieldErrors?.body ?? result.error);
   };
 
   const remove = () => {
@@ -115,40 +122,27 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
                 </Text>
               )}
             </Inline>
-            {mode === 'show' && (
-              <Inline gap={1} alignY="center">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  onClick={switchTo('edit')}
-                >
-                  Edit
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  intent="danger"
-                  onClick={switchTo('remove')}
-                >
-                  Remove
-                </Button>
-              </Inline>
+            {mode === 'show' && !editing && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="small"
+                intent="danger"
+                onClick={switchTo('remove')}
+              >
+                Remove
+              </Button>
             )}
           </Inline>
-          {mode === 'edit' ? (
-            <CommentForm
-              label="Edit comment"
-              submitLabel="Save"
-              initialBody={comment.body}
-              save={(body) => editTicketComment({ id: comment.id, body })}
-              onSaved={() => setMode('show')}
-              onCancel={switchTo('show')}
-            />
-          ) : (
-            <Markdown headingLevel={4}>{comment.body}</Markdown>
-          )}
+          <InlineEdit
+            multiline
+            rows={4}
+            value={comment.body}
+            label="Comment"
+            renderValue={(body) => <Markdown headingLevel={4}>{body}</Markdown>}
+            onEditingChange={setEditing}
+            onSave={saveBody}
+          />
           {mode === 'remove' && (
             <Stack gap={2}>
               <Text tag="p" fontSize="small">
@@ -187,28 +181,21 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
 type CommentFormProps = {
   label: string;
   submitLabel: string;
-  /** The body to start from. Defaults to empty. */
-  initialBody?: string;
   /** Saves the body; the form shows the result's error if it fails. */
   save: (body: string) => Promise<TicketCommentResult>;
   /** Runs once a save succeeds. */
   onSaved: () => void;
-  /** When given, the form gets a Cancel button that calls it. */
-  onCancel?: (event: MouseEvent) => void;
 };
 
 /**
- * A Markdown textarea with a submit button, for a new comment or an edit.
- * It keeps the draft and shows the Tickets module's reason when a save is
- * refused.
+ * A Markdown textarea with a submit button, for a new comment. It keeps the
+ * draft and shows the Tickets module's reason when a save is refused.
  */
 const CommentForm: FC<CommentFormProps> = ({
   label,
   submitLabel,
-  initialBody = '',
   save,
   onSaved,
-  onCancel,
 }) => {
   const inputId = useId();
   const errorId = useId();
@@ -219,7 +206,7 @@ const CommentForm: FC<CommentFormProps> = ({
     setError,
     watch,
   } = useForm<{ body: string }>({
-    defaultValues: { body: initialBody },
+    defaultValues: { body: '' },
     // A refused body keeps its reason until the next submit.
     reValidateMode: 'onSubmit',
   });
@@ -272,17 +259,6 @@ const CommentForm: FC<CommentFormProps> = ({
           >
             {submitLabel}
           </Button>
-          {onCancel && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              disabled={isSubmitting}
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-          )}
         </Inline>
       </Stack>
     </form>

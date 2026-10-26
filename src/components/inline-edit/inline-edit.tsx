@@ -54,6 +54,8 @@ export type InlineEditProps = {
    * line and Cmd/Ctrl+Enter saves.
    */
   multiline?: boolean;
+  /** The textarea's height in lines, when `multiline`. Defaults to 12. */
+  rows?: number;
   /**
    * Renders the text at rest, such as as Markdown. Links in it still work:
    * a click or Enter on one follows it instead of opening the edit.
@@ -95,6 +97,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
   renderText = asIs,
   inputClassName,
   multiline = false,
+  rows = 12,
   renderValue = asIs,
   placeholder,
   onDirtyChange,
@@ -296,7 +299,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
             {fieldLabel}
             <Textarea
               {...fieldProps}
-              rows={12}
+              rows={rows}
               onKeyDown={(event) => {
                 if (claimEscape(event)) {
                   cancel();
