@@ -31,8 +31,9 @@ const applyPick = (style: Style, pick: StyleProjectInput): Style => ({
 /**
  * A Project's header on its Board and History pages: its icon, which opens
  * the colour and icon picker, its name, and `children`, on a soft band of
- * its colour when it has one. A pick shows at once and goes back, with the
- * reason in the picker, when it is refused.
+ * its colour when it has one. Its padding does not depend on the colour, so
+ * a pick changes only the background. A pick shows at once and goes back,
+ * with the reason in the picker, when it is refused.
  */
 export const ProjectHeader: FC<ProjectHeaderProps> = ({
   project,
@@ -60,7 +61,8 @@ export const ProjectHeader: FC<ProjectHeaderProps> = ({
     <Box
       asChild
       borderRadius={3}
-      padding={style.color ? 4 : 0}
+      paddingBlock={2}
+      paddingInline={3}
       className={style.color ? tintBackground[style.color] : undefined}
     >
       <section aria-label={project.name} data-color={style.color ?? undefined}>
