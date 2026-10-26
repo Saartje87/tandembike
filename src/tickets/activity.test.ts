@@ -278,22 +278,24 @@ describe('Activity', () => {
 
   it('records archiving and restoring, and keeps Activity readable while archived', () => {
     const { tickets, project, ticket } = ticketsWithOne();
-    const other = tickets.createTicket({
-      projectId: project.id,
-      title: 'Logo',
-    });
+    const others = ['Logo', 'Footer'].map((title) =>
+      tickets.createTicket({ projectId: project.id, title }),
+    );
 
     tickets.archiveTicket(ticket.number);
     tickets.archiveTicket(ticket.number);
-    tickets.archiveTickets([other.number]);
+    tickets.archiveTickets(others.map((other) => other.number));
 
     expect(changesOf(tickets, ticket.number).at(-1)?.changes).toEqual([
       { type: 'archived' },
     ]);
     expect(tickets.listActivity(ticket.number)).toHaveLength(2);
-    expect(changesOf(tickets, other.number).at(-1)?.changes).toEqual([
-      { type: 'archived' },
-    ]);
+    for (const other of others) {
+      expect(changesOf(tickets, other.number).at(-1)?.changes).toEqual([
+        { type: 'archived' },
+      ]);
+      expect(tickets.listActivity(other.number)).toHaveLength(2);
+    }
 
     tickets.restoreTicket(ticket.number);
 
