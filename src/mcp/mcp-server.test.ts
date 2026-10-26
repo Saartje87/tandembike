@@ -26,6 +26,7 @@ describe('MCP server', () => {
       'detach_from_epic',
       'edit_comment',
       'get_ticket',
+      'list_activity',
       'list_blockers',
       'list_comments',
       'list_cycles',
@@ -66,6 +67,7 @@ describe('MCP server', () => {
     expect(instructions).not.toMatch(/#\d/);
     expect(instructions).toMatch(/list_labels/);
     expect(instructions).toMatch(/add_comment/);
+    expect(instructions).toMatch(/list_activity/);
     expect(instructions).toMatch(/add_blocker/);
     expect(instructions).toMatch(/create_tickets/);
     expect(instructions).toMatch(/Epic/);
@@ -1731,6 +1733,47 @@ describe('Comment tools', () => {
       { author: 'user', body: 'From the User' },
       { author: 'agent', body: 'From an Agent' },
     ]);
+    await client.close();
+  });
+
+  it("lists a Ticket's whole Activity, oldest first", async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    const client = await connectMcpClient(tickets);
+    await client.callTool({
+      name: 'claim_ticket',
+      arguments: { number: ticket.number, agentRunId: 'run-1' },
+    });
+
+    const result = await client.callTool({
+      name: 'list_activity',
+      arguments: { number: ticket.number },
+    });
+    const missing = await client.callTool({
+      name: 'list_activity',
+      arguments: { number: 99 },
+    });
+
+    expect(resultJson(result)).toEqual([
+      {
+        id: expect.any(Number),
+        actor: 'agent',
+        createdAt: expect.any(String),
+        changes: [{ type: 'created' }],
+      },
+      {
+        id: expect.any(Number),
+        actor: 'agent',
+        createdAt: expect.any(String),
+        changes: [{ type: 'claimTaken', agentRunId: 'run-1', agentName: null }],
+      },
+    ]);
+    expect(missing.isError).toBe(true);
+    expect(resultText(missing)).toBe('There is no Ticket T99.');
     await client.close();
   });
 

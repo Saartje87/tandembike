@@ -9,6 +9,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import type { ActivityChange } from '../tickets/activity-change';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
@@ -190,4 +191,25 @@ export const cycleTickets = sqliteTable(
     primaryKey({ columns: [table.cycleId, table.ticketNumber] }),
     index('cycle_tickets_ticket_number').on(table.ticketNumber),
   ],
+);
+
+/**
+ * A Ticket's Activity (ADR 0009): one row per action that changed it, oldest
+ * first by id, with who acted and the list of changes it made as JSON.
+ * Deleting a Ticket deletes its rows.
+ */
+export const ticketActivity = sqliteTable(
+  'ticket_activity',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+    actor: text('actor', { enum: commentAuthors }).notNull(),
+    changes: text('changes', { mode: 'json' })
+      .$type<ActivityChange[]>()
+      .notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('ticket_activity_ticket_number').on(table.ticketNumber)],
 );

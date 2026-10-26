@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: 'Welcome' };
 /** With Projects, go to the first one's Board; otherwise ask for one. */
 const HomePage: FC = async () => {
   await connection();
-  const path = homeRedirect(appTickets().listProjects());
+  const path = homeRedirect(appTickets('user').listProjects());
   if (path) {
     redirect(path);
   }

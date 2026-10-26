@@ -24,7 +24,7 @@ export const ProjectBreadcrumbs: FC<ProjectBreadcrumbsProps> = async ({
     return null;
   }
   try {
-    const project = appTickets().getProject(id);
+    const project = appTickets('user').getProject(id);
     return (
       <Breadcrumbs
         ancestors={[{ label: 'Projects', href: projectsPath() }]}

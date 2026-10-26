@@ -37,6 +37,7 @@ import {
   restoreTicket,
   updateTicket,
 } from '../../app/tickets/actions';
+import type { ActivityEntry } from '../../tickets/activity';
 import type { Cycle } from '../../tickets/cycles';
 import {
   type Blockers,
@@ -76,6 +77,8 @@ export type TicketDrawerProps = {
   allLabels?: string[];
   /** The Ticket's comments, oldest first. Defaults to none. */
   comments?: Comment[];
+  /** The Ticket's Activity, oldest first. Defaults to none. */
+  activity?: ActivityEntry[];
   /** The Ticket's blocking relationships. Defaults to none. */
   blockers?: Blockers;
   /** The Cycles of the Ticket's Project, to plan it into. Defaults to none. */
@@ -416,6 +419,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   ticket,
   allLabels = [],
   comments = [],
+  activity,
   blockers = noBlockers,
   cycles = noCycles,
   epics,
@@ -666,7 +670,11 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
             ticketNumber={ticket.number}
             criteria={ticket.acceptanceCriteria}
           />
-          <TicketComments ticketNumber={ticket.number} comments={comments} />
+          <TicketComments
+            ticketNumber={ticket.number}
+            comments={comments}
+            activity={activity}
+          />
           <Stack gap={2}>
             {archiveError && <Alert intent="error">{archiveError}</Alert>}
             <Inline gap={2} alignY="center" justifyContent="space-between">

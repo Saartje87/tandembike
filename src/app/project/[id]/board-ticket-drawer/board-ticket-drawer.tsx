@@ -31,12 +31,13 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   if (ticket === null) {
     return null;
   }
-  const tickets = appTickets();
+  const tickets = appTickets('user');
   return (
     <TicketDrawer
       ticket={ticket}
       allLabels={tickets.listLabels()}
       comments={tickets.listComments(ticket.number)}
+      activity={tickets.listActivity(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
       cycles={tickets.listCycles(ticket.projectId)}
       epics={tickets

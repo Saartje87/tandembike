@@ -39,7 +39,7 @@ export async function createTicket(input: {
   epicNumber?: number;
 }): Promise<CreateTicketResult> {
   return actionResult(() => {
-    const ticket = appTickets().createTicket({
+    const ticket = appTickets('user').createTicket({
       projectId: Number(input?.projectId),
       title: String(input?.title ?? ''),
       description: String(input?.description ?? ''),
@@ -76,7 +76,7 @@ export async function updateTicket(
     if (status !== undefined && !isStatus(status)) {
       throw new ValidationError({ status: statusRule });
     }
-    const ticket = appTickets().updateTicket(Number(input?.number), {
+    const ticket = appTickets('user').updateTicket(Number(input?.number), {
       ...(title === undefined ? {} : { title: String(title) }),
       ...(description === undefined
         ? {}
@@ -128,7 +128,7 @@ export async function reorderTickets(
         ? {}
         : { cycleId: cycleId === null ? null : Number(cycleId) }),
     };
-    appTickets().reorderTickets(reorder);
+    appTickets('user').reorderTickets(reorder);
     revalidatePath(projectPath(projectId));
     revalidatePath(cycleRoute, 'page');
     return {};
@@ -148,7 +148,7 @@ export async function moveTickets(
       throw new ValidationError({ status: statusRule });
     }
     const projectId = Number(input?.projectId);
-    appTickets().moveTickets({
+    appTickets('user').moveTickets({
       projectId,
       ticketNumbers: Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
@@ -173,7 +173,7 @@ function setArchived(
   archived: boolean,
 ): ArchiveTicketResult {
   return actionResult(() => {
-    const tickets = appTickets();
+    const tickets = appTickets('user');
     const number = Number(input?.number);
     const ticket = archived
       ? tickets.archiveTicket(number)
@@ -199,7 +199,7 @@ export async function archiveTickets(input: {
   ticketNumbers: number[];
 }): Promise<ArchiveTicketResult> {
   return actionResult(() => {
-    appTickets().archiveTickets(
+    appTickets('user').archiveTickets(
       Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
         : [],
@@ -231,7 +231,7 @@ export async function deleteTicket(input: {
   withChildren?: boolean;
 }): Promise<DeleteTicketResult> {
   return actionResult(() => {
-    const tickets = appTickets();
+    const tickets = appTickets('user');
     const number = Number(input?.number);
     const { projectId } = tickets.getTicket(number);
     tickets.deleteTicket(number, {
@@ -250,7 +250,7 @@ export async function clearTicketClaim(input: {
   number: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    const ticket = appTickets().clearTicketClaim(Number(input?.number));
+    const ticket = appTickets('user').clearTicketClaim(Number(input?.number));
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
     return {};
@@ -266,7 +266,7 @@ function changeLabel(
   change: 'add' | 'remove',
 ): TicketLabelResult {
   return actionResult(() => {
-    const tickets = appTickets();
+    const tickets = appTickets('user');
     const number = Number(input?.number);
     const labels = [String(input?.label ?? '')];
     const ticket =
@@ -316,7 +316,7 @@ export async function addTicketComment(input: {
   body: string;
 }): Promise<TicketCommentResult> {
   return changeComment(() =>
-    appTickets().addComment(Number(input?.number), {
+    appTickets('user').addComment(Number(input?.number), {
       body: String(input?.body ?? ''),
       author: 'user',
     }),
@@ -329,7 +329,7 @@ export async function editTicketComment(input: {
   body: string;
 }): Promise<TicketCommentResult> {
   return changeComment(() =>
-    appTickets().editComment(Number(input?.id), {
+    appTickets('user').editComment(Number(input?.id), {
       body: String(input?.body ?? ''),
       by: 'user',
     }),
@@ -341,7 +341,7 @@ export async function removeTicketComment(input: {
   id: number;
 }): Promise<TicketCommentResult> {
   return changeComment(() =>
-    appTickets().removeComment(Number(input?.id), { by: 'user' }),
+    appTickets('user').removeComment(Number(input?.id), { by: 'user' }),
   );
 }
 
@@ -356,7 +356,7 @@ function changeBlocker(
   change: 'add' | 'remove',
 ): TicketBlockerResult {
   return actionResult(() => {
-    const tickets = appTickets();
+    const tickets = appTickets('user');
     const relationship = {
       blocker: Number(input?.blocker),
       blocked: Number(input?.blocked),
@@ -419,7 +419,7 @@ export async function setTicketAcceptanceCriteria(input: {
         acceptanceCriteria: 'Give the acceptance criteria as a list.',
       });
     }
-    return appTickets().updateTicket(Number(input.number), {
+    return appTickets('user').updateTicket(Number(input.number), {
       acceptanceCriteria: input.acceptanceCriteria.map((criterion) => ({
         ...(criterion?.id === undefined ? {} : { id: Number(criterion.id) }),
         text: String(criterion?.text ?? ''),
@@ -435,7 +435,7 @@ export async function checkTicketAcceptanceCriterion(input: {
   checked: boolean;
 }): Promise<TicketAcceptanceCriteriaResult> {
   return changeAcceptanceCriteria(() =>
-    appTickets().setAcceptanceCriteriaChecked(Number(input?.number), [
+    appTickets('user').setAcceptanceCriteriaChecked(Number(input?.number), [
       { id: Number(input?.id), checked: Boolean(input?.checked) },
     ]),
   );
@@ -465,7 +465,7 @@ export async function attachTicketToEpic(
   input: EpicChildInput,
 ): Promise<TicketEpicResult> {
   return changeEpic(() =>
-    appTickets().moveToEpic({
+    appTickets('user').moveToEpic({
       epic: Number(input?.epic),
       child: Number(input?.child),
     }),
@@ -480,7 +480,7 @@ export async function moveTicketsToEpic(
   input: EpicChildrenInput,
 ): Promise<TicketEpicResult> {
   return changeEpic(() =>
-    appTickets().moveTicketsToEpic({
+    appTickets('user').moveTicketsToEpic({
       epic: Number(input?.epic),
       children: Array.isArray(input?.children)
         ? input.children.map(Number)
@@ -493,7 +493,9 @@ export async function moveTicketsToEpic(
 export async function detachTicketFromEpic(input: {
   number: number;
 }): Promise<TicketEpicResult> {
-  return changeEpic(() => appTickets().detachFromEpic(Number(input?.number)));
+  return changeEpic(() =>
+    appTickets('user').detachFromEpic(Number(input?.number)),
+  );
 }
 
 export type TicketOriginResult = ActionResult;
@@ -508,7 +510,7 @@ export async function setTicketOrigin(input: {
   originNumber: number | null;
 }): Promise<TicketOriginResult> {
   return actionResult(() => {
-    appTickets().updateTicket(Number(input?.number), {
+    appTickets('user').updateTicket(Number(input?.number), {
       originNumber:
         input?.originNumber === null ? null : Number(input?.originNumber),
     });

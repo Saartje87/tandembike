@@ -16,7 +16,7 @@ export async function createProject(input: {
   name: string;
 }): Promise<CreateProjectResult> {
   return actionResult(() => {
-    const project = appTickets().createProject({
+    const project = appTickets('user').createProject({
       name: String(input?.name ?? ''),
     });
     revalidatePath('/', 'layout');
@@ -32,7 +32,7 @@ export async function archiveProject(input: {
   projectId: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().archiveProject(Number(input?.projectId));
+    appTickets('user').archiveProject(Number(input?.projectId));
     revalidatePath('/', 'layout');
     return {};
   });
@@ -43,7 +43,7 @@ export async function restoreProject(input: {
   projectId: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().restoreProject(Number(input?.projectId));
+    appTickets('user').restoreProject(Number(input?.projectId));
     revalidatePath('/', 'layout');
     return {};
   });
@@ -57,7 +57,7 @@ export async function renameProject(input: {
   name: string;
 }): Promise<RenameProjectResult> {
   return actionResult(() => {
-    const project = appTickets().renameProject(Number(input?.projectId), {
+    const project = appTickets('user').renameProject(Number(input?.projectId), {
       name: String(input?.name ?? ''),
     });
     revalidatePath('/', 'layout');
@@ -74,7 +74,7 @@ export async function styleProject(
   input: { projectId: number } & StyleProjectInput,
 ): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().styleProject(Number(input?.projectId), {
+    appTickets('user').styleProject(Number(input?.projectId), {
       ...(input?.color === undefined ? {} : { color: input.color }),
       ...(input?.icon === undefined ? {} : { icon: input.icon }),
     });

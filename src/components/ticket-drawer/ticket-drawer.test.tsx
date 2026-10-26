@@ -269,9 +269,9 @@ describe('TicketDrawer', () => {
     );
 
     expect(
-      within(inDrawer().getByRole('list', { name: 'Comments' })).getByText(
-        'Started on it.',
-      ),
+      within(
+        inDrawer().getByRole('list', { name: 'Comments and Activity' }),
+      ).getByText('Started on it.'),
     ).toBeInTheDocument();
     expect(
       inDrawer().getByRole('textbox', { name: 'Add a comment' }),

@@ -12,7 +12,7 @@ export async function loadTicketByNumber(rawNumber: string) {
     notFound();
   }
   try {
-    return appTickets().getTicket(number);
+    return appTickets('user').getTicket(number);
   } catch (error) {
     if (error instanceof NotFoundError) {
       notFound();

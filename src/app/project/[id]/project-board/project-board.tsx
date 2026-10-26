@@ -60,7 +60,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
 
 /** The tab's Board, or an Archived Cycle's read-only list. */
 const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
-  const tickets = appTickets();
+  const tickets = appTickets('user');
   const cycleId = tab === 'backlog' ? null : tab.id;
   const cycles = tickets.listCycles(project.id);
   if (tab !== 'backlog' && tab.state === 'Archived') {

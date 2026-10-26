@@ -22,7 +22,7 @@ describe('openDatabase', () => {
   it('creates a missing database file, folder included, ready to use', () => {
     const path = join(folder, 'data', 'ticket.db');
 
-    const tickets = createTickets(openDatabase(path));
+    const tickets = createTickets(openDatabase(path), 'user');
 
     expect(existsSync(path)).toBe(true);
     expect(tickets.listProjects()).toEqual([]);
@@ -30,9 +30,11 @@ describe('openDatabase', () => {
 
   it('keeps data when the file is opened again', () => {
     const path = join(folder, 'ticket.db');
-    createTickets(openDatabase(path)).createProject({ name: 'Website' });
+    createTickets(openDatabase(path), 'user').createProject({
+      name: 'Website',
+    });
 
-    const reopened = createTickets(openDatabase(path));
+    const reopened = createTickets(openDatabase(path), 'user');
 
     expect(reopened.listProjects().map((project) => project.name)).toEqual([
       'Website',

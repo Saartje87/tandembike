@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Archived Projects' };
 
 async function loadProjects() {
   await connection();
-  return appTickets().listProjects();
+  return appTickets('user').listProjects();
 }
 
 // Unawaited, as on the Projects page, so the read suspends inside the list.

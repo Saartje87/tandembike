@@ -65,7 +65,7 @@ A unique identifier for one Agent run, used to claim Tickets independently of it
 _Avoid_: Agent name as the owner identifier
 
 **Activity**:
-A Ticket's record of the changes made to it, one **Activity entry** per change. Each entry says what changed, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.
+A Ticket's record of the changes made to it, one **Activity entry** per action. Each entry lists every change the action made, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.
 _Avoid_: History, event, audit log, changelog
 
 **Archived**:
