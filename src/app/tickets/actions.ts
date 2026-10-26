@@ -86,7 +86,7 @@ export async function updateTicket(
       // The module checks the colour against the palette.
       ...(color === undefined ? {} : { color }),
     });
-    // A moved Ticket leaves one Board for another, and its drawer shows it.
+    // Its card shows on its Board and on the Cycle tab it is planned into.
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
     return { projectId: ticket.projectId };

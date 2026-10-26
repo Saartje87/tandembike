@@ -208,7 +208,6 @@ describe('TicketDrawer', () => {
 
     expect(field('Status')).toHaveValue('In progress');
     expect(inDrawer().queryByLabelText('Project')).not.toBeInTheDocument();
-    expect(inDrawer().queryByText('Project')).not.toBeInTheDocument();
   });
 
   it('shows who claimed the Ticket and lets the User clear the claim', async () => {

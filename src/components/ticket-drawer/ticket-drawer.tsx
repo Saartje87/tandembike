@@ -105,13 +105,6 @@ type Fields = Pick<Ticket, 'title' | 'description' | 'status'>;
 /** One field's new value. */
 type Edit = { [Field in keyof Fields]: Pick<Fields, Field> }[keyof Fields];
 
-/** The fields saved as soon as they change, whose errors the drawer keeps. */
-type DetailField = 'status';
-
-type DetailEdit = Pick<Fields, 'status'>;
-
-type DetailErrors = Partial<Record<DetailField, string>>;
-
 /** Saves one field; `onRefused` gets the reason when the server refuses it. */
 type SaveField = (edit: Edit, onRefused: (reason: string) => void) => void;
 
@@ -437,7 +430,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     fieldsOf(ticket),
     (current, edit: Edit): Fields => ({ ...current, ...edit }),
   );
-  const [errors, setErrors] = useState<DetailErrors>({});
+  const [statusError, setStatusError] = useState<string>();
   const [unsavedDescription, setUnsavedDescription] = useState(false);
   const [, startSave] = useTransition();
   const [archived, showArchived] = useOptimistic(ticket.archived);
@@ -470,9 +463,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     close();
   };
 
-  const setDetailError = (field: DetailField, message: string | undefined) =>
-    setErrors((current) => ({ ...current, [field]: message }));
-
   const save: SaveField = (edit, onRefused) => {
     const field = fieldOf(edit);
     startSave(async () => {
@@ -484,10 +474,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     });
   };
 
-  const saveDetail = (edit: DetailEdit) => {
-    const field = fieldOf(edit) as DetailField;
-    setDetailError(field, undefined);
-    save(edit, (reason) => setDetailError(field, reason));
+  const saveStatus = (status: Fields['status']) => {
+    setStatusError(undefined);
+    save({ status }, setStatusError);
   };
 
   const toggleArchived = () => {
@@ -577,11 +566,11 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                     id={statusId}
                     name="status"
                     value={fields.status}
-                    onChange={(status) => saveDetail({ status })}
-                    aria-invalid={errors.status ? true : undefined}
-                    aria-describedby={errors.status ? statusErrorId : undefined}
+                    onChange={saveStatus}
+                    aria-invalid={statusError ? true : undefined}
+                    aria-describedby={statusError ? statusErrorId : undefined}
                   />
-                  <FieldError id={statusErrorId} reason={errors.status} />
+                  <FieldError id={statusErrorId} reason={statusError} />
                 </Stack>
               </Detail>
             )}
