@@ -26,7 +26,9 @@ import {
   removeTicketComment,
   type TicketCommentResult,
 } from '../../app/tickets/actions';
-import type { Comment, CommentAuthor } from '../../tickets/tickets';
+import type { ActivityEntry as Entry } from '../../tickets/activity';
+import type { Comment } from '../../tickets/tickets';
+import { ActivityEntry, actorNames } from '../activity-entry/activity-entry';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import { Markdown } from '../markdown/markdown';
@@ -37,12 +39,30 @@ export type TicketCommentsProps = {
   ticketNumber: number;
   /** The Ticket's comments, oldest first. */
   comments: Comment[];
+  /** The Ticket's Activity, oldest first. Defaults to none. */
+  activity?: Entry[];
 };
 
-const authorNames: Record<CommentAuthor, string> = {
-  user: 'User',
-  agent: 'Agent',
-};
+/** A comment or an Activity entry in the timeline. */
+type TimelineItem =
+  | { kind: 'comment'; comment: Comment }
+  | { kind: 'activity'; entry: Entry };
+
+/**
+ * `comments` and `activity` merged into one list, oldest first; at the same
+ * moment, Activity comes first.
+ */
+function timelineOf(comments: Comment[], activity: Entry[]): TimelineItem[] {
+  const items: TimelineItem[] = [
+    ...activity.map((entry) => ({ kind: 'activity' as const, entry })),
+    ...comments.map((comment) => ({ kind: 'comment' as const, comment })),
+  ];
+  const timeOf = (item: TimelineItem) =>
+    (item.kind === 'comment' ? item.comment : item.entry).createdAt.getTime();
+  return items.sort((left, right) => timeOf(left) - timeOf(right));
+}
+
+const noActivity: Entry[] = [];
 
 type CommentItemProps = { comment: Comment };
 
@@ -84,7 +104,7 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
           <Inline gap={2} alignY="center" justifyContent="space-between">
             <Inline gap={2} alignY="center" flexWrap="wrap">
               <Text fontSize="small" fontWeight="strong">
-                {authorNames[comment.author]}
+                {actorNames[comment.author]}
               </Text>
               <Text fontSize="small" color="text-600">
                 <DateTime date={comment.createdAt} />
@@ -270,32 +290,44 @@ const CommentForm: FC<CommentFormProps> = ({
 };
 
 /**
- * A Ticket's comments, oldest first, with a form to add one. Changes are
- * saved at once, apart from the drawer's Save; the drawer refreshes to show
- * them.
+ * A Ticket's timeline: its comments and Activity entries, oldest first, with
+ * a form to add a comment. Changes are saved at once, apart from the
+ * drawer's Save; the drawer refreshes to show them.
  */
 export const TicketComments: FC<TicketCommentsProps> = ({
   ticketNumber,
   comments,
+  activity = noActivity,
 }) => {
   const [formKey, setFormKey] = useState(0);
   const headingId = useId();
+  const timeline = timelineOf(comments, activity);
 
   return (
     <Stack gap={2}>
       <Heading id={headingId} level={3} fontSize="medium">
-        Comments
+        Comments and Activity
       </Heading>
-      {comments.length === 0 ? (
+      {timeline.length === 0 ? (
         <Text tag="p" color="text-600">
           No comments
         </Text>
       ) : (
         <Box asChild display="flex" flexDirection="column" gap={2}>
           <ul aria-labelledby={headingId} className={styles.list}>
-            {comments.map((comment) => (
-              <CommentItem key={comment.id} comment={comment} />
-            ))}
+            {timeline.map((item) =>
+              item.kind === 'comment' ? (
+                <CommentItem
+                  key={`comment-${item.comment.id}`}
+                  comment={item.comment}
+                />
+              ) : (
+                <ActivityEntry
+                  key={`activity-${item.entry.id}`}
+                  entry={item.entry}
+                />
+              ),
+            )}
           </ul>
         </Box>
       )}

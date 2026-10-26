@@ -1,4 +1,5 @@
 import { openDatabase } from '../db/connection';
+import type { Actor } from '../tickets/activity';
 import type { ChangeChannel } from '../tickets/changes';
 import { createTickets } from '../tickets/tickets';
 
@@ -6,9 +7,10 @@ import { createTickets } from '../tickets/tickets';
  * A Tickets module backed by a fresh in-memory database with the real
  * migrations applied. Call it in each test; nothing is shared between calls.
  * Test files that use it need `// @vitest-environment node` on line 1.
+ * It acts as the User unless `actor` says otherwise.
  */
-export function createTestTickets(changes?: ChangeChannel) {
-  return createTickets(openDatabase(':memory:'), changes);
+export function createTestTickets(changes?: ChangeChannel, actor?: Actor) {
+  return createTickets(openDatabase(':memory:'), changes, actor);
 }
 
 /**

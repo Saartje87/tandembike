@@ -38,7 +38,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
 - Only the User archives and restores Projects. An archived Project is read-only: its Tickets can be read, but any change to them, or to its Cycles, is refused until it is restored.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
-- Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description.
+- Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
 - To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
 - When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
@@ -873,6 +873,28 @@ export function createMcpServer(tickets: Tickets): McpServer {
       annotations: { readOnlyHint: true },
     },
     ({ number }) => respond(() => tickets.listComments(number)),
+  );
+
+  server.registerTool(
+    'list_activity',
+    {
+      title: 'List Activity',
+      description:
+        'List a Ticket\'s whole Activity, oldest first: one entry per action that changed it, archived Tickets included. Each has its id, actor ("user" for the User, "agent" for an Agent), createdAt and changes, each with its type and its old and new values (from, to), or the label, Ticket number or criterion text it names; Claim entries carry the agentRunId and agentName. Comments are not in it: list_comments lists them.',
+      inputSchema: { number: ticketNumber },
+      annotations: { readOnlyHint: true },
+    },
+    ({ number }) =>
+      respond(() =>
+        tickets
+          .listActivity(number)
+          .map(({ id, actor, createdAt, changes }) => ({
+            id,
+            actor,
+            createdAt,
+            changes,
+          })),
+      ),
   );
 
   server.registerTool(

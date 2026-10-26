@@ -12,12 +12,14 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
   TicketDrawer: ({
     ticket,
     comments,
+    activity,
     boardPath,
     epics,
     epicChildren,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
+    activity: { changes: { type: string }[] }[];
     boardPath: string;
     epics: unknown;
     epicChildren: unknown;
@@ -27,7 +29,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-epics={JSON.stringify(epics)}
       data-epic-children={JSON.stringify(epicChildren)}
     >
-      {`Ticket drawer T${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')}`}
+      {`Ticket drawer T${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
   ),
 }));
@@ -64,7 +66,7 @@ describe('BoardTicketDrawer', () => {
     );
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `Ticket drawer T${ticket.number} over /project/1/cycle/7 comments: Started.`,
+      `Ticket drawer T${ticket.number} over /project/1/cycle/7 comments: Started. activity: created`,
     );
   });
 

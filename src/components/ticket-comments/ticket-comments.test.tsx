@@ -8,6 +8,7 @@ import {
   removeTicketComment,
 } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
+import type { ActivityEntry } from '../../tickets/activity';
 import type { Comment } from '../../tickets/tickets';
 import { TicketComments } from './ticket-comments';
 
@@ -36,9 +37,9 @@ const byAgent: Comment = {
 };
 
 const commentItems = () =>
-  within(screen.getByRole('list', { name: 'Comments' })).getAllByRole(
-    'listitem',
-  );
+  within(
+    screen.getByRole('list', { name: 'Comments and Activity' }),
+  ).getAllByRole('listitem');
 
 /** A promise the test settles itself, to look at the UI while it is pending. */
 function deferred<T>() {
@@ -81,6 +82,40 @@ describe('TicketComments', () => {
         .getAllByRole('time')
         .map((time) => time.getAttribute('datetime')),
     ).toEqual(['2026-03-02T10:00:00.000Z', '2026-03-02T11:30:00.000Z']);
+  });
+
+  it('shows Activity entries and comments in one timeline, oldest first', () => {
+    const created: ActivityEntry = {
+      id: 1,
+      ticketNumber: 4,
+      actor: 'user',
+      changes: [{ type: 'created' }],
+      createdAt: new Date('2026-02-28T08:00:00Z'),
+    };
+    const started: ActivityEntry = {
+      id: 2,
+      ticketNumber: 4,
+      actor: 'agent',
+      changes: [{ type: 'status', from: 'Todo', to: 'In progress' }],
+      createdAt: new Date('2026-03-01T12:00:00Z'),
+    };
+    renderWithTheme(
+      <TicketComments
+        ticketNumber={4}
+        comments={[byUser, byAgent]}
+        activity={[created, started]}
+      />,
+    );
+
+    expect(commentItems().map((item) => item.textContent)).toEqual([
+      expect.stringMatching(/^User created this Ticket · /),
+      expect.stringContaining('Please check the logo.'),
+      expect.stringMatching(
+        /^Agent changed the Status from Todo to In progress · /,
+      ),
+      expect.stringContaining('Fixed in the header.'),
+    ]);
+    expect(screen.queryByText('No comments')).not.toBeInTheDocument();
   });
 
   it('says when the Ticket has no comments', () => {
