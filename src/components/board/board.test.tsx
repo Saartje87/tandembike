@@ -1206,11 +1206,10 @@ describe('Selecting cards', () => {
   it('archives the whole selection at once, in Board order, without asking', async () => {
     const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
     vi.mocked(archiveTickets).mockReturnValue(promise);
-    onTestFinished(async () => {
-      await act(async () => resolve({ ok: true }));
-    });
     const user = userEvent.setup();
-    renderWithTheme(<Board project={project} tickets={board} />);
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
     await user.click(checkbox(15, 'Deploy'));
     await user.click(checkbox(9, 'Draw the logo'));
 
@@ -1231,11 +1230,24 @@ describe('Selecting cards', () => {
     ]);
     expect(cardsIn('In progress')).toEqual([]);
     expect(screen.getByText('Show archived (2)')).toBeInTheDocument();
+    expect(selectionBar()).not.toBeInTheDocument();
+
+    await act(async () => resolve({ ok: true }));
+    const archived = [
+      { ...logo, archived: true },
+      { ...deploy, archived: true },
+    ];
+    rerender(
+      <Board project={project} tickets={[header, copy, footer, ...archived]} />,
+    );
+    // Restored later, they are no longer selected.
+    rerender(<Board project={project} tickets={board} />);
+
     expect(selectedTitles()).toEqual([]);
     expect(selectionBar()).not.toBeInTheDocument();
   });
 
-  it('puts the cards back and explains when archiving is refused', async () => {
+  it('puts the cards back, still selected, and explains when archiving is refused', async () => {
     vi.mocked(archiveTickets).mockResolvedValue({
       ok: false,
       error:
@@ -1260,6 +1272,11 @@ describe('Selecting cards', () => {
       ]),
     );
     expect(screen.getByText('Show archived (0)')).toBeInTheDocument();
+    expect(selectedTitles()).toEqual([
+      'Select T4 Fix the header',
+      'Select T9 Draw the logo',
+    ]);
+    expect(selectionBar()).toHaveTextContent('2 selected');
   });
 
   it('drags an unselected card on its own', async () => {

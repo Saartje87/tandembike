@@ -5,7 +5,7 @@ import { createTestTickets, errorFrom } from '../test/tickets';
 import type { Change } from './changes';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
 
-function setUp() {
+function projectWithThree() {
   const tickets = createTestTickets();
   const project = tickets.createProject({ name: 'Website' });
   const [a, b, c] = ['A', 'B', 'C'].map((title) =>
@@ -18,7 +18,7 @@ function setUp() {
 
 describe('Archiving several Tickets at once', () => {
   it('archives every Ticket given and announces them once', () => {
-    const { tickets, a, b, c, changes } = setUp();
+    const { tickets, a, b, c, changes } = projectWithThree();
 
     tickets.archiveTickets([c.number, a.number]);
 
@@ -31,7 +31,7 @@ describe('Archiving several Tickets at once', () => {
   });
 
   it("derives a child's Epic Status again and announces the Epic with them", () => {
-    const { tickets, project, a, changes } = setUp();
+    const { tickets, project, a, changes } = projectWithThree();
     const epic = tickets.createTicket({
       projectId: project.id,
       title: 'Checkout',
@@ -60,7 +60,7 @@ describe('Archiving several Tickets at once', () => {
   });
 
   it('archives none of the Tickets when one cannot be archived, and names it', () => {
-    const { tickets, project, a, changes } = setUp();
+    const { tickets, project, a, changes } = projectWithThree();
     const epic = tickets.createTicket({
       projectId: project.id,
       title: 'Checkout',
@@ -86,7 +86,7 @@ describe('Archiving several Tickets at once', () => {
   });
 
   it('archives none of the Tickets when one does not exist', () => {
-    const { tickets, a, changes } = setUp();
+    const { tickets, a, changes } = projectWithThree();
 
     expect(errorFrom(() => tickets.archiveTickets([a.number, 42]))).toEqual(
       new NotFoundError('There is no Ticket T42.'),
@@ -96,7 +96,7 @@ describe('Archiving several Tickets at once', () => {
   });
 
   it('refuses an empty or repeated list', () => {
-    const { tickets, a } = setUp();
+    const { tickets, a } = projectWithThree();
 
     expect(errorFrom(() => tickets.archiveTickets([]))).toEqual(
       new ValidationError({ ticketNumbers: 'Choose at least one Ticket.' }),

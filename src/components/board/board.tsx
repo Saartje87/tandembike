@@ -257,7 +257,7 @@ type BoardChange =
   | { status: Status; ticketNumbers: number[] }
   | { status: Status; laneOrder: number[] }
   | { numbers: number[]; epic: EpicLink }
-  | { archived: number[] };
+  | { numbers: number[]; archived: true };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   if ('laneOrder' in change) {
@@ -274,7 +274,7 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   }
   if ('archived' in change) {
     return tickets.map((ticket) =>
-      change.archived.includes(ticket.number)
+      change.numbers.includes(ticket.number)
         ? { ...ticket, archived: true }
         : ticket,
     );
@@ -345,8 +345,8 @@ const escapeOwnerSelector =
  * one column, or their checkboxes; a bar then shows the selection. Dragging
  * a selected card moves the whole selection, into a lane or, dropped on an
  * Epic's chip, into that Epic. The bar's Archive archives the selection
- * without asking, since each Ticket can be restored. The selection lives only in
- * this tab and drops Tickets that leave the Board.
+ * without asking, since each Ticket can be restored. The selection lives
+ * only in this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
   project,
@@ -398,10 +398,20 @@ export const Board: FC<BoardProps> = ({
     .flat()
     .filter((ticket) => selected.has(ticket.number));
   const selectedOnBoard = new Set(selection.map(({ number }) => number));
-  if (selectedOnBoard.size < selected.size) {
+  // Judged by the saved Board, not the shown one: a selection being archived
+  // stays selected until the archive is saved, so a refused one comes back
+  // selected.
+  const savedOnBoard = new Set(
+    tickets
+      .filter((ticket) => !ticket.archived && ticket.type !== 'Epic')
+      .map(({ number }) => number),
+  );
+  if ([...selected].some((number) => !savedOnBoard.has(number))) {
     // A Ticket that left the Board drops out, so it is not selected if it
     // comes back.
-    setSelected(selectedOnBoard);
+    setSelected(
+      new Set([...selected].filter((number) => savedOnBoard.has(number))),
+    );
   }
   const clearSelection = useCallback(() => {
     setSelected(new Set());
@@ -568,9 +578,8 @@ export const Board: FC<BoardProps> = ({
   const archiveSelection = () => {
     const numbers = selection.map(({ number }) => number);
     setError(undefined);
-    clearSelection();
     startTransition(async () => {
-      showChange({ archived: numbers });
+      showChange({ numbers, archived: true });
       const result = await archiveTickets({ ticketNumbers: numbers });
       if (!result.ok) {
         setError(result.error);
