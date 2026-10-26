@@ -30,7 +30,7 @@ describe('TicketEpic', () => {
   it('links a child to its Epic', () => {
     renderWithTheme(<TicketEpic ticket={child} />);
 
-    expect(screen.getByRole('link', { name: '#4 Checkout' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'T4 Checkout' })).toHaveAttribute(
       'href',
       '/ticket/4',
     );
@@ -45,7 +45,7 @@ describe('TicketEpic', () => {
   it('detaches the Ticket from its Epic, and shows a refusal', async () => {
     vi.mocked(detachTicketFromEpic).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #5.',
+      error: 'There is no Ticket T5.',
     });
     renderWithTheme(<TicketEpic ticket={child} />);
 
@@ -55,7 +55,7 @@ describe('TicketEpic', () => {
 
     expect(detachTicketFromEpic).toHaveBeenCalledExactlyOnceWith({ number: 5 });
     expect(
-      await screen.findByText('There is no Ticket #5.'),
+      await screen.findByText('There is no Ticket T5.'),
     ).toBeInTheDocument();
   });
 
@@ -79,8 +79,8 @@ describe('TicketEpic', () => {
 
       expect(options('Attach to Epic')).toEqual([
         'Attach to Epic…',
-        '#4 Checkout',
-        '#8 Search',
+        'T4 Checkout',
+        'T8 Search',
       ]);
     });
 
@@ -97,7 +97,7 @@ describe('TicketEpic', () => {
 
       await userEvent.selectOptions(
         screen.getByRole('combobox', { name: 'Attach to Epic' }),
-        '#8 Search',
+        'T8 Search',
       );
 
       expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
@@ -105,7 +105,7 @@ describe('TicketEpic', () => {
         child: 5,
       });
       expect(
-        screen.getByRole('link', { name: '#8 Search' }),
+        screen.getByRole('link', { name: 'T8 Search' }),
       ).toBeInTheDocument();
       finish({ ok: true });
     });
@@ -116,7 +116,7 @@ describe('TicketEpic', () => {
 
       expect(options('Move to another Epic')).toEqual([
         'Move to another Epic…',
-        '#8 Search',
+        'T8 Search',
       ]);
       expect(
         screen.getByRole('button', { name: 'Detach from Epic' }),
@@ -124,7 +124,7 @@ describe('TicketEpic', () => {
 
       await userEvent.selectOptions(
         screen.getByRole('combobox', { name: 'Move to another Epic' }),
-        '#8 Search',
+        'T8 Search',
       );
 
       expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
@@ -136,7 +136,7 @@ describe('TicketEpic', () => {
     it('puts the Ticket back and explains when attaching is refused', async () => {
       vi.mocked(attachTicketToEpic).mockResolvedValue({
         ok: false,
-        error: 'Epic #8 is archived. Restore it before adding Tickets to it.',
+        error: 'Epic T8 is archived. Restore it before adding Tickets to it.',
       });
       renderWithTheme(
         <TicketEpic ticket={{ ...child, epic: null }} epics={epics} />,
@@ -144,12 +144,12 @@ describe('TicketEpic', () => {
 
       await userEvent.selectOptions(
         screen.getByRole('combobox', { name: 'Attach to Epic' }),
-        '#8 Search',
+        'T8 Search',
       );
 
       expect(
         await screen.findByText(
-          'Epic #8 is archived. Restore it before adding Tickets to it.',
+          'Epic T8 is archived. Restore it before adding Tickets to it.',
         ),
       ).toBeInTheDocument();
       expect(screen.getByText('None')).toBeInTheDocument();

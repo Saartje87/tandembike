@@ -275,7 +275,7 @@ describe('Refusing a batch', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${ticket.number} is not an Epic. Only an Epic can have child Tickets.`,
+        `Ticket T${ticket.number} is not an Epic. Only an Epic can have child Tickets.`,
       ),
     );
     expect(tickets.listTickets().map(({ number }) => number)).toEqual([

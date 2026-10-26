@@ -82,7 +82,7 @@ describe('Ticket actions', () => {
       before: null,
     });
 
-    expect(result).toEqual({ ok: false, error: 'There is no Ticket #42.' });
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket T42.' });
   });
 
   it('deletes an Epic and detaches its children, or deletes them too when asked', async () => {
@@ -166,7 +166,7 @@ describe('Ticket actions', () => {
 
     const result = await deleteTicket({ number: 42 });
 
-    expect(result).toEqual({ ok: false, error: 'There is no Ticket #42.' });
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket T42.' });
   });
 
   it('creates a Todo Ticket with needs-triage and refreshes its Board', async () => {

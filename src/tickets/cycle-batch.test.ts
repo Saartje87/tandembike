@@ -5,7 +5,7 @@ import { createTestTickets, errorFrom } from '../test/tickets';
 import { createChangeChannel } from './changes';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
 
-/** A Project with a Prepared Cycle "Beta" and Tickets #1 to #`count`. */
+/** A Project with a Prepared Cycle "Beta" and Tickets T1 to #`count`. */
 function planningWith(count: number) {
   const changes = createChangeChannel();
   const tickets = createTestTickets(changes);
@@ -59,20 +59,20 @@ describe('Planning several Tickets into a Cycle at once', () => {
     expect(result).toEqual({
       updated: [1],
       failed: [
-        { number: 99, error: 'There is no Ticket #99.' },
+        { number: 99, error: 'There is no Ticket T99.' },
         {
           number: 2,
           error:
-            'Ticket #2 is already planned into the Cycle "Launch". Remove it from that Cycle first.',
+            'Ticket T2 is already planned into the Cycle "Launch". Remove it from that Cycle first.',
         },
         {
           number: 3,
           error:
-            'Ticket #3 is archived. Restore it before planning it into a Cycle.',
+            'Ticket T3 is archived. Restore it before planning it into a Cycle.',
         },
         {
           number: elsewhere.number,
-          error: `Ticket #${elsewhere.number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+          error: `Ticket T${elsewhere.number} is in another Project. A Cycle holds only its own Project's Tickets.`,
         },
       ],
       cycle: { ...cycle, ticketNumbers: [1] },
@@ -110,8 +110,8 @@ describe('Unplanning several Tickets from a Cycle at once', () => {
     expect(result).toEqual({
       updated: [1],
       failed: [
-        { number: 99, error: 'There is no Ticket #99.' },
-        { number: 2, error: 'Ticket #2 is not planned into the Cycle "Beta".' },
+        { number: 99, error: 'There is no Ticket T99.' },
+        { number: 2, error: 'Ticket T2 is not planned into the Cycle "Beta".' },
       ],
       cycle: { ...cycle, ticketNumbers: [] },
     });
@@ -135,7 +135,7 @@ describe.each(['planTickets', 'unplanTickets'] as const)(
       [
         'a Ticket number given twice',
         [1, 2, 1],
-        { ticketNumbers: 'Choose each Ticket once: #1 is given twice.' },
+        { ticketNumbers: 'Choose each Ticket once: T1 is given twice.' },
       ],
     ])(
       'refuses %s and changes nothing',

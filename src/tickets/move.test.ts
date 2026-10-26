@@ -80,7 +80,7 @@ describe('Moving several Tickets into a Status lane at once', () => {
       ),
     ).toEqual(
       new ValidationError({
-        ticketNumbers: `Ticket #${b} is archived. Restore it before moving it.`,
+        ticketNumbers: `Ticket T${b} is archived. Restore it before moving it.`,
       }),
     );
     expect(lane('Todo')).toEqual([a, c]);
@@ -132,7 +132,7 @@ describe('Moving several Tickets into a Status lane at once', () => {
       ),
     ).toEqual(
       new ValidationError({
-        ticketNumbers: `Ticket #${elsewhere} is not in this Project.`,
+        ticketNumbers: `Ticket T${elsewhere} is not in this Project.`,
       }),
     );
     expect(
@@ -146,7 +146,7 @@ describe('Moving several Tickets into a Status lane at once', () => {
       ),
     ).toEqual(
       new ValidationError({
-        ticketNumbers: `Ticket #${epic} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+        ticketNumbers: `Ticket T${epic} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
       }),
     );
   });

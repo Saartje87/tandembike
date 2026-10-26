@@ -347,7 +347,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         .where(eq(tickets.number, number))
         .get();
       if (!ticket) {
-        throw new NotFoundError(`There is no Ticket #${number}.`);
+        throw new NotFoundError(`There is no Ticket T${number}.`);
       }
       const current = db
         .select({ id: cycles.id, title: cycles.title })
@@ -365,17 +365,17 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       }
       if (ticket.projectId !== cycle.projectId) {
         throw new NotAllowedError(
-          `Ticket #${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+          `Ticket T${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
         );
       }
       if (ticket.archived) {
         throw new NotAllowedError(
-          `Ticket #${number} is archived. Restore it before planning it into a Cycle.`,
+          `Ticket T${number} is archived. Restore it before planning it into a Cycle.`,
         );
       }
       if (current) {
         throw new NotAllowedError(
-          `Ticket #${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
+          `Ticket T${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
         );
       }
       db.insert(cycleTickets)
@@ -404,9 +404,9 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         .get();
       throw ticket
         ? new NotAllowedError(
-            `Ticket #${number} is not planned into the Cycle "${cycle.title}".`,
+            `Ticket T${number} is not planned into the Cycle "${cycle.title}".`,
           )
-        : new NotFoundError(`There is no Ticket #${number}.`);
+        : new NotFoundError(`There is no Ticket T${number}.`);
     }
   }
 

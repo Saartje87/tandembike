@@ -158,7 +158,7 @@ describe('LabelEditor', () => {
   it('explains a refused removal and shows the label again', async () => {
     vi.mocked(removeTicketLabel).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     renderWithTheme(
       <LabelEditor ticketNumber={4} labels={['bug']} suggestions={[]} />,
@@ -169,7 +169,7 @@ describe('LabelEditor', () => {
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     await waitFor(() => expect(labelsShown()).toEqual(['bug']));
   });

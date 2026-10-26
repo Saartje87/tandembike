@@ -32,7 +32,7 @@ export const SplitOffTickets: FC<SplitOffTicketsProps> = ({ items }) => {
           <li key={split.number}>
             <Inline gap={2} alignY="center" flexWrap="wrap">
               <AppLink href={ticketByNumberPath(split.number)}>
-                #{split.number} {split.title}
+                T{split.number} {split.title}
               </AppLink>
               <Text fontSize="xsmall" color="text-600">
                 {split.archived ? `${split.status} · Archived` : split.status}

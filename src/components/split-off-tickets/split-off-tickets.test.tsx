@@ -19,7 +19,7 @@ describe('SplitOffTickets', () => {
       screen.getByRole('list', { name: 'Split-off Tickets' }),
     ).getAllByRole('listitem');
     expect(
-      within(items[0]).getByRole('link', { name: '#5 Pay by card' }),
+      within(items[0]).getByRole('link', { name: 'T5 Pay by card' }),
     ).toHaveAttribute('href', '/ticket/5');
     expect(items[0]).toHaveTextContent('Done');
     expect(items[1]).toHaveTextContent('Todo · Archived');

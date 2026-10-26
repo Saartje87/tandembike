@@ -51,7 +51,7 @@ describe('EpicChildren', () => {
 
     const items = within(childList()).getAllByRole('listitem');
     expect(
-      within(items[0]).getByRole('link', { name: '#5 Pay by card' }),
+      within(items[0]).getByRole('link', { name: 'T5 Pay by card' }),
     ).toHaveAttribute('href', '/ticket/5');
     expect(items[0]).toHaveTextContent('In progress');
     expect(items[1]).toHaveTextContent('Todo · Blocked');
@@ -88,7 +88,7 @@ describe('EpicChildren', () => {
     );
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Ticket number to attach' }),
-      '#9{Enter}',
+      't9{Enter}',
     );
 
     expect(attachTicketToEpic).toHaveBeenCalledExactlyOnceWith({
@@ -105,7 +105,7 @@ describe('EpicChildren', () => {
   it('shows why an attach was refused', async () => {
     vi.mocked(attachTicketToEpic).mockResolvedValue({
       ok: false,
-      error: 'Ticket #9 is already in Epic #2. Detach it from that Epic first.',
+      error: 'Ticket T9 is already in Epic T2. Detach it from that Epic first.',
     });
     renderWithTheme(<EpicChildren epic={epic} items={[]} />);
 
@@ -119,7 +119,7 @@ describe('EpicChildren', () => {
 
     expect(
       await screen.findByText(
-        'Ticket #9 is already in Epic #2. Detach it from that Epic first.',
+        'Ticket T9 is already in Epic T2. Detach it from that Epic first.',
       ),
     ).toBeInTheDocument();
   });
@@ -127,19 +127,19 @@ describe('EpicChildren', () => {
   it('shows why a detach was refused, and the child again', async () => {
     vi.mocked(detachTicketFromEpic).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #5.',
+      error: 'There is no Ticket T5.',
     });
     renderWithTheme(<EpicChildren epic={epic} items={[card]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Detach #5' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Detach T5' }));
 
     expect(
-      await screen.findByText('There is no Ticket #5.'),
+      await screen.findByText('There is no Ticket T5.'),
     ).toBeInTheDocument();
     // The refusal and the rolled-back child can commit in separate renders.
     await waitFor(() =>
       expect(
-        within(childList()).getByRole('link', { name: '#5 Pay by card' }),
+        within(childList()).getByRole('link', { name: 'T5 Pay by card' }),
       ).toBeInTheDocument(),
     );
   });
@@ -150,14 +150,14 @@ describe('EpicChildren', () => {
     vi.mocked(detachTicketFromEpic).mockReturnValue(promise);
     renderWithTheme(<EpicChildren epic={epic} items={[card, invoice]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Detach #5' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Detach T5' }));
 
     expect(detachTicketFromEpic).toHaveBeenCalledExactlyOnceWith({ number: 5 });
     expect(
       within(childList())
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['#6 Send the invoice']);
+    ).toEqual(['T6 Send the invoice']);
     await act(async () => resolve({ ok: true }));
   });
 });

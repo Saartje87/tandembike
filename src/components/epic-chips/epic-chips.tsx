@@ -83,7 +83,7 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
             scroll={false}
             variant="inherit"
           >
-            <Text fontWeight="medium">#{epic.number}</Text> {epic.title}{' '}
+            <Text fontWeight="medium">T{epic.number}</Text> {epic.title}{' '}
             <Text fontWeight="medium">
               {done.length}/{live.length} Done
             </Text>

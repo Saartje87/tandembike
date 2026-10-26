@@ -204,7 +204,7 @@ describe('Acceptance criteria', () => {
 
       expect(error).toEqual(
         new ValidationError({
-          acceptanceCriteria: `Ticket #${ticket.number} has no acceptance criterion ${otherId}.`,
+          acceptanceCriteria: `Ticket T${ticket.number} has no acceptance criterion ${otherId}.`,
         }),
       );
       expect(tickets.getTicket(ticket.number)).toEqual(ticket);
@@ -253,7 +253,7 @@ describe('Acceptance criteria', () => {
         errorFrom(() =>
           tickets.updateTicket(42, { acceptanceCriteria: [{ text: 'Done' }] }),
         ),
-      ).toEqual(new NotFoundError('There is no Ticket #42.'));
+      ).toEqual(new NotFoundError('There is no Ticket T42.'));
     });
   });
 
@@ -310,7 +310,7 @@ describe('Acceptance criteria', () => {
 
       expect(error).toEqual(
         new ValidationError({
-          acceptanceCriteria: `Ticket #${ticket.number} has no acceptance criterion ${otherId}.`,
+          acceptanceCriteria: `Ticket T${ticket.number} has no acceptance criterion ${otherId}.`,
         }),
       );
       expect(tickets.getTicket(ticket.number)).toEqual(ticket);
@@ -343,7 +343,7 @@ describe('Acceptance criteria', () => {
         errorFrom(() =>
           tickets.setAcceptanceCriteriaChecked(42, [{ id: 1, checked: true }]),
         ),
-      ).toEqual(new NotFoundError('There is no Ticket #42.'));
+      ).toEqual(new NotFoundError('There is no Ticket T42.'));
     });
   });
 

@@ -46,13 +46,13 @@ const copy = {
     list: 'Blocked by',
     add: 'Add blocker',
     input: 'Ticket number of the Blocker',
-    remove: (number: number) => `Remove Blocker #${number}`,
+    remove: (number: number) => `Remove Blocker T${number}`,
   },
   blocks: {
     list: 'Blocks',
     add: 'Add blocked Ticket',
     input: 'Ticket number of the blocked Ticket',
-    remove: (number: number) => `Stop blocking #${number}`,
+    remove: (number: number) => `Stop blocking T${number}`,
   },
 } satisfies Record<keyof Blockers, unknown>;
 
@@ -178,7 +178,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
             <li key={ticket.number}>
               <Inline gap={2} alignY="center" flexWrap="wrap">
                 <AppLink href={ticketByNumberPath(ticket.number)}>
-                  #{ticket.number} {ticket.title}
+                  T{ticket.number} {ticket.title}
                 </AppLink>
                 <Text fontSize="xsmall" color="text-600">
                   {stateOf(ticket)}
@@ -227,7 +227,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                 })}
                 id={inputId}
                 inputMode="numeric"
-                placeholder="#42"
+                placeholder="T42"
                 autoComplete="off"
                 autoFocus
                 disabled={isSubmitting}

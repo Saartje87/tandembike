@@ -75,7 +75,7 @@ describe('EpicChips', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#4 Checkout 1/2 Done', '#2 Search 0/0 Done']);
+    expect(chips()).toEqual(['T4 Checkout 1/2 Done', 'T2 Search 0/0 Done']);
   });
 
   it("opens an Epic's drawer over the Board", () => {
@@ -110,13 +110,13 @@ describe('EpicChips', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#2 Search 0/0 Done']);
+    expect(chips()).toEqual(['T2 Search 0/0 Done']);
 
     await userEvent.click(
       screen.getByRole('checkbox', { name: 'Show done Epics (1)' }),
     );
 
-    expect(chips()).toEqual(['#4 Checkout 1/1 Done', '#2 Search 0/0 Done']);
+    expect(chips()).toEqual(['T4 Checkout 1/1 Done', 'T2 Search 0/0 Done']);
   });
 
   it('offers no done toggle when no Epic is done', () => {

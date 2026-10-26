@@ -121,7 +121,7 @@ describe('Cycles', () => {
 });
 
 describe('Planning Tickets into a Cycle', () => {
-  /** A Project with a Prepared Cycle and Tickets #1 to #`count` in it. */
+  /** A Project with a Prepared Cycle and Tickets T1 to #`count` in it. */
   function planningWith(count: number) {
     const { tickets, project } = ticketsWithProject();
     for (let index = 1; index <= count; index++) {
@@ -164,7 +164,7 @@ describe('Planning Tickets into a Cycle', () => {
       errorFrom(() => tickets.planTicket({ cycleId: cycle.id, number: 1 })),
     ).toEqual(
       new NotAllowedError(
-        'Ticket #1 is archived. Restore it before planning it into a Cycle.',
+        'Ticket T1 is archived. Restore it before planning it into a Cycle.',
       ),
     );
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
@@ -182,7 +182,7 @@ describe('Planning Tickets into a Cycle', () => {
       errorFrom(() => tickets.planTicket({ cycleId: launch.id, number: 1 })),
     ).toEqual(
       new NotAllowedError(
-        'Ticket #1 is already planned into the Cycle "Beta". Remove it from that Cycle first.',
+        'Ticket T1 is already planned into the Cycle "Beta". Remove it from that Cycle first.',
       ),
     );
     expect(tickets.planTicket({ cycleId: cycle.id, number: 1 })).toEqual(
@@ -205,12 +205,12 @@ describe('Planning Tickets into a Cycle', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${elsewhere.number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+        `Ticket T${elsewhere.number} is in another Project. A Cycle holds only its own Project's Tickets.`,
       ),
     );
     expect(
       errorFrom(() => tickets.planTicket({ cycleId: cycle.id, number: 99 })),
-    ).toEqual(new NotFoundError('There is no Ticket #99.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99.'));
     expect(
       errorFrom(() => tickets.planTicket({ cycleId: 99, number: 1 })),
     ).toEqual(new NotFoundError('There is no Cycle with id 99.'));
@@ -436,7 +436,7 @@ describe('Archiving a Cycle', () => {
 
     const archived = tickets.archiveCycle(cycle.id);
 
-    // #1 is Todo and #3 an archived Todo: unfinished, so they leave it.
+    // T1 is Todo and T3 an archived Todo: unfinished, so they leave it.
     expect(archived).toEqual({
       ...cycle,
       state: 'Archived',
@@ -516,7 +516,7 @@ describe('Archiving a Cycle', () => {
     const { tickets, project, cycle } = activeCycle();
     tickets.archiveCycle(cycle.id);
 
-    // #2 is Done, so it stays with the archived Cycle (#69).
+    // T2 is Done, so it stays with the archived Cycle (T69).
     expect(
       tickets
         .listTickets({ projectId: project.id, cycleId: null })
@@ -544,8 +544,8 @@ describe('Archiving a Cycle', () => {
 
 describe('Starting a Cycle with rollover', () => {
   /**
-   * A Project whose Active Cycle "Beta" holds #1 Todo, #2 In progress, #3
-   * Done and #4 archived, and whose Prepared Cycle "Launch" holds #5.
+   * A Project whose Active Cycle "Beta" holds T1 Todo, T2 In progress, T3
+   * Done and T4 archived, and whose Prepared Cycle "Launch" holds T5.
    */
   function withActiveAndNext() {
     const { tickets, project } = ticketsWithProject();
@@ -673,11 +673,11 @@ describe('Review fixes', () => {
     expect(
       errorFrom(() => tickets.unplanTicket({ cycleId: cycle.id, number: 1 })),
     ).toEqual(
-      new NotAllowedError('Ticket #1 is not planned into the Cycle "Beta".'),
+      new NotAllowedError('Ticket T1 is not planned into the Cycle "Beta".'),
     );
     expect(
       errorFrom(() => tickets.unplanTicket({ cycleId: cycle.id, number: 99 })),
-    ).toEqual(new NotFoundError('There is no Ticket #99.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99.'));
   });
 
   it('refuses a rollover when another Cycle is Active than the one confirmed', () => {
@@ -735,7 +735,7 @@ describe('Review fixes', () => {
 });
 
 describe('The Backlog', () => {
-  /** Tickets #1 to #`count` in a Project, and a way to list its Backlog. */
+  /** Tickets T1 to #`count` in a Project, and a way to list its Backlog. */
   function backlogWith(count: number) {
     const { tickets, project } = ticketsWithProject();
     for (let index = 1; index <= count; index++) {

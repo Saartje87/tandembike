@@ -147,7 +147,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             variant="ghost"
             size="small"
             alignSelf="stretch"
-            aria-label={`Drag Ticket #${ticket.number} to another Status`}
+            aria-label={`Drag Ticket T${ticket.number} to another Status`}
           >
             <Icon name="bars-3" size="small" />
           </Button>
@@ -160,7 +160,7 @@ export const TicketCard: FC<TicketCardProps> = ({
                 aria-label={ticket.title}
               >
                 <Text color="text-600" fontSize="small" marginInlineEnd={1}>
-                  #{ticket.number}
+                  T{ticket.number}
                 </Text>
 
                 {ticket.title}
@@ -172,11 +172,11 @@ export const TicketCard: FC<TicketCardProps> = ({
                 <AppLink
                   href={ticketByNumberPath(ticket.epic.number)}
                   variant="inherit"
-                  aria-label={`Epic #${ticket.epic.number} ${ticket.epic.title}`}
+                  aria-label={`Epic T${ticket.epic.number} ${ticket.epic.title}`}
                   data-color={ticket.epic.color}
                   className={`${styles.epicBadge} ${tinted[ticket.epic.color]}`}
                 >
-                  #{ticket.epic.number} {ticket.epic.title}
+                  T{ticket.epic.number} {ticket.epic.title}
                 </AppLink>
               </Text>
             )}
@@ -192,7 +192,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             <Box paddingBlock={3}>
               <Checkbox
                 name={`select-${ticket.number}`}
-                aria-label={`Select #${ticket.number} ${ticket.title}`}
+                aria-label={`Select T${ticket.number} ${ticket.title}`}
                 className={styles.selectBox}
                 checked={selected}
                 onChange={(event) =>

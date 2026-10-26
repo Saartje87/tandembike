@@ -18,9 +18,9 @@ describe('actionResult', () => {
   it("returns a domain error's message", () => {
     expect(
       actionResult(() => {
-        throw new NotFoundError('There is no Ticket #42.');
+        throw new NotFoundError('There is no Ticket T42.');
       }),
-    ).toEqual({ ok: false, error: 'There is no Ticket #42.' });
+    ).toEqual({ ok: false, error: 'There is no Ticket T42.' });
     expect(
       actionResult(() => {
         throw new NameTakenError('Website');

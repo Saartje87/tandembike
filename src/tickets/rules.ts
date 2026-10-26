@@ -47,7 +47,7 @@ export function checkBatchNumbers(ticketNumbers: readonly number[]) {
     (number, index) => ticketNumbers.indexOf(number) !== index,
   );
   if (duplicate !== undefined) {
-    return `Choose each Ticket once: #${duplicate} is given twice.`;
+    return `Choose each Ticket once: T${duplicate} is given twice.`;
   }
   return undefined;
 }

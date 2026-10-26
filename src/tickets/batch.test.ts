@@ -55,7 +55,7 @@ describe('Updating several Tickets at once', () => {
     expect(result.updated).toEqual([tickets.getTicket(a.number)]);
     expect(result.updated[0].status).toBe('In progress');
     expect(result.failed).toEqual([
-      { number: 42, error: 'There is no Ticket #42.' },
+      { number: 42, error: 'There is no Ticket T42.' },
     ]);
   });
 
@@ -76,7 +76,7 @@ describe('Updating several Tickets at once', () => {
     [
       'a Ticket number given twice',
       { ticketNumbers: [1, 2, 1], status: 'Done' as const },
-      { ticketNumbers: 'Choose each Ticket once: #1 is given twice.' },
+      { ticketNumbers: 'Choose each Ticket once: T1 is given twice.' },
     ],
     [
       'no change',

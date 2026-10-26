@@ -62,7 +62,7 @@ describe('Ticket claims', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${ticket.number} is already claimed by Frontend Agent (run-1).`,
+        `Ticket T${ticket.number} is already claimed by Frontend Agent (run-1).`,
       ),
     );
     expect(tickets.getTicket(ticket.number).claim).toEqual({
@@ -98,7 +98,7 @@ describe('Ticket claims', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${ticket.number} is claimed by Frontend Agent (run-1); only that Agent run can release it.`,
+        `Ticket T${ticket.number} is claimed by Frontend Agent (run-1); only that Agent run can release it.`,
       ),
     );
     expect(tickets.getTicket(ticket.number).claim).toEqual({

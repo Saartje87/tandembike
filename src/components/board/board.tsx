@@ -228,7 +228,7 @@ const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets, boardPath }) => {
             {tickets.map((ticket) => (
               <li key={ticket.number}>
                 <Text color="text-600" fontSize="small">
-                  #{ticket.number}
+                  T{ticket.number}
                 </Text>{' '}
                 <Text wordBreak="break-word">
                   <AppLink

@@ -100,7 +100,7 @@ describe('Creating a Ticket under an Epic', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${ticket.number} is not an Epic. Only an Epic can have child Tickets.`,
+        `Ticket T${ticket.number} is not an Epic. Only an Epic can have child Tickets.`,
       ),
     );
   });
@@ -136,7 +136,7 @@ describe('Creating a Ticket under an Epic', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Epic #${epic.number} is in another Project. An Epic holds only its own Project's Tickets.`,
+        `Epic T${epic.number} is in another Project. An Epic holds only its own Project's Tickets.`,
       ),
     );
     expect(tickets.listTickets({ projectId: app.id })).toEqual([]);
@@ -153,7 +153,7 @@ describe('Creating a Ticket under an Epic', () => {
           epicNumber: 99,
         }),
       ),
-    ).toEqual(new NotFoundError('There is no Ticket #99.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99.'));
   });
 });
 
@@ -206,7 +206,7 @@ describe('Attaching refusals', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${child.number} is already in Epic #${other.number}. Detach it from that Epic first.`,
+        `Ticket T${child.number} is already in Epic T${other.number}. Detach it from that Epic first.`,
       ),
     );
   });
@@ -225,7 +225,7 @@ describe('Attaching refusals', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+        `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
       ),
     );
   });
@@ -295,7 +295,7 @@ describe('Moving a Ticket to an Epic', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+        `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
       ),
     );
   });
@@ -339,7 +339,7 @@ describe('Moving a grouped Ticket to another Project', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `Ticket #${child.number} is in Epic #${epic.number}. Detach it from its Epic before moving it to another Project.`,
+        `Ticket T${child.number} is in Epic T${epic.number}. Detach it from its Epic before moving it to another Project.`,
       ),
     );
     expect(tickets.getTicket(child.number).projectId).toBe(project.id);
@@ -363,7 +363,7 @@ describe('Moving a grouped Ticket to another Project', () => {
       errorFrom(() => tickets.updateTicket(epic.number, { projectId: app.id })),
     ).toEqual(
       new NotAllowedError(
-        `Epic #${epic.number} has child Tickets. Detach them before moving it to another Project.`,
+        `Epic T${epic.number} has child Tickets. Detach them before moving it to another Project.`,
       ),
     );
     expect(
@@ -480,7 +480,7 @@ describe("An Epic's derived Status", () => {
 describe("Setting an Epic's Status by hand", () => {
   const byHand = (number: number) =>
     new ValidationError({
-      status: `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+      status: `Ticket T${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
     });
 
   it('is refused', () => {
@@ -569,7 +569,7 @@ describe('Archiving an Epic', () => {
 
     expect(errorFrom(() => tickets.archiveTicket(epic.number))).toEqual(
       new NotAllowedError(
-        `Epic #${epic.number} has child Tickets that are not archived: #${child.number}. Archive or detach them first.`,
+        `Epic T${epic.number} has child Tickets that are not archived: T${child.number}. Archive or detach them first.`,
       ),
     );
     expect(tickets.getTicket(epic.number).archived).toBe(false);
@@ -588,7 +588,7 @@ describe('Blockers and Epics', () => {
       epicNumber: epic.number,
     });
     const refusal = new ValidationError({
-      blocker: `#${child.number} is a child of Epic #${epic.number}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
+      blocker: `T${child.number} is a child of Epic T${epic.number}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
     });
 
     expect(
@@ -643,7 +643,7 @@ describe('Blockers and Epics', () => {
       ),
     ).toEqual(
       new NotAllowedError(
-        `#${ticket.number} blocks #${epic.number}. An Epic and its own children cannot block each other; remove that Blocker first.`,
+        `T${ticket.number} blocks T${epic.number}. An Epic and its own children cannot block each other; remove that Blocker first.`,
       ),
     );
   });
@@ -671,7 +671,7 @@ describe('Claiming an Epic', () => {
 
     expect(errorFrom(() => tickets.claimTicket(first.number, run2))).toEqual(
       new NotAllowedError(
-        `Ticket #${first.number} is in Epic #${epic.number}, which is claimed by Frontend Agent (run-1). Claiming an Epic covers its children.`,
+        `Ticket T${first.number} is in Epic T${epic.number}, which is claimed by Frontend Agent (run-1). Claiming an Epic covers its children.`,
       ),
     );
     expect(tickets.getTicket(first.number).claim).toBeNull();
@@ -699,7 +699,7 @@ describe('Claiming an Epic', () => {
 
     expect(errorFrom(() => tickets.claimTicket(epic.number, run1))).toEqual(
       new NotAllowedError(
-        `Epic #${epic.number} has child Ticket #${first.number} claimed by Agent run run-2. Claiming an Epic covers its children, so that claim must be released first.`,
+        `Epic T${epic.number} has child Ticket T${first.number} claimed by Agent run run-2. Claiming an Epic covers its children, so that claim must be released first.`,
       ),
     );
   });
@@ -727,7 +727,7 @@ describe('Claiming an Epic', () => {
 
     expect(errorFrom(() => tickets.claimTicket(epic.number, run1))).toEqual(
       new NotAllowedError(
-        `Epic #${epic.number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
+        `Epic T${epic.number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
       ),
     );
   });
@@ -788,7 +788,7 @@ describe('Archived children', () => {
 
     expect(errorFrom(() => tickets.restoreTicket(child.number))).toEqual(
       new NotAllowedError(
-        `Ticket #${child.number} is in Epic #${epic.number}, which is archived. Restore the Epic first.`,
+        `Ticket T${child.number} is in Epic T${epic.number}, which is archived. Restore the Epic first.`,
       ),
     );
     expect(tickets.getTicket(child.number).archived).toBe(true);
@@ -888,7 +888,7 @@ describe('Epic colours', () => {
       errorFrom(() => tickets.updateTicket(ticket.number, { color: 'teal' })),
     ).toEqual(
       new ValidationError({
-        color: `Ticket #${ticket.number} is not an Epic. Only an Epic has a colour.`,
+        color: `Ticket T${ticket.number} is not an Epic. Only an Epic has a colour.`,
       }),
     );
   });
@@ -911,7 +911,7 @@ describe('Epic colours', () => {
     expect(result.failed).toEqual([
       {
         number: ticket.number,
-        error: `Ticket #${ticket.number} is not an Epic. Only an Epic has a colour.`,
+        error: `Ticket T${ticket.number} is not an Epic. Only an Epic has a colour.`,
       },
     ]);
   });

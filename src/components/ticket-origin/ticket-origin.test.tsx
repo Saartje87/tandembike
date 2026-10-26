@@ -24,7 +24,7 @@ describe('TicketOrigin', () => {
     renderWithTheme(<TicketOrigin ticket={split} />);
 
     expect(
-      screen.getByRole('link', { name: '#4 Checkout spec' }),
+      screen.getByRole('link', { name: 'T4 Checkout spec' }),
     ).toHaveAttribute('href', '/ticket/4');
     expect(screen.getByText('Done')).toBeInTheDocument();
   });
@@ -57,7 +57,7 @@ describe('TicketOrigin', () => {
   it('changes the Origin, and keeps the field open with the reason when refused', async () => {
     vi.mocked(setTicketOrigin).mockResolvedValue({
       ok: false,
-      error: '#6 cannot be the Origin of #5.',
+      error: 'T6 cannot be the Origin of T5.',
     });
     renderWithTheme(<TicketOrigin ticket={split} />);
 
@@ -74,7 +74,7 @@ describe('TicketOrigin', () => {
       originNumber: 6,
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      '#6 cannot be the Origin of #5.',
+      'T6 cannot be the Origin of T5.',
     );
     expect(
       screen.getByRole('textbox', { name: 'Origin Ticket number' }),
@@ -92,7 +92,7 @@ describe('TicketOrigin', () => {
 
     expect(setTicketOrigin).not.toHaveBeenCalled();
     expect(
-      screen.getByText('Enter a Ticket number, like 42.'),
+      screen.getByText('Enter a Ticket number, like T42.'),
     ).toBeInTheDocument();
   });
 
@@ -109,14 +109,14 @@ describe('TicketOrigin', () => {
 
     expect(setTicketOrigin).not.toHaveBeenCalled();
     expect(
-      screen.getByRole('link', { name: '#4 Checkout spec' }),
+      screen.getByRole('link', { name: 'T4 Checkout spec' }),
     ).toBeInTheDocument();
   });
 
   it('clears the Origin at once, and shows a refusal', async () => {
     vi.mocked(setTicketOrigin).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #5.',
+      error: 'There is no Ticket T5.',
     });
     renderWithTheme(<TicketOrigin ticket={split} />);
 
@@ -127,7 +127,7 @@ describe('TicketOrigin', () => {
       originNumber: null,
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #5.',
+      'There is no Ticket T5.',
     );
   });
 });

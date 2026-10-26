@@ -122,7 +122,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
             <li key={child.number}>
               <Inline gap={2} alignY="center" flexWrap="wrap">
                 <AppLink href={ticketByNumberPath(child.number)}>
-                  #{child.number} {child.title}
+                  T{child.number} {child.title}
                 </AppLink>
                 <Text fontSize="xsmall" color="text-600">
                   {describeChild(child)}
@@ -131,7 +131,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                   type="button"
                   variant="ghost"
                   size="small"
-                  aria-label={`Detach #${child.number}`}
+                  aria-label={`Detach T${child.number}`}
                   onClick={(event) => {
                     keepDrawerOpen(event);
                     detach(child.number);
@@ -174,7 +174,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                 })}
                 id={inputId}
                 inputMode="numeric"
-                placeholder="#42"
+                placeholder="T42"
                 autoComplete="off"
                 autoFocus
                 disabled={isSubmitting}

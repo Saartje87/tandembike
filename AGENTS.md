@@ -60,7 +60,7 @@ The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) run
 - Do each Ticket on its own branch off `main`, named `ticket-<number>-<slug>` (e.g. `ticket-23-remove-blocker-missing`). An Epic is one unit: claim it once, work its children in Blocker order on one branch named after the Epic, and open one PR for it; see "Working an Epic" in `docs/agents/issue-tracker.md`.
 - Push that branch and open a PR with `gh` freely; write the body with the `pr` skill.
 - Changes reach `main` through a merged PR. Ask the User before merging a PR or pushing to `main`.
-- Refer to a Ticket in commits and PRs as `Ticket #23`, without GitHub closing keywords (`Closes`, `Fixes`): GitHub resolves those numbers to its own issues, not Tickets.
+- Refer to a Ticket in commits and PRs as `T23` (ADR 0016).
 - When a Ticket's work is done, see `docs/agents/issue-tracker.md` for when to move it to `Done`.
 
 ### Before finishing

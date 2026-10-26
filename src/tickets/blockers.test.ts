@@ -6,7 +6,7 @@ import { createChangeChannel } from './changes';
 import { NotFoundError, ValidationError } from './errors';
 
 /**
- * A Tickets module with one Project and Tickets #1 to #`count`, announcing
+ * A Tickets module with one Project and Tickets T1 to #`count`, announcing
  * on `changes` when given.
  */
 function ticketsWith(count: number, changes = createChangeChannel()) {
@@ -113,14 +113,14 @@ describe('Blockers', () => {
     ).toEqual(
       new ValidationError({
         blocker:
-          '#3 cannot block #1, because #1 already blocks #3: #1 → #2 → #3.',
+          'T3 cannot block T1, because T1 already blocks T3: T1 → T2 → T3.',
       }),
     );
     expect(
       errorFrom(() => tickets.addBlocker({ blocker: 2, blocked: 1 })),
     ).toEqual(
       new ValidationError({
-        blocker: '#2 cannot block #1, because #1 already blocks #2: #1 → #2.',
+        blocker: 'T2 cannot block T1, because T1 already blocks T2: T1 → T2.',
       }),
     );
     expect(tickets.getTicket(1).blockedBy).toEqual([]);
@@ -131,10 +131,10 @@ describe('Blockers', () => {
 
     expect(
       errorFrom(() => tickets.addBlocker({ blocker: 7, blocked: 1 })),
-    ).toEqual(new NotFoundError('There is no Ticket #7.'));
+    ).toEqual(new NotFoundError('There is no Ticket T7.'));
     expect(
       errorFrom(() => tickets.addBlocker({ blocker: 1, blocked: 7 })),
-    ).toEqual(new NotFoundError('There is no Ticket #7.'));
+    ).toEqual(new NotFoundError('There is no Ticket T7.'));
     expect(tickets.getTicket(1).updatedAt).toEqual(
       tickets.getTicket(1).createdAt,
     );
@@ -151,7 +151,7 @@ describe('Blockers', () => {
     expect(unblocked).toMatchObject({ number: 3, blockedBy: [2] });
     expect(
       errorFrom(() => tickets.removeBlocker({ blocker: 1, blocked: 7 })),
-    ).toEqual(new NotFoundError('There is no Ticket #7.'));
+    ).toEqual(new NotFoundError('There is no Ticket T7.'));
   });
 
   it('refuses to remove a Blocker that does not exist, and changes nothing', () => {
@@ -166,7 +166,7 @@ describe('Blockers', () => {
 
       expect(
         errorFrom(() => tickets.removeBlocker({ blocker: 99, blocked: 2 })),
-      ).toEqual(new NotFoundError('There is no Ticket #99.'));
+      ).toEqual(new NotFoundError('There is no Ticket T99.'));
       expect(tickets.getTicket(2)).toEqual(before);
       expect(listener).not.toHaveBeenCalled();
     } finally {
@@ -179,10 +179,10 @@ describe('Blockers', () => {
 
     expect(
       errorFrom(() => tickets.removeBlocker({ blocker: 98, blocked: 99 })),
-    ).toEqual(new NotFoundError('There is no Ticket #98.'));
+    ).toEqual(new NotFoundError('There is no Ticket T98.'));
     expect(
       errorFrom(() => tickets.addBlocker({ blocker: 98, blocked: 99 })),
-    ).toEqual(new NotFoundError('There is no Ticket #98.'));
+    ).toEqual(new NotFoundError('There is no Ticket T98.'));
   });
 
   it('removes an archived Blocker', () => {
@@ -234,7 +234,7 @@ describe('Blockers', () => {
       ],
     });
     expect(errorFrom(() => tickets.listBlockers(7))).toEqual(
-      new NotFoundError('There is no Ticket #7.'),
+      new NotFoundError('There is no Ticket T7.'),
     );
   });
 

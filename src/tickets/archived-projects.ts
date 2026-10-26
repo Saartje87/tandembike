@@ -37,7 +37,7 @@ export function checkTicketWritable(db: DatabaseConnection, number: number) {
     .get();
   if (project?.archived) {
     throw new NotAllowedError(
-      `Ticket #${number} is in the archived Project "${project.name}". Restore the Project before changing its Tickets.`,
+      `Ticket T${number} is in the archived Project "${project.name}". Restore the Project before changing its Tickets.`,
     );
   }
 }

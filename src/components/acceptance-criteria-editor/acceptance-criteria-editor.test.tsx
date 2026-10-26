@@ -141,7 +141,7 @@ describe('AcceptanceCriteriaEditor', () => {
   it('puts the checkbox back and says why when checking is refused', async () => {
     vi.mocked(checkTicketAcceptanceCriterion).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     renderWithTheme(
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo]} />,
@@ -152,7 +152,7 @@ describe('AcceptanceCriteriaEditor', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     expect(criteriaShown()).toEqual([
       { text: 'The logo is centred', checked: true },
@@ -249,7 +249,7 @@ describe('AcceptanceCriteriaEditor', () => {
   it('shows the old order again and says why when a reorder is refused', async () => {
     vi.mocked(setTicketAcceptanceCriteria).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     renderWithTheme(
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo, menu]} />,
@@ -258,7 +258,7 @@ describe('AcceptanceCriteriaEditor', () => {
     await dragCriterion('The logo is centred', '{ArrowDown}');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     expect(criteriaShown().map(({ text }) => text)).toEqual([
       'The logo is centred',
@@ -282,7 +282,7 @@ describe('AcceptanceCriteriaEditor', () => {
   it('shows the list again and says why when a change is refused', async () => {
     vi.mocked(setTicketAcceptanceCriteria).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     renderWithTheme(
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo, menu]} />,
@@ -291,7 +291,7 @@ describe('AcceptanceCriteriaEditor', () => {
     await removeCriterion('The logo is centred');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     expect(criteriaShown().map(({ text }) => text)).toEqual([
       'The logo is centred',

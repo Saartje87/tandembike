@@ -5,7 +5,7 @@ import { createTestTickets, errorFrom } from '../test/tickets';
 import { createChangeChannel } from './changes';
 import { NotFoundError } from './errors';
 
-/** A Tickets module with one Project and Tickets #1 to #`count`. */
+/** A Tickets module with one Project and Tickets T1 to #`count`. */
 function ticketsWith(count: number) {
   const tickets = createTestTickets();
   const project = tickets.createProject({ name: 'Website' });
@@ -23,7 +23,7 @@ describe('Deleting a Ticket', () => {
     const next = tickets.createTicket({ projectId: project.id, title: 'Next' });
 
     expect(errorFrom(() => tickets.getTicket(2))).toEqual(
-      new NotFoundError('There is no Ticket #2.'),
+      new NotFoundError('There is no Ticket T2.'),
     );
     expect(next.number).toBe(3);
     expect(
@@ -52,7 +52,7 @@ describe('Deleting a Ticket', () => {
 
     expect(tickets.listLabels()).toEqual(['shared']);
     expect(errorFrom(() => tickets.listComments(doomed.number))).toEqual(
-      new NotFoundError(`There is no Ticket #${doomed.number}.`),
+      new NotFoundError(`There is no Ticket T${doomed.number}.`),
     );
   });
 
@@ -157,7 +157,7 @@ describe('Deleting a Ticket', () => {
     tickets.deleteTicket(epic.number);
 
     expect(errorFrom(() => tickets.getTicket(epic.number))).toEqual(
-      new NotFoundError(`There is no Ticket #${epic.number}.`),
+      new NotFoundError(`There is no Ticket T${epic.number}.`),
     );
     for (const child of [open, archived]) {
       expect(tickets.getTicket(child.number)).toMatchObject({
@@ -182,7 +182,7 @@ describe('Deleting a Ticket', () => {
 
     for (const number of [epic.number, open.number, archived.number]) {
       expect(errorFrom(() => tickets.getTicket(number))).toEqual(
-        new NotFoundError(`There is no Ticket #${number}.`),
+        new NotFoundError(`There is no Ticket T${number}.`),
       );
     }
     expect(tickets.getTicket(outside.number)).toMatchObject({

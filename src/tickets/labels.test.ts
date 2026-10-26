@@ -130,10 +130,10 @@ describe('Labelling Tickets', () => {
     const tickets = createTestTickets();
 
     expect(errorFrom(() => tickets.addLabels(42, ['bug']))).toEqual(
-      new NotFoundError('There is no Ticket #42.'),
+      new NotFoundError('There is no Ticket T42.'),
     );
     expect(errorFrom(() => tickets.removeLabels(42, ['bug']))).toEqual(
-      new NotFoundError('There is no Ticket #42.'),
+      new NotFoundError('There is no Ticket T42.'),
     );
   });
 
