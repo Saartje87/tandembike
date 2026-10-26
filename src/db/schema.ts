@@ -93,6 +93,27 @@ export const ticketLabels = sqliteTable(
   ],
 );
 
+/**
+ * A Ticket's External references, in the order they were added by `id`:
+ * one row per reference, stored trimmed and each once per Ticket.
+ */
+export const ticketExternalReferences = sqliteTable(
+  'ticket_external_references',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+    reference: text('reference').notNull(),
+  },
+  (table) => [
+    uniqueIndex('ticket_external_references_ticket_reference').on(
+      table.ticketNumber,
+      table.reference,
+    ),
+  ],
+);
+
 export const commentAuthors = ['user', 'agent'] as const;
 
 /**

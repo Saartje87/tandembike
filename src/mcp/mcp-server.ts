@@ -5,6 +5,11 @@ import { z } from 'zod';
 
 import { isAllowedHost } from '../http/allowed-host';
 import { type BatchFailure, TicketsError } from '../tickets/errors';
+import {
+  maxExternalReferenceKeyLength,
+  maxExternalReferences,
+  maxExternalReferenceUrlLength,
+} from '../tickets/external-references';
 import { paletteColors } from '../tickets/palette';
 import { maxBatchSize } from '../tickets/rules';
 import { statuses } from '../tickets/status';
@@ -82,6 +87,26 @@ const removeLabels = z
   .optional()
   .describe(
     'Labels to remove, ignoring case; ones the Ticket does not have are ignored. A label may not be in both addLabels and removeLabels.',
+  );
+
+const externalReference = z
+  .string()
+  .describe(
+    `An External reference: the same work in another system, such as a GitHub issue or a Jira issue. Either an absolute http(s) URL of at most ${maxExternalReferenceUrlLength.toLocaleString('en-US')} characters, or a key without spaces of at most ${maxExternalReferenceKeyLength} characters, such as ABC-33, or a GitHub issue number after a hash, alone or after owner/repo. It is trimmed and kept as typed.`,
+  );
+
+const addExternalReferences = z
+  .array(externalReference)
+  .optional()
+  .describe(
+    `External references to add after the ones the Ticket has, after removeExternalReferences are removed; ones it already has (exact match) are ignored. A Ticket has at most ${maxExternalReferences}.`,
+  );
+
+const removeExternalReferences = z
+  .array(externalReference)
+  .optional()
+  .describe(
+    'External references to remove, matched exactly; ones the Ticket does not have are ignored. A reference may not be in both addExternalReferences and removeExternalReferences.',
   );
 
 const commentId = z
@@ -191,6 +216,12 @@ const newTicketFields = {
     .array(label)
     .optional()
     .describe('Optional labels. Call list_labels to reuse existing ones.'),
+  externalReferences: z
+    .array(externalReference)
+    .optional()
+    .describe(
+      `Optional External references, in order, at most ${maxExternalReferences}: where the same work lives in another system.`,
+    ),
   acceptanceCriteria: z
     .array(newCriterion)
     .optional()
@@ -414,7 +445,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. Read it before starting work on the Ticket.',
+        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. Read it before starting work on the Ticket.',
       inputSchema: { number: ticketNumber },
       annotations: { readOnlyHint: true },
     },
@@ -587,7 +618,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. When moving it to "Done", remove its triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay. The same rules apply as for create_ticket. ${returnsSummary()}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. When moving it to "Done", remove its triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay. The same rules apply as for create_ticket. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -629,6 +660,8 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
         addLabels,
         removeLabels,
+        addExternalReferences,
+        removeExternalReferences,
         acceptanceCriteria: z
           .array(
             newCriterion.extend({

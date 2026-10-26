@@ -134,6 +134,13 @@
       "when": 1793049545607,
       "tag": "0018_add_archived_with_epic",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1793050710716,
+      "tag": "0019_create_ticket_external_references",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ const ticket = (
   position: 0,
   archived: false,
   labels: [],
+  externalReferences: [],
   blockedBy: [],
   blocked: false,
   type: 'Ticket',

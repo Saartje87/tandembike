@@ -7,6 +7,7 @@ import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
 import {
   addTicketComment,
+  addTicketExternalReference,
   addTicketLabel,
   archiveTicket,
   archiveTickets,
@@ -19,6 +20,7 @@ import {
   moveTickets,
   moveTicketsToEpic,
   removeTicketComment,
+  removeTicketExternalReference,
   removeTicketLabel,
   restoreTicket,
   setTicketAcceptanceCriteria,
@@ -457,6 +459,59 @@ describe('Ticket actions', () => {
       ok: false,
       error: 'Enter a label.',
       fieldErrors: { labels: 'Enter a label.' },
+    });
+  });
+
+  it("adds and removes an External reference and refreshes the Ticket's drawer", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const added = await addTicketExternalReference({
+      number: ticket.number,
+      reference: ' #55 ',
+    });
+
+    expect(added).toEqual({ ok: true });
+    expect(tickets.getTicket(ticket.number).externalReferences).toEqual([
+      '#55',
+    ]);
+    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+
+    const removed = await removeTicketExternalReference({
+      number: ticket.number,
+      reference: '#55',
+    });
+
+    expect(removed).toEqual({ ok: true });
+    expect(tickets.getTicket(ticket.number).externalReferences).toEqual([]);
+  });
+
+  it('returns why an External reference was refused', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await addTicketExternalReference({
+      number: ticket.number,
+      reference: 'javascript:alert(1)',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        externalReferences: expect.stringMatching(
+          /^"javascript:alert\(1\)" is not a valid URL or key\./,
+        ),
+      },
     });
   });
 

@@ -53,6 +53,7 @@ import {
 } from '../delete-ticket-dialog/delete-ticket-dialog';
 import { EpicChildren } from '../epic-children/epic-children';
 import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
+import { ExternalReferenceEditor } from '../external-reference-editor/external-reference-editor';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { InlineEdit } from '../inline-edit/inline-edit';
@@ -400,6 +401,12 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 suggestions={allLabels}
               />
             </Detail>
+            <Detail name={<DetailName>External references</DetailName>}>
+              <ExternalReferenceEditor
+                ticketNumber={ticket.number}
+                references={ticket.externalReferences}
+              />
+            </Detail>
             <Detail name={<DetailName>Claim</DetailName>}>
               <Stack gap={1}>
                 <Text>
@@ -513,7 +520,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 /**
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
  * in-place editable heading, its Status, Epic (or that it is an
- * Epic), Origin, Cycle, labels and Blockers, an Epic's child Tickets, the
+ * Epic), Origin, Cycle, labels, External references and Blockers, an Epic's child Tickets, the
  * Tickets split from it, its Markdown description, acceptance criteria and
  * comments, and a footer with its timestamps, Archive and Delete.
  * Each field saves on its own when the User finishes with it, shows the new

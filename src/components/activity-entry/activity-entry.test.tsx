@@ -46,6 +46,14 @@ describe('ActivityEntry', () => {
   it.each<[ActivityChange, string]>([
     [{ type: 'created' }, 'created this Ticket'],
     [
+      { type: 'externalReferenceAdded', reference: '#55' },
+      'added the External reference #55',
+    ],
+    [
+      { type: 'externalReferenceRemoved', reference: 'ABC-33' },
+      'removed the External reference ABC-33',
+    ],
+    [
       {
         type: 'project',
         from: { id: 1, name: 'Website' },

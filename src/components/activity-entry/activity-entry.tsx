@@ -37,6 +37,10 @@ function describeChange(change: ActivityChange): string {
       return `added the label ${change.label}`;
     case 'labelRemoved':
       return `removed the label ${change.label}`;
+    case 'externalReferenceAdded':
+      return `added the External reference ${change.reference}`;
+    case 'externalReferenceRemoved':
+      return `removed the External reference ${change.reference}`;
     case 'blockedByAdded':
       return `added Blocker T${change.number}`;
     case 'blockedByRemoved':
