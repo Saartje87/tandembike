@@ -1012,10 +1012,11 @@ export function createMcpServer(tickets: Tickets): McpServer {
       title: 'Rename Cycle',
       description:
         'Rename a Prepared or Active Cycle and return it. An Archived Cycle cannot change.',
-      inputSchema: { id: cycleId, title: cycleTitle },
+      inputSchema: { cycleId, title: cycleTitle },
       annotations: { idempotentHint: true },
     },
-    ({ id, title }) => respond(() => tickets.renameCycle(id, { title })),
+    ({ cycleId, title }) =>
+      respond(() => tickets.renameCycle(cycleId, { title })),
   );
 
   server.registerTool(
@@ -1075,7 +1076,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
       description:
         "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step.",
       inputSchema: {
-        id: cycleId,
+        cycleId,
         confirmArchiveActive: z
           .boolean()
           .optional()
@@ -1084,9 +1085,9 @@ export function createMcpServer(tickets: Tickets): McpServer {
           ),
       },
     },
-    ({ id, confirmArchiveActive }) =>
+    ({ cycleId, confirmArchiveActive }) =>
       respond(() =>
-        tickets.startCycle(id, { archiveActive: confirmArchiveActive }),
+        tickets.startCycle(cycleId, { archiveActive: confirmArchiveActive }),
       ),
   );
 
@@ -1096,9 +1097,9 @@ export function createMcpServer(tickets: Tickets): McpServer {
       title: 'Archive Cycle',
       description:
         'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history.',
-      inputSchema: { id: cycleId },
+      inputSchema: { cycleId },
     },
-    ({ id }) => respond(() => tickets.archiveCycle(id)),
+    ({ cycleId }) => respond(() => tickets.archiveCycle(cycleId)),
   );
 
   return server;
