@@ -189,6 +189,32 @@ describe('MCP server', () => {
     await client.close();
   });
 
+  it('tells Agents to remove the triage state label when moving to Done', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    const rules: [tool: string, rule: RegExp][] = [
+      [
+        'update_ticket',
+        /triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay/,
+      ],
+      [
+        'update_tickets',
+        /triage state labels other than wontfix, listing each one any of them has in removeLabels in the same call; their other labels stay/,
+      ],
+    ];
+    for (const [name, rule] of rules) {
+      const description =
+        tools.find((tool) => tool.name === name)?.description ?? '';
+      expect(description, name).toMatch(rule);
+      expect(description, name).not.toMatch(
+        /needs-triage|needs-info|ready-for-agent|ready-for-human/,
+      );
+    }
+    await client.close();
+  });
+
   it('keeps the instructions and every tool description within the cap clients read whole', async () => {
     const client = await connectMcpClient(createTestTickets());
 
