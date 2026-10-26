@@ -92,7 +92,10 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/never as a checklist in the description/);
     expect(instructions).toMatch(/one level deep/);
     expect(instructions).toMatch(/its description holds their shared context/);
-    expect(instructions).toMatch(/reconnect/);
+    expect(instructions).toMatch(/ask the User to start a new session/);
+    expect(instructions).toMatch(
+      /reconnecting may keep the tool descriptions already loaded/,
+    );
     expect(instructions).toMatch(/not direct database access/);
     // Process belongs to each repository, and no client is assumed.
     expect(instructions).not.toMatch(/branch|pull request|\bPR\b/i);
