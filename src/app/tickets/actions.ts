@@ -191,6 +191,25 @@ export async function archiveTicket(input: {
   return setArchived(input, true);
 }
 
+/**
+ * Archives a selection of Tickets for the UI, all or nothing, and refreshes
+ * the Boards. Domain errors come back as `error`, like `createTicket`.
+ */
+export async function archiveTickets(input: {
+  ticketNumbers: number[];
+}): Promise<ArchiveTicketResult> {
+  return actionResult(() => {
+    appTickets().archiveTickets(
+      Array.isArray(input?.ticketNumbers)
+        ? input.ticketNumbers.map(Number)
+        : [],
+    );
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}
+
 /** Restores an archived Ticket for the UI. */
 export async function restoreTicket(input: {
   number: number;
