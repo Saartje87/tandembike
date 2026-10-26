@@ -153,10 +153,10 @@ export const InlineEdit: FC<InlineEditProps> = ({
     reset({ text: value });
     reopen(true);
   };
-  const close = (left: boolean) => {
+  const close = (byLeaving: boolean) => {
     ended.current = true;
     setEditing(false);
-    setRefocus(!left);
+    setRefocus(!byLeaving);
   };
   const cancel = () => {
     close(false);
@@ -164,11 +164,11 @@ export const InlineEdit: FC<InlineEditProps> = ({
   };
   // Not `handleSubmit`: it validates asynchronously, so the input would
   // close a frame before the new text shows. The field has no rules to check.
-  const save = (left: boolean) => {
+  const save = (byLeaving: boolean) => {
     const text = getValues('text');
     // The text when the edit began, which may since have changed elsewhere.
     const original = defaultValues?.text ?? value;
-    close(left);
+    close(byLeaving);
     if (text === original) {
       reset({ text: value });
       return;
@@ -182,7 +182,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
         reset({ text: original });
         setValue('text', text);
         setError('text', { type: 'server', message: reason });
-        reopen(!left);
+        reopen(!byLeaving);
       }
     });
   };

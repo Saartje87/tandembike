@@ -378,7 +378,7 @@ listener is registered first. It is covered by a test that asserts no
 Cancel buttons swap themselves out the same way and use the same workaround
 (`keepDrawerOpen`, now in `keep-drawer-open/keep-drawer-open.ts`), with the
 same kind of test. The redesigned drawer (#16) swaps out many more buttons:
-the title (which turns into an input), the description's Save and Cancel,
+the title (which turns into an input), the description's Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
 banner's Restore all need it. The header's copy button for the Ticket
 number (#34, `copy-ticket-number.tsx`) swaps its text and icon on click and

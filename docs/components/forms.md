@@ -42,9 +42,9 @@ not a hand-built button-and-form pair. At rest it is the text with a hover
 tint; a click or Enter opens the field with Cancel (✗). Enter, or focus
 leaving the field for elsewhere in the page, saves: the field closes at once
 showing the new text, and a refusal reopens it with the reason (after a blur,
-without taking focus back). Switching windows does not save. `onSave` resolves to that reason, or nothing when saved: map a
-Server Action's result with `refusalReason(result, field)` from
-`src/app/lib/action-result.ts`.
+without taking focus back). Switching windows does not save. `onSave`
+resolves to that reason, or nothing when saved: map a Server Action's result
+with `refusalReason(result, field)` from `src/app/lib/action-result.ts`.
 
 - **Single line** (default): a `TextInput`. Pass `wrap` to put the text in a
   `Heading` and `inputClassName` to match its font.
