@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { appTickets } from '../../tickets/app-tickets';
-import type { EpicChildInput } from '../../tickets/epics';
+import type { EpicChildInput, EpicChildrenInput } from '../../tickets/epics';
 import { ValidationError } from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
 import type { TicketType } from '../../tickets/ticket-type';
@@ -449,6 +449,23 @@ export async function attachTicketToEpic(
     appTickets().moveToEpic({
       epic: Number(input?.epic),
       child: Number(input?.child),
+    }),
+  );
+}
+
+/**
+ * Makes several Tickets children of an Epic for the UI, taking each out of
+ * the Epic it is in, if any; all or nothing.
+ */
+export async function moveTicketsToEpic(
+  input: EpicChildrenInput,
+): Promise<TicketEpicResult> {
+  return changeEpic(() =>
+    appTickets().moveTicketsToEpic({
+      epic: Number(input?.epic),
+      children: Array.isArray(input?.children)
+        ? input.children.map(Number)
+        : [],
     }),
   );
 }

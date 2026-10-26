@@ -323,6 +323,153 @@ describe('Moving a Ticket to an Epic', () => {
   });
 });
 
+describe('Moving several Tickets to an Epic', () => {
+  it('attaches every Ticket, leaving their Statuses and positions alone', () => {
+    const { tickets, project, epic } = setUp();
+    const first = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+    const second = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by bank',
+      status: 'In progress',
+    });
+    const before = [first, second].map((ticket) =>
+      tickets.getTicket(ticket.number),
+    );
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.moveTicketsToEpic({
+      epic: epic.number,
+      children: [first.number, second.number],
+    });
+
+    for (const ticket of before) {
+      expect(tickets.getTicket(ticket.number)).toMatchObject({
+        epic: { number: epic.number },
+        status: ticket.status,
+        position: ticket.position,
+      });
+    }
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      status: 'In progress',
+      children: [{ number: first.number }, { number: second.number }],
+    });
+    expect(changes).toEqual([
+      {
+        type: 'tickets',
+        numbers: [epic.number, first.number, second.number],
+      },
+    ]);
+  });
+
+  it('takes Tickets out of another Epic, and its Status follows', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const moving = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+      status: 'Done',
+    });
+    const staying = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by bank',
+      epicNumber: other.number,
+    });
+    const free = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay later',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.moveTicketsToEpic({
+      epic: epic.number,
+      children: [moving.number, free.number],
+    });
+
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      status: 'In progress',
+      children: [{ number: moving.number }, { number: free.number }],
+    });
+    expect(tickets.getTicket(other.number)).toMatchObject({
+      status: 'Todo',
+      children: [{ number: staying.number }],
+    });
+    expect(changes).toEqual([
+      {
+        type: 'tickets',
+        numbers: [other.number, epic.number, moving.number, free.number],
+      },
+    ]);
+  });
+
+  it('moves none of the Tickets when one cannot join', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    expect(
+      errorFrom(() =>
+        tickets.moveTicketsToEpic({
+          epic: epic.number,
+          children: [ticket.number, other.number],
+        }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+      ),
+    );
+    expect(tickets.getTicket(ticket.number).epic?.number).toBe(other.number);
+    expect(tickets.getTicket(epic.number).children).toEqual([]);
+    expect(changes).toEqual([]);
+  });
+
+  it('refuses an empty or repeated list', () => {
+    const { tickets, project, epic } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+
+    expect(
+      errorFrom(() =>
+        tickets.moveTicketsToEpic({ epic: epic.number, children: [] }),
+      ),
+    ).toEqual(new ValidationError({ children: 'Choose at least one Ticket.' }));
+    expect(
+      errorFrom(() =>
+        tickets.moveTicketsToEpic({
+          epic: epic.number,
+          children: [ticket.number, ticket.number],
+        }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        children: `Choose each Ticket once: T${ticket.number} is given twice.`,
+      }),
+    );
+  });
+});
+
 describe('Moving a grouped Ticket to another Project', () => {
   it('refuses to move a child', () => {
     const { tickets, project, epic } = setUp();

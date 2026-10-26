@@ -6,6 +6,7 @@ import {
   attachTicketToEpic,
   createTicket,
   moveTickets,
+  moveTicketsToEpic,
   reorderTickets,
   updateTicket,
 } from '../../app/tickets/actions';
@@ -22,6 +23,7 @@ vi.mock('../../app/tickets/actions', () => ({
   attachTicketToEpic: vi.fn(),
   createTicket: vi.fn(),
   moveTickets: vi.fn(),
+  moveTicketsToEpic: vi.fn(),
   reorderTickets: vi.fn(),
   updateTicket: vi.fn(),
 }));
@@ -755,6 +757,8 @@ describe('Dropping a card on an Epic', () => {
 
   beforeEach(() => {
     vi.mocked(attachTicketToEpic).mockReset();
+    vi.mocked(moveTicketsToEpic).mockReset();
+    vi.mocked(moveTickets).mockReset();
     vi.mocked(reorderTickets).mockReset();
     vi.mocked(updateTicket).mockReset();
   });
@@ -839,6 +843,80 @@ describe('Dropping a card on an Epic', () => {
     await waitFor(() =>
       expect(chips()).toEqual(['T10 Checkout 0/1 Done', 'T20 Search 0/0 Done']),
     );
+  });
+
+  it('attaches every selected Ticket at once, in Board order, moving them from their Epics', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(moveTicketsToEpic).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockEpicBounds(20);
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Select T4 Fix the header' }),
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Select T11 Pay by card' }),
+    );
+
+    await dragTicketOntoEpic(4, 20);
+
+    expect(moveTicketsToEpic).toHaveBeenCalledExactlyOnceWith({
+      epic: 20,
+      children: [11, 4],
+    });
+    expect(attachTicketToEpic).not.toHaveBeenCalled();
+    expect(moveTickets).not.toHaveBeenCalled();
+    expect(updateTicket).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(chips()).toEqual(['T10 Checkout 0/0 Done', 'T20 Search 0/2 Done']),
+    );
+    expect(cardsIn('Todo')).toEqual(['Pay by card', 'Fix the header']);
+    expect(
+      screen.getAllByRole('link', { name: 'Epic T20 Search' }),
+    ).toHaveLength(2);
+  });
+
+  it('puts the selected Tickets back and explains when attaching them is refused', async () => {
+    vi.mocked(moveTicketsToEpic).mockResolvedValue({
+      ok: false,
+      error: 'Epic T20 is archived. Restore it before adding Tickets to it.',
+    });
+    mockEpicBounds(20);
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[payByCard, header]}
+        epics={[checkout, search]}
+      />,
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Select T4 Fix the header' }),
+    );
+    await user.click(
+      screen.getByRole('checkbox', { name: 'Select T11 Pay by card' }),
+    );
+
+    await dragTicketOntoEpic(11, 20);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Epic T20 is archived. Restore it before adding Tickets to it.',
+    );
+    await waitFor(() =>
+      expect(chips()).toEqual(['T10 Checkout 0/1 Done', 'T20 Search 0/0 Done']),
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Epic T20 Search' }),
+    ).not.toBeInTheDocument();
   });
 });
 
