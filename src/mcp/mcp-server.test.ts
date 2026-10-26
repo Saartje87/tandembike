@@ -194,12 +194,20 @@ describe('MCP server', () => {
 
     const { tools } = await client.listTools();
 
-    for (const name of ['update_ticket', 'update_tickets']) {
+    const rules: [tool: string, rule: RegExp][] = [
+      [
+        'update_ticket',
+        /triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay/,
+      ],
+      [
+        'update_tickets',
+        /triage state labels other than wontfix, listing each one any of them has in removeLabels in the same call; their other labels stay/,
+      ],
+    ];
+    for (const [name, rule] of rules) {
       const description =
         tools.find((tool) => tool.name === name)?.description ?? '';
-      expect(description, name).toMatch(
-        /triage state label, if (it has|they have) one, with removeLabels in the same call; (its|their) other labels stay, wontfix included/,
-      );
+      expect(description, name).toMatch(rule);
       expect(description, name).not.toMatch(
         /needs-triage|needs-info|ready-for-agent|ready-for-human/,
       );
