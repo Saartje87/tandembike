@@ -587,7 +587,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. The same rules apply as for create_ticket. ${returnsSummary()}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. When moving it to "Done", remove its triage state label, if it has one, with removeLabels in the same call; its other labels stay, wontfix included. The same rules apply as for create_ticket. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -666,7 +666,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'update_tickets',
     {
       title: 'Update Tickets',
-      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (${summaryFields}), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
+      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. When moving them to "Done", remove their triage state label, if they have one, with removeLabels in the same call; their other labels stay, wontfix included. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (${summaryFields}), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
         ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
