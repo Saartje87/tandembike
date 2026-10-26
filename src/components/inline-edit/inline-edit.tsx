@@ -67,6 +67,11 @@ export type InlineEditProps = {
    * text.
    */
   onDirtyChange?: (dirty: boolean) => void;
+  /**
+   * Told when an edit opens (true) and ends (false), and when a refused
+   * save reopens it, such as to hide the item's other buttons meanwhile.
+   */
+  onEditingChange?: (editing: boolean) => void;
 };
 
 const asIs = (text: ReactNode) => text;
@@ -93,11 +98,16 @@ export const InlineEdit: FC<InlineEditProps> = ({
   renderValue = asIs,
   placeholder,
   onDirtyChange,
+  onEditingChange,
 }) => {
   const inputId = useId();
   const errorId = useId();
   const hintId = useId();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (next: boolean) => {
+    setEditingState(next);
+    onEditingChange?.(next);
+  };
   // Puts focus back on the text when the User ends an edit.
   const [refocus, setRefocus] = useState(false);
   // The multiline text at rest, which is not a button, so React does not

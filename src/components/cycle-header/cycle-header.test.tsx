@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,26 +54,49 @@ describe('CycleHeader', () => {
     expect(screen.getByText('Prepared')).toBeInTheDocument();
   });
 
-  it('renames the Cycle inline', async () => {
-    vi.mocked(renameCycle).mockResolvedValue({ ok: true });
+  const title = () => screen.getByRole('button', { name: 'Launch the beta' });
+  const titleInput = () => screen.getByRole('textbox', { name: 'Cycle title' });
+
+  it('has no Rename button; the title says it can be edited', () => {
     renderWithTheme(<CycleHeader cycle={prepared} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    const input = screen.getByRole('textbox', { name: 'Cycle title' });
-    expect(input).toHaveValue('Launch the beta');
-    await userEvent.clear(input);
-    await userEvent.type(input, 'Public beta{Enter}');
+    expect(
+      screen.queryByRole('button', { name: 'Rename' }),
+    ).not.toBeInTheDocument();
+    expect(title()).toHaveAccessibleDescription('Edit cycle title');
+  });
+
+  it('opens the title on click and saves on Enter, showing the new title at once', async () => {
+    const save = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(renameCycle).mockReturnValue(save.promise);
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    await userEvent.click(title());
+    expect(titleInput()).toHaveValue('Launch the beta');
+    await userEvent.clear(titleInput());
+    await userEvent.type(titleInput(), 'Public beta{Enter}');
 
     expect(renameCycle).toHaveBeenCalledExactlyOnceWith({
       cycleId: 7,
       title: 'Public beta',
     });
     expect(
-      await screen.findByRole('button', { name: 'Rename' }),
+      screen.getByRole('heading', { level: 2, name: 'Public beta' }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    await act(async () => save.resolve({ ok: true }));
   });
 
-  it('keeps the editor open with the reason a rename was refused', async () => {
+  it('opens the title on Enter when focused', async () => {
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    title().focus();
+    await userEvent.keyboard('{Enter}');
+
+    expect(titleInput()).toHaveValue('Launch the beta');
+  });
+
+  it("reopens a refused rename with the User's text and the reason", async () => {
     vi.mocked(renameCycle).mockResolvedValue({
       ok: false,
       error: 'Enter a title.',
@@ -81,23 +104,36 @@ describe('CycleHeader', () => {
     });
     renderWithTheme(<CycleHeader cycle={prepared} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    const input = screen.getByRole('textbox', { name: 'Cycle title' });
-    await userEvent.clear(input);
-    await userEvent.keyboard('{Enter}');
+    await userEvent.click(title());
+    await userEvent.clear(titleInput());
+    await userEvent.type(titleInput(), ' {Enter}');
 
     expect(await screen.findByText('Enter a title.')).toBeInTheDocument();
-    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(titleInput()).toHaveValue(' ');
+    expect(titleInput()).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('shows the general reason when a refusal names no field', async () => {
+    vi.mocked(renameCycle).mockResolvedValue({
+      ok: false,
+      error: 'There is no Cycle with id 7.',
+    });
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    await userEvent.click(title());
+    await userEvent.type(titleInput(), '!{Enter}');
+
+    expect(
+      await screen.findByText('There is no Cycle with id 7.'),
+    ).toBeInTheDocument();
+    expect(titleInput()).toHaveValue('Launch the beta!');
   });
 
   it('cancels a rename with Escape', async () => {
     renderWithTheme(<CycleHeader cycle={prepared} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    await userEvent.type(
-      screen.getByRole('textbox', { name: 'Cycle title' }),
-      'x{Escape}',
-    );
+    await userEvent.click(title());
+    await userEvent.type(titleInput(), 'x{Escape}');
 
     expect(renameCycle).not.toHaveBeenCalled();
     expect(
@@ -179,7 +215,7 @@ describe('CycleHeader', () => {
     renderWithTheme(<CycleHeader cycle={{ ...prepared, state: 'Active' }} />);
 
     expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
+    expect(title()).toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Start Cycle' }),
     ).not.toBeInTheDocument();
@@ -215,7 +251,7 @@ describe('CycleHeader', () => {
     expect(archiveCycle).not.toHaveBeenCalled();
   });
 
-  it('shows an Archived Cycle read-only, with when it was archived', () => {
+  it('shows an Archived Cycle read-only, with when it was archived', async () => {
     renderWithTheme(
       <CycleHeader
         cycle={{
@@ -231,6 +267,9 @@ describe('CycleHeader', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/^Archived/)).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.queryByText('Edit cycle title')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByText('Launch the beta'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
   describe('over an Active Cycle', () => {
