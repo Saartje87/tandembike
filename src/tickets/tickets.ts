@@ -1608,21 +1608,30 @@ export function createTickets(
     /**
      * `moveToEpic` for each of `children`, all or nothing: if any cannot
      * join `epic`, none does. Their Statuses and positions stay as they are.
-     * The change is announced once.
+     * The change is announced once, or not at all when every Ticket was in
+     * `epic` already.
      */
     moveTicketsToEpic(input: EpicChildrenInput): void {
       const { epic, children } = input;
       throwFieldErrors({ children: checkBatchNumbers(children) });
 
-      const left = db.transaction(() =>
+      const joined = db.transaction(() =>
         children.flatMap((child) => {
-          const previous = joinEpicStep({ epic, child }, true)?.previous;
-          return previous == null ? [] : [previous];
+          const changed = joinEpicStep({ epic, child }, { move: true });
+          return changed ? [{ child, ...changed }] : [];
         }),
+      );
+      if (joined.length === 0) {
+        return;
+      }
+      const left = joined.flatMap(({ previous }) =>
+        previous === null ? [] : [previous],
       );
       changes.publish({
         type: 'tickets',
-        numbers: [...new Set([...left, epic, ...children])],
+        numbers: [
+          ...new Set([...left, epic, ...joined.map(({ child }) => child)]),
+        ],
       });
     },
 
@@ -2049,7 +2058,7 @@ export function createTickets(
    */
   function joinEpicStep(
     { epic, child }: EpicChildInput,
-    move: boolean,
+    { move }: { move: boolean },
   ): { previous: number | null } | null {
     checkTicketWritable(db, child);
     const ticket = db
@@ -2095,7 +2104,9 @@ export function createTickets(
     { epic, child }: EpicChildInput,
     { move }: { move: boolean },
   ): Ticket {
-    const changed = db.transaction(() => joinEpicStep({ epic, child }, move));
+    const changed = db.transaction(() =>
+      joinEpicStep({ epic, child }, { move }),
+    );
     if (changed) {
       changes.publish({
         type: 'tickets',

@@ -443,6 +443,21 @@ describe('Moving several Tickets to an Epic', () => {
     expect(changes).toEqual([]);
   });
 
+  it('changes and announces nothing when every Ticket is in the Epic already', () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.moveTicketsToEpic({ epic: epic.number, children: [child.number] });
+
+    expect(changes).toEqual([]);
+  });
+
   it('refuses an empty or repeated list', () => {
     const { tickets, project, epic } = setUp();
     const ticket = tickets.createTicket({

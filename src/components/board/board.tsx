@@ -35,7 +35,6 @@ import {
 
 import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import {
-  attachTicketToEpic,
   moveTickets,
   moveTicketsToEpic,
   reorderTickets,
@@ -300,10 +299,11 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 type EpicJoin = { joining: Ticket[]; epicNumber: number };
 
 /** `epics` with `joining` taken out of their Epics and into Epic `epicNumber`. */
-const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) =>
-  epics.map((epic) => {
+const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) => {
+  const numbers = new Set(joining.map(({ number }) => number));
+  return epics.map((epic) => {
     const children = epic.children.filter(
-      (candidate) => !joining.some(({ number }) => number === candidate.number),
+      (candidate) => !numbers.has(candidate.number),
     );
     if (epic.number === epicNumber) {
       for (const child of joining) {
@@ -313,6 +313,7 @@ const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) =>
     }
     return { ...epic, children };
   });
+};
 
 /** Clicks inside these are not on empty Board space. */
 const notEmptySpaceSelector =
@@ -526,8 +527,8 @@ export const Board: FC<BoardProps> = ({
   };
 
   /**
-   * Attaches `moving` to Epic `epicNumber`, taking them out of their Epics;
-   * a selection saves as one change, all or nothing.
+   * Attaches `moving` to Epic `epicNumber`, taking them out of their Epics,
+   * as one change, all or nothing.
    */
   const joinEpic = (moving: Ticket[], epicNumber: number) => {
     const epic = shownEpics.find(({ number }) => number === epicNumber);
@@ -542,10 +543,10 @@ export const Board: FC<BoardProps> = ({
     startTransition(async () => {
       showChange({ numbers, epic: epicLinkOf(epic) });
       showEpicJoin({ joining, epicNumber });
-      const result =
-        moving.length === 1
-          ? await attachTicketToEpic({ epic: epicNumber, child: numbers[0] })
-          : await moveTicketsToEpic({ epic: epicNumber, children: numbers });
+      const result = await moveTicketsToEpic({
+        epic: epicNumber,
+        children: numbers,
+      });
       if (!result.ok) {
         setError(result.error);
       }
