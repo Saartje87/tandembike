@@ -607,6 +607,31 @@ Blocks has no component for this, so the app builds its own `InlineEdit`
 />
 ```
 
+**Textarea variant, with links at rest.** The description (and later each
+comment) edits in a `Textarea` with ✓ and ✗ below it, Enter for a new line
+and Cmd/Ctrl+Enter to save, which the app wires up itself in `onKeyDown`
+with `form.requestSubmit()`. At rest it shows rendered Markdown, which can
+hold links, so it cannot be a `<button>` (no interactive content inside, and
+a `button` role hides its children from assistive technology). The
+workaround is a plain `<div tabIndex={0}>` with the same `text` class whose
+click and Enter handlers skip events that start on an `<a>`, plus
+`biome-ignore` comments for `noStaticElementInteractions` and
+`noNoninteractiveTabindex`. React does not `autoFocus` a `div`, so focus goes
+back to it after an edit through a ref and an effect. An empty text shows a
+muted `Text color="text-600"` placeholder ("Add a description…") inside it.
+
+```tsx
+// Wanted:
+<InlineEdit
+  multiline
+  value={description}
+  label="Description"
+  renderValue={(text) => <Markdown>{text}</Markdown>}
+  placeholder="Add a description…"
+  onSave={async (text) => reasonIfRefused}
+/>
+```
+
 Escape inside it also has to be kept from a surrounding `Drawer`
 (proposal 17), and a click on ✓ or ✗, which unmounts the button, from its
 outside-click check (proposal 13).

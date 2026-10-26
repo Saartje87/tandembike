@@ -12,19 +12,16 @@ import {
   Label,
   Stack,
   Text,
-  Textarea,
 } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
 import {
   type FC,
   type ReactNode,
-  useEffect,
   useId,
   useOptimistic,
   useState,
   useTransition,
 } from 'react';
-import { useForm } from 'react-hook-form';
 
 import { projectPath } from '../../app/lib/paths';
 import {
@@ -64,7 +61,7 @@ import { StatusSelect } from '../status-select/status-select';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
-import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
+import { keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
 import { useIsShown } from './use-is-shown';
 
@@ -122,153 +119,35 @@ function fieldOf(edit: Edit): keyof Fields {
 
 type DescriptionFieldProps = {
   description: string;
-  onSave: SaveField;
+  onSave: (description: string) => Promise<string | undefined>;
   /** Whether the edit in progress has unsaved text, so the drawer can guard closing. */
   onUnsavedChange: (unsaved: boolean) => void;
 };
 
 /**
- * The description as Markdown with an Edit button that swaps in a textarea
- * with Save and Cancel. Cmd/Ctrl+Enter saves and Escape cancels. A refused
- * description opens the textarea again with the User's text.
+ * The description as Markdown that edits in place in a textarea, with a
+ * placeholder to add one when it is empty.
  */
 const DescriptionField: FC<DescriptionFieldProps> = ({
   description,
   onSave,
   onUnsavedChange,
-}) => {
-  const headingId = useId();
-  const errorId = useId();
-  const [editing, setEditing] = useState(false);
-  const [refocus, setRefocus] = useState(false);
-  // The form outlives the textarea, which closes on submit while the
-  // description saves. It has no pending state: the optimistic description
-  // shows instead.
-  const {
-    formState: { defaultValues, errors, isDirty },
-    handleSubmit,
-    register,
-    reset,
-    setError,
-    setValue,
-  } = useForm<{ description: string }>({
-    defaultValues: { description },
-    // A refused description keeps its reason until the edit ends.
-    reValidateMode: 'onSubmit',
-  });
-  const error = errors.description?.message;
-
-  // Dirty against the description the edit began with, so text typed back
-  // to it counts as unchanged.
-  const unsaved = editing && isDirty;
-  useEffect(() => onUnsavedChange(unsaved), [unsaved, onUnsavedChange]);
-
-  const end = () => {
-    setEditing(false);
-    setRefocus(true);
-  };
-  const save = handleSubmit(({ description: text }) => {
-    end();
-    // The description when the edit began, which may since have changed elsewhere.
-    const original = defaultValues?.description ?? description;
-    if (text === original) {
-      reset({ description });
-      return;
-    }
-    onSave({ description: text }, (reason) => {
-      reset({ description: original });
-      setValue('description', text, { shouldDirty: true });
-      setError('description', { type: 'server', message: reason });
-      setEditing(true);
-    });
-  });
-  const cancel = () => {
-    end();
-    reset({ description });
-  };
-
-  let body: ReactNode;
-  if (editing) {
-    body = (
-      <form
-        onSubmit={save}
-        onKeyDown={(event) => {
-          if (claimEscape(event)) {
-            cancel();
-          } else if (
-            event.key === 'Enter' &&
-            (event.metaKey || event.ctrlKey)
-          ) {
-            event.preventDefault();
-            event.currentTarget.requestSubmit();
-          }
-        }}
-      >
-        <Stack gap={2}>
-          <Textarea
-            {...register('description')}
-            rows={12}
-            autoFocus
-            aria-labelledby={headingId}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-          />
-          <Inline gap={2}>
-            <Button type="submit" size="small" onClick={keepDrawerOpen}>
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={(event) => {
-                keepDrawerOpen(event);
-                cancel();
-              }}
-            >
-              Cancel
-            </Button>
-          </Inline>
-        </Stack>
-      </form>
-    );
-  } else if (description === '') {
-    body = (
-      <Text tag="p" color="text-600">
-        No description
-      </Text>
-    );
-  } else {
-    body = <Markdown headingLevel={4}>{description}</Markdown>;
-  }
-
-  return (
-    <Stack gap={2}>
-      <Inline gap={2} alignY="center" justifyContent="space-between">
-        <Heading id={headingId} level={3} fontSize="medium">
-          Description
-        </Heading>
-        {!editing && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="small"
-            autoFocus={refocus}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              reset({ description });
-              setEditing(true);
-            }}
-          >
-            Edit description
-          </Button>
-        )}
-      </Inline>
-      {body}
-      <FieldError id={errorId} reason={error} />
-    </Stack>
-  );
-};
+}) => (
+  <Stack gap={2}>
+    <Heading level={3} fontSize="medium">
+      Description
+    </Heading>
+    <InlineEdit
+      value={description}
+      label="Description"
+      onSave={onSave}
+      multiline
+      renderValue={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
+      placeholder="Add a description…"
+      onDirtyChange={onUnsavedChange}
+    />
+  </Stack>
+);
 
 type DetailProps = {
   /** The detail's name, a `Label` for a control or plain text. */
@@ -365,6 +244,14 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     showEdit({ title });
     const result = await updateTicket({ number: ticket.number, title });
     return result.ok ? undefined : (result.fieldErrors?.title ?? result.error);
+  };
+
+  const saveDescription = async (description: string) => {
+    showEdit({ description });
+    const result = await updateTicket({ number: ticket.number, description });
+    return result.ok
+      ? undefined
+      : (result.fieldErrors?.description ?? result.error);
   };
 
   const saveStatus = (status: Fields['status']) => {
@@ -562,7 +449,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
           )}
           <DescriptionField
             description={fields.description}
-            onSave={save}
+            onSave={saveDescription}
             onUnsavedChange={setUnsavedDescription}
           />
           <AcceptanceCriteriaEditor

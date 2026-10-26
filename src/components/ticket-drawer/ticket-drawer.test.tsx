@@ -80,7 +80,9 @@ const titleButton = () => button('Fix the header');
 const titleInput = () => inDrawer().getByRole('textbox', { name: 'Title' });
 const descriptionInput = () =>
   inDrawer().getByRole('textbox', { name: 'Description' });
-const editDescription = () => userEvent.click(button('Edit description'));
+/** Opens the description by clicking its text, which starts with "It overlaps". */
+const editDescription = () =>
+  userEvent.click(inDrawer().getByText(/^It overlaps/));
 
 /**
  * An `updateTicket` result the test settles itself, to look at the drawer
@@ -507,10 +509,48 @@ describe('TicketDrawer', () => {
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
     });
 
-    it('says when there is no description', () => {
+    it('has no Edit button, and says how to add a missing description', async () => {
       renderDrawer({ ...ticket, description: '' });
 
-      expect(inDrawer().getByText('No description')).toBeInTheDocument();
+      expect(
+        inDrawer().queryByRole('button', { name: /edit/i }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(inDrawer().getByText('Add a description…'));
+
+      expect(descriptionInput()).toHaveValue('');
+    });
+
+    it('opens on Enter when the description has focus', async () => {
+      renderDrawer();
+
+      inDrawer()
+        .getByText(/^It overlaps/)
+        .closest<HTMLElement>('[tabindex="0"]')
+        ?.focus();
+      await userEvent.keyboard('{Enter}');
+
+      expect(descriptionInput()).toHaveValue('It overlaps the **logo**.');
+    });
+
+    it('follows a link in the description instead of opening it', async () => {
+      const onDocumentClick = vi.fn((event: MouseEvent) =>
+        event.preventDefault(),
+      );
+      document.addEventListener('click', onDocumentClick);
+      onTestFinished(() =>
+        document.removeEventListener('click', onDocumentClick),
+      );
+      renderDrawer({
+        ...ticket,
+        description: 'See [the docs](https://example.com/docs).',
+      });
+
+      await userEvent.click(inDrawer().getByRole('link', { name: 'the docs' }));
+
+      expect(onDocumentClick).toHaveBeenCalledOnce();
+      expect(
+        inDrawer().queryByRole('textbox', { name: 'Description' }),
+      ).not.toBeInTheDocument();
     });
 
     it('edits the description as plain Markdown and saves it on its own', async () => {
@@ -558,7 +598,9 @@ describe('TicketDrawer', () => {
       expect(keys).not.toHaveBeenCalled();
       expect(updateTicket).not.toHaveBeenCalled();
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
-      expect(button('Edit description')).toHaveFocus();
+      expect(document.activeElement).toHaveAccessibleDescription(
+        'Edit description',
+      );
       expect(router.replace).not.toHaveBeenCalled();
     });
 
@@ -661,8 +703,14 @@ describe('TicketDrawer', () => {
       await userEvent.clear(descriptionInput());
       await userEvent.type(descriptionInput(), 'Now *shorter*.');
       await userEvent.click(button('Save'));
-      rerender(
-        <TicketDrawer ticket={{ ...ticket, description: 'Now *shorter*.' }} />,
+      // Awaited: the save's transition may still be pending, and a render
+      // during it can suspend until it ends.
+      await act(async () =>
+        rerender(
+          <TicketDrawer
+            ticket={{ ...ticket, description: 'Now *shorter*.' }}
+          />,
+        ),
       );
 
       expect(inDrawer().getByText('shorter').tagName).toBe('EM');

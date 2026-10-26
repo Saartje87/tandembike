@@ -6,6 +6,8 @@ import {
   Inline,
   Label,
   Stack,
+  Text,
+  Textarea,
   TextInput,
   VisuallyHidden,
 } from '@blockle/blocks';
@@ -13,8 +15,10 @@ import {
   type FC,
   type FormEvent,
   type ReactNode,
+  useEffect,
   useId,
   useOptimistic,
+  useRef,
   useState,
   useTransition,
 } from 'react';
@@ -45,9 +49,31 @@ export type InlineEditProps = {
   renderText?: (text: ReactNode) => ReactNode;
   /** For the `<input>`, such as to match the wrapper's font. */
   inputClassName?: string;
+  /**
+   * Edits in a textarea with Save and Cancel below it, where Enter adds a
+   * line and Cmd/Ctrl+Enter saves.
+   */
+  multiline?: boolean;
+  /**
+   * Renders the text at rest, such as as Markdown. Links in it still work:
+   * a click or Enter on one follows it instead of opening the edit.
+   */
+  renderValue?: (value: string) => ReactNode;
+  /** Shown, muted, at rest when the text is empty, such as "Add a description…". */
+  placeholder?: string;
+  /**
+   * Called with whether an edit is open with text that differs from the
+   * text it began with, such as for a guard against closing with unsaved
+   * text.
+   */
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 const asIs = (text: ReactNode) => text;
+
+/** Whether `event` started on a link, which it should follow instead. */
+const onLink = (event: { target: EventTarget }) =>
+  event.target instanceof Element && event.target.closest('a') !== null;
 
 /**
  * Text that edits in place. At rest it is plain text with a hover tint and a
@@ -63,6 +89,10 @@ export const InlineEdit: FC<InlineEditProps> = ({
   readOnly = false,
   renderText = asIs,
   inputClassName,
+  multiline = false,
+  renderValue = asIs,
+  placeholder,
+  onDirtyChange,
 }) => {
   const inputId = useId();
   const errorId = useId();
@@ -70,22 +100,36 @@ export const InlineEdit: FC<InlineEditProps> = ({
   const [editing, setEditing] = useState(false);
   // Puts focus back on the text when the User ends an edit.
   const [refocus, setRefocus] = useState(false);
+  // The multiline text at rest, which is not a button, so React does not
+  // autofocus it.
+  const atRest = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!editing && refocus) {
+      atRest.current?.focus();
+    }
+  }, [editing, refocus]);
   const [shown, showSaved] = useOptimistic(value);
   const [, startSave] = useTransition();
   // The form outlives the input, which closes on submit while the text
   // saves. It has no pending state: the optimistic text shows instead.
   const {
-    formState: { errors },
+    formState: { defaultValues, errors, isDirty },
     handleSubmit,
     register,
     reset,
     setError,
+    setValue,
   } = useForm<{ text: string }>({
     defaultValues: { text: value },
     // A refused text keeps its reason until the edit ends.
     reValidateMode: 'onSubmit',
   });
   const error = errors.text?.message;
+
+  // Dirty against the text the edit began with, so text typed back to it
+  // counts as unchanged.
+  const dirty = editing && isDirty;
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
 
   const open = () => {
     reset({ text: value });
@@ -103,7 +147,9 @@ export const InlineEdit: FC<InlineEditProps> = ({
     event?.preventDefault();
     close();
     void handleSubmit(({ text }) => {
-      if (text === value) {
+      // The text when the edit began, which may since have changed elsewhere.
+      const original = defaultValues?.text ?? value;
+      if (text === original) {
         reset({ text: value });
         return;
       }
@@ -111,7 +157,9 @@ export const InlineEdit: FC<InlineEditProps> = ({
         showSaved(text);
         const reason = await onSave(text);
         if (reason !== undefined) {
-          reset({ text });
+          // Still dirty against the original, for the unsaved-text guard.
+          reset({ text: original });
+          setValue('text', text, { shouldDirty: true });
           setError('text', { type: 'server', message: reason });
           setEditing(true);
         }
@@ -121,6 +169,52 @@ export const InlineEdit: FC<InlineEditProps> = ({
 
   if (readOnly) {
     return renderText(shown);
+  }
+
+  const content =
+    shown === '' && placeholder !== undefined ? (
+      <Text color="text-600">{placeholder}</Text>
+    ) : (
+      renderValue(shown)
+    );
+  const hint = (
+    <VisuallyHidden id={hintId}>
+      Edit {label.charAt(0).toLowerCase() + label.slice(1)}
+    </VisuallyHidden>
+  );
+
+  if (!editing && multiline) {
+    // Not a <button>: the text may hold links, which a button cannot.
+    return (
+      <>
+        {renderText(
+          // biome-ignore lint/a11y/noStaticElementInteractions: a button role would hide the links inside from assistive technology.
+          <div
+            ref={atRest}
+            className={styles.text}
+            // biome-ignore lint/a11y/noNoninteractiveTabindex: opens on Enter, like the single-line button.
+            tabIndex={0}
+            aria-describedby={hintId}
+            onClick={(event) => {
+              if (onLink(event)) {
+                return;
+              }
+              keepDrawerOpen(event);
+              open();
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !onLink(event)) {
+                event.preventDefault();
+                open();
+              }
+            }}
+          >
+            {content}
+          </div>,
+        )}
+        {hint}
+      </>
+    );
   }
 
   if (!editing) {
@@ -138,13 +232,81 @@ export const InlineEdit: FC<InlineEditProps> = ({
               open();
             }}
           >
-            {shown}
+            {content}
           </button>,
         )}
-        <VisuallyHidden id={hintId}>
-          Edit {label.charAt(0).toLowerCase() + label.slice(1)}
-        </VisuallyHidden>
+        {hint}
       </>
+    );
+  }
+
+  const saveButton = (
+    <Button
+      type="submit"
+      variant="ghost"
+      size="small"
+      aria-label="Save"
+      onClick={keepDrawerOpen}
+    >
+      <Icon name="check" size="small" />
+    </Button>
+  );
+  const cancelButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="small"
+      aria-label="Cancel"
+      onClick={(event) => {
+        keepDrawerOpen(event);
+        cancel();
+      }}
+    >
+      <Icon name="x-mark" size="small" />
+    </Button>
+  );
+  const fieldLabel = (
+    <Label htmlFor={inputId}>
+      <VisuallyHidden>{label}</VisuallyHidden>
+    </Label>
+  );
+  const fieldProps = {
+    ...register('text'),
+    id: inputId,
+    autoFocus: true,
+    'aria-invalid': error ? true : undefined,
+    'aria-describedby': error ? errorId : undefined,
+  };
+
+  if (multiline) {
+    return (
+      <form onSubmit={submit}>
+        <Stack gap={1}>
+          <Box>
+            {fieldLabel}
+            <Textarea
+              {...fieldProps}
+              rows={12}
+              onKeyDown={(event) => {
+                if (claimEscape(event)) {
+                  cancel();
+                } else if (
+                  event.key === 'Enter' &&
+                  (event.metaKey || event.ctrlKey)
+                ) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+            />
+          </Box>
+          <FieldError id={errorId} reason={error} />
+          <Inline gap={1}>
+            {saveButton}
+            {cancelButton}
+          </Inline>
+        </Stack>
+      </form>
     );
   }
 
@@ -153,12 +315,9 @@ export const InlineEdit: FC<InlineEditProps> = ({
       <Stack gap={1}>
         <Inline gap={1} alignY="center" flexWrap="nowrap">
           <Box flex={1}>
-            <Label htmlFor={inputId}>
-              <VisuallyHidden>{label}</VisuallyHidden>
-            </Label>
+            {fieldLabel}
             <TextInput
-              {...register('text')}
-              id={inputId}
+              {...fieldProps}
               onKeyDown={(event) => {
                 if (claimEscape(event)) {
                   cancel();
@@ -166,32 +325,10 @@ export const InlineEdit: FC<InlineEditProps> = ({
               }}
               inputClassName={inputClassName}
               autoComplete="off"
-              autoFocus
-              aria-invalid={error ? true : undefined}
-              aria-describedby={error ? errorId : undefined}
             />
           </Box>
-          <Button
-            type="submit"
-            variant="ghost"
-            size="small"
-            aria-label="Save"
-            onClick={keepDrawerOpen}
-          >
-            <Icon name="check" size="small" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="small"
-            aria-label="Cancel"
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              cancel();
-            }}
-          >
-            <Icon name="x-mark" size="small" />
-          </Button>
+          {saveButton}
+          {cancelButton}
         </Inline>
         <FieldError id={errorId} reason={error} />
       </Stack>
