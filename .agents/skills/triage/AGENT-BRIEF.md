@@ -32,6 +32,8 @@ The agent needs to know when it's done. Every agent brief must have concrete, te
 - **Good:** "Running `gh issue list --label needs-triage` returns issues that have been through initial classification"
 - **Bad:** "Triage should work correctly"
 
+In this repo, store the criteria in the Ticket's acceptance criteria field (`update_ticket` with `acceptanceCriteria`), never as a checklist in the brief: agents check them off there with `set_acceptance_criteria_checked`. The brief points to the field. The examples below show criteria inline only to illustrate what good ones look like.
+
 ### Explicit scope boundaries
 
 State what is out of scope. This prevents the agent from gold-plating or making assumptions about adjacent features.
@@ -57,10 +59,7 @@ Be specific about edge cases and error conditions.
 - `functionName()` return type: what it currently returns vs what it should return
 - Config shape: any new configuration options needed
 
-**Acceptance criteria:**
-- [ ] Specific, testable criterion 1
-- [ ] Specific, testable criterion 2
-- [ ] Specific, testable criterion 3
+**Acceptance criteria:** in the Ticket's acceptance criteria field.
 
 **Out of scope:**
 - Thing that should NOT be changed or addressed in this issue
