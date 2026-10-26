@@ -5,7 +5,10 @@ import { referenceTemplates } from '../db/schema';
 import { checkProjectWritable } from './archived-projects';
 import type { ChangeChannel } from './changes';
 import { NotFoundError } from './errors';
-import { httpUrl } from './external-reference-display';
+import {
+  httpUrl,
+  type ReferenceTemplateLink,
+} from './external-reference-display';
 import {
   maxExternalReferenceKeyLength,
   maxExternalReferenceUrlLength,
@@ -25,7 +28,8 @@ export type ReferenceTemplate = {
   url: string;
 };
 
-export type ReferenceTemplateInput = { prefix: string; url: string };
+/** A Reference template's prefix and URL, as the User types them. */
+export type ReferenceTemplateInput = ReferenceTemplateLink;
 
 const templateColumns = {
   id: referenceTemplates.id,
@@ -64,19 +68,16 @@ function checkUrl(url: string): string | undefined {
 }
 
 /**
- * `input` trimmed, or a `ValidationError` naming each field that breaks a
- * rule. The prefix must be free in Project `projectId`, apart from template
- * `exceptId`, the one being edited.
+ * Whether Project `projectId` has a Reference template for `prefix` other
+ * than template `exceptId`, the one being edited.
  */
-function checkedTemplate(
+function prefixTaken(
   db: DatabaseConnection,
   projectId: number,
-  input: ReferenceTemplateInput,
+  prefix: string,
   exceptId?: number,
-): ReferenceTemplateInput {
-  const prefix = String(input.prefix ?? '').trim();
-  const url = String(input.url ?? '').trim();
-  const taken =
+): boolean {
+  return (
     db
       .select({ id: referenceTemplates.id })
       .from(referenceTemplates)
@@ -89,11 +90,27 @@ function checkedTemplate(
             : ne(referenceTemplates.id, exceptId),
         ),
       )
-      .get() !== undefined;
+      .get() !== undefined
+  );
+}
+
+/**
+ * `input` trimmed, or a `ValidationError` naming each field that breaks a
+ * rule. The prefix must be free in Project `projectId`, apart from template
+ * `exceptId`, the one being edited.
+ */
+function checkedTemplate(
+  db: DatabaseConnection,
+  projectId: number,
+  input: ReferenceTemplateInput,
+  exceptId?: number,
+): ReferenceTemplateInput {
+  const prefix = input.prefix.trim();
+  const url = input.url.trim();
   throwFieldErrors({
     prefix:
       checkPrefix(prefix) ??
-      (taken
+      (prefixTaken(db, projectId, prefix, exceptId)
         ? `This Project already has a Reference template for ${prefix}. Edit that one instead.`
         : undefined),
     url: checkUrl(url),

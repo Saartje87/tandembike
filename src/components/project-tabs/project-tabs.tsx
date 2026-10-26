@@ -125,8 +125,8 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 
 /**
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
- * one, the History of archived ones and its Settings, with a New Cycle button that adds
- * one.
+ * one, the History of archived ones and its Settings, with a New Cycle
+ * button that adds one.
  */
 export const ProjectTabs: FC<ProjectTabsProps> = ({
   projectId,

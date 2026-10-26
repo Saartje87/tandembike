@@ -5,7 +5,11 @@ export const list = style({
   listStyle: 'none',
 });
 
-/** A prefix is short, such as `#` or `ABC-`. */
+/**
+ * A prefix is short, such as `#` or `ABC-`. The `inlineSize` atoms take only
+ * `auto`, `full` and `fit-content`, and there are no size tokens, so the
+ * field widths are set here.
+ */
 export const prefixField = style({
   inlineSize: '8rem',
 });

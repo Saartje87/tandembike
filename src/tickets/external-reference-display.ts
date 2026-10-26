@@ -1,5 +1,3 @@
-import type { ReferenceTemplate } from './reference-templates';
-
 /** A scheme, such as `https:` or `javascript:`, at the start of a value. */
 const schemePattern = /^[a-z][a-z\d+.-]*:/i;
 
@@ -24,7 +22,7 @@ export type ExternalReferenceDisplay = { text: string; href?: string };
 const githubIssuePath = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/|$)/;
 
 /** The prefix and URL of a Reference template, enough to link a key. */
-export type ReferenceTemplateLink = Pick<ReferenceTemplate, 'prefix' | 'url'>;
+export type ReferenceTemplateLink = { prefix: string; url: string };
 
 /**
  * Key `reference` linked by the first of `templates` whose prefix it starts
