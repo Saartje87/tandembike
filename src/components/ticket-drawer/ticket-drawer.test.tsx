@@ -361,18 +361,37 @@ describe('TicketDrawer', () => {
       expect(titleInput()).toHaveValue('Fix the header');
     });
 
-    it('saves when the input loses focus', async () => {
-      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 1 });
+    it('does not save when the input loses focus', async () => {
       renderDrawer();
 
       await userEvent.click(titleButton());
       await userEvent.type(titleInput(), '!');
       await userEvent.tab();
 
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(titleInput()).toHaveValue('Fix the header!');
+    });
+
+    it('saves with Save, and cancels with Cancel without closing the drawer', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '!');
+      await userEvent.click(button('Cancel'));
+      expect(titleButton()).toHaveFocus();
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '?');
+      await userEvent.click(button('Save'));
+
       expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
         number: 4,
-        title: 'Fix the header!',
+        title: 'Fix the header?',
       });
+      expect(
+        screen.getByRole('dialog', { name: 'Fix the header?' }),
+      ).toBeInTheDocument();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('saves nothing when the title is unchanged', async () => {

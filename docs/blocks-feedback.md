@@ -562,7 +562,7 @@ for its Delete confirmation (#60): `requestClose` returns early while
 **Question.** Should overlays listen for Escape on themselves, pass a reason
 to `onRequestClose`, and should `Drawer` join `Dialog`'s nesting context?
 
-## 18. No unstyled button for click-to-edit text
+## 18. No unstyled button or inline-edit component for click-to-edit text
 
 **Problem.** The drawer's title is a heading that turns into an input when
 clicked or on Enter. That needs a real `<button>` inside the `<h2>` that looks
@@ -582,10 +582,34 @@ height from the theme, so the title would not look like a heading.
 **Expected.** A `variant="plain"` (or `unstyled`) `Button` that inherits font
 and colour, and keeps only the theme's focus ring and a subtle hover.
 
-**Workaround.** A plain `<button>` with `titleButton` in
-`ticket-drawer.css.ts` (resets font, border and background, adds the hover
-background and `vars.focus.boxShadow`). The edit input matches the heading
-through `TextInput`'s `inputClassName` and `titleInput`.
+**Workaround.** A plain `<button>` with the `text` class in
+`src/components/inline-edit/inline-edit.css.ts` (resets font, border and
+background, adds the hover background and `vars.focus.boxShadow`). The
+drawer's title input matches the heading through `TextInput`'s
+`inputClassName` and `titleInput` in `ticket-drawer.css.ts`.
+
+**No inline-edit component.** Every editable text in the app (Ticket title,
+description, criterion, Project name, Cycle title, comment) edits the same
+way: plain text at rest that opens on a click or Enter, an input with icon
+buttons ✓ (Save) and ✗ (Cancel), Enter to save, Escape to cancel, no save on
+blur, and a refused save that reopens with the User's text and the reason.
+Blocks has no component for this, so the app builds its own `InlineEdit`
+(`src/components/inline-edit/inline-edit.tsx`) from a plain `<button>`,
+`TextInput`, two ghost icon `Button`s and `react-hook-form`.
+
+```tsx
+// Wanted:
+<InlineEdit
+  value={title}
+  label="Title"
+  onSave={async (text) => reasonIfRefused}
+  renderText={(text) => <Heading level={2}>{text}</Heading>}
+/>
+```
+
+Escape inside it also has to be kept from a surrounding `Drawer`
+(proposal 17), and a click on ✓ or ✗, which unmounts the button, from its
+outside-click check (proposal 13).
 
 **Second case.** Each acceptance criterion's text opens its edit field on a
 click, so it is a button that has to read as body text and wrap across lines.
@@ -612,7 +636,8 @@ helper, so a criterion's text and its checkbox show different rings side by
 side.
 
 **Question.** Is a plain button variant in scope, or should inline editing
-be its own component (an `InlineEdit` or `EditableText`)? And which focus
+be its own component (an `InlineEdit` or `EditableText`, single-line and
+textarea)? And which focus
 ring should custom controls use: `vars.focus.boxShadow`, or a token for the
 outline the theme's components draw?
 
