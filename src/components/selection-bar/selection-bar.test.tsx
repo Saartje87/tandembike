@@ -28,4 +28,15 @@ describe('SelectionBar', () => {
 
     expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
   });
+
+  it('shows the notice it is given outside the toolbar', () => {
+    renderWithTheme(
+      <SelectionBar count={1} onClear={vi.fn()} notice={<p>Not planned</p>} />,
+    );
+
+    expect(screen.getByText('Not planned')).toBeInTheDocument();
+    expect(
+      screen.getByRole('toolbar', { name: 'Selection' }),
+    ).not.toHaveTextContent('Not planned');
+  });
 });
