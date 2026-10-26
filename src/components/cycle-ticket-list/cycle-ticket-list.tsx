@@ -45,7 +45,7 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
           <li key={ticket.number}>
             <Inline gap={2} alignY="center">
               <Text color="text-600" fontSize="small">
-                #{ticket.number}
+                T{ticket.number}
               </Text>
               <Text wordBreak="break-word">
                 <AppLink

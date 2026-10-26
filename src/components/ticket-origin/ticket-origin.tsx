@@ -112,7 +112,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
               })}
               id={inputId}
               inputMode="numeric"
-              placeholder="#42"
+              placeholder="T42"
               autoComplete="off"
               autoFocus
               disabled={isSubmitting}
@@ -153,7 +153,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
         {origin ? (
           <>
             <AppLink href={ticketByNumberPath(origin.number)}>
-              #{origin.number} {origin.title}
+              T{origin.number} {origin.title}
             </AppLink>
             <Text fontSize="xsmall" color="text-600">
               {origin.status}

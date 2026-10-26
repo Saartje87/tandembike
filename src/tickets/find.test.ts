@@ -248,7 +248,7 @@ describe('Finding Tickets', () => {
     [
       'a cursor that is no Ticket',
       { cursor: 9 },
-      { cursor: 'There is no Ticket #9 to continue after.' },
+      { cursor: 'There is no Ticket T9 to continue after.' },
     ],
     [
       'a blank query',
@@ -260,7 +260,7 @@ describe('Finding Tickets', () => {
       { limit: 0, cursor: 9 },
       {
         limit: 'Choose a limit from 1 to 200.',
-        cursor: 'There is no Ticket #9 to continue after.',
+        cursor: 'There is no Ticket T9 to continue after.',
       },
     ],
   ])('refuses %s', (_case, input, fieldErrors) => {

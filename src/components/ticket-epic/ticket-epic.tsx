@@ -69,7 +69,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
       {epic ? (
         <Inline gap={2} alignY="center" flexWrap="wrap">
           <AppLink href={ticketByNumberPath(epic.number)}>
-            #{epic.number} {epic.title}
+            T{epic.number} {epic.title}
           </AppLink>
           <Button
             type="button"
@@ -105,7 +105,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
             <option value="">{pickerName}…</option>
             {choices.map((choice) => (
               <option key={choice.number} value={choice.number}>
-                #{choice.number} {choice.title}
+                T{choice.number} {choice.title}
               </option>
             ))}
           </Select>

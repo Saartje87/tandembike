@@ -66,11 +66,11 @@ describe('BlockerEditor', () => {
     );
 
     expect(shown('Blocked by')).toEqual([
-      '#3 Design the header',
-      '#5 Build the API',
+      'T3 Design the header',
+      'T5 Build the API',
     ]);
     expect(
-      screen.getByRole('link', { name: '#3 Design the header' }),
+      screen.getByRole('link', { name: 'T3 Design the header' }),
     ).toHaveAttribute('href', '/ticket/3');
     const items = within(
       screen.getByRole('list', { name: 'Blocked by' }),
@@ -117,14 +117,14 @@ describe('BlockerEditor', () => {
       );
 
       await userEvent.click(
-        screen.getByRole('button', { name: 'Remove Blocker #5' }),
+        screen.getByRole('button', { name: 'Remove Blocker T5' }),
       );
 
       expect(screen.getByText('Ready to start')).toBeInTheDocument();
       expect(screen.queryByText('Blocked')).not.toBeInTheDocument();
 
       await userEvent.click(
-        screen.getByRole('button', { name: 'Remove Blocker #3' }),
+        screen.getByRole('button', { name: 'Remove Blocker T3' }),
       );
 
       expect(screen.queryByText(/^(Blocked|Ready to start)$/)).toBeNull();
@@ -157,7 +157,7 @@ describe('BlockerEditor', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add blocker' }));
     expect(numberInput()).toHaveFocus();
-    await userEvent.type(numberInput(), ' #12 {Enter}');
+    await userEvent.type(numberInput(), ' T12 {Enter}');
 
     expect(addTicketBlocker).toHaveBeenCalledExactlyOnceWith({
       blocker: 12,
@@ -178,7 +178,7 @@ describe('BlockerEditor', () => {
       <BlockerEditor ticketNumber={4} direction="blocks" related={[api]} />,
     );
 
-    expect(shown('Blocks')).toEqual(['#5 Build the API']);
+    expect(shown('Blocks')).toEqual(['T5 Build the API']);
     await userEvent.click(
       screen.getByRole('button', { name: 'Add blocked Ticket' }),
     );
@@ -205,16 +205,16 @@ describe('BlockerEditor', () => {
 
     expect(addTicketBlocker).not.toHaveBeenCalled();
     expect(numberInput()).toHaveAccessibleDescription(
-      'Enter a Ticket number, like 42.',
+      'Enter a Ticket number, like T42.',
     );
   });
 
   it("shows the module's reason under the field when a Blocker is refused", async () => {
     vi.mocked(addTicketBlocker).mockResolvedValue({
       ok: false,
-      error: '#4 cannot block #3, because #3 already blocks #4: #3 → #4.',
+      error: 'T4 cannot block T3, because T3 already blocks T4: T3 → T4.',
       fieldErrors: {
-        blocker: '#4 cannot block #3, because #3 already blocks #4: #3 → #4.',
+        blocker: 'T4 cannot block T3, because T3 already blocks T4: T3 → T4.',
       },
     });
     renderWithTheme(
@@ -231,14 +231,14 @@ describe('BlockerEditor', () => {
 
     expect(input).toHaveValue('3');
     expect(input).toHaveAccessibleDescription(
-      '#4 cannot block #3, because #3 already blocks #4: #3 → #4.',
+      'T4 cannot block T3, because T3 already blocks T4: T3 → T4.',
     );
   });
 
   it('shows a missing Ticket as an error', async () => {
     vi.mocked(addTicketBlocker).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #42.',
+      error: 'There is no Ticket T42.',
     });
     renderWithTheme(
       <BlockerEditor ticketNumber={4} direction="blockedBy" related={[]} />,
@@ -248,7 +248,7 @@ describe('BlockerEditor', () => {
     await userEvent.type(numberInput(), '42{Enter}');
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'There is no Ticket #42.',
+      'There is no Ticket T42.',
     );
   });
 
@@ -278,25 +278,25 @@ describe('BlockerEditor', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Remove Blocker #3' }),
+      screen.getByRole('button', { name: 'Remove Blocker T3' }),
     );
 
     expect(removeTicketBlocker).toHaveBeenCalledExactlyOnceWith({
       blocker: 3,
       blocked: 4,
     });
-    expect(shown('Blocked by')).toEqual(['#5 Build the API']);
+    expect(shown('Blocked by')).toEqual(['T5 Build the API']);
 
     await act(async () =>
-      removed.resolve({ ok: false, error: 'There is no Ticket #4.' }),
+      removed.resolve({ ok: false, error: 'There is no Ticket T4.' }),
     );
 
     expect(shown('Blocked by')).toEqual([
-      '#3 Design the header',
-      '#5 Build the API',
+      'T3 Design the header',
+      'T5 Build the API',
     ]);
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
   });
 
@@ -307,7 +307,7 @@ describe('BlockerEditor', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'Stop blocking #5' }),
+      screen.getByRole('button', { name: 'Stop blocking T5' }),
     );
 
     expect(removeTicketBlocker).toHaveBeenCalledExactlyOnceWith({

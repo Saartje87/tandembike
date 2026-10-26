@@ -21,9 +21,9 @@ type ChildCandidate = {
   epicNumber?: number | null;
 };
 
-/** `#42`, or `This Ticket` for one not created yet. */
+/** `T42`, or `This Ticket` for one not created yet. */
 function nameOf(number: number | undefined) {
-  return number === undefined ? 'This Ticket' : `Ticket #${number}`;
+  return number === undefined ? 'This Ticket' : `Ticket T${number}`;
 }
 
 /**
@@ -46,31 +46,31 @@ export function checkEpicChild(
     .where(eq(tickets.number, epicNumber))
     .get();
   if (!epic) {
-    throw new NotFoundError(`There is no Ticket #${epicNumber}.`);
+    throw new NotFoundError(`There is no Ticket T${epicNumber}.`);
   }
   if (epic.type !== 'Epic') {
     throw new NotAllowedError(
-      `Ticket #${epicNumber} is not an Epic. Only an Epic can have child Tickets.`,
+      `Ticket T${epicNumber} is not an Epic. Only an Epic can have child Tickets.`,
     );
   }
   if (child.type === 'Epic') {
     throw new NotAllowedError(
-      `${child.number === undefined ? 'An Epic' : `Ticket #${child.number} is an Epic, and an Epic`} cannot be a child of another Epic.`,
+      `${child.number === undefined ? 'An Epic' : `Ticket T${child.number} is an Epic, and an Epic`} cannot be a child of another Epic.`,
     );
   }
   if (child.epicNumber != null && child.epicNumber !== epicNumber) {
     throw new NotAllowedError(
-      `${nameOf(child.number)} is already in Epic #${child.epicNumber}. Detach it from that Epic first.`,
+      `${nameOf(child.number)} is already in Epic T${child.epicNumber}. Detach it from that Epic first.`,
     );
   }
   if (epic.projectId !== child.projectId) {
     throw new NotAllowedError(
-      `Epic #${epicNumber} is in another Project. An Epic holds only its own Project's Tickets.`,
+      `Epic T${epicNumber} is in another Project. An Epic holds only its own Project's Tickets.`,
     );
   }
   if (epic.archived) {
     throw new NotAllowedError(
-      `Epic #${epicNumber} is archived. Restore it before adding Tickets to it.`,
+      `Epic T${epicNumber} is archived. Restore it before adding Tickets to it.`,
     );
   }
 }
@@ -86,7 +86,7 @@ export function checkUngrouped(
 ) {
   if (ticket.epicNumber !== null) {
     throw new NotAllowedError(
-      `Ticket #${ticket.number} is in Epic #${ticket.epicNumber}. Detach it from its Epic before moving it to another Project.`,
+      `Ticket T${ticket.number} is in Epic T${ticket.epicNumber}. Detach it from its Epic before moving it to another Project.`,
     );
   }
   const child = db
@@ -96,14 +96,14 @@ export function checkUngrouped(
     .get();
   if (child) {
     throw new NotAllowedError(
-      `Epic #${ticket.number} has child Tickets. Detach them before moving it to another Project.`,
+      `Epic T${ticket.number} has child Tickets. Detach them before moving it to another Project.`,
     );
   }
 }
 
 /** Why Epic `number`'s Status cannot be set by hand. */
 export function epicStatusRule(number: number) {
-  return `Ticket #${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`;
+  return `Ticket T${number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`;
 }
 
 /**
@@ -192,7 +192,7 @@ export function checkNotEpicAndChild(
     .get();
   if (child) {
     throw new ValidationError({
-      blocker: `#${child.number} is a child of Epic #${child.epicNumber}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
+      blocker: `T${child.number} is a child of Epic T${child.epicNumber}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
     });
   }
 }
@@ -226,7 +226,7 @@ export function checkNoBlockerBetween(
     .get();
   if (blocker) {
     throw new NotAllowedError(
-      `#${blocker.blocker} blocks #${blocker.blocked}. An Epic and its own children cannot block each other; remove that Blocker first.`,
+      `T${blocker.blocker} blocks T${blocker.blocked}. An Epic and its own children cannot block each other; remove that Blocker first.`,
     );
   }
 }
@@ -241,7 +241,7 @@ export function checkChildrenArchived(db: DatabaseConnection, number: number) {
     .all();
   if (unarchived.length > 0) {
     throw new NotAllowedError(
-      `Epic #${number} has child Tickets that are not archived: ${unarchived.map((child) => `#${child.number}`).join(', ')}. Archive or detach them first.`,
+      `Epic T${number} has child Tickets that are not archived: ${unarchived.map((child) => `T${child.number}`).join(', ')}. Archive or detach them first.`,
     );
   }
 }
@@ -284,7 +284,7 @@ export function checkEpicClaimable(
   }
   if (ticket.type === 'Epic' && ticket.status === 'Done') {
     throw new NotAllowedError(
-      `Epic #${number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
+      `Epic T${number} is Done: all its child Tickets are Done, so there is nothing left to claim.`,
     );
   }
   if (ticket.epicNumber !== null) {
@@ -298,7 +298,7 @@ export function checkEpicClaimable(
       .get();
     if (epic?.claimAgentRunId != null && epic.claimAgentRunId !== agentRunId) {
       throw new NotAllowedError(
-        `Ticket #${number} is in Epic #${ticket.epicNumber}, which is claimed by ${claimOwner(epic.claimAgentRunId, epic.claimAgentName)}. Claiming an Epic covers its children.`,
+        `Ticket T${number} is in Epic T${ticket.epicNumber}, which is claimed by ${claimOwner(epic.claimAgentRunId, epic.claimAgentName)}. Claiming an Epic covers its children.`,
       );
     }
   }
@@ -321,7 +321,7 @@ export function checkEpicClaimable(
       .get();
     if (child) {
       throw new NotAllowedError(
-        `Epic #${number} has child Ticket #${child.number} claimed by ${claimOwner(child.claimAgentRunId, child.claimAgentName)}. Claiming an Epic covers its children, so that claim must be released first.`,
+        `Epic T${number} has child Ticket T${child.number} claimed by ${claimOwner(child.claimAgentRunId, child.claimAgentName)}. Claiming an Epic covers its children, so that claim must be released first.`,
       );
     }
   }
@@ -340,7 +340,7 @@ export function checkEpicNotArchived(db: DatabaseConnection, number: number) {
     .get();
   if (epic) {
     throw new NotAllowedError(
-      `Ticket #${number} is in Epic #${epic.number}, which is archived. Restore the Epic first.`,
+      `Ticket T${number} is in Epic T${epic.number}, which is archived. Restore the Epic first.`,
     );
   }
 }

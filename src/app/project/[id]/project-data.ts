@@ -35,7 +35,7 @@ function orNotFound<T>(run: () => T): T {
 }
 
 /**
- * The browser tab's title for a Board: `#12 Fix the header` while `?ticket=`
+ * The browser tab's title for a Board: `T12 Fix the header` while `?ticket=`
  * opens one of Project `projectId`'s Tickets, else `boardTitle`.
  */
 export async function boardPageTitle(
@@ -46,7 +46,7 @@ export async function boardPageTitle(
   const number = openTicketNumber((await searchParams).ticket);
   const ticket =
     number === undefined ? null : findBoardTicket(projectId, number);
-  return ticket ? `#${ticket.number} ${ticket.title}` : boardTitle;
+  return ticket ? `T${ticket.number} ${ticket.title}` : boardTitle;
 }
 
 /**

@@ -11,7 +11,7 @@ const stubClipboard = (clipboard: Partial<Clipboard> | undefined) =>
   });
 
 const copyButton = () =>
-  screen.getByRole('button', { name: 'Copy Ticket number #42' });
+  screen.getByRole('button', { name: 'Copy Ticket number T42' });
 
 /** Clicks the button and lets the clipboard write settle. */
 const copy = async () => {
@@ -25,16 +25,16 @@ describe('CopyTicketNumber', () => {
     vi.useRealTimers();
   });
 
-  it('copies the number as #42', async () => {
+  it('copies the number as T42', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     stubClipboard({ writeText });
     renderWithTheme(<CopyTicketNumber number={42} />);
 
-    expect(copyButton()).toHaveTextContent('#42');
+    expect(copyButton()).toHaveTextContent('T42');
 
     await copy();
 
-    expect(writeText).toHaveBeenCalledWith('#42');
+    expect(writeText).toHaveBeenCalledWith('T42');
   });
 
   // The drawer closes on a document click whose target has left the dialog,
@@ -64,8 +64,8 @@ describe('CopyTicketNumber', () => {
     await copy();
 
     expect(copyButton()).toHaveTextContent('Copied');
-    expect(copyButton()).not.toHaveTextContent('#42');
-    expect(screen.getByRole('status')).toHaveTextContent('Copied #42');
+    expect(copyButton()).not.toHaveTextContent('T42');
+    expect(screen.getByRole('status')).toHaveTextContent('Copied T42');
 
     act(() => vi.advanceTimersByTime(1999));
 
@@ -73,7 +73,7 @@ describe('CopyTicketNumber', () => {
 
     act(() => vi.advanceTimersByTime(1));
 
-    expect(copyButton()).toHaveTextContent('#42');
+    expect(copyButton()).toHaveTextContent('T42');
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
@@ -89,9 +89,9 @@ describe('CopyTicketNumber', () => {
       await copy();
 
       expect(copyButton()).toHaveTextContent("Couldn't copy");
-      const number = screen.getByText('#42');
+      const number = screen.getByText('T42');
       expect(copyButton()).not.toContainElement(number);
-      expect(screen.getByRole('status')).toHaveTextContent("Couldn't copy #42");
+      expect(screen.getByRole('status')).toHaveTextContent("Couldn't copy T42");
     },
   );
 });

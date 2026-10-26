@@ -815,7 +815,7 @@ function givenIds(criteria: readonly { id?: number }[]): number[] {
 
 /** Why Ticket `number` has no acceptance criterion `id`. */
 function noSuchCriterion(number: number, id: number | undefined) {
-  return `Ticket #${number} has no acceptance criterion ${id}.`;
+  return `Ticket T${number} has no acceptance criterion ${id}.`;
 }
 
 /** Why the ids in a list of criteria break the rules, if they do. */
@@ -1070,7 +1070,7 @@ export function createTickets(
             : undefined,
         cursor:
           input.cursor !== undefined && !cursor
-            ? `There is no Ticket #${input.cursor} to continue after.`
+            ? `There is no Ticket T${input.cursor} to continue after.`
             : undefined,
       });
       const matching = and(
@@ -1164,7 +1164,7 @@ export function createTickets(
           .where(eq(tickets.number, number))
           .get();
         if (!existing) {
-          throw new NotFoundError(`There is no Ticket #${number}.`);
+          throw new NotFoundError(`There is no Ticket T${number}.`);
         }
         if (existing.claimAgentRunId === agentRunId) {
           return false;
@@ -1175,7 +1175,7 @@ export function createTickets(
           existing.claimAgentName,
         );
         throw new NotAllowedError(
-          `Ticket #${number} is already claimed by ${owner}.`,
+          `Ticket T${number} is already claimed by ${owner}.`,
         );
       });
 
@@ -1221,7 +1221,7 @@ export function createTickets(
           .where(eq(tickets.number, number))
           .get();
         if (!existing) {
-          throw new NotFoundError(`There is no Ticket #${number}.`);
+          throw new NotFoundError(`There is no Ticket T${number}.`);
         }
         if (existing.claimAgentRunId === null) {
           return false;
@@ -1232,7 +1232,7 @@ export function createTickets(
           existing.claimAgentName,
         );
         throw new NotAllowedError(
-          `Ticket #${number} is claimed by ${owner}; only that Agent run can release it.`,
+          `Ticket T${number} is claimed by ${owner}; only that Agent run can release it.`,
         );
       });
 
@@ -1550,7 +1550,7 @@ export function createTickets(
         const cycle = blockingPath(db, blocked, blocker);
         throwFieldErrors({
           blocker: cycle
-            ? `#${blocker} cannot block #${blocked}, because #${blocked} already blocks #${blocker}: ${cycle.map((number) => `#${number}`).join(' → ')}.`
+            ? `T${blocker} cannot block T${blocked}, because T${blocked} already blocks T${blocker}: ${cycle.map((number) => `T${number}`).join(' → ')}.`
             : undefined,
         });
         touchTicket(db, blocked);
@@ -1617,7 +1617,7 @@ export function createTickets(
           .where(eq(tickets.number, number))
           .get();
         if (!ticket) {
-          throw new NotFoundError(`There is no Ticket #${number}.`);
+          throw new NotFoundError(`There is no Ticket T${number}.`);
         }
         if (ticket.epicNumber === null) {
           return null;
@@ -1776,16 +1776,16 @@ export function createTickets(
             .where(eq(tickets.number, number))
             .get();
           if (!ticket) {
-            throw new NotFoundError(`There is no Ticket #${number}.`);
+            throw new NotFoundError(`There is no Ticket T${number}.`);
           }
           if (ticket.projectId !== projectId) {
             throw new ValidationError({
-              ticketNumbers: `Ticket #${number} is not in this Project.`,
+              ticketNumbers: `Ticket T${number} is not in this Project.`,
             });
           }
           if (ticket.archived) {
             throw new ValidationError({
-              ticketNumbers: `Ticket #${number} is archived. Restore it before moving it.`,
+              ticketNumbers: `Ticket T${number} is archived. Restore it before moving it.`,
             });
           }
           if (ticket.type === 'Epic') {
@@ -2040,7 +2040,7 @@ export function createTickets(
         .where(eq(tickets.number, child))
         .get();
       if (!ticket) {
-        throw new NotFoundError(`There is no Ticket #${child}.`);
+        throw new NotFoundError(`There is no Ticket T${child}.`);
       }
       const previous = ticket.epicNumber;
       checkEpicChild(db, epic, {
@@ -2084,7 +2084,7 @@ export function createTickets(
       .where(eq(tickets.number, number))
       .get();
     if (!ticket) {
-      throw new NotFoundError(`There is no Ticket #${number}.`);
+      throw new NotFoundError(`There is no Ticket T${number}.`);
     }
     return withRelations(db, [ticket])[0];
   }
@@ -2138,7 +2138,7 @@ export function createTickets(
         .where(eq(tickets.number, number))
         .get();
       if (!existing) {
-        throw new NotFoundError(`There is no Ticket #${number}.`);
+        throw new NotFoundError(`There is no Ticket T${number}.`);
       }
       const projectId = values.projectId ?? existing.projectId;
       const status = values.status ?? existing.status;
@@ -2151,7 +2151,7 @@ export function createTickets(
       }
       if (values.color !== undefined && existing.type !== 'Epic') {
         throw new ValidationError({
-          color: `Ticket #${number} is not an Epic. Only an Epic has a colour.`,
+          color: `Ticket T${number} is not an Epic. Only an Epic has a colour.`,
         });
       }
       if (projectId !== existing.projectId) {
@@ -2241,7 +2241,7 @@ export function createTickets(
         .returning({ epicNumber: tickets.epicNumber })
         .get();
       if (!ticket) {
-        throw new NotFoundError(`There is no Ticket #${number}.`);
+        throw new NotFoundError(`There is no Ticket T${number}.`);
       }
       return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
     });
@@ -2475,7 +2475,7 @@ function touchTicket(db: DatabaseConnection, number: number) {
     .returning({ number: tickets.number })
     .get();
   if (!ticket) {
-    throw new NotFoundError(`There is no Ticket #${number}.`);
+    throw new NotFoundError(`There is no Ticket T${number}.`);
   }
 }
 

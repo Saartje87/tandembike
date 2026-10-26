@@ -503,7 +503,7 @@ describe('Updating Tickets', () => {
 
     expect(
       errorFrom(() => tickets.updateTicket(42, { status: 'Done' })),
-    ).toEqual(new NotFoundError('There is no Ticket #42.'));
+    ).toEqual(new NotFoundError('There is no Ticket T42.'));
   });
 
   it('announces an updated Ticket and nothing for a refused update', () => {
@@ -540,7 +540,7 @@ describe('Getting a Ticket', () => {
     const tickets = createTestTickets();
 
     expect(errorFrom(() => tickets.getTicket(42))).toEqual(
-      new NotFoundError('There is no Ticket #42.'),
+      new NotFoundError('There is no Ticket T42.'),
     );
   });
 });
@@ -597,10 +597,10 @@ describe('Archiving and restoring Tickets', () => {
     const { tickets } = setUp();
 
     expect(errorFrom(() => tickets.archiveTicket(42))).toEqual(
-      new NotFoundError('There is no Ticket #42.'),
+      new NotFoundError('There is no Ticket T42.'),
     );
     expect(errorFrom(() => tickets.restoreTicket(42))).toEqual(
-      new NotFoundError('There is no Ticket #42.'),
+      new NotFoundError('There is no Ticket T42.'),
     );
   });
 

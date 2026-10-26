@@ -22,12 +22,12 @@ export type CopyTicketNumberProps = {
 };
 
 /**
- * A Ticket's number, `#42`, as a button that copies it. A copy confirms in
+ * A Ticket's number, `T42`, as a button that copies it. A copy confirms in
  * place for a moment; a failed one says so until the next try, with the
  * number beside it to select by hand. A live region announces both.
  */
 export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({ number }) => {
-  const text = `#${number}`;
+  const text = `T${number}`;
   const [state, setState] = useState<CopyState>('idle');
 
   useEffect(() => {

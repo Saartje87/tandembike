@@ -62,7 +62,8 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/In progress/);
     expect(instructions).toMatch(/Done/);
     expect(instructions).toMatch(/list_projects/);
-    expect(instructions).toMatch(/#42/);
+    expect(instructions).toMatch(/like T42/);
+    expect(instructions).not.toMatch(/#\d/);
     expect(instructions).toMatch(/list_labels/);
     expect(instructions).toMatch(/add_comment/);
     expect(instructions).toMatch(/add_blocker/);
@@ -99,7 +100,7 @@ describe('MCP server', () => {
     expect(archive?.description).toMatch(
       /Agents cannot delete Tickets; the User can, from the app/,
     );
-    // Facts that only one repository's docs used to state (#63).
+    // Facts that only one repository's docs used to state (T63).
     const describe = (name: string) =>
       JSON.stringify(tools.find((tool) => tool.name === name));
     expect(archive?.description).toMatch(
@@ -120,9 +121,23 @@ describe('MCP server', () => {
         /Giving both is refused unless they name the same Project/,
       );
     }
-    // The name there would read as the Project's new name (#105).
+    // The name there would read as the Project's new name (T105).
     expect(describe('rename_project')).not.toMatch(/projectName/);
     expect(instructions).toMatch(/missing from your list may still exist/);
+    await client.close();
+  });
+
+  it('writes Ticket numbers as T42 in every tool description', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(
+      JSON.stringify(tools.find((tool) => tool.name === 'get_ticket')),
+    ).toMatch(/e\.g\. 42 for T42/);
+    for (const tool of tools) {
+      expect(JSON.stringify(tool), tool.name).not.toMatch(/#\d/);
+    }
     await client.close();
   });
 
@@ -283,7 +298,7 @@ describe('Project tools', () => {
 
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result.content)).toContain(
-      `Ticket #${ticket.number} is in the archived Project \\"Old site\\". Restore the Project before changing its Tickets.`,
+      `Ticket T${ticket.number} is in the archived Project \\"Old site\\". Restore the Project before changing its Tickets.`,
     );
     await client.close();
   });
@@ -621,7 +636,7 @@ describe('Ticket tools', () => {
     });
     expect(conflict.isError).toBe(true);
     expect(resultText(conflict)).toBe(
-      `Ticket #${ticket.number} is already claimed by Frontend Agent (run-1).`,
+      `Ticket T${ticket.number} is already claimed by Frontend Agent (run-1).`,
     );
     expect(resultJson(released)).toMatchObject({
       number: ticket.number,
@@ -639,7 +654,7 @@ describe('Ticket tools', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe('There is no Ticket #42.');
+    expect(resultText(result)).toBe('There is no Ticket T42.');
     await client.close();
   });
 
@@ -821,7 +836,7 @@ describe('Ticket tools', () => {
     expect(blank.isError).toBe(true);
     expect(resultText(blank)).toBe('Enter a title.');
     expect(missing.isError).toBe(true);
-    expect(resultText(missing)).toBe('There is no Ticket #42.');
+    expect(resultText(missing)).toBe('There is no Ticket T42.');
     expect(tickets.getTicket(1).title).toBe('Fix the header');
     await client.close();
   });
@@ -859,7 +874,7 @@ describe('Ticket tools', () => {
       const result = await client.callTool({ name, arguments: { number: 42 } });
 
       expect(result.isError, name).toBe(true);
-      expect(resultText(result), name).toBe('There is no Ticket #42.');
+      expect(resultText(result), name).toBe('There is no Ticket T42.');
     }
     await client.close();
   });
@@ -935,7 +950,7 @@ describe('Label tools', () => {
     expect(blank.isError).toBe(true);
     expect(resultText(blank)).toBe('Enter a label.');
     expect(missing.isError).toBe(true);
-    expect(resultText(missing)).toBe('There is no Ticket #42.');
+    expect(resultText(missing)).toBe('There is no Ticket T42.');
     await client.close();
   });
 
@@ -1160,7 +1175,7 @@ describe('Batch tools', () => {
     expect(result.isError).toBe(true);
     expect(JSON.parse(resultText(result))).toMatchObject({
       updated: [{ number: 1, status: 'Done' }],
-      failed: [{ number: 42, error: 'There is no Ticket #42.' }],
+      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
     });
     await client.close();
   });
@@ -1338,7 +1353,7 @@ describe('Epic tools', () => {
           arguments: { number: 3, color: 'teal' },
         }),
       ),
-    ).toMatch(/Ticket #3 is not an Epic. Only an Epic has a colour./);
+    ).toMatch(/Ticket T3 is not an Epic. Only an Epic has a colour./);
     await client.close();
   });
 
@@ -1498,11 +1513,11 @@ describe('Epic tools', () => {
 
     expect(status.isError).toBe(true);
     expect(resultText(status)).toBe(
-      `Ticket #${epic.number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
+      `Ticket T${epic.number} is an Epic. Its Status follows its child Tickets and cannot be set by hand.`,
     );
     expect(attach.isError).toBe(true);
     expect(resultText(attach)).toBe(
-      `Ticket #${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+      `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
     );
     await client.close();
   });
@@ -1653,7 +1668,7 @@ describe('Origin tools', () => {
 
     expect(result.isError).toBe(true);
     expect(resultText(result)).toMatch(
-      /#2 cannot be the Origin of #1, because #1 is already an Origin of #2/,
+      /T2 cannot be the Origin of T1, because T1 is already an Origin of T2/,
     );
     await client.close();
   });
@@ -1836,7 +1851,7 @@ describe('Blocker tools', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe('There is no Ticket #9999.');
+    expect(resultText(result)).toBe('There is no Ticket T9999.');
     await client.close();
   });
 
@@ -1879,10 +1894,10 @@ describe('Blocker tools', () => {
     expect(resultText(self)).toBe('A Ticket cannot block itself.');
     expect(cycle.isError).toBe(true);
     expect(resultText(cycle)).toBe(
-      '#2 cannot block #1, because #1 already blocks #2: #1 → #2.',
+      'T2 cannot block T1, because T1 already blocks T2: T1 → T2.',
     );
     expect(missing.isError).toBe(true);
-    expect(resultText(missing)).toBe('There is no Ticket #42.');
+    expect(resultText(missing)).toBe('There is no Ticket T42.');
     await client.close();
   });
 });
@@ -2022,14 +2037,14 @@ describe('Acceptance criteria tools', () => {
     expect(resultText(empty)).toBe('Enter text for each acceptance criterion.');
     expect(unknown.isError).toBe(true);
     expect(resultText(unknown)).toBe(
-      `Ticket #${ticket.number} has no acceptance criterion 7.`,
+      `Ticket T${ticket.number} has no acceptance criterion 7.`,
     );
     await client.close();
   });
 });
 
 describe('Cycle tools', () => {
-  /** A Project with Tickets #1 to #3, and an MCP client on it. */
+  /** A Project with Tickets T1 to T3, and an MCP client on it. */
   async function cycleSetup() {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -2236,14 +2251,14 @@ describe('Cycle tools', () => {
     expect(planned.isError).toBe(true);
     expect(JSON.parse(resultText(planned))).toMatchObject({
       updated: [1],
-      failed: [{ number: 42, error: 'There is no Ticket #42.' }],
+      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
       cycle: { ticketNumbers: [1] },
     });
     expect(unplanned.isError).toBe(true);
     expect(JSON.parse(resultText(unplanned))).toMatchObject({
       updated: [1],
       failed: [
-        { number: 2, error: 'Ticket #2 is not planned into the Cycle "Beta".' },
+        { number: 2, error: 'Ticket T2 is not planned into the Cycle "Beta".' },
       ],
       cycle: { ticketNumbers: [] },
     });
@@ -2327,7 +2342,7 @@ describe('Cycle tools', () => {
       [archived, untitled, missing].map((result) => result.isError),
     ).toEqual([true, true, true]);
     expect(resultText(archived)).toBe(
-      'Ticket #3 is archived. Restore it before planning it into a Cycle.',
+      'Ticket T3 is archived. Restore it before planning it into a Cycle.',
     );
     expect(resultText(untitled)).toBe('Enter a title.');
     expect(resultText(missing)).toBe('There is no Cycle with id 99.');
@@ -2396,7 +2411,7 @@ describe('Cycle tools', () => {
 });
 
 describe('Write tool responses', () => {
-  /** A Project with Ticket #1, which has a description and two criteria. */
+  /** A Project with Ticket T1, which has a description and two criteria. */
   function ticketsWithOne() {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -2587,7 +2602,7 @@ describe('Write tool responses', () => {
           blocked: false,
         },
       ],
-      failed: [{ number: 99, error: 'There is no Ticket #99.' }],
+      failed: [{ number: 99, error: 'There is no Ticket T99.' }],
     });
     expect(resultJson(full)).toEqual({
       updated: [JSON.parse(JSON.stringify(tickets.getTicket(2)))],
@@ -2640,7 +2655,7 @@ describe('Write tool responses', () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe('There is no Ticket #42.');
+    expect(resultText(result)).toBe('There is no Ticket T42.');
     await client.close();
   });
 });

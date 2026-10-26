@@ -31,7 +31,7 @@ export function checkOrigin(
   const chain = originChain(db, originNumber);
   if (chain.length === 0) {
     throw new NotFoundError(
-      `There is no Ticket #${originNumber} to be the Origin.`,
+      `There is no Ticket T${originNumber} to be the Origin.`,
     );
   }
   const loop = number === undefined ? -1 : chain.indexOf(number);
@@ -39,10 +39,10 @@ export function checkOrigin(
     const path = chain
       .slice(0, loop + 1)
       .reverse()
-      .map((link) => `#${link}`)
+      .map((link) => `T${link}`)
       .join(' → ');
     throwFieldErrors({
-      originNumber: `#${originNumber} cannot be the Origin of #${number}, because #${number} is already an Origin of #${originNumber}: ${path}.`,
+      originNumber: `T${originNumber} cannot be the Origin of T${number}, because T${number} is already an Origin of T${originNumber}: ${path}.`,
     });
   }
 }

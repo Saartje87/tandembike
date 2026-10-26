@@ -21,7 +21,7 @@ function archivedProjectWithTicket() {
 
 const archivedTicket = (number: number) =>
   new NotAllowedError(
-    `Ticket #${number} is in the archived Project "Old site". Restore the Project before changing its Tickets.`,
+    `Ticket T${number} is in the archived Project "Old site". Restore the Project before changing its Tickets.`,
   );
 
 const archivedProject = new NotAllowedError(

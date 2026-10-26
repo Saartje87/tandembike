@@ -45,7 +45,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access or hand-written requests.
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
-- Refer to Tickets by number with a hash, like #42, the same way the User does.
+- Refer to Tickets by number with a T, like T42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets.
@@ -62,7 +62,7 @@ const ticketNumber = z
   .number()
   .int()
   .positive()
-  .describe('The Ticket number, e.g. 42 for #42.');
+  .describe('The Ticket number, e.g. 42 for T42.');
 
 const label = z
   .string()
@@ -695,9 +695,9 @@ export function createMcpServer(tickets: Tickets): McpServer {
       title: 'Attach Ticket to Epic',
       description: `Make an existing normal Ticket a child of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing. ${returnsSummary({ subject: 'the child', extra: 'its epic' })}`,
       inputSchema: {
-        epic: ticketNumber.describe('The Epic, e.g. 41 for #41.'),
+        epic: ticketNumber.describe('The Epic, e.g. 41 for T41.'),
         ticket: ticketNumber.describe(
-          'The Ticket to make its child, e.g. 42 for #42.',
+          'The Ticket to make its child, e.g. 42 for T42.',
         ),
         detail,
       },
@@ -822,10 +822,10 @@ export function createMcpServer(tickets: Tickets): McpServer {
       description: `Record that the blocker Ticket must be resolved (Done or archived) before the blocked Ticket can start. The two may be in different Projects. A Ticket cannot block itself, a Blocker that would make a cycle is refused, and Blockers between an Epic and its own children are refused: order the children with Blockers among themselves. Adding one that exists already changes nothing. ${returnsSummary({ subject: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
-          'The Ticket that must be resolved first, e.g. 41 for #41.',
+          'The Ticket that must be resolved first, e.g. 41 for T41.',
         ),
         blocked: ticketNumber.describe(
-          'The Ticket that waits for it, e.g. 42 for #42.',
+          'The Ticket that waits for it, e.g. 42 for T42.',
         ),
         detail,
       },
@@ -846,10 +846,10 @@ export function createMcpServer(tickets: Tickets): McpServer {
       description: `Stop the blocker Ticket blocking the blocked Ticket. Removing a Blocker the Ticket does not have changes nothing. ${returnsSummary({ subject: 'the blocked Ticket', extra: 'blockedBy, the numbers of the Tickets that still block it' })}`,
       inputSchema: {
         blocker: ticketNumber.describe(
-          'The Ticket that blocks, e.g. 41 for #41.',
+          'The Ticket that blocks, e.g. 41 for T41.',
         ),
         blocked: ticketNumber.describe(
-          'The Ticket it blocks, e.g. 42 for #42.',
+          'The Ticket it blocks, e.g. 42 for T42.',
         ),
         detail,
       },

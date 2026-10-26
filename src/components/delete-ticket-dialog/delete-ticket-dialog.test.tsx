@@ -22,7 +22,7 @@ const build: RelatedTicket = {
 
 const openDialog = async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
-  return screen.getByRole('dialog', { name: 'Delete #42?' });
+  return screen.getByRole('dialog', { name: 'Delete T42?' });
 };
 
 describe('DeleteTicketDialog', () => {
@@ -38,7 +38,7 @@ describe('DeleteTicketDialog', () => {
     const dialog = await openDialog();
 
     expect(dialog).toHaveAccessibleDescription(
-      'Delete #42 "Fix the header" permanently? This can\'t be undone.',
+      'Delete T42 "Fix the header" permanently? This can\'t be undone.',
     );
     expect(within(dialog).queryByRole('list')).toBeNull();
   });
@@ -62,7 +62,7 @@ describe('DeleteTicketDialog', () => {
         .getAllByRole('listitem')
         .map((item) => item.textContent),
     ).toEqual([
-      '#43 Build the nav will no longer be blocked by it.',
+      'T43 Build the nav will no longer be blocked by it.',
       'Claude Code (run-1) has claimed it.',
       'Agent run run-2 has claimed its Epic.',
     ]);
@@ -85,7 +85,7 @@ describe('DeleteTicketDialog', () => {
   it('deletes on confirm, and shows a refusal in the dialog', async () => {
     vi.mocked(deleteTicket).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #42.',
+      error: 'There is no Ticket T42.',
     });
     renderWithTheme(
       <DeleteTicketDialog ticket={ticket} blocks={[]} epicClaim={null} />,
@@ -93,7 +93,7 @@ describe('DeleteTicketDialog', () => {
     const dialog = await openDialog();
 
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Delete #42' }),
+      within(dialog).getByRole('button', { name: 'Delete T42' }),
     );
 
     expect(deleteTicket).toHaveBeenCalledWith({
@@ -101,7 +101,7 @@ describe('DeleteTicketDialog', () => {
       withChildren: false,
     });
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #42.',
+      'There is no Ticket T42.',
     );
   });
 
@@ -119,7 +119,7 @@ describe('DeleteTicketDialog', () => {
     const dialog = await openDialog();
 
     await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Delete #42' }),
+      within(dialog).getByRole('button', { name: 'Delete T42' }),
     );
 
     expect(onDeleted).toHaveBeenCalledOnce();
@@ -170,8 +170,8 @@ describe('DeleteTicketDialog', () => {
       await userEvent.click(within(dialog).getByRole('checkbox'));
 
       expect(warnings(dialog)).toEqual([
-        '#50 Ship it will no longer be blocked by it.',
-        'Agent run run-3 has claimed #43 Build the nav.',
+        'T50 Ship it will no longer be blocked by it.',
+        'Agent run run-3 has claimed T43 Build the nav.',
       ]);
     });
 
@@ -180,7 +180,7 @@ describe('DeleteTicketDialog', () => {
       renderEpic();
       const dialog = await openDialog();
       const confirm = within(dialog).getByRole('button', {
-        name: 'Delete #42',
+        name: 'Delete T42',
       });
 
       await userEvent.click(confirm);

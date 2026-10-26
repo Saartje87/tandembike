@@ -28,7 +28,7 @@ vi.mock('../../../components/board/board', () => ({
   }) => (
     <section aria-label={project.name}>
       {header}
-      {`Tickets: ${tickets.map((ticket) => `#${ticket.number}`).join(',')}`}
+      {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
     </section>
   ),
 }));
@@ -51,7 +51,7 @@ vi.mock('./board-ticket-drawer/board-ticket-drawer', () => ({
   }: {
     number: number;
     boardPath: string;
-  }) => <div role="dialog">{`Drawer #${number} over ${boardPath}`}</div>,
+  }) => <div role="dialog">{`Drawer T${number} over ${boardPath}`}</div>,
 }));
 vi.mock(
   '../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton',
@@ -92,7 +92,7 @@ describe('ProjectPage', () => {
       'Tabs: Beta,Launch current backlog',
     );
     expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
-      `Tickets: #${ticket.number}`,
+      `Tickets: T${ticket.number}`,
     );
     expect(screen.queryByRole('dialog')).toBeNull();
     await expect(
@@ -126,10 +126,10 @@ describe('ProjectPage', () => {
     renderWithTheme(<main>{await ProjectPage({ params, searchParams })}</main>);
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `Drawer #${ticket.number} over /project/${project.id}`,
+      `Drawer T${ticket.number} over /project/${project.id}`,
     );
     await expect(generateMetadata({ params, searchParams })).resolves.toEqual({
-      title: `#${ticket.number} Fix the header`,
+      title: `T${ticket.number} Fix the header`,
     });
   });
 

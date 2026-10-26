@@ -93,7 +93,7 @@ const mockBoardBounds = (targetStatus: string) =>
 
 const dragTicketTo = async (number: number, status: string) => {
   const handle = screen.getByRole('button', {
-    name: `Drag Ticket #${number} to another Status`,
+    name: `Drag Ticket T${number} to another Status`,
   });
   const target = screen.getByRole('region', { name: status });
   const elementFromPoint = Object.getOwnPropertyDescriptor(
@@ -306,7 +306,7 @@ describe('Board', () => {
   it('restores the Ticket and explains when a dropped Status is refused', async () => {
     vi.mocked(updateTicket).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     const bounds = mockBoardBounds('In progress');
     onTestFinished(() => bounds.mockRestore());
@@ -320,7 +320,7 @@ describe('Board', () => {
     await dragTicketTo(4, 'In progress');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     await waitFor(() => expect(cardsIn('Todo')).toEqual(['Fix the header']));
     expect(cardsIn('In progress')).toEqual([]);
@@ -386,7 +386,7 @@ describe('Board', () => {
   it('puts the card back and explains when the change is refused', async () => {
     vi.mocked(updateTicket).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #4.',
+      error: 'There is no Ticket T4.',
     });
     const bounds = mockBoardBounds('Done');
     onTestFinished(() => bounds.mockRestore());
@@ -400,7 +400,7 @@ describe('Board', () => {
     await dragTicketTo(4, 'Done');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'There is no Ticket #4.',
+      'There is no Ticket T4.',
     );
     // The alert can show one render before the optimistic move is undone.
     await waitFor(() => expect(cardsIn('Todo')).toEqual(['Fix the header']));
@@ -462,7 +462,7 @@ describe('Board with Epics', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']);
+    expect(chips()).toEqual(['T10 Checkout 0/1 Done', 'T20 Search 0/0 Done']);
   });
 
   it("lists on a Cycle's Board an Epic with a child planned into it, and not one with nothing in it", () => {
@@ -475,7 +475,7 @@ describe('Board with Epics', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+    expect(chips()).toEqual(['T10 Checkout 0/1 Done']);
   });
 
   it("leaves out of a Cycle's row an Epic whose only planned child is archived", () => {
@@ -501,7 +501,7 @@ describe('Board with Epics', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+    expect(chips()).toEqual(['T20 Search 0/0 Done']);
   });
 
   it("shows a Cycle's done Epics with no toggle, but hides them on the Project Board", () => {
@@ -515,7 +515,7 @@ describe('Board with Epics', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#20 Search 0/0 Done']);
+    expect(chips()).toEqual(['T20 Search 0/0 Done']);
     expect(
       screen.queryByRole('checkbox', { name: /Show done Epics/ }),
     ).not.toBeInTheDocument();
@@ -529,7 +529,7 @@ describe('Board with Epics', () => {
       />,
     );
 
-    expect(chips()).toEqual(['#10 Checkout 0/1 Done']);
+    expect(chips()).toEqual(['T10 Checkout 0/1 Done']);
     expect(
       screen.getByRole('checkbox', { name: 'Show done Epics (1)' }),
     ).toBeInTheDocument();
@@ -621,7 +621,7 @@ describe('Board with archived Tickets', () => {
       '/project/1?ticket=6',
     ]);
     expect(
-      within(list as HTMLElement).getByText('#5', { exact: false }),
+      within(list as HTMLElement).getByText('T5', { exact: false }),
     ).toBeInTheDocument();
   });
 
@@ -728,7 +728,7 @@ describe('Dropping a card on an Epic', () => {
   /** Drags card `number` by keyboard onto Epic `epicNumber`'s chip. */
   const dragTicketOntoEpic = async (number: number, epicNumber: number) => {
     const chip = screen.getByRole('link', {
-      name: new RegExp(`^#${epicNumber} `),
+      name: new RegExp(`^T${epicNumber} `),
     });
     const elementFromPoint = Object.getOwnPropertyDescriptor(
       document,
@@ -747,7 +747,7 @@ describe('Dropping a card on an Epic', () => {
     });
     await keyboardDrag(
       screen.getByRole('button', {
-        name: `Drag Ticket #${number} to another Status`,
+        name: `Drag Ticket T${number} to another Status`,
       }),
       '{ArrowRight}',
     );
@@ -783,11 +783,11 @@ describe('Dropping a card on an Epic', () => {
     expect(updateTicket).not.toHaveBeenCalled();
     expect(reorderTickets).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/1 Done']),
+      expect(chips()).toEqual(['T10 Checkout 0/1 Done', 'T20 Search 0/1 Done']),
     );
     expect(cardsIn('Todo')).toEqual(['Pay by card', 'Fix the header']);
     expect(
-      screen.getByRole('link', { name: 'Epic #20 Search' }),
+      screen.getByRole('link', { name: 'Epic T20 Search' }),
     ).toBeInTheDocument();
   });
 
@@ -813,14 +813,14 @@ describe('Dropping a card on an Epic', () => {
       child: 11,
     });
     await waitFor(() =>
-      expect(chips()).toEqual(['#10 Checkout 0/0 Done', '#20 Search 0/1 Done']),
+      expect(chips()).toEqual(['T10 Checkout 0/0 Done', 'T20 Search 0/1 Done']),
     );
   });
 
   it('puts the Ticket back and explains when attaching is refused', async () => {
     vi.mocked(attachTicketToEpic).mockResolvedValue({
       ok: false,
-      error: 'Epic #20 is archived. Restore it before adding Tickets to it.',
+      error: 'Epic T20 is archived. Restore it before adding Tickets to it.',
     });
     mockEpicBounds(20);
     renderWithTheme(
@@ -834,10 +834,10 @@ describe('Dropping a card on an Epic', () => {
     await dragTicketOntoEpic(4, 20);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Epic #20 is archived. Restore it before adding Tickets to it.',
+      'Epic T20 is archived. Restore it before adding Tickets to it.',
     );
     await waitFor(() =>
-      expect(chips()).toEqual(['#10 Checkout 0/1 Done', '#20 Search 0/0 Done']),
+      expect(chips()).toEqual(['T10 Checkout 0/1 Done', 'T20 Search 0/0 Done']),
     );
   });
 });
@@ -856,10 +856,10 @@ describe('Selecting cards', () => {
 
   const cardLink = (title: string) => screen.getByRole('link', { name: title });
   const checkbox = (number: number, title: string) =>
-    screen.getByRole('checkbox', { name: `Select #${number} ${title}` });
+    screen.getByRole('checkbox', { name: `Select T${number} ${title}` });
   const selectedTitles = () =>
     screen
-      .queryAllByRole('checkbox', { name: /^Select #/, checked: true })
+      .queryAllByRole('checkbox', { name: /^Select T/, checked: true })
       .map((box) => box.getAttribute('aria-label'));
   const selectionBar = () =>
     screen.queryByRole('toolbar', { name: 'Selection' });
@@ -891,14 +891,14 @@ describe('Selecting cards', () => {
     await clickWith(user, 'Control', 'Draw the logo');
 
     expect(selectedTitles()).toEqual([
-      'Select #4 Fix the header',
-      'Select #9 Draw the logo',
+      'Select T4 Fix the header',
+      'Select T9 Draw the logo',
     ]);
     expect(selectionBar()).toHaveTextContent('2 selected');
 
     await clickWith(user, 'Meta', 'Fix the header');
 
-    expect(selectedTitles()).toEqual(['Select #9 Draw the logo']);
+    expect(selectedTitles()).toEqual(['Select T9 Draw the logo']);
     expect(selectionBar()).toHaveTextContent('1 selected');
   });
 
@@ -910,9 +910,9 @@ describe('Selecting cards', () => {
     await clickWith(user, 'Shift', 'Fix the footer');
 
     expect(selectedTitles()).toEqual([
-      'Select #7 Write the copy',
-      'Select #9 Draw the logo',
-      'Select #12 Fix the footer',
+      'Select T7 Write the copy',
+      'Select T9 Draw the logo',
+      'Select T12 Fix the footer',
     ]);
   });
 
@@ -924,8 +924,8 @@ describe('Selecting cards', () => {
     await clickWith(user, 'Shift', 'Deploy');
 
     expect(selectedTitles()).toEqual([
-      'Select #4 Fix the header',
-      'Select #15 Deploy',
+      'Select T4 Fix the header',
+      'Select T15 Deploy',
     ]);
   });
 
@@ -938,13 +938,13 @@ describe('Selecting cards', () => {
     await user.keyboard(' ');
 
     expect(selectedTitles()).toEqual([
-      'Select #4 Fix the header',
-      'Select #7 Write the copy',
+      'Select T4 Fix the header',
+      'Select T7 Write the copy',
     ]);
 
     await user.keyboard(' ');
 
-    expect(selectedTitles()).toEqual(['Select #4 Fix the header']);
+    expect(selectedTitles()).toEqual(['Select T4 Fix the header']);
   });
 
   it('offers no checkbox on archived Tickets', async () => {
@@ -962,7 +962,7 @@ describe('Selecting cards', () => {
     await user.click(screen.getByRole('checkbox', { name: /Show archived/ }));
 
     expect(
-      screen.queryByRole('checkbox', { name: /^Select #5/ }),
+      screen.queryByRole('checkbox', { name: /^Select T5/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -1004,7 +1004,7 @@ describe('Selecting cards', () => {
       />,
     );
 
-    expect(selectedTitles()).toEqual(['Select #4 Fix the page header']);
+    expect(selectedTitles()).toEqual(['Select T4 Fix the page header']);
     expect(selectionBar()).toHaveTextContent('1 selected');
   });
 
@@ -1061,16 +1061,16 @@ describe('Selecting cards', () => {
       'Deploy',
     ]);
     expect(selectedTitles()).toEqual([
-      'Select #4 Fix the header',
-      'Select #9 Draw the logo',
-      'Select #15 Deploy',
+      'Select T4 Fix the header',
+      'Select T9 Draw the logo',
+      'Select T15 Deploy',
     ]);
   });
 
   it('puts the cards back and explains when the move is refused', async () => {
     vi.mocked(moveTickets).mockResolvedValue({
       ok: false,
-      error: 'Ticket #9 is archived. Restore it before moving it.',
+      error: 'Ticket T9 is archived. Restore it before moving it.',
     });
     const bounds = mockBoardBounds('Done');
     onTestFinished(() => bounds.mockRestore());
@@ -1082,7 +1082,7 @@ describe('Selecting cards', () => {
     await dragTicketTo(4, 'Done');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Ticket #9 is archived. Restore it before moving it.',
+      'Ticket T9 is archived. Restore it before moving it.',
     );
     await waitFor(() =>
       expect(cardsIn('Todo')).toEqual([

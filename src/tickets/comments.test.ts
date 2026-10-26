@@ -69,9 +69,9 @@ describe('Commenting on Tickets', () => {
 
     expect(
       errorFrom(() => tickets.addComment(9, { body: 'Hi', author: 'user' })),
-    ).toEqual(new NotFoundError('There is no Ticket #9.'));
+    ).toEqual(new NotFoundError('There is no Ticket T9.'));
     expect(errorFrom(() => tickets.listComments(9))).toEqual(
-      new NotFoundError('There is no Ticket #9.'),
+      new NotFoundError('There is no Ticket T9.'),
     );
   });
 

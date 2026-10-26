@@ -22,7 +22,7 @@ An Epic is handed off, worked and delivered as one unit:
 
 1. `get_ticket` the Epic and claim it once with `claim_ticket`, as the server's instructions describe.
 2. Leave the children unclaimed: the Epic's Claim covers them.
-3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`Ticket #42`).
+3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`T42`).
 4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
 5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
 
@@ -37,7 +37,7 @@ An idea Ticket that grilling, for example in `/triage`, shows to be a multi-sess
 1. Stop triaging it, tell the User, and continue in the same session with `/to-spec`, then `/to-tickets`.
 2. `/to-spec` publishes the spec as a new Epic (`create_ticket` with `type: "Epic"`) in the idea Ticket's Project, with the spec as its description, the idea Ticket as its `originNumber` and the `ready-for-agent` label. The idea Ticket itself cannot become the Epic: a Ticket's type is fixed at creation.
 3. `/to-tickets` creates the Epic's children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. "Working an Epic" then applies.
-4. Comment `Refined into Epic #<number>` on the idea Ticket, remove its triage state label, and archive it with `archive_ticket`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
+4. Comment `Refined into Epic T<number>` on the idea Ticket, remove its triage state label, and archive it with `archive_ticket`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
 
 ## Acceptance criteria
 

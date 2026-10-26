@@ -761,8 +761,8 @@ know to keep it mounted and empty so that later text is announced.
 **Repro.**
 
 ```tsx
-<Button aria-label="Copy Ticket number #42" onClick={copy}>
-  {copied ? 'Copied' : '#42'}
+<Button aria-label="Copy Ticket number T42" onClick={copy}>
+  {copied ? 'Copied' : 'T42'}
 </Button>;
 // The name never changes, so nothing announces "Copied".
 ```

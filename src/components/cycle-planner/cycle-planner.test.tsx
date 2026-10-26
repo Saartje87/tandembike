@@ -145,7 +145,7 @@ describe('CyclePlanner', () => {
     vi.mocked(planTicket).mockResolvedValue({
       ok: false,
       error:
-        'Ticket #12 is archived. Restore it before planning it into a Cycle.',
+        'Ticket T12 is archived. Restore it before planning it into a Cycle.',
     });
     renderWithTheme(
       <CyclePlanner ticket={open} cycles={[cycle({ id: 7, title: 'Beta' })]} />,
@@ -157,7 +157,7 @@ describe('CyclePlanner', () => {
     );
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Ticket #12 is archived. Restore it before planning it into a Cycle.',
+      'Ticket T12 is archived. Restore it before planning it into a Cycle.',
     );
   });
 });

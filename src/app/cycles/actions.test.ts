@@ -155,7 +155,7 @@ describe('Cycle actions', () => {
       planTicket({ cycleId: cycle.id, number: ticket.number }),
     ).resolves.toEqual({
       ok: false,
-      error: `Ticket #${ticket.number} is archived. Restore it before planning it into a Cycle.`,
+      error: `Ticket T${ticket.number} is archived. Restore it before planning it into a Cycle.`,
     });
   });
 });

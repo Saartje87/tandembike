@@ -32,8 +32,8 @@ vi.mock('../../../../../components/board/board', () => ({
   }) => (
     <section aria-label={project.name}>
       {header}
-      {`Tickets: ${tickets.map((ticket) => `#${ticket.number}`).join(',')}`}
-      <p>{`Epics: ${epics.map((epic) => `#${epic.number}`).join(',')}`}</p>
+      {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
+      <p>{`Epics: ${epics.map((epic) => `T${epic.number}`).join(',')}`}</p>
     </section>
   ),
 }));
@@ -70,7 +70,7 @@ vi.mock('../../board-ticket-drawer/board-ticket-drawer', () => ({
   }: {
     number: number;
     boardPath: string;
-  }) => <div role="dialog">{`Drawer #${number} over ${boardPath}`}</div>,
+  }) => <div role="dialog">{`Drawer T${number} over ${boardPath}`}</div>,
 }));
 vi.mock(
   '../../../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton',
@@ -115,7 +115,7 @@ describe('CyclePage', () => {
       screen.getByRole('heading', { level: 2, name: 'Launch' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
-      `Tickets: #${planned.number}`,
+      `Tickets: T${planned.number}`,
     );
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
@@ -160,7 +160,7 @@ describe('CyclePage', () => {
     );
 
     expect(screen.getByText(/^Epics:/)).toHaveTextContent(
-      `Epics: #${epic.number}`,
+      `Epics: T${epic.number}`,
     );
   });
 
@@ -208,7 +208,7 @@ describe('CyclePage', () => {
     expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
-    ).toHaveTextContent(`#${done.number}ShippedDone#${moved.number}MovedDone`);
+    ).toHaveTextContent(`T${done.number}ShippedDoneT${moved.number}MovedDone`);
   });
 
   it("tells a Prepared Cycle's header which Cycle is Active", async () => {
@@ -296,10 +296,10 @@ describe('CyclePage', () => {
     renderWithTheme(<main>{await CyclePage({ params, searchParams })}</main>);
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `Drawer #${ticket.number} over /project/${project.id}/cycle/${cycle.id}`,
+      `Drawer T${ticket.number} over /project/${project.id}/cycle/${cycle.id}`,
     );
     await expect(generateMetadata({ params, searchParams })).resolves.toEqual({
-      title: `#${ticket.number} Ship it`,
+      title: `T${ticket.number} Ship it`,
     });
   });
 });

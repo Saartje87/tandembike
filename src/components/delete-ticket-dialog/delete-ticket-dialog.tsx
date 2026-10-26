@@ -76,12 +76,12 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
   const warnings = [
     ...[...unblocked.values()].map(
       ({ number, title }) =>
-        `#${number} ${title} will no longer be blocked by it.`,
+        `T${number} ${title} will no longer be blocked by it.`,
     ),
     ...(ticket.claim ? [`${ownerOf(ticket.claim)} has claimed it.`] : []),
     ...(epicClaim ? [`${ownerOf(epicClaim)} has claimed its Epic.`] : []),
     ...deletedChildren.flatMap(({ number, title, claim }) =>
-      claim ? [`${ownerOf(claim)} has claimed #${number} ${title}.`] : [],
+      claim ? [`${ownerOf(claim)} has claimed T${number} ${title}.`] : [],
     ),
   ];
 
@@ -126,10 +126,10 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
         {open && (
           <Stack gap={4}>
             <Heading id={headingId} level={2}>
-              Delete #{ticket.number}?
+              Delete T{ticket.number}?
             </Heading>
             <Text id={descriptionId} tag="p">
-              Delete #{ticket.number} "{ticket.title}" permanently? This can't
+              Delete T{ticket.number} "{ticket.title}" permanently? This can't
               be undone.
             </Text>
             {epicChildren.length > 0 && (
@@ -162,7 +162,7 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
                 disabled={pending}
                 onClick={confirm}
               >
-                Delete #{ticket.number}
+                Delete T{ticket.number}
               </Button>
               <Button
                 type="button"

@@ -157,7 +157,7 @@ describe('TicketDrawer', () => {
     expect(
       screen.getByRole('dialog', { name: 'Fix the header' }),
     ).toBeInTheDocument();
-    expect(button('Copy Ticket number #4')).toHaveTextContent('#4');
+    expect(button('Copy Ticket number T4')).toHaveTextContent('T4');
     expect(
       inDrawer().getByRole('heading', { level: 2, name: 'Fix the header' }),
     ).toBeInTheDocument();
@@ -171,7 +171,7 @@ describe('TicketDrawer', () => {
 
     expect(
       inDocumentOrder(
-        button('Copy Ticket number #4'),
+        button('Copy Ticket number T4'),
         button('Close'),
         inDrawer().getByText('This Ticket is archived'),
         inDrawer().getByRole('heading', { level: 2 }),
@@ -361,7 +361,7 @@ describe('TicketDrawer', () => {
     it('goes back to the old Status and says why when it is refused', async () => {
       vi.mocked(updateTicket).mockResolvedValue({
         ok: false,
-        error: 'There is no Ticket #4.',
+        error: 'There is no Ticket T4.',
       });
       renderDrawer();
 
@@ -369,7 +369,7 @@ describe('TicketDrawer', () => {
 
       await waitFor(() => expect(field('Status')).toHaveValue('In progress'));
       expect(field('Status')).toHaveAccessibleDescription(
-        'There is no Ticket #4.',
+        'There is no Ticket T4.',
       );
     });
 
@@ -706,7 +706,7 @@ describe('TicketDrawer', () => {
     it('drops a refused reason when the edit is cancelled', async () => {
       vi.mocked(updateTicket).mockResolvedValue({
         ok: false,
-        error: 'There is no Ticket #4.',
+        error: 'There is no Ticket T4.',
       });
       renderDrawer();
 
@@ -715,13 +715,13 @@ describe('TicketDrawer', () => {
       await userEvent.click(button('Save'));
       await waitFor(() =>
         expect(descriptionInput()).toHaveAccessibleDescription(
-          'There is no Ticket #4.',
+          'There is no Ticket T4.',
         ),
       );
       await userEvent.click(button('Cancel'));
 
       expect(
-        inDrawer().queryByText('There is no Ticket #4.'),
+        inDrawer().queryByText('There is no Ticket T4.'),
       ).not.toBeInTheDocument();
       await editDescription();
       expect(descriptionInput()).toHaveValue('It overlaps the **logo**.');
@@ -847,7 +847,7 @@ describe('TicketDrawer', () => {
       it('asks again after a refused description reopens with its text', async () => {
         vi.mocked(updateTicket).mockResolvedValue({
           ok: false,
-          error: 'There is no Ticket #4.',
+          error: 'There is no Ticket T4.',
         });
         const asked = confirm(false);
         renderDrawer();
@@ -902,12 +902,12 @@ describe('TicketDrawer', () => {
         within(inDrawer().getByRole('list', { name: 'Blocked by' })).getByRole(
           'link',
         ),
-      ).toHaveTextContent('#2 Design the header');
+      ).toHaveTextContent('T2 Design the header');
       expect(
         within(inDrawer().getByRole('list', { name: 'Blocks' })).getByRole(
           'link',
         ),
-      ).toHaveTextContent('#7 Ship the header');
+      ).toHaveTextContent('T7 Ship the header');
     });
 
     it('says plainly in the Blocked by row whether the Ticket is blocked', () => {
@@ -1113,7 +1113,7 @@ describe('TicketDrawer', () => {
       expect(
         within(
           inDrawer().getByRole('list', { name: 'Child Tickets' }),
-        ).getByRole('link', { name: '#9 Pay by card' }),
+        ).getByRole('link', { name: 'T9 Pay by card' }),
       ).toBeInTheDocument();
       expect(
         inDrawer().queryByRole('button', { name: 'Detach from Epic' }),
@@ -1179,7 +1179,7 @@ describe('TicketDrawer', () => {
       });
 
       expect(
-        inDrawer().getByRole('link', { name: '#8 Checkout' }),
+        inDrawer().getByRole('link', { name: 'T8 Checkout' }),
       ).toHaveAttribute('href', '/ticket/8');
       expect(
         inDrawer().queryByRole('heading', { name: 'Child Tickets' }),
@@ -1195,7 +1195,7 @@ describe('TicketDrawer', () => {
       });
 
       expect(
-        inDrawer().getByRole('link', { name: '#2 Checkout spec' }),
+        inDrawer().getByRole('link', { name: 'T2 Checkout spec' }),
       ).toHaveAttribute('href', '/ticket/2');
       expect(button('Change Origin')).toBeInTheDocument();
       expect(
@@ -1213,7 +1213,7 @@ describe('TicketDrawer', () => {
 
       const list = inDrawer().getByRole('list', { name: 'Split-off Tickets' });
       expect(
-        within(list).getByRole('link', { name: '#9 Pay by card' }),
+        within(list).getByRole('link', { name: 'T9 Pay by card' }),
       ).toBeInTheDocument();
       expect(list).toHaveTextContent('Todo');
       expect(button('Set Origin')).toBeInTheDocument();
@@ -1302,7 +1302,7 @@ describe('TicketDrawer', () => {
     it('explains a refused archive', async () => {
       vi.mocked(archiveTicket).mockResolvedValue({
         ok: false,
-        error: 'There is no Ticket #4.',
+        error: 'There is no Ticket T4.',
       });
       renderDrawer();
 
@@ -1311,7 +1311,7 @@ describe('TicketDrawer', () => {
       expect(
         inDrawer()
           .getAllByRole('alert')
-          .some((alert) => alert.textContent === 'There is no Ticket #4.'),
+          .some((alert) => alert.textContent === 'There is no Ticket T4.'),
       ).toBe(true);
     });
 
@@ -1338,7 +1338,7 @@ describe('TicketDrawer', () => {
 
       await userEvent.click(button('Delete'));
       await userEvent.click(
-        screen.getByRole('button', { name: `Delete #${ticket.number}` }),
+        screen.getByRole('button', { name: `Delete T${ticket.number}` }),
       );
 
       expect(deleteTicket).toHaveBeenCalledWith({

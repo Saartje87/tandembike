@@ -40,7 +40,7 @@ it once at user level as described in the next section.
 Keep `npm run dev` (or `npm run start`) running while the Agent works. The
 server's instructions explain the tracker to Agents: moving a Ticket to In
 progress and Done, Claims, acceptance criteria, Blockers, Epics and Cycles,
-using the Project their repository names, and referring to Tickets as `#42`.
+using the Project their repository names, and referring to Tickets as `T42`.
 
 An Agent session keeps the tools it loaded when it connected. After you pull
 or merge changes to the MCP tools, reconnect the server (`/mcp` in Claude

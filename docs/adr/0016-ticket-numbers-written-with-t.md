@@ -1,0 +1,3 @@
+# Ticket numbers are written T42, not #42
+
+A Ticket number was written `#42`, but other systems claim that form: on GitHub, where this repo's commits and PRs live, `#42` links to GitHub's own issue or PR 42. We write it `T42` in everything written from now on, in the UI, MCP instructions, error messages, docs and commits, while the number itself stays a plain integer in storage, URLs and MCP parameters. Fields still accept `#42`, `t42` and a bare `42`, and text already written with `#` is left as it is. We rejected a separator (`T-42`) or longer prefix (`TB-42`) as noise, and per-Project keys (`WEB-12`) because a Ticket keeps its number when it moves Project (T151).

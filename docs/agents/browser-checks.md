@@ -1,6 +1,6 @@
 # Browser checks
 
-jsdom cannot run Next's routing, so a bug in navigation, a drawer or dialog, or a Server Action that navigates can pass every test and both reviews (the 404 after a delete in #60 did). Check such a change in a real browser: headless Chrome driving a throwaway copy of the branch.
+jsdom cannot run Next's routing, so a bug in navigation, a drawer or dialog, or a Server Action that navigates can pass every test and both reviews (the 404 after a delete in T60 did). Check such a change in a real browser: headless Chrome driving a throwaway copy of the branch.
 
 ## Never the User's app or data
 

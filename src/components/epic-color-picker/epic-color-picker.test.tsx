@@ -60,7 +60,7 @@ describe('EpicColorPicker', () => {
   it('puts the colour back and explains when the pick is refused', async () => {
     vi.mocked(updateTicket).mockResolvedValue({
       ok: false,
-      error: 'There is no Ticket #8.',
+      error: 'There is no Ticket T8.',
     });
     renderWithTheme(<EpicColorPicker epic={{ number: 8, color: 'teal' }} />);
 
@@ -71,7 +71,7 @@ describe('EpicColorPicker', () => {
       await within(
         screen.getByRole('dialog', { name: 'Epic colour' }),
       ).findByRole('alert'),
-    ).toHaveTextContent('There is no Ticket #8.');
+    ).toHaveTextContent('There is no Ticket T8.');
     await waitFor(() => expect(pressed()).toEqual(['Teal']));
   });
 

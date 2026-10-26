@@ -68,7 +68,7 @@ describe('Creating a Ticket split from an Origin', () => {
           originNumber: 99,
         }),
       ),
-    ).toEqual(new NotFoundError('There is no Ticket #99 to be the Origin.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99 to be the Origin.'));
     expect(tickets.listTickets().map(({ number }) => number)).toEqual([1]);
   });
 });
@@ -103,7 +103,7 @@ describe('Creating a batch split from an Origin', () => {
           tickets: [{ title: 'Pay by card' }, { title: 'Pay by invoice' }],
         }),
       ),
-    ).toEqual(new NotFoundError('There is no Ticket #99 to be the Origin.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99 to be the Origin.'));
     expect(tickets.listTickets().map(({ number }) => number)).toEqual([1]);
   });
 });
@@ -234,7 +234,7 @@ describe("Changing a Ticket's Origin", () => {
       ),
     ).toEqual(
       new ValidationError({
-        originNumber: `#${subtask.number} cannot be the Origin of #${spec.number}, because #${spec.number} is already an Origin of #${subtask.number}: #${spec.number} → #${split.number} → #${subtask.number}.`,
+        originNumber: `T${subtask.number} cannot be the Origin of T${spec.number}, because T${spec.number} is already an Origin of T${subtask.number}: T${spec.number} → T${split.number} → T${subtask.number}.`,
       }),
     );
     expect(tickets.getTicket(spec.number)).toMatchObject({
@@ -248,7 +248,7 @@ describe("Changing a Ticket's Origin", () => {
 
     expect(
       errorFrom(() => tickets.updateTicket(split.number, { originNumber: 99 })),
-    ).toEqual(new NotFoundError('There is no Ticket #99 to be the Origin.'));
+    ).toEqual(new NotFoundError('There is no Ticket T99 to be the Origin.'));
   });
 });
 

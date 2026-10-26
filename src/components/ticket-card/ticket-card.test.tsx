@@ -36,7 +36,7 @@ describe('TicketCard', () => {
 
     const title = screen.getByRole('link', { name: 'Fix the header' });
     expect(title).toHaveAttribute('href', '/project/1/cycle/7?ticket=4');
-    expect(screen.getByText('#4').parentElement).toContainElement(title);
+    expect(screen.getByText('T4').parentElement).toContainElement(title);
   });
 
   it('shows an icon-only drag handle with an accessible name', () => {
@@ -45,7 +45,7 @@ describe('TicketCard', () => {
     );
 
     const handle = screen.getByRole('button', {
-      name: 'Drag Ticket #4 to another Status',
+      name: 'Drag Ticket T4 to another Status',
     });
     expect(handle).not.toHaveTextContent('Drag');
     const icon = handle.querySelector('span[role="presentation"]');
@@ -222,7 +222,7 @@ describe('TicketCard', () => {
       );
 
       expect(
-        screen.getByRole('link', { name: 'Epic #2 Checkout' }),
+        screen.getByRole('link', { name: 'Epic T2 Checkout' }),
       ).toHaveAttribute('href', '/ticket/2');
     });
 
@@ -238,7 +238,7 @@ describe('TicketCard', () => {
       );
 
       expect(
-        screen.getByRole('link', { name: 'Epic #2 Checkout' }),
+        screen.getByRole('link', { name: 'Epic T2 Checkout' }),
       ).toHaveAttribute('data-color', 'amber');
     });
 
@@ -278,7 +278,7 @@ describe('Selecting a TicketCard', () => {
     selectable(true);
 
     expect(
-      screen.getByRole('checkbox', { name: 'Select #4 Fix the header' }),
+      screen.getByRole('checkbox', { name: 'Select T4 Fix the header' }),
     ).toBeChecked();
   });
 

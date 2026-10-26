@@ -27,12 +27,12 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-epics={JSON.stringify(epics)}
       data-epic-children={JSON.stringify(epicChildren)}
     >
-      {`Ticket drawer #${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')}`}
+      {`Ticket drawer T${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')}`}
     </div>
   ),
 }));
 
-/** Tickets with a Project "Website" holding #1, and another holding #2. */
+/** Tickets with a Project "Website" holding T1, and another holding T2. */
 function setUp() {
   const tickets = createTestTickets();
   const website = tickets.createProject({ name: 'Website' });
@@ -64,7 +64,7 @@ describe('BoardTicketDrawer', () => {
     );
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `Ticket drawer #${ticket.number} over /project/1/cycle/7 comments: Started.`,
+      `Ticket drawer T${ticket.number} over /project/1/cycle/7 comments: Started.`,
     );
   });
 
