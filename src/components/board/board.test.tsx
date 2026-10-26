@@ -148,7 +148,9 @@ describe('Board', () => {
   it('offers to rename the Project from its header', () => {
     renderWithTheme(<Board project={project} tickets={[]} />);
 
-    expect(screen.getByRole('button', { name: 'Rename' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Website' }),
+    ).toHaveAccessibleDescription('Edit project name');
   });
 
   it('shows every Status column, even when empty', () => {
