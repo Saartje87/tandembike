@@ -22,7 +22,34 @@ Run every check against a throwaway server with its own database, never the User
    });
    ```
 
-6. **Seed** through MCP on the throwaway port, never the database: a JSON-RPC `tools/call` POST to `http://localhost:3100/api/mcp` with `accept: application/json, text/event-stream`. Create a fresh Project per run so runs repeat.
+6. **Seed** through MCP on the throwaway port, never the database. Create a fresh Project per run so runs repeat. This helper posts a JSON-RPC `tools/call`, reads the event-stream reply and throws on a refused call:
+
+   ```js
+   let rpcId = 0;
+   async function call(name, args) {
+     const res = await fetch('http://localhost:3100/api/mcp', {
+       method: 'POST',
+       headers: {
+         'content-type': 'application/json',
+         accept: 'application/json, text/event-stream',
+       },
+       body: JSON.stringify({
+         jsonrpc: '2.0',
+         id: ++rpcId,
+         method: 'tools/call',
+         params: { name, arguments: args },
+       }),
+     });
+     const text = await res.text();
+     const data = text.split('\n').find((line) => line.startsWith('data:'));
+     const { result, error } = JSON.parse(data ? data.slice(5) : text);
+     const body = result?.content?.[0]?.text ?? error?.message;
+     if (error || result?.isError) throw new Error(`${name}: ${body}`);
+     try { return JSON.parse(body); } catch { return body; }
+   }
+   ```
+
+   Read each tool's input and reply shape from its `registerTool` call in `src/mcp/mcp-server.ts` rather than guessing: `create_tickets` returns `{ numbers }`, and `rename_cycle`, `start_cycle` and `archive_cycle` take the Cycle as `id` where the planning tools take `cycleId`.
 7. **Drive and assert** the user's exact symptom: the URL (`pathname + search`), what a heading or `getByText(/not found/i)` shows, `window.scrollY`, `document.title`. A check passes only if it can fail: make it go red once, on the bug or by breaking the code in the worktree, then restore.
 8. **Clean up.** Stop the server, then `git worktree remove --force <scratchpad>/wt` and `git worktree prune`.
 
