@@ -33,6 +33,7 @@ import {
 import type { AcceptanceCriterion } from '../../tickets/tickets';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
+import { InlineEdit } from '../inline-edit/inline-edit';
 import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 import * as styles from './acceptance-criteria-editor.css';
 
@@ -84,58 +85,66 @@ type SortableCriterionProps = {
   criterion: AcceptanceCriterion;
   /** Its place in the list, from 0. */
   index: number;
+  /** Whether its text is being edited: it cannot be dragged meanwhile. */
+  editing: boolean;
   children: ReactNode;
 };
 
 /**
- * A criterion that can be dragged by its handle to another place. Only a
- * criterion that shows, not one being edited or removed, renders one: a
- * sortable without its handle makes its whole item the handle.
+ * A criterion that can be dragged by its handle to another place, except
+ * while its text is being edited: then it is disabled and its handle hidden.
+ * The handle stays in the DOM, as a sortable without one makes its whole
+ * item the handle.
  */
 const SortableCriterion: FC<SortableCriterionProps> = ({
   criterion,
   index,
+  editing,
   children,
 }) => {
-  const { ref, handleRef } = useSortable({ id: criterion.id, index });
+  const { ref, handleRef } = useSortable({
+    id: criterion.id,
+    index,
+    disabled: editing,
+  });
 
   return (
     <li ref={ref} className={styles.sortable}>
-      <Inline gap={1} alignY="center">
-        <Button
-          ref={handleRef}
-          className={styles.handle}
-          type="button"
-          variant="ghost"
-          size="small"
-          aria-label={`Drag criterion: ${criterion.text}`}
-        >
-          <Icon name="bars-3" size="small" />
-        </Button>
+      <Inline gap={1} alignY="center" flexWrap="nowrap">
+        {/* Hidden, not removed, so the handle stays the only activator. */}
+        <Box hidden={editing}>
+          <Button
+            ref={handleRef}
+            className={styles.handle}
+            type="button"
+            variant="ghost"
+            size="small"
+            aria-label={`Drag criterion: ${criterion.text}`}
+          >
+            <Icon name="bars-3" size="small" />
+          </Button>
+        </Box>
         {children}
       </Inline>
     </li>
   );
 };
 
-/** Whether a criterion shows, is being edited, or asks to confirm its removal. */
-type CriterionMode = 'show' | 'edit' | 'remove';
-
 type CriterionItemProps = {
   criterion: AcceptanceCriterion;
   /** Its place in the list, from 0. */
   index: number;
   onCheck: (checked: boolean) => void;
-  /** Saves new text; `onRefused` gets the reason when the server refuses it. */
-  onEdit: (text: string, onRefused: (reason: string) => void) => void;
+  /** Saves new text; resolves to the reason when the server refuses it. */
+  onEdit: (text: string) => Promise<string | undefined>;
   onRemove: () => void;
 };
 
 /**
  * One criterion: a handle to drag it to another place, its checkbox, its
- * text, which opens a field to edit it, and a button to remove it. In the
- * field Enter saves and Escape cancels; a refused edit opens the field again
- * with the User's text. Remove asks first, in place of the criterion.
+ * text, which edits in place, and a button to remove it. While the text is
+ * edited only the checkbox stays beside it. Remove asks first, in place of
+ * the criterion.
  */
 const CriterionItem: FC<CriterionItemProps> = ({
   criterion,
@@ -144,58 +153,26 @@ const CriterionItem: FC<CriterionItemProps> = ({
   onEdit,
   onRemove,
 }) => {
-  const inputId = useId();
-  const errorId = useId();
-  const [mode, setMode] = useState<CriterionMode>('show');
-  // The button to focus once the criterion shows again.
-  const [refocus, setRefocus] = useState<Exclude<CriterionMode, 'show'>>();
-  // The form outlives the field, which closes on submit while the text
-  // saves. It has no pending state: the optimistic text shows instead.
-  const {
-    formState: { errors },
-    handleSubmit,
-    register,
-    reset,
-    setError,
-  } = useForm<{ text: string }>({
-    defaultValues: { text: criterion.text },
-    // A refused text keeps its reason until the edit ends.
-    reValidateMode: 'onSubmit',
-  });
-  const error = errors.text?.message;
+  const [removing, setRemoving] = useState(false);
+  const [editing, setEditing] = useState(false);
+  // Puts focus back on the remove button when its removal is cancelled.
+  const [refocusRemove, setRefocusRemove] = useState(false);
 
   const keepingDrawerOpen = (run: () => void) => (event: MouseEvent) => {
     keepDrawerOpen(event);
     run();
   };
-  const showAgain = (focus: typeof refocus) => {
-    setMode('show');
-    setRefocus(focus);
-  };
-  const endEdit = () => showAgain('edit');
-  const save = handleSubmit(({ text }) => {
-    endEdit();
-    if (text.trim() === criterion.text) {
-      reset({ text: criterion.text });
-      return;
-    }
-    onEdit(text, (reason) => {
-      reset({ text });
-      setError('text', { type: 'server', message: reason });
-      setMode('edit');
-    });
-  });
-  const cancel = () => {
-    endEdit();
-    reset({ text: criterion.text });
+  const keep = () => {
+    setRemoving(false);
+    setRefocusRemove(true);
   };
 
-  if (mode === 'remove') {
+  if (removing) {
     return (
       <li
         onKeyDown={(event) => {
           if (claimEscape(event)) {
-            showAgain('remove');
+            keep();
           }
         }}
       >
@@ -217,7 +194,7 @@ const CriterionItem: FC<CriterionItemProps> = ({
               type="button"
               variant="ghost"
               size="small"
-              onClick={keepingDrawerOpen(() => showAgain('remove'))}
+              onClick={keepingDrawerOpen(keep)}
             >
               Cancel
             </Button>
@@ -227,51 +204,8 @@ const CriterionItem: FC<CriterionItemProps> = ({
     );
   }
 
-  if (mode === 'edit') {
-    return (
-      <li>
-        <form
-          onSubmit={save}
-          onKeyDown={(event) => {
-            if (claimEscape(event)) {
-              cancel();
-            }
-          }}
-        >
-          <Stack gap={1}>
-            <Label htmlFor={inputId}>
-              <VisuallyHidden>Edit acceptance criterion</VisuallyHidden>
-            </Label>
-            <Inline gap={2} alignY="center">
-              <TextInput
-                {...register('text')}
-                id={inputId}
-                autoComplete="off"
-                autoFocus
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? errorId : undefined}
-              />
-              <Button type="submit" size="small" onClick={keepDrawerOpen}>
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="small"
-                onClick={keepingDrawerOpen(cancel)}
-              >
-                Cancel
-              </Button>
-            </Inline>
-            <FieldError id={errorId} reason={error} />
-          </Stack>
-        </form>
-      </li>
-    );
-  }
-
   return (
-    <SortableCriterion criterion={criterion} index={index}>
+    <SortableCriterion criterion={criterion} index={index} editing={editing}>
       <Checkbox
         name={`criterion-${criterion.id}`}
         aria-label={criterion.text}
@@ -279,43 +213,27 @@ const CriterionItem: FC<CriterionItemProps> = ({
         checked={criterion.checked}
         onChange={(event) => onCheck(event.currentTarget.checked)}
       />
-      <Box
-        asChild
-        flex={1}
-        backgroundColor="transparent"
-        border="none"
-        borderRadius={1}
-        paddingBlock={0}
-        paddingInline={1}
-        wordBreak="break-word"
-        className={styles.text}
-      >
-        <button
-          type="button"
-          aria-label={`Edit criterion: ${criterion.text}`}
-          // biome-ignore lint/a11y/noAutofocus: returns focus to the text when its edit ends, as the Blocks buttons here do.
-          autoFocus={refocus === 'edit'}
-          onClick={keepingDrawerOpen(() => {
-            reset({ text: criterion.text });
-            setMode('edit');
-          })}
-        >
-          {criterion.text}
-        </button>
+      <Box flex={1}>
+        <InlineEdit
+          value={criterion.text}
+          label="Acceptance criterion"
+          onSave={onEdit}
+          onEditingChange={setEditing}
+        />
       </Box>
-      <Inline gap={0} alignY="center">
+      {!editing && (
         <Button
           type="button"
           variant="ghost"
           size="small"
           intent="danger"
           aria-label={`Remove criterion: ${criterion.text}`}
-          autoFocus={refocus === 'remove'}
-          onClick={keepingDrawerOpen(() => setMode('remove'))}
+          autoFocus={refocusRemove}
+          onClick={keepingDrawerOpen(() => setRemoving(true))}
         >
           <Icon name="x-mark" size="small" />
         </Button>
-      </Inline>
+      )}
     </SortableCriterion>
   );
 };
@@ -469,20 +387,28 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
     });
   };
 
-  /** Saves `next` as the whole list, showing it at once. */
-  const replace = (
-    next: AcceptanceCriterion[],
-    onRefused: (reason: string) => void = setError,
-  ) => {
+  /**
+   * Saves `next` as the whole list, showing it at once. Call it inside a
+   * transition. Resolves to the reason when the server refuses it.
+   */
+  const save = async (next: AcceptanceCriterion[]) => {
     setError(undefined);
+    showChange({ type: 'replace', criteria: next });
+    const result = await setTicketAcceptanceCriteria({
+      number: ticketNumber,
+      acceptanceCriteria: asReplacement(next),
+    });
+    return result.ok
+      ? undefined
+      : (result.fieldErrors?.acceptanceCriteria ?? result.error);
+  };
+
+  /** Saves `next` as the whole list, saying why when it is refused. */
+  const replace = (next: AcceptanceCriterion[]) => {
     startChange(async () => {
-      showChange({ type: 'replace', criteria: next });
-      const result = await setTicketAcceptanceCriteria({
-        number: ticketNumber,
-        acceptanceCriteria: asReplacement(next),
-      });
-      if (!result.ok) {
-        onRefused(result.fieldErrors?.acceptanceCriteria ?? result.error);
+      const reason = await save(next);
+      if (reason !== undefined) {
+        setError(reason);
       }
     });
   };
@@ -520,15 +446,15 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
                 criterion={criterion}
                 index={index}
                 onCheck={(checked) => check({ id: criterion.id, checked })}
-                onEdit={(text, onRefused) =>
-                  replace(
+                onEdit={(text) =>
+                  // Runs in InlineEdit's transition.
+                  save(
                     shown.map((other) =>
                       // Editing a criterion unchecks it, as the server does.
                       other.id === criterion.id
                         ? { ...other, text: text.trim(), checked: false }
                         : other,
                     ),
-                    onRefused,
                   )
                 }
                 onRemove={() => {

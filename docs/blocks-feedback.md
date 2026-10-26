@@ -611,11 +611,10 @@ Escape inside it also has to be kept from a surrounding `Drawer`
 (proposal 17), and a click on ✓ or ✗, which unmounts the button, from its
 outside-click check (proposal 13).
 
-**Second case.** Each acceptance criterion's text opens its edit field on a
-click, so it is a button that has to read as body text and wrap across lines.
-`acceptance-criteria-editor.tsx` uses `Box asChild` on a plain `<button>` for
-the reset (`border="none"`, `backgroundColor="transparent"`,
-`wordBreak`) plus a `text` class for what atoms cannot express:
+**Second case.** Each acceptance criterion's text is an `InlineEdit` too, so
+it is a button that has to read as body text and wrap across lines beside its
+checkbox. The `text` class in `inline-edit.css.ts` covers what atoms cannot
+express:
 
 - `cursor: text`. The `cursor` atom has only `auto` and `pointer`.
 - `textAlign: start`. The `textAlign` atom has `left` and `right` but no
@@ -623,6 +622,10 @@ the reset (`border="none"`, `backgroundColor="transparent"`,
 - The `:hover` background and the `:focus-visible` ring.
 - Biome's `noAutofocus` flags `autoFocus` on the plain `<button>`, which
   returns focus to the text after an edit, though not on Blocks' `Button`.
+
+While a criterion is edited its drag handle and remove ✗ are hidden, so the
+component tells its caller through `onEditingChange`; an inline-edit
+component in Blocks would need the same.
 
 **Faint until hovered.** Each criterion's drag handle is at `opacity: 0.4`
 until its row is hovered or focused. The `opacity` atom has only `0` and `1`,

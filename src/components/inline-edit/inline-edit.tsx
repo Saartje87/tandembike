@@ -45,6 +45,11 @@ export type InlineEditProps = {
   renderText?: (text: ReactNode) => ReactNode;
   /** For the `<input>`, such as to match the wrapper's font. */
   inputClassName?: string;
+  /**
+   * Told when an edit opens (true) and ends (false), and when a refused
+   * save reopens it, such as to hide the item's other buttons meanwhile.
+   */
+  onEditingChange?: (editing: boolean) => void;
 };
 
 const asIs = (text: ReactNode) => text;
@@ -63,11 +68,16 @@ export const InlineEdit: FC<InlineEditProps> = ({
   readOnly = false,
   renderText = asIs,
   inputClassName,
+  onEditingChange,
 }) => {
   const inputId = useId();
   const errorId = useId();
   const hintId = useId();
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditingState] = useState(false);
+  const setEditing = (next: boolean) => {
+    setEditingState(next);
+    onEditingChange?.(next);
+  };
   // Puts focus back on the text when the User ends an edit.
   const [refocus, setRefocus] = useState(false);
   const [shown, showSaved] = useOptimistic(value);

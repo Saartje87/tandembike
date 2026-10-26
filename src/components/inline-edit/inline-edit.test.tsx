@@ -209,6 +209,29 @@ describe('InlineEdit', () => {
     expect(input()).toHaveValue('Fix the logo!');
   });
 
+  it('tells when an edit opens and ends, including a refused save reopening it', async () => {
+    const { onSave, settle } = pendingSave();
+    const onEditingChange = vi.fn<(editing: boolean) => void>();
+    renderEdit({ onSave, onEditingChange });
+
+    await userEvent.click(text());
+    expect(onEditingChange).toHaveBeenLastCalledWith(true);
+    await userEvent.keyboard('{Escape}');
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+    await userEvent.click(text());
+    await userEvent.type(input(), '!{Enter}');
+    expect(onEditingChange).toHaveBeenLastCalledWith(false);
+    await settle('Enter a title.');
+    expect(onEditingChange).toHaveBeenLastCalledWith(true);
+    expect(onEditingChange.mock.calls).toEqual([
+      [true],
+      [false],
+      [true],
+      [false],
+      [true],
+    ]);
+  });
+
   it('wraps the text at rest, such as in a heading', () => {
     renderEdit({ renderText: (content) => <h2>{content}</h2> });
 
