@@ -49,7 +49,7 @@ Run every check against a throwaway server with its own database, never the User
    }
    ```
 
-   Read each tool's input and reply shape from its `registerTool` call in `src/mcp/mcp-server.ts` rather than guessing: `create_tickets` returns `{ numbers }`, and `rename_cycle`, `start_cycle` and `archive_cycle` take the Cycle as `id` where the planning tools take `cycleId`.
+   Read each tool's input and reply shape from its `registerTool` call in `src/mcp/mcp-server.ts` rather than guessing: `create_tickets` returns `{ numbers }`.
 7. **Drive and assert** the user's exact symptom: the URL (`pathname + search`), what a heading or `getByText(/not found/i)` shows, `window.scrollY`, `document.title`. A check passes only if it can fail: make it go red once, on the bug or by breaking the code in the worktree, then restore.
 8. **Clean up.** Stop the server, then `git worktree remove --force <scratchpad>/wt` and `git worktree prune`.
 

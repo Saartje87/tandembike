@@ -2073,7 +2073,7 @@ describe('Cycle tools', () => {
     });
     await client.callTool({
       name: 'rename_cycle',
-      arguments: { id: created.id, title: 'Public beta' },
+      arguments: { cycleId: created.id, title: 'Public beta' },
     });
     const listed = await client.callTool({
       name: 'list_cycles',
@@ -2276,17 +2276,38 @@ describe('Cycle tools', () => {
 
     const started = await client.callTool({
       name: 'start_cycle',
-      arguments: { id: cycle.id },
+      arguments: { cycleId: cycle.id },
     });
     expect(resultJson(started)).toMatchObject({ state: 'Active' });
 
     const archived = await client.callTool({
       name: 'archive_cycle',
-      arguments: { id: cycle.id },
+      arguments: { cycleId: cycle.id },
     });
     expect(resultJson(archived)).toMatchObject({
       state: 'Archived',
       archivedAt: expect.any(String),
+    });
+    await client.close();
+  });
+
+  it('refuses a Cycle tool called with id in place of cycleId', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    for (const [name, args] of [
+      ['rename_cycle', { id: cycle.id, title: 'Launch' }],
+      ['start_cycle', { id: cycle.id }],
+      ['archive_cycle', { id: cycle.id }],
+    ] as const) {
+      const result = await client.callTool({ name, arguments: args });
+
+      expect(result.isError, name).toBe(true);
+      expect(resultText(result), name).toMatch(/Input validation error/);
+    }
+    expect(tickets.getCycle(cycle.id)).toMatchObject({
+      title: 'Beta',
+      state: 'Prepared',
     });
     await client.close();
   });
@@ -2303,7 +2324,7 @@ describe('Cycle tools', () => {
 
     const refused = await client.callTool({
       name: 'start_cycle',
-      arguments: { id: launch.id },
+      arguments: { cycleId: launch.id },
     });
     expect(refused.isError).toBe(true);
     expect(resultText(refused)).toBe(
@@ -2313,7 +2334,7 @@ describe('Cycle tools', () => {
 
     const started = await client.callTool({
       name: 'start_cycle',
-      arguments: { id: launch.id, confirmArchiveActive: true },
+      arguments: { cycleId: launch.id, confirmArchiveActive: true },
     });
     expect(resultJson(started)).toMatchObject({
       state: 'Active',
@@ -2338,7 +2359,7 @@ describe('Cycle tools', () => {
     });
     const missing = await client.callTool({
       name: 'archive_cycle',
-      arguments: { id: 99 },
+      arguments: { cycleId: 99 },
     });
 
     expect(
