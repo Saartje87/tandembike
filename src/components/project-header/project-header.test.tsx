@@ -1,3 +1,4 @@
+import { atoms } from '@blockle/blocks';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,6 +26,7 @@ const project: Project = {
 };
 
 const header = () => screen.getByRole('region', { name: 'Website' });
+const padding = atoms({ paddingBlock: 2, paddingInline: 3 }).split(' ');
 const openPicker = () =>
   userEvent.click(screen.getByRole('button', { name: 'Colour and icon' }));
 const picker = () => within(screen.getByRole('group', { name: 'Colour' }));
@@ -58,6 +60,34 @@ describe('ProjectHeader', () => {
 
     expect(header()).toHaveAttribute('data-color', 'teal');
   });
+
+  it.each([
+    ['without', null],
+    ['with', 'teal'],
+  ] as const)('pads the header the same %s a colour', (_, color) => {
+    renderWithTheme(<ProjectHeader project={{ ...project, color }} />);
+
+    expect(header()).toHaveClass(...padding);
+  });
+
+  it.each([
+    ['picked', null, 'Teal', 'teal'],
+    ['cleared', 'teal', 'Default', undefined],
+  ] as const)(
+    'keeps the padding while a colour is %s',
+    async (_, color, name, shown) => {
+      const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+      vi.mocked(styleProject).mockReturnValue(promise);
+      renderWithTheme(<ProjectHeader project={{ ...project, color }} />);
+
+      await openPicker();
+      await userEvent.click(picker().getByRole('button', { name }));
+
+      expect(header().getAttribute('data-color') ?? undefined).toBe(shown);
+      expect(header()).toHaveClass(...padding);
+      await act(async () => resolve({ ok: true }));
+    },
+  );
 
   it('offers every colour and icon, each with a Default that is picked when none is set', async () => {
     renderWithTheme(<ProjectHeader project={project} />);
