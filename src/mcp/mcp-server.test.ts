@@ -2295,17 +2295,15 @@ describe('Cycle tools', () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
 
-    const results = await Promise.all(
-      [
-        { name: 'rename_cycle', arguments: { id: cycle.id, title: 'Launch' } },
-        { name: 'start_cycle', arguments: { id: cycle.id } },
-        { name: 'archive_cycle', arguments: { id: cycle.id } },
-      ].map((call) => client.callTool(call)),
-    );
+    for (const [name, args] of [
+      ['rename_cycle', { id: cycle.id, title: 'Launch' }],
+      ['start_cycle', { id: cycle.id }],
+      ['archive_cycle', { id: cycle.id }],
+    ] as const) {
+      const result = await client.callTool({ name, arguments: args });
 
-    for (const result of results) {
-      expect(result.isError).toBe(true);
-      expect(resultText(result)).toMatch(/Input validation error/);
+      expect(result.isError, name).toBe(true);
+      expect(resultText(result), name).toMatch(/Input validation error/);
     }
     expect(tickets.getCycle(cycle.id)).toMatchObject({
       title: 'Beta',
