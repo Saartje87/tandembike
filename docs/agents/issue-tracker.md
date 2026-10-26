@@ -8,13 +8,13 @@ A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm r
 
 ## Development work in this repository
 
-Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), post its link as a comment on the Ticket with `add_comment`. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below); remove its triage state label in the same call, by the completion rule in `triage-labels.md`. Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
+Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), add its URL to the Ticket as an External reference with `update_ticket` `addExternalReferences`; do not post it as a comment. If that PR is closed and replaced, add the new PR's URL as another reference and leave the old one: references are history, not status. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below); remove its triage state label in the same call, by the completion rule in `triage-labels.md`. Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
 
 A Claim covers the work of one Agent run, not the wait for a merge:
 
-- Right after posting the PR link, release the Claim with `release_ticket_claim`. The Ticket stays `In progress`; that and the PR comment show it is taken.
+- Right after adding the PR's External reference, release the Claim with `release_ticket_claim`. The Ticket stays `In progress`; that and the PR reference show it is taken.
 - A later Agent run that works on the open PR, for example to fix review findings, claims the Ticket for that work and releases it again when done.
-- After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose linked PR is merged with CI green does; failing both, the User does.
+- After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose PR, in its External references, is merged with CI green does; failing both, the User does.
 
 ## Working an Epic
 
@@ -23,7 +23,7 @@ An Epic is handed off, worked and delivered as one unit:
 1. `get_ticket` the Epic and claim it once with `claim_ticket`, as the server's instructions describe.
 2. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`T42`).
-4. Open one PR for the whole Epic, named after it, and post its link as a comment on the Epic. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
+4. Open one PR for the whole Epic, named after it, and add its URL to the Epic as an External reference with `update_ticket` `addExternalReferences`, not to its children. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
 5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
 
 ## Triage and Blockers
