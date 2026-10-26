@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 
 import { appTickets } from '../../tickets/app-tickets';
+import type { BatchFailure } from '../../tickets/errors';
 import { type ActionResult, actionResult } from '../lib/action-result';
 import { boardRoute } from '../lib/paths';
 
@@ -83,6 +84,52 @@ export async function unplanTicket(input: {
     });
     revalidateProjects();
     return {};
+  });
+}
+
+export type CycleTicketsActionResult = ActionResult<{
+  /** The Tickets left as they were, each with the reason. */
+  failed: BatchFailure[];
+}>;
+
+type CycleTicketsActionInput = { cycleId: number; ticketNumbers: number[] };
+
+/** The batch input as the Tickets module takes it. */
+function cycleTicketsInput(input: CycleTicketsActionInput) {
+  return {
+    cycleId: Number(input?.cycleId),
+    ticketNumbers: Array.isArray(input?.ticketNumbers)
+      ? input.ticketNumbers.map(Number)
+      : [],
+  };
+}
+
+/**
+ * Plans a selection of Tickets into a Cycle for the UI. Each Ticket that
+ * cannot be planned comes back in `failed` and the others are still planned;
+ * a refused batch as a whole comes back as `error`.
+ */
+export async function planTickets(
+  input: CycleTicketsActionInput,
+): Promise<CycleTicketsActionResult> {
+  return actionResult(() => {
+    const { failed } = appTickets().planTickets(cycleTicketsInput(input));
+    revalidateProjects();
+    return { failed };
+  });
+}
+
+/**
+ * Takes a selection of Tickets out of a Cycle, back to the Backlog, for the
+ * UI, reporting the ones it cannot as `planTickets` does.
+ */
+export async function unplanTickets(
+  input: CycleTicketsActionInput,
+): Promise<CycleTicketsActionResult> {
+  return actionResult(() => {
+    const { failed } = appTickets().unplanTickets(cycleTicketsInput(input));
+    revalidateProjects();
+    return { failed };
   });
 }
 

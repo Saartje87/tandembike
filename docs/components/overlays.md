@@ -99,7 +99,9 @@ export function HelpPopover() {
 
 Under jsdom an open popover counts as hidden, so a component test that opens
 one calls `showOpenPopovers()` from `src/test/popover.ts` first
-(`docs/blocks-feedback.md`, 27). Blocks' `Popover` renders a plain `div`;
+(`docs/blocks-feedback.md`, 27). In a file with drag tests, call it inside
+the `describe` that opens the popover: dnd-kit drags differently once the
+Popover API exists. Blocks' `Popover` renders a plain `div`;
 pass `role="dialog"` and an `aria-label` when it holds controls.
 
 Keep focus, accessible names, and dismissal behavior in mind when choosing an

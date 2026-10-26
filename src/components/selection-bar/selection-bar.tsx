@@ -9,23 +9,26 @@ export type SelectionBarProps = {
   onClear: () => void;
   /** Actions on the selection, shown between the count and Clear. */
   children?: ReactNode;
+  /** Shown under the actions, such as why an action left some Tickets. */
+  notice?: ReactNode;
 };
 
 /**
  * A toolbar saying how many Tickets are selected, with their actions and a
- * button to clear the selection. It sticks to the bottom of the view.
+ * button to clear the selection, and an optional notice under it. It sticks
+ * to the bottom of the view.
  */
 export const SelectionBar: FC<SelectionBarProps> = ({
   count,
   onClear,
   children,
+  notice,
 }) => (
-  // `Inline` takes no `role` (docs/blocks-feedback.md, 15).
   <Box
     asChild
     display="flex"
-    alignItems="center"
-    gap={3}
+    flexDirection="column"
+    gap={2}
     position="sticky"
     insetBlockEnd={0}
     backgroundColor="primary-100"
@@ -34,12 +37,19 @@ export const SelectionBar: FC<SelectionBarProps> = ({
     paddingBlock={2}
     paddingInline={3}
   >
-    <div role="toolbar" aria-label="Selection">
-      <Text>{count} selected</Text>
-      {children}
-      <Button type="button" variant="ghost" size="small" onClick={onClear}>
-        Clear
-      </Button>
+    {/* Marked so a click inside it is not one on empty Board space. */}
+    <div data-selection-bar="">
+      {/* `Inline` takes no `role` (docs/blocks-feedback.md, 15). */}
+      <Box asChild display="flex" alignItems="center" gap={3}>
+        <div role="toolbar" aria-label="Selection">
+          <Text>{count} selected</Text>
+          {children}
+          <Button type="button" variant="ghost" size="small" onClick={onClear}>
+            Clear
+          </Button>
+        </div>
+      </Box>
+      {notice}
     </div>
   </Box>
 );

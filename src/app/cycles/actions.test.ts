@@ -10,9 +10,11 @@ import {
   createCycle,
   discardCycle,
   planTicket,
+  planTickets,
   renameCycle,
   startCycle,
   unplanTicket,
+  unplanTickets,
 } from './actions';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -77,6 +79,68 @@ describe('Cycle actions', () => {
     ).resolves.toEqual({ ok: true });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it('plans several Tickets into a Cycle, reporting the ones it refuses', async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the footer',
+    });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: launch.id, number: other.number });
+
+    await expect(
+      planTickets({
+        cycleId: beta.id,
+        ticketNumbers: [ticket.number, other.number],
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      failed: [
+        {
+          number: other.number,
+          error: `Ticket T${other.number} is already planned into the Cycle "Launch". Remove it from that Cycle first.`,
+        },
+      ],
+    });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([ticket.number]);
+    expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([other.number]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it('takes several Tickets out of a Cycle, reporting the ones it refuses', async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: ticket.number });
+
+    await expect(
+      unplanTickets({ cycleId: cycle.id, ticketNumbers: [ticket.number, 42] }),
+    ).resolves.toEqual({
+      ok: true,
+      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
+    });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it('refuses a whole batch for a Cycle that cannot change', async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    const result = await planTickets({
+      cycleId: cycle.id,
+      ticketNumbers: [ticket.number],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('starts a Cycle, and returns why a second one may not start', async () => {

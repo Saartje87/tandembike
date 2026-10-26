@@ -666,7 +666,11 @@ instead.
 
 **Expected.** An accessible menu button built on `Popover`.
 
-**Workaround.** None needed yet; Archive is a footer button.
+**Workaround.** Archive is a footer button. The selection bar's "Plan into
+Cycle" (T115) needs a real pick list, so `plan-into-cycle-menu.tsx` builds
+one from `Popover` (`role="dialog"`) holding a `Stack` of ghost `Button`s,
+closing on a pick and claiming Escape itself, as `epic-color-picker.tsx`
+does. It has no menu roles and no arrow-key focus.
 
 **Question.** Is a `Menu` component planned?
 
@@ -866,7 +870,10 @@ screen.getByRole('button', { name: 'Inside' }); // throws under jsdom
 
 **Workaround.** `src/test/popover.ts`: no-op `showPopover` and
 `hidePopover`, and a test stylesheet that shows `[popover][data-open]`,
-which Blocks sets while open.
+which Blocks sets while open. The stub has to stay inside the `describe`
+that opens a popover (`showOpenPopovers()` removes it again after that
+block): dnd-kit drags differently once `showPopover` exists, which broke the
+Board's drag tests (T115).
 
 **Question.** Could Blocks' test setup docs cover this, or `Popover` fall
 back to plain visibility where the Popover API is missing?
