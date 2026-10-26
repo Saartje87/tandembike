@@ -60,6 +60,14 @@ export const tickets = sqliteTable(
     claimAgentName: text('claim_agent_name'),
     position: integer('position').notNull().default(0),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Whether this archived child was archived along with its Epic, so
+     * restoring the Epic restores it too. Cleared when it is restored or
+     * leaves its Epic.
+     */
+    archivedWithEpic: integer('archived_with_epic', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },

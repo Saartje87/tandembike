@@ -195,7 +195,8 @@ marker-free ordered list.
 **Workaround.** `board.css.ts`, `breadcrumbs.css.ts`, `label-list.css.ts`,
 `ticket-comments.css.ts`, `blocker-editor.css.ts`,
 `acceptance-criteria-editor.css.ts`, `epic-children.css.ts`,
-`delete-ticket-dialog.css.ts`, `cycle-history.css.ts`,
+`delete-ticket-dialog.css.ts`, `archive-epic-dialog.css.ts`,
+`cycle-history.css.ts`,
 `cycle-ticket-list.css.ts`, `project-tabs.css.ts` and
 `split-off-tickets.css.ts` each use `style({ listStyle: 'none' })`, passed as
 `className` to the list component.
@@ -456,7 +457,7 @@ the "Acceptance criteria" heading.
 
 `cycle-history.tsx` ("Archived Cycles") and `cycle-ticket-list.tsx` ("Tickets
 in this Cycle") name their `Stack tag="ul"` lists with `aria-label` the same
-way.
+way, as does `archive-epic-dialog.tsx` ("Children" and "Warnings").
 
 **Also no `span` tag or `role`.** A Board card's acceptance-criteria count is
 an icon plus `2/4`, read as one image named "Acceptance criteria: 2 of 4

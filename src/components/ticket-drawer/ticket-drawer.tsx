@@ -42,6 +42,7 @@ import {
   type TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
+import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
@@ -87,7 +88,7 @@ export type TicketDrawerProps = {
   epicClaim?: TicketClaim | null;
   /**
    * An Epic's children with their Claims and the Tickets they block, for
-   * deleting them along with it. Defaults to none.
+   * deleting or archiving them along with it. Defaults to none.
    */
   epicChildren?: ChildDeletion[];
   /**
@@ -247,6 +248,20 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     setStatusError(undefined);
     save({ status }, setStatusError);
   };
+
+  // An Epic's children that would be archived with it, which it asks about.
+  const archivableChildren = ticket.children
+    .filter((child) => !child.archived)
+    .map(({ number, title, status }) => {
+      const detail = epicChildren?.find((each) => each.number === number);
+      return {
+        number,
+        title,
+        status,
+        claim: detail?.claim ?? null,
+        blocks: detail?.blocks ?? [],
+      };
+    });
 
   const toggleArchived = () => {
     const next = !archived;
@@ -457,7 +472,14 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 <DateTime date={ticket.updatedAt} />
               </Text>
               <Inline gap={2} alignY="center">
-                {!archived && (
+                {!archived && archivableChildren.length > 0 && (
+                  <ArchiveEpicDialog
+                    epic={{ ...ticket, status: fields.status, claim }}
+                    blocks={blockers.blocks}
+                    epicChildren={archivableChildren}
+                  />
+                )}
+                {!archived && archivableChildren.length === 0 && (
                   <Button
                     type="button"
                     variant="outline"

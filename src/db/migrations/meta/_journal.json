@@ -127,6 +127,13 @@
       "when": 1793038849315,
       "tag": "0017_create_ticket_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793049545607,
+      "tag": "0018_add_archived_with_epic",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,1 @@
+ALTER TABLE `tickets` ADD `archived_with_epic` integer DEFAULT false NOT NULL;

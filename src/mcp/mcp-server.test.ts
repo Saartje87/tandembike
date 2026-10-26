@@ -898,6 +898,46 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
+  it('refuses to archive an Epic with children that are not archived', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'archive_ticket',
+      arguments: { number: epic.number },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(
+      `Epic T${epic.number} has child Tickets that are not archived: T${child.number}. Archive or detach them first.`,
+    );
+    expect(tickets.getTicket(child.number).archived).toBe(false);
+    await client.close();
+  });
+
+  it('says restoring an Epic brings back the children archived with it', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const restore = tools.find((tool) => tool.name === 'restore_ticket');
+
+    expect(restore?.description).toMatch(
+      /Restoring an Epic also brings back the children archived with it/,
+    );
+    await client.close();
+  });
+
   it('says when the Ticket to archive or restore does not exist', async () => {
     const client = await connectMcpClient(createTestTickets());
 

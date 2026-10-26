@@ -957,7 +957,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'restore_ticket',
     {
       title: 'Restore Ticket',
-      description: `Bring an archived Ticket back onto the Board exactly as it was. ${returnsSummary({ extra: 'archived' })}`,
+      description: `Bring an archived Ticket back onto the Board exactly as it was. Restoring an Epic also brings back the children archived with it, but not ones archived before it. ${returnsSummary({ extra: 'archived' })}`,
       inputSchema: { number: ticketNumber, detail },
       annotations: { idempotentHint: true },
     },

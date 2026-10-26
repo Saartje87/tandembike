@@ -311,6 +311,17 @@ export type UpdateTicketsInput = Pick<
   ticketNumbers: number[];
 };
 
+/** How `archiveTicket` and `archiveTickets` treat an Epic's children. */
+export type ArchiveTicketOptions = {
+  /**
+   * Archive an Epic's children that are not archived along with it,
+   * instead of refusing the Epic while they are; restoring the Epic brings
+   * them back. Defaults to false. Only the User does this: no MCP tool
+   * passes it.
+   */
+  withChildren?: boolean;
+};
+
 /** How `deleteTicket` treats an Epic's children. */
 export type DeleteTicketOptions = {
   /** Delete the children too, instead of detaching them. Defaults to false. */
@@ -1738,7 +1749,11 @@ export function createTickets(
           return null;
         }
         db.update(tickets)
-          .set({ epicNumber: null, updatedAt: new Date() })
+          .set({
+            epicNumber: null,
+            archivedWithEpic: false,
+            updatedAt: new Date(),
+          })
           .where(eq(tickets.number, number))
           .run();
         touchTicket(db, ticket.epicNumber);
@@ -2051,35 +2066,62 @@ export function createTickets(
 
     /**
      * Archives Ticket `number`: it leaves the normal views but keeps
-     * everything, so restoring brings it back. There is no delete (ADR 0003).
+     * everything, so restoring brings it back (ADR 0003). An Epic is refused
+     * while any child is not archived, unless `withChildren` archives those
+     * children with it, whatever their Status or Claims, all or nothing.
      */
-    archiveTicket(number: number): Ticket {
-      return setArchived(number, true);
+    archiveTicket(number: number, options: ArchiveTicketOptions = {}): Ticket {
+      const affected = db.transaction(() => archiveStep([number], options));
+      publishWith(number, ...affected);
+      return getTicket(number);
     },
 
     /**
      * `archiveTicket` for each of `ticketNumbers`, all or nothing: if any
-     * cannot be archived, none is. The change is announced once, with the
-     * Epics whose Status changed.
+     * cannot be archived, none is. An Epic is archived after its children
+     * in the list, whatever their order. The change is announced once, with
+     * the children archived with an Epic and the Epics whose Status changed.
      */
-    archiveTickets(ticketNumbers: number[]): void {
+    archiveTickets(
+      ticketNumbers: number[],
+      options: ArchiveTicketOptions = {},
+    ): void {
       throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
 
-      const changedEpics = db.transaction(() =>
-        ticketNumbers.flatMap((number) => {
-          const changedEpic = setArchivedStep(number, true);
-          return changedEpic === null ? [] : [changedEpic];
-        }),
+      const affected = db.transaction(() =>
+        archiveStep(ticketNumbers, options),
       );
-      changes.publish({
-        type: 'tickets',
-        numbers: [...new Set([...ticketNumbers, ...changedEpics])],
-      });
+      changes.publish({ type: 'tickets', numbers: affected });
     },
 
-    /** Brings archived Ticket `number` back exactly as it was. */
+    /**
+     * Brings archived Ticket `number` back exactly as it was. An Epic brings
+     * back the children archived with it, but not ones archived before it
+     * or detached since.
+     */
     restoreTicket(number: number): Ticket {
-      return setArchived(number, false);
+      const affected = db.transaction(() => {
+        const changedEpic = setArchivedStep(number, false);
+        const children = db
+          .select({ number: tickets.number })
+          .from(tickets)
+          .where(
+            and(
+              eq(tickets.epicNumber, number),
+              eq(tickets.archived, true),
+              eq(tickets.archivedWithEpic, true),
+            ),
+          )
+          .orderBy(asc(tickets.number))
+          .all()
+          .map((child) => child.number);
+        const changedEpics = children.map((child) =>
+          setArchivedStep(child, false),
+        );
+        return [...children, changedEpic, ...changedEpics];
+      });
+      publishWith(number, ...affected);
+      return getTicket(number);
     },
 
     /**
@@ -2104,7 +2146,11 @@ export function createTickets(
           const childNumbers = children.map((child) => child.number);
           if (!withChildren) {
             db.update(tickets)
-              .set({ epicNumber: null, updatedAt: new Date() })
+              .set({
+                epicNumber: null,
+                archivedWithEpic: false,
+                updatedAt: new Date(),
+              })
               .where(eq(tickets.epicNumber, number))
               .run();
           }
@@ -2207,7 +2253,7 @@ export function createTickets(
     }
     checkNoBlockerBetween(db, { epic, child });
     db.update(tickets)
-      .set({ epicNumber: epic, updatedAt: new Date() })
+      .set({ epicNumber: epic, archivedWithEpic: false, updatedAt: new Date() })
       .where(eq(tickets.number, child))
       .run();
     touchTicket(db, epic);
@@ -2405,21 +2451,68 @@ export function createTickets(
   }
 
   /**
-   * Sets only the archived flag (and updated time), and announces it. A
-   * child's Epic leaves out archived children, so its Status may change.
+   * The change of `archiveTickets`, without its transaction or
+   * announcement: archives `numbers`, their Epics last, and with
+   * `withChildren` the Epics' other children that are not archived. Children
+   * archived in the same step as their Epic are marked so that restoring it
+   * brings them back. Returns every Ticket archived and the Epics whose
+   * Status changed, without repeats.
    */
-  function setArchived(number: number, archived: boolean): Ticket {
-    const changedEpic = db.transaction(() => setArchivedStep(number, archived));
-    publishWith(number, changedEpic);
-    return getTicket(number);
+  function archiveStep(
+    numbers: number[],
+    { withChildren = false }: ArchiveTicketOptions,
+  ): number[] {
+    const epicNumbers = new Set(
+      db
+        .select({ number: tickets.number })
+        .from(tickets)
+        .where(and(inArray(tickets.number, numbers), eq(tickets.type, 'Epic')))
+        .all()
+        .map((epic) => epic.number),
+    );
+    const withEpic = new Set(
+      epicNumbers.size === 0
+        ? []
+        : db
+            .select({ number: tickets.number })
+            .from(tickets)
+            .where(
+              and(
+                inArray(tickets.epicNumber, [...epicNumbers]),
+                eq(tickets.archived, false),
+              ),
+            )
+            .orderBy(asc(tickets.number))
+            .all()
+            .map((child) => child.number),
+    );
+    const extra = withChildren
+      ? [...withEpic].filter((child) => !numbers.includes(child))
+      : [];
+    const order = [
+      ...numbers.filter((number) => !epicNumbers.has(number)),
+      ...extra,
+      ...numbers.filter((number) => epicNumbers.has(number)),
+    ];
+    const changedEpics = order.flatMap((number) => {
+      const changedEpic = setArchivedStep(number, true, withEpic.has(number));
+      return changedEpic === null ? [] : [changedEpic];
+    });
+    return [...new Set([...numbers, ...extra, ...changedEpics])];
   }
 
   /**
-   * The change of `setArchived`, without its transaction or announcement:
-   * run it in the transaction that makes the change. Returns the Epic whose
-   * Status changed, if any.
+   * Sets only Ticket `number`'s archived flag (and updated time), marking it
+   * as archived with its Epic when `withEpic`, and records the Activity:
+   * run it in the transaction that makes the change. A child's Epic leaves
+   * out archived children, so its Status may change: returns that Epic if
+   * it did.
    */
-  function setArchivedStep(number: number, archived: boolean): number | null {
+  function setArchivedStep(
+    number: number,
+    archived: boolean,
+    withEpic = false,
+  ): number | null {
     checkTicketWritable(db, number);
     if (archived) {
       checkChildrenArchived(db, number);
@@ -2433,7 +2526,13 @@ export function createTickets(
       .get();
     const ticket = db
       .update(tickets)
-      .set({ archived, updatedAt: new Date() })
+      .set({
+        archived,
+        updatedAt: new Date(),
+        ...(before?.archived === archived
+          ? {}
+          : { archivedWithEpic: archived && withEpic }),
+      })
       .where(eq(tickets.number, number))
       .returning({ epicNumber: tickets.epicNumber })
       .get();
