@@ -43,9 +43,9 @@ progress and Done, Claims, acceptance criteria, Blockers, Epics and Cycles,
 using the Project their repository names, and referring to Tickets as `T42`.
 
 An Agent session keeps the tools it loaded when it connected. After you pull
-or merge changes to the MCP tools, reconnect the server (`/mcp` in Claude
-Code) or start a new session; see "When the MCP tools change" in
-`docs/agents/issue-tracker.md`.
+or merge changes to the MCP tools, start a new session: reconnecting (`/mcp`
+in Claude Code) may keep the tool descriptions already loaded. See "When the
+MCP tools change" in `docs/agents/issue-tracker.md`.
 
 ## Use Tandembike from another repository
 
