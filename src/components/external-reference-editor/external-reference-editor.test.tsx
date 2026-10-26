@@ -68,6 +68,21 @@ describe('ExternalReferenceEditor', () => {
     expect(screen.queryByRole('link', { name: 'ABC-33' })).toBeNull();
   });
 
+  it('shows a value that is not an http(s) URL as plain text, never as a link', () => {
+    renderWithTheme(
+      <ExternalReferenceEditor
+        ticketNumber={4}
+        references={['javascript:alert(1)', 'mailto:someone@example.com']}
+      />,
+    );
+
+    expect(screen.queryAllByRole('link')).toEqual([]);
+    expect(referencesShown()).toEqual([
+      'javascript:alert(1)',
+      'mailto:someone@example.com',
+    ]);
+  });
+
   it('says when there are none', () => {
     renderWithTheme(
       <ExternalReferenceEditor ticketNumber={4} references={[]} />,

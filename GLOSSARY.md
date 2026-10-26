@@ -49,7 +49,7 @@ A short tag on a Ticket that classifies it, such as `bug` or `needs-triage`. Lab
 _Avoid_: Tag, category, triage metadata
 
 **External reference**:
-A URL or key, such as `#55` or `ABC-33`, that points to the same work in another system, such as a GitHub issue or pull request or a Jira issue. A Ticket can have any number of them, each at most once, and the User or an Agent can add or remove them. Several Tickets may point to the same work.
+A URL or key, such as `#55` or `ABC-33`, that points to the same work in another system, such as a GitHub issue or pull request or a Jira issue. A Ticket can have up to 50 of them, each at most once, and the User or an Agent can add or remove them. Several Tickets may point to the same work.
 _Avoid_: External link, external ID, URL, link
 
 **Reference template**:

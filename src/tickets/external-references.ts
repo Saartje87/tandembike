@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DatabaseConnection } from '../db/connection';
 import { ticketExternalReferences } from '../db/schema';
 import type { ActivityChange } from './activity-change';
+import { hasScheme, httpUrl } from './external-reference-display';
 import { throwFieldErrors } from './rules';
 
 export const maxExternalReferences = 50;
@@ -10,9 +11,6 @@ export const maxExternalReferences = 50;
 export const maxExternalReferenceKeyLength = 100;
 
 export const maxExternalReferenceUrlLength = 2000;
-
-/** A scheme, such as `https:` or `javascript:`, at the start of a value. */
-const schemePattern = /^[a-z][a-z\d+.-]*:/i;
 
 /**
  * Whether trimmed `reference` is an absolute http(s) URL or, without a
@@ -22,26 +20,19 @@ function isExternalReference(reference: string): boolean {
   if (/\s/.test(reference)) {
     return false;
   }
-  if (!schemePattern.test(reference)) {
+  if (!hasScheme(reference)) {
     return reference.length <= maxExternalReferenceKeyLength;
   }
   return (
     reference.length <= maxExternalReferenceUrlLength &&
-    URL.parse(reference)?.protocol.match(/^https?:$/) != null
+    httpUrl(reference) !== null
   );
 }
 
-/**
- * Why the normalized `references` break the rules, if they do; with
- * `limited`, also when there are more than a Ticket can have.
- */
+/** Why one of the normalized `references` breaks the rules, if any does. */
 export function checkExternalReferences(
   references: readonly string[],
-  { limited = false } = {},
 ): string | undefined {
-  if (limited && references.length > maxExternalReferences) {
-    return `A Ticket can have at most ${maxExternalReferences} External references.`;
-  }
   for (const reference of references) {
     if (reference === '') {
       return 'Enter a URL or key for each External reference.';
@@ -51,6 +42,15 @@ export function checkExternalReferences(
     }
   }
   return undefined;
+}
+
+/** Why a new Ticket's normalized `references` break the rules, if they do. */
+export function checkNewExternalReferences(
+  references: readonly string[],
+): string | undefined {
+  return references.length > maxExternalReferences
+    ? `A Ticket can have at most ${maxExternalReferences} External references.`
+    : checkExternalReferences(references);
 }
 
 /** External references as they are stored: trimmed and each once, in order. */
@@ -192,32 +192,4 @@ export function withExternalReferences<Row extends { number: number }>(
     ...row,
     externalReferences: byNumber.get(row.number) ?? [],
   }));
-}
-
-/** How an External reference shows: a URL as a link, a key as plain text. */
-export type ExternalReferenceDisplay = { text: string; href?: string };
-
-/** A GitHub issue or pull request path: owner, repository and number. */
-const githubIssuePath = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/|$)/;
-
-/**
- * Stored `reference` as it shows: a URL links to itself with shorter text,
- * `owner/repo#87` for a GitHub issue or pull request and host and path
- * otherwise; a key shows as typed.
- */
-export function externalReferenceDisplay(
-  reference: string,
-): ExternalReferenceDisplay {
-  const url = schemePattern.test(reference) ? URL.parse(reference) : null;
-  if (url === null) {
-    return { text: reference };
-  }
-  const github =
-    url.hostname === 'github.com' ? githubIssuePath.exec(url.pathname) : null;
-  return {
-    text: github
-      ? `${github[1]}/${github[2]}#${github[3]}`
-      : `${url.host}${url.pathname.replace(/\/+$/, '')}`,
-    href: reference,
-  };
 }

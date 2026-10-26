@@ -17,7 +17,7 @@ import {
   addTicketExternalReference,
   removeTicketExternalReference,
 } from '../../app/tickets/actions';
-import { externalReferenceDisplay } from '../../tickets/external-references';
+import { externalReferenceDisplay } from '../../tickets/external-reference-display';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';

@@ -194,6 +194,7 @@ marker-free ordered list.
 
 **Workaround.** `board.css.ts`, `breadcrumbs.css.ts`, `label-list.css.ts`,
 `ticket-comments.css.ts`, `blocker-editor.css.ts`,
+`external-reference-editor.css.ts`,
 `acceptance-criteria-editor.css.ts`, `epic-children.css.ts`,
 `delete-ticket-dialog.css.ts`, `archive-epic-dialog.css.ts`,
 `cycle-history.css.ts`,

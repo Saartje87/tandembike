@@ -71,6 +71,7 @@ import {
   checkExternalReferenceCount,
   checkExternalReferences,
   checkedExternalReferences,
+  checkNewExternalReferences,
   deleteExternalReferences,
   externalReferenceChanges,
   externalReferencesOf,
@@ -654,9 +655,7 @@ function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
             ? undefined
             : 'Only an Epic has a colour. Leave the colour out.',
     labels: checkLabels(labels),
-    externalReferences: checkExternalReferences(externalReferences, {
-      limited: true,
-    }),
+    externalReferences: checkNewExternalReferences(externalReferences),
     acceptanceCriteria: checkAcceptanceCriteria(
       acceptanceCriteria.map(({ text }) => text),
     ),
