@@ -100,7 +100,7 @@ describe('ArchiveEpicDialog', () => {
     ).toEqual([
       'T40 Launch will no longer be blocked by T5.',
       'T41 Email receipts will no longer be blocked by T6.',
-      'Agent run run-1 has claimed it.',
+      'Agent run run-1 has claimed T5 Checkout.',
       'Claude Code (run-2) has claimed T6 Pay 6.',
     ]);
   });

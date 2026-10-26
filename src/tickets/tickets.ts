@@ -2470,7 +2470,8 @@ export function createTickets(
         .all()
         .map((epic) => epic.number),
     );
-    const withEpic = new Set(
+    // Every child of these Epics archived now is archived with its Epic.
+    const archivedWithEpic = new Set(
       epicNumbers.size === 0
         ? []
         : db
@@ -2486,19 +2487,23 @@ export function createTickets(
             .all()
             .map((child) => child.number),
     );
-    const extra = withChildren
-      ? [...withEpic].filter((child) => !numbers.includes(child))
+    const unlistedChildren = withChildren
+      ? [...archivedWithEpic].filter((child) => !numbers.includes(child))
       : [];
-    const order = [
+    const childrenFirst = [
       ...numbers.filter((number) => !epicNumbers.has(number)),
-      ...extra,
+      ...unlistedChildren,
       ...numbers.filter((number) => epicNumbers.has(number)),
     ];
-    const changedEpics = order.flatMap((number) => {
-      const changedEpic = setArchivedStep(number, true, withEpic.has(number));
+    const changedEpics = childrenFirst.flatMap((number) => {
+      const changedEpic = setArchivedStep(
+        number,
+        true,
+        archivedWithEpic.has(number),
+      );
       return changedEpic === null ? [] : [changedEpic];
     });
-    return [...new Set([...numbers, ...extra, ...changedEpics])];
+    return [...new Set([...numbers, ...unlistedChildren, ...changedEpics])];
   }
 
   /**

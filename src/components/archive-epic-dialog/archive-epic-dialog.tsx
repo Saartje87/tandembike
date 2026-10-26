@@ -72,7 +72,9 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
     );
   const warnings = [
     ...unblocked,
-    ...(epic.claim ? [`${ownerOf(epic.claim)} has claimed it.`] : []),
+    ...(epic.claim
+      ? [`${ownerOf(epic.claim)} has claimed T${epic.number} ${epic.title}.`]
+      : []),
     ...epicChildren.flatMap(({ number, title, claim }) =>
       claim ? [`${ownerOf(claim)} has claimed T${number} ${title}.`] : [],
     ),
@@ -109,10 +111,7 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
         variant="outline"
         intent="neutral"
         size="small"
-        onClick={(event) => {
-          keepDrawerOpen(event);
-          setOpen(true);
-        }}
+        onClick={() => setOpen(true)}
       >
         Archive
       </Button>

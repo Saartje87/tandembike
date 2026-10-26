@@ -64,7 +64,7 @@ describe('Restoring an Epic', () => {
     ]);
   });
 
-  it('leaves a child detached while archived archived', () => {
+  it('does not restore a child detached from it while archived', () => {
     const { tickets, epic, todo, doing } = epicWithChildren();
     tickets.archiveTicket(epic.number, { withChildren: true });
     tickets.detachFromEpic(todo.number);
@@ -99,8 +99,9 @@ describe('Archiving an Epic and its children as one selection', () => {
       done.number,
     ]);
 
-    expect(tickets.getTicket(epic.number).archived).toBe(true);
-    expect(tickets.getTicket(todo.number).archived).toBe(true);
+    for (const { number } of [epic, todo, doing, done]) {
+      expect(tickets.getTicket(number).archived).toBe(true);
+    }
   });
 
   it('archives the children left out of the selection with the cascade, and restoring the Epic brings back all of them', () => {
