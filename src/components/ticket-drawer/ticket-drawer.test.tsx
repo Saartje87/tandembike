@@ -902,6 +902,22 @@ describe('TicketDrawer', () => {
     expect(button('Add External reference')).toBeInTheDocument();
   });
 
+  it("links a key by the Project's Reference templates", () => {
+    renderWithTheme(
+      <TicketDrawer
+        ticket={{ ...ticket, externalReferences: ['#55'] }}
+        referenceTemplates={[
+          { prefix: '#', url: 'https://github.com/acme/web/issues/{n}' },
+        ]}
+      />,
+    );
+
+    expect(inDrawer().getByRole('link', { name: '#55' })).toHaveAttribute(
+      'href',
+      'https://github.com/acme/web/issues/55',
+    );
+  });
+
   describe('labels', () => {
     it("shows the Ticket's labels with a way to remove each", () => {
       renderDrawer({ ...ticket, labels: ['bug'] });

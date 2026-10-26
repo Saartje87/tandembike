@@ -627,7 +627,9 @@ describe('Archiving and restoring Tickets', () => {
       Object.keys(tickets).filter(
         (name) =>
           /delete|remove/i.test(name) &&
-          !/label|comment|blocker|externalreference/i.test(name),
+          !/label|comment|blocker|externalreference|referencetemplate/i.test(
+            name,
+          ),
       ),
     ).toEqual(['deleteTicket']);
   });

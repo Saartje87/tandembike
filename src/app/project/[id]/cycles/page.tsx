@@ -22,7 +22,7 @@ const CyclesPage: FC<ProjectPageProps> = async ({ params }) => {
   }
   const cycles = appTickets('user').listCycles(project.id);
   return (
-    <ProjectFrame project={project} cycles={cycles}>
+    <ProjectFrame project={project} cycles={cycles} current="history">
       <CycleHistory cycles={cycles} />
     </ProjectFrame>
   );

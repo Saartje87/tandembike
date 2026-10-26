@@ -10,21 +10,24 @@ export type ProjectFrameProps = {
   project: Project;
   /** The Project's Cycles, for its tabs. */
   cycles: Cycle[];
+  /** The tab on screen. */
+  current: 'history' | 'settings';
   children: ReactNode;
 };
 
 /**
- * A History page of a Project, which is not a Board: its header with its
- * tabs, the History tab current, above `children`.
+ * A page of a Project that is not a Board, its History or its Settings:
+ * its header with its tabs, `current` marked, above `children`.
  */
 export const ProjectFrame: FC<ProjectFrameProps> = ({
   project,
   cycles,
+  current,
   children,
 }) => (
   <Stack gap={4}>
     <ProjectHeader project={project}>
-      <ProjectTabs projectId={project.id} cycles={cycles} current="history" />
+      <ProjectTabs projectId={project.id} cycles={cycles} current={current} />
     </ProjectHeader>
     {children}
   </Stack>

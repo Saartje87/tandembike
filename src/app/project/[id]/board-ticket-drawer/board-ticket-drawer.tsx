@@ -55,6 +55,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         blocks: tickets.listBlockers(child.number).blocks,
       }))}
       boardPath={boardPath}
+      referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
     />
   );
 };

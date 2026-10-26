@@ -1255,6 +1255,36 @@ describe('External reference tools', () => {
     await client.close();
   });
 
+  it('returns keys as stored, whatever Reference templates the Project has, and has no template tools', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.addReferenceTemplate(project.id, {
+      prefix: '#',
+      url: 'https://github.com/acme/web/issues/{n}',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      externalReferences: ['#55'],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const got = await client.callTool({
+      name: 'get_ticket',
+      arguments: { number: 1 },
+    });
+    const { tools } = await client.listTools();
+
+    expect(resultJson(got)).toMatchObject({ externalReferences: ['#55'] });
+    expect(JSON.stringify(resultJson(got))).not.toContain('github.com');
+    expect(
+      tools
+        .filter(({ name }) => /template/i.test(name))
+        .map(({ name }) => name),
+    ).toEqual([]);
+    await client.close();
+  });
+
   it('describes External references where Agents set and read them', async () => {
     const client = await connectMcpClient(createTestTickets());
 

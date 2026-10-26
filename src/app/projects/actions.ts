@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { appTickets } from '../../tickets/app-tickets';
 import type { StyleProjectInput } from '../../tickets/tickets';
 import { type ActionResult, actionResult } from '../lib/action-result';
+import { boardRoute } from '../lib/paths';
 
 export type CreateProjectResult = ActionResult<{ projectId: number }>;
 
@@ -79,6 +80,53 @@ export async function styleProject(
       ...(input?.icon === undefined ? {} : { icon: input.icon }),
     });
     revalidatePath('/', 'layout');
+    return {};
+  });
+}
+
+/**
+ * Adds a Reference template to a Project for the UI and refreshes every page
+ * of the Project, so its keys link at once. Domain errors come back as
+ * `error`, with `fieldErrors` naming `prefix` or `url`.
+ */
+export async function addReferenceTemplate(input: {
+  projectId: number;
+  prefix: string;
+  url: string;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets('user').addReferenceTemplate(Number(input?.projectId), {
+      prefix: String(input?.prefix ?? ''),
+      url: String(input?.url ?? ''),
+    });
+    revalidatePath(boardRoute, 'layout');
+    return {};
+  });
+}
+
+/** Edits a Reference template for the UI, by the rules of adding one. */
+export async function updateReferenceTemplate(input: {
+  id: number;
+  prefix: string;
+  url: string;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets('user').updateReferenceTemplate(Number(input?.id), {
+      prefix: String(input?.prefix ?? ''),
+      url: String(input?.url ?? ''),
+    });
+    revalidatePath(boardRoute, 'layout');
+    return {};
+  });
+}
+
+/** Removes a Reference template for the UI, returning domain errors. */
+export async function removeReferenceTemplate(input: {
+  id: number;
+}): Promise<ActionResult> {
+  return actionResult(() => {
+    appTickets('user').removeReferenceTemplate(Number(input?.id));
+    revalidatePath(boardRoute, 'layout');
     return {};
   });
 }

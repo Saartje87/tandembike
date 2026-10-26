@@ -1,0 +1,100 @@
+import { screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { renderWithTheme } from '../../../../test/render';
+import { createTestTickets } from '../../../../test/tickets';
+import { appTickets } from '../../../../tickets/app-tickets';
+import SettingsPage, { generateMetadata } from './page';
+
+const { notFound } = vi.hoisted(() => ({
+  notFound: vi.fn((): never => {
+    throw new Error('NEXT_NOT_FOUND');
+  }),
+}));
+
+vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('next/server', () => ({ connection: vi.fn() }));
+vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
+vi.mock('../../../../components/project-tabs/project-tabs', () => ({
+  ProjectTabs: ({ current }: { current: string }) => (
+    <nav>{`Tabs current ${current}`}</nav>
+  ),
+}));
+vi.mock(
+  '../../../../components/reference-template-editor/reference-template-editor',
+  () => ({
+    ReferenceTemplateEditor: ({
+      projectId,
+      templates,
+    }: {
+      projectId: number;
+      templates: { prefix: string }[];
+    }) => (
+      <p>{`Templates of ${projectId}: ${templates.map(({ prefix }) => prefix).join(' ')}`}</p>
+    ),
+  }),
+);
+
+describe('SettingsPage', () => {
+  beforeEach(() => {
+    notFound.mockClear();
+  });
+
+  it("shows the Project's Reference templates under the Settings tab", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.addReferenceTemplate(project.id, {
+      prefix: '#',
+      url: 'https://github.com/acme/web/issues/{n}',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    renderWithTheme(<main>{await SettingsPage({ params })}</main>);
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Website' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('navigation')).toHaveTextContent(
+      'Tabs current settings',
+    );
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Reference templates' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`Templates of ${project.id}: #`),
+    ).toBeInTheDocument();
+    await expect(generateMetadata({ params })).resolves.toEqual({
+      title: 'Settings · Website',
+    });
+  });
+
+  it('shows the archived notice for an archived Project', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.archiveProject(project.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    renderWithTheme(
+      <main>
+        {
+          await SettingsPage({
+            params: Promise.resolve({ id: String(project.id) }),
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.queryByText(/Templates of/)).toBeNull();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+  });
+
+  it('returns not-found for a missing Project', async () => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    await expect(
+      SettingsPage({ params: Promise.resolve({ id: '999' }) }),
+    ).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(notFound).toHaveBeenCalledOnce();
+  });
+});

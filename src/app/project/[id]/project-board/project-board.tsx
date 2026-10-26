@@ -66,7 +66,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
   if (tab !== 'backlog' && tab.state === 'Archived') {
     // Its final membership, including Tickets moved to another Project since.
     return (
-      <ProjectFrame project={project} cycles={cycles}>
+      <ProjectFrame project={project} cycles={cycles} current="history">
         <CycleHeader key={tab.id} cycle={tab} />
         <CycleTicketList
           cycle={tab}

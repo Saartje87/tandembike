@@ -58,6 +58,7 @@ describe('ProjectTabs', () => {
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
 
@@ -79,6 +80,7 @@ describe('ProjectTabs', () => {
       'Launch',
       'Beta',
       'History',
+      'Settings',
     ]);
   });
 
@@ -90,6 +92,19 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Settings', href: '/project/3/settings', current: null },
+    ]);
+  });
+
+  it('marks the Settings tab current on the Settings', () => {
+    renderWithTheme(
+      <ProjectTabs projectId={3} cycles={[]} current="settings" />,
+    );
+
+    expect(tabs()).toEqual([
+      { name: 'Backlog', href: '/project/3', current: null },
+      { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Settings', href: '/project/3/settings', current: 'page' },
     ]);
   });
 
@@ -101,6 +116,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
 

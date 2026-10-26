@@ -97,6 +97,7 @@ import {
   type ProjectIcon,
   projectIconRule,
 } from './project-icons';
+import { createReferenceTemplates } from './reference-templates';
 import {
   checkBatchNumbers,
   checkTitle,
@@ -983,6 +984,7 @@ export function createTickets(
 ) {
   return {
     ...createCycles(db, changes),
+    ...createReferenceTemplates(db, changes),
 
     /** All Projects, oldest first. */
     listProjects(): Project[] {

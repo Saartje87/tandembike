@@ -34,6 +34,11 @@ export function cyclesPath(projectId: number): string {
   return `${projectPath(projectId)}/cycles`;
 }
 
+/** A Project's settings, such as its Reference templates. */
+export function projectSettingsPath(projectId: number): string {
+  return `${projectPath(projectId)}/settings`;
+}
+
 /**
  * Board `boardPath` with Ticket `number` open in its drawer (ADR 0013). Open
  * it with `scroll={false}`, so the Board keeps its scroll position.

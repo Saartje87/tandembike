@@ -114,6 +114,30 @@ export const ticketExternalReferences = sqliteTable(
   ],
 );
 
+/**
+ * A Project's Reference templates, in the order they were added by `id`:
+ * each turns External reference keys starting with `prefix` into `url`,
+ * with `{n}` replaced by the rest of the key. A prefix is unique within its
+ * Project.
+ */
+export const referenceTemplates = sqliteTable(
+  'reference_templates',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    prefix: text('prefix').notNull(),
+    url: text('url').notNull(),
+  },
+  (table) => [
+    uniqueIndex('reference_templates_project_prefix').on(
+      table.projectId,
+      table.prefix,
+    ),
+  ],
+);
+
 export const commentAuthors = ['user', 'agent'] as const;
 
 /**

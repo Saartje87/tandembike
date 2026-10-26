@@ -17,7 +17,10 @@ import {
   addTicketExternalReference,
   removeTicketExternalReference,
 } from '../../app/tickets/actions';
-import { externalReferenceDisplay } from '../../tickets/external-reference-display';
+import {
+  externalReferenceDisplay,
+  type ReferenceTemplateLink,
+} from '../../tickets/external-reference-display';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
@@ -31,6 +34,8 @@ export type ExternalReferenceEditorProps = {
   ticketNumber: number;
   /** The Ticket's External references, in the order they were added. */
   references: string[];
+  /** The Project's Reference templates, which link keys. Defaults to none. */
+  templates?: ReferenceTemplateLink[];
 };
 
 type ReferenceChange = { type: 'add' | 'remove'; reference: string };
@@ -49,11 +54,17 @@ function changedReferences(
     : [...references, reference];
 }
 
-type ReferenceProps = { reference: string };
+type ReferenceProps = {
+  reference: string;
+  templates: ReferenceTemplateLink[];
+};
 
-/** A URL as a link that opens in a new tab, or a key as plain text. */
-const Reference: FC<ReferenceProps> = ({ reference }) => {
-  const { text, href } = externalReferenceDisplay(reference);
+/**
+ * A URL, or a key one of `templates` matches, as a link that opens in a new
+ * tab; any other key as plain text.
+ */
+const Reference: FC<ReferenceProps> = ({ reference, templates }) => {
+  const { text, href } = externalReferenceDisplay(reference, templates);
 
   return (
     <Text fontSize="small" wordBreak="break-word">
@@ -82,6 +93,7 @@ const Reference: FC<ReferenceProps> = ({ reference }) => {
 export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
   ticketNumber,
   references,
+  templates = [],
 }) => {
   const inputId = useId();
   const errorId = useId();
@@ -155,7 +167,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
           {shown.map((reference) => (
             <li key={reference}>
               <Inline gap={2} alignY="center" flexWrap="nowrap">
-                <Reference reference={reference} />
+                <Reference reference={reference} templates={templates} />
                 <Button
                   type="button"
                   variant="ghost"
