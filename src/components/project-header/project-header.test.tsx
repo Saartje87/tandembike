@@ -7,6 +7,7 @@ import { styleProject } from '../../app/projects/actions';
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
 import type { Project } from '../../tickets/tickets';
+import { tintBackground } from '../palette/palette.css';
 import { ProjectHeader } from './project-header';
 
 vi.mock('../../app/projects/actions', () => ({
@@ -59,6 +60,7 @@ describe('ProjectHeader', () => {
     renderWithTheme(<ProjectHeader project={{ ...project, color: 'teal' }} />);
 
     expect(header()).toHaveAttribute('data-color', 'teal');
+    expect(header()).toHaveClass(tintBackground.teal);
   });
 
   it.each([
@@ -71,19 +73,19 @@ describe('ProjectHeader', () => {
   });
 
   it.each([
-    ['picked', null, 'Teal', 'teal'],
-    ['cleared', 'teal', 'Default', undefined],
+    { change: 'picked', from: null, click: 'Teal', to: 'teal' },
+    { change: 'cleared', from: 'teal', click: 'Default', to: null },
   ] as const)(
-    'keeps the padding while a colour is %s',
-    async (_, color, name, shown) => {
+    'keeps the padding while a colour is $change',
+    async ({ from, click, to }) => {
       const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
       vi.mocked(styleProject).mockReturnValue(promise);
-      renderWithTheme(<ProjectHeader project={{ ...project, color }} />);
+      renderWithTheme(<ProjectHeader project={{ ...project, color: from }} />);
 
       await openPicker();
-      await userEvent.click(picker().getByRole('button', { name }));
+      await userEvent.click(picker().getByRole('button', { name: click }));
 
-      expect(header().getAttribute('data-color') ?? undefined).toBe(shown);
+      expect(header().getAttribute('data-color')).toBe(to);
       expect(header()).toHaveClass(...padding);
       await act(async () => resolve({ ok: true }));
     },
