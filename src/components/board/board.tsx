@@ -34,11 +34,7 @@ import {
   useTransition,
 } from 'react';
 
-import {
-  type CycleTicketsActionResult,
-  planTickets,
-  unplanTickets,
-} from '../../app/cycles/actions';
+import { planTickets, unplanTickets } from '../../app/cycles/actions';
 import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import {
   archiveTickets,
@@ -101,23 +97,28 @@ export type BoardProps = {
 };
 
 type CycleRefusalsProps = {
-  /** What the refused change was, read out as the list's name. */
-  label: string;
+  /** What the refused change was, such as `Not planned`; it names the list. */
+  heading: string;
   refusals: BatchFailure[];
 };
 
 /** Why each Ticket a Cycle change left out was refused. */
-const CycleRefusals: FC<CycleRefusalsProps> = ({ label, refusals }) => {
-  const labelId = useId();
+const CycleRefusals: FC<CycleRefusalsProps> = ({ heading, refusals }) => {
+  const headingId = useId();
   return (
     <Alert intent="warning">
       <Stack gap={1}>
-        <Text id={labelId}>{label}</Text>
-        <ul aria-labelledby={labelId}>
+        <Text id={headingId}>{heading}</Text>
+        <Stack
+          gap={1}
+          tag="ul"
+          className={styles.ticketList}
+          aria-labelledby={headingId}
+        >
           {refusals.map(({ number, error }) => (
             <li key={number}>{error}</li>
           ))}
-        </ul>
+        </Stack>
       </Stack>
     </Alert>
   );
@@ -456,6 +457,11 @@ export const Board: FC<BoardProps> = ({
       new Set([...selected].filter((number) => savedOnBoard.has(number))),
     );
   }
+  // A refused Ticket that has since left the Board, or the selection, drops out.
+  const shownRefusals =
+    cycleRefusals?.refusals.filter(({ number }) =>
+      selectedOnBoard.has(number),
+    ) ?? [];
   const clearSelection = useCallback(() => {
     setSelected(new Set());
     setCycleRefusals(undefined);
@@ -638,12 +644,9 @@ export const Board: FC<BoardProps> = ({
    * with their reasons; a batch refused as a whole leaves it as it was.
    */
   const changeSelectionCycle = (
-    action: (input: {
-      cycleId: number;
-      ticketNumbers: number[];
-    }) => Promise<CycleTicketsActionResult>,
+    action: typeof planTickets,
     targetCycleId: number,
-    label: string,
+    heading: string,
   ) => {
     const numbers = selection.map(({ number }) => number);
     setError(undefined);
@@ -657,10 +660,18 @@ export const Board: FC<BoardProps> = ({
         setError(result.error);
         return;
       }
-      setSelected(new Set(result.failed.map(({ number }) => number)));
-      selectionAnchor.current = undefined;
+      const refused = new Set(result.failed.map(({ number }) => number));
+      // Only the changed Tickets leave: cards picked meanwhile stay selected.
+      setSelected(
+        (current) =>
+          new Set(
+            [...current].filter(
+              (number) => !numbers.includes(number) || refused.has(number),
+            ),
+          ),
+      );
       if (result.failed.length > 0) {
-        setCycleRefusals({ label, refusals: result.failed });
+        setCycleRefusals({ heading, refusals: result.failed });
       }
     });
   };
@@ -798,7 +809,14 @@ export const Board: FC<BoardProps> = ({
           <SelectionBar
             count={selection.length}
             onClear={clearSelection}
-            notice={cycleRefusals && <CycleRefusals {...cycleRefusals} />}
+            notice={
+              shownRefusals.length > 0 && (
+                <CycleRefusals
+                  heading={cycleRefusals?.heading ?? ''}
+                  refusals={shownRefusals}
+                />
+              )
+            }
           >
             {typeof cycleId === 'number' ? (
               <Button
@@ -827,6 +845,7 @@ export const Board: FC<BoardProps> = ({
               type="button"
               variant="ghost"
               size="small"
+              disabled={changingCycle}
               onClick={archiveSelection}
             >
               Archive

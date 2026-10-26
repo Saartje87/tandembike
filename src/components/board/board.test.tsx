@@ -1433,11 +1433,43 @@ describe('Planning a selection into a Cycle', () => {
     expect(selectedTitles()).toEqual(['Select T15 Deploy']);
     expect(selectionBar()).toHaveTextContent('1 selected');
 
+    // Not a click on empty Board space.
+    await user.click(within(refusals).getByText(refusal));
+
+    expect(selectedTitles()).toEqual(['Select T15 Deploy']);
+
     await user.click(checkbox(7, 'Write the copy'));
 
     expect(
       screen.queryByRole('list', { name: 'Not planned' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('keeps a card picked while the plan saves selected', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      failed: [];
+    }>();
+    vi.mocked(planTickets).mockReturnValue(promise);
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        cycles={cycles}
+        cycleId={null}
+      />,
+    );
+    await selectTwo(user);
+    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Beta' }));
+
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
+
+    await user.click(checkbox(7, 'Write the copy'));
+    await act(async () => resolve({ ok: true, failed: [] }));
+
+    expect(selectedTitles()).toEqual(['Select T7 Write the copy']);
   });
 
   it('keeps the selection and explains when the whole batch is refused', async () => {
