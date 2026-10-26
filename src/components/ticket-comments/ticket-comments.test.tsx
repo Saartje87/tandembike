@@ -285,7 +285,7 @@ describe('TicketComments', () => {
 
       await userEvent.click(within(item).getByText('Fixed in the header.'));
       await userEvent.type(commentInput(item), '!');
-      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+      await userEvent.click(document.body);
 
       expect(remove()).toBeInTheDocument();
     });
@@ -310,14 +310,14 @@ describe('TicketComments', () => {
       expect(within(item).getByText('nav').tagName).toBe('EM');
     });
 
-    it('saves on Save', async () => {
+    it('saves when focus leaves the field', async () => {
       vi.mocked(editTicketComment).mockResolvedValue({ ok: true });
       renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
       const [item] = commentItems();
 
       await userEvent.click(within(item).getByText('Fixed in the header.'));
       await userEvent.type(commentInput(item), '!');
-      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+      await userEvent.click(document.body);
 
       expect(editTicketComment).toHaveBeenCalledExactlyOnceWith({
         id: 2,
@@ -338,7 +338,7 @@ describe('TicketComments', () => {
       await userEvent.click(within(item).getByText('Fixed in the header.'));
       await userEvent.clear(commentInput(item));
       await userEvent.type(commentInput(item), '  ');
-      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+      await userEvent.click(document.body);
 
       expect(await within(item).findByRole('textbox')).toHaveValue('  ');
       expect(commentInput(item)).toHaveAccessibleDescription(
@@ -349,17 +349,12 @@ describe('TicketComments', () => {
       ).not.toBeInTheDocument();
     });
 
-    it('cancels silently on Escape or Cancel, and not on leaving the field', async () => {
+    it('cancels silently on Escape or Cancel', async () => {
       renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
       const [item] = commentItems();
 
       await userEvent.click(within(item).getByText('logo'));
       await userEvent.type(commentInput(item), ' More');
-      await userEvent.click(document.body);
-
-      expect(commentInput(item)).toHaveValue('Please check the **logo**. More');
-
-      await userEvent.click(commentInput(item));
       await userEvent.keyboard('{Escape}');
 
       expect(queryCommentInput(item)).not.toBeInTheDocument();

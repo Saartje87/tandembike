@@ -23,7 +23,7 @@ const headingAt = (level: number) => Math.min(level, 6) as HeadingLevel;
  * back here. Only `children` (and a link's `href`) are passed on, which
  * keeps react-markdown's `node` prop off the DOM.
  */
-const components = (headingLevel: HeadingLevel): Components => ({
+const componentsFor = (headingLevel: HeadingLevel): Components => ({
   h1: ({ children }) => <Heading level={headingLevel}>{children}</Heading>,
   h2: ({ children }) => (
     <Heading level={headingAt(headingLevel + 1)}>{children}</Heading>
@@ -99,6 +99,21 @@ const components = (headingLevel: HeadingLevel): Components => ({
     </Box>
   ),
 });
+
+const componentsByLevel = new Map<HeadingLevel, Components>();
+
+/**
+ * The components for `headingLevel`, the same ones on every render: new ones
+ * would be new component types to React, which would remount the whole text.
+ */
+const components = (headingLevel: HeadingLevel): Components => {
+  let found = componentsByLevel.get(headingLevel);
+  if (found === undefined) {
+    found = componentsFor(headingLevel);
+    componentsByLevel.set(headingLevel, found);
+  }
+  return found;
+};
 
 /**
  * Markdown, such as an Agent writes, rendered with Blocks. GitHub-flavoured

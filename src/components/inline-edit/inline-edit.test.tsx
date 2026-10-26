@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -10,20 +10,23 @@ const renderEdit = (props: Partial<InlineEditProps> = {}) => {
     .fn<InlineEditProps['onSave']>()
     .mockResolvedValue(undefined);
   const view = renderWithTheme(
-    <InlineEdit
-      value="Fix the header"
-      label="Title"
-      onSave={onSave}
-      {...props}
-    />,
+    <>
+      <InlineEdit
+        value="Fix the header"
+        label="Title"
+        onSave={onSave}
+        {...props}
+      />
+      <button type="button">Elsewhere</button>
+    </>,
   );
   return { ...view, onSave: props.onSave ?? onSave };
 };
 
 const text = () => screen.getByRole('button', { name: 'Fix the header' });
 const input = () => screen.getByRole('textbox', { name: 'Title' });
-const save = () => screen.getByRole('button', { name: 'Save' });
 const cancel = () => screen.getByRole('button', { name: 'Cancel' });
+const elsewhere = () => screen.getByRole('button', { name: 'Elsewhere' });
 
 /**
  * An `onSave` the test settles itself, to look at the field while the save
@@ -42,20 +45,22 @@ describe('InlineEdit', () => {
   it('shows the text alone at rest, with no buttons but the text itself', () => {
     renderEdit();
 
-    expect(screen.getAllByRole('button')).toEqual([text()]);
+    expect(screen.getAllByRole('button')).toEqual([text(), elsewhere()]);
     expect(text()).toHaveAccessibleDescription('Edit title');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
-  it('opens an input with Save and Cancel when the text is clicked', async () => {
+  it('opens an input with Cancel and no Save when the text is clicked', async () => {
     renderEdit();
 
     await userEvent.click(text());
 
     expect(input()).toHaveValue('Fix the header');
     expect(input()).toHaveFocus();
-    expect(save()).toBeInTheDocument();
     expect(cancel()).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument();
   });
 
   it('opens on Enter when the text has focus', async () => {
@@ -82,18 +87,30 @@ describe('InlineEdit', () => {
     ).toHaveFocus();
   });
 
-  it('saves with the Save button', async () => {
+  it('saves when focus moves elsewhere in the page, leaving focus there', async () => {
     const { onSave } = pendingSave();
     renderEdit({ onSave });
 
     await userEvent.click(text());
     await userEvent.type(input(), '!');
-    await userEvent.click(save());
+    await userEvent.click(elsewhere());
 
     expect(onSave).toHaveBeenCalledExactlyOnceWith('Fix the header!');
     expect(
       screen.getByRole('button', { name: 'Fix the header!' }),
     ).toBeInTheDocument();
+    expect(elsewhere()).toHaveFocus();
+  });
+
+  it('saves when a click on the page takes focus to nothing', async () => {
+    const { onSave } = pendingSave();
+    renderEdit({ onSave });
+
+    await userEvent.click(text());
+    await userEvent.type(input(), '!');
+    await userEvent.click(document.body);
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith('Fix the header!');
   });
 
   it('shows the new text in the same update that closes the input', async () => {
@@ -102,8 +119,8 @@ describe('InlineEdit', () => {
 
     await userEvent.click(text());
     await userEvent.type(input(), '!');
-    // A plain click, not userEvent's: nothing awaits between it and the check.
-    act(() => save().click());
+    // A plain focus, not userEvent's: nothing awaits between it and the check.
+    act(() => elsewhere().focus());
 
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
     expect(
@@ -119,6 +136,18 @@ describe('InlineEdit', () => {
 
     expect(onSave).not.toHaveBeenCalled();
     expect(text()).toHaveFocus();
+  });
+
+  it('just closes when focus leaves with the text unchanged', async () => {
+    const { onSave } = renderEdit();
+
+    await userEvent.click(text());
+    await userEvent.type(input(), '!{Backspace}');
+    await userEvent.click(elsewhere());
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(elsewhere()).toHaveFocus();
   });
 
   it('cancels on Escape, keeping the Escape from the page, and drops the draft', async () => {
@@ -138,7 +167,7 @@ describe('InlineEdit', () => {
     expect(input()).toHaveValue('Fix the header');
   });
 
-  it('cancels with the Cancel button', async () => {
+  it('cancels with the Cancel button, which does not count as leaving', async () => {
     const { onSave } = renderEdit();
 
     await userEvent.click(text());
@@ -149,15 +178,45 @@ describe('InlineEdit', () => {
     expect(text()).toHaveFocus();
   });
 
-  it('stays open when the input loses focus', async () => {
+  it('does not save when Tab moves focus to Cancel, but does when it leaves', async () => {
+    const { onSave } = pendingSave();
+    renderEdit({ onSave });
+
+    await userEvent.click(text());
+    await userEvent.type(input(), '!');
+    await userEvent.tab();
+    expect(cancel()).toHaveFocus();
+    expect(onSave).not.toHaveBeenCalled();
+    await userEvent.tab();
+
+    expect(onSave).toHaveBeenCalledExactlyOnceWith('Fix the header!');
+    expect(elsewhere()).toHaveFocus();
+  });
+
+  // The window loses focus but the input stays the page's focused element.
+  it('stays open, unsaved, when the window loses focus', async () => {
     const { onSave } = renderEdit();
 
     await userEvent.click(text());
     await userEvent.type(input(), '!');
-    input().blur();
+    fireEvent.blur(input());
 
     expect(onSave).not.toHaveBeenCalled();
     expect(input()).toHaveValue('Fix the header!');
+  });
+
+  it("reopens a text refused after leaving with the User's text and the reason, without taking focus", async () => {
+    const { onSave, settle } = pendingSave();
+    renderEdit({ onSave });
+
+    await userEvent.click(text());
+    await userEvent.clear(input());
+    await userEvent.click(elsewhere());
+    await settle('Enter a title.');
+
+    expect(input()).toHaveValue('');
+    expect(input()).toHaveAccessibleDescription('Enter a title.');
+    expect(elsewhere()).toHaveFocus();
   });
 
   it("reopens a refused text with the User's text and the reason", async () => {
@@ -171,6 +230,7 @@ describe('InlineEdit', () => {
 
     expect(input()).toHaveValue('');
     expect(input()).toHaveAccessibleDescription('Enter a title.');
+    expect(input()).toHaveFocus();
   });
 
   it('saves again after a refused text is corrected', async () => {
@@ -264,7 +324,7 @@ describe('InlineEdit', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Fix the header' }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toEqual([elsewhere()]);
     await userEvent.click(screen.getByText('Fix the header'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
@@ -312,22 +372,21 @@ describe('InlineEdit', () => {
       },
     );
 
-    it('saves with Save and cancels with Cancel, both below the textarea', async () => {
+    it('cancels with Cancel below the textarea, and has no Save', async () => {
       const { onSave } = renderTextarea();
 
       await userEvent.click(screen.getByText('It overlaps the logo.'));
       expect(
-        textarea().compareDocumentPosition(save()) &
+        textarea().compareDocumentPosition(cancel()) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
+      expect(
+        screen.queryByRole('button', { name: 'Save' }),
+      ).not.toBeInTheDocument();
       await userEvent.type(textarea(), '!');
       await userEvent.click(cancel());
-      expect(onSave).not.toHaveBeenCalled();
 
-      await userEvent.click(screen.getByText('It overlaps the logo.'));
-      await userEvent.type(textarea(), '?');
-      await userEvent.click(save());
-      expect(onSave).toHaveBeenCalledExactlyOnceWith('It overlaps the logo.?');
+      expect(onSave).not.toHaveBeenCalled();
     });
 
     it('cancels on Escape, keeping the Escape from the page, and puts focus back on the text', async () => {
@@ -348,12 +407,25 @@ describe('InlineEdit', () => {
       );
     });
 
-    it('stays open when the textarea loses focus', async () => {
+    it('saves when focus moves elsewhere in the page, leaving focus there', async () => {
+      const { onSave } = pendingSave();
+      renderTextarea({ onSave });
+
+      await userEvent.click(screen.getByText('It overlaps the logo.'));
+      await userEvent.type(textarea(), '!');
+      await userEvent.click(elsewhere());
+
+      expect(onSave).toHaveBeenCalledExactlyOnceWith('It overlaps the logo.!');
+      expect(screen.getByText('It overlaps the logo.!')).toBeInTheDocument();
+      expect(elsewhere()).toHaveFocus();
+    });
+
+    it('stays open, unsaved, when the window loses focus', async () => {
       const { onSave } = renderTextarea();
 
       await userEvent.click(screen.getByText('It overlaps the logo.'));
       await userEvent.type(textarea(), '!');
-      await userEvent.click(document.body);
+      fireEvent.blur(textarea());
 
       expect(textarea()).toHaveValue('It overlaps the logo.!');
       expect(onSave).not.toHaveBeenCalled();
@@ -412,36 +484,21 @@ describe('InlineEdit', () => {
       expect(textarea()).toHaveValue('');
     });
 
-    it('says while editing whether the text has unsaved changes', async () => {
-      const onDirtyChange = vi.fn();
-      renderTextarea({ onDirtyChange });
-
-      await userEvent.click(screen.getByText('It overlaps the logo.'));
-      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
-      await userEvent.type(textarea(), '!');
-      expect(onDirtyChange).toHaveBeenLastCalledWith(true);
-      await userEvent.type(textarea(), '{Backspace}');
-      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
-      await userEvent.type(textarea(), '!{Escape}');
-      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
-    });
-
-    it("reopens a refused text with the User's text, the reason and unsaved changes", async () => {
-      const onDirtyChange = vi.fn();
+    it("reopens a refused text with the User's text and the reason", async () => {
       const onSave = vi
         .fn<InlineEditProps['onSave']>()
         .mockResolvedValue('Too long.');
-      renderTextarea({ onSave, onDirtyChange });
+      renderTextarea({ onSave });
 
       await userEvent.click(screen.getByText('It overlaps the logo.'));
       await userEvent.type(textarea(), '!');
-      await userEvent.click(save());
+      await userEvent.click(elsewhere());
 
       expect(await screen.findByRole('textbox')).toHaveValue(
         'It overlaps the logo.!',
       );
       expect(textarea()).toHaveAccessibleDescription('Too long.');
-      expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+      expect(elsewhere()).toHaveFocus();
     });
   });
 });

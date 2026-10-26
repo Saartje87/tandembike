@@ -272,12 +272,15 @@ describe('AcceptanceCriteriaEditor', () => {
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo, menu]} />,
     );
 
+    const dragButton = (text: string) =>
+      screen.queryByRole('button', { name: `Drag criterion: ${text}` });
+
     await userEvent.click(screen.getByText('The logo is centred'));
+    expect(dragButton('The logo is centred')).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
     await userEvent.click(removeButton('The menu collapses on phones'));
 
-    expect(
-      screen.queryByRole('button', { name: /^Drag criterion: / }),
-    ).not.toBeInTheDocument();
+    expect(dragButton('The menu collapses on phones')).not.toBeInTheDocument();
   });
 
   it('shows the list again and says why when a change is refused', async () => {
@@ -373,7 +376,7 @@ describe('AcceptanceCriteriaEditor', () => {
       description: 'Edit acceptance criterion',
     });
 
-  it('edits a criterion with Save and Cancel icon buttons, hiding its remove button meanwhile', async () => {
+  it('edits a criterion with a Cancel icon button, hiding its remove button meanwhile', async () => {
     renderWithTheme(
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo, menu]} />,
     );
@@ -381,10 +384,10 @@ describe('AcceptanceCriteriaEditor', () => {
     await userEvent.click(criterionText('The logo is centred'));
 
     const item = editInput().closest('li') as HTMLElement;
-    // Icon-only: named by their labels, with no text of their own.
+    // Icon-only: named by its label, with no text of its own.
     expect(
-      within(item).getByRole('button', { name: 'Save' }),
-    ).toHaveTextContent(/^$/);
+      within(item).queryByRole('button', { name: 'Save' }),
+    ).not.toBeInTheDocument();
     expect(
       within(item).getByRole('button', { name: 'Cancel' }),
     ).toHaveTextContent(/^$/);
@@ -407,7 +410,6 @@ describe('AcceptanceCriteriaEditor', () => {
     );
 
     await userEvent.click(criterionText('The menu collapses on phones'));
-    await userEvent.type(editInput(), ' fast');
     await userEvent.click(
       screen.getByRole('checkbox', { name: 'The menu collapses on phones' }),
     );
@@ -417,10 +419,11 @@ describe('AcceptanceCriteriaEditor', () => {
       id: menu.id,
       checked: true,
     });
-    expect(editInput()).toHaveValue('The menu collapses on phones fast');
   });
 
-  it('stays open when the input loses focus', async () => {
+  it('saves the text when focus leaves the input', async () => {
+    const saved = deferred<{ ok: true }>();
+    vi.mocked(setTicketAcceptanceCriteria).mockReturnValue(saved.promise);
     renderWithTheme(
       <AcceptanceCriteriaEditor ticketNumber={4} criteria={[menu]} />,
     );
@@ -431,8 +434,19 @@ describe('AcceptanceCriteriaEditor', () => {
       screen.getByRole('heading', { name: 'Acceptance criteria' }),
     );
 
-    expect(editInput()).toHaveValue('The menu collapses on phones fast');
-    expect(setTicketAcceptanceCriteria).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole('textbox', { name: 'Acceptance criterion' }),
+    ).not.toBeInTheDocument();
+    expect(setTicketAcceptanceCriteria).toHaveBeenCalledExactlyOnceWith({
+      number: 4,
+      acceptanceCriteria: [
+        { id: menu.id, text: 'The menu collapses on phones fast' },
+      ],
+    });
+    expect(
+      criterionText('The menu collapses on phones fast'),
+    ).toBeInTheDocument();
+    await act(async () => saved.resolve({ ok: true }));
   });
 
   it('edits a criterion in place, showing it unchecked at once', async () => {
