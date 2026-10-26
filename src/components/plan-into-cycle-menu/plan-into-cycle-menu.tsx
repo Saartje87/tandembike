@@ -4,7 +4,7 @@ import { Button, Popover, Stack } from '@blockle/blocks';
 import { type FC, useRef, useState } from 'react';
 
 import type { Cycle } from '../../tickets/cycles';
-import { claimEscape } from '../ticket-drawer/keep-drawer-open';
+import { claimEscape } from '../keep-drawer-open/keep-drawer-open';
 
 export type PlanIntoCycleMenuProps = {
   /** The Cycles to offer, in order. */

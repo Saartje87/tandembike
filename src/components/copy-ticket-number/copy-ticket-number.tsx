@@ -4,7 +4,7 @@ import { Button, Inline, Text, VisuallyHidden } from '@blockle/blocks';
 import { type FC, type MouseEvent, useEffect, useState } from 'react';
 
 import { Icon } from '../icon/icon';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 /** How long the confirmation shows. */
 const confirmationMs = 2000;

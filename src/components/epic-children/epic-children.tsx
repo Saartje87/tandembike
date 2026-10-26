@@ -27,8 +27,11 @@ import type { EpicChild, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
+import {
+  claimEscape,
+  keepDrawerOpen,
+} from '../keep-drawer-open/keep-drawer-open';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
-import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 import * as styles from './epic-children.css';
 
 export type EpicChildrenProps = {

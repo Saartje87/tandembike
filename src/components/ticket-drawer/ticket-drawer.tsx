@@ -12,24 +12,18 @@ import {
   Label,
   Stack,
   Text,
-  Textarea,
-  TextInput,
-  VisuallyHidden,
 } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
 import {
   type FC,
-  type FormEvent,
   type ReactNode,
-  useEffect,
   useId,
   useOptimistic,
-  useRef,
   useState,
   useTransition,
 } from 'react';
-import { useForm } from 'react-hook-form';
 
+import { refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import {
   archiveTicket,
@@ -60,6 +54,8 @@ import { EpicChildren } from '../epic-children/epic-children';
 import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
+import { InlineEdit } from '../inline-edit/inline-edit';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
@@ -67,7 +63,6 @@ import { StatusSelect } from '../status-select/status-select';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
-import { claimEscape, keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
 import { useIsShown } from './use-is-shown';
 
@@ -123,270 +118,37 @@ function fieldOf(edit: Edit): keyof Fields {
   return Object.keys(edit)[0] as keyof Fields;
 }
 
-type TitleFieldProps = {
-  title: string;
-  onSave: SaveField;
-};
-
-/**
- * The title as the drawer's heading. Clicking it, or Enter on it, turns it
- * into an input; Enter or leaving the input saves and Escape cancels. A
- * refused title opens the input again with the User's text.
- */
-const TitleField: FC<TitleFieldProps> = ({ title, onSave }) => {
-  const inputId = useId();
-  const errorId = useId();
-  const hintId = useId();
-  const [editing, setEditing] = useState(false);
-  const [refocus, setRefocus] = useState(false);
-  // Ending the edit unmounts the input, which can blur it once more.
-  const acceptingSubmit = useRef(false);
-  // The form outlives the input, which closes on submit while the title
-  // saves. It has no pending state: the optimistic title shows instead.
-  const {
-    formState: { errors },
-    handleSubmit,
-    register,
-    reset,
-    setError,
-  } = useForm<{ title: string }>({
-    defaultValues: { title },
-    // A refused title keeps its reason until the edit ends.
-    reValidateMode: 'onSubmit',
-  });
-  const error = errors.title?.message;
-
-  const begin = () => {
-    acceptingSubmit.current = true;
-    setEditing(true);
-  };
-  const end = (refocusTitle: boolean) => {
-    acceptingSubmit.current = false;
-    setEditing(false);
-    setRefocus(refocusTitle);
-  };
-  const submit = (refocusTitle: boolean, event?: FormEvent) => {
-    event?.preventDefault();
-    if (!acceptingSubmit.current) {
-      return;
-    }
-    end(refocusTitle);
-    void handleSubmit(({ title: text }) => {
-      if (text === title) {
-        reset({ title });
-        return;
-      }
-      onSave({ title: text }, (reason) => {
-        reset({ title: text });
-        setError('title', { type: 'server', message: reason });
-        begin();
-      });
-    })();
-  };
-  const cancel = () => {
-    end(true);
-    reset({ title });
-  };
-
-  if (!editing) {
-    return (
-      <>
-        <Heading level={2} fontSize="xlarge" fontWeight="strong">
-          <button
-            type="button"
-            className={styles.titleButton}
-            aria-describedby={hintId}
-            // biome-ignore lint/a11y/noAutofocus: only after the User ends an edit, to put focus back where it was.
-            autoFocus={refocus}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              reset({ title });
-              begin();
-            }}
-          >
-            {title}
-          </button>
-        </Heading>
-        <VisuallyHidden id={hintId}>Edit title</VisuallyHidden>
-      </>
-    );
-  }
-
-  return (
-    <form onSubmit={(event) => submit(true, event)}>
-      <Stack gap={1}>
-        <Label htmlFor={inputId}>
-          <VisuallyHidden>Title</VisuallyHidden>
-        </Label>
-        <TextInput
-          {...register('title', { onBlur: () => submit(false) })}
-          id={inputId}
-          onKeyDown={(event) => {
-            if (claimEscape(event)) {
-              cancel();
-            }
-          }}
-          inputClassName={styles.titleInput}
-          autoComplete="off"
-          autoFocus
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-        />
-        <FieldError id={errorId} reason={error} />
-      </Stack>
-    </form>
-  );
-};
-
 type DescriptionFieldProps = {
   description: string;
-  onSave: SaveField;
+  onSave: (description: string) => Promise<string | undefined>;
   /** Whether the edit in progress has unsaved text, so the drawer can guard closing. */
   onUnsavedChange: (unsaved: boolean) => void;
 };
 
 /**
- * The description as Markdown with an Edit button that swaps in a textarea
- * with Save and Cancel. Cmd/Ctrl+Enter saves and Escape cancels. A refused
- * description opens the textarea again with the User's text.
+ * The description as Markdown that edits in place in a textarea, with a
+ * placeholder to add one when it is empty.
  */
 const DescriptionField: FC<DescriptionFieldProps> = ({
   description,
   onSave,
   onUnsavedChange,
-}) => {
-  const headingId = useId();
-  const errorId = useId();
-  const [editing, setEditing] = useState(false);
-  const [refocus, setRefocus] = useState(false);
-  // The form outlives the textarea, which closes on submit while the
-  // description saves. It has no pending state: the optimistic description
-  // shows instead.
-  const {
-    formState: { defaultValues, errors, isDirty },
-    handleSubmit,
-    register,
-    reset,
-    setError,
-    setValue,
-  } = useForm<{ description: string }>({
-    defaultValues: { description },
-    // A refused description keeps its reason until the edit ends.
-    reValidateMode: 'onSubmit',
-  });
-  const error = errors.description?.message;
-
-  // Dirty against the description the edit began with, so text typed back
-  // to it counts as unchanged.
-  const unsaved = editing && isDirty;
-  useEffect(() => onUnsavedChange(unsaved), [unsaved, onUnsavedChange]);
-
-  const end = () => {
-    setEditing(false);
-    setRefocus(true);
-  };
-  const save = handleSubmit(({ description: text }) => {
-    end();
-    // The description when the edit began, which may since have changed elsewhere.
-    const original = defaultValues?.description ?? description;
-    if (text === original) {
-      reset({ description });
-      return;
-    }
-    onSave({ description: text }, (reason) => {
-      reset({ description: original });
-      setValue('description', text, { shouldDirty: true });
-      setError('description', { type: 'server', message: reason });
-      setEditing(true);
-    });
-  });
-  const cancel = () => {
-    end();
-    reset({ description });
-  };
-
-  let body: ReactNode;
-  if (editing) {
-    body = (
-      <form
-        onSubmit={save}
-        onKeyDown={(event) => {
-          if (claimEscape(event)) {
-            cancel();
-          } else if (
-            event.key === 'Enter' &&
-            (event.metaKey || event.ctrlKey)
-          ) {
-            event.preventDefault();
-            event.currentTarget.requestSubmit();
-          }
-        }}
-      >
-        <Stack gap={2}>
-          <Textarea
-            {...register('description')}
-            rows={12}
-            autoFocus
-            aria-labelledby={headingId}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-          />
-          <Inline gap={2}>
-            <Button type="submit" size="small" onClick={keepDrawerOpen}>
-              Save
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={(event) => {
-                keepDrawerOpen(event);
-                cancel();
-              }}
-            >
-              Cancel
-            </Button>
-          </Inline>
-        </Stack>
-      </form>
-    );
-  } else if (description === '') {
-    body = (
-      <Text tag="p" color="text-600">
-        No description
-      </Text>
-    );
-  } else {
-    body = <Markdown headingLevel={4}>{description}</Markdown>;
-  }
-
-  return (
-    <Stack gap={2}>
-      <Inline gap={2} alignY="center" justifyContent="space-between">
-        <Heading id={headingId} level={3} fontSize="medium">
-          Description
-        </Heading>
-        {!editing && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="small"
-            autoFocus={refocus}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              reset({ description });
-              setEditing(true);
-            }}
-          >
-            Edit description
-          </Button>
-        )}
-      </Inline>
-      {body}
-      <FieldError id={errorId} reason={error} />
-    </Stack>
-  );
-};
+}) => (
+  <Stack gap={2}>
+    <Heading level={3} fontSize="medium">
+      Description
+    </Heading>
+    <InlineEdit
+      value={description}
+      label="Description"
+      onSave={onSave}
+      multiline
+      renderContent={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
+      placeholder="Add a description…"
+      onDirtyChange={onUnsavedChange}
+    />
+  </Stack>
+);
 
 type DetailProps = {
   /** The detail's name, a `Label` for a control or plain text. */
@@ -472,10 +234,24 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     startSave(async () => {
       showEdit(edit);
       const result = await updateTicket({ number: ticket.number, ...edit });
-      if (!result.ok) {
-        onRefused(result.fieldErrors?.[field] ?? result.error);
+      const reason = refusalReason(result, field);
+      if (reason !== undefined) {
+        onRefused(reason);
       }
     });
+  };
+
+  // Runs inside InlineEdit's save, so the drawer's name follows at once too.
+  const saveTitle = async (title: string) => {
+    showEdit({ title });
+    const result = await updateTicket({ number: ticket.number, title });
+    return refusalReason(result, 'title');
+  };
+
+  const saveDescription = async (description: string) => {
+    showEdit({ description });
+    const result = await updateTicket({ number: ticket.number, description });
+    return refusalReason(result, 'description');
   };
 
   const saveStatus = (status: Fields['status']) => {
@@ -550,7 +326,17 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 </Inline>
               </Alert>
             )}
-            <TitleField title={fields.title} onSave={save} />
+            <InlineEdit
+              value={fields.title}
+              label="Title"
+              onSave={saveTitle}
+              wrap={(title) => (
+                <Heading level={2} fontSize="xlarge" fontWeight="strong">
+                  {title}
+                </Heading>
+              )}
+              inputClassName={styles.titleInput}
+            />
           </Stack>
           <Stack gap={3}>
             {ticket.type === 'Epic' ? (
@@ -663,7 +449,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
           )}
           <DescriptionField
             description={fields.description}
-            onSave={save}
+            onSave={saveDescription}
             onUnsavedChange={setUnsavedDescription}
           />
           <AcceptanceCriteriaEditor

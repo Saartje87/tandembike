@@ -17,7 +17,7 @@ import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 export type CyclePlannerProps = {
   ticket: Pick<Ticket, 'number' | 'status' | 'archived'>;

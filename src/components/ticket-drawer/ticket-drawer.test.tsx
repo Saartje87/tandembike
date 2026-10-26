@@ -80,7 +80,9 @@ const titleButton = () => button('Fix the header');
 const titleInput = () => inDrawer().getByRole('textbox', { name: 'Title' });
 const descriptionInput = () =>
   inDrawer().getByRole('textbox', { name: 'Description' });
-const editDescription = () => userEvent.click(button('Edit description'));
+/** Opens the description by clicking its text, which starts with "It overlaps". */
+const editDescription = () =>
+  userEvent.click(inDrawer().getByText(/^It overlaps/));
 
 /**
  * An `updateTicket` result the test settles itself, to look at the drawer
@@ -361,18 +363,37 @@ describe('TicketDrawer', () => {
       expect(titleInput()).toHaveValue('Fix the header');
     });
 
-    it('saves when the input loses focus', async () => {
-      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 1 });
+    it('does not save when the input loses focus', async () => {
       renderDrawer();
 
       await userEvent.click(titleButton());
       await userEvent.type(titleInput(), '!');
       await userEvent.tab();
 
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(titleInput()).toHaveValue('Fix the header!');
+    });
+
+    it('saves with Save, and cancels with Cancel without closing the drawer', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '!');
+      await userEvent.click(button('Cancel'));
+      expect(titleButton()).toHaveFocus();
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '?');
+      await userEvent.click(button('Save'));
+
       expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
         number: 4,
-        title: 'Fix the header!',
+        title: 'Fix the header?',
       });
+      expect(
+        screen.getByRole('dialog', { name: 'Fix the header?' }),
+      ).toBeInTheDocument();
+      expect(router.replace).not.toHaveBeenCalled();
     });
 
     it('saves nothing when the title is unchanged', async () => {
@@ -488,10 +509,48 @@ describe('TicketDrawer', () => {
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
     });
 
-    it('says when there is no description', () => {
+    it('has no Edit button, and says how to add a missing description', async () => {
       renderDrawer({ ...ticket, description: '' });
 
-      expect(inDrawer().getByText('No description')).toBeInTheDocument();
+      expect(
+        inDrawer().queryByRole('button', { name: /edit/i }),
+      ).not.toBeInTheDocument();
+      await userEvent.click(inDrawer().getByText('Add a description…'));
+
+      expect(descriptionInput()).toHaveValue('');
+    });
+
+    it('opens on Enter when the description has focus', async () => {
+      renderDrawer();
+
+      inDrawer()
+        .getByText(/^It overlaps/)
+        .closest<HTMLElement>('[tabindex="0"]')
+        ?.focus();
+      await userEvent.keyboard('{Enter}');
+
+      expect(descriptionInput()).toHaveValue('It overlaps the **logo**.');
+    });
+
+    it('follows a link in the description instead of opening it', async () => {
+      const onDocumentClick = vi.fn((event: MouseEvent) =>
+        event.preventDefault(),
+      );
+      document.addEventListener('click', onDocumentClick);
+      onTestFinished(() =>
+        document.removeEventListener('click', onDocumentClick),
+      );
+      renderDrawer({
+        ...ticket,
+        description: 'See [the docs](https://example.com/docs).',
+      });
+
+      await userEvent.click(inDrawer().getByRole('link', { name: 'the docs' }));
+
+      expect(onDocumentClick).toHaveBeenCalledOnce();
+      expect(
+        inDrawer().queryByRole('textbox', { name: 'Description' }),
+      ).not.toBeInTheDocument();
     });
 
     it('edits the description as plain Markdown and saves it on its own', async () => {
@@ -539,7 +598,9 @@ describe('TicketDrawer', () => {
       expect(keys).not.toHaveBeenCalled();
       expect(updateTicket).not.toHaveBeenCalled();
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
-      expect(button('Edit description')).toHaveFocus();
+      expect(document.activeElement).toHaveAccessibleDescription(
+        'Edit description',
+      );
       expect(router.replace).not.toHaveBeenCalled();
     });
 
@@ -642,8 +703,14 @@ describe('TicketDrawer', () => {
       await userEvent.clear(descriptionInput());
       await userEvent.type(descriptionInput(), 'Now *shorter*.');
       await userEvent.click(button('Save'));
-      rerender(
-        <TicketDrawer ticket={{ ...ticket, description: 'Now *shorter*.' }} />,
+      // Awaited: the save's transition may still be pending, and a render
+      // during it can suspend until it ends.
+      await act(async () =>
+        rerender(
+          <TicketDrawer
+            ticket={{ ...ticket, description: 'Now *shorter*.' }}
+          />,
+        ),
       );
 
       expect(inDrawer().getByText('shorter').tagName).toBe('EM');
@@ -760,6 +827,71 @@ describe('TicketDrawer', () => {
           scroll: false,
         });
       });
+    });
+  });
+
+  describe('title and description open at once', () => {
+    // In document order: the title's, then the description's.
+    const saveButtons = () =>
+      inDrawer().getAllByRole('button', { name: 'Save' });
+    const cancelButtons = () =>
+      inDrawer().getAllByRole('button', { name: 'Cancel' });
+
+    const openBoth = async () => {
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '!');
+      await editDescription();
+      await userEvent.type(descriptionInput(), ' Use *flex*.');
+    };
+
+    it('saves the title alone, keeping the description open with its draft', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(saveButtons()[0]);
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        title: 'Fix the header!',
+      });
+      expect(button('Fix the header!')).toBeInTheDocument();
+      expect(descriptionInput()).toHaveValue(
+        'It overlaps the **logo**. Use *flex*.',
+      );
+    });
+
+    it('cancels the title alone, then saves the description', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(cancelButtons()[0]);
+
+      expect(titleButton()).toBeInTheDocument();
+      expect(descriptionInput()).toHaveValue(
+        'It overlaps the **logo**. Use *flex*.',
+      );
+
+      await userEvent.click(button('Save'));
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        description: 'It overlaps the **logo**. Use *flex*.',
+      });
+      expect(inDrawer().getByText('flex').tagName).toBe('EM');
+      expect(titleButton()).toBeInTheDocument();
+    });
+
+    it('cancels the description alone, keeping the title open with its draft', async () => {
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(cancelButtons()[1]);
+
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
+      expect(titleInput()).toHaveValue('Fix the header!');
     });
   });
 

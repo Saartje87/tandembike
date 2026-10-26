@@ -15,7 +15,7 @@ import { type FC, useId, useState, useTransition } from 'react';
 import { deleteTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { warningList } from './delete-ticket-dialog.css';
 
 /** One child of an Epic, with what deleting it too would affect. */

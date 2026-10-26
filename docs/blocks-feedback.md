@@ -376,7 +376,7 @@ listener (same node); `stopImmediatePropagation()` does, because React's
 listener is registered first. It is covered by a test that asserts no
 `document` click listener sees the click. The comment list's Edit, Remove and
 Cancel buttons swap themselves out the same way and use the same workaround
-(`keepDrawerOpen`, now in `ticket-drawer/keep-drawer-open.ts`), with the
+(`keepDrawerOpen`, now in `keep-drawer-open/keep-drawer-open.ts`), with the
 same kind of test. The redesigned drawer (#16) swaps out many more buttons:
 the title (which turns into an input), the description's Save and Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
@@ -540,7 +540,7 @@ than the document, so content can claim it with `stopPropagation()` or
 disabling itself while a nested `Dialog` is open, as `Dialog` does.
 
 **Workaround.** In #16 every in-place edit's `onKeyDown` stops an Escape with
-`claimEscape` (`ticket-drawer/keep-drawer-open.ts`), used by the title, the
+`claimEscape` (`keep-drawer-open/keep-drawer-open.ts`), used by the title, the
 description and the label field. As with proposal 13, Next's React root is
 `document`, the same node as the Drawer's listener, so `stopPropagation()`
 alone is not enough; `nativeEvent.stopImmediatePropagation()` is, because
@@ -562,7 +562,7 @@ for its Delete confirmation (#60): `requestClose` returns early while
 **Question.** Should overlays listen for Escape on themselves, pass a reason
 to `onRequestClose`, and should `Drawer` join `Dialog`'s nesting context?
 
-## 18. No unstyled button for click-to-edit text
+## 18. No unstyled button or inline-edit component for click-to-edit text
 
 **Problem.** The drawer's title is a heading that turns into an input when
 clicked or on Enter. That needs a real `<button>` inside the `<h2>` that looks
@@ -582,16 +582,64 @@ height from the theme, so the title would not look like a heading.
 **Expected.** A `variant="plain"` (or `unstyled`) `Button` that inherits font
 and colour, and keeps only the theme's focus ring and a subtle hover.
 
-**Workaround.** A plain `<button>` with `titleButton` in
-`ticket-drawer.css.ts` (resets font, border and background, adds the hover
-background and `vars.focus.boxShadow`). The edit input matches the heading
-through `TextInput`'s `inputClassName` and `titleInput`.
+**Workaround.** A plain `<button>` with the `text` class in
+`src/components/inline-edit/inline-edit.css.ts` (resets font, border and
+background, adds the hover background and `vars.focus.boxShadow`). The
+drawer's title input matches the heading through `TextInput`'s
+`inputClassName` and `titleInput` in `ticket-drawer.css.ts`.
 
-**Second case.** Each acceptance criterion's text opens its edit field on a
-click, so it is a button that has to read as body text and wrap across lines.
-`acceptance-criteria-editor.tsx` uses `Box asChild` on a plain `<button>` for
-the reset (`border="none"`, `backgroundColor="transparent"`,
-`wordBreak`) plus a `text` class for what atoms cannot express:
+**No inline-edit component.** Every editable text in the app (Ticket title,
+description, criterion, Project name, Cycle title, comment) edits the same
+way: plain text at rest that opens on a click or Enter, an input with icon
+buttons ✓ (Save) and ✗ (Cancel), Enter to save, Escape to cancel, no save on
+blur, and a refused save that reopens with the User's text and the reason.
+Blocks has no component for this, so the app builds its own `InlineEdit`
+(`src/components/inline-edit/inline-edit.tsx`) from a plain `<button>`,
+`TextInput`, two ghost icon `Button`s and `react-hook-form`.
+
+```tsx
+// Wanted:
+<InlineEdit
+  value={title}
+  label="Title"
+  onSave={async (text) => reasonIfRefused}
+  wrap={(text) => <Heading level={2}>{text}</Heading>}
+/>
+```
+
+**Textarea variant, with links at rest.** The description and each comment
+edit in a `Textarea` with ✓ and ✗ below it, Enter for a new line
+and Cmd/Ctrl+Enter to save, which the app wires up itself in `onKeyDown`
+with `form.requestSubmit()`. At rest it shows rendered Markdown, which can
+hold links, so it cannot be a `<button>` (no interactive content inside, and
+a `button` role hides its children from assistive technology). The
+workaround is a plain `<div tabIndex={0}>` with the same `text` class whose
+click and Enter handlers skip events that start on an `<a>`, plus
+`biome-ignore` comments for `noStaticElementInteractions` and
+`noNoninteractiveTabindex`. React does not `autoFocus` a `div`, so focus goes
+back to it after an edit through a ref and an effect. An empty text shows a
+muted `Text color="text-600"` placeholder ("Add a description…") inside it.
+
+```tsx
+// Wanted:
+<InlineEdit
+  multiline
+  value={description}
+  label="Description"
+  renderContent={(text) => <Markdown>{text}</Markdown>}
+  placeholder="Add a description…"
+  onSave={async (text) => reasonIfRefused}
+/>
+```
+
+Escape inside it also has to be kept from a surrounding `Drawer`
+(proposal 17), and a click on ✓ or ✗, which unmounts the button, from its
+outside-click check (proposal 13).
+
+**Second case.** Each acceptance criterion's text is an `InlineEdit` too, so
+it is a button that has to read as body text and wrap across lines beside its
+checkbox. The `text` class in `inline-edit.css.ts` covers what atoms cannot
+express:
 
 - `cursor: text`. The `cursor` atom has only `auto` and `pointer`.
 - `textAlign: start`. The `textAlign` atom has `left` and `right` but no
@@ -599,6 +647,12 @@ the reset (`border="none"`, `backgroundColor="transparent"`,
 - The `:hover` background and the `:focus-visible` ring.
 - Biome's `noAutofocus` flags `autoFocus` on the plain `<button>`, which
   returns focus to the text after an edit, though not on Blocks' `Button`.
+
+While a criterion is edited its drag handle and remove ✗ are hidden, and
+while a comment is edited its Remove button is, so the component tells its
+caller through `onEditingChange`; an inline-edit component in Blocks would
+need the same, and a `rows` for its textarea (a comment edits in 4 lines, a
+description in 12).
 
 **Faint until hovered.** Each criterion's drag handle is at `opacity: 0.4`
 until its row is hovered or focused. The `opacity` atom has only `0` and `1`,
@@ -612,7 +666,8 @@ helper, so a criterion's text and its checkbox show different rings side by
 side.
 
 **Question.** Is a plain button variant in scope, or should inline editing
-be its own component (an `InlineEdit` or `EditableText`)? And which focus
+be its own component (an `InlineEdit` or `EditableText`, single-line and
+textarea)? And which focus
 ring should custom controls use: `vars.focus.boxShadow`, or a token for the
 outline the theme's components draw?
 

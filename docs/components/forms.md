@@ -34,6 +34,26 @@ do not use it merely to add another wrapper.
 - **`NumericInput`** is for a numeric value. Use it instead of a text field
   when the value is inherently numeric.
 
+## Editable text: `InlineEdit`
+
+Text the User edits in place, such as a title, a name, a description or a
+comment, uses `InlineEdit` (`src/components/inline-edit/inline-edit.tsx`),
+not a hand-built button-and-form pair. At rest it is the text with a hover
+tint; a click or Enter opens the field with Save (✓) and Cancel (✗). Save
+closes it at once showing the new text; a refusal reopens it with the
+reason. `onSave` resolves to that reason, or nothing when saved: map a
+Server Action's result with `refusalReason(result, field)` from
+`src/app/lib/action-result.ts`.
+
+- **Single line** (default): a `TextInput`. Pass `wrap` to put the text in a
+  `Heading` and `inputClassName` to match its font.
+- **`multiline`**: a `Textarea` with Save and Cancel below it; Enter adds a
+  line, Cmd/Ctrl+Enter saves. Pass `renderContent` to render the text, such
+  as Markdown (links still work), and `placeholder` for empty text.
+- **`readOnly`**: just the wrapped text, such as in an archived Project.
+- `onEditingChange` hides an item's other buttons while it is edited;
+  `onDirtyChange` guards against closing with unsaved text.
+
 ## Textarea sizing and styling
 
 `Textarea` renders a wrapper `Box` around the native `<textarea>`.

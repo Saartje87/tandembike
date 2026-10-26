@@ -128,6 +128,6 @@ Checked against `@blockle/blocks-react` 2.8.1 (see proposals 10 and 17 in
   `onRequestClose` gets no reason. An in-place edit inside it that cancels on
   Escape must call `event.nativeEvent.stopImmediatePropagation()` in its
   React `onKeyDown`, since Next's React root is `document` too (see
-  `claimEscape` in `ticket-drawer/keep-drawer-open.ts`). It does not join
+  `claimEscape` in `keep-drawer-open/keep-drawer-open.ts`). It does not join
   `Dialog`'s nesting, so a `Dialog` opened from inside it leaves its Escape
   and outside-click handling on (proposal 17).

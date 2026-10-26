@@ -208,41 +208,176 @@ describe('TicketComments', () => {
     );
   });
 
-  it('edits a comment in place and goes back to showing it once saved', async () => {
-    vi.mocked(editTicketComment).mockResolvedValue({ ok: true });
-    renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
-    const [item] = commentItems();
+  describe('editing a comment', () => {
+    const commentInput = (item: HTMLElement) =>
+      within(item).getByRole('textbox', { name: 'Comment' });
+    const queryCommentInput = (item: HTMLElement) =>
+      within(item).queryByRole('textbox', { name: 'Comment' });
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Edit' }));
-    const field = within(item).getByRole('textbox', { name: 'Edit comment' });
+    it('has no Edit button, and opens on a click on the body', async () => {
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
 
-    expect(field).toHaveValue('Fixed in the header.');
+      expect(
+        within(item).queryByRole('button', { name: 'Edit' }),
+      ).not.toBeInTheDocument();
 
-    await userEvent.clear(field);
-    await userEvent.type(field, 'Fixed in the nav.');
-    await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
 
-    expect(editTicketComment).toHaveBeenCalledExactlyOnceWith({
-      id: 2,
-      body: 'Fixed in the nav.',
+      expect(commentInput(item)).toHaveValue('Fixed in the header.');
     });
-    expect(within(item).queryByRole('textbox')).not.toBeInTheDocument();
-  });
 
-  it('cancels an edit without saving', async () => {
-    renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
-    const [item] = commentItems();
+    it('opens on Enter when the body has focus', async () => {
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Edit' }));
-    await userEvent.type(
-      within(item).getByRole('textbox', { name: 'Edit comment' }),
-      ' More',
-    );
-    await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
+      within(item)
+        .getByText('Fixed in the header.')
+        .closest<HTMLElement>('[tabindex="0"]')
+        ?.focus();
+      await userEvent.keyboard('{Enter}');
 
-    expect(within(item).queryByRole('textbox')).not.toBeInTheDocument();
-    expect(within(item).getByText('logo')).toBeInTheDocument();
-    expect(editTicketComment).not.toHaveBeenCalled();
+      expect(commentInput(item)).toHaveValue('Fixed in the header.');
+    });
+
+    it('follows a link in the body instead of opening it', async () => {
+      const onDocumentClick = vi.fn((event: MouseEvent) =>
+        event.preventDefault(),
+      );
+      document.addEventListener('click', onDocumentClick);
+      onTestFinished(() =>
+        document.removeEventListener('click', onDocumentClick),
+      );
+      renderWithTheme(
+        <TicketComments
+          ticketNumber={4}
+          comments={[
+            { ...byUser, body: 'See [the docs](https://example.com/docs).' },
+          ]}
+        />,
+      );
+      const [item] = commentItems();
+
+      await userEvent.click(
+        within(item).getByRole('link', { name: 'the docs' }),
+      );
+
+      expect(onDocumentClick).toHaveBeenCalledOnce();
+      expect(queryCommentInput(item)).not.toBeInTheDocument();
+    });
+
+    it('hides Remove while the comment is being edited', async () => {
+      vi.mocked(editTicketComment).mockResolvedValue({ ok: true });
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
+      const remove = () =>
+        within(item).queryByRole('button', { name: 'Remove' });
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+
+      expect(remove()).not.toBeInTheDocument();
+
+      await userEvent.click(
+        within(item).getByRole('button', { name: 'Cancel' }),
+      );
+
+      expect(remove()).toBeInTheDocument();
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+      await userEvent.type(commentInput(item), '!');
+      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+
+      expect(remove()).toBeInTheDocument();
+    });
+
+    it('saves on Cmd/Ctrl+Enter and closes at once showing the new text', async () => {
+      const saved = deferred<{ ok: true }>();
+      vi.mocked(editTicketComment).mockReturnValue(saved.promise);
+      onTestFinished(() => act(async () => saved.resolve({ ok: true })));
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+      await userEvent.clear(commentInput(item));
+      await userEvent.type(commentInput(item), 'Fixed in the *nav*.');
+      await userEvent.keyboard('{Control>}{Enter}{/Control}');
+
+      expect(editTicketComment).toHaveBeenCalledExactlyOnceWith({
+        id: 2,
+        body: 'Fixed in the *nav*.',
+      });
+      expect(queryCommentInput(item)).not.toBeInTheDocument();
+      expect(within(item).getByText('nav').tagName).toBe('EM');
+    });
+
+    it('saves on Save', async () => {
+      vi.mocked(editTicketComment).mockResolvedValue({ ok: true });
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+      await userEvent.type(commentInput(item), '!');
+      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+
+      expect(editTicketComment).toHaveBeenCalledExactlyOnceWith({
+        id: 2,
+        body: 'Fixed in the header.!',
+      });
+      expect(queryCommentInput(item)).not.toBeInTheDocument();
+    });
+
+    it("reopens a refused edit with the User's text and the reason", async () => {
+      vi.mocked(editTicketComment).mockResolvedValue({
+        ok: false,
+        error: 'Write something in the comment.',
+        fieldErrors: { body: 'Write something in the comment.' },
+      });
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+      await userEvent.clear(commentInput(item));
+      await userEvent.type(commentInput(item), '  ');
+      await userEvent.click(within(item).getByRole('button', { name: 'Save' }));
+
+      expect(await within(item).findByRole('textbox')).toHaveValue('  ');
+      expect(commentInput(item)).toHaveAccessibleDescription(
+        'Write something in the comment.',
+      );
+      expect(
+        within(item).queryByRole('button', { name: 'Remove' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('cancels silently on Escape or Cancel, and not on leaving the field', async () => {
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(within(item).getByText('logo'));
+      await userEvent.type(commentInput(item), ' More');
+      await userEvent.click(document.body);
+
+      expect(commentInput(item)).toHaveValue('Please check the **logo**. More');
+
+      await userEvent.click(commentInput(item));
+      await userEvent.keyboard('{Escape}');
+
+      expect(queryCommentInput(item)).not.toBeInTheDocument();
+
+      await userEvent.click(within(item).getByText('logo'));
+
+      expect(commentInput(item)).toHaveValue('Please check the **logo**.');
+
+      await userEvent.type(commentInput(item), ' More');
+      await userEvent.click(
+        within(item).getByRole('button', { name: 'Cancel' }),
+      );
+
+      expect(queryCommentInput(item)).not.toBeInTheDocument();
+      expect(within(item).getByText('logo')).toBeInTheDocument();
+      expect(within(item).queryByRole('alert')).not.toBeInTheDocument();
+      expect(editTicketComment).not.toHaveBeenCalled();
+    });
   });
 
   it('asks before removing a comment for good', async () => {
@@ -300,7 +435,7 @@ describe('TicketComments', () => {
     renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
     const [item] = commentItems();
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Edit' }));
+    await userEvent.click(within(item).getByText('logo'));
     await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
     await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
     await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));

@@ -11,8 +11,8 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 
 import { addTicketLabel, removeTicketLabel } from '../../app/tickets/actions';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { LabelList } from '../label-list/label-list';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 
 export type LabelEditorProps = {
   ticketNumber: number;
