@@ -626,7 +626,8 @@ describe('Archiving and restoring Tickets', () => {
     expect(
       Object.keys(tickets).filter(
         (name) =>
-          /delete|remove/i.test(name) && !/label|comment|blocker/i.test(name),
+          /delete|remove/i.test(name) &&
+          !/label|comment|blocker|externalreference/i.test(name),
       ),
     ).toEqual(['deleteTicket']);
   });

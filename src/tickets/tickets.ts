@@ -68,6 +68,18 @@ import {
   ValidationError,
 } from './errors';
 import {
+  checkExternalReferenceCount,
+  checkExternalReferences,
+  checkedExternalReferences,
+  checkNewExternalReferences,
+  deleteExternalReferences,
+  externalReferenceChanges,
+  externalReferencesOf,
+  insertExternalReferences,
+  normalizeExternalReferences,
+  withExternalReferences,
+} from './external-references';
+import {
   checkOrigin,
   type OriginLink,
   type SplitOffTicket,
@@ -159,6 +171,11 @@ export type Ticket = {
   archived: boolean;
   /** Trimmed, lower-cased and sorted; empty when the Ticket has none. */
   labels: string[];
+  /**
+   * URLs or keys pointing to the same work elsewhere, trimmed, in the order
+   * they were added; empty when the Ticket has none.
+   */
+  externalReferences: string[];
   /** The numbers of the Ticket's Blockers, sorted, resolved ones included. */
   blockedBy: number[];
   /** Whether any Blocker is unresolved: neither Done nor archived. */
@@ -219,6 +236,8 @@ export type CreateTicketInput = {
   status?: Status;
   /** Defaults to none. */
   labels?: string[];
+  /** In order; defaults to none. */
+  externalReferences?: string[];
   /** In order; defaults to none. Each starts unchecked unless `checked`. */
   acceptanceCriteria?: NewAcceptanceCriterion[];
   /** A Cycle of the same Project to plan it into; defaults to none. */
@@ -257,7 +276,12 @@ export type CreateTicketBatchInput = {
 /** One Ticket of a batch: the fields of `CreateTicketInput` that apply. */
 export type BatchTicketInput = Pick<
   CreateTicketInput,
-  'title' | 'description' | 'status' | 'labels' | 'acceptanceCriteria'
+  | 'title'
+  | 'description'
+  | 'status'
+  | 'labels'
+  | 'externalReferences'
+  | 'acceptanceCriteria'
 > & {
   /**
    * The positions, from 0, of the earlier Tickets in the batch that block
@@ -280,6 +304,10 @@ export type UpdateTicketInput = {
   addLabels?: string[];
   /** Labels to remove, ignoring case and ones the Ticket does not have. */
   removeLabels?: string[];
+  /** External references to add, after `removeExternalReferences`. */
+  addExternalReferences?: string[];
+  /** External references to remove; ones the Ticket does not have are ignored. */
+  removeExternalReferences?: string[];
   /**
    * The Ticket's whole list of acceptance criteria, in order. Ones left out
    * are removed.
@@ -602,6 +630,9 @@ function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
   const status = input.status ?? 'Todo';
   const type = input.type ?? 'Ticket';
   const labels = normalizeLabels(input.labels ?? []);
+  const externalReferences = normalizeExternalReferences(
+    input.externalReferences ?? [],
+  );
   const acceptanceCriteria = (input.acceptanceCriteria ?? []).map(
     ({ text, checked }) => ({ text: text.trim(), checked: checked ?? false }),
   );
@@ -624,6 +655,7 @@ function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
             ? undefined
             : 'Only an Epic has a colour. Leave the colour out.',
     labels: checkLabels(labels),
+    externalReferences: checkNewExternalReferences(externalReferences),
     acceptanceCriteria: checkAcceptanceCriteria(
       acceptanceCriteria.map(({ text }) => text),
     ),
@@ -631,6 +663,7 @@ function checkNewTicket(input: Omit<CreateTicketInput, 'projectId'>) {
   return {
     values: { title, description, status, type, color: input.color },
     labels,
+    externalReferences,
     acceptanceCriteria,
   };
 }
@@ -706,7 +739,7 @@ function checkBlockedByPositions(
 function insertTicket(
   db: DatabaseConnection,
   actor: Actor,
-  { values, labels, acceptanceCriteria }: CheckedNewTicket,
+  { values, labels, externalReferences, acceptanceCriteria }: CheckedNewTicket,
   row: {
     projectId: number;
     epicNumber: number | null;
@@ -729,6 +762,7 @@ function insertTicket(
     .returning({ number: tickets.number })
     .get();
   insertLabels(db, number, labels);
+  insertExternalReferences(db, number, externalReferences);
   insertAcceptanceCriteria(db, number, acceptanceCriteria);
   recordActivity(db, number, actor, [{ type: 'created' }]);
   return number;
@@ -770,20 +804,22 @@ type TicketValues = Pick<
 >;
 
 /**
- * A checked Ticket update: the row fields given, normalized labels and the
- * trimmed acceptance criteria, if given.
+ * A checked Ticket update: the row fields given, normalized labels and
+ * External references, and the trimmed acceptance criteria, if given.
  */
 type TicketChanges = {
   values: TicketValues;
   addLabels: string[];
   removeLabels: string[];
+  addExternalReferences: string[];
+  removeExternalReferences: string[];
   acceptanceCriteria?: AcceptanceCriterionInput[];
 };
 
 /**
  * The cleaned-up fields of a Ticket update, holding only the fields given,
- * or a `ValidationError` by the same rules as creating a Ticket. A label
- * named both to add and to remove is refused.
+ * or a `ValidationError` by the same rules as creating a Ticket. A label or
+ * External reference named both to add and to remove is refused.
  */
 function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
   const title = input.title?.trim();
@@ -791,6 +827,15 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
   const addLabels = normalizeLabels(input.addLabels ?? []);
   const removeLabels = normalizeLabels(input.removeLabels ?? []);
   const inBoth = addLabels.filter((label) => removeLabels.includes(label));
+  const addExternalReferences = normalizeExternalReferences(
+    input.addExternalReferences ?? [],
+  );
+  const removeExternalReferences = normalizeExternalReferences(
+    input.removeExternalReferences ?? [],
+  );
+  const referencesInBoth = addExternalReferences.filter((reference) =>
+    removeExternalReferences.includes(reference),
+  );
   const acceptanceCriteria = input.acceptanceCriteria?.map((criterion) => ({
     ...criterion,
     text: criterion.text.trim(),
@@ -809,6 +854,12 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
       inBoth.length === 0
         ? undefined
         : `Name each label in addLabels or removeLabels, not both: ${inBoth.join(', ')}.`,
+    addExternalReferences: checkExternalReferences(addExternalReferences),
+    removeExternalReferences: checkExternalReferences(removeExternalReferences),
+    externalReferences:
+      referencesInBoth.length === 0
+        ? undefined
+        : `Name each External reference in addExternalReferences or removeExternalReferences, not both: ${referencesInBoth.join(', ')}.`,
     acceptanceCriteria:
       acceptanceCriteria === undefined
         ? undefined
@@ -826,7 +877,14 @@ function checkTicketChanges(input: UpdateTicketInput): TicketChanges {
       originNumber,
     }).filter(([, value]) => value !== undefined),
   ) as TicketValues;
-  return { values, addLabels, removeLabels, acceptanceCriteria };
+  return {
+    values,
+    addLabels,
+    removeLabels,
+    addExternalReferences,
+    removeExternalReferences,
+    acceptanceCriteria,
+  };
 }
 
 /** The ids of the `criteria` that have one, in order. */
@@ -1330,7 +1388,8 @@ export function createTickets(
     },
 
     createTicket(input: CreateTicketInput): Ticket {
-      const { values, labels, acceptanceCriteria } = checkNewTicket(input);
+      const checked = checkNewTicket(input);
+      const { values } = checked;
       checkProjectWritable(db, input.projectId);
       const project = { id: input.projectId };
 
@@ -1346,17 +1405,12 @@ export function createTickets(
         if (input.originNumber !== undefined) {
           checkOrigin(db, input.originNumber);
         }
-        const number = insertTicket(
-          db,
-          actor,
-          { values, labels, acceptanceCriteria },
-          {
-            projectId: project.id,
-            epicNumber: input.epicNumber ?? null,
-            originNumber: input.originNumber ?? null,
-            createdAt: new Date(),
-          },
-        );
+        const number = insertTicket(db, actor, checked, {
+          projectId: project.id,
+          epicNumber: input.epicNumber ?? null,
+          originNumber: input.originNumber ?? null,
+          createdAt: new Date(),
+        });
         if (input.cycleId !== undefined) {
           planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
         }
@@ -1556,6 +1610,52 @@ export function createTickets(
         const before = labelsOf(db, number);
         deleteLabels(db, number, removed);
         recordActivity(db, number, actor, labelChanges(before, { removed }));
+      });
+      changes.publish({ type: 'ticket', number });
+      return getTicket(number);
+    },
+
+    /**
+     * Adds `references` to Ticket `number` after the ones it has, trimmed;
+     * ones it already has are kept once, where they were. Refused past
+     * `maxExternalReferences`. Bumps its updated time.
+     */
+    addExternalReferences(number: number, references: string[]): Ticket {
+      const added = checkedExternalReferences(references);
+      db.transaction(() => {
+        checkTicketWritable(db, number);
+        touchTicket(db, number);
+        const before = externalReferencesOf(db, number);
+        insertExternalReferences(db, number, added);
+        checkExternalReferenceCount(db, number);
+        recordActivity(
+          db,
+          number,
+          actor,
+          externalReferenceChanges(before, { added }),
+        );
+      });
+      changes.publish({ type: 'ticket', number });
+      return getTicket(number);
+    },
+
+    /**
+     * Removes `references` from Ticket `number`, trimmed and matched
+     * exactly; ones it does not have are ignored. Bumps its updated time.
+     */
+    removeExternalReferences(number: number, references: string[]): Ticket {
+      const removed = checkedExternalReferences(references);
+      db.transaction(() => {
+        checkTicketWritable(db, number);
+        touchTicket(db, number);
+        const before = externalReferencesOf(db, number);
+        deleteExternalReferences(db, number, removed);
+        recordActivity(
+          db,
+          number,
+          actor,
+          externalReferenceChanges(before, { removed }),
+        );
       });
       changes.publish({ type: 'ticket', number });
       return getTicket(number);
@@ -2127,7 +2227,7 @@ export function createTickets(
     /**
      * Destroys Ticket `number` for good (ADR 0012), whatever its Status,
      * archived or claimed; its number is never used again. Its labels,
-     * Activity, Comments, acceptance criteria and Blockers on both sides go
+     * External references, Activity, Comments, acceptance criteria and Blockers on both sides go
      * with it, and it leaves every Cycle, Archived ones included. The Tickets it
      * blocked and its Epic are bumped, and the Epic's Status is derived
      * again. The Tickets split from it lose their Origin and stay. An Epic's
@@ -2327,7 +2427,8 @@ export function createTickets(
 
   /**
    * Writes checked `changes` to Ticket `number` in one transaction, without
-   * announcing them: removed labels go before added ones, a Ticket that
+   * announcing them: removed labels and External references go before added
+   * ones, a Ticket that
    * changes Project or Status goes to the end of its new lane, and one that
    * changes Project leaves its Cycle unless that is Archived. A child's
    * Status change updates its Epic's. Returns the ids of the Cycles it left,
@@ -2336,7 +2437,14 @@ export function createTickets(
    */
   function applyTicketChanges(
     number: number,
-    { values, addLabels, removeLabels, acceptanceCriteria }: TicketChanges,
+    {
+      values,
+      addLabels,
+      removeLabels,
+      addExternalReferences,
+      removeExternalReferences,
+      acceptanceCriteria,
+    }: TicketChanges,
   ): {
     leftCycles: number[];
     changedEpic: number | null;
@@ -2383,6 +2491,7 @@ export function createTickets(
         }
       }
       const labelsBefore = labelsOf(db, number);
+      const referencesBefore = externalReferencesOf(db, number);
       const criteriaBefore =
         acceptanceCriteria === undefined
           ? undefined
@@ -2406,6 +2515,9 @@ export function createTickets(
         projectId === existing.projectId ? [] : leaveOpenCycles(db, number);
       deleteLabels(db, number, removeLabels);
       insertLabels(db, number, addLabels);
+      deleteExternalReferences(db, number, removeExternalReferences);
+      insertExternalReferences(db, number, addExternalReferences);
+      checkExternalReferenceCount(db, number);
       if (acceptanceCriteria !== undefined) {
         replaceAcceptanceCriteria(db, number, acceptanceCriteria);
       }
@@ -2414,6 +2526,10 @@ export function createTickets(
         ...labelChanges(labelsBefore, {
           added: addLabels,
           removed: removeLabels,
+        }),
+        ...externalReferenceChanges(referencesBefore, {
+          added: addExternalReferences,
+          removed: removeExternalReferences,
         }),
         ...(criteriaBefore !== undefined &&
         criteriaFingerprint(db, number) !== criteriaBefore
@@ -2730,7 +2846,7 @@ function checkedLabels(labels: readonly string[]): string[] {
 
 /**
  * Deletes Ticket `number`'s row with everything attached to it: labels,
- * Activity, Comments, acceptance criteria, Blockers on both sides and Cycle
+ * External references, Activity, Comments, acceptance criteria, Blockers on both sides and Cycle
  * membership. The Tickets split from it lose their Origin and are bumped.
  * Run it in the deleting transaction. Returns the Tickets it blocked, the
  * Cycles it left, the Tickets split from it and its own Origin: the caller
@@ -2738,6 +2854,7 @@ function checkedLabels(labels: readonly string[]): string[] {
  */
 function removeTicket(db: DatabaseConnection, number: number) {
   db.delete(ticketLabels).where(eq(ticketLabels.ticketNumber, number)).run();
+  deleteExternalReferences(db, number);
   deleteActivity(db, number);
   db.delete(ticketComments)
     .where(eq(ticketComments.ticketNumber, number))
@@ -3222,8 +3339,8 @@ type RelationColumns = {
 };
 
 /**
- * `rows` with each Ticket's claim, Epic, labels, Blockers, acceptance
- * criteria, children, Origin and split-off Tickets.
+ * `rows` with each Ticket's claim, Epic, labels, Blockers, External
+ * references, acceptance criteria, children, Origin and split-off Tickets.
  */
 function withRelations<Row extends { number: number }>(
   db: DatabaseConnection,
@@ -3231,7 +3348,13 @@ function withRelations<Row extends { number: number }>(
 ) {
   return withOrigins(
     db,
-    withChildren(db, withAcceptanceCriteria(db, withClaimAndLinks(db, rows))),
+    withChildren(
+      db,
+      withAcceptanceCriteria(
+        db,
+        withExternalReferences(db, withClaimAndLinks(db, rows)),
+      ),
+    ),
   );
 }
 

@@ -22,6 +22,8 @@ export type ActivityChange =
   | { type: 'origin'; from: number | null; to: number | null }
   | { type: 'labelAdded'; label: string }
   | { type: 'labelRemoved'; label: string }
+  | { type: 'externalReferenceAdded'; reference: string }
+  | { type: 'externalReferenceRemoved'; reference: string }
   /** On the blocked Ticket: Ticket `number` became one of its Blockers. */
   | { type: 'blockedByAdded'; number: number }
   | { type: 'blockedByRemoved'; number: number }

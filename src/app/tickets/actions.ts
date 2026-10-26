@@ -305,6 +305,46 @@ export async function removeTicketLabel(input: {
   return changeLabel(input, 'remove');
 }
 
+export type TicketExternalReferenceResult = ActionResult;
+
+/**
+ * Adds or removes one External reference for the UI and refreshes the
+ * Ticket's drawer. Domain errors come back as `error`, like `createTicket`.
+ */
+function changeExternalReference(
+  input: { number: number; reference: string },
+  change: 'add' | 'remove',
+): TicketExternalReferenceResult {
+  return actionResult(() => {
+    const tickets = appTickets('user');
+    const number = Number(input?.number);
+    const references = [String(input?.reference ?? '')];
+    const ticket =
+      change === 'add'
+        ? tickets.addExternalReferences(number, references)
+        : tickets.removeExternalReferences(number, references);
+    revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}
+
+/** Adds an External reference to a Ticket for the UI. */
+export async function addTicketExternalReference(input: {
+  number: number;
+  reference: string;
+}): Promise<TicketExternalReferenceResult> {
+  return changeExternalReference(input, 'add');
+}
+
+/** Removes an External reference from a Ticket for the UI. */
+export async function removeTicketExternalReference(input: {
+  number: number;
+  reference: string;
+}): Promise<TicketExternalReferenceResult> {
+  return changeExternalReference(input, 'remove');
+}
+
 export type TicketCommentResult = ActionResult;
 
 /**

@@ -1195,6 +1195,84 @@ function iso(date: Date): string {
   return date.toISOString();
 }
 
+describe('External reference tools', () => {
+  it('sets references on create_ticket and create_tickets, changes them on update_ticket and reads them in get_ticket', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets);
+
+    await client.callTool({
+      name: 'create_ticket',
+      arguments: {
+        projectId: project.id,
+        title: 'Fix the header',
+        externalReferences: ['#55', 'https://github.com/acme/web/pull/87'],
+      },
+    });
+    await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [{ title: 'Fix the footer', externalReferences: ['ABC-33'] }],
+      },
+    });
+    const updated = await client.callTool({
+      name: 'update_ticket',
+      arguments: {
+        number: 1,
+        removeExternalReferences: ['#55'],
+        addExternalReferences: ['ABC-34'],
+        detail: 'full',
+      },
+    });
+    const got = await client.callTool({
+      name: 'get_ticket',
+      arguments: { number: 2 },
+    });
+
+    expect(resultJson(updated)).toMatchObject({
+      externalReferences: ['https://github.com/acme/web/pull/87', 'ABC-34'],
+    });
+    expect(resultJson(got)).toMatchObject({ externalReferences: ['ABC-33'] });
+    await client.close();
+  });
+
+  it('refuses a value that is neither a URL nor a key, with the reason', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({ projectId: project.id, title: 'Fix the header' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 1, addExternalReferences: ['javascript:alert(1)'] },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(
+      '"javascript:alert(1)" is not a valid URL or key. Give an http(s) URL of at most 2,000 characters, or a key without spaces of at most 100 characters, such as #55 or ABC-33.',
+    );
+    await client.close();
+  });
+
+  it('describes External references where Agents set and read them', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
+
+    for (const name of ['create_ticket', 'create_tickets', 'update_ticket']) {
+      expect(describe(name), name).toMatch(/http\(s\) URL/);
+      expect(describe(name), name).toMatch(/at most 50/);
+    }
+    expect(describe('update_ticket')).toMatch(/addExternalReferences/);
+    expect(describe('update_ticket')).toMatch(/removeExternalReferences/);
+    expect(describe('get_ticket')).toMatch(/externalReferences/);
+    await client.close();
+  });
+});
+
 describe('Batch tools', () => {
   it('changes several Tickets in one update_tickets call', async () => {
     const tickets = createTestTickets();

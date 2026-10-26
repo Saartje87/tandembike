@@ -33,6 +33,8 @@ vi.mock('../../app/tickets/actions', () => ({
   createTicket: vi.fn(),
   addTicketLabel: vi.fn(),
   removeTicketLabel: vi.fn(),
+  addTicketExternalReference: vi.fn(),
+  removeTicketExternalReference: vi.fn(),
   clearTicketClaim: vi.fn(),
   deleteTicket: vi.fn(),
   updateTicket: vi.fn(),
@@ -55,6 +57,7 @@ const ticket: Ticket = {
   position: 0,
   archived: false,
   labels: [],
+  externalReferences: [],
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
@@ -876,6 +879,27 @@ describe('TicketDrawer', () => {
       });
       expect(drawer()).toBeInTheDocument();
     });
+  });
+
+  it("shows the Ticket's External references after its labels, with a way to add one", () => {
+    renderDrawer({
+      ...ticket,
+      externalReferences: ['https://github.com/acme/web/pull/87', 'ABC-33'],
+    });
+
+    const list = inDrawer().getByRole('list', { name: 'External references' });
+    expect(
+      inDocumentOrder(
+        inDrawer().getByText('Labels'),
+        inDrawer().getByText('External references'),
+        list,
+      ),
+    ).toBe(true);
+    expect(
+      within(list).getByRole('link', { name: 'acme/web#87' }),
+    ).toHaveAttribute('target', '_blank');
+    expect(within(list).getByText('ABC-33')).toBeInTheDocument();
+    expect(button('Add External reference')).toBeInTheDocument();
   });
 
   describe('labels', () => {
