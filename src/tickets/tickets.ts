@@ -48,6 +48,7 @@ import {
   checkUngrouped,
   claimedEpics,
   type EpicChildInput,
+  type EpicChildrenInput,
   epicStatusRule,
   syncEpicStatus,
 } from './epics';
@@ -1605,6 +1606,36 @@ export function createTickets(
     },
 
     /**
+     * `moveToEpic` for each of `children`, all or nothing: if any cannot
+     * join `epic`, none does. Their Statuses and positions stay as they are.
+     * The change is announced once, or not at all when every Ticket was in
+     * `epic` already.
+     */
+    moveTicketsToEpic(input: EpicChildrenInput): void {
+      const { epic, children } = input;
+      throwFieldErrors({ children: checkBatchNumbers(children) });
+
+      const joined = db.transaction(() =>
+        children.flatMap((child) => {
+          const changed = joinEpicStep({ epic, child }, { move: true });
+          return changed ? [{ child, ...changed }] : [];
+        }),
+      );
+      if (joined.length === 0) {
+        return;
+      }
+      const left = joined.flatMap(({ previous }) =>
+        previous === null ? [] : [previous],
+      );
+      changes.publish({
+        type: 'tickets',
+        numbers: [
+          ...new Set([...left, epic, ...joined.map(({ child }) => child)]),
+        ],
+      });
+    },
+
+    /**
      * Takes Ticket `number` out of its Epic, if it has one, and bumps both
      * updated times. Returns the Ticket.
      */
@@ -2021,6 +2052,51 @@ export function createTickets(
   }
 
   /**
+   * The change of `joinEpic`, without its transaction or announcement: run
+   * it in the transaction that makes the change. Returns `null` when `child`
+   * was in `epic` already, and otherwise the Epic it left, if any.
+   */
+  function joinEpicStep(
+    { epic, child }: EpicChildInput,
+    { move }: { move: boolean },
+  ): { previous: number | null } | null {
+    checkTicketWritable(db, child);
+    const ticket = db
+      .select({
+        type: tickets.type,
+        projectId: tickets.projectId,
+        epicNumber: tickets.epicNumber,
+      })
+      .from(tickets)
+      .where(eq(tickets.number, child))
+      .get();
+    if (!ticket) {
+      throw new NotFoundError(`There is no Ticket T${child}.`);
+    }
+    const previous = ticket.epicNumber;
+    checkEpicChild(db, epic, {
+      number: child,
+      ...ticket,
+      epicNumber: move ? null : previous,
+    });
+    if (previous === epic) {
+      return null;
+    }
+    checkNoBlockerBetween(db, { epic, child });
+    db.update(tickets)
+      .set({ epicNumber: epic, updatedAt: new Date() })
+      .where(eq(tickets.number, child))
+      .run();
+    touchTicket(db, epic);
+    syncEpicStatus(db, epic);
+    if (previous !== null) {
+      touchTicket(db, previous);
+      syncEpicStatus(db, previous);
+    }
+    return { previous };
+  }
+
+  /**
    * Makes `child` a child of `epic`, by the rules of `attachToEpic`; with
    * `move`, a child of another Epic leaves that one first.
    */
@@ -2028,42 +2104,9 @@ export function createTickets(
     { epic, child }: EpicChildInput,
     { move }: { move: boolean },
   ): Ticket {
-    const changed = db.transaction(() => {
-      checkTicketWritable(db, child);
-      const ticket = db
-        .select({
-          type: tickets.type,
-          projectId: tickets.projectId,
-          epicNumber: tickets.epicNumber,
-        })
-        .from(tickets)
-        .where(eq(tickets.number, child))
-        .get();
-      if (!ticket) {
-        throw new NotFoundError(`There is no Ticket T${child}.`);
-      }
-      const previous = ticket.epicNumber;
-      checkEpicChild(db, epic, {
-        number: child,
-        ...ticket,
-        epicNumber: move ? null : previous,
-      });
-      if (previous === epic) {
-        return null;
-      }
-      checkNoBlockerBetween(db, { epic, child });
-      db.update(tickets)
-        .set({ epicNumber: epic, updatedAt: new Date() })
-        .where(eq(tickets.number, child))
-        .run();
-      touchTicket(db, epic);
-      syncEpicStatus(db, epic);
-      if (previous !== null) {
-        touchTicket(db, previous);
-        syncEpicStatus(db, previous);
-      }
-      return { previous };
-    });
+    const changed = db.transaction(() =>
+      joinEpicStep({ epic, child }, { move }),
+    );
     if (changed) {
       changes.publish({
         type: 'tickets',

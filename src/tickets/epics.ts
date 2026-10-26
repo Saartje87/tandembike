@@ -12,6 +12,9 @@ import type { TicketType } from './ticket-type';
 /** A Ticket to attach to, or detach from, an Epic (ADR 0011). */
 export type EpicChildInput = { epic: number; child: number };
 
+/** Tickets to move into an Epic together, each once, at most `maxBatchSize`. */
+export type EpicChildrenInput = { epic: number; children: number[] };
+
 /** The would-be child of an Epic: a new Ticket has no number yet. */
 type ChildCandidate = {
   number?: number;

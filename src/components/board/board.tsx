@@ -35,8 +35,8 @@ import {
 
 import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
 import {
-  attachTicketToEpic,
   moveTickets,
+  moveTicketsToEpic,
   reorderTickets,
   updateTicket,
 } from '../../app/tickets/actions';
@@ -254,7 +254,7 @@ type BoardChange =
   | (StatusMove & { position: number })
   | { status: Status; ticketNumbers: number[] }
   | { status: Status; laneOrder: number[] }
-  | { number: number; epic: EpicLink };
+  | { numbers: number[]; epic: EpicLink };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   if ('laneOrder' in change) {
@@ -271,7 +271,7 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   }
   if ('epic' in change) {
     return tickets.map((ticket) =>
-      ticket.number === change.number
+      change.numbers.includes(ticket.number)
         ? { ...ticket, epic: change.epic }
         : ticket,
     );
@@ -296,20 +296,24 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   );
 };
 
-type EpicJoin = { child: Ticket; epicNumber: number };
+type EpicJoin = { joining: Ticket[]; epicNumber: number };
 
-/** `epics` with `child` taken out of its Epic and into Epic `epicNumber`. */
-const applyEpicJoin = (epics: Ticket[], { child, epicNumber }: EpicJoin) =>
-  epics.map((epic) => {
+/** `epics` with `joining` taken out of their Epics and into Epic `epicNumber`. */
+const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) => {
+  const numbers = new Set(joining.map(({ number }) => number));
+  return epics.map((epic) => {
     const children = epic.children.filter(
-      (candidate) => candidate.number !== child.number,
+      (candidate) => !numbers.has(candidate.number),
     );
     if (epic.number === epicNumber) {
-      const { number, title, status, archived, blockedBy, blocked } = child;
-      children.push({ number, title, status, archived, blockedBy, blocked });
+      for (const child of joining) {
+        const { number, title, status, archived, blockedBy, blocked } = child;
+        children.push({ number, title, status, archived, blockedBy, blocked });
+      }
     }
     return { ...epic, children };
   });
+};
 
 /** Clicks inside these are not on empty Board space. */
 const notEmptySpaceSelector =
@@ -329,7 +333,8 @@ const escapeOwnerSelector =
  *
  * Cards can be selected with Cmd-click or Ctrl-click, a Shift-click range in
  * one column, or their checkboxes; a bar then shows the selection. Dragging
- * a selected card moves the whole selection. The selection lives only in
+ * a selected card moves the whole selection, into a lane or, dropped on an
+ * Epic's chip, into that Epic. The selection lives only in
  * this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
@@ -521,21 +526,26 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
-  const joinEpic = (ticket: Ticket, epicNumber: number) => {
+  /**
+   * Attaches `moving` to Epic `epicNumber`, taking them out of their Epics,
+   * as one change, all or nothing.
+   */
+  const joinEpic = (moving: Ticket[], epicNumber: number) => {
     const epic = shownEpics.find(({ number }) => number === epicNumber);
-    if (!epic || ticket.epic?.number === epicNumber) {
+    const joining = moving.filter(
+      (ticket) => ticket.epic?.number !== epicNumber,
+    );
+    if (!epic || joining.length === 0) {
       return;
     }
+    const numbers = joining.map(({ number }) => number);
     setError(undefined);
     startTransition(async () => {
-      showChange({
-        number: ticket.number,
-        epic: epicLinkOf(epic),
-      });
-      showEpicJoin({ child: ticket, epicNumber });
-      const result = await attachTicketToEpic({
+      showChange({ numbers, epic: epicLinkOf(epic) });
+      showEpicJoin({ joining, epicNumber });
+      const result = await moveTicketsToEpic({
         epic: epicNumber,
-        child: ticket.number,
+        children: numbers,
       });
       if (!result.ok) {
         setError(result.error);
@@ -584,9 +594,11 @@ export const Board: FC<BoardProps> = ({
     if (!ticket || ticket.archived) {
       return;
     }
+    const carriesSelection =
+      selectedOnBoard.has(sourceId) && selection.length > 1;
     const epicNumber = epicOfDropTarget(targetId);
     if (epicNumber !== undefined) {
-      joinEpic(ticket, epicNumber);
+      joinEpic(carriesSelection ? selection : [ticket], epicNumber);
       return;
     }
     const targetTicket =
@@ -597,7 +609,7 @@ export const Board: FC<BoardProps> = ({
     if (!status) {
       return;
     }
-    if (selectedOnBoard.has(sourceId) && selection.length > 1) {
+    if (carriesSelection) {
       moveSelection(status, sourceId, targetId);
       return;
     }

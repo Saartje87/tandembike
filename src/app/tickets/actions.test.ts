@@ -16,6 +16,7 @@ import {
   deleteTicket,
   editTicketComment,
   moveTickets,
+  moveTicketsToEpic,
   removeTicketComment,
   removeTicketLabel,
   restoreTicket,
@@ -141,6 +142,49 @@ describe('Ticket actions', () => {
     expect(result).toEqual({ ok: true });
     expect(tickets.getTicket(child.number).epic?.number).toBe(to.number);
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+  });
+
+  it('moves several Tickets into an Epic and refreshes the Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const [a, b] = ['A', 'B'].map(
+      (title) => tickets.createTicket({ projectId: project.id, title }).number,
+    );
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await moveTicketsToEpic({
+      epic: epic.number,
+      children: [a, b],
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(
+      tickets.getTicket(epic.number).children.map(({ number }) => number),
+    ).toEqual([a, b]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+  });
+
+  it('refuses a move into an Epic with the reason the Tickets module gives', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await moveTicketsToEpic({
+      epic: epic.number,
+      children: [42],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket T42.' });
   });
 
   it("changes an Epic's colour and refreshes the Boards", async () => {
