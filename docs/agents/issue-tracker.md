@@ -4,7 +4,7 @@ This repository's Tickets live in the local Tandembike app, in the Project named
 
 ## When the MCP tools change
 
-A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm run dev`, and only after `npm run build` and a restart under `npm run start`. Once it has, ask the User to reconnect the MCP server (`/mcp` in Claude Code) or start a new session, as the server's instructions say; until then your loaded tool descriptions may be out of date.
+A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm run dev`, and only after `npm run build` and a restart under `npm run start`. Once it has, ask the User to start a new session to pick up the new tool descriptions and instructions. Reconnecting with `/mcp` in Claude Code is not enough: it reconnects the server, but tool descriptions this session has already loaded stay as they were. Until the new session, treat your loaded tool descriptions as out of date.
 
 ## Development work in this repository
 
