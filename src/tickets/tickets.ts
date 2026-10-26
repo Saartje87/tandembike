@@ -1954,6 +1954,26 @@ export function createTickets(
       return setArchived(number, true);
     },
 
+    /**
+     * `archiveTicket` for each of `ticketNumbers`, all or nothing: if any
+     * cannot be archived, none is. The change is announced once, with the
+     * Epics whose Status changed.
+     */
+    archiveTickets(ticketNumbers: number[]): void {
+      throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
+
+      const changedEpics = db.transaction(() =>
+        ticketNumbers.flatMap((number) => {
+          const changedEpic = setArchivedStep(number, true);
+          return changedEpic === null ? [] : [changedEpic];
+        }),
+      );
+      changes.publish({
+        type: 'tickets',
+        numbers: [...new Set([...ticketNumbers, ...changedEpics])],
+      });
+    },
+
     /** Brings archived Ticket `number` back exactly as it was. */
     restoreTicket(number: number): Ticket {
       return setArchived(number, false);
@@ -2270,26 +2290,33 @@ export function createTickets(
    * child's Epic leaves out archived children, so its Status may change.
    */
   function setArchived(number: number, archived: boolean): Ticket {
-    const changedEpic = db.transaction(() => {
-      checkTicketWritable(db, number);
-      if (archived) {
-        checkChildrenArchived(db, number);
-      } else {
-        checkEpicNotArchived(db, number);
-      }
-      const ticket = db
-        .update(tickets)
-        .set({ archived, updatedAt: new Date() })
-        .where(eq(tickets.number, number))
-        .returning({ epicNumber: tickets.epicNumber })
-        .get();
-      if (!ticket) {
-        throw new NotFoundError(`There is no Ticket T${number}.`);
-      }
-      return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
-    });
+    const changedEpic = db.transaction(() => setArchivedStep(number, archived));
     publishWith(number, changedEpic);
     return getTicket(number);
+  }
+
+  /**
+   * The change of `setArchived`, without its transaction or announcement:
+   * run it in the transaction that makes the change. Returns the Epic whose
+   * Status changed, if any.
+   */
+  function setArchivedStep(number: number, archived: boolean): number | null {
+    checkTicketWritable(db, number);
+    if (archived) {
+      checkChildrenArchived(db, number);
+    } else {
+      checkEpicNotArchived(db, number);
+    }
+    const ticket = db
+      .update(tickets)
+      .set({ archived, updatedAt: new Date() })
+      .where(eq(tickets.number, number))
+      .returning({ epicNumber: tickets.epicNumber })
+      .get();
+    if (!ticket) {
+      throw new NotFoundError(`There is no Ticket T${number}.`);
+    }
+    return syncEpicStatus(db, ticket.epicNumber) ? ticket.epicNumber : null;
   }
 }
 

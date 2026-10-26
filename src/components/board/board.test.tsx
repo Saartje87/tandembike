@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
+  archiveTickets,
   createTicket,
   moveTickets,
   moveTicketsToEpic,
@@ -19,6 +20,7 @@ vi.mock('../../app/projects/actions', () => ({
   styleProject: vi.fn(),
 }));
 vi.mock('../../app/tickets/actions', () => ({
+  archiveTickets: vi.fn(),
   createTicket: vi.fn(),
   moveTickets: vi.fn(),
   moveTicketsToEpic: vi.fn(),
@@ -981,6 +983,7 @@ describe('Selecting cards', () => {
   };
 
   beforeEach(() => {
+    vi.mocked(archiveTickets).mockReset();
     vi.mocked(moveTickets).mockReset();
     vi.mocked(reorderTickets).mockReset();
     vi.mocked(updateTicket).mockReset();
@@ -1198,6 +1201,82 @@ describe('Selecting cards', () => {
       ]),
     );
     expect(cardsIn('Done')).toEqual([]);
+  });
+
+  it('archives the whole selection at once, in Board order, without asking', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(archiveTickets).mockReturnValue(promise);
+    const user = userEvent.setup();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await user.click(checkbox(15, 'Deploy'));
+    await user.click(checkbox(9, 'Draw the logo'));
+
+    await user.click(
+      within(selectionBar() as HTMLElement).getByRole('button', {
+        name: 'Archive',
+      }),
+    );
+
+    expect(archiveTickets).toHaveBeenCalledExactlyOnceWith({
+      ticketNumbers: [9, 15],
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(cardsIn('Todo')).toEqual([
+      'Fix the header',
+      'Write the copy',
+      'Fix the footer',
+    ]);
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(screen.getByText('Show archived (2)')).toBeInTheDocument();
+    expect(selectionBar()).not.toBeInTheDocument();
+
+    await act(async () => resolve({ ok: true }));
+    const archived = [
+      { ...logo, archived: true },
+      { ...deploy, archived: true },
+    ];
+    rerender(
+      <Board project={project} tickets={[header, copy, footer, ...archived]} />,
+    );
+    // Restored later, they are no longer selected.
+    rerender(<Board project={project} tickets={board} />);
+
+    expect(selectedTitles()).toEqual([]);
+    expect(selectionBar()).not.toBeInTheDocument();
+  });
+
+  it('puts the cards back, still selected, and explains when archiving is refused', async () => {
+    vi.mocked(archiveTickets).mockResolvedValue({
+      ok: false,
+      error:
+        'Ticket T9 is in the archived Project "Website". Restore the Project before changing its Tickets.',
+    });
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(9, 'Draw the logo'));
+
+    await user.click(screen.getByRole('button', { name: 'Archive' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Ticket T9 is in the archived Project "Website".',
+    );
+    await waitFor(() =>
+      expect(cardsIn('Todo')).toEqual([
+        'Fix the header',
+        'Write the copy',
+        'Draw the logo',
+        'Fix the footer',
+      ]),
+    );
+    expect(screen.getByText('Show archived (0)')).toBeInTheDocument();
+    expect(selectedTitles()).toEqual([
+      'Select T4 Fix the header',
+      'Select T9 Draw the logo',
+    ]);
+    expect(selectionBar()).toHaveTextContent('2 selected');
   });
 
   it('drags an unselected card on its own', async () => {

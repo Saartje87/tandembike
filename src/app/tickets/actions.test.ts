@@ -9,6 +9,7 @@ import {
   addTicketComment,
   addTicketLabel,
   archiveTicket,
+  archiveTickets,
   attachTicketToEpic,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
@@ -142,6 +143,38 @@ describe('Ticket actions', () => {
     expect(result).toEqual({ ok: true });
     expect(tickets.getTicket(child.number).epic?.number).toBe(to.number);
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+  });
+
+  it('archives several Tickets and refreshes the Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const [a, b] = ['A', 'B'].map(
+      (title) => tickets.createTicket({ projectId: project.id, title }).number,
+    );
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await archiveTickets({ ticketNumbers: [a, b] });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getTicket(a).archived).toBe(true);
+    expect(tickets.getTicket(b).archived).toBe(true);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(revalidatePath).toHaveBeenCalledWith(
+      '/project/[id]/cycle/[cycleId]',
+      'page',
+    );
+  });
+
+  it('refuses to archive several Tickets with the reason the Tickets module gives', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const a = tickets.createTicket({ projectId: project.id, title: 'A' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await archiveTickets({ ticketNumbers: [a.number, 42] });
+
+    expect(result).toEqual({ ok: false, error: 'There is no Ticket T42.' });
+    expect(tickets.getTicket(a.number).archived).toBe(false);
   });
 
   it('moves several Tickets into an Epic and refreshes the Boards', async () => {
