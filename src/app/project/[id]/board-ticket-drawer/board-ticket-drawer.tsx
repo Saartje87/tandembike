@@ -35,7 +35,6 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   return (
     <TicketDrawer
       ticket={ticket}
-      projects={tickets.listProjects()}
       allLabels={tickets.listLabels()}
       comments={tickets.listComments(ticket.number)}
       blockers={tickets.listBlockers(ticket.number)}
