@@ -46,25 +46,6 @@ vi.mock('../../app/tickets/actions', () => ({
   setTicketOrigin: vi.fn(),
 }));
 
-const projects = [
-  {
-    id: 1,
-    name: 'Website',
-    color: null,
-    icon: null,
-    archived: false,
-    createdAt: new Date('2026-01-01'),
-  },
-  {
-    id: 2,
-    name: 'App',
-    color: null,
-    icon: null,
-    archived: false,
-    createdAt: new Date('2026-01-02'),
-  },
-];
-
 const ticket: Ticket = {
   number: 4,
   title: 'Fix the header',
@@ -89,7 +70,7 @@ const ticket: Ticket = {
 };
 
 const renderDrawer = (shown: Ticket = ticket) =>
-  renderWithTheme(<TicketDrawer ticket={shown} projects={projects} />);
+  renderWithTheme(<TicketDrawer ticket={shown} />);
 
 const drawer = () => screen.getByRole('dialog');
 const inDrawer = () => within(drawer());
@@ -176,7 +157,6 @@ describe('TicketDrawer', () => {
         inDrawer().getByText('This Ticket is archived'),
         inDrawer().getByRole('heading', { level: 2 }),
         field('Status'),
-        field('Project'),
         inDrawer().getByText('Labels'),
         inDrawer().getByRole('heading', { name: 'Description' }),
         inDrawer().getByRole('heading', { name: 'Acceptance criteria' }),
@@ -189,7 +169,6 @@ describe('TicketDrawer', () => {
     renderWithTheme(
       <TicketDrawer
         ticket={ticket}
-        projects={projects}
         cycles={[
           {
             id: 7,
@@ -213,11 +192,7 @@ describe('TicketDrawer', () => {
 
   it('closes to the tab it was opened over', async () => {
     renderWithTheme(
-      <TicketDrawer
-        ticket={ticket}
-        projects={projects}
-        boardPath="/project/1/cycle/7"
-      />,
+      <TicketDrawer ticket={ticket} boardPath="/project/1/cycle/7" />,
     );
 
     await userEvent.click(button('Close'));
@@ -228,36 +203,12 @@ describe('TicketDrawer', () => {
     );
   });
 
-  it("shows the Ticket's Status and Project", () => {
+  it("shows the Ticket's Status, with no way to move it to another Project", () => {
     renderDrawer();
 
     expect(field('Status')).toHaveValue('In progress');
-    expect(field('Project')).toHaveDisplayValue('Website');
-  });
-
-  it('offers no archived Project to move the Ticket to', () => {
-    renderWithTheme(
-      <TicketDrawer
-        ticket={ticket}
-        projects={[
-          ...projects,
-          {
-            id: 3,
-            name: 'Old site',
-            color: null,
-            icon: null,
-            archived: true,
-            createdAt: new Date('2026-01-03'),
-          },
-        ]}
-      />,
-    );
-
-    expect(
-      within(field('Project'))
-        .getAllByRole('option')
-        .map((option) => option.textContent),
-    ).toEqual(['Website', 'App']);
+    expect(inDrawer().queryByLabelText('Project')).not.toBeInTheDocument();
+    expect(inDrawer().queryByText('Project')).not.toBeInTheDocument();
   });
 
   it('shows who claimed the Ticket and lets the User clear the claim', async () => {
@@ -305,7 +256,6 @@ describe('TicketDrawer', () => {
     renderWithTheme(
       <TicketDrawer
         ticket={ticket}
-        projects={projects}
         comments={[
           {
             id: 1,
@@ -344,7 +294,7 @@ describe('TicketDrawer', () => {
     ]);
   });
 
-  describe('Status and Project', () => {
+  describe('Status', () => {
     it('saves a new Status on its own and shows it at once', async () => {
       pendingUpdate();
       renderDrawer();
@@ -371,54 +321,6 @@ describe('TicketDrawer', () => {
       expect(field('Status')).toHaveAccessibleDescription(
         'There is no Ticket T4.',
       );
-    });
-
-    it('saves a new Project on its own and shows it at once', async () => {
-      pendingUpdate();
-      renderDrawer();
-
-      await userEvent.selectOptions(field('Project'), 'App');
-
-      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
-        number: 4,
-        projectId: 2,
-      });
-      expect(field('Project')).toHaveDisplayValue('App');
-    });
-
-    it('goes back to the old Project and says why when it is refused', async () => {
-      vi.mocked(updateTicket).mockResolvedValue({
-        ok: false,
-        error: 'There is no Project with id 2.',
-      });
-      renderDrawer();
-
-      await userEvent.selectOptions(field('Project'), 'App');
-
-      await waitFor(() =>
-        expect(field('Project')).toHaveDisplayValue('Website'),
-      );
-      expect(field('Project')).toHaveAccessibleDescription(
-        'There is no Project with id 2.',
-      );
-    });
-
-    it("reopens over its new Project's Backlog when moved, and closes there", async () => {
-      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 2 });
-      renderDrawer(ticket);
-
-      await userEvent.selectOptions(field('Project'), 'App');
-
-      expect(router.replace).toHaveBeenCalledExactlyOnceWith(
-        '/project/2?ticket=4',
-        { scroll: false },
-      );
-
-      await userEvent.click(button('Close'));
-
-      expect(router.replace).toHaveBeenLastCalledWith('/project/2', {
-        scroll: false,
-      });
     });
   });
 
@@ -571,20 +473,10 @@ describe('TicketDrawer', () => {
     it('follows a title changed elsewhere unless it is being edited', async () => {
       const { rerender } = renderDrawer();
 
-      rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, title: 'Fix the logo' }}
-          projects={projects}
-        />,
-      );
+      rerender(<TicketDrawer ticket={{ ...ticket, title: 'Fix the logo' }} />);
       await userEvent.click(button('Fix the logo'));
       await userEvent.type(titleInput(), '!');
-      rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, title: 'Fix the menu' }}
-          projects={projects}
-        />,
-      );
+      rerender(<TicketDrawer ticket={{ ...ticket, title: 'Fix the menu' }} />);
 
       expect(titleInput()).toHaveValue('Fix the logo!');
     });
@@ -735,7 +627,6 @@ describe('TicketDrawer', () => {
       rerender(
         <TicketDrawer
           ticket={{ ...ticket, description: 'Changed by an Agent.' }}
-          projects={projects}
         />,
       );
       await userEvent.click(button('Save'));
@@ -753,10 +644,7 @@ describe('TicketDrawer', () => {
       await userEvent.type(descriptionInput(), 'Now *shorter*.');
       await userEvent.click(button('Save'));
       rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, description: 'Now *shorter*.' }}
-          projects={projects}
-        />,
+        <TicketDrawer ticket={{ ...ticket, description: 'Now *shorter*.' }} />,
       );
 
       expect(inDrawer().getByText('shorter').tagName).toBe('EM');
@@ -773,7 +661,6 @@ describe('TicketDrawer', () => {
             description: 'Changed by an Agent.',
             status: 'Done',
           }}
-          projects={projects}
         />,
       );
 
@@ -890,7 +777,6 @@ describe('TicketDrawer', () => {
       renderWithTheme(
         <TicketDrawer
           ticket={ticket}
-          projects={projects}
           blockers={{
             blockedBy: [related(2, 'Design the header')],
             blocks: [related(7, 'Ship the header')],
@@ -914,7 +800,6 @@ describe('TicketDrawer', () => {
       renderWithTheme(
         <TicketDrawer
           ticket={{ ...ticket, blockedBy: [2], blocked: true }}
-          projects={projects}
           blockers={{
             blockedBy: [
               {
@@ -945,7 +830,6 @@ describe('TicketDrawer', () => {
       renderWithTheme(
         <TicketDrawer
           ticket={{ ...ticket, blockedBy: [2], blocked: false }}
-          projects={projects}
           blockers={{
             blockedBy: [
               {
@@ -1007,13 +891,7 @@ describe('TicketDrawer', () => {
 
     it('adds an existing label from the select without closing the drawer', async () => {
       vi.mocked(addTicketLabel).mockResolvedValue({ ok: true });
-      renderWithTheme(
-        <TicketDrawer
-          ticket={ticket}
-          projects={projects}
-          allLabels={['bug']}
-        />,
-      );
+      renderWithTheme(<TicketDrawer ticket={ticket} allLabels={['bug']} />);
 
       const select = inDrawer().getByRole('combobox', { name: 'Add a label' });
       await userEvent.selectOptions(select, 'bug');
@@ -1151,7 +1029,7 @@ describe('TicketDrawer', () => {
         { number: 8, title: 'Checkout', color: 'teal' },
       ];
       const { unmount } = renderWithTheme(
-        <TicketDrawer ticket={ticket} projects={projects} epics={epics} />,
+        <TicketDrawer ticket={ticket} epics={epics} />,
       );
 
       expect(
@@ -1160,11 +1038,7 @@ describe('TicketDrawer', () => {
       unmount();
 
       renderWithTheme(
-        <TicketDrawer
-          ticket={{ ...epic, number: 10 }}
-          projects={projects}
-          epics={epics}
-        />,
+        <TicketDrawer ticket={{ ...epic, number: 10 }} epics={epics} />,
       );
 
       expect(
@@ -1272,12 +1146,7 @@ describe('TicketDrawer', () => {
       const { rerender } = renderDrawer();
 
       await userEvent.click(button('Archive'));
-      rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, archived: true }}
-          projects={projects}
-        />,
-      );
+      rerender(<TicketDrawer ticket={{ ...ticket, archived: true }} />);
 
       expect(button('Restore')).toBeInTheDocument();
     });
@@ -1285,17 +1154,12 @@ describe('TicketDrawer', () => {
     it('follows an archive or restore made elsewhere', () => {
       const { rerender } = renderDrawer();
 
-      rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, archived: true }}
-          projects={projects}
-        />,
-      );
+      rerender(<TicketDrawer ticket={{ ...ticket, archived: true }} />);
       expect(
         inDrawer().getByText('This Ticket is archived'),
       ).toBeInTheDocument();
 
-      rerender(<TicketDrawer ticket={ticket} projects={projects} />);
+      rerender(<TicketDrawer ticket={ticket} />);
       expect(button('Archive')).toBeInTheDocument();
     });
 
@@ -1329,11 +1193,7 @@ describe('TicketDrawer', () => {
     it('closes to its Board by replacing the URL once the Ticket is deleted', async () => {
       vi.mocked(deleteTicket).mockResolvedValue({ ok: true });
       renderWithTheme(
-        <TicketDrawer
-          ticket={ticket}
-          projects={projects}
-          boardPath="/project/1/cycle/7"
-        />,
+        <TicketDrawer ticket={ticket} boardPath="/project/1/cycle/7" />,
       );
 
       await userEvent.click(button('Delete'));
@@ -1379,7 +1239,7 @@ describe('TicketDrawer', () => {
   it('takes its dialog down while its route is hidden and reopens fresh', async () => {
     const at = (mode: 'visible' | 'hidden') => (
       <Activity mode={mode}>
-        <TicketDrawer ticket={ticket} projects={projects} />
+        <TicketDrawer ticket={ticket} />
       </Activity>
     );
     const { rerender } = renderWithTheme(at('visible'));

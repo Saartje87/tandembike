@@ -10,7 +10,6 @@ import {
   Heading,
   Inline,
   Label,
-  Select,
   Stack,
   Text,
   Textarea,
@@ -31,7 +30,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { projectPath, ticketOnBoardPath } from '../../app/lib/paths';
+import { projectPath } from '../../app/lib/paths';
 import {
   archiveTicket,
   clearTicketClaim,
@@ -44,7 +43,6 @@ import {
   type Comment,
   type EpicLink,
   epicLinkOf,
-  type Project,
   type Ticket,
   type TicketClaim,
 } from '../../tickets/tickets';
@@ -74,8 +72,6 @@ import { useIsShown } from './use-is-shown';
 
 export type TicketDrawerProps = {
   ticket: Ticket;
-  /** Every Project, to move the Ticket to; archived ones are not offered. */
-  projects: Project[];
   /** Every label in use, suggested when adding one. Defaults to none. */
   allLabels?: string[];
   /** The Ticket's comments, oldest first. Defaults to none. */
@@ -98,22 +94,21 @@ export type TicketDrawerProps = {
   epicChildren?: ChildDeletion[];
   /**
    * The URL of the Board the drawer is open over, without `?ticket=`: where
-   * closing goes. Defaults to the Ticket's Project's Backlog, as it does
-   * after a move.
+   * closing goes. Defaults to the Ticket's Project's Backlog.
    */
   boardPath?: string;
 };
 
 /** The fields the drawer saves one at a time. */
-type Fields = Pick<Ticket, 'title' | 'description' | 'status' | 'projectId'>;
+type Fields = Pick<Ticket, 'title' | 'description' | 'status'>;
 
 /** One field's new value. */
 type Edit = { [Field in keyof Fields]: Pick<Fields, Field> }[keyof Fields];
 
 /** The fields saved as soon as they change, whose errors the drawer keeps. */
-type DetailField = 'status' | 'projectId';
+type DetailField = 'status';
 
-type DetailEdit = Pick<Fields, 'status'> | Pick<Fields, 'projectId'>;
+type DetailEdit = Pick<Fields, 'status'>;
 
 type DetailErrors = Partial<Record<DetailField, string>>;
 
@@ -125,7 +120,6 @@ function fieldsOf(ticket: Ticket): Fields {
     title: ticket.title,
     description: ticket.description,
     status: ticket.status,
-    projectId: ticket.projectId,
   };
 }
 
@@ -427,7 +421,6 @@ const noCycles: Cycle[] = [];
 /** The drawer itself, with its edits, for as long as it is shown. */
 const OpenDrawer: FC<TicketDrawerProps> = ({
   ticket,
-  projects,
   allLabels = [],
   comments = [],
   blockers = noBlockers,
@@ -440,9 +433,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   const router = useRouter();
   const statusId = useId();
   const statusErrorId = useId();
-  const projectId = useId();
-  const projectErrorId = useId();
-  const [currentProjectId, setCurrentProjectId] = useState(ticket.projectId);
   const [fields, showEdit] = useOptimistic(
     fieldsOf(ticket),
     (current, edit: Edit): Fields => ({ ...current, ...edit }),
@@ -460,12 +450,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   // Closing replaces the URL (ADR 0013), so Back does not reopen the drawer,
   // and keeps the Board's scroll position, which Next resets by default.
   const close = () => {
-    router.replace(
-      boardPath !== undefined && currentProjectId === ticket.projectId
-        ? boardPath
-        : projectPath(currentProjectId),
-      { scroll: false },
-    );
+    router.replace(boardPath ?? projectPath(ticket.projectId), {
+      scroll: false,
+    });
   };
   const requestClose = () => {
     // The Blocks `Drawer` does not join `Dialog`'s nesting, so an Escape or
@@ -493,15 +480,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
       const result = await updateTicket({ number: ticket.number, ...edit });
       if (!result.ok) {
         onRefused(result.fieldErrors?.[field] ?? result.error);
-        return;
-      }
-      if (result.projectId !== currentProjectId) {
-        setCurrentProjectId(result.projectId);
-        // It left every Cycle, so its own Board is the new Project's Backlog.
-        router.replace(
-          ticketOnBoardPath(projectPath(result.projectId), ticket.number),
-          { scroll: false },
-        );
       }
     });
   };
@@ -607,37 +585,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
                 </Stack>
               </Detail>
             )}
-            <Detail
-              name={
-                <Label htmlFor={projectId}>
-                  <DetailName>Project</DetailName>
-                </Label>
-              }
-            >
-              <Stack gap={1}>
-                <Select
-                  id={projectId}
-                  name="projectId"
-                  value={fields.projectId}
-                  onChange={(event) =>
-                    saveDetail({ projectId: Number(event.currentTarget.value) })
-                  }
-                  aria-invalid={errors.projectId ? true : undefined}
-                  aria-describedby={
-                    errors.projectId ? projectErrorId : undefined
-                  }
-                >
-                  {projects
-                    .filter((project) => !project.archived)
-                    .map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                </Select>
-                <FieldError id={projectErrorId} reason={errors.projectId} />
-              </Stack>
-            </Detail>
             {ticket.type === 'Epic' ? (
               <>
                 <Detail name={<DetailName>Type</DetailName>}>
@@ -772,7 +719,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
 
 /**
  * A Ticket in a side drawer over its Board: its number to copy, its title as an
- * in-place editable heading, its Status, Project, Epic (or that it is an
+ * in-place editable heading, its Status, Epic (or that it is an
  * Epic), Origin, Cycle, labels and Blockers, an Epic's child Tickets, the
  * Tickets split from it, its Markdown description, acceptance criteria and
  * comments, and a footer with its timestamps, Archive and Delete.
