@@ -48,6 +48,14 @@ _Avoid_: Checklist task
 A short tag on a Ticket that classifies it, such as `bug` or `needs-triage`. Labels are stored trimmed and lower-cased; a Ticket has each at most once and can have any number. A label exists only while some Ticket has it.
 _Avoid_: Tag, category, triage metadata
 
+**External reference**:
+A URL or key, such as `#55` or `ABC-33`, that points to the same work in another system, such as a GitHub issue or pull request or a Jira issue. A Ticket can have any number of them, each at most once, and the User or an Agent can add or remove them. Several Tickets may point to the same work.
+_Avoid_: External link, external ID, URL, link
+
+**Reference template**:
+A Project's rule that turns External reference keys starting with a given prefix, such as `#` or `ABC-`, into a URL, so they open as links. A Project can have several; the first whose prefix matches applies. Only the User manages them. A key keeps its text, and is linked by the templates of whichever Project its Ticket is in.
+_Avoid_: Link template, URL pattern
+
 **Comment**:
 A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent`.
 _Avoid_: Note, reply, update
