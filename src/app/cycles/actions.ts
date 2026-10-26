@@ -23,7 +23,7 @@ export async function createCycle(input: {
   title: string;
 }): Promise<CreateCycleResult> {
   return actionResult(() => {
-    const cycle = appTickets().createCycle({
+    const cycle = appTickets('user').createCycle({
       projectId: Number(input?.projectId),
       title: String(input?.title ?? ''),
     });
@@ -38,7 +38,7 @@ export async function renameCycle(input: {
   title: string;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().renameCycle(Number(input?.cycleId), {
+    appTickets('user').renameCycle(Number(input?.cycleId), {
       title: String(input?.title ?? ''),
     });
     revalidateProjects();
@@ -51,7 +51,7 @@ export async function discardCycle(input: {
   cycleId: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().discardCycle(Number(input?.cycleId));
+    appTickets('user').discardCycle(Number(input?.cycleId));
     revalidateProjects();
     return {};
   });
@@ -63,7 +63,7 @@ export async function planTicket(input: {
   number: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().planTicket({
+    appTickets('user').planTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
     });
@@ -78,7 +78,7 @@ export async function unplanTicket(input: {
   number: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().unplanTicket({
+    appTickets('user').unplanTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
     });
@@ -113,7 +113,7 @@ export async function planTickets(
   input: CycleTicketsActionInput,
 ): Promise<CycleTicketsActionResult> {
   return actionResult(() => {
-    const { failed } = appTickets().planTickets(cycleTicketsInput(input));
+    const { failed } = appTickets('user').planTickets(cycleTicketsInput(input));
     revalidateProjects();
     return { failed };
   });
@@ -127,7 +127,9 @@ export async function unplanTickets(
   input: CycleTicketsActionInput,
 ): Promise<CycleTicketsActionResult> {
   return actionResult(() => {
-    const { failed } = appTickets().unplanTickets(cycleTicketsInput(input));
+    const { failed } = appTickets('user').unplanTickets(
+      cycleTicketsInput(input),
+    );
     revalidateProjects();
     return { failed };
   });
@@ -146,7 +148,7 @@ export async function startCycle(input: {
   activeCycleId?: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().startCycle(Number(input?.cycleId), {
+    appTickets('user').startCycle(Number(input?.cycleId), {
       archiveActive: input?.archiveActive === true,
       ...(input?.activeCycleId === undefined
         ? {}
@@ -162,7 +164,7 @@ export async function archiveCycle(input: {
   cycleId: number;
 }): Promise<ActionResult> {
   return actionResult(() => {
-    appTickets().archiveCycle(Number(input?.cycleId));
+    appTickets('user').archiveCycle(Number(input?.cycleId));
     revalidateProjects();
     return {};
   });

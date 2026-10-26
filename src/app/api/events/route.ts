@@ -7,5 +7,5 @@ import { appTickets } from '../../../tickets/app-tickets';
 // Tickets module announces, from Server Actions or the MCP route alike.
 export const GET = async (request: Request): Promise<Response> => {
   await connection();
-  return changeEventsResponse(appTickets().subscribe, request.signal);
+  return changeEventsResponse(appTickets('user').subscribe, request.signal);
 };

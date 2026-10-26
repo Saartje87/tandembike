@@ -31,7 +31,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   if (ticket === null) {
     return null;
   }
-  const tickets = appTickets();
+  const tickets = appTickets('user');
   return (
     <TicketDrawer
       ticket={ticket}

@@ -55,7 +55,7 @@ export async function boardPageTitle(
  */
 export function findBoardTicket(projectId: number, number: number) {
   try {
-    const ticket = appTickets().getTicket(number);
+    const ticket = appTickets('user').getTicket(number);
     return ticket.projectId === projectId ? ticket : null;
   } catch (error) {
     if (error instanceof NotFoundError) {
@@ -72,7 +72,7 @@ export async function loadProject(params: ProjectPageProps['params']) {
   if (!Number.isSafeInteger(id)) {
     notFound();
   }
-  return orNotFound(() => appTickets().getProject(id));
+  return orNotFound(() => appTickets('user').getProject(id));
 }
 
 /**
@@ -85,7 +85,7 @@ export async function loadProjectCycle(params: CyclePageProps['params']) {
   if (!Number.isSafeInteger(cycleId)) {
     notFound();
   }
-  const cycle = orNotFound(() => appTickets().getCycle(cycleId));
+  const cycle = orNotFound(() => appTickets('user').getCycle(cycleId));
   if (cycle.projectId !== project.id) {
     notFound();
   }

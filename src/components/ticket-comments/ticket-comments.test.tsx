@@ -115,13 +115,15 @@ describe('TicketComments', () => {
       ),
       expect.stringContaining('Fixed in the header.'),
     ]);
-    expect(screen.queryByText('No comments')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No comments or Activity'),
+    ).not.toBeInTheDocument();
   });
 
   it('says when the Ticket has no comments', () => {
     renderWithTheme(<TicketComments ticketNumber={4} comments={[]} />);
 
-    expect(screen.getByText('No comments')).toBeInTheDocument();
+    expect(screen.getByText('No comments or Activity')).toBeInTheDocument();
   });
 
   it('adds a comment and clears the field once saved', async () => {

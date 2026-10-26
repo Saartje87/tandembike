@@ -19,7 +19,6 @@ import {
 
 import type { DatabaseConnection } from '../db/connection';
 import {
-  type commentAuthors,
   projects,
   ticketAcceptanceCriteria,
   ticketBlockers,
@@ -453,7 +452,7 @@ export type TicketPage = {
 };
 
 /** Who wrote a Comment: the UI writes `user`, MCP writes `agent`. */
-export type CommentAuthor = (typeof commentAuthors)[number];
+export type CommentAuthor = Actor;
 
 export type Comment = {
   id: number;
@@ -906,12 +905,12 @@ const commentColumns = {
  * `appChangeChannel()` so every caller shares the same announcements.
  *
  * Every change it makes to a Ticket is recorded as Activity by `actor`:
- * Server Actions use the default, `user`, and MCP passes `agent` (ADR 0009).
+ * Server Actions pass `user` and the MCP route `agent` (ADR 0009).
  */
 export function createTickets(
   db: DatabaseConnection,
+  actor: Actor,
   changes: ChangeChannel = createChangeChannel(),
-  actor: Actor = 'user',
 ) {
   return {
     ...createCycles(db, changes),
@@ -1167,9 +1166,15 @@ export function createTickets(
           .returning({ number: tickets.number })
           .get();
         if (claimed) {
-          recordActivity(db, number, actor, [
-            { type: 'claimTaken', agentRunId, agentName },
-          ]);
+          recordActivity(
+            db,
+            number,
+            actor,
+            claimChanges('claimTaken', {
+              claimAgentRunId: agentRunId,
+              claimAgentName: agentName,
+            }),
+          );
           return true;
         }
 
@@ -1212,7 +1217,10 @@ export function createTickets(
       const changed = db.transaction(() => {
         checkTicketWritable(db, number);
         const claim = db
-          .select({ agentName: tickets.claimAgentName })
+          .select({
+            claimAgentRunId: tickets.claimAgentRunId,
+            claimAgentName: tickets.claimAgentName,
+          })
           .from(tickets)
           .where(
             and(
@@ -1237,13 +1245,14 @@ export function createTickets(
           .returning({ number: tickets.number })
           .get();
         if (released) {
-          recordActivity(db, number, actor, [
-            {
-              type: 'claimReleased',
-              agentRunId,
-              agentName: claim?.agentName ?? null,
-            },
-          ]);
+          if (claim) {
+            recordActivity(
+              db,
+              number,
+              actor,
+              claimChanges('claimReleased', claim),
+            );
+          }
           return true;
         }
 
@@ -1518,14 +1527,7 @@ export function createTickets(
         touchTicket(db, number);
         const before = labelsOf(db, number);
         insertLabels(db, number, added);
-        recordActivity(
-          db,
-          number,
-          actor,
-          added
-            .filter((label) => !before.includes(label))
-            .map((label) => ({ type: 'labelAdded', label })),
-        );
+        recordActivity(db, number, actor, labelChanges(before, { added }));
       });
       changes.publish({ type: 'ticket', number });
       return getTicket(number);
@@ -1542,14 +1544,7 @@ export function createTickets(
         touchTicket(db, number);
         const before = labelsOf(db, number);
         deleteLabels(db, number, removed);
-        recordActivity(
-          db,
-          number,
-          actor,
-          removed
-            .filter((label) => before.includes(label))
-            .map((label) => ({ type: 'labelRemoved', label })),
-        );
+        recordActivity(db, number, actor, labelChanges(before, { removed }));
       });
       changes.publish({ type: 'ticket', number });
       return getTicket(number);
@@ -1641,12 +1636,7 @@ export function createTickets(
           .returning({ blocked: ticketBlockers.blockedNumber })
           .get();
         if (added) {
-          recordActivity(db, blocked, actor, [
-            { type: 'blockedByAdded', number: blocker },
-          ]);
-          recordActivity(db, blocker, actor, [
-            { type: 'blocksAdded', number: blocked },
-          ]);
+          recordBlocker(db, actor, { blocker, blocked }, 'Added');
         }
       });
       changes.publish({ type: 'tickets', numbers: [blocker, blocked] });
@@ -1674,12 +1664,7 @@ export function createTickets(
           .returning({ blocked: ticketBlockers.blockedNumber })
           .get();
         if (removed) {
-          recordActivity(db, blocked, actor, [
-            { type: 'blockedByRemoved', number: blocker },
-          ]);
-          recordActivity(db, blocker, actor, [
-            { type: 'blocksRemoved', number: blocked },
-          ]);
+          recordBlocker(db, actor, { blocker, blocked }, 'Removed');
         }
       });
       changes.publish({ type: 'tickets', numbers: [blocker, blocked] });
@@ -2353,7 +2338,9 @@ export function createTickets(
       }
       const labelsBefore = labelsOf(db, number);
       const criteriaBefore =
-        acceptanceCriteria === undefined ? '' : criteriaSnapshot(db, number);
+        acceptanceCriteria === undefined
+          ? undefined
+          : criteriaFingerprint(db, number);
       db.update(tickets)
         .set({
           ...values,
@@ -2378,14 +2365,12 @@ export function createTickets(
       }
       recordActivity(db, number, actor, [
         ...rowChanges(db, existing, values),
-        ...removeLabels
-          .filter((label) => labelsBefore.includes(label))
-          .map((label): ActivityChange => ({ type: 'labelRemoved', label })),
-        ...addLabels
-          .filter((label) => !labelsBefore.includes(label))
-          .map((label): ActivityChange => ({ type: 'labelAdded', label })),
-        ...(acceptanceCriteria !== undefined &&
-        criteriaSnapshot(db, number) !== criteriaBefore
+        ...labelChanges(labelsBefore, {
+          added: addLabels,
+          removed: removeLabels,
+        }),
+        ...(criteriaBefore !== undefined &&
+        criteriaFingerprint(db, number) !== criteriaBefore
           ? [{ type: 'criteriaEdited' } as const]
           : []),
       ]);
@@ -2691,67 +2676,48 @@ function rowChanges(
   existing: Pick<
     Ticket,
     'status' | 'projectId' | 'title' | 'description' | 'color'
-  > & {
-    originNumber: number | null;
-    claimAgentRunId: string | null;
-    claimAgentName: string | null;
-  },
-  values: TicketValues,
+  > &
+    ClaimColumns & { originNumber: number | null },
+  { status, projectId, title, description, color, originNumber }: TicketValues,
 ): ActivityChange[] {
-  const changed = <Key extends keyof TicketValues>(key: Key) =>
-    values[key] !== undefined && values[key] !== existing[key];
-  return [
-    ...(changed('status')
-      ? [
-          {
-            type: 'status',
-            from: existing.status,
-            to: values.status as Status,
-          } as const,
-        ]
-      : []),
-    ...(values.status === 'Done'
-      ? claimChanges('claimReleased', existing)
-      : []),
-    ...(changed('projectId')
-      ? [
-          {
-            type: 'project',
-            from: activityProject(db, existing.projectId),
-            to: activityProject(db, values.projectId as number),
-          } as const,
-        ]
-      : []),
-    ...(changed('title')
-      ? [
-          {
-            type: 'title',
-            from: existing.title,
-            to: values.title as string,
-          } as const,
-        ]
-      : []),
-    ...(changed('description') ? [{ type: 'description' } as const] : []),
-    ...(changed('color')
-      ? [
-          {
-            type: 'color',
-            from: existing.color,
-            to: values.color as PaletteColor,
-          } as const,
-        ]
-      : []),
-    ...(changed('originNumber')
-      ? [
-          {
-            type: 'origin',
-            from: existing.originNumber,
-            to: values.originNumber ?? null,
-          } as const,
-        ]
-      : []),
-  ];
+  const changes: ActivityChange[] = [];
+  if (status !== undefined && status !== existing.status) {
+    changes.push({ type: 'status', from: existing.status, to: status });
+  }
+  if (status === 'Done') {
+    changes.push(...claimChanges('claimReleased', existing));
+  }
+  if (projectId !== undefined && projectId !== existing.projectId) {
+    changes.push({
+      type: 'project',
+      from: activityProject(db, existing.projectId),
+      to: activityProject(db, projectId),
+    });
+  }
+  if (title !== undefined && title !== existing.title) {
+    changes.push({ type: 'title', from: existing.title, to: title });
+  }
+  if (description !== undefined && description !== existing.description) {
+    changes.push({ type: 'description' });
+  }
+  if (color !== undefined && color !== existing.color) {
+    changes.push({ type: 'color', from: existing.color, to: color });
+  }
+  if (originNumber !== undefined && originNumber !== existing.originNumber) {
+    changes.push({
+      type: 'origin',
+      from: existing.originNumber,
+      to: originNumber,
+    });
+  }
+  return changes;
 }
+
+/** A Ticket row's Claim columns: both `null` when it is unclaimed. */
+type ClaimColumns = {
+  claimAgentRunId: string | null;
+  claimAgentName: string | null;
+};
 
 /**
  * A Claim change of `type` for the Claim a Ticket row holds, or none when it
@@ -2759,14 +2725,47 @@ function rowChanges(
  */
 function claimChanges(
   type: 'claimTaken' | 'claimReleased' | 'claimCleared',
-  {
-    claimAgentRunId,
-    claimAgentName,
-  }: { claimAgentRunId: string | null; claimAgentName: string | null },
+  { claimAgentRunId, claimAgentName }: ClaimColumns,
 ): ActivityChange[] {
   return claimAgentRunId === null
     ? []
     : [{ type, agentRunId: claimAgentRunId, agentName: claimAgentName }];
+}
+
+/**
+ * The Activity changes of removing `removed` labels and adding `added` ones
+ * to a Ticket that had `before`: only the ones that really change.
+ */
+function labelChanges(
+  before: readonly string[],
+  { added = [], removed = [] }: { added?: string[]; removed?: string[] },
+): ActivityChange[] {
+  return [
+    ...removed
+      .filter((label) => before.includes(label))
+      .map((label) => ({ type: 'labelRemoved' as const, label })),
+    ...added
+      .filter((label) => !before.includes(label))
+      .map((label) => ({ type: 'labelAdded' as const, label })),
+  ];
+}
+
+/**
+ * Records a Blocker added or removed between `blocker` and `blocked` on both
+ * Tickets, by `actor`. Run it in the transaction that makes the change.
+ */
+function recordBlocker(
+  db: DatabaseConnection,
+  actor: Actor,
+  { blocker, blocked }: BlockerInput,
+  change: 'Added' | 'Removed',
+) {
+  recordActivity(db, blocked, actor, [
+    { type: `blockedBy${change}`, number: blocker },
+  ]);
+  recordActivity(db, blocker, actor, [
+    { type: `blocks${change}`, number: blocked },
+  ]);
 }
 
 /** Project `id` as an Activity entry names it. */
@@ -2793,10 +2792,10 @@ function labelsOf(db: DatabaseConnection, number: number): string[] {
 }
 
 /**
- * Ticket `number`'s acceptance criteria as text, in order with their checked
- * state, so a replaced list can be told apart from the same list again.
+ * Ticket `number`'s acceptance criteria in order with their checked state,
+ * as one string, so a replaced list can be compared with the one before.
  */
-function criteriaSnapshot(db: DatabaseConnection, number: number): string {
+function criteriaFingerprint(db: DatabaseConnection, number: number): string {
   return JSON.stringify(
     withAcceptanceCriteria(db, [{ number }])[0].acceptanceCriteria.map(
       ({ text, checked }) => [text, checked],

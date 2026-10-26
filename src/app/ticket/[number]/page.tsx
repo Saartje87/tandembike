@@ -18,7 +18,10 @@ type TicketByNumberPageProps = {
  */
 const TicketByNumberPage: FC<TicketByNumberPageProps> = async ({ params }) => {
   const ticket = await loadTicketByNumber((await params).number);
-  const cycle = boardCycleOf(appTickets().listCycles(ticket.projectId), ticket);
+  const cycle = boardCycleOf(
+    appTickets('user').listCycles(ticket.projectId),
+    ticket,
+  );
   redirect(
     ticketOnBoardPath(
       boardPathOf(ticket.projectId, cycle?.id ?? null),

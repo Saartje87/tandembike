@@ -310,7 +310,7 @@ export const TicketComments: FC<TicketCommentsProps> = ({
       </Heading>
       {timeline.length === 0 ? (
         <Text tag="p" color="text-600">
-          No comments
+          No comments or Activity
         </Text>
       ) : (
         <Box asChild display="flex" flexDirection="column" gap={2}>

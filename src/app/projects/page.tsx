@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Projects' };
 
 async function loadProjects() {
   await connection();
-  return appTickets().listProjects();
+  return appTickets('user').listProjects();
 }
 
 // The promise is passed down unawaited so the uncached read suspends inside

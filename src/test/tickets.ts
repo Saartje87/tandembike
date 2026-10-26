@@ -9,8 +9,11 @@ import { createTickets } from '../tickets/tickets';
  * Test files that use it need `// @vitest-environment node` on line 1.
  * It acts as the User unless `actor` says otherwise.
  */
-export function createTestTickets(changes?: ChangeChannel, actor?: Actor) {
-  return createTickets(openDatabase(':memory:'), changes, actor);
+export function createTestTickets(
+  changes?: ChangeChannel,
+  actor: Actor = 'user',
+) {
+  return createTickets(openDatabase(':memory:'), actor, changes);
 }
 
 /**

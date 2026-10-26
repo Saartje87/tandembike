@@ -7,5 +7,5 @@ import { ProjectNav } from '../project-nav/project-nav';
 /** Loads the Projects at request time for the side navigation. */
 export const ProjectNavLoader: FC = async () => {
   await connection();
-  return <ProjectNav projects={appTickets().listProjects()} />;
+  return <ProjectNav projects={appTickets('user').listProjects()} />;
 };

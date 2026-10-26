@@ -20,7 +20,7 @@ const CyclesPage: FC<ProjectPageProps> = async ({ params }) => {
   if (project.archived) {
     return <ArchivedProjectNotice project={project} />;
   }
-  const cycles = appTickets().listCycles(project.id);
+  const cycles = appTickets('user').listCycles(project.id);
   return (
     <ProjectFrame project={project} cycles={cycles}>
       <CycleHistory cycles={cycles} />

@@ -16,11 +16,11 @@ type GlobalWithDatabase = typeof globalThis & {
  * The Tickets module the app uses: the real database file (created and
  * migrated on first use) and the app-wide change channel. The connection is
  * held on `globalThis` so dev-mode reloads reuse it. Its changes are
- * recorded as Activity by `actor`: the User's, unless the MCP route passes
- * `agent`.
+ * recorded as Activity by `actor`: Server Actions and pages pass `user`, the
+ * MCP route `agent`.
  */
-export function appTickets(actor: Actor = 'user'): Tickets {
+export function appTickets(actor: Actor): Tickets {
   const global = globalThis as GlobalWithDatabase;
   global[globalKey] ??= openDatabase(appDatabasePath);
-  return createTickets(global[globalKey], appChangeChannel(), actor);
+  return createTickets(global[globalKey], actor, appChangeChannel());
 }
