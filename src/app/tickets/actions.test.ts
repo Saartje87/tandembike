@@ -165,6 +165,62 @@ describe('Ticket actions', () => {
     );
   });
 
+  it('archives an Epic with its children only when asked to', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const refused = await archiveTicket({ number: epic.number });
+
+    expect(refused).toEqual({
+      ok: false,
+      error: `Epic T${epic.number} has child Tickets that are not archived: T${child.number}. Archive or detach them first.`,
+    });
+
+    const result = await archiveTicket({
+      number: epic.number,
+      withChildren: true,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getTicket(epic.number).archived).toBe(true);
+    expect(tickets.getTicket(child.number).archived).toBe(true);
+  });
+
+  it('archives a selection with the children of its Epics when asked to', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await archiveTickets({
+      ticketNumbers: [epic.number],
+      withChildren: true,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getTicket(child.number).archived).toBe(true);
+  });
+
   it('refuses to archive several Tickets with the reason the Tickets module gives', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

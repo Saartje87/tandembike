@@ -169,14 +169,16 @@ export type ArchiveTicketResult = ActionResult;
  * drawer. Domain errors come back as `error`, like `createTicket`.
  */
 function setArchived(
-  input: { number: number },
+  input: { number: number; withChildren?: boolean },
   archived: boolean,
 ): ArchiveTicketResult {
   return actionResult(() => {
     const tickets = appTickets('user');
     const number = Number(input?.number);
     const ticket = archived
-      ? tickets.archiveTicket(number)
+      ? tickets.archiveTicket(number, {
+          withChildren: input?.withChildren === true,
+        })
       : tickets.restoreTicket(number);
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(cycleRoute, 'page');
@@ -187,6 +189,8 @@ function setArchived(
 /** Archives a Ticket for the UI; it can be restored (ADR 0003). */
 export async function archiveTicket(input: {
   number: number;
+  /** For an Epic: archive its children that are not archived with it. */
+  withChildren?: boolean;
 }): Promise<ArchiveTicketResult> {
   return setArchived(input, true);
 }
@@ -197,12 +201,15 @@ export async function archiveTicket(input: {
  */
 export async function archiveTickets(input: {
   ticketNumbers: number[];
+  /** Archive the children of the Epics in it too. */
+  withChildren?: boolean;
 }): Promise<ArchiveTicketResult> {
   return actionResult(() => {
     appTickets('user').archiveTickets(
       Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
         : [],
+      { withChildren: input?.withChildren === true },
     );
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
@@ -210,7 +217,10 @@ export async function archiveTickets(input: {
   });
 }
 
-/** Restores an archived Ticket for the UI. */
+/**
+ * Restores an archived Ticket for the UI, an Epic with the children archived
+ * with it.
+ */
 export async function restoreTicket(input: {
   number: number;
 }): Promise<ArchiveTicketResult> {

@@ -1180,6 +1180,81 @@ describe('TicketDrawer', () => {
       ).toBe(true);
     });
 
+    describe('an Epic', () => {
+      const child = {
+        number: 9,
+        title: 'Pay by card',
+        status: 'In progress' as const,
+        archived: false,
+        blockedBy: [],
+        blocked: false,
+      };
+      const epic: Ticket = {
+        ...ticket,
+        number: 8,
+        title: 'Checkout',
+        type: 'Epic',
+        children: [
+          child,
+          { ...child, number: 10, title: 'Old idea', archived: true },
+        ],
+      };
+
+      it('asks before archiving it with its children that are not archived', async () => {
+        vi.mocked(archiveTicket).mockResolvedValue({ ok: true });
+        renderWithTheme(
+          <TicketDrawer
+            ticket={epic}
+            epicChildren={[
+              {
+                number: 9,
+                title: 'Pay by card',
+                claim: { agentRunId: 'run-1', agentName: null },
+                blocks: [],
+              },
+              { number: 10, title: 'Old idea', claim: null, blocks: [] },
+            ]}
+          />,
+        );
+
+        await userEvent.click(button('Archive'));
+        const dialog = screen.getByRole('dialog', {
+          name: 'Archive T8 and its children?',
+        });
+
+        expect(
+          within(dialog).getByRole('list', { name: 'Children' }),
+        ).toHaveTextContent('T9 Pay by card · In progress');
+        expect(dialog).not.toHaveTextContent('Old idea');
+        expect(dialog).toHaveTextContent('Agent run run-1 has claimed T9');
+        expect(archiveTicket).not.toHaveBeenCalled();
+
+        await userEvent.click(
+          within(dialog).getByRole('button', { name: 'Archive T8' }),
+        );
+
+        expect(archiveTicket).toHaveBeenCalledExactlyOnceWith({
+          number: 8,
+          withChildren: true,
+        });
+      });
+
+      it('archives it at once when every child is archived', async () => {
+        vi.mocked(archiveTicket).mockResolvedValue({ ok: true });
+        renderDrawer({
+          ...epic,
+          children: epic.children.map((each) => ({ ...each, archived: true })),
+        });
+
+        await userEvent.click(button('Archive'));
+
+        expect(archiveTicket).toHaveBeenCalledExactlyOnceWith({ number: 8 });
+        expect(
+          screen.queryByRole('dialog', { name: /Archive T8/ }),
+        ).not.toBeInTheDocument();
+      });
+    });
+
     it.each([false, true])(
       'offers Delete in the footer, archived: %s (ADR 0012)',
       (archived) => {
