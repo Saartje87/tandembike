@@ -13,6 +13,7 @@ import {
 } from '@blockle/blocks';
 import {
   type FC,
+  type FocusEvent,
   type FormEvent,
   type ReactNode,
   useEffect,
@@ -53,8 +54,8 @@ export type InlineEditProps = {
   /** For the `<input>`, such as to match the wrapper's font. */
   inputClassName?: string;
   /**
-   * Edits in a textarea with Save and Cancel below it, where Enter adds a
-   * line and Cmd/Ctrl+Enter saves.
+   * Edits in a textarea with Cancel below it, where Enter adds a line and
+   * Cmd/Ctrl+Enter saves.
    */
   multiline?: boolean;
   /** The textarea's height in lines, when `multiline`. Defaults to 12. */
@@ -67,12 +68,6 @@ export type InlineEditProps = {
   renderContent?: (value: string) => ReactNode;
   /** Shown, muted, at rest when the text is empty, such as "Add a description…". */
   placeholder?: string;
-  /**
-   * Called with whether an edit is open with text that differs from the
-   * text it began with, such as for a guard against closing with unsaved
-   * text.
-   */
-  onDirtyChange?: (dirty: boolean) => void;
   /**
    * Told when an edit opens (true) and ends (false), and when a refused
    * save reopens it, such as to hide the item's other buttons meanwhile.
@@ -88,10 +83,11 @@ const onLink = (event: { target: EventTarget }) =>
 
 /**
  * Text that edits in place. At rest it is plain text with a hover tint and a
- * focus ring; a click, or Enter on it, opens an input with Save (✓) and
- * Cancel (✗). Enter or Save closes it at once showing the new text while the
- * save runs; a refused save reopens it with the User's text and the reason.
- * Escape or Cancel drops the draft. Leaving the input does nothing.
+ * focus ring; a click, or Enter on it, opens an input with Cancel (✗).
+ * Enter, or focus leaving it for elsewhere in the page, closes it at once
+ * showing the new text while the save runs; a refused save reopens it with
+ * the User's text and the reason. Escape or Cancel drops the draft. Switching
+ * windows leaves it open.
  */
 export const InlineEdit: FC<InlineEditProps> = ({
   value,
@@ -104,7 +100,6 @@ export const InlineEdit: FC<InlineEditProps> = ({
   rows = 12,
   renderContent = asIs,
   placeholder,
-  onDirtyChange,
   onEditingChange,
 }) => {
   const inputId = useId();
@@ -115,8 +110,14 @@ export const InlineEdit: FC<InlineEditProps> = ({
     setEditingState(next);
     onEditingChange?.(next);
   };
-  // Puts focus back on the text when the User ends an edit.
+  // Puts focus back on the text when the User ends an edit, unless they
+  // ended it by leaving.
   const [refocus, setRefocus] = useState(false);
+  // Whether the input takes focus when it opens: not when a save refused
+  // after leaving reopens it, which leaves focus where the User went.
+  const [focusInput, setFocusInput] = useState(true);
+  // Set once an edit ends, so the input's blur as it unmounts saves nothing.
+  const ended = useRef(false);
   // The multiline text at rest, which is not a button, so React does not
   // autofocus it.
   const atRest = useRef<HTMLDivElement>(null);
@@ -130,7 +131,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
   // The form outlives the input, which closes on submit while the text
   // saves. It has no pending state: the optimistic text shows instead.
   const {
-    formState: { defaultValues, errors, isDirty },
+    formState: { defaultValues, errors },
     getValues,
     register,
     reset,
@@ -143,31 +144,31 @@ export const InlineEdit: FC<InlineEditProps> = ({
   });
   const error = errors.text?.message;
 
-  // Dirty against the text the edit began with, so text typed back to it
-  // counts as unchanged.
-  const dirty = editing && isDirty;
-  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange]);
-
-  const open = () => {
-    reset({ text: value });
+  const reopen = (focus: boolean) => {
+    ended.current = false;
+    setFocusInput(focus);
     setEditing(true);
   };
-  const close = () => {
+  const open = () => {
+    reset({ text: value });
+    reopen(true);
+  };
+  const close = (byLeaving: boolean) => {
+    ended.current = true;
     setEditing(false);
-    setRefocus(true);
+    setRefocus(!byLeaving);
   };
   const cancel = () => {
-    close();
+    close(false);
     reset({ text: value });
   };
   // Not `handleSubmit`: it validates asynchronously, so the input would
   // close a frame before the new text shows. The field has no rules to check.
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const save = (byLeaving: boolean) => {
     const text = getValues('text');
     // The text when the edit began, which may since have changed elsewhere.
     const original = defaultValues?.text ?? value;
-    close();
+    close(byLeaving);
     if (text === original) {
       reset({ text: value });
       return;
@@ -177,13 +178,30 @@ export const InlineEdit: FC<InlineEditProps> = ({
       showSaved(text);
       const reason = await onSave(text);
       if (reason !== undefined) {
-        // Still dirty against the original, for the unsaved-text guard.
+        // Compared with the original again on the next save.
         reset({ text: original });
-        setValue('text', text, { shouldDirty: true });
+        setValue('text', text);
         setError('text', { type: 'server', message: reason });
-        setEditing(true);
+        reopen(!byLeaving);
       }
     });
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    save(false);
+  };
+  // Saves when focus leaves the form for elsewhere in the page. Moving to
+  // Cancel stays inside it, and a click on Cancel keeps focus in the input.
+  // When the window loses focus, the input stays the page's focused element.
+  const leave = (event: FocusEvent<HTMLFormElement>) => {
+    if (
+      ended.current ||
+      event.currentTarget.contains(event.relatedTarget) ||
+      document.activeElement === event.target
+    ) {
+      return;
+    }
+    save(true);
   };
 
   if (readOnly) {
@@ -259,23 +277,14 @@ export const InlineEdit: FC<InlineEditProps> = ({
     );
   }
 
-  const saveButton = (
-    <Button
-      type="submit"
-      variant="ghost"
-      size="small"
-      aria-label="Save"
-      onClick={keepDrawerOpen}
-    >
-      <Icon name="check" size="small" />
-    </Button>
-  );
   const cancelButton = (
     <Button
       type="button"
       variant="ghost"
       size="small"
       aria-label="Cancel"
+      // Keeps focus in the input, so the click does not count as leaving.
+      onMouseDown={(event) => event.preventDefault()}
       onClick={(event) => {
         keepDrawerOpen(event);
         cancel();
@@ -292,14 +301,14 @@ export const InlineEdit: FC<InlineEditProps> = ({
   const fieldProps = {
     ...register('text'),
     id: inputId,
-    autoFocus: true,
+    autoFocus: focusInput,
     'aria-invalid': error ? true : undefined,
     'aria-describedby': error ? errorId : undefined,
   };
 
   if (multiline) {
     return (
-      <form onSubmit={submit}>
+      <form onSubmit={submit} onBlur={leave}>
         <Stack gap={1}>
           <Box>
             {fieldLabel}
@@ -320,17 +329,14 @@ export const InlineEdit: FC<InlineEditProps> = ({
             />
           </Box>
           <FieldError id={errorId} reason={error} />
-          <Inline gap={1}>
-            {saveButton}
-            {cancelButton}
-          </Inline>
+          <Box>{cancelButton}</Box>
         </Stack>
       </form>
     );
   }
 
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} onBlur={leave}>
       <Stack gap={1}>
         <Inline gap={1} alignY="center" flexWrap="nowrap">
           <Box flex={1}>
@@ -346,7 +352,6 @@ export const InlineEdit: FC<InlineEditProps> = ({
               autoComplete="off"
             />
           </Box>
-          {saveButton}
           {cancelButton}
         </Inline>
         <FieldError id={errorId} reason={error} />

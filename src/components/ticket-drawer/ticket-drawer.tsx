@@ -121,8 +121,6 @@ function fieldOf(edit: Edit): keyof Fields {
 type DescriptionFieldProps = {
   description: string;
   onSave: (description: string) => Promise<string | undefined>;
-  /** Whether the edit in progress has unsaved text, so the drawer can guard closing. */
-  onUnsavedChange: (unsaved: boolean) => void;
 };
 
 /**
@@ -132,7 +130,6 @@ type DescriptionFieldProps = {
 const DescriptionField: FC<DescriptionFieldProps> = ({
   description,
   onSave,
-  onUnsavedChange,
 }) => (
   <Stack gap={2}>
     <Heading level={3} fontSize="medium">
@@ -145,7 +142,6 @@ const DescriptionField: FC<DescriptionFieldProps> = ({
       multiline
       renderContent={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
       placeholder="Add a description…"
-      onDirtyChange={onUnsavedChange}
     />
   </Stack>
 );
@@ -197,7 +193,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     (current, edit: Edit): Fields => ({ ...current, ...edit }),
   );
   const [statusError, setStatusError] = useState<string>();
-  const [unsavedDescription, setUnsavedDescription] = useState(false);
   const [, startSave] = useTransition();
   const [archived, showArchived] = useOptimistic(ticket.archived);
   const [archiveError, setArchiveError] = useState<string>();
@@ -218,12 +213,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     // outside click meant for a dialog in it (Delete) reaches the drawer
     // first. Leave that one to the dialog (docs/blocks-feedback.md, 17).
     if (document.querySelector('dialog[data-ticket-drawer] dialog[open]')) {
-      return;
-    }
-    if (
-      unsavedDescription &&
-      !window.confirm('Discard changes to the description?')
-    ) {
       return;
     }
     close();
@@ -450,7 +439,6 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
           <DescriptionField
             description={fields.description}
             onSave={saveDescription}
-            onUnsavedChange={setUnsavedDescription}
           />
           <AcceptanceCriteriaEditor
             ticketNumber={ticket.number}
@@ -508,8 +496,8 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
  * comments, and a footer with its timestamps, Archive and Delete.
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. Closing
- * (the Close button, Escape or a click outside) goes to the Ticket's Board,
- * after a confirmation when the description has unsaved changes.
+ * (the Close button, Escape or a click outside) goes to the Ticket's Board;
+ * a field being edited saves as focus leaves it.
  */
 export const TicketDrawer: FC<TicketDrawerProps> = (props) => {
   const shown = useIsShown();

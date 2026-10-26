@@ -378,7 +378,7 @@ listener is registered first. It is covered by a test that asserts no
 Cancel buttons swap themselves out the same way and use the same workaround
 (`keepDrawerOpen`, now in `keep-drawer-open/keep-drawer-open.ts`), with the
 same kind of test. The redesigned drawer (#16) swaps out many more buttons:
-the title (which turns into an input), the description's Save and Cancel,
+the title (which turns into an input), the description's Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
 banner's Restore all need it. The header's copy button for the Ticket
 number (#34, `copy-ticket-number.tsx`) swaps its text and icon on click and
@@ -546,9 +546,7 @@ description and the label field. As with proposal 13, Next's React root is
 alone is not enough; `nativeEvent.stopImmediatePropagation()` is, because
 React's listener is registered first. Tests assert no `document` `keydown`
 listener sees the Escape (in jsdom the root is a container, so they cannot
-tell the two apart). The "discard changes to the description?" question
-uses `window.confirm()` from the drawer's `onRequestClose` handler, not a
-nested `Dialog`.
+tell the two apart).
 
 The header's Project drawer (#30) does nest one: `ProjectNav`'s "New Project"
 `Dialog`. One Escape in that dialog would close the drawer as well, and
@@ -590,12 +588,16 @@ drawer's title input matches the heading through `TextInput`'s
 
 **No inline-edit component.** Every editable text in the app (Ticket title,
 description, criterion, Project name, Cycle title, comment) edits the same
-way: plain text at rest that opens on a click or Enter, an input with icon
-buttons ✓ (Save) and ✗ (Cancel), Enter to save, Escape to cancel, no save on
-blur, and a refused save that reopens with the User's text and the reason.
-Blocks has no component for this, so the app builds its own `InlineEdit`
+way: plain text at rest that opens on a click or Enter, an input with an icon
+button ✗ (Cancel), Enter or leaving the field to save, Escape to cancel, and a
+refused save that reopens with the User's text and the reason. Blocks has no
+component for this, so the app builds its own `InlineEdit`
 (`src/components/inline-edit/inline-edit.tsx`) from a plain `<button>`,
-`TextInput`, two ghost icon `Button`s and `react-hook-form`.
+`TextInput`, a ghost icon `Button` and `react-hook-form`. Saving on blur
+takes care the component would ideally own: the form's `onBlur` skips focus
+moving within it (`relatedTarget`) and a window switch (the input stays
+`document.activeElement`), and Cancel's `onMouseDown` prevents default so a
+click on it does not blur the input and save first.
 
 ```tsx
 // Wanted:
@@ -608,7 +610,7 @@ Blocks has no component for this, so the app builds its own `InlineEdit`
 ```
 
 **Textarea variant, with links at rest.** The description and each comment
-edit in a `Textarea` with ✓ and ✗ below it, Enter for a new line
+edit in a `Textarea` with ✗ below it, Enter for a new line
 and Cmd/Ctrl+Enter to save, which the app wires up itself in `onKeyDown`
 with `form.requestSubmit()`. At rest it shows rendered Markdown, which can
 hold links, so it cannot be a `<button>` (no interactive content inside, and
@@ -633,7 +635,7 @@ muted `Text color="text-600"` placeholder ("Add a description…") inside it.
 ```
 
 Escape inside it also has to be kept from a surrounding `Drawer`
-(proposal 17), and a click on ✓ or ✗, which unmounts the button, from its
+(proposal 17), and a click on ✗, which unmounts the button, from its
 outside-click check (proposal 13).
 
 **Second case.** Each acceptance criterion's text is an `InlineEdit` too, so

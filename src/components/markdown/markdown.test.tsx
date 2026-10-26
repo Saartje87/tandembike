@@ -5,6 +5,19 @@ import { renderWithTheme } from '../../test/render';
 import { Markdown } from './markdown';
 
 describe('Markdown', () => {
+  // A click on the text opens an edit, and a re-render between the press
+  // and the release must not swap the clicked element for a new one.
+  it('keeps its elements when it renders again', () => {
+    const { rerender } = renderWithTheme(
+      <Markdown headingLevel={3}>{'Fix **the** header.'}</Markdown>,
+    );
+    const before = screen.getByText('the');
+
+    rerender(<Markdown headingLevel={3}>{'Fix **the** header.'}</Markdown>);
+
+    expect(screen.getByText('the')).toBe(before);
+  });
+
   it('renders headings below the heading level it is given', () => {
     renderWithTheme(
       <Markdown headingLevel={3}>{'# Plan\n\n## Steps'}</Markdown>,
