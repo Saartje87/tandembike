@@ -2,7 +2,7 @@
 
 import { Alert, Button, Heading, Inline, Stack, Text } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
-import { type FC, type ReactNode, useState, useTransition } from 'react';
+import { type FC, useState, useTransition } from 'react';
 
 import {
   archiveCycle,
@@ -10,7 +10,7 @@ import {
   renameCycle,
   startCycle,
 } from '../../app/cycles/actions';
-import type { ActionResult } from '../../app/lib/action-result';
+import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { DateTime } from '../date-time/date-time';
@@ -26,8 +26,6 @@ type CycleTitleProps = {
   cycle: Cycle;
 };
 
-const asHeading = (text: ReactNode) => <Heading level={2}>{text}</Heading>;
-
 /**
  * The Cycle's title as a heading that edits in place, unless the Cycle is
  * Archived.
@@ -35,7 +33,7 @@ const asHeading = (text: ReactNode) => <Heading level={2}>{text}</Heading>;
 const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
   const saveTitle = async (title: string) => {
     const result = await renameCycle({ cycleId: cycle.id, title });
-    return result.ok ? undefined : (result.fieldErrors?.title ?? result.error);
+    return refusalReason(result, 'title');
   };
 
   return (
@@ -44,7 +42,7 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
       label="Cycle title"
       onSave={saveTitle}
       readOnly={cycle.state === 'Archived'}
-      renderText={asHeading}
+      wrap={(title) => <Heading level={2}>{title}</Heading>}
     />
   );
 };

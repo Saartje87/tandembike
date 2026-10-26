@@ -26,6 +26,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { refusalReason } from '../../app/lib/action-result';
 import {
   checkTicketAcceptanceCriterion,
   setTicketAcceptanceCriteria,
@@ -34,7 +35,10 @@ import type { AcceptanceCriterion } from '../../tickets/tickets';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { InlineEdit } from '../inline-edit/inline-edit';
-import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import {
+  claimEscape,
+  keepDrawerOpen,
+} from '../keep-drawer-open/keep-drawer-open';
 import * as styles from './acceptance-criteria-editor.css';
 
 export type AcceptanceCriteriaEditorProps = {
@@ -381,9 +385,7 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
         number: ticketNumber,
         ...change,
       });
-      if (!result.ok) {
-        setError(result.fieldErrors?.acceptanceCriteria ?? result.error);
-      }
+      setError(refusalReason(result, 'acceptanceCriteria'));
     });
   };
 
@@ -398,9 +400,7 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
       number: ticketNumber,
       acceptanceCriteria: asReplacement(next),
     });
-    return result.ok
-      ? undefined
-      : (result.fieldErrors?.acceptanceCriteria ?? result.error);
+    return refusalReason(result, 'acceptanceCriteria');
   };
 
   /** Saves `next` as the whole list, saying why when it is refused. */
@@ -446,17 +446,21 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
                 criterion={criterion}
                 index={index}
                 onCheck={(checked) => check({ id: criterion.id, checked })}
-                onEdit={(text) =>
+                onEdit={async (text) => {
+                  // The server trims it too, so spaces alone change nothing.
+                  if (text.trim() === criterion.text) {
+                    return undefined;
+                  }
                   // Runs in InlineEdit's transition.
-                  save(
+                  return save(
                     shown.map((other) =>
                       // Editing a criterion unchecks it, as the server does.
                       other.id === criterion.id
                         ? { ...other, text: text.trim(), checked: false }
                         : other,
                     ),
-                  )
-                }
+                  );
+                }}
                 onRemove={() => {
                   document.getElementById(headingId)?.focus();
                   replace(shown.filter(({ id }) => id !== criterion.id));

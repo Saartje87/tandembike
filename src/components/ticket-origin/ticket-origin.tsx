@@ -22,7 +22,10 @@ import { setTicketOrigin } from '../../app/tickets/actions';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
-import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import {
+  claimEscape,
+  keepDrawerOpen,
+} from '../keep-drawer-open/keep-drawer-open';
 
 export type TicketOriginProps = {
   ticket: Pick<Ticket, 'number' | 'origin'>;

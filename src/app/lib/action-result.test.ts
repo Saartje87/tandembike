@@ -5,7 +5,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../../tickets/errors';
-import { actionResult } from './action-result';
+import { actionResult, refusalReason } from './action-result';
 
 describe('actionResult', () => {
   it('returns what the call returns, marked ok', () => {
@@ -51,5 +51,40 @@ describe('actionResult', () => {
         throw bug;
       }),
     ).toThrow(bug);
+  });
+});
+
+describe('refusalReason', () => {
+  it('is nothing when the action succeeded', () => {
+    expect(refusalReason({ ok: true }, 'title')).toBeUndefined();
+  });
+
+  it("is the named field's reason when the input broke its rule", () => {
+    expect(
+      refusalReason(
+        {
+          ok: false,
+          error: 'Enter a title. Keep the description short.',
+          fieldErrors: {
+            title: 'Enter a title.',
+            description: 'Keep the description short.',
+          },
+        },
+        'title',
+      ),
+    ).toBe('Enter a title.');
+  });
+
+  it("is the action's error otherwise", () => {
+    expect(
+      refusalReason({ ok: false, error: 'There is no Ticket T42.' }, 'title'),
+    ).toBe('There is no Ticket T42.');
+    expect(
+      refusalReason({
+        ok: false,
+        error: 'Enter a name.',
+        fieldErrors: { name: 'Enter a name.' },
+      }),
+    ).toBe('Enter a name.');
   });
 });

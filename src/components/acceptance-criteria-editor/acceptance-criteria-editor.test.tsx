@@ -503,6 +503,20 @@ describe('AcceptanceCriteriaEditor', () => {
     expect(setTicketAcceptanceCriteria).not.toHaveBeenCalled();
   });
 
+  it('saves nothing, and keeps it checked, when only spaces were added around the text', async () => {
+    renderWithTheme(
+      <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo]} />,
+    );
+
+    await userEvent.click(criterionText('The logo is centred'));
+    await userEvent.type(editInput(), '  {Enter}');
+
+    expect(setTicketAcceptanceCriteria).not.toHaveBeenCalled();
+    expect(criteriaShown()).toEqual([
+      { text: 'The logo is centred', checked: true },
+    ]);
+  });
+
   it("reopens a refused edit with the User's text and the reason", async () => {
     vi.mocked(setTicketAcceptanceCriteria).mockResolvedValue({
       ok: false,

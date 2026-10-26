@@ -23,6 +23,7 @@ import {
   useTransition,
 } from 'react';
 
+import { refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import {
   archiveTicket,
@@ -54,6 +55,7 @@ import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { InlineEdit } from '../inline-edit/inline-edit';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
@@ -61,7 +63,6 @@ import { StatusSelect } from '../status-select/status-select';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
-import { keepDrawerOpen } from './keep-drawer-open';
 import * as styles from './ticket-drawer.css';
 import { useIsShown } from './use-is-shown';
 
@@ -142,7 +143,7 @@ const DescriptionField: FC<DescriptionFieldProps> = ({
       label="Description"
       onSave={onSave}
       multiline
-      renderValue={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
+      renderContent={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
       placeholder="Add a description…"
       onDirtyChange={onUnsavedChange}
     />
@@ -233,8 +234,9 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
     startSave(async () => {
       showEdit(edit);
       const result = await updateTicket({ number: ticket.number, ...edit });
-      if (!result.ok) {
-        onRefused(result.fieldErrors?.[field] ?? result.error);
+      const reason = refusalReason(result, field);
+      if (reason !== undefined) {
+        onRefused(reason);
       }
     });
   };
@@ -243,15 +245,13 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   const saveTitle = async (title: string) => {
     showEdit({ title });
     const result = await updateTicket({ number: ticket.number, title });
-    return result.ok ? undefined : (result.fieldErrors?.title ?? result.error);
+    return refusalReason(result, 'title');
   };
 
   const saveDescription = async (description: string) => {
     showEdit({ description });
     const result = await updateTicket({ number: ticket.number, description });
-    return result.ok
-      ? undefined
-      : (result.fieldErrors?.description ?? result.error);
+    return refusalReason(result, 'description');
   };
 
   const saveStatus = (status: Fields['status']) => {
@@ -330,7 +330,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               value={fields.title}
               label="Title"
               onSave={saveTitle}
-              renderText={(title) => (
+              wrap={(title) => (
                 <Heading level={2} fontSize="xlarge" fontWeight="strong">
                   {title}
                 </Heading>

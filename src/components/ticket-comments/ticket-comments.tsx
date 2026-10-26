@@ -20,6 +20,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { refusalReason } from '../../app/lib/action-result';
 import {
   addTicketComment,
   editTicketComment,
@@ -32,8 +33,8 @@ import { ActivityEntry, actorNames } from '../activity-entry/activity-entry';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { Markdown } from '../markdown/markdown';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
 import * as styles from './ticket-comments.css';
 
 export type TicketCommentsProps = {
@@ -72,20 +73,21 @@ type CommentItemProps = { comment: Comment };
  * place, with a button to remove it after a confirmation.
  */
 const CommentItem: FC<CommentItemProps> = ({ comment }) => {
-  const [mode, setMode] = useState<'show' | 'remove'>('show');
+  // Whether it asks to confirm the removal.
+  const [removing, setRemoving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<string>();
-  const [removing, startRemove] = useTransition();
+  const [removePending, startRemove] = useTransition();
 
-  const switchTo = (next: typeof mode) => (event: MouseEvent) => {
+  const askToRemove = (next: boolean) => (event: MouseEvent) => {
     keepDrawerOpen(event);
     setError(undefined);
-    setMode(next);
+    setRemoving(next);
   };
 
   const saveBody = async (body: string) => {
     const result = await editTicketComment({ id: comment.id, body });
-    return result.ok ? undefined : (result.fieldErrors?.body ?? result.error);
+    return refusalReason(result, 'body');
   };
 
   const remove = () => {
@@ -122,13 +124,13 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
                 </Text>
               )}
             </Inline>
-            {mode === 'show' && !editing && (
+            {!removing && !editing && (
               <Button
                 type="button"
                 variant="ghost"
                 size="small"
                 intent="danger"
-                onClick={switchTo('remove')}
+                onClick={askToRemove(true)}
               >
                 Remove
               </Button>
@@ -139,11 +141,13 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
             rows={4}
             value={comment.body}
             label="Comment"
-            renderValue={(body) => <Markdown headingLevel={4}>{body}</Markdown>}
+            renderContent={(body) => (
+              <Markdown headingLevel={4}>{body}</Markdown>
+            )}
             onEditingChange={setEditing}
             onSave={saveBody}
           />
-          {mode === 'remove' && (
+          {removing && (
             <Stack gap={2}>
               <Text tag="p" fontSize="small">
                 Remove this comment? It cannot be restored.
@@ -153,8 +157,8 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
                   type="button"
                   size="small"
                   intent="danger"
-                  loading={removing}
-                  disabled={removing}
+                  loading={removePending}
+                  disabled={removePending}
                   onClick={remove}
                 >
                   Remove comment
@@ -163,8 +167,8 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
                   type="button"
                   variant="ghost"
                   size="small"
-                  disabled={removing}
-                  onClick={switchTo('show')}
+                  disabled={removePending}
+                  onClick={askToRemove(false)}
                 >
                   Cancel
                 </Button>

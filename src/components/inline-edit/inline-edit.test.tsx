@@ -96,6 +96,21 @@ describe('InlineEdit', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the new text in the same update that closes the input', async () => {
+    const { onSave } = pendingSave();
+    renderEdit({ onSave });
+
+    await userEvent.click(text());
+    await userEvent.type(input(), '!');
+    // A plain click, not userEvent's: nothing awaits between it and the check.
+    act(() => save().click());
+
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Fix the header!' }),
+    ).toBeInTheDocument();
+  });
+
   it('saves nothing when the text is unchanged', async () => {
     const { onSave } = renderEdit();
 
@@ -233,7 +248,7 @@ describe('InlineEdit', () => {
   });
 
   it('wraps the text at rest, such as in a heading', () => {
-    renderEdit({ renderText: (content) => <h2>{content}</h2> });
+    renderEdit({ wrap: (content) => <h2>{content}</h2> });
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'Fix the header' }),
@@ -243,7 +258,7 @@ describe('InlineEdit', () => {
   it('shows read-only text with no button that cannot be opened', async () => {
     renderEdit({
       readOnly: true,
-      renderText: (content) => <h2>{content}</h2>,
+      wrap: (content) => <h2>{content}</h2>,
     });
 
     expect(
@@ -359,7 +374,7 @@ describe('InlineEdit', () => {
     it('renders the text at rest, and follows a link in it instead of opening', async () => {
       const onLinkClick = vi.fn((event: MouseEvent) => event.preventDefault());
       renderTextarea({
-        renderValue: (value) => (
+        renderContent: (value) => (
           <p>
             {value} <a href="#docs">Docs</a>
           </p>
@@ -376,7 +391,7 @@ describe('InlineEdit', () => {
 
     it('follows a link on Enter instead of opening', async () => {
       renderTextarea({
-        renderValue: (value) => (
+        renderContent: (value) => (
           <p>
             {value} <a href="#docs">Docs</a>
           </p>

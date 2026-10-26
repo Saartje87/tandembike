@@ -376,7 +376,7 @@ listener (same node); `stopImmediatePropagation()` does, because React's
 listener is registered first. It is covered by a test that asserts no
 `document` click listener sees the click. The comment list's Edit, Remove and
 Cancel buttons swap themselves out the same way and use the same workaround
-(`keepDrawerOpen`, now in `ticket-drawer/keep-drawer-open.ts`), with the
+(`keepDrawerOpen`, now in `keep-drawer-open/keep-drawer-open.ts`), with the
 same kind of test. The redesigned drawer (#16) swaps out many more buttons:
 the title (which turns into an input), the description's Save and Cancel,
 the label chips' remove buttons, Add label, Archive and the archived
@@ -540,7 +540,7 @@ than the document, so content can claim it with `stopPropagation()` or
 disabling itself while a nested `Dialog` is open, as `Dialog` does.
 
 **Workaround.** In #16 every in-place edit's `onKeyDown` stops an Escape with
-`claimEscape` (`ticket-drawer/keep-drawer-open.ts`), used by the title, the
+`claimEscape` (`keep-drawer-open/keep-drawer-open.ts`), used by the title, the
 description and the label field. As with proposal 13, Next's React root is
 `document`, the same node as the Drawer's listener, so `stopPropagation()`
 alone is not enough; `nativeEvent.stopImmediatePropagation()` is, because
@@ -603,7 +603,7 @@ Blocks has no component for this, so the app builds its own `InlineEdit`
   value={title}
   label="Title"
   onSave={async (text) => reasonIfRefused}
-  renderText={(text) => <Heading level={2}>{text}</Heading>}
+  wrap={(text) => <Heading level={2}>{text}</Heading>}
 />
 ```
 
@@ -626,7 +626,7 @@ muted `Text color="text-600"` placeholder ("Add a description…") inside it.
   multiline
   value={description}
   label="Description"
-  renderValue={(text) => <Markdown>{text}</Markdown>}
+  renderContent={(text) => <Markdown>{text}</Markdown>}
   placeholder="Add a description…"
   onSave={async (text) => reasonIfRefused}
 />

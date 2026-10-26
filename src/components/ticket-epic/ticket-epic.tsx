@@ -20,7 +20,7 @@ import {
 } from '../../app/tickets/actions';
 import type { EpicLink, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 export type TicketEpicProps = {
   ticket: Pick<Ticket, 'number' | 'projectId' | 'epic'>;

@@ -30,7 +30,10 @@ import type {
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import {
+  claimEscape,
+  keepDrawerOpen,
+} from '../keep-drawer-open/keep-drawer-open';
 import * as styles from './blocker-editor.css';
 
 export type BlockerEditorProps = {

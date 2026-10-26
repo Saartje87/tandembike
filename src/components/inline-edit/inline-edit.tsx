@@ -26,7 +26,10 @@ import { useForm } from 'react-hook-form';
 
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import { claimEscape, keepDrawerOpen } from '../ticket-drawer/keep-drawer-open';
+import {
+  claimEscape,
+  keepDrawerOpen,
+} from '../keep-drawer-open/keep-drawer-open';
 import * as styles from './inline-edit.css';
 
 export type InlineEditProps = {
@@ -43,10 +46,10 @@ export type InlineEditProps = {
   /** Plain text with no cue that cannot be opened, such as in an archived Project. */
   readOnly?: boolean;
   /**
-   * Wraps the text at rest, such as in a `Heading`; the text inherits its
-   * font. The input is not wrapped.
+   * Wraps the text at rest, read-only included, such as in a `Heading`; the
+   * text inherits its font. The input is not wrapped.
    */
-  renderText?: (text: ReactNode) => ReactNode;
+  wrap?: (text: ReactNode) => ReactNode;
   /** For the `<input>`, such as to match the wrapper's font. */
   inputClassName?: string;
   /**
@@ -57,10 +60,11 @@ export type InlineEditProps = {
   /** The textarea's height in lines, when `multiline`. Defaults to 12. */
   rows?: number;
   /**
-   * Renders the text at rest, such as as Markdown. Links in it still work:
-   * a click or Enter on one follows it instead of opening the edit.
+   * Renders the saved text as content at rest, such as Markdown, inside
+   * `wrap`. Links in it still work: a click or Enter on one follows it
+   * instead of opening the edit.
    */
-  renderValue?: (value: string) => ReactNode;
+  renderContent?: (value: string) => ReactNode;
   /** Shown, muted, at rest when the text is empty, such as "Add a description…". */
   placeholder?: string;
   /**
@@ -94,11 +98,11 @@ export const InlineEdit: FC<InlineEditProps> = ({
   label,
   onSave,
   readOnly = false,
-  renderText = asIs,
+  wrap = asIs,
   inputClassName,
   multiline = false,
   rows = 12,
-  renderValue = asIs,
+  renderContent = asIs,
   placeholder,
   onDirtyChange,
   onEditingChange,
@@ -127,7 +131,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
   // saves. It has no pending state: the optimistic text shows instead.
   const {
     formState: { defaultValues, errors, isDirty },
-    handleSubmit,
+    getValues,
     register,
     reset,
     setError,
@@ -156,39 +160,41 @@ export const InlineEdit: FC<InlineEditProps> = ({
     close();
     reset({ text: value });
   };
-  const submit = (event?: FormEvent) => {
-    event?.preventDefault();
+  // Not `handleSubmit`: it validates asynchronously, so the input would
+  // close a frame before the new text shows. The field has no rules to check.
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const text = getValues('text');
+    // The text when the edit began, which may since have changed elsewhere.
+    const original = defaultValues?.text ?? value;
     close();
-    void handleSubmit(({ text }) => {
-      // The text when the edit began, which may since have changed elsewhere.
-      const original = defaultValues?.text ?? value;
-      if (text === original) {
-        reset({ text: value });
-        return;
+    if (text === original) {
+      reset({ text: value });
+      return;
+    }
+    // In the same update as `close`, so the new text replaces the input.
+    startSave(async () => {
+      showSaved(text);
+      const reason = await onSave(text);
+      if (reason !== undefined) {
+        // Still dirty against the original, for the unsaved-text guard.
+        reset({ text: original });
+        setValue('text', text, { shouldDirty: true });
+        setError('text', { type: 'server', message: reason });
+        setEditing(true);
       }
-      startSave(async () => {
-        showSaved(text);
-        const reason = await onSave(text);
-        if (reason !== undefined) {
-          // Still dirty against the original, for the unsaved-text guard.
-          reset({ text: original });
-          setValue('text', text, { shouldDirty: true });
-          setError('text', { type: 'server', message: reason });
-          setEditing(true);
-        }
-      });
-    })();
+    });
   };
 
   if (readOnly) {
-    return renderText(shown);
+    return wrap(renderContent(shown));
   }
 
   const content =
     shown === '' && placeholder !== undefined ? (
       <Text color="text-600">{placeholder}</Text>
     ) : (
-      renderValue(shown)
+      renderContent(shown)
     );
   const hint = (
     <VisuallyHidden id={hintId}>
@@ -200,7 +206,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
     // Not a <button>: the text may hold links, which a button cannot.
     return (
       <>
-        {renderText(
+        {wrap(
           // biome-ignore lint/a11y/noStaticElementInteractions: a button role would hide the links inside from assistive technology.
           <div
             ref={atRest}
@@ -233,7 +239,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
   if (!editing) {
     return (
       <>
-        {renderText(
+        {wrap(
           <button
             type="button"
             className={styles.text}

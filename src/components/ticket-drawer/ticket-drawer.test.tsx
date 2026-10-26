@@ -830,6 +830,71 @@ describe('TicketDrawer', () => {
     });
   });
 
+  describe('title and description open at once', () => {
+    // In document order: the title's, then the description's.
+    const saveButtons = () =>
+      inDrawer().getAllByRole('button', { name: 'Save' });
+    const cancelButtons = () =>
+      inDrawer().getAllByRole('button', { name: 'Cancel' });
+
+    const openBoth = async () => {
+      await userEvent.click(titleButton());
+      await userEvent.type(titleInput(), '!');
+      await editDescription();
+      await userEvent.type(descriptionInput(), ' Use *flex*.');
+    };
+
+    it('saves the title alone, keeping the description open with its draft', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(saveButtons()[0]);
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        title: 'Fix the header!',
+      });
+      expect(button('Fix the header!')).toBeInTheDocument();
+      expect(descriptionInput()).toHaveValue(
+        'It overlaps the **logo**. Use *flex*.',
+      );
+    });
+
+    it('cancels the title alone, then saves the description', async () => {
+      pendingUpdate();
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(cancelButtons()[0]);
+
+      expect(titleButton()).toBeInTheDocument();
+      expect(descriptionInput()).toHaveValue(
+        'It overlaps the **logo**. Use *flex*.',
+      );
+
+      await userEvent.click(button('Save'));
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        description: 'It overlaps the **logo**. Use *flex*.',
+      });
+      expect(inDrawer().getByText('flex').tagName).toBe('EM');
+      expect(titleButton()).toBeInTheDocument();
+    });
+
+    it('cancels the description alone, keeping the title open with its draft', async () => {
+      renderDrawer();
+
+      await openBoth();
+      await userEvent.click(cancelButtons()[1]);
+
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
+      expect(titleInput()).toHaveValue('Fix the header!');
+    });
+  });
+
   describe('Blockers', () => {
     it('shows the Tickets it is blocked by and the Tickets it blocks', () => {
       const related = (number: number, title: string) => ({
