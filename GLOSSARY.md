@@ -9,8 +9,8 @@ A single unit of work to be tracked from creation to completion.
 _Avoid_: Task, issue, item, card
 
 **Ticket number**:
-The number that identifies a Ticket across the whole app, written `#42`. It never changes, even when the Ticket moves to another Project.
-_Avoid_: Ticket key, ticket ID, `WEB-12`-style keys
+The number that identifies a Ticket across the whole app, written `T42`. It never changes, even when the Ticket moves to another Project.
+_Avoid_: Ticket key, ticket ID, `#42` (other systems, such as GitHub, claim it), `WEB-12`-style keys
 
 **Project**:
 A named group of Tickets. Every Ticket belongs to exactly one Project. A Project's name is unique, ignoring case and surrounding spaces; a Project can be renamed and archived, but never deleted. The User can give a Project a colour and an icon, from fixed sets, to tell it apart at a glance.
