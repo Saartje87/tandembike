@@ -10,7 +10,10 @@ import { style } from '@vanilla-extract/css';
 export const text = style({
   appearance: 'none',
   display: 'block',
-  inlineSize: '100%',
+  // Wider by the negative margins, which pull the hover tint past the text,
+  // so the text keeps its own width in a container sized to fit it, such as
+  // a heading in a flex row.
+  inlineSize: `calc(100% + 2 * ${vars.space[1]})`,
   margin: 0,
   paddingBlock: vars.space[1],
   paddingInline: vars.space[1],
