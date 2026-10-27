@@ -8,14 +8,20 @@ import {
   TextInput,
   VisuallyHidden,
 } from '@blockle/blocks';
-import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
+import {
+  useRouter,
+  useSearchParams,
+  useSelectedLayoutSegments,
+} from 'next/navigation';
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createCycle } from '../../app/cycles/actions';
 import {
+  boardFilterOf,
   cyclePath,
   cyclesPath,
+  filteredBoardPath,
   projectPath,
   projectSettingsPath,
 } from '../../app/lib/paths';
@@ -150,17 +156,26 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
  * one, the History of archived ones and its Settings, with a New Cycle
  * button that adds one. It marks the tab on screen from the URL, so the
- * Project's layout can keep it mounted across its tabs.
+ * Project's layout can keep it mounted across its tabs, and carries the
+ * Board filter in the URL from one Board's tab to another's.
  */
 export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
   const [adding, setAdding] = useState(false);
   const current = currentTab(useSelectedLayoutSegments(), cycles);
+  const searchParams = useSearchParams();
+  const filter = boardFilterOf(
+    searchParams.get('q') ?? undefined,
+    searchParams.getAll('label'),
+  );
 
   return (
     <Inline gap={3} alignY="center">
       <nav aria-label="Project views">
         <Inline tag="ul" gap={1} className={styles.tabList}>
-          <Tab href={projectPath(projectId)} current={current === 'backlog'}>
+          <Tab
+            href={filteredBoardPath(projectPath(projectId), filter)}
+            current={current === 'backlog'}
+          >
             Backlog
           </Tab>
           {[
@@ -169,7 +184,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
           ].map((cycle) => (
             <Tab
               key={cycle.id}
-              href={cyclePath(projectId, cycle.id)}
+              href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
               current={current === cycle.id}
             >
               {cycle.title}

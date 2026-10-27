@@ -315,4 +315,30 @@ describe('CyclePage', () => {
       title: `T${ticket.number} Ship it`,
     });
   });
+
+  it("closes the drawer to the Cycle's tab with its filter", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Ship it',
+      cycleId: cycle.id,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({
+      id: String(project.id),
+      cycleId: String(cycle.id),
+    });
+    const searchParams = Promise.resolve({
+      ticket: String(ticket.number),
+      label: 'bug',
+    });
+
+    await renderPage(<main>{await CyclePage({ params, searchParams })}</main>);
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      `Drawer T${ticket.number} over /project/${project.id}/cycle/${cycle.id}?label=bug`,
+    );
+  });
 });

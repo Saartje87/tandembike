@@ -13,7 +13,7 @@ import {
 import { useDroppable } from '@dnd-kit/react';
 import { type FC, useId, useRef, useState } from 'react';
 
-import { ticketOnBoardPath } from '../../app/lib/paths';
+import { type BoardFilter, ticketOnBoardPath } from '../../app/lib/paths';
 import { epicLinkOf, type Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
@@ -30,6 +30,8 @@ export type EpicChipsProps = {
   cycleId?: number;
   /** The Board's own URL, which an Epic's drawer opens over. */
   boardPath: string;
+  /** The Board filter, which an Epic's drawer keeps. Defaults to none. */
+  filter?: BoardFilter;
   /**
    * Hide done Epics behind a "Show done Epics" switch, as the Project Board
    * does; a Cycle's Board shows them all. Defaults to true.
@@ -48,14 +50,18 @@ export function epicOfDropTarget(id: unknown): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-type EpicChipProps = { epic: Ticket; boardPath: string };
+type EpicChipProps = {
+  epic: Ticket;
+  boardPath: string;
+  filter?: BoardFilter;
+};
 
 /**
  * One Epic in its colour: its number, title and how many of its children
  * that are not archived are Done, as a link that opens its drawer. A card
  * dropped on it joins the Epic, and it is outlined while one is over it.
  */
-const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
+const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter }) => {
   const { ref, isDropTarget } = useDroppable({
     id: epicDropTarget(epic.number),
     collisionPriority: 2,
@@ -79,7 +85,7 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath }) => {
       >
         <Text fontSize="small" wordBreak="break-word">
           <AppLink
-            href={ticketOnBoardPath(boardPath, epic.number)}
+            href={ticketOnBoardPath(boardPath, epic.number, filter)}
             scroll={false}
             variant="inherit"
           >
@@ -105,6 +111,7 @@ export const EpicChips: FC<EpicChipsProps> = ({
   projectId,
   cycleId,
   boardPath,
+  filter,
   hideDone = true,
 }) => {
   const headingId = useId();
@@ -141,7 +148,12 @@ export const EpicChips: FC<EpicChipsProps> = ({
             className={styles.chipList}
           >
             {shown.map((epic) => (
-              <EpicChip key={epic.number} epic={epic} boardPath={boardPath} />
+              <EpicChip
+                key={epic.number}
+                epic={epic}
+                boardPath={boardPath}
+                filter={filter}
+              />
             ))}
           </Inline>
           <Button

@@ -5,8 +5,15 @@ import { appTickets } from '../../../tickets/app-tickets';
 import { NotFoundError } from '../../../tickets/errors';
 import { openTicketNumber } from '../../lib/paths';
 
-/** A Board's search parameters: `?ticket=` opens a Ticket (ADR 0013). */
-export type BoardSearchParams = Promise<{ ticket?: string | string[] }>;
+/**
+ * A Board's search parameters: `?ticket=` opens a Ticket (ADR 0013), and
+ * `?q=` and `?label=` hold its Board filter.
+ */
+export type BoardSearchParams = Promise<{
+  ticket?: string | string[];
+  q?: string | string[];
+  label?: string | string[];
+}>;
 
 export type ProjectPageProps = {
   params: Promise<{ id: string }>;

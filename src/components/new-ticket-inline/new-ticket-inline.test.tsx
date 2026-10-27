@@ -84,6 +84,16 @@ describe('NewTicketInline', () => {
     });
   });
 
+  it('tells which Ticket it created', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    const onCreated = vi.fn();
+    renderWithTheme(<NewTicketInline projectId={3} onCreated={onCreated} />);
+
+    await userEvent.type(titleField(), 'Fix the header{Enter}');
+
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith(12);
+  });
+
   it('is empty and focused for another Ticket after creating one', async () => {
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
     renderWithTheme(<NewTicketInline projectId={3} />);

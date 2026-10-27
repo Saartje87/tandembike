@@ -23,12 +23,15 @@ vi.mock('../../../components/board/board', () => ({
   Board: ({
     project,
     tickets,
+    filter,
   }: {
     project: { name: string };
     tickets: { number: number }[];
+    filter?: { query: string; labels: string[] };
   }) => (
     <section aria-label={project.name}>
       {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
+      <p>{`Filter: ${JSON.stringify(filter)}`}</p>
     </section>
   ),
 }));
@@ -144,6 +147,33 @@ describe('ProjectPage', () => {
     await expect(generateMetadata({ params, searchParams })).resolves.toEqual({
       title: `T${ticket.number} Fix the header`,
     });
+  });
+
+  it('filters the Board by ?q= and ?label=, and closes the drawer to the filtered Board', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({ id: String(project.id) });
+    const searchParams = Promise.resolve({
+      ticket: String(ticket.number),
+      q: 'fix',
+      label: ['bug', 'ui'],
+    });
+
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams })}</main>,
+    );
+
+    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
+      'Filter: {"query":"fix","labels":["bug","ui"]}',
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      `Drawer T${ticket.number} over /project/${project.id}?q=fix&label=bug&label=ui`,
+    );
   });
 
   it('names the Board alone when ?ticket= names no Ticket of this Project', async () => {

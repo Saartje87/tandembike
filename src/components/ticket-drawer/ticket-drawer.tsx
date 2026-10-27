@@ -94,8 +94,9 @@ export type TicketDrawerProps = {
    */
   epicChildren?: ChildDeletion[];
   /**
-   * The URL of the Board the drawer is open over, without `?ticket=`: where
-   * closing goes. Defaults to the Ticket's Project's Backlog.
+   * The URL of the Board the drawer is open over, with its filter and
+   * without `?ticket=`: where closing goes. Defaults to the Ticket's
+   * Project's Backlog.
    */
   boardPath?: string;
   /**
