@@ -508,7 +508,9 @@ named remove button sized to the pill.
 **Workaround.** `src/components/label-list/label-list.tsx` composes the parts
 above; the card's `BlockedMarker` (`src/components/ticket-card/ticket-card.tsx`)
 does too, with `warning` shades and an `Icon`, as does its `EpicProgress`
-with `primary` shades. The archived Project notice's "Archived" marker
+with `primary` shades. The count pill a dragged selection shows, `3
+Tickets` (`CarryCount`, same file, T243), is a fourth, placed on the
+card's corner (proposal 32). The archived Project notice's "Archived" marker
 next to the Project name is plain `Text fontSize="small" fontWeight="strong"
 color="text-600"` rather than a fourth hand-built pill.
 
@@ -1049,6 +1051,41 @@ class of `src/components/inline-edit/inline-edit.css.ts`.
 
 **Question.** Can the `cursor` atom also take `grab`, `grabbing`, `text` and
 `not-allowed`?
+
+## 32. `opacity` takes only `0` and `1`, and the inset atoms only `0`
+
+**Problem.** While a selection is dragged on the Board (T243), the other
+selected cards stay in place, faded, and the grabbed card shows a count pill
+straddling its top-right corner. The `opacity` atom has only `0` and `1`, so
+there is no faded state; the inset atoms (`insetBlockStart`,
+`insetInlineEnd`, …) take only `0`, so the pill can sit in the corner but
+not overhang it. The same opacity gap gives proposal 18's faint drag handle
+its bare `0.4`.
+
+**Repro.**
+
+```tsx
+<Box asChild opacity={0.4}> {/* type error */}
+  <li>…a selected card carried along…</li>
+</Box>
+<Box position="absolute" insetBlockStart={-2} insetInlineEnd={-2}> {/* type error */}
+  <Text fontSize="xsmall">3 Tickets</Text>
+</Box>
+```
+
+**Expected.** A muted opacity from an atom or token, such as
+`opacity="muted"`, and inset atoms that take the `space` scale, negative
+steps included, to offset an overlay from its anchor's edge.
+
+**Workaround.** `src/components/ticket-card/ticket-card.css.ts`: the `card`
+class sets `opacity: 0.4` under `[data-carried-along]`, and the
+`carryCount` class moves the pill, placed with `insetBlockStart={0}
+insetInlineEnd={0}`, with `transform: translate(25%, -50%)`. `transform`
+has no logical form, so in a right-to-left layout the pill would overhang
+inward.
+
+**Question.** Can `opacity` gain a muted step (or a `vars` token for one),
+and can the inset atoms take space tokens, negative ones included?
 
 ## Notes (lower priority)
 

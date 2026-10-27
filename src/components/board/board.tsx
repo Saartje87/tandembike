@@ -349,7 +349,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       cardRef={ref}
       selected={selected}
       selecting={selecting}
-      carrying={carrying ? carries : 1}
+      carryCount={carrying ? carries : 1}
       carriedAlong={carriedAlong}
       onSelect={onSelect}
     />
@@ -491,12 +491,12 @@ const escapeOwnerSelector =
  * one column, or their checkboxes; a bar then shows the selection. Dragging
  * a selected card moves the whole selection, into a lane or, dropped on an
  * Epic's chip, into that Epic; the dragged card shows how many Tickets it
- * carries, and the rest of the selection is dimmed in place. The bar's Archive archives the selection
- * without asking, since each Ticket can be restored. On the Backlog the bar
- * plans the selection into a Cycle, and on a Cycle's Board it removes the
- * selection from that Cycle; either leaves the refused Tickets selected,
- * with their reasons. The selection lives
- * only in this tab and drops Tickets that leave the Board.
+ * carries, and the rest of the selection is dimmed in place. The bar's
+ * Archive archives the selection without asking, since each Ticket can be
+ * restored. On the Backlog the bar plans the selection into a Cycle, and on
+ * a Cycle's Board it removes the selection from that Cycle; either leaves
+ * the refused Tickets selected, with their reasons. The selection lives only
+ * in this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
   project,

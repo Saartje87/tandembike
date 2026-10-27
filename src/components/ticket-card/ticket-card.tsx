@@ -31,7 +31,7 @@ export type TicketCardProps = {
    * How many Tickets the card carries while it is dragged, itself included;
    * more than one shows a pill with the count.
    */
-  carrying?: number;
+  carryCount?: number;
   /** Whether the card is selected and carried along by another one's drag. */
   carriedAlong?: boolean;
 };
@@ -131,7 +131,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   selected,
   selecting = false,
   onSelect,
-  carrying = 1,
+  carryCount = 1,
   carriedAlong = false,
 }) => {
   const changed = useTicketChanged(ticket.number);
@@ -232,7 +232,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             </Box>
           )}
         </Inline>
-        {carrying > 1 && <CarryCount count={carrying} />}
+        {carryCount > 1 && <CarryCount count={carryCount} />}
       </li>
     </Box>
   );
