@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { planTickets, unplanTickets } from '../../app/cycles/actions';
+import { noBoardFilter } from '../../app/lib/paths';
 import {
   archiveTickets,
   createTicket,
@@ -2192,6 +2193,97 @@ describe('Filtering the Board', () => {
     );
 
     expect(cardsIn('Todo')).toContain('Fix the logo');
+    expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
+  });
+
+  it('follows the URL when the Board is opened again without its filter', () => {
+    const { rerender } = renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    rerender(
+      <Board project={project} tickets={board} filter={noBoardFilter} />,
+    );
+
+    expect(search()).toHaveValue('');
+    expect(cardsIn('Todo')).toHaveLength(3);
+  });
+
+  it('keeps the search being typed when the Board refreshes with the URL it wrote', async () => {
+    replaceState();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await userEvent.type(search(), 'fix');
+    await waitFor(() => expect(window.history.replaceState).toHaveBeenCalled());
+    await userEvent.type(search(), ' the f');
+
+    rerender(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    expect(search()).toHaveValue('fix the f');
+    expect(cardsIn('Todo')).toEqual(['Fix the footer']);
+  });
+
+  it('says briefly when an Epic added inline is hidden by the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 81 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Epic' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Epic title' }),
+      'Checkout{Enter}',
+    );
+    const epic = ticket({ number: 81, title: 'Checkout', type: 'Epic' });
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, epic]}
+        epics={[epic]}
+        filter={filter}
+      />,
+    );
+
+    expect(
+      await screen.findByText('T81 created, hidden by the filter'),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing when a Ticket added inline that matched is edited out of the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 80 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Fix the logo{Enter}',
+    );
+    const logo = ticket({ number: 80, title: 'Fix the logo' });
+    rerender(
+      <Board project={project} tickets={[...board, logo]} filter={filter} />,
+    );
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, { ...logo, title: 'Draw the logo' }]}
+        filter={filter}
+      />,
+    );
+
     expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
   });
 });

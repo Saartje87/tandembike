@@ -37,6 +37,8 @@ export type EpicChipsProps = {
    * does; a Cycle's Board shows them all. Defaults to true.
    */
   hideDone?: boolean;
+  /** Called with the number of an Epic created from the row. */
+  onCreated?: (number: number) => void;
 };
 
 /** The drop-target id of Epic `number`'s chip, for a card dragged onto it. */
@@ -113,6 +115,7 @@ export const EpicChips: FC<EpicChipsProps> = ({
   boardPath,
   filter,
   hideDone = true,
+  onCreated,
 }) => {
   const headingId = useId();
   const switchId = useId();
@@ -181,6 +184,7 @@ export const EpicChips: FC<EpicChipsProps> = ({
               cycleId={cycleId}
               type="Epic"
               autoFocus
+              onCreated={onCreated}
               onDone={closeNewEpic}
             />
           </Box>

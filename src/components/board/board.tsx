@@ -548,6 +548,20 @@ export const Board: FC<BoardProps> = ({
   const boardPath = boardPathOf(project.id, cycleId ?? null);
   const [filter, setFilter] = useState(initialFilter);
   const filterUrlTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The URL's filter as last rendered, and as the Board last wrote it.
+  const urlFilter = filteredBoardPath('', initialFilter);
+  const [renderedUrlFilter, setRenderedUrlFilter] = useState(urlFilter);
+  const [writtenUrlFilter, setWrittenUrlFilter] = useState(urlFilter);
+  const [filterResets, setFilterResets] = useState(0);
+  if (urlFilter !== renderedUrlFilter) {
+    setRenderedUrlFilter(urlFilter);
+    if (urlFilter !== writtenUrlFilter) {
+      // Navigated to this Board with another filter, such as none: follow it.
+      setFilter(initialFilter);
+      setWrittenUrlFilter(urlFilter);
+      setFilterResets((count) => count + 1);
+    }
+  }
   const [created, setCreated] = useState<number>();
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [shownEpics, showEpicJoin] = useOptimistic(epics, applyEpicJoin);
@@ -615,7 +629,14 @@ export const Board: FC<BoardProps> = ({
     rowEpics.length === 0 &&
     archived.length === 0;
   const createdTicket =
-    created === undefined ? undefined : byNumber.get(created);
+    created === undefined
+      ? undefined
+      : (byNumber.get(created) ??
+        shownEpics.find(({ number }) => number === created));
+  if (createdTicket !== undefined && matches(createdTicket)) {
+    // Shown as it arrived: an edit hiding it later needs no notice.
+    setCreated(undefined);
+  }
   const createdHidden = createdTicket !== undefined && !matches(createdTicket);
   // In Board order.
   const selection = lanes
@@ -651,7 +672,8 @@ export const Board: FC<BoardProps> = ({
     selectionAnchor.current = undefined;
   }, []);
 
-  useEffect(() => () => clearTimeout(filterUrlTimer.current), []);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on each reset to the URL's filter.
+  useEffect(() => () => clearTimeout(filterUrlTimer.current), [filterResets]);
 
   useEffect(() => {
     if (created === undefined) {
@@ -679,6 +701,7 @@ export const Board: FC<BoardProps> = ({
         '',
         filteredBoardPath(boardPath, next, ticket),
       );
+      setWrittenUrlFilter(filteredBoardPath('', next));
     };
     if (typing) {
       filterUrlTimer.current = setTimeout(writeUrl, 300);
@@ -1029,11 +1052,11 @@ export const Board: FC<BoardProps> = ({
             </Button>
           </Inline>
         )}
-        {createdHidden && (
-          <Text tag="p" role="status" color="text-600" fontSize="small">
-            T{createdTicket.number} created, hidden by the filter
-          </Text>
-        )}
+        {/* Always there, so a screen reader announces what it comes to say. */}
+        <Text tag="p" role="status" color="text-600" fontSize="small">
+          {createdHidden &&
+            `T${createdTicket.number} created, hidden by the filter`}
+        </Text>
         <DndProvider
           sensors={sensors}
           plugins={plugins}
@@ -1048,6 +1071,7 @@ export const Board: FC<BoardProps> = ({
             boardPath={boardPath}
             filter={filter}
             hideDone={typeof cycleId !== 'number'}
+            onCreated={setCreated}
           />
           <Grid gap={3}>
             {statuses.map((status) => (
