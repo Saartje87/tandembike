@@ -646,10 +646,8 @@ it is a button that has to read as body text and wrap across lines beside its
 checkbox. The `text` class in `inline-edit.css.ts` covers what atoms cannot
 express:
 
-- `cursor: text`. The `cursor` atom has only `auto` and `pointer`. A Board
-  card, dragged from anywhere on it (T242), needs `cursor: grab` too, set in
-  the `card` class in `ticket-card.css.ts`; `grab` and `text` would cover
-  both.
+- `cursor: text`. The `cursor` atom has only `auto` and `pointer`
+  (proposal 31).
 - `textAlign: start`. The `textAlign` atom has `left` and `right` but no
   logical `start` or `end`.
 - The `:hover` background and the `:focus-visible` ring.
@@ -1027,6 +1025,30 @@ token fits.
 **Question.** Can the theme gain a size scale (`vars.size`), taken by the
 size atoms and a new `minInlineSize` / `minBlockSize`, such as
 `inlineSize="small"`?
+
+## 31. The `cursor` atom has only `auto` and `pointer`
+
+**Problem.** A Board card is dragged from anywhere on it (T242), so it should
+show a grab cursor, but the `cursor` atom takes only `auto` and `pointer`.
+The same gap makes the click-to-edit text of proposal 18 set `cursor: text`
+by hand.
+
+**Repro.**
+
+```tsx
+<Box asChild cursor="grab"> {/* type error */}
+  <li>…a Ticket card…</li>
+</Box>
+```
+
+**Expected.** The card shows `grab` on hover, from an atom.
+
+**Workaround.** `src/components/ticket-card/ticket-card.css.ts`:
+`cursor: 'grab'` in the `card` class, and `cursor: 'text'` in the `text`
+class of `src/components/inline-edit/inline-edit.css.ts`.
+
+**Question.** Can the `cursor` atom also take `grab`, `grabbing`, `text` and
+`not-allowed`?
 
 ## Notes (lower priority)
 

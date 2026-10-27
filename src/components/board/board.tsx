@@ -233,17 +233,17 @@ const sensors = [
   KeyboardSensor,
 ];
 
-/** Where card `source` lands over `target`: an Epic's chip or a Status. */
-const dropPlace = (source: Draggable, target: Droppable | null) => {
+/**
+ * What card `source` is over at `target`, for a screen reader: an Epic's
+ * chip, as `Epic T20`, or a Status.
+ */
+const placeName = (source: Draggable, target: Droppable | null) => {
   const epicNumber = epicOfDropTarget(target?.id);
   if (epicNumber !== undefined) {
-    return `on Epic T${epicNumber}`;
+    return `Epic T${epicNumber}`;
   }
   // A lane is a Status by id; a card, the dragged one included, has its own.
-  const status = isStatus(target?.id)
-    ? target.id
-    : (target ?? source).data.status;
-  return `in ${status}`;
+  return isStatus(target?.id) ? target.id : (target ?? source).data.status;
 };
 
 // dnd-kit does not export the type of its announcements.
@@ -251,17 +251,26 @@ type Announcements = NonNullable<
   NonNullable<ConstructorParameters<typeof Accessibility>[1]>['announcements']
 >;
 
-/** What a screen reader hears while a card is dragged, naming its Ticket. */
+/**
+ * What a screen reader hears while a card is dragged, naming its Ticket and
+ * the Status or Epic it is over (T242).
+ */
 const announcements: Announcements = {
   dragstart: ({ operation: { source } }) =>
     source ? `Picked up T${source.id}.` : undefined,
+  dragover: ({ operation: { source, target } }) =>
+    source && target && target.id !== source.id
+      ? `T${source.id} is over ${placeName(source, target)}.`
+      : undefined,
   dragend: ({ operation: { source, target }, canceled }) => {
     if (!source) {
       return undefined;
     }
-    return canceled
-      ? `Cancelled. T${source.id} stays in ${source.data.status}.`
-      : `Dropped T${source.id} ${dropPlace(source, target)}.`;
+    if (canceled) {
+      return `Cancelled. T${source.id} stays in ${source.data.status}.`;
+    }
+    const onto = epicOfDropTarget(target?.id) === undefined ? 'in' : 'on';
+    return `Dropped T${source.id} ${onto} ${placeName(source, target)}.`;
   },
 };
 

@@ -98,6 +98,27 @@ const announced = () =>
     .map((region) => region.textContent)
     .join('');
 
+/**
+ * Every announcement dnd-kit makes from now on, in order: a later one can
+ * replace an earlier one in its live region before it is seen.
+ */
+const recordAnnouncements = () => {
+  const heard: string[] = [];
+  const observer = new MutationObserver(() => {
+    const latest = announced();
+    if (latest && heard.at(-1) !== latest) {
+      heard.push(latest);
+    }
+  });
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+  });
+  onTestFinished(() => observer.disconnect());
+  return heard;
+};
+
 const mockBoardBounds = (targetStatus: string) =>
   vi
     .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
@@ -118,7 +139,8 @@ const mockBoardBounds = (targetStatus: string) =>
       return new DOMRect(0, 0, 800, 700);
     });
 
-const dragTicketTo = async (number: number, status: string) => {
+/** Points dnd-kit's hit testing at `status`'s lane for the rest of the test. */
+const pointAtLane = (status: string) => {
   const target = screen.getByRole('region', { name: status });
   const elementFromPoint = Object.getOwnPropertyDescriptor(
     document,
@@ -135,6 +157,10 @@ const dragTicketTo = async (number: number, status: string) => {
       Reflect.deleteProperty(document, 'elementFromPoint');
     }
   });
+};
+
+const dragTicketTo = async (number: number, status: string) => {
+  pointAtLane(status);
   await keyboardDrag(cardOf(number), '{ArrowRight}{ArrowRight}{ArrowRight}');
 };
 
@@ -326,7 +352,31 @@ describe('Board', () => {
     });
   });
 
-  it('names the Ticket, and where it was dropped, to a screen reader', async () => {
+  it('names the Ticket it picks up, and where a cancelled one stays, to a screen reader', async () => {
+    // Every lane away from the card, so it starts over itself.
+    const bounds = mockBoardBounds('Nowhere');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[ticket({ number: 4, title: 'Fix the header' })]}
+      />,
+    );
+    // dnd-kit sets up its live region with the card's role description.
+    await waitFor(() =>
+      expect(cardOf(4)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+
+    cardOf(4).focus();
+    await userEvent.keyboard('{Space}');
+    await waitFor(() => expect(announced()).toBe('Picked up T4.'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(announced()).toBe('Cancelled. T4 stays in Todo.'),
+    );
+  });
+
+  it('names the Ticket, and the Status it is over and dropped in, to a screen reader', async () => {
     vi.mocked(updateTicket).mockResolvedValue({
       ok: true,
       projectId: project.id,
@@ -339,20 +389,21 @@ describe('Board', () => {
         tickets={[ticket({ number: 4, title: 'Fix the header' })]}
       />,
     );
-    // dnd-kit sets up its live region with the card's role description.
     await waitFor(() =>
       expect(cardOf(4)).toHaveAttribute('aria-roledescription', 'draggable'),
     );
+    const heard = recordAnnouncements();
+
     cardOf(4).focus();
     await userEvent.keyboard('{Space}');
-    await waitFor(() => expect(announced()).toBe('Picked up T4.'));
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() =>
-      expect(announced()).toBe('Cancelled. T4 stays in Todo.'),
-    );
+    pointAtLane('In progress');
+    await userEvent.keyboard('{ArrowRight}{ArrowRight}{ArrowRight}');
+    await waitFor(() => expect(heard).toContain('T4 is over In progress.'));
+    await userEvent.keyboard('{Space}');
 
-    await dragTicketTo(4, 'In progress');
-    await waitFor(() => expect(announced()).toBe('Dropped T4 in In progress.'));
+    await waitFor(() =>
+      expect(heard.at(-1)).toBe('Dropped T4 in In progress.'),
+    );
   });
 
   it('restores the Ticket and explains when a dropped Status is refused', async () => {
