@@ -27,6 +27,7 @@ import {
   DragDropProvider as DndProvider,
   type DragEndEvent,
   type DragOverEvent,
+  type DragStartEvent,
   useDroppable,
 } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
@@ -137,6 +138,8 @@ type StatusColumnProps = {
   status: Status;
   tickets: Ticket[];
   selected: ReadonlySet<number>;
+  /** The card carrying the selection in a drag under way, if any. */
+  carrier?: number;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
 };
 
@@ -158,6 +161,7 @@ const StatusColumn: FC<StatusColumnProps> = ({
   status,
   tickets,
   selected,
+  carrier,
   onSelect,
 }) => {
   const { ref, isDropTarget } = useDroppable({
@@ -197,6 +201,17 @@ const StatusColumn: FC<StatusColumnProps> = ({
                   boardPath={boardPath}
                   selected={selected.has(ticket.number)}
                   selecting={selected.size > 0}
+                  carries={
+                    selected.size > 1 && selected.has(ticket.number)
+                      ? selected.size
+                      : 1
+                  }
+                  carrying={carrier === ticket.number}
+                  carriedAlong={
+                    carrier !== undefined &&
+                    carrier !== ticket.number &&
+                    selected.has(ticket.number)
+                  }
                   onSelect={(mode) => onSelect(ticket, mode)}
                 />
               ))}
@@ -234,6 +249,13 @@ const sensors = [
 ];
 
 /**
+ * What card `source` carries, for a screen reader: its Ticket, as `T4`, or
+ * the selection it is part of, as `3 Tickets`.
+ */
+const carriedName = (source: Draggable) =>
+  source.data.carries > 1 ? `${source.data.carries} Tickets` : `T${source.id}`;
+
+/**
  * What card `source` is over at `target`, for a screen reader: an Epic's
  * chip, as `Epic T20`, or a Status.
  */
@@ -252,25 +274,32 @@ type Announcements = NonNullable<
 >;
 
 /**
- * What a screen reader hears while a card is dragged, naming its Ticket and
- * the Status or Epic it is over (T242).
+ * What a screen reader hears while a card is dragged, naming its Ticket, or
+ * how many Tickets it carries (T243), and the Status or Epic it is over
+ * (T242).
  */
 const announcements: Announcements = {
   dragstart: ({ operation: { source } }) =>
-    source ? `Picked up T${source.id}.` : undefined,
-  dragover: ({ operation: { source, target } }) =>
-    source && target && target.id !== source.id
-      ? `T${source.id} is over ${placeName(source, target)}.`
-      : undefined,
+    source ? `Picked up ${carriedName(source)}.` : undefined,
+  dragover: ({ operation: { source, target } }) => {
+    if (!source || !target || target.id === source.id) {
+      return undefined;
+    }
+    const verb = source.data.carries > 1 ? 'are' : 'is';
+    return `${carriedName(source)} ${verb} over ${placeName(source, target)}.`;
+  },
   dragend: ({ operation: { source, target }, canceled }) => {
     if (!source) {
       return undefined;
     }
     if (canceled) {
-      return `Cancelled. T${source.id} stays in ${source.data.status}.`;
+      // A selection can come from several lanes.
+      return source.data.carries > 1
+        ? `Cancelled. The ${source.data.carries} Tickets stay where they were.`
+        : `Cancelled. T${source.id} stays in ${source.data.status}.`;
     }
     const onto = epicOfDropTarget(target?.id) === undefined ? 'in' : 'on';
-    return `Dropped T${source.id} ${onto} ${placeName(source, target)}.`;
+    return `Dropped ${carriedName(source)} ${onto} ${placeName(source, target)}.`;
   },
 };
 
@@ -286,6 +315,11 @@ type SortableTicketCardProps = {
   boardPath: string;
   selected: boolean;
   selecting: boolean;
+  /** How many Tickets a drag of the card carries: the selection, if it is in one. */
+  carries: number;
+  /** Whether the card is carrying the selection in a drag under way. */
+  carrying: boolean;
+  carriedAlong: boolean;
   onSelect: (mode: SelectMode) => void;
 };
 
@@ -295,13 +329,16 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   boardPath,
   selected,
   selecting,
+  carries,
+  carrying,
+  carriedAlong,
   onSelect,
 }) => {
   const { ref } = useSortable({
     id: ticket.number,
     index,
     group: ticket.status,
-    data: { status: ticket.status },
+    data: { status: ticket.status, carries },
     collisionPriority: 3,
   });
 
@@ -312,6 +349,8 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       cardRef={ref}
       selected={selected}
       selecting={selecting}
+      carryCount={carrying ? carries : 1}
+      carriedAlong={carriedAlong}
       onSelect={onSelect}
     />
   );
@@ -451,12 +490,13 @@ const escapeOwnerSelector =
  * Cards can be selected with Cmd-click or Ctrl-click, a Shift-click range in
  * one column, or their checkboxes; a bar then shows the selection. Dragging
  * a selected card moves the whole selection, into a lane or, dropped on an
- * Epic's chip, into that Epic. The bar's Archive archives the selection
- * without asking, since each Ticket can be restored. On the Backlog the bar
- * plans the selection into a Cycle, and on a Cycle's Board it removes the
- * selection from that Cycle; either leaves the refused Tickets selected,
- * with their reasons. The selection lives
- * only in this tab and drops Tickets that leave the Board.
+ * Epic's chip, into that Epic; the dragged card shows how many Tickets it
+ * carries, and the rest of the selection is dimmed in place. The bar's
+ * Archive archives the selection without asking, since each Ticket can be
+ * restored. On the Backlog the bar plans the selection into a Cycle, and on
+ * a Cycle's Board it removes the selection from that Cycle; either leaves
+ * the refused Tickets selected, with their reasons. The selection lives only
+ * in this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
   project,
@@ -480,6 +520,7 @@ export const Board: FC<BoardProps> = ({
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const selectionAnchor = useRef<number | undefined>(undefined);
   const dragging = useRef(false);
+  const [carrier, setCarrier] = useState<number>();
   const switchId = useId();
   const active = shownTickets.filter(
     (ticket) => !ticket.archived && ticket.type !== 'Epic',
@@ -761,8 +802,21 @@ export const Board: FC<BoardProps> = ({
     }
   };
 
+  const startDrag = (event: DragStartEvent) => {
+    dragging.current = true;
+    const sourceId = event.operation.source?.id;
+    if (
+      typeof sourceId === 'number' &&
+      selectedOnBoard.has(sourceId) &&
+      selection.length > 1
+    ) {
+      setCarrier(sourceId);
+    }
+  };
+
   const finishDrag = (event: DragEndEvent) => {
     dragging.current = false;
+    setCarrier(undefined);
     const sourceId = event.operation.source?.id;
     const operationTargetId = event.operation.target?.id;
     // Dropped back on its own slot: take the card it was last over, but not
@@ -846,9 +900,7 @@ export const Board: FC<BoardProps> = ({
         <DndProvider
           sensors={sensors}
           plugins={plugins}
-          onDragStart={() => {
-            dragging.current = true;
-          }}
+          onDragStart={startDrag}
           onDragOver={rememberDropTarget}
           onDragEnd={finishDrag}
         >
@@ -869,6 +921,7 @@ export const Board: FC<BoardProps> = ({
                   status={status}
                   tickets={laneOf(status)}
                   selected={selectedOnBoard}
+                  carrier={carrier}
                   onSelect={select}
                 />
               </GridItem>

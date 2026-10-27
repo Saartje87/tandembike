@@ -961,8 +961,13 @@ describe('Dropping a card on an Epic', () => {
       screen.getByRole('checkbox', { name: 'Select T11 Pay by card' }),
     );
 
+    const heard = recordAnnouncements();
+
     await dragTicketOntoEpic(4, 20);
 
+    await waitFor(() =>
+      expect(heard.at(-1)).toBe('Dropped 2 Tickets on Epic T20.'),
+    );
     expect(moveTicketsToEpic).toHaveBeenCalledExactlyOnceWith({
       epic: 20,
       children: [11, 4],
@@ -1246,9 +1251,14 @@ describe('Selecting cards', () => {
     await user.click(checkbox(9, 'Draw the logo'));
     await user.click(checkbox(15, 'Deploy'));
     await user.click(checkbox(4, 'Fix the header'));
+    const heard = recordAnnouncements();
 
     await dragTicketTo(9, 'Done');
 
+    await waitFor(() =>
+      expect(heard.at(-1)).toBe('Dropped 3 Tickets in Done.'),
+    );
+    expect(heard).toContain('3 Tickets are over Done.');
     expect(moveTickets).toHaveBeenCalledExactlyOnceWith({
       projectId: project.id,
       ticketNumbers: [4, 9, 15],
@@ -1267,6 +1277,76 @@ describe('Selecting cards', () => {
       'Select T4 Fix the header',
       'Select T9 Draw the logo',
       'Select T15 Deploy',
+    ]);
+  });
+
+  it('shows how many Tickets a dragged selection carries, and dims the rest of it until the drop', async () => {
+    const bounds = mockBoardBounds('Nowhere');
+    onTestFinished(() => bounds.mockRestore());
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(9, 'Draw the logo'));
+    await user.click(checkbox(15, 'Deploy'));
+    await waitFor(() =>
+      expect(cardOf(9)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+    const carriedAlong = () =>
+      // A dragged card leaves a copy of itself in its place, so T9 is left out.
+      [4, 7, 12, 15].filter((number) =>
+        cardOf(number).hasAttribute('data-carried-along'),
+      );
+
+    expect(screen.queryByText('3 Tickets')).not.toBeInTheDocument();
+    expect(carriedAlong()).toEqual([]);
+
+    cardOf(9).focus();
+    await user.keyboard('{Space}');
+
+    await waitFor(() => expect(announced()).toBe('Picked up 3 Tickets.'));
+    expect(screen.getByText('3 Tickets').closest('li')).toHaveTextContent(
+      /^T9/,
+    );
+    expect(carriedAlong()).toEqual([4, 15]);
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(announced()).toBe(
+        'Cancelled. The 3 Tickets stay where they were.',
+      ),
+    );
+    expect(screen.queryByText('3 Tickets')).not.toBeInTheDocument();
+    expect(carriedAlong()).toEqual([]);
+  });
+
+  it('carries only an unselected card picked up while others are selected, keeping the selection', async () => {
+    const bounds = mockBoardBounds('Nowhere');
+    onTestFinished(() => bounds.mockRestore());
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(9, 'Draw the logo'));
+    await waitFor(() =>
+      expect(cardOf(7)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+
+    cardOf(7).focus();
+    await user.keyboard('{Space}');
+
+    await waitFor(() => expect(announced()).toBe('Picked up T7.'));
+    expect(screen.queryByText(/^\d+ Tickets$/)).not.toBeInTheDocument();
+    expect(cardOf(4)).not.toHaveAttribute('data-carried-along');
+    expect(cardOf(9)).not.toHaveAttribute('data-carried-along');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(announced()).toBe('Cancelled. T7 stays in Todo.'),
+    );
+    expect(selectedTitles()).toEqual([
+      'Select T4 Fix the header',
+      'Select T9 Draw the logo',
     ]);
   });
 

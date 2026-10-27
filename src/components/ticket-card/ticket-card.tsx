@@ -27,6 +27,13 @@ export type TicketCardProps = {
    * its checkbox, `range` for a Shift-click.
    */
   onSelect?: (mode: SelectMode) => void;
+  /**
+   * How many Tickets the card carries while it is dragged, itself included;
+   * more than one shows a pill with the count.
+   */
+  carryCount?: number;
+  /** Whether the card is selected and carried along by another one's drag. */
+  carriedAlong?: boolean;
 };
 
 export type SelectMode = 'toggle' | 'range';
@@ -62,6 +69,27 @@ const BlockedMarker: FC = () => (
   </Box>
 );
 
+type CarryCountProps = { count: number };
+
+/** A pill on a dragged card saying how many Tickets it carries. */
+const CarryCount: FC<CarryCountProps> = ({ count }) => (
+  <Box
+    asChild
+    position="absolute"
+    insetBlockStart={0}
+    insetInlineEnd={0}
+    backgroundColor="primary-600"
+    borderRadius="full"
+    boxShadow={1}
+    paddingInline={2}
+    className={styles.carryCount}
+  >
+    <Text fontSize="xsmall" color="white" whiteSpace="nowrap">
+      {count} Tickets
+    </Text>
+  </Box>
+);
+
 /** How many acceptance criteria are checked, as `2/4`; nothing without any. */
 const CriteriaProgress: FC<CriteriaProgressProps> = ({
   acceptanceCriteria,
@@ -93,6 +121,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
  * colour linking to it, whether it is blocked (unless it is Done), labels and
  * acceptance-criteria progress. Through `cardRef` the whole card is dragged.
  * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
+ * While it carries a selection in a drag it shows how many Tickets that is,
+ * and the other selected cards are dimmed in place (T243).
  */
 export const TicketCard: FC<TicketCardProps> = ({
   ticket,
@@ -101,6 +131,8 @@ export const TicketCard: FC<TicketCardProps> = ({
   selected,
   selecting = false,
   onSelect,
+  carryCount = 1,
+  carriedAlong = false,
 }) => {
   const changed = useTicketChanged(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
@@ -129,6 +161,7 @@ export const TicketCard: FC<TicketCardProps> = ({
       boxShadow={1}
       paddingBlock={0}
       paddingInline={3}
+      position="relative"
       transition="slow"
     >
       <li
@@ -142,6 +175,7 @@ export const TicketCard: FC<TicketCardProps> = ({
         tabIndex={cardRef ? 0 : undefined}
         data-changed={changed ? '' : undefined}
         data-selecting={selecting ? '' : undefined}
+        data-carried-along={carriedAlong ? '' : undefined}
         className={styles.card}
         onClickCapture={selectByClick}
       >
@@ -198,6 +232,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             </Box>
           )}
         </Inline>
+        {carryCount > 1 && <CarryCount count={carryCount} />}
       </li>
     </Box>
   );
