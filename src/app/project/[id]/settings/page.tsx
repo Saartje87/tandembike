@@ -1,8 +1,9 @@
 import { Heading, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
-import type { FC } from 'react';
+import { type FC, Suspense } from 'react';
 
 import { ArchivedProjectNotice } from '../../../../components/archived-project-notice/archived-project-notice';
+import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { ProjectFrame } from '../../../../components/project-frame/project-frame';
 import { ReferenceTemplateEditor } from '../../../../components/reference-template-editor/reference-template-editor';
 import { appTickets } from '../../../../tickets/app-tickets';
@@ -15,8 +16,7 @@ export async function generateMetadata({
   return { title: `Settings · ${project.name}` };
 }
 
-/** A Project's Settings tab: its Reference templates. */
-const SettingsPage: FC<ProjectPageProps> = async ({ params }) => {
+async function settingsTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   if (project.archived) {
     return <ArchivedProjectNotice project={project} />;
@@ -46,6 +46,14 @@ const SettingsPage: FC<ProjectPageProps> = async ({ params }) => {
       </Stack>
     </ProjectFrame>
   );
-};
+}
+
+/**
+ * A Project's Settings tab: its Reference templates. It streams in behind its
+ * own boundary, as the Backlog tab does.
+ */
+const SettingsPage: FC<ProjectPageProps> = ({ params }) => (
+  <Suspense fallback={<PageLoading />}>{settingsTab(params)}</Suspense>
+);
 
 export default SettingsPage;

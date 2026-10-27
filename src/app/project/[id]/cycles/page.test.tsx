@@ -1,7 +1,11 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderWithTheme } from '../../../../test/render';
+import {
+  renderPage,
+  renderPageError,
+  renderWithTheme,
+} from '../../../../test/render';
 import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
 import CyclesPage, { generateMetadata } from './page';
@@ -36,7 +40,7 @@ describe('CyclesPage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({ id: String(project.id) });
-    renderWithTheme(<main>{await CyclesPage({ params })}</main>);
+    await renderPage(<main>{await CyclesPage({ params })}</main>);
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Website' }),
@@ -53,12 +57,26 @@ describe('CyclesPage', () => {
     });
   });
 
+  it('shows the loading state until the Project loads', async () => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    renderWithTheme(
+      <main>{await CyclesPage({ params: new Promise(() => {}) })}</main>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+  });
+
   it('returns not-found for a missing Project', async () => {
     vi.mocked(appTickets).mockReturnValue(createTestTickets());
 
     await expect(
-      CyclesPage({ params: Promise.resolve({ id: '999' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+      renderPageError(
+        <main>
+          {await CyclesPage({ params: Promise.resolve({ id: '999' }) })}
+        </main>,
+      ),
+    ).resolves.toMatchObject({ message: 'NEXT_NOT_FOUND' });
     expect(notFound).toHaveBeenCalledOnce();
   });
 });

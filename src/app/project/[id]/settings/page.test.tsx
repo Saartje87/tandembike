@@ -1,7 +1,11 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderWithTheme } from '../../../../test/render';
+import {
+  renderPage,
+  renderPageError,
+  renderWithTheme,
+} from '../../../../test/render';
 import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
 import SettingsPage, { generateMetadata } from './page';
@@ -50,7 +54,7 @@ describe('SettingsPage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({ id: String(project.id) });
-    renderWithTheme(<main>{await SettingsPage({ params })}</main>);
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Website' }),
@@ -75,7 +79,7 @@ describe('SettingsPage', () => {
     tickets.archiveProject(project.id);
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    renderWithTheme(
+    await renderPage(
       <main>
         {
           await SettingsPage({
@@ -89,12 +93,26 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Archived')).toBeInTheDocument();
   });
 
+  it('shows the loading state until the Project loads', async () => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    renderWithTheme(
+      <main>{await SettingsPage({ params: new Promise(() => {}) })}</main>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+  });
+
   it('returns not-found for a missing Project', async () => {
     vi.mocked(appTickets).mockReturnValue(createTestTickets());
 
     await expect(
-      SettingsPage({ params: Promise.resolve({ id: '999' }) }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+      renderPageError(
+        <main>
+          {await SettingsPage({ params: Promise.resolve({ id: '999' }) })}
+        </main>,
+      ),
+    ).resolves.toMatchObject({ message: 'NEXT_NOT_FOUND' });
     expect(notFound).toHaveBeenCalledOnce();
   });
 });

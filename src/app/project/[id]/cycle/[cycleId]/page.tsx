@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import type { FC } from 'react';
+import { type FC, Suspense } from 'react';
 
+import { PageLoading } from '../../../../../components/page-loading/page-loading';
 import { openTicketNumber } from '../../../../lib/paths';
 import { ProjectBoard } from '../../project-board/project-board';
 import {
@@ -23,11 +24,10 @@ export async function generateMetadata({
   };
 }
 
-/**
- * One of a Project's Cycles, as a tab of the Project, with the Ticket
- * `?ticket=` opens in a drawer.
- */
-const CyclePage: FC<CyclePageProps> = async ({ params, searchParams }) => {
+async function cycleTab(
+  params: CyclePageProps['params'],
+  searchParams: CyclePageProps['searchParams'],
+) {
   const { project, cycle } = await loadProjectCycle(params);
   return (
     <ProjectBoard
@@ -36,6 +36,17 @@ const CyclePage: FC<CyclePageProps> = async ({ params, searchParams }) => {
       openTicket={openTicketNumber((await searchParams).ticket)}
     />
   );
-};
+}
+
+/**
+ * One of a Project's Cycles, as a tab of the Project, with the Ticket
+ * `?ticket=` opens in a drawer. It streams in behind its own boundary, as
+ * the Backlog tab does.
+ */
+const CyclePage: FC<CyclePageProps> = ({ params, searchParams }) => (
+  <Suspense fallback={<PageLoading />}>
+    {cycleTab(params, searchParams)}
+  </Suspense>
+);
 
 export default CyclePage;
