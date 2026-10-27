@@ -36,6 +36,10 @@ _Avoid_: Parent, source, spec link
 The view of one Project's Tickets, laid out in one column per Status. Epics are not in the columns; the Board lists them apart, with their progress.
 _Avoid_: Kanban, dashboard, list
 
+**Board filter**:
+A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.
+_Avoid_: Search, view, saved filter
+
 **Status**:
 Where a Ticket stands: one of a fixed set, **Todo**, **In progress** or **Done**. A Ticket can move between any two Statuses.
 _Avoid_: State, stage, column
