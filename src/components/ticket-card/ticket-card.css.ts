@@ -4,10 +4,26 @@ import { style } from '@vanilla-extract/css';
 /**
  * A card, whose checkbox shows when it is hovered or focused. It is dragged
  * from anywhere on it, which the `cursor` atom cannot show: it has only
- * `auto` and `pointer` (docs/blocks-feedback.md, 31).
+ * `auto` and `pointer` (docs/blocks-feedback.md, 31). A selected card
+ * carried along by another one's drag is faded, which the `opacity` atom,
+ * with only `0` and `1`, cannot express (docs/blocks-feedback.md, 18).
  */
 export const card = style({
   cursor: 'grab',
+  selectors: {
+    '&[data-carried-along]': {
+      opacity: 0.4,
+    },
+  },
+});
+
+/**
+ * The count pill of a dragged selection, centred on the card's top-right
+ * corner: inset atoms take only `0`, and there is no badge component
+ * (docs/blocks-feedback.md, 16).
+ */
+export const carryCount = style({
+  transform: 'translate(25%, -50%)',
 });
 
 /**
