@@ -29,7 +29,7 @@ const applyPick = (style: Style, pick: StyleProjectInput): Style => ({
 });
 
 /**
- * A Project's header on its Board and History pages: its icon, which opens
+ * A Project's header above each of its tabs: its icon, which opens
  * the colour and icon picker, its name, and `children`, on a soft band of
  * its colour when it has one. Its padding does not depend on the colour, so
  * a pick changes only the background. A pick shows at once and goes back,

@@ -1,5 +1,4 @@
 import { screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -24,27 +23,13 @@ vi.mock('../../../components/board/board', () => ({
   Board: ({
     project,
     tickets,
-    header,
   }: {
     project: { name: string };
     tickets: { number: number }[];
-    header: ReactNode;
   }) => (
     <section aria-label={project.name}>
-      {header}
       {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
     </section>
-  ),
-}));
-vi.mock('../../../components/project-tabs/project-tabs', () => ({
-  ProjectTabs: ({
-    cycles,
-    current,
-  }: {
-    cycles: { title: string }[];
-    current: number | string;
-  }) => (
-    <nav>{`Tabs: ${cycles.map(({ title }) => title).join(',')} current ${current}`}</nav>
   ),
 }));
 
@@ -71,7 +56,7 @@ describe('ProjectPage', () => {
     notFound.mockClear();
   });
 
-  it("shows the Backlog's Tickets, those in no Cycle, beside the Cycles' tabs", async () => {
+  it("shows the Backlog's Tickets, those in no Cycle, under the layout's tabs", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
@@ -92,9 +77,8 @@ describe('ProjectPage', () => {
       <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
     );
 
-    expect(screen.getByRole('navigation')).toHaveTextContent(
-      'Tabs: Beta,Launch current backlog',
-    );
+    // The Project's layout shows its header and tabs.
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
       `Tickets: T${ticket.number}`,
     );

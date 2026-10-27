@@ -1,5 +1,4 @@
 import { screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -27,29 +26,15 @@ vi.mock('../../../../../components/board/board', () => ({
     project,
     tickets,
     epics,
-    header,
   }: {
     project: { name: string };
     tickets: { number: number }[];
     epics: { number: number }[];
-    header: ReactNode;
   }) => (
     <section aria-label={project.name}>
-      {header}
       {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
       <p>{`Epics: ${epics.map((epic) => `T${epic.number}`).join(',')}`}</p>
     </section>
-  ),
-}));
-vi.mock('../../../../../components/project-tabs/project-tabs', () => ({
-  ProjectTabs: ({
-    cycles,
-    current,
-  }: {
-    cycles: { title: string }[];
-    current: number | string;
-  }) => (
-    <nav>{`Tabs: ${cycles.map(({ title }) => title).join(',')} current ${current}`}</nav>
   ),
 }));
 vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
@@ -88,7 +73,7 @@ describe('CyclePage', () => {
     notFound.mockClear();
   });
 
-  it("shows the Cycle's Tickets as a tab of its Project's Board", async () => {
+  it("shows the Cycle's header above its Board, under the layout's tabs", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     tickets.createCycle({ projectId: project.id, title: 'Beta' });
@@ -112,9 +97,7 @@ describe('CyclePage', () => {
       <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
     );
 
-    expect(screen.getByRole('navigation')).toHaveTextContent(
-      `Tabs: Beta,Launch current ${cycle.id}`,
-    );
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 2, name: 'Launch' }),
     ).toBeInTheDocument();
@@ -168,7 +151,7 @@ describe('CyclePage', () => {
     );
   });
 
-  it("shows an archived Cycle's final Tickets read-only, under the History tab", async () => {
+  it("shows an archived Cycle's final Tickets read-only", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
@@ -205,9 +188,6 @@ describe('CyclePage', () => {
       </main>,
     );
 
-    expect(screen.getByRole('navigation')).toHaveTextContent(
-      'Tabs: Beta current history',
-    );
     // The mocked Board lists its Tickets; the History page has no Board.
     expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
     expect(

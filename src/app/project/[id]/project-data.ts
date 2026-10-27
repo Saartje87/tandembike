@@ -65,14 +65,26 @@ export function findBoardTicket(projectId: number, number: number) {
   }
 }
 
-/** The Project for the `[id]` segment, or the not-found page. */
-export async function loadProject(params: ProjectPageProps['params']) {
+/** The Project for the `[id]` segment, or `null` when there is none. */
+export async function findProject(params: ProjectPageProps['params']) {
   await connection();
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id)) {
-    notFound();
+    return null;
   }
-  return orNotFound(() => appTickets('user').getProject(id));
+  try {
+    return appTickets('user').getProject(id);
+  } catch (error) {
+    if (error instanceof NotFoundError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** The Project for the `[id]` segment, or the not-found page. */
+export async function loadProject(params: ProjectPageProps['params']) {
+  return (await findProject(params)) ?? notFound();
 }
 
 /**

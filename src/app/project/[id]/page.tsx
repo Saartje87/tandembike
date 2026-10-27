@@ -36,8 +36,8 @@ async function backlogTab(
 
 /**
  * A Project's Backlog tab, with the Ticket `?ticket=` opens in a drawer. It
- * streams in behind its own boundary: `loading.tsx` is already on screen when
- * switching from another of the Project's tabs (Cache Components, T221).
+ * streams in behind its own boundary (Cache Components, T221), under the
+ * Project's layout, which keeps the header and tabs on screen (T239).
  */
 const ProjectPage: FC<BacklogPageProps> = ({ params, searchParams }) => (
   <Suspense fallback={<PageLoading />}>

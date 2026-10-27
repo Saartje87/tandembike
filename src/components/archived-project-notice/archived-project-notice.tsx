@@ -9,8 +9,8 @@ export type ArchivedProjectNoticeProps = {
 };
 
 /**
- * What an archived Project's pages show in place of its Board or History:
- * its name, that it is archived, and Restore.
+ * What an archived Project's pages show in place of its header, tabs and
+ * their content: its name, that it is archived, and Restore.
  */
 export const ArchivedProjectNotice: FC<ArchivedProjectNoticeProps> = ({
   project,

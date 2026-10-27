@@ -19,11 +19,6 @@ const { notFound } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
-vi.mock('../../../../components/project-tabs/project-tabs', () => ({
-  ProjectTabs: ({ current }: { current: string }) => (
-    <nav>{`Tabs current ${current}`}</nav>
-  ),
-}));
 vi.mock(
   '../../../../components/reference-template-editor/reference-template-editor',
   () => ({
@@ -44,7 +39,7 @@ describe('SettingsPage', () => {
     notFound.mockClear();
   });
 
-  it("shows the Project's Reference templates under the Settings tab", async () => {
+  it("shows the Project's Reference templates", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     tickets.addReferenceTemplate(project.id, {
@@ -56,12 +51,8 @@ describe('SettingsPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Website' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('navigation')).toHaveTextContent(
-      'Tabs current settings',
-    );
+    // The Project's layout shows its header and tabs.
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(
       screen.getByRole('heading', { level: 2, name: 'Reference templates' }),
     ).toBeInTheDocument();
@@ -71,26 +62,6 @@ describe('SettingsPage', () => {
     await expect(generateMetadata({ params })).resolves.toEqual({
       title: 'Settings · Website',
     });
-  });
-
-  it('shows the archived notice for an archived Project', async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    tickets.archiveProject(project.id);
-    vi.mocked(appTickets).mockReturnValue(tickets);
-
-    await renderPage(
-      <main>
-        {
-          await SettingsPage({
-            params: Promise.resolve({ id: String(project.id) }),
-          })
-        }
-      </main>,
-    );
-
-    expect(screen.queryByText(/Templates of/)).toBeNull();
-    expect(screen.getByText('Archived')).toBeInTheDocument();
   });
 
   it('shows the loading state until the Project loads', async () => {
