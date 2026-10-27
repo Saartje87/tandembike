@@ -350,7 +350,7 @@ export function createMcpServer(tickets: Tickets): McpServer {
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -398,6 +398,12 @@ export function createMcpServer(tickets: Tickets): McpServer {
           .optional()
           .describe(
             'Only list Tickets whose title or description contains this text, trimmed and ignoring case (for ASCII letters only). % and _ match literally.',
+          ),
+        externalReferences: z
+          .array(externalReference)
+          .optional()
+          .describe(
+            'Only list Tickets that have any of these External references, unlike labels, which needs every one. Each is trimmed and matched exactly, never partly: ABC-3 does not match ABC-33, and a GitHub issue number after a hash does not match the URL of that issue. Use it to check whether a Ticket for an item in another system already exists; pass includeArchived: true when checking for duplicates, since the earlier Ticket may be archived. An empty list is refused.',
           ),
         limit: z
           .number()

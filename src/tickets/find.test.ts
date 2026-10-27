@@ -165,6 +165,153 @@ describe('Finding Tickets', () => {
     ).toEqual(['Header bug', 'Old header bug']);
   });
 
+  it('finds Tickets that have any of the External references, each once', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Both',
+      externalReferences: ['#5', 'ABC-1'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Key',
+      externalReferences: ['ABC-1'],
+    });
+    tickets.createTicket({ projectId: project.id, title: 'None' });
+
+    const page = tickets.findTickets({ externalReferences: ['#5', 'ABC-1'] });
+
+    expect([titles(page), page.total]).toEqual([['Both', 'Key'], 2]);
+  });
+
+  it('matches External references exactly, after trimming', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Short',
+      externalReferences: ['#5'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Key',
+      externalReferences: ['#55'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Url',
+      externalReferences: ['https://github.com/o/r/issues/55'],
+    });
+
+    expect(
+      titles(tickets.findTickets({ externalReferences: [' #55 '] })),
+    ).toEqual(['Key']);
+    expect(titles(tickets.findTickets({ externalReferences: ['#5'] }))).toEqual(
+      ['Short'],
+    );
+    expect(
+      titles(tickets.findTickets({ externalReferences: ['abc-55', '55'] })),
+    ).toEqual([]);
+    expect(
+      titles(
+        tickets.findTickets({
+          externalReferences: ['HTTPS://GITHUB.COM/O/R/ISSUES/55'],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('combines External references with the other filters and paging', () => {
+    const tickets = createTestTickets();
+    const website = tickets.createProject({ name: 'Website' });
+    const app = tickets.createProject({ name: 'App' });
+    const wanted = {
+      projectId: website.id,
+      title: 'Header bug',
+      status: 'In progress' as const,
+      labels: ['bug'],
+      externalReferences: ['#7'],
+    };
+    tickets.createTicket(wanted);
+    tickets.createTicket({ ...wanted, title: 'Footer bug' });
+    tickets.createTicket({ ...wanted, title: 'Header two' });
+    tickets.createTicket({ ...wanted, projectId: app.id });
+    tickets.createTicket({ ...wanted, status: 'Todo' });
+    tickets.createTicket({ ...wanted, labels: [] });
+    tickets.createTicket({ ...wanted, externalReferences: ['#8'] });
+    tickets.archiveTicket(
+      tickets.createTicket({ ...wanted, title: 'Old header bug' }).number,
+    );
+    const filter = {
+      externalReferences: ['#7'],
+      query: 'header',
+      projectId: website.id,
+      status: 'In progress' as const,
+      labels: ['bug'],
+      limit: 1,
+    };
+
+    const first = tickets.findTickets(filter);
+    const second = tickets.findTickets({
+      ...filter,
+      cursor: first.nextCursor ?? 0,
+    });
+
+    expect([titles(first), first.total]).toEqual([['Header bug'], 2]);
+    expect([titles(second), second.nextCursor]).toEqual([['Header two'], null]);
+    expect(
+      tickets.findTickets({ ...filter, limit: 50, includeArchived: true })
+        .total,
+    ).toBe(3);
+  });
+
+  it('combines External references with the blocked and claimed filters', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const wanted = { projectId: project.id, externalReferences: ['#7'] };
+    const blocker = tickets.createTicket({ ...wanted, title: 'Blocker' });
+    const blocked = tickets.createTicket({ ...wanted, title: 'Blocked' });
+    tickets.addBlocker({ blocker: blocker.number, blocked: blocked.number });
+    tickets.claimTicket(blocker.number, { agentRunId: 'run-1' });
+    tickets.createTicket({ projectId: project.id, title: 'Unrelated' });
+
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], blocked: true }),
+      ),
+    ).toEqual(['Blocked']);
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], claimed: true }),
+      ),
+    ).toEqual(['Blocker']);
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], claimed: false }),
+      ),
+    ).toEqual(['Blocked']);
+  });
+
+  it.each([
+    [
+      'an empty list',
+      [],
+      'Enter a URL or key to find Tickets by, or leave externalReferences out.',
+    ],
+    [
+      'a blank reference',
+      ['ABC-1', '  '],
+      'Enter a URL or key for each External reference to find Tickets by.',
+    ],
+  ])('refuses %s of External references', (_, externalReferences, reason) => {
+    const tickets = createTestTickets();
+
+    expect(
+      errorFrom(() => tickets.findTickets({ externalReferences })),
+    ).toEqual(new ValidationError({ externalReferences: reason }));
+  });
+
   it('pages through Tickets after the cursor, oldest-created first', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
