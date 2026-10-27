@@ -10,6 +10,7 @@ import {
   openTicketNumber,
   projectIdFromPath,
   projectPath,
+  projectSettingsPath,
   projectsPath,
   ticketByNumberPath,
   ticketOnBoardPath,
@@ -34,6 +35,10 @@ describe('paths', () => {
 
   it("puts a Project's archived Cycles under a plural segment", () => {
     expect(cyclesPath(3)).toBe('/project/3/cycles');
+  });
+
+  it("puts a Project's settings under its own segment", () => {
+    expect(projectSettingsPath(3)).toBe('/project/3/settings');
   });
 
   it('finds a Ticket by its number alone', () => {

@@ -16,6 +16,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     boardPath,
     epics,
     epicChildren,
+    referenceTemplates,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
@@ -23,10 +24,14 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     boardPath: string;
     epics: unknown;
     epicChildren: unknown;
+    referenceTemplates: { prefix: string }[];
   }) => (
     <div
       role="dialog"
       data-epics={JSON.stringify(epics)}
+      data-reference-prefixes={referenceTemplates
+        .map(({ prefix }) => prefix)
+        .join(' ')}
       data-epic-children={JSON.stringify(epicChildren)}
     >
       {`Ticket drawer T${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
@@ -99,6 +104,39 @@ describe('BoardTicketDrawer', () => {
     expect(
       JSON.parse(screen.getByRole('dialog').dataset.epics ?? 'null'),
     ).toEqual([{ number: epic.number, title: 'Checkout', color: 'red' }]);
+  });
+
+  it("links keys by the Reference templates of the Ticket's Project, after a move too", async () => {
+    const { tickets, website, ticket } = setUp();
+    const app = tickets.createProject({ name: 'Mobile' });
+    tickets.addReferenceTemplate(website.id, {
+      prefix: '#',
+      url: 'https://github.com/acme/web/issues/{n}',
+    });
+    tickets.addReferenceTemplate(app.id, {
+      prefix: 'ABC-',
+      url: 'https://acme.atlassian.net/browse/ABC-{n}',
+    });
+    const drawerFor = async (projectId: number) =>
+      renderWithTheme(
+        <div>
+          {
+            await BoardTicketDrawer({
+              projectId,
+              number: ticket.number,
+              boardPath: '/project/1',
+            })
+          }
+        </div>,
+      );
+
+    const { unmount } = await drawerFor(website.id);
+    expect(screen.getByRole('dialog').dataset.referencePrefixes).toBe('#');
+    unmount();
+
+    tickets.updateTicket(ticket.number, { projectId: app.id });
+    await drawerFor(app.id);
+    expect(screen.getByRole('dialog').dataset.referencePrefixes).toBe('ABC-');
   });
 
   it('renders nothing for a Ticket that does not exist (any more)', async () => {

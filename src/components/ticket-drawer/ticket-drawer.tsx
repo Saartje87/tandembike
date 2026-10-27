@@ -33,6 +33,7 @@ import {
 } from '../../app/tickets/actions';
 import type { ActivityEntry } from '../../tickets/activity';
 import type { Cycle } from '../../tickets/cycles';
+import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
 import {
   type Blockers,
   type Comment,
@@ -97,6 +98,11 @@ export type TicketDrawerProps = {
    * closing goes. Defaults to the Ticket's Project's Backlog.
    */
   boardPath?: string;
+  /**
+   * The Reference templates of the Ticket's Project, which link its
+   * External reference keys. Defaults to none.
+   */
+  referenceTemplates?: ReferenceTemplateLink[];
 };
 
 /** The fields the drawer saves one at a time. */
@@ -186,6 +192,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   epicClaim = null,
   epicChildren,
   boardPath,
+  referenceTemplates,
 }) => {
   const router = useRouter();
   const statusId = useId();
@@ -405,6 +412,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
               <ExternalReferenceEditor
                 ticketNumber={ticket.number}
                 references={ticket.externalReferences}
+                templates={referenceTemplates}
               />
             </Detail>
             <Detail name={<DetailName>Claim</DetailName>}>

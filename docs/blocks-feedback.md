@@ -198,7 +198,8 @@ marker-free ordered list.
 `acceptance-criteria-editor.css.ts`, `epic-children.css.ts`,
 `delete-ticket-dialog.css.ts`, `archive-epic-dialog.css.ts`,
 `cycle-history.css.ts`,
-`cycle-ticket-list.css.ts`, `project-tabs.css.ts` and
+`cycle-ticket-list.css.ts`, `project-tabs.css.ts`,
+`reference-template-editor.css.ts` and
 `split-off-tickets.css.ts` each use `style({ listStyle: 'none' })`, passed as
 `className` to the list component.
 
@@ -807,7 +808,9 @@ typed as `keyof AlignItemsMap`, whose keys are `left`, `right`, `center` and
 
 **Workaround.** `acceptance-criteria-editor.tsx` used the
 `alignItems="flex-start"` atom instead of `alignY`. The row now centres its
-items with `alignY="center"`, so no code depends on this today.
+items with `alignY="center"`. `reference-template-editor.tsx` still needs it:
+its Prefix and URL fields sit in a row aligned to the top, so a reason under
+one field does not push the other down, and it uses `alignItems="flex-start"`.
 
 **Question.** Can `alignY` get its own map with `top` and `bottom`?
 

@@ -68,6 +68,34 @@ describe('ExternalReferenceEditor', () => {
     expect(screen.queryByRole('link', { name: 'ABC-33' })).toBeNull();
   });
 
+  it("links a key by its Project's first matching Reference template, and leaves others as text", () => {
+    renderWithTheme(
+      <ExternalReferenceEditor
+        ticketNumber={4}
+        references={['#55', 'ABC-33', 'XYZ-1']}
+        templates={[
+          { prefix: '#', url: 'https://github.com/acme/web/issues/{n}' },
+          { prefix: 'ABC-', url: 'https://acme.atlassian.net/browse/ABC-{n}' },
+          { prefix: 'A', url: 'https://example.com/{n}' },
+        ]}
+      />,
+    );
+
+    const links = screen.getAllByRole('link');
+    expect(
+      links.map((link) => [link.textContent, link.getAttribute('href')]),
+    ).toEqual([
+      ['#55', 'https://github.com/acme/web/issues/55'],
+      ['ABC-33', 'https://acme.atlassian.net/browse/ABC-33'],
+    ]);
+    for (const link of links) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    }
+    expect(referencesShown()).toContain('XYZ-1');
+    expect(screen.queryByRole('link', { name: 'XYZ-1' })).toBeNull();
+  });
+
   it('shows a value that is not an http(s) URL as plain text, never as a link', () => {
     renderWithTheme(
       <ExternalReferenceEditor

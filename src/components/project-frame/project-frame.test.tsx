@@ -23,7 +23,7 @@ const project = {
 describe('ProjectFrame', () => {
   it("shows the Project's name and tabs, with History current, above its content", () => {
     renderWithTheme(
-      <ProjectFrame project={project} cycles={[]}>
+      <ProjectFrame project={project} cycles={[]} current="history">
         <p>Archived Cycles</p>
       </ProjectFrame>,
     );
@@ -36,5 +36,18 @@ describe('ProjectFrame', () => {
       'page',
     );
     expect(screen.getByText('Archived Cycles')).toBeInTheDocument();
+  });
+
+  it('marks the Settings tab current on the Settings', () => {
+    renderWithTheme(
+      <ProjectFrame project={project} cycles={[]} current="settings">
+        <p>Reference templates</p>
+      </ProjectFrame>,
+    );
+
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
   });
 });

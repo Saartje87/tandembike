@@ -12,23 +12,51 @@ export function httpUrl(reference: string): URL | null {
   return url && /^https?:$/.test(url.protocol) ? url : null;
 }
 
-/** How an External reference shows: a URL as a link, a key as plain text. */
+/**
+ * How an External reference shows: a URL, or a key a Reference template
+ * matches, as a link; any other key as plain text.
+ */
 export type ExternalReferenceDisplay = { text: string; href?: string };
 
 /** A GitHub issue or pull request path: owner, repository and number. */
 const githubIssuePath = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/|$)/;
 
+/** The prefix and URL of a Reference template, enough to link a key. */
+export type ReferenceTemplateLink = { prefix: string; url: string };
+
+/**
+ * Key `reference` linked by the first of `templates` whose prefix it starts
+ * with, every `{n}` replaced by the rest of the key, URL-encoded; as typed
+ * when none matches or nothing follows the prefix.
+ */
+function keyDisplay(
+  reference: string,
+  templates: readonly ReferenceTemplateLink[],
+): ExternalReferenceDisplay {
+  const template = templates.find(({ prefix }) => reference.startsWith(prefix));
+  const rest = template ? reference.slice(template.prefix.length) : '';
+  if (!template || rest === '') {
+    return { text: reference };
+  }
+  return {
+    text: reference,
+    href: template.url.replaceAll('{n}', encodeURIComponent(rest)),
+  };
+}
+
 /**
  * `reference` as it shows: an http(s) URL links to itself with shorter
  * text, `owner/repo#87` for a GitHub issue or pull request and host and
- * path otherwise; anything else, such as a key, shows as typed.
+ * path otherwise; a key shows as typed, linked by its Project's
+ * `templates` when one matches.
  */
 export function externalReferenceDisplay(
   reference: string,
+  templates: readonly ReferenceTemplateLink[] = [],
 ): ExternalReferenceDisplay {
   const url = httpUrl(reference);
   if (url === null) {
-    return { text: reference };
+    return keyDisplay(reference, templates);
   }
   const github =
     url.hostname === 'github.com' ? githubIssuePath.exec(url.pathname) : null;

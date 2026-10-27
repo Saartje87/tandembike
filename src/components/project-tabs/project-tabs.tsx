@@ -13,7 +13,12 @@ import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createCycle } from '../../app/cycles/actions';
-import { cyclePath, cyclesPath, projectPath } from '../../app/lib/paths';
+import {
+  cyclePath,
+  cyclesPath,
+  projectPath,
+  projectSettingsPath,
+} from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
@@ -24,10 +29,10 @@ export type ProjectTabsProps = {
   /** The Project's Cycles; a tab shows for each that is not Archived. */
   cycles: Cycle[];
   /**
-   * The tab on screen: the Backlog, a Cycle by id, or the History, which an
-   * archived Cycle belongs to.
+   * The tab on screen: the Backlog, a Cycle by id, the History, which an
+   * archived Cycle belongs to, or the Project's Settings.
    */
-  current: 'backlog' | 'history' | number;
+  current: 'backlog' | 'history' | 'settings' | number;
 };
 
 type TabProps = {
@@ -120,8 +125,8 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 
 /**
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
- * one and the History of archived ones, with a New Cycle button that adds
- * one.
+ * one, the History of archived ones and its Settings, with a New Cycle
+ * button that adds one.
  */
 export const ProjectTabs: FC<ProjectTabsProps> = ({
   projectId,
@@ -151,6 +156,12 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           ))}
           <Tab href={cyclesPath(projectId)} current={current === 'history'}>
             History
+          </Tab>
+          <Tab
+            href={projectSettingsPath(projectId)}
+            current={current === 'settings'}
+          >
+            Settings
           </Tab>
         </Inline>
       </nav>
