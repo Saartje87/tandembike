@@ -77,6 +77,7 @@ import {
   externalReferencesOf,
   insertExternalReferences,
   normalizeExternalReferences,
+  withAnyExternalReference,
   withExternalReferences,
 } from './external-references';
 import {
@@ -430,6 +431,11 @@ export type FindTicketsInput = ListTicketsFilter &
      * ignoring (ASCII) case.
      */
     query?: string;
+    /**
+     * Only Tickets with at least one of these External references, each
+     * trimmed and matched exactly.
+     */
+    externalReferences?: string[];
     /** At most this many Tickets, from 1 to `maxPageSize`; `defaultPageSize` if left out. */
     limit?: number;
     /** List the Tickets after this Ticket number: a previous page's `nextCursor`. */
@@ -1133,6 +1139,12 @@ export function createTickets(
       const filter = { ...input, projectId: resolvedProjectId(db, input) };
       const limit = input.limit ?? defaultPageSize;
       const query = input.query?.trim();
+      const references =
+        input.externalReferences === undefined
+          ? undefined
+          : normalizeExternalReferences(input.externalReferences).filter(
+              (reference) => reference !== '',
+            );
       const cursor =
         input.cursor === undefined
           ? undefined
@@ -1149,6 +1161,10 @@ export function createTickets(
             ? undefined
             : checkStatusFilter(input.status),
         query: query === undefined ? undefined : checkQuery(query),
+        externalReferences:
+          references?.length === 0
+            ? 'Enter a URL or key to find Tickets by, or leave externalReferences out.'
+            : undefined,
         sort:
           input.sort === 'position' && filter.projectId === undefined
             ? 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.'
@@ -1161,6 +1177,9 @@ export function createTickets(
       const matching = and(
         matchingTickets(db, filter),
         query === undefined ? undefined : titleOrDescriptionContains(query),
+        references === undefined
+          ? undefined
+          : withAnyExternalReference(db, references),
       );
       const numbers = db
         .select({ number: tickets.number })

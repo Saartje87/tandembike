@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, exists, inArray } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
-import { ticketExternalReferences } from '../db/schema';
+import { ticketExternalReferences, tickets } from '../db/schema';
 import type { ActivityChange } from './activity-change';
 import { hasScheme, httpUrl } from './external-reference-display';
 import { throwFieldErrors } from './rules';
@@ -162,6 +162,27 @@ export function deleteExternalReferences(
       ),
     )
     .run();
+}
+
+/**
+ * The condition for Tickets with at least one of the normalized
+ * `references`, matched exactly.
+ */
+export function withAnyExternalReference(
+  db: DatabaseConnection,
+  references: readonly string[],
+) {
+  return exists(
+    db
+      .select({ number: ticketExternalReferences.ticketNumber })
+      .from(ticketExternalReferences)
+      .where(
+        and(
+          eq(ticketExternalReferences.ticketNumber, tickets.number),
+          inArray(ticketExternalReferences.reference, [...references]),
+        ),
+      ),
+  );
 }
 
 /** `rows` with each Ticket's External references in order, in one query. */

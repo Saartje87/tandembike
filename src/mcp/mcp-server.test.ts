@@ -295,6 +295,35 @@ describe('Project tools', () => {
     await client.close();
   });
 
+  it('finds Tickets by External reference, advising includeArchived for duplicates', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Imported',
+      externalReferences: ['ABC-33'],
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Other' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'list_tickets',
+      arguments: { externalReferences: ['ABC-33'], includeArchived: true },
+    });
+    const { tools } = await client.listTools();
+    const listTickets = tools.find((tool) => tool.name === 'list_tickets');
+
+    expect(resultJson(result)).toMatchObject({
+      tickets: [{ number: ticket.number }],
+      total: 1,
+    });
+    expect(listTickets?.description).toMatch(/External reference/);
+    expect(JSON.stringify(listTickets?.inputSchema)).toMatch(
+      /any of these.*includeArchived: true when checking for duplicates/,
+    );
+    await client.close();
+  });
+
   it('hides Tickets of archived Projects unless their Project is named', async () => {
     const tickets = createTestTickets();
     const old = tickets.createProject({ name: 'Old site' });
