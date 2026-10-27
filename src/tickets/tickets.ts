@@ -70,6 +70,7 @@ import {
 import {
   checkExternalReferenceCount,
   checkExternalReferences,
+  checkExternalReferencesFilter,
   checkedExternalReferences,
   checkNewExternalReferences,
   deleteExternalReferences,
@@ -1142,9 +1143,7 @@ export function createTickets(
       const references =
         input.externalReferences === undefined
           ? undefined
-          : normalizeExternalReferences(input.externalReferences).filter(
-              (reference) => reference !== '',
-            );
+          : normalizeExternalReferences(input.externalReferences);
       const cursor =
         input.cursor === undefined
           ? undefined
@@ -1162,9 +1161,9 @@ export function createTickets(
             : checkStatusFilter(input.status),
         query: query === undefined ? undefined : checkQuery(query),
         externalReferences:
-          references?.length === 0
-            ? 'Enter a URL or key to find Tickets by, or leave externalReferences out.'
-            : undefined,
+          references === undefined
+            ? undefined
+            : checkExternalReferencesFilter(references),
         sort:
           input.sort === 'position' && filter.projectId === undefined
             ? 'Sorting by position needs a Project, since Board order exists only within one: give projectId or projectName.'

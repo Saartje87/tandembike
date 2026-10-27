@@ -213,6 +213,13 @@ describe('Finding Tickets', () => {
     expect(
       titles(tickets.findTickets({ externalReferences: ['abc-55', '55'] })),
     ).toEqual([]);
+    expect(
+      titles(
+        tickets.findTickets({
+          externalReferences: ['HTTPS://GITHUB.COM/O/R/ISSUES/55'],
+        }),
+      ),
+    ).toEqual([]);
   });
 
   it('combines External references with the other filters and paging', () => {
@@ -259,20 +266,50 @@ describe('Finding Tickets', () => {
     ).toBe(3);
   });
 
+  it('combines External references with the blocked and claimed filters', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const wanted = { projectId: project.id, externalReferences: ['#7'] };
+    const blocker = tickets.createTicket({ ...wanted, title: 'Blocker' });
+    const blocked = tickets.createTicket({ ...wanted, title: 'Blocked' });
+    tickets.addBlocker({ blocker: blocker.number, blocked: blocked.number });
+    tickets.claimTicket(blocker.number, { agentRunId: 'run-1' });
+    tickets.createTicket({ projectId: project.id, title: 'Unrelated' });
+
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], blocked: true }),
+      ),
+    ).toEqual(['Blocked']);
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], claimed: true }),
+      ),
+    ).toEqual(['Blocker']);
+    expect(
+      titles(
+        tickets.findTickets({ externalReferences: ['#7'], claimed: false }),
+      ),
+    ).toEqual(['Blocked']);
+  });
+
   it.each([
-    ['an empty list', []],
-    ['only blank references', ['  ']],
-  ])('refuses %s of External references', (_, externalReferences) => {
+    [
+      'an empty list',
+      [],
+      'Enter a URL or key to find Tickets by, or leave externalReferences out.',
+    ],
+    [
+      'a blank reference',
+      ['ABC-1', '  '],
+      'Enter a URL or key for each External reference to find Tickets by.',
+    ],
+  ])('refuses %s of External references', (_, externalReferences, reason) => {
     const tickets = createTestTickets();
 
     expect(
       errorFrom(() => tickets.findTickets({ externalReferences })),
-    ).toEqual(
-      new ValidationError({
-        externalReferences:
-          'Enter a URL or key to find Tickets by, or leave externalReferences out.',
-      }),
-    );
+    ).toEqual(new ValidationError({ externalReferences: reason }));
   });
 
   it('pages through Tickets after the cursor, oldest-created first', () => {

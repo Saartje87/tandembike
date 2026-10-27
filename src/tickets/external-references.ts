@@ -44,6 +44,21 @@ export function checkExternalReferences(
   return undefined;
 }
 
+/**
+ * Why normalized `references` to find Tickets by break the rules, if they
+ * do. Their format is not checked: one no Ticket could have just matches none.
+ */
+export function checkExternalReferencesFilter(
+  references: readonly string[],
+): string | undefined {
+  if (references.length === 0) {
+    return 'Enter a URL or key to find Tickets by, or leave externalReferences out.';
+  }
+  return references.includes('')
+    ? 'Enter a URL or key for each External reference to find Tickets by.'
+    : undefined;
+}
+
 /** Why a new Ticket's normalized `references` break the rules, if they do. */
 export function checkNewExternalReferences(
   references: readonly string[],
@@ -170,7 +185,7 @@ export function deleteExternalReferences(
  */
 export function withAnyExternalReference(
   db: DatabaseConnection,
-  references: readonly string[],
+  references: string[],
 ) {
   return exists(
     db
@@ -179,7 +194,7 @@ export function withAnyExternalReference(
       .where(
         and(
           eq(ticketExternalReferences.ticketNumber, tickets.number),
-          inArray(ticketExternalReferences.reference, [...references]),
+          inArray(ticketExternalReferences.reference, references),
         ),
       ),
   );

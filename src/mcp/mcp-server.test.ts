@@ -317,7 +317,9 @@ describe('Project tools', () => {
       tickets: [{ number: ticket.number }],
       total: 1,
     });
-    expect(listTickets?.description).toMatch(/External reference/);
+    expect(listTickets?.description).toMatch(
+      /with any of given External references/,
+    );
     expect(JSON.stringify(listTickets?.inputSchema)).toMatch(
       /any of these.*includeArchived: true when checking for duplicates/,
     );
