@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import type { FC } from 'react';
+import { type FC, Suspense } from 'react';
 
+import { PageLoading } from '../../../components/page-loading/page-loading';
 import { openTicketNumber } from '../../lib/paths';
 import { ProjectBoard } from './project-board/project-board';
 import {
@@ -19,8 +20,10 @@ export async function generateMetadata({
   };
 }
 
-/** A Project's Backlog tab, with the Ticket `?ticket=` opens in a drawer. */
-const ProjectPage: FC<BacklogPageProps> = async ({ params, searchParams }) => {
+async function backlogTab(
+  params: BacklogPageProps['params'],
+  searchParams: BacklogPageProps['searchParams'],
+) {
   const project = await loadProject(params);
   return (
     <ProjectBoard
@@ -29,6 +32,17 @@ const ProjectPage: FC<BacklogPageProps> = async ({ params, searchParams }) => {
       openTicket={openTicketNumber((await searchParams).ticket)}
     />
   );
-};
+}
+
+/**
+ * A Project's Backlog tab, with the Ticket `?ticket=` opens in a drawer. It
+ * streams in behind its own boundary: `loading.tsx` is already on screen when
+ * switching from another of the Project's tabs (Cache Components, T221).
+ */
+const ProjectPage: FC<BacklogPageProps> = ({ params, searchParams }) => (
+  <Suspense fallback={<PageLoading />}>
+    {backlogTab(params, searchParams)}
+  </Suspense>
+);
 
 export default ProjectPage;

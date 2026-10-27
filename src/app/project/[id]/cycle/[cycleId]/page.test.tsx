@@ -2,7 +2,11 @@ import { screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderWithTheme } from '../../../../../test/render';
+import {
+  renderPage,
+  renderPageError,
+  renderWithTheme,
+} from '../../../../../test/render';
 import { createTestTickets } from '../../../../../test/tickets';
 import { appTickets } from '../../../../../tickets/app-tickets';
 import CyclePage, { generateMetadata } from './page';
@@ -104,7 +108,7 @@ describe('CyclePage', () => {
       id: String(project.id),
       cycleId: String(cycle.id),
     });
-    renderWithTheme(
+    await renderPage(
       <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
     );
 
@@ -155,7 +159,7 @@ describe('CyclePage', () => {
       id: String(project.id),
       cycleId: String(cycle.id),
     });
-    renderWithTheme(
+    await renderPage(
       <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
     );
 
@@ -187,7 +191,7 @@ describe('CyclePage', () => {
     tickets.updateTicket(moved.number, { projectId: other.id });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    renderWithTheme(
+    await renderPage(
       <main>
         {
           await CyclePage({
@@ -222,7 +226,7 @@ describe('CyclePage', () => {
     tickets.startCycle(beta.id);
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    renderWithTheme(
+    await renderPage(
       <main>
         {
           await CyclePage({
@@ -247,15 +251,38 @@ describe('CyclePage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     await expect(
-      CyclePage({
-        params: Promise.resolve({
-          id: String(requested.id),
-          cycleId: String(cycle.id),
-        }),
-        searchParams: noSearch,
-      }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+      renderPageError(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(requested.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      ),
+    ).resolves.toMatchObject({ message: 'NEXT_NOT_FOUND' });
     expect(notFound).toHaveBeenCalledOnce();
+  });
+
+  it('shows the loading state until the Project and Cycle load', async () => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    renderWithTheme(
+      <main>
+        {
+          await CyclePage({
+            params: new Promise(() => {}),
+            searchParams: noSearch,
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
   });
 
   it.each([
@@ -269,11 +296,17 @@ describe('CyclePage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     await expect(
-      CyclePage({
-        params: Promise.resolve({ id, cycleId }),
-        searchParams: noSearch,
-      }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+      renderPageError(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({ id, cycleId }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      ),
+    ).resolves.toMatchObject({ message: 'NEXT_NOT_FOUND' });
     expect(notFound).toHaveBeenCalledOnce();
   });
 
@@ -293,7 +326,7 @@ describe('CyclePage', () => {
     });
     const searchParams = Promise.resolve({ ticket: String(ticket.number) });
 
-    renderWithTheme(<main>{await CyclePage({ params, searchParams })}</main>);
+    await renderPage(<main>{await CyclePage({ params, searchParams })}</main>);
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `Drawer T${ticket.number} over /project/${project.id}/cycle/${cycle.id}`,

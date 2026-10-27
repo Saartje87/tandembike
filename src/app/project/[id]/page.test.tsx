@@ -2,7 +2,11 @@ import { screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderWithTheme } from '../../../test/render';
+import {
+  renderPage,
+  renderPageError,
+  renderWithTheme,
+} from '../../../test/render';
 import { createTestTickets } from '../../../test/tickets';
 import { appTickets } from '../../../tickets/app-tickets';
 import ProjectPage, { generateMetadata } from './page';
@@ -84,7 +88,7 @@ describe('ProjectPage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({ id: String(project.id) });
-    renderWithTheme(
+    await renderPage(
       <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
     );
 
@@ -100,15 +104,38 @@ describe('ProjectPage', () => {
     ).resolves.toEqual({ title: 'Website' });
   });
 
+  it('shows the loading state until the Project loads', async () => {
+    vi.mocked(appTickets).mockReturnValue(createTestTickets());
+
+    renderWithTheme(
+      <main>
+        {
+          await ProjectPage({
+            params: new Promise(() => {}),
+            searchParams: noSearch,
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+  });
+
   it('returns not-found for a missing Project', async () => {
     vi.mocked(appTickets).mockReturnValue(createTestTickets());
 
     await expect(
-      ProjectPage({
-        params: Promise.resolve({ id: '999' }),
-        searchParams: noSearch,
-      }),
-    ).rejects.toThrow('NEXT_NOT_FOUND');
+      renderPageError(
+        <main>
+          {
+            await ProjectPage({
+              params: Promise.resolve({ id: '999' }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      ),
+    ).resolves.toMatchObject({ message: 'NEXT_NOT_FOUND' });
     expect(notFound).toHaveBeenCalledOnce();
   });
 
@@ -123,7 +150,9 @@ describe('ProjectPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     const searchParams = Promise.resolve({ ticket: String(ticket.number) });
 
-    renderWithTheme(<main>{await ProjectPage({ params, searchParams })}</main>);
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams })}</main>,
+    );
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `Drawer T${ticket.number} over /project/${project.id}`,
