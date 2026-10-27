@@ -1,8 +1,14 @@
 import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
-/** A card, whose checkbox shows when it is hovered or focused. */
-export const card = style({});
+/**
+ * A card, whose checkbox shows when it is hovered or focused. It is dragged
+ * from anywhere on it, which the `cursor` atom cannot show: it has only
+ * `auto` and `pointer` (docs/blocks-feedback.md, 31).
+ */
+export const card = style({
+  cursor: 'grab',
+});
 
 /**
  * A card's select checkbox: hidden until its card is hovered or focused, or
