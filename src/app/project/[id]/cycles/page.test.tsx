@@ -19,18 +19,13 @@ const { notFound } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
-vi.mock('../../../../components/project-tabs/project-tabs', () => ({
-  ProjectTabs: ({ current }: { current: string }) => (
-    <nav>{`Tabs current ${current}`}</nav>
-  ),
-}));
 
 describe('CyclesPage', () => {
   beforeEach(() => {
     notFound.mockClear();
   });
 
-  it("lists the Project's archived Cycles under the History tab", async () => {
+  it("lists the Project's archived Cycles", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
@@ -42,12 +37,8 @@ describe('CyclesPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await CyclesPage({ params })}</main>);
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Website' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('navigation')).toHaveTextContent(
-      'Tabs current history',
-    );
+    // The Project's layout shows its header and tabs.
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(
       screen.getByRole('list', { name: 'Archived Cycles' }),
     ).toHaveTextContent('Beta');

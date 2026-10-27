@@ -24,7 +24,6 @@ import { useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
   type MouseEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -56,7 +55,6 @@ import { AppLink } from '../app-link/app-link';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { PlanIntoCycleMenu } from '../plan-into-cycle-menu/plan-into-cycle-menu';
-import { ProjectHeader } from '../project-header/project-header';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
 import * as styles from './board.css';
@@ -81,8 +79,6 @@ export type BoardProps = {
    * it is archived, the Board starts with the archived Tickets shown.
    */
   openTicket?: number;
-  /** Shown under the Project's name: its tabs, and a Cycle's header. */
-  header?: ReactNode;
   /**
    * The tab the Board shows: a Cycle by id, whose new Tickets are planned
    * into it, or `null` for the Backlog. Lanes are reordered within it.
@@ -371,10 +367,9 @@ const escapeOwnerSelector =
   'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]';
 
 /**
- * A Project's Board: its header, its Epics' row, and one column per Status
- * holding its active normal Tickets, plus a
- * "Show archived" switch, with their count, that lists archived Tickets
- * below. Tickets can be reordered by dragging or moved between Statuses; both
+ * A Project's Board: its Epics' row, and one column per Status holding its
+ * active normal Tickets, plus a "Show archived" switch, with their count,
+ * that lists archived Tickets below. Tickets can be reordered by dragging or moved between Statuses; both
  * changes save through Server Actions and roll back optimistically if
  * refused.
  *
@@ -393,7 +388,6 @@ export const Board: FC<BoardProps> = ({
   tickets,
   epics = [],
   openTicket,
-  header,
   cycleId,
   cycles = [],
 }) => {
@@ -773,7 +767,6 @@ export const Board: FC<BoardProps> = ({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: see above */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
       <div onClick={clearOnEmptyClick}>
-        <ProjectHeader project={project}>{header}</ProjectHeader>
         {error && <Alert intent="error">{error}</Alert>}
         <DndProvider
           onDragStart={() => {

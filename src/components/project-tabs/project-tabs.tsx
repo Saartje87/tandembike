@@ -8,7 +8,7 @@ import {
   TextInput,
   VisuallyHidden,
 } from '@blockle/blocks';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -28,12 +28,35 @@ export type ProjectTabsProps = {
   projectId: number;
   /** The Project's Cycles; a tab shows for each that is not Archived. */
   cycles: Cycle[];
-  /**
-   * The tab on screen: the Backlog, a Cycle by id, the History, which an
-   * archived Cycle belongs to, or the Project's Settings.
-   */
-  current: 'backlog' | 'history' | 'settings' | number;
 };
+
+/** A tab of the Project: the Backlog, a Cycle by id, the History or Settings. */
+type CurrentTab = 'backlog' | 'history' | 'settings' | number;
+
+/**
+ * The tab on screen, from the URL's `segments` below the Project: an
+ * Archived Cycle belongs to the History.
+ */
+function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
+  const [segment, cycleId] = segments;
+  if (segment === undefined) {
+    return 'backlog';
+  }
+  if (segment === 'cycles') {
+    return 'history';
+  }
+  if (segment === 'settings') {
+    return 'settings';
+  }
+  const cycle =
+    segment === 'cycle'
+      ? cycles.find(({ id }) => String(id) === cycleId)
+      : undefined;
+  if (!cycle) {
+    return null;
+  }
+  return cycle.state === 'Archived' ? 'history' : cycle.id;
+}
 
 type TabProps = {
   href: string;
@@ -126,14 +149,12 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 /**
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
  * one, the History of archived ones and its Settings, with a New Cycle
- * button that adds one.
+ * button that adds one. It marks the tab on screen from the URL, so the
+ * Project's layout can keep it mounted across its tabs.
  */
-export const ProjectTabs: FC<ProjectTabsProps> = ({
-  projectId,
-  cycles,
-  current,
-}) => {
+export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
   const [adding, setAdding] = useState(false);
+  const current = currentTab(useSelectedLayoutSegments(), cycles);
 
   return (
     <Inline gap={3} alignY="center">

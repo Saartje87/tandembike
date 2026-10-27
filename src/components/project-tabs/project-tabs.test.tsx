@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCycle } from '../../app/cycles/actions';
@@ -9,7 +9,10 @@ import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
 import { ProjectTabs } from './project-tabs';
 
-vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  useRouter: vi.fn(),
+  useSelectedLayoutSegments: vi.fn(),
+}));
 vi.mock('../../app/cycles/actions', () => ({ createCycle: vi.fn() }));
 
 const cycle = (
@@ -22,6 +25,12 @@ const cycle = (
   archivedAt: null,
   ...fields,
 });
+
+/** Renders the tabs as the Project layout does at `segments` below it. */
+const renderTabs = (cycles: Cycle[], segments: string[] = []) => {
+  vi.mocked(useSelectedLayoutSegments).mockReturnValue(segments);
+  return renderWithTheme(<ProjectTabs projectId={3} cycles={cycles} />);
+};
 
 const tabs = () =>
   within(screen.getByRole('navigation', { name: 'Project views' }))
@@ -42,15 +51,9 @@ describe('ProjectTabs', () => {
   });
 
   it('shows a Backlog tab and one tab per Prepared Cycle, marking the current one', () => {
-    renderWithTheme(
-      <ProjectTabs
-        projectId={3}
-        cycles={[
-          cycle({ id: 7, title: 'Beta' }),
-          cycle({ id: 8, title: 'Launch' }),
-        ]}
-        current={8}
-      />,
+    renderTabs(
+      [cycle({ id: 7, title: 'Beta' }), cycle({ id: 8, title: 'Launch' })],
+      ['cycle', '8'],
     );
 
     expect(tabs()).toEqual([
@@ -63,17 +66,11 @@ describe('ProjectTabs', () => {
   });
 
   it('puts the Active Cycle first and leaves Archived ones out', () => {
-    renderWithTheme(
-      <ProjectTabs
-        projectId={3}
-        cycles={[
-          cycle({ id: 6, title: 'Old', state: 'Archived' }),
-          cycle({ id: 7, title: 'Beta' }),
-          cycle({ id: 8, title: 'Launch', state: 'Active' }),
-        ]}
-        current="backlog"
-      />,
-    );
+    renderTabs([
+      cycle({ id: 6, title: 'Old', state: 'Archived' }),
+      cycle({ id: 7, title: 'Beta' }),
+      cycle({ id: 8, title: 'Launch', state: 'Active' }),
+    ]);
 
     expect(tabs().map(({ name }) => name)).toEqual([
       'Backlog',
@@ -85,9 +82,7 @@ describe('ProjectTabs', () => {
   });
 
   it('marks the History tab current on the History', () => {
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="history" />,
-    );
+    renderTabs([], ['cycles']);
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
@@ -96,10 +91,25 @@ describe('ProjectTabs', () => {
     ]);
   });
 
-  it('marks the Settings tab current on the Settings', () => {
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="settings" />,
+  it("marks the History tab current on an Archived Cycle's page", () => {
+    renderTabs(
+      [
+        cycle({ id: 6, title: 'Old', state: 'Archived' }),
+        cycle({ id: 7, title: 'Beta' }),
+      ],
+      ['cycle', '6'],
     );
+
+    expect(tabs()).toEqual([
+      { name: 'Backlog', href: '/project/3', current: null },
+      { name: 'Beta', href: '/project/3/cycle/7', current: null },
+      { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Settings', href: '/project/3/settings', current: null },
+    ]);
+  });
+
+  it('marks the Settings tab current on the Settings', () => {
+    renderTabs([], ['settings']);
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
@@ -109,9 +119,7 @@ describe('ProjectTabs', () => {
   });
 
   it('marks the Backlog tab current on the Backlog', () => {
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="backlog" />,
-    );
+    renderTabs([]);
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
@@ -122,9 +130,7 @@ describe('ProjectTabs', () => {
 
   it('creates a Cycle from its title and opens its tab', async () => {
     vi.mocked(createCycle).mockResolvedValue({ ok: true, cycleId: 9 });
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="backlog" />,
-    );
+    renderTabs([]);
 
     await userEvent.click(screen.getByRole('button', { name: 'New Cycle' }));
     await userEvent.type(
@@ -148,9 +154,7 @@ describe('ProjectTabs', () => {
       error: 'Enter a title.',
       fieldErrors: { title: 'Enter a title.' },
     });
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="backlog" />,
-    );
+    renderTabs([]);
 
     await userEvent.click(screen.getByRole('button', { name: 'New Cycle' }));
     const input = screen.getByRole('textbox', { name: 'New Cycle title' });
@@ -162,9 +166,7 @@ describe('ProjectTabs', () => {
   });
 
   it('cancels a new Cycle with Escape', async () => {
-    renderWithTheme(
-      <ProjectTabs projectId={3} cycles={[]} current="backlog" />,
-    );
+    renderTabs([]);
 
     await userEvent.click(screen.getByRole('button', { name: 'New Cycle' }));
     await userEvent.type(

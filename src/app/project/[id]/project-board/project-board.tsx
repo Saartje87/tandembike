@@ -1,11 +1,8 @@
 import { type FC, Suspense } from 'react';
 
-import { ArchivedProjectNotice } from '../../../../components/archived-project-notice/archived-project-notice';
 import { Board } from '../../../../components/board/board';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
-import { ProjectFrame } from '../../../../components/project-frame/project-frame';
-import { ProjectTabs } from '../../../../components/project-tabs/project-tabs';
 import { TicketDrawerSkeleton } from '../../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton';
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
@@ -22,21 +19,17 @@ export type ProjectBoardProps = {
 };
 
 /**
- * One tab of a Project: its Board holding the Backlog's Tickets (those in no
- * Prepared or Active Cycle) or one Cycle's, under the Project's tabs, with
- * the Ticket `?ticket=` opens in a drawer over it (ADR 0013). An Archived
- * Cycle belongs to the History, and lists its final Tickets read-only
- * instead.
+ * One tab of a Project, under the Project's layout: its Board holding the
+ * Backlog's Tickets (those in no Prepared or Active Cycle) or one Cycle's,
+ * under the Cycle's header, with the Ticket `?ticket=` opens in a drawer
+ * over it (ADR 0013). An Archived Cycle belongs to the History, and lists
+ * its final Tickets read-only instead.
  */
 export const ProjectBoard: FC<ProjectBoardProps> = ({
   project,
   tab,
   openTicket,
 }) => {
-  if (project.archived) {
-    // Its Tickets are hidden, drawers included, until it is restored.
-    return <ArchivedProjectNotice project={project} />;
-  }
   const boardPath = boardPathOf(project.id, tab === 'backlog' ? null : tab.id);
   const drawer = openTicket !== undefined && (
     <Suspense
@@ -66,7 +59,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
   if (tab !== 'backlog' && tab.state === 'Archived') {
     // Its final membership, including Tickets moved to another Project since.
     return (
-      <ProjectFrame project={project} cycles={cycles} current="history">
+      <>
         <CycleHeader key={tab.id} cycle={tab} />
         <CycleTicketList
           cycle={tab}
@@ -75,7 +68,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
             includeArchived: true,
           })}
         />
-      </ProjectFrame>
+      </>
     );
   }
   const shown = tickets.listTickets({
@@ -84,29 +77,22 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
     includeArchived: true,
   });
   return (
-    <Board
-      project={project}
-      tickets={shown}
-      epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
-      cycleId={cycleId}
-      cycles={cycles}
-      openTicket={openTicket}
-      header={
-        <>
-          <ProjectTabs
-            projectId={project.id}
-            cycles={cycles}
-            current={tab === 'backlog' ? 'backlog' : tab.id}
-          />
-          {tab !== 'backlog' && (
-            <CycleHeader
-              key={tab.id}
-              cycle={tab}
-              activeCycle={cycles.find(({ state }) => state === 'Active')}
-            />
-          )}
-        </>
-      }
-    />
+    <>
+      {tab !== 'backlog' && (
+        <CycleHeader
+          key={tab.id}
+          cycle={tab}
+          activeCycle={cycles.find(({ state }) => state === 'Active')}
+        />
+      )}
+      <Board
+        project={project}
+        tickets={shown}
+        epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
+        cycleId={cycleId}
+        cycles={cycles}
+        openTicket={openTicket}
+      />
+    </>
   );
 };

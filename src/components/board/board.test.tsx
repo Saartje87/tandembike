@@ -130,28 +130,12 @@ describe('Board', () => {
     vi.mocked(updateTicket).mockReset();
   });
 
-  it("shows the Project's name", () => {
-    renderWithTheme(<Board project={project} tickets={[]} />);
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Website' }),
-    ).toBeInTheDocument();
-  });
-
   it('leaves the breadcrumbs to the page header', () => {
     renderWithTheme(<Board project={project} tickets={[]} />);
 
     expect(
       screen.queryByRole('navigation', { name: 'Breadcrumb' }),
     ).not.toBeInTheDocument();
-  });
-
-  it('offers to rename the Project from its header', () => {
-    renderWithTheme(<Board project={project} tickets={[]} />);
-
-    expect(
-      screen.getByRole('button', { name: 'Website' }),
-    ).toHaveAccessibleDescription('Edit project name');
   });
 
   it('shows every Status column, even when empty', () => {
@@ -260,20 +244,6 @@ describe('Board', () => {
       title: 'Fix the header',
       cycleId: 7,
     });
-  });
-
-  it('shows its header under the Project name', () => {
-    renderWithTheme(
-      <Board
-        project={project}
-        tickets={[]}
-        header={<nav aria-label="Project views" />}
-      />,
-    );
-
-    expect(
-      screen.getByRole('navigation', { name: 'Project views' }),
-    ).toBeInTheDocument();
   });
 
   it('does not show a Status dropdown on Ticket cards', () => {
