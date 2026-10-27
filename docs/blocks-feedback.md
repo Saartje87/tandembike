@@ -993,6 +993,38 @@ kept inside the viewport, as floating-ui's `shift` does.
 
 **Question.** Should `Popover` take an `align` and keep itself on screen?
 
+## 30. Size atoms take no lengths, and there are no size tokens
+
+**Problem.** A form row of a short Prefix field next to a URL field that
+takes the rest of the row needs a fixed width for one field and a minimum
+width for the other. `inlineSize`, `blockSize`, `maxInlineSize` and
+`maxBlockSize` take only `auto`, `full` and `fit-content`; there is no
+`minInlineSize` atom; and the theme has `space` tokens but no size scale,
+so `vars` offers nothing to set a width with either. The same gap is behind
+the sidebar width in proposal 6, the Drawer width in proposal 10 and the
+shrinkable flex item in proposal 14.
+
+**Repro.**
+
+```tsx
+<Inline gap={2}>
+  <Stack gap={1} inlineSize="small">…Prefix…</Stack> {/* type error */}
+  <Stack gap={1} flexGrow={1} minInlineSize="medium">…URL…</Stack> {/* no atom */}
+</Inline>
+```
+
+**Expected.** The Prefix field is narrow, and the URL field fills the rest of
+the row but never gets narrower than a readable width.
+
+**Workaround.** `src/components/reference-template-editor/reference-template-editor.css.ts`:
+`inlineSize: '8rem'` on the Prefix field's `Stack`, and `flexGrow: 1` with
+`minInlineSize: '16rem'` on the URL field's, as hard-coded lengths since no
+token fits.
+
+**Question.** Can the theme gain a size scale (`vars.size`), taken by the
+size atoms and a new `minInlineSize` / `minBlockSize`, such as
+`inlineSize="small"`?
+
 ## Notes (lower priority)
 
 Not needed by the current consumer, recorded for completeness.
