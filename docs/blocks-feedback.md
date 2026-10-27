@@ -646,7 +646,10 @@ it is a button that has to read as body text and wrap across lines beside its
 checkbox. The `text` class in `inline-edit.css.ts` covers what atoms cannot
 express:
 
-- `cursor: text`. The `cursor` atom has only `auto` and `pointer`.
+- `cursor: text`. The `cursor` atom has only `auto` and `pointer`. A Board
+  card, dragged from anywhere on it (T242), needs `cursor: grab` too, set in
+  the `card` class in `ticket-card.css.ts`; `grab` and `text` would cover
+  both.
 - `textAlign: start`. The `textAlign` atom has `left` and `right` but no
   logical `start` or `end`.
 - The `:hover` background and the `:focus-visible` ring.

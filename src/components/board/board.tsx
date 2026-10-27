@@ -15,6 +15,15 @@ import {
   VisuallyHidden,
 } from '@blockle/blocks';
 import {
+  Accessibility,
+  type DragDropManagerInput,
+  type Draggable,
+  type Droppable,
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from '@dnd-kit/dom';
+import {
   DragDropProvider as DndProvider,
   type DragEndEvent,
   type DragOverEvent,
@@ -205,6 +214,63 @@ const StatusColumn: FC<StatusColumnProps> = ({
   );
 };
 
+/**
+ * A card is dragged from anywhere on it (T242). A mouse drag starts once the
+ * pointer moves 5px, so a click still opens or selects; a touch drag after a
+ * 250ms press, so a swipe still scrolls. One starting on the card's checkbox
+ * selects instead. Space picks up the focused card by keyboard.
+ */
+const sensors = [
+  PointerSensor.configure({
+    activationConstraints: (event) =>
+      event.pointerType === 'touch'
+        ? [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })]
+        : [new PointerActivationConstraints.Distance({ value: 5 })],
+    preventActivation: (event) =>
+      event.target instanceof Element &&
+      event.target.closest('input, button, select, textarea') !== null,
+  }),
+  KeyboardSensor,
+];
+
+/** Where card `source` lands over `target`: an Epic's chip or a Status. */
+const dropPlace = (source: Draggable, target: Droppable | null) => {
+  const epicNumber = epicOfDropTarget(target?.id);
+  if (epicNumber !== undefined) {
+    return `on Epic T${epicNumber}`;
+  }
+  // A lane is a Status by id; a card, the dragged one included, has its own.
+  const status = isStatus(target?.id)
+    ? target.id
+    : (target ?? source).data.status;
+  return `in ${status}`;
+};
+
+// dnd-kit does not export the type of its announcements.
+type Announcements = NonNullable<
+  NonNullable<ConstructorParameters<typeof Accessibility>[1]>['announcements']
+>;
+
+/** What a screen reader hears while a card is dragged, naming its Ticket. */
+const announcements: Announcements = {
+  dragstart: ({ operation: { source } }) =>
+    source ? `Picked up T${source.id}.` : undefined,
+  dragend: ({ operation: { source, target }, canceled }) => {
+    if (!source) {
+      return undefined;
+    }
+    return canceled
+      ? `Cancelled. T${source.id} stays in ${source.data.status}.`
+      : `Dropped T${source.id} ${dropPlace(source, target)}.`;
+  },
+};
+
+/** dnd-kit's plugins, with `announcements` in place of its own. */
+const plugins: DragDropManagerInput['plugins'] = (defaults) => [
+  ...defaults.filter((plugin) => plugin !== Accessibility),
+  Accessibility.configure({ announcements }),
+];
+
 type SortableTicketCardProps = {
   ticket: Ticket;
   index: number;
@@ -222,10 +288,11 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   selecting,
   onSelect,
 }) => {
-  const { ref, handleRef } = useSortable({
+  const { ref } = useSortable({
     id: ticket.number,
     index,
     group: ticket.status,
+    data: { status: ticket.status },
     collisionPriority: 3,
   });
 
@@ -234,7 +301,6 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       ticket={ticket}
       boardPath={boardPath}
       cardRef={ref}
-      dragHandleRef={handleRef}
       selected={selected}
       selecting={selecting}
       onSelect={onSelect}
@@ -769,6 +835,8 @@ export const Board: FC<BoardProps> = ({
       <div onClick={clearOnEmptyClick}>
         {error && <Alert intent="error">{error}</Alert>}
         <DndProvider
+          sensors={sensors}
+          plugins={plugins}
           onDragStart={() => {
             dragging.current = true;
           }}

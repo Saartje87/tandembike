@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
+import { Box, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import { ticketByNumberPath, ticketOnBoardPath } from '../../app/lib/paths';
@@ -16,8 +16,8 @@ export type TicketCardProps = {
   ticket: Ticket;
   /** The URL of the Board the card is on, which its drawer opens over. */
   boardPath: string;
+  /** Makes the whole card the drag source on the Board. */
   cardRef?: (element: Element | null) => void;
-  dragHandleRef?: (element: Element | null) => void;
   /** Whether the card is selected. Leave it out for a card that cannot be. */
   selected?: boolean;
   /** Whether any card on the Board is selected, which shows every checkbox. */
@@ -90,16 +90,14 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
 
 /**
  * A normal Ticket on the Board: its number, title, a badge in its Epic's
- * colour linking to it,
- * whether it is blocked (unless it is Done), labels and acceptance-criteria
- * progress, and a drag handle.
+ * colour linking to it, whether it is blocked (unless it is Done), labels and
+ * acceptance-criteria progress. Through `cardRef` the whole card is dragged.
  * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
  */
 export const TicketCard: FC<TicketCardProps> = ({
   ticket,
   boardPath,
   cardRef,
-  dragHandleRef,
   selected,
   selecting = false,
   onSelect,
@@ -130,27 +128,24 @@ export const TicketCard: FC<TicketCardProps> = ({
       borderRadius={2}
       boxShadow={1}
       paddingBlock={0}
-      paddingInlineEnd={3}
+      paddingInline={3}
       transition="slow"
     >
       <li
         ref={cardRef}
+        // dnd-kit makes a card it drags a button unless it has a role; it
+        // stays a list item, with the drag in its role description.
+        // biome-ignore lint/a11y/noRedundantRoles: see above
+        role="listitem"
+        // Focusable from the first render when it can be dragged, so Space
+        // picks it up; dnd-kit would add this only on a later frame.
+        tabIndex={cardRef ? 0 : undefined}
         data-changed={changed ? '' : undefined}
         data-selecting={selecting ? '' : undefined}
         className={styles.card}
         onClickCapture={selectByClick}
       >
         <Inline gap={2} alignY="stretch">
-          <Button
-            ref={dragHandleRef}
-            type="button"
-            variant="ghost"
-            size="small"
-            alignSelf="stretch"
-            aria-label={`Drag Ticket T${ticket.number} to another Status`}
-          >
-            <Icon name="bars-3" size="small" />
-          </Button>
           <Stack gap={2} paddingBlock={3} className={styles.cardContent}>
             <Text wordBreak="break-word" className={styles.title}>
               <AppLink

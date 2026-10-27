@@ -78,14 +78,31 @@ const cardsIn = (column: string) =>
       within(card).getAllByRole('link')[0].getAttribute('aria-label'),
     );
 
+/** Whether `element` is a Ticket card: an Epic chip has no checkbox. */
+const isCard = (element: HTMLElement) =>
+  element.tagName === 'LI' &&
+  element.querySelector('input[type="checkbox"]') !== null;
+
+/** Ticket `number`'s card, which is dragged from anywhere on it (T242). */
+const cardOf = (number: number) => {
+  const card = screen.getByText(`T${number}`).closest('li');
+  if (!card) {
+    throw new Error(`No card for T${number}`);
+  }
+  return card;
+};
+
+/** What dnd-kit last announced to a screen reader. */
+const announced = () =>
+  [...document.querySelectorAll('[aria-live="polite"]')]
+    .map((region) => region.textContent)
+    .join('');
+
 const mockBoardBounds = (targetStatus: string) =>
   vi
     .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     .mockImplementation(function (this: HTMLElement) {
-      if (
-        this.tagName === 'LI' &&
-        this.querySelector('button[aria-label^="Drag Ticket"]')
-      ) {
+      if (isCard(this)) {
         return new DOMRect(0, 0, 100, 100);
       }
       if (this.tagName === 'SECTION') {
@@ -102,9 +119,6 @@ const mockBoardBounds = (targetStatus: string) =>
     });
 
 const dragTicketTo = async (number: number, status: string) => {
-  const handle = screen.getByRole('button', {
-    name: `Drag Ticket T${number} to another Status`,
-  });
   const target = screen.getByRole('region', { name: status });
   const elementFromPoint = Object.getOwnPropertyDescriptor(
     document,
@@ -121,7 +135,7 @@ const dragTicketTo = async (number: number, status: string) => {
       Reflect.deleteProperty(document, 'elementFromPoint');
     }
   });
-  await keyboardDrag(handle, '{ArrowRight}{ArrowRight}{ArrowRight}');
+  await keyboardDrag(cardOf(number), '{ArrowRight}{ArrowRight}{ArrowRight}');
 };
 
 describe('Board', () => {
@@ -283,6 +297,62 @@ describe('Board', () => {
     });
     expect(cardsIn('Todo')).toEqual([]);
     expect(cardsIn('In progress')).toEqual(['Fix the header']);
+  });
+
+  it('drags a card from the card itself, which has no drag handle', async () => {
+    vi.mocked(updateTicket).mockResolvedValue({
+      ok: true,
+      projectId: project.id,
+    });
+    const bounds = mockBoardBounds('In progress');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[ticket({ number: 4, title: 'Fix the header' })]}
+      />,
+    );
+
+    expect(
+      within(cardOf(4)).queryByRole('button', { name: /drag/i }),
+    ).not.toBeInTheDocument();
+    expect(cardOf(4)).toHaveAttribute('tabindex', '0');
+    expect(cardOf(4)).toHaveAttribute('role', 'listitem');
+    await dragTicketTo(4, 'In progress');
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 4,
+      status: 'In progress',
+    });
+  });
+
+  it('names the Ticket, and where it was dropped, to a screen reader', async () => {
+    vi.mocked(updateTicket).mockResolvedValue({
+      ok: true,
+      projectId: project.id,
+    });
+    const bounds = mockBoardBounds('In progress');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[ticket({ number: 4, title: 'Fix the header' })]}
+      />,
+    );
+    // dnd-kit sets up its live region with the card's role description.
+    await waitFor(() =>
+      expect(cardOf(4)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+    cardOf(4).focus();
+    await userEvent.keyboard('{Space}');
+    await waitFor(() => expect(announced()).toBe('Picked up T4.'));
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(announced()).toBe('Cancelled. T4 stays in Todo.'),
+    );
+
+    await dragTicketTo(4, 'In progress');
+    await waitFor(() => expect(announced()).toBe('Dropped T4 in In progress.'));
   });
 
   it('restores the Ticket and explains when a dropped Status is refused', async () => {
@@ -681,17 +751,14 @@ describe('Dropping a card on an Epic', () => {
     const isChip = (element: HTMLElement) =>
       element.tagName === 'LI' &&
       element.querySelector(`a[href$="?ticket=${epicNumber}"]`) !== null &&
-      element.querySelector('button[aria-label^="Drag Ticket"]') === null;
+      !isCard(element);
     const bounds = vi
       .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockImplementation(function (this: HTMLElement) {
         if (isChip(this)) {
           return new DOMRect(60, 0, 100, 40);
         }
-        if (
-          this.tagName === 'LI' &&
-          this.querySelector('button[aria-label^="Drag Ticket"]')
-        ) {
+        if (isCard(this)) {
           return new DOMRect(0, 0, 100, 100);
         }
         // Away from the chip: the other Epics' chips and the columns, not
@@ -727,12 +794,7 @@ describe('Dropping a card on an Epic', () => {
         Reflect.deleteProperty(document, 'elementFromPoint');
       }
     });
-    await keyboardDrag(
-      screen.getByRole('button', {
-        name: `Drag Ticket T${number} to another Status`,
-      }),
-      '{ArrowRight}',
-    );
+    await keyboardDrag(cardOf(number), '{ArrowRight}');
   };
 
   beforeEach(() => {
@@ -758,6 +820,8 @@ describe('Dropping a card on an Epic', () => {
     );
 
     await dragTicketOntoEpic(4, 20);
+
+    await waitFor(() => expect(announced()).toBe('Dropped T4 on Epic T20.'));
 
     expect(moveTicketsToEpic).toHaveBeenCalledExactlyOnceWith({
       epic: 20,

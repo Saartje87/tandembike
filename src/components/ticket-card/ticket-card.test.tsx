@@ -40,28 +40,15 @@ describe('TicketCard', () => {
     expect(screen.getByText('T4').parentElement).toContainElement(title);
   });
 
-  it('shows an icon-only drag handle with an accessible name', () => {
+  it('has no drag handle: the whole card is dragged (T242)', () => {
     renderWithTheme(
       <TicketCard ticket={ticket} boardPath="/project/1/cycle/7" />,
     );
 
-    const handle = screen.getByRole('button', {
-      name: 'Drag Ticket T4 to another Status',
-    });
-    expect(handle).not.toHaveTextContent('Drag');
-    const icon = handle.querySelector('span[role="presentation"]');
-    expect(icon).toBeInTheDocument();
-    expect(icon).toHaveAttribute(
-      'style',
-      expect.stringContaining('/heroicons/outline/bars-3.svg'),
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toContainElement(
+      screen.getByRole('link', { name: 'Fix the header' }),
     );
-    expect(
-      (handle.compareDocumentPosition(
-        screen.getByRole('link', { name: 'Fix the header' }),
-      ) &
-        Node.DOCUMENT_POSITION_FOLLOWING) !==
-        0,
-    ).toBe(true);
   });
 
   it('does not show a Status dropdown on the card', () => {
