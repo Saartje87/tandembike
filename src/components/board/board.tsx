@@ -367,10 +367,9 @@ const escapeOwnerSelector =
   'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]';
 
 /**
- * A Project's Board: its Epics' row, and one column per Status
- * holding its active normal Tickets, plus a
- * "Show archived" switch, with their count, that lists archived Tickets
- * below. Tickets can be reordered by dragging or moved between Statuses; both
+ * A Project's Board: its Epics' row, and one column per Status holding its
+ * active normal Tickets, plus a "Show archived" switch, with their count,
+ * that lists archived Tickets below. Tickets can be reordered by dragging or moved between Statuses; both
  * changes save through Server Actions and roll back optimistically if
  * refused.
  *
