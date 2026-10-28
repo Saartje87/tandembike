@@ -6,6 +6,8 @@ import * as styles from './not-found.css';
 
 export const metadata: Metadata = { title: 'Page not found' };
 
+// `neutral-100` is surface.sunken's light value: atoms take no Color roles
+// (T338).
 const NotFound: FC = () => {
   return (
     <Box

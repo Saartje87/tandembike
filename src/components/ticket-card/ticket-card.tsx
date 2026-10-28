@@ -113,6 +113,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
         role="img"
         aria-label={`Acceptance criteria: ${checked.length} of ${total} checked`}
       >
+        {/* neutral-700 is text.muted's light value: Icon takes no text roles (T338). */}
         <Icon name="check-circle" size="small" color="neutral-700" />
         <Text fontSize="xsmall" color="muted">
           {checked.length}/{total}
@@ -160,6 +161,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
 
+  // `white` is surface.raised's light value: atoms take no Color roles (T338).
   return (
     <Box
       asChild

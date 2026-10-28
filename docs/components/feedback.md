@@ -13,13 +13,13 @@ Pass `onRequestClose` to add a dismiss button.
 ```tsx
 import { Alert } from '@blockle/blocks';
 
-{
-  hasError && (
+<>
+  {hasError && (
     <Alert intent="error" onRequestClose={() => setHasError(false)}>
       Something went wrong.
     </Alert>
-  );
-}
+  )}
+</>;
 ```
 
 Use an appropriate intent for the message and keep the content specific. Do

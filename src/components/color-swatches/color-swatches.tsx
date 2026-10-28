@@ -56,6 +56,7 @@ export const ColorSwatches: FC<ColorSwatchesProps> = ({
             disabled={disabled}
             onClick={() => onPick(null)}
           >
+            {/* neutral-700 is text.muted's light value: Icon takes no text roles (T338). */}
             <Icon name="no-symbol" size="small" color="neutral-700" />
           </Button>
         )}

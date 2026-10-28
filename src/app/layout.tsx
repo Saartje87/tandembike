@@ -36,7 +36,7 @@ export type RootLayoutProps = {
 // listener per tab here, where it stays mounted across navigation.
 // The app is light-only: `BlocksProvider` pins the Color mode, but writes it
 // on `<html>` only once it mounts, so the server HTML sets it too, or a
-// dark-OS User would see a dark first paint.
+// dark-OS User would see a dark first paint (T337).
 const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
   return (
     <html
