@@ -26,15 +26,15 @@ Blocks also declares peer dependencies on `@blockle/blocks-core`,
 `createVanillaExtractPlugin`, using the Turbopack integration:
 
 ```ts
-import { createVanillaExtractPlugin } from "@vanilla-extract/next-plugin";
-import type { NextConfig } from "next";
+import { createVanillaExtractPlugin } from '@vanilla-extract/next-plugin';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   // existing Next.js options
 };
 
 const withVanillaExtract = createVanillaExtractPlugin({
-  unstable_turbopack: { mode: "auto" },
+  unstable_turbopack: { mode: 'auto' },
 });
 
 export default withVanillaExtract(nextConfig);
@@ -46,10 +46,10 @@ The root layout, [src/app/layout.tsx](../src/app/layout.tsx), imports the
 Blocks reset and wraps the app in `BlocksProvider`:
 
 ```tsx
-import "@blockle/blocks/reset";
+import '@blockle/blocks/reset';
 
-import { BlocksProvider } from "@blockle/blocks";
-import { momotaro } from "@blockle/blocks-theme-momotaro";
+import { BlocksProvider } from '@blockle/blocks';
+import { momotaro } from '@blockle/blocks-theme-momotaro';
 
 <BlocksProvider theme={momotaro} colorMode="light">
   {children}

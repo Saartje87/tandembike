@@ -2,13 +2,13 @@
 
 The skills speak in terms of five canonical triage state roles. Each is a native Ticket label of the same name. A Ticket carries exactly one state label at a time, so move it between states with one `update_ticket` call that names the old label in `removeLabels` and the new one in `addLabels`, for example `removeLabels: ["needs-triage"], addLabels: ["ready-for-agent"]`. Use `update_tickets` to move up to 50 Tickets the same way at once.
 
-| Canonical role | Label | Meaning |
-| --- | --- | --- |
-| `needs-triage` | `needs-triage` | Maintainer needs to evaluate this Ticket |
-| `needs-info` | `needs-info` | Waiting on the reporter for more information |
-| `ready-for-agent` | `ready-for-agent` | Fully specified, ready for an agent |
-| `ready-for-human` | `ready-for-human` | Requires human implementation |
-| `wontfix` | `wontfix` | Will not be actioned |
+| Canonical role    | Label             | Meaning                                      |
+| ----------------- | ----------------- | -------------------------------------------- |
+| `needs-triage`    | `needs-triage`    | Maintainer needs to evaluate this Ticket     |
+| `needs-info`      | `needs-info`      | Waiting on the reporter for more information |
+| `ready-for-agent` | `ready-for-agent` | Fully specified, ready for an agent          |
+| `ready-for-human` | `ready-for-human` | Requires human implementation                |
+| `wontfix`         | `wontfix`         | Will not be actioned                         |
 
 Triage category roles are the labels `bug` and `enhancement`. Find Tickets in a role with `list_tickets` and its `labels` filter, for example `labels: ["ready-for-agent"]`.
 

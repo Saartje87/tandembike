@@ -7,10 +7,10 @@ the application (or the part of the tree that uses Blocks) once with the
 chosen theme.
 
 ```tsx
-import "@blockle/blocks/reset";
+import '@blockle/blocks/reset';
 
-import { BlocksProvider } from "@blockle/blocks";
-import { momotaro } from "@blockle/blocks-theme-momotaro";
+import { BlocksProvider } from '@blockle/blocks';
+import { momotaro } from '@blockle/blocks-theme-momotaro';
 
 <BlocksProvider theme={momotaro} colorMode="light">
   {children}
@@ -35,4 +35,3 @@ paint. `useColorMode()` reads the setting and the resolved mode.
 
 For complete installation steps and a full root layout example, see
 [Blockle Blocks setup](../blockle-blocks-setup.md).
-

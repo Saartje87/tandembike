@@ -7,7 +7,7 @@ content hierarchy, not the visual size you want; style should not skip or
 misrepresent heading levels.
 
 ```tsx
-import { Heading } from "@blockle/blocks";
+import { Heading } from '@blockle/blocks';
 
 <Heading level={2}>Account settings</Heading>;
 ```
@@ -19,7 +19,7 @@ semantic element, such as `p` for a paragraph; use its text and spacing atoms
 for presentation.
 
 ```tsx
-import { Text } from "@blockle/blocks";
+import { Text } from '@blockle/blocks';
 
 <Text tag="p" paddingBlockEnd={2}>
   Update the details associated with your account.
@@ -34,7 +34,7 @@ For supporting copy, pass a text role: `color="muted"` (or `disabled`,
 ```tsx
 <Text tag="p" fontSize="small" color="muted">
   Last edited 3 days ago
-</Text>
+</Text>;
 ```
 
 `Text` supports `asChild` when another component must supply the rendered
@@ -50,6 +50,5 @@ only `cite`, `code`, `del`, `em`, `ins`, `kbd`, `label`, `mark`, `p`, `q`, `s`,
 ```tsx
 <Text tag="code" fontFamily="mono" whiteSpace="pre-wrap">
   {value}
-</Text>
+</Text>;
 ```
-

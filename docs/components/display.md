@@ -15,13 +15,11 @@ when defining or adapting icon assets rather than as a general-purpose
 component. It creates a component that maps a typed icon name to an asset URL:
 
 ```tsx
-import { createIconMask } from "@blockle/blocks";
+import { createIconMask } from '@blockle/blocks';
 
-type IconName = "search" | "close";
+type IconName = 'search' | 'close';
 
-const Icon = createIconMask(
-  (name: IconName) => `/icons/${name}.svg`,
-);
+const Icon = createIconMask((name: IconName) => `/icons/${name}.svg`);
 
 <Icon name="search" />;
 ```
@@ -36,7 +34,7 @@ helper with the assets in `public/heroicons/outline`. Pass an `IconName` from
 those asset filenames, without the `.svg` extension:
 
 ```tsx
-import { Icon } from "../../src/components/icon/icon";
+import { Icon } from '../../src/components/icon/icon';
 
 <Icon name="ticket" size="medium" />;
 ```

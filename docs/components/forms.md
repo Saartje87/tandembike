@@ -11,10 +11,10 @@ Use `disabled` when the action cannot currently be performed, and provide a
 clear label that describes the action.
 
 ```tsx
-import { Button } from "@blockle/blocks";
+import { Button } from '@blockle/blocks';
 
 <Button variant="solid" onClick={save} disabled={isSaving}>
-  {isSaving ? "Saving..." : "Save"}
+  {isSaving ? 'Saving...' : 'Save'}
 </Button>;
 ```
 
@@ -82,7 +82,7 @@ with `refusalReason(result, field)` from `src/app/lib/action-result.ts`.
   maxBlockSize={400}
   className={styles.textarea}
   containerProps={{ flex: 1, className: styles.wrapper }}
-/>
+/>;
 ```
 
 ## Choices

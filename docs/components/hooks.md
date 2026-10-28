@@ -33,4 +33,3 @@ from Client Components.
 - **`useIsomorphicLayoutEffect`** — SSR-safe layout-effect helper. This is a
   low-level rendering utility, not a substitute for ordinary effects or a
   component API.
-

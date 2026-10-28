@@ -106,16 +106,16 @@ up, copy the folder; to start fresh, stop the app and delete it.
 
 ## Available commands
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the local development server on `localhost:4747` |
-| `npm run build` | Create a production build |
-| `npm run start` | Serve the production build on `localhost:4747` |
-| `npm test` | Run the tests once |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run ts` | Check TypeScript types |
-| `npm run lint` | Check the code with Biome |
-| `npm run check` | Run lint, type checking, and tests |
+| Command               | Description                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run dev`         | Start the local development server on `localhost:4747`                                    |
+| `npm run build`       | Create a production build                                                                 |
+| `npm run start`       | Serve the production build on `localhost:4747`                                            |
+| `npm test`            | Run the tests once                                                                        |
+| `npm run test:watch`  | Run tests in watch mode                                                                   |
+| `npm run ts`          | Check TypeScript types                                                                    |
+| `npm run lint`        | Check the code with Biome                                                                 |
+| `npm run check`       | Run lint, type checking, and tests                                                        |
 | `npm run db:generate` | Write a migration after changing `src/db/schema.ts` (applied automatically on next start) |
 
 ## Project structure
