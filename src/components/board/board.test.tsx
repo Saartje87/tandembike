@@ -12,10 +12,15 @@ import {
   reorderTickets,
   updateTicket,
 } from '../../app/tickets/actions';
-import { keyboardDrag, stubDragAndDrop } from '../../test/drag-and-drop';
+import {
+  keyboardDrag,
+  nextFrame,
+  stubDragAndDrop,
+} from '../../test/drag-and-drop';
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
+import { type Status, statuses } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
 
@@ -121,25 +126,81 @@ const recordAnnouncements = () => {
   return heard;
 };
 
-const mockBoardBounds = (targetStatus: string) =>
-  vi
+/** The Status of the lane `section`, named by its heading. */
+const laneStatus = (section: Element | null) =>
+  document.getElementById(section?.getAttribute('aria-labelledby') ?? '')
+    ?.textContent;
+
+/**
+ * Lays out the Board so a card dragged right lands in `targetStatus`'s lane,
+ * on the empty space below that lane's own cards: they have no size, so a
+ * keyboard drag passes them over, as a pointer below them would.
+ */
+const mockBoardBounds = (targetStatus: string) => {
+  const isTarget = (section: Element | null) =>
+    laneStatus(section) === targetStatus;
+  return vi
     .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     .mockImplementation(function (this: HTMLElement) {
       if (isCard(this)) {
-        return new DOMRect(0, 0, 100, 100);
+        return isTarget(this.closest('section'))
+          ? new DOMRect(60, 300, 0, 0)
+          : new DOMRect(0, 0, 100, 100);
       }
       if (this.tagName === 'SECTION') {
-        const headingId = this.getAttribute('aria-labelledby');
-        if (
-          headingId &&
-          document.getElementById(headingId)?.textContent === targetStatus
-        ) {
-          return new DOMRect(60, 0, 100, 300);
-        }
-        return new DOMRect(500, 0, 100, 300);
+        return isTarget(this)
+          ? new DOMRect(60, 0, 100, 300)
+          : new DOMRect(500, 0, 100, 300);
       }
       return new DOMRect(0, 0, 800, 700);
     });
+};
+
+/**
+ * Lays out the Board's lanes side by side, left to right in Status order,
+ * with each lane's cards one under another. Returns a function that moves a
+ * lane, with its cards, one lane further left.
+ */
+const mockLaneBounds = () => {
+  const laneSpacing = 200;
+  const shifted = new Set<string>();
+  const left = (section: Element) => {
+    const status = laneStatus(section) ?? '';
+    return (
+      (statuses.indexOf(status as Status) - (shifted.has(status) ? 1 : 0)) *
+      laneSpacing
+    );
+  };
+  const bounds = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement) {
+      const section = this.closest('section');
+      if (isCard(this) && section) {
+        const cards: HTMLElement[] = [...section.querySelectorAll('li')].filter(
+          isCard,
+        );
+        return new DOMRect(
+          left(section),
+          50 + cards.indexOf(this) * 100,
+          100,
+          80,
+        );
+      }
+      if (this.tagName === 'SECTION') {
+        return new DOMRect(left(this), 0, 100, 400);
+      }
+      return new DOMRect(0, 0, 800, 700);
+    });
+  onTestFinished(() => bounds.mockRestore());
+  return (status: Status) => shifted.add(status);
+};
+
+/** The lanes a dragged card highlights as where it would drop. */
+const highlightedLanes = () =>
+  screen
+    .getAllByRole('region')
+    .filter((region) => region.hasAttribute('data-drop-target'))
+    .map(laneStatus);
 
 /** Points dnd-kit's hit testing at `status`'s lane for the rest of the test. */
 const pointAtLane = (status: string) => {
@@ -325,6 +386,175 @@ describe('Board', () => {
     });
     expect(cardsIn('Todo')).toEqual([]);
     expect(cardsIn('In progress')).toEqual(['Fix the header']);
+  });
+
+  it("moves a Ticket dropped below a Lane's last card to the end of that Lane", async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(updateTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    const bounds = mockBoardBounds('In progress');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({ number: 4, title: 'Fix the header' }),
+          ticket({ number: 7, title: 'Write the copy', status: 'In progress' }),
+          ticket({
+            number: 8,
+            title: 'Draw the logo',
+            status: 'In progress',
+            position: 1,
+          }),
+        ]}
+      />,
+    );
+
+    await dragTicketTo(4, 'In progress');
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 4,
+      status: 'In progress',
+    });
+    expect(cardsIn('In progress')).toEqual([
+      'Write the copy',
+      'Draw the logo',
+      'Fix the header',
+    ]);
+  });
+
+  it("moves a Ticket dropped below its own Lane's last card to the end of it", async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    const bounds = mockBoardBounds('Todo');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({ number: 4, title: 'Fix the header' }),
+          ticket({ number: 7, title: 'Write the copy', position: 1 }),
+          ticket({ number: 2, title: 'Add a footer', status: 'Done' }),
+        ]}
+      />,
+    );
+
+    await dragTicketTo(4, 'Todo');
+
+    expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      status: 'Todo',
+      ticketNumbers: [7, 4],
+    });
+    expect(updateTicket).not.toHaveBeenCalled();
+    expect(cardsIn('Todo')).toEqual(['Write the copy', 'Fix the header']);
+  });
+
+  it('leaves a card dragged out of its Lane and back onto its own slot where it was, highlighting the Lane it is over', async () => {
+    const moveLaneLeft = mockLaneBounds();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({ number: 4, title: 'Fix the header' }),
+          ticket({ number: 7, title: 'Write the copy', position: 1 }),
+          ticket({ number: 8, title: 'Draw the logo', status: 'In progress' }),
+        ]}
+      />,
+    );
+    await waitFor(() =>
+      expect(cardOf(4)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+    const heard = recordAnnouncements();
+
+    cardOf(4).focus();
+    await userEvent.keyboard('{Space}');
+    await nextFrame();
+    expect(highlightedLanes()).toEqual(['Todo']);
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(highlightedLanes()).toEqual(['In progress']));
+    // A keyboard drag leaves the dragged card's shape where it started, so
+    // its own lane moves to the left of it to be found again.
+    moveLaneLeft('Todo');
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(highlightedLanes()).toEqual(['Todo']));
+    await userEvent.keyboard('{Space}');
+
+    await waitFor(() => expect(heard.at(-1)).toBe('Dropped T4 in Todo.'));
+    expect(highlightedLanes()).toEqual([]);
+    expect(updateTicket).not.toHaveBeenCalled();
+    expect(reorderTickets).not.toHaveBeenCalled();
+    expect(cardsIn('Todo')).toEqual(['Fix the header', 'Write the copy']);
+    expect(cardsIn('In progress')).toEqual(['Draw the logo']);
+  });
+
+  it("moves a Ticket dropped below a filtered Lane's last card to just after that card", async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    const bounds = mockBoardBounds('Todo');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        filter={{ query: 'ship', labels: [] }}
+        tickets={[
+          ticket({ number: 4, title: 'Ship the header' }),
+          ticket({ number: 7, title: 'Ship the copy', position: 1 }),
+          ticket({ number: 9, title: 'Draw the logo', position: 2 }),
+        ]}
+      />,
+    );
+
+    await dragTicketTo(4, 'Todo');
+
+    expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      status: 'Todo',
+      // Before the hidden Tickets that follow it, as `mergeLaneOrder` says.
+      ticketNumbers: [7, 4, 9],
+    });
+    expect(cardsIn('Todo')).toEqual(['Ship the copy', 'Ship the header']);
+  });
+
+  it('reorders a card dropped on another card in its Lane', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    mockLaneBounds();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({ number: 4, title: 'Fix the header' }),
+          ticket({ number: 7, title: 'Write the copy', position: 1 }),
+          ticket({ number: 9, title: 'Draw the logo', position: 2 }),
+        ]}
+      />,
+    );
+
+    await keyboardDrag(cardOf(4), '{ArrowDown}');
+
+    await waitFor(() =>
+      expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+        projectId: project.id,
+        status: 'Todo',
+        ticketNumbers: [7, 4, 9],
+      }),
+    );
+    expect(updateTicket).not.toHaveBeenCalled();
   });
 
   it('drags a card from the card itself, which has no drag handle', async () => {
@@ -1235,6 +1465,41 @@ describe('Selecting cards', () => {
 
     expect(selectedTitles()).toEqual([]);
     expect(selectionBar()).not.toBeInTheDocument();
+  });
+
+  it('leaves a selection dragged out of its Lane and back onto its own slot where it was', async () => {
+    const moveLaneLeft = mockLaneBounds();
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({ number: 4, title: 'Fix the header' }),
+          ticket({ number: 7, title: 'Write the copy', position: 1 }),
+          ticket({ number: 8, title: 'Draw the logo', status: 'In progress' }),
+        ]}
+      />,
+    );
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(7, 'Write the copy'));
+    const heard = recordAnnouncements();
+
+    cardOf(4).focus();
+    await userEvent.keyboard('{Space}');
+    await nextFrame();
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(highlightedLanes()).toEqual(['In progress']));
+    moveLaneLeft('Todo');
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(highlightedLanes()).toEqual(['Todo']));
+    await userEvent.keyboard('{Space}');
+
+    await waitFor(() =>
+      expect(heard.at(-1)).toBe('Dropped 2 Tickets in Todo.'),
+    );
+    expect(moveTickets).not.toHaveBeenCalled();
+    expect(cardsIn('Todo')).toEqual(['Fix the header', 'Write the copy']);
+    expect(cardsIn('In progress')).toEqual(['Draw the logo']);
   });
 
   it('drags the whole selection to a column, in Board order, and saves it as one move', async () => {
