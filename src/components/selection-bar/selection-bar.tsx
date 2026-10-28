@@ -39,7 +39,7 @@ export const SelectionBar: FC<SelectionBarProps> = ({
   >
     {/* Marked so a click inside it is not one on empty Board space. */}
     <div data-selection-bar="">
-      {/* `Inline` takes no `role` (docs/blocks-feedback.md, 15). */}
+      {/* `Inline` takes no `role` (T315). */}
       <Box asChild display="flex" alignItems="center" gap={3}>
         <div role="toolbar" aria-label="Selection">
           <Text>{count} selected</Text>

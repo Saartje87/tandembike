@@ -221,7 +221,7 @@ const OpenDrawer: FC<TicketDrawerProps> = ({
   const requestClose = () => {
     // The Blocks `Drawer` does not join `Dialog`'s nesting, so an Escape or
     // outside click meant for a dialog in it (Delete) reaches the drawer
-    // first. Leave that one to the dialog (docs/blocks-feedback.md, 17).
+    // first. Leave that one to the dialog (T298).
     if (document.querySelector('dialog[data-ticket-drawer] dialog[open]')) {
       return;
     }

@@ -13,7 +13,7 @@ type Shades = { tint: string; strong: string };
 /**
  * Each palette colour as two tokens: `tint`, a soft background, and
  * `strong`, for an icon or text on that tint or on the page. Blocks has no
- * decorative palette (docs/blocks-feedback.md, 26), so the values live here.
+ * decorative palette (T317), so the values live here.
  */
 export const palette = createThemeContract(
   Object.fromEntries(

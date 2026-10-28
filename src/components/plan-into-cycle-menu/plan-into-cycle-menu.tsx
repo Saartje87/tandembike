@@ -16,7 +16,7 @@ export type PlanIntoCycleMenuProps = {
 /**
  * A "Plan into Cycle" button that opens a list of Cycles to pick from, and
  * closes on a pick. Escape closes the list and not what holds the button.
- * Blocks has no menu component (docs/blocks-feedback.md, 20).
+ * Blocks has no menu component (T323).
  */
 export const PlanIntoCycleMenu: FC<PlanIntoCycleMenuProps> = ({
   cycles,

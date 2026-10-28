@@ -56,7 +56,7 @@ type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
 /** A pill that says the Ticket is blocked by an unresolved Blocker. */
 const BlockedMarker: FC = () => (
-  // `Inline` takes no `role` and cannot render a `span` (docs/blocks-feedback.md, 15).
+  // `Inline` takes no `role` and cannot render a `span` (T315).
   <Box
     asChild
     display="flex"
@@ -106,7 +106,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
   const checked = acceptanceCriteria.filter((criterion) => criterion.checked);
   const total = acceptanceCriteria.length;
 
-  // `Inline` takes no `role` and cannot render a `span` (docs/blocks-feedback.md, 15).
+  // `Inline` takes no `role` and cannot render a `span` (T315).
   return (
     <Box asChild display="flex" alignItems="center" gap={1}>
       <span

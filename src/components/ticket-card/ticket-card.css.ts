@@ -4,9 +4,9 @@ import { style } from '@vanilla-extract/css';
 /**
  * A card, whose checkbox shows when it is hovered or focused. It is dragged
  * from anywhere on it, which the `cursor` atom cannot show: it has only
- * `auto` and `pointer` (docs/blocks-feedback.md, 31). A selected card
+ * `auto` and `pointer` (T319). A selected card
  * carried along by another one's drag is faded, which the `opacity` atom,
- * with only `0` and `1`, cannot express (docs/blocks-feedback.md, 32).
+ * with only `0` and `1`, cannot express (T320).
  */
 export const card = style({
   cursor: 'grab',
@@ -19,7 +19,7 @@ export const card = style({
 
 /**
  * The count pill of a dragged selection, centred on the card's top-right
- * corner: inset atoms take only `0` (docs/blocks-feedback.md, 32), and there is no
+ * corner: inset atoms take only `0` (T320), and there is no
  * badge component (16).
  */
 export const carryCount = style({
@@ -29,7 +29,7 @@ export const carryCount = style({
 /**
  * A card's select checkbox: hidden until its card is hovered or focused, or
  * anything on the Board is selected, yet still reachable by Tab. Blocks'
- * Checkbox shrinks beside text that wraps (docs/blocks-feedback.md, 22).
+ * Checkbox shrinks beside text that wraps (T308).
  */
 export const selectBox = style({
   flexShrink: 0,
