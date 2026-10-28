@@ -30,7 +30,7 @@ import {
   type DragStartEvent,
   useDroppable,
 } from '@dnd-kit/react';
-import { useSortable } from '@dnd-kit/react/sortable';
+import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
   type MouseEvent,
@@ -161,6 +161,8 @@ type StatusColumnProps = {
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
   carrier?: number;
+  /** Whether a card dragged now is over the lane or one of its cards. */
+  highlighted: boolean;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
   /** Called with the number of a Ticket created in the lane. */
   onCreated: (number: number) => void;
@@ -186,25 +188,28 @@ const StatusColumn: FC<StatusColumnProps> = ({
   tickets,
   selected,
   carrier,
+  highlighted,
   onSelect,
   onCreated,
 }) => {
-  const { ref, isDropTarget } = useDroppable({
-    id: status,
-    disabled: tickets.length > 0,
-    collisionPriority: 1,
-  });
+  // Takes a drop between or below its cards: a card under the pointer
+  // outranks its lane.
+  const { ref } = useDroppable({ id: status, collisionPriority: 1 });
   const headingId = useId();
 
   return (
     <Box
       asChild
-      backgroundColor={isDropTarget ? 'primary-100' : 'neutral-100'}
+      backgroundColor={highlighted ? 'primary-100' : 'neutral-100'}
       borderRadius={2}
       padding={3}
       blockSize="full"
     >
-      <section ref={ref} aria-labelledby={headingId}>
+      <section
+        ref={ref}
+        aria-labelledby={headingId}
+        data-drop-target={highlighted ? '' : undefined}
+      >
         <Stack gap={3}>
           <Inline gap={2} alignY="center">
             <Heading id={headingId} level={2} fontSize="medium">
@@ -572,7 +577,7 @@ export const Board: FC<BoardProps> = ({
   const [showArchived, setShowArchived] = useState(() =>
     tickets.some((ticket) => ticket.number === openTicket && ticket.archived),
   );
-  const lastDropTarget = useRef<string | number | undefined>(undefined);
+  const [overLane, setOverLane] = useState<Status>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const selectionAnchor = useRef<number | undefined>(undefined);
   const dragging = useRef(false);
@@ -919,12 +924,9 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
-  const rememberDropTarget = (event: DragOverEvent) => {
+  const followDrag = (event: DragOverEvent) => {
     const sourceId = event.operation.source?.id;
     const targetId = event.operation.target?.id;
-    if (targetId !== undefined && targetId !== sourceId) {
-      lastDropTarget.current = targetId;
-    }
     // dnd-kit would move the card's element into the other column's list,
     // which React then fails to remove from its own list on the drop.
     const statusOf = (id: unknown) =>
@@ -933,6 +935,8 @@ export const Board: FC<BoardProps> = ({
     if (targetStatus !== undefined && targetStatus !== statusOf(sourceId)) {
       event.preventDefault();
     }
+    // The lane under the pointer, whether over the lane or one of its cards.
+    setOverLane(isStatus(targetId) ? targetId : targetStatus);
   };
 
   const startDrag = (event: DragStartEvent) => {
@@ -950,17 +954,9 @@ export const Board: FC<BoardProps> = ({
   const finishDrag = (event: DragEndEvent) => {
     dragging.current = false;
     setCarrier(undefined);
-    const sourceId = event.operation.source?.id;
-    const operationTargetId = event.operation.target?.id;
-    // Dropped back on its own slot: take the card it was last over, but not
-    // a chip it passed on the way, or it would join that Epic.
-    const targetId =
-      sourceId === operationTargetId &&
-      lastDropTarget.current !== undefined &&
-      epicOfDropTarget(lastDropTarget.current) === undefined
-        ? lastDropTarget.current
-        : operationTargetId;
-    lastDropTarget.current = undefined;
+    setOverLane(undefined);
+    const { source, target } = event.operation;
+    const sourceId = source?.id;
     if (event.canceled) {
       return;
     }
@@ -973,6 +969,15 @@ export const Board: FC<BoardProps> = ({
     if (!ticket || ticket.archived) {
       return;
     }
+    // Over its own slot, the card is either where it started, and stays
+    // there, or where dnd-kit's sorting moved it within its lane: in the
+    // place of the card that held that slot.
+    const targetId =
+      target?.id === sourceId
+        ? isSortable(source) && source.index !== source.initialIndex
+          ? laneOf(ticket.status)[source.index]?.number
+          : undefined
+        : target?.id;
     const carriesSelection =
       selectedOnBoard.has(sourceId) && selection.length > 1;
     const epicNumber = epicOfDropTarget(targetId);
@@ -996,9 +1001,6 @@ export const Board: FC<BoardProps> = ({
       changeStatus(sourceId, status);
       return;
     }
-    if (typeof targetId !== 'number' || targetId === sourceId) {
-      return;
-    }
     const lane = shownTickets
       .filter(
         (candidate) =>
@@ -1013,8 +1015,12 @@ export const Board: FC<BoardProps> = ({
       .map((candidate) => candidate.number);
     const shownLane = laneOf(status).map(({ number }) => number);
     const sourceIndex = shownLane.indexOf(sourceId);
-    const targetIndex = shownLane.indexOf(targetId);
-    if (sourceIndex < 0 || targetIndex < 0) {
+    // Onto a card, it takes that card's place; onto the lane, the end.
+    const targetIndex =
+      typeof targetId === 'number'
+        ? shownLane.indexOf(targetId)
+        : shownLane.length - 1;
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
       return;
     }
     shownLane.splice(sourceIndex, 1);
@@ -1061,7 +1067,7 @@ export const Board: FC<BoardProps> = ({
           sensors={sensors}
           plugins={plugins}
           onDragStart={startDrag}
-          onDragOver={rememberDropTarget}
+          onDragOver={followDrag}
           onDragEnd={finishDrag}
         >
           <EpicChips
@@ -1085,6 +1091,7 @@ export const Board: FC<BoardProps> = ({
                   tickets={laneOf(status)}
                   selected={selectedOnBoard}
                   carrier={carrier}
+                  highlighted={overLane === status}
                   onSelect={select}
                   onCreated={setCreated}
                 />

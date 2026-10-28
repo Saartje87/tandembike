@@ -56,7 +56,7 @@ export function stubDragAndDrop() {
 }
 
 /** Lets dnd-kit handle the last key, which it does on the next frame. */
-async function nextFrame() {
+export async function nextFrame() {
   await act(async () => {
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => resolve()),
