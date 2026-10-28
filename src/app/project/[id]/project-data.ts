@@ -58,7 +58,7 @@ export async function boardPageTitle(
 
 /**
  * Ticket `number`, if it exists and belongs to Project `projectId`, so its
- * Board can open it; `null` otherwise, and the Board shows on its own.
+ * Board can open it; `null` otherwise, and its drawer says it is not found.
  */
 export function findBoardTicket(projectId: number, number: number) {
   try {

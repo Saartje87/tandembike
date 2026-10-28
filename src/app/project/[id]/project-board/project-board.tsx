@@ -1,9 +1,9 @@
-import { type FC, Suspense } from 'react';
+import type { FC } from 'react';
 
 import { Board } from '../../../../components/board/board';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
-import { TicketDrawerSkeleton } from '../../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton';
+import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
 import type { Project } from '../../../../tickets/tickets';
@@ -43,17 +43,12 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
     boardPathOf(project.id, tab === 'backlog' ? null : tab.id),
     filter,
   );
+  // One drawer for every Ticket opened over this tab, so it slides in once
+  // and only its contents stream in (T333).
   const drawer = openTicket !== undefined && (
-    <Suspense
-      key={openTicket}
-      fallback={<TicketDrawerSkeleton boardPath={boardPath} />}
-    >
-      <BoardTicketDrawer
-        projectId={project.id}
-        number={openTicket}
-        boardPath={boardPath}
-      />
-    </Suspense>
+    <TicketDrawerShell number={openTicket} boardPath={boardPath}>
+      <BoardTicketDrawer projectId={project.id} number={openTicket} />
+    </TicketDrawerShell>
   );
   return (
     <>

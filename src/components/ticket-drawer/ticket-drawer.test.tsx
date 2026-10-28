@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
-import { Activity } from 'react';
+import { Activity, type FC } from 'react';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
@@ -18,7 +18,8 @@ import {
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { EpicLink, Ticket } from '../../tickets/tickets';
-import { TicketDrawer } from './ticket-drawer';
+import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
+import { TicketDrawer, type TicketDrawerProps } from './ticket-drawer';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../../app/cycles/actions', () => ({
@@ -72,8 +73,17 @@ const ticket: Ticket = {
   updatedAt: new Date('2026-03-02T10:30:00Z'),
 };
 
+type InShellProps = TicketDrawerProps & { boardPath?: string };
+
+/** The drawer's contents in the shell a Board opens them in. */
+const InShell: FC<InShellProps> = ({ boardPath = '/project/1', ...props }) => (
+  <TicketDrawerShell number={props.ticket.number} boardPath={boardPath}>
+    <TicketDrawer {...props} />
+  </TicketDrawerShell>
+);
+
 const renderDrawer = (shown: Ticket = ticket) =>
-  renderWithTheme(<TicketDrawer ticket={shown} />);
+  renderWithTheme(<InShell ticket={shown} />);
 
 const drawer = () => screen.getByRole('dialog');
 const inDrawer = () => within(drawer());
@@ -177,7 +187,7 @@ describe('TicketDrawer', () => {
 
   it('shows the Cycle the Ticket is planned into', () => {
     renderWithTheme(
-      <TicketDrawer
+      <InShell
         ticket={ticket}
         cycles={[
           {
@@ -201,9 +211,7 @@ describe('TicketDrawer', () => {
   });
 
   it('closes to the tab it was opened over', async () => {
-    renderWithTheme(
-      <TicketDrawer ticket={ticket} boardPath="/project/1/cycle/7" />,
-    );
+    renderWithTheme(<InShell ticket={ticket} boardPath="/project/1/cycle/7" />);
 
     await userEvent.click(button('Close'));
 
@@ -263,7 +271,7 @@ describe('TicketDrawer', () => {
 
   it("shows the Ticket's comments with a way to add one", () => {
     renderWithTheme(
-      <TicketDrawer
+      <InShell
         ticket={ticket}
         comments={[
           {
@@ -435,9 +443,9 @@ describe('TicketDrawer', () => {
         await inDrawer().findByRole('textbox', { name: 'Title' }),
       ).toHaveValue('');
       expect(titleInput()).toHaveAccessibleDescription('Enter a title.');
-      // The optimistic title gives way once the refused save settles.
+      // With no title heading while it is edited, the number names it.
       expect(
-        await screen.findByRole('dialog', { name: 'Fix the header' }),
+        screen.getByRole('dialog', { name: 'Ticket T4' }),
       ).toBeInTheDocument();
     });
 
@@ -491,10 +499,10 @@ describe('TicketDrawer', () => {
     it('follows a title changed elsewhere unless it is being edited', async () => {
       const { rerender } = renderDrawer();
 
-      rerender(<TicketDrawer ticket={{ ...ticket, title: 'Fix the logo' }} />);
+      rerender(<InShell ticket={{ ...ticket, title: 'Fix the logo' }} />);
       await userEvent.click(button('Fix the logo'));
       await userEvent.type(titleInput(), '!');
-      rerender(<TicketDrawer ticket={{ ...ticket, title: 'Fix the menu' }} />);
+      rerender(<InShell ticket={{ ...ticket, title: 'Fix the menu' }} />);
 
       expect(titleInput()).toHaveValue('Fix the logo!');
     });
@@ -683,9 +691,7 @@ describe('TicketDrawer', () => {
 
       await editDescription();
       rerender(
-        <TicketDrawer
-          ticket={{ ...ticket, description: 'Changed by an Agent.' }}
-        />,
+        <InShell ticket={{ ...ticket, description: 'Changed by an Agent.' }} />,
       );
       await leaveField();
 
@@ -705,9 +711,7 @@ describe('TicketDrawer', () => {
       // during it can suspend until it ends.
       await act(async () =>
         rerender(
-          <TicketDrawer
-            ticket={{ ...ticket, description: 'Now *shorter*.' }}
-          />,
+          <InShell ticket={{ ...ticket, description: 'Now *shorter*.' }} />,
         ),
       );
 
@@ -719,7 +723,7 @@ describe('TicketDrawer', () => {
 
       await editDescription();
       rerender(
-        <TicketDrawer
+        <InShell
           ticket={{
             ...ticket,
             description: 'Changed by an Agent.',
@@ -779,7 +783,7 @@ describe('TicketDrawer', () => {
         resolved: false,
       });
       renderWithTheme(
-        <TicketDrawer
+        <InShell
           ticket={ticket}
           blockers={{
             blockedBy: [related(2, 'Design the header')],
@@ -802,7 +806,7 @@ describe('TicketDrawer', () => {
 
     it('says plainly in the Blocked by row whether the Ticket is blocked', () => {
       renderWithTheme(
-        <TicketDrawer
+        <InShell
           ticket={{ ...ticket, blockedBy: [2], blocked: true }}
           blockers={{
             blockedBy: [
@@ -832,7 +836,7 @@ describe('TicketDrawer', () => {
 
     it('says it is ready to start once every Blocker is resolved', () => {
       renderWithTheme(
-        <TicketDrawer
+        <InShell
           ticket={{ ...ticket, blockedBy: [2], blocked: false }}
           blockers={{
             blockedBy: [
@@ -904,7 +908,7 @@ describe('TicketDrawer', () => {
 
   it("links a key by the Project's Reference templates", () => {
     renderWithTheme(
-      <TicketDrawer
+      <InShell
         ticket={{ ...ticket, externalReferences: ['#55'] }}
         referenceTemplates={[
           { prefix: '#', url: 'https://github.com/acme/web/issues/{n}' },
@@ -932,7 +936,7 @@ describe('TicketDrawer', () => {
 
     it('adds an existing label from the select without closing the drawer', async () => {
       vi.mocked(addTicketLabel).mockResolvedValue({ ok: true });
-      renderWithTheme(<TicketDrawer ticket={ticket} allLabels={['bug']} />);
+      renderWithTheme(<InShell ticket={ticket} allLabels={['bug']} />);
 
       const select = inDrawer().getByRole('combobox', { name: 'Add a label' });
       await userEvent.selectOptions(select, 'bug');
@@ -1070,7 +1074,7 @@ describe('TicketDrawer', () => {
         { number: 8, title: 'Checkout', color: 'teal' },
       ];
       const { unmount } = renderWithTheme(
-        <TicketDrawer ticket={ticket} epics={epics} />,
+        <InShell ticket={ticket} epics={epics} />,
       );
 
       expect(
@@ -1079,7 +1083,7 @@ describe('TicketDrawer', () => {
       unmount();
 
       renderWithTheme(
-        <TicketDrawer ticket={{ ...epic, number: 10 }} epics={epics} />,
+        <InShell ticket={{ ...epic, number: 10 }} epics={epics} />,
       );
 
       expect(
@@ -1187,7 +1191,7 @@ describe('TicketDrawer', () => {
       const { rerender } = renderDrawer();
 
       await userEvent.click(button('Archive'));
-      rerender(<TicketDrawer ticket={{ ...ticket, archived: true }} />);
+      rerender(<InShell ticket={{ ...ticket, archived: true }} />);
 
       expect(button('Restore')).toBeInTheDocument();
     });
@@ -1195,12 +1199,12 @@ describe('TicketDrawer', () => {
     it('follows an archive or restore made elsewhere', () => {
       const { rerender } = renderDrawer();
 
-      rerender(<TicketDrawer ticket={{ ...ticket, archived: true }} />);
+      rerender(<InShell ticket={{ ...ticket, archived: true }} />);
       expect(
         inDrawer().getByText('This Ticket is archived'),
       ).toBeInTheDocument();
 
-      rerender(<TicketDrawer ticket={ticket} />);
+      rerender(<InShell ticket={ticket} />);
       expect(button('Archive')).toBeInTheDocument();
     });
 
@@ -1243,7 +1247,7 @@ describe('TicketDrawer', () => {
       it('asks before archiving it with its children that are not archived', async () => {
         vi.mocked(archiveTicket).mockResolvedValue({ ok: true });
         renderWithTheme(
-          <TicketDrawer
+          <InShell
             ticket={epic}
             epicChildren={[
               {
@@ -1309,7 +1313,7 @@ describe('TicketDrawer', () => {
     it('closes to its Board by replacing the URL once the Ticket is deleted', async () => {
       vi.mocked(deleteTicket).mockResolvedValue({ ok: true });
       renderWithTheme(
-        <TicketDrawer ticket={ticket} boardPath="/project/1/cycle/7" />,
+        <InShell ticket={ticket} boardPath="/project/1/cycle/7" />,
       );
 
       await userEvent.click(button('Delete'));
@@ -1338,24 +1342,12 @@ describe('TicketDrawer', () => {
     });
   });
 
-  it("closes to its Project's Backlog by replacing the URL, keeping the Board's scroll", async () => {
-    renderDrawer();
-
-    await userEvent.click(button('Close'));
-
-    expect(router.replace).toHaveBeenCalledExactlyOnceWith('/project/1', {
-      scroll: false,
-    });
-    expect(router.push).not.toHaveBeenCalled();
-    expect(router.back).not.toHaveBeenCalled();
-  });
-
   // Next.js keeps a route the User left in a hidden <Activity>, and shows it
   // again when they come back.
   it('takes its dialog down while its route is hidden and reopens fresh', async () => {
     const at = (mode: 'visible' | 'hidden') => (
       <Activity mode={mode}>
-        <TicketDrawer ticket={ticket} />
+        <InShell ticket={ticket} />
       </Activity>
     );
     const { rerender } = renderWithTheme(at('visible'));
