@@ -1030,7 +1030,7 @@ export const Board: FC<BoardProps> = ({
   };
 
   return (
-    // `Stack` takes no `onClick` and has no `asChild` (docs/blocks-feedback.md, 15).
+    // `Stack` takes no `onClick` and has no `asChild` (T315).
     <Box asChild display="flex" flexDirection="column" gap={4}>
       {/* A click on empty Board space clears the selection, a pointer
           shortcut: Escape and the bar's Clear button do it by keyboard. */}

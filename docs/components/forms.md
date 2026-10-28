@@ -91,7 +91,7 @@ with `refusalReason(result, field)` from `src/app/lib/action-result.ts`.
   readable label in its children and use `name` for form identification.
   Without children it renders only the box: name it with `aria-label`, and in
   a flex row give it a `className` with `flexShrink: 0`, or it shrinks beside
-  text that wraps (`docs/blocks-feedback.md`, 22).
+  text that wraps (T308).
 - **`Radio`** is for choosing one value from a group. Give related radios the
   same `name` and distinct `value` values.
 - **`Select`** is for choosing one item from a set of options. Provide clear

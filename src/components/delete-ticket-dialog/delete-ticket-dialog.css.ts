@@ -1,4 +1,4 @@
 import { style } from '@vanilla-extract/css';
 
-/** The warnings, without list markers (docs/blocks-feedback.md, 8). */
+/** The warnings, without list markers (T313). */
 export const warningList = style({ listStyle: 'none' });

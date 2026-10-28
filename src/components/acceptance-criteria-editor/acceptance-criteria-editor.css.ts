@@ -10,7 +10,7 @@ export const sortable = style({});
 
 /**
  * Its drag handle, faint until the criterion is hovered or focused. The
- * `opacity` atom has only `0` and `1` (docs/blocks-feedback.md).
+ * `opacity` atom has only `0` and `1` (T320).
  */
 export const handle = style({
   opacity: 0.4,
@@ -23,7 +23,7 @@ export const handle = style({
 
 /**
  * Blocks' Checkbox has a fixed size but shrinks beside text that wraps
- * (docs/blocks-feedback.md).
+ * (T308).
  */
 export const checkbox = style({
   flexShrink: 0,

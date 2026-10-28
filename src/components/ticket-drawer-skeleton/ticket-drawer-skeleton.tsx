@@ -23,7 +23,7 @@ export const TicketDrawerSkeleton: FC<TicketDrawerSkeletonProps> = ({
   boardPath,
 }) => {
   const router = useRouter();
-  // Like the drawer itself, only while shown (docs/blocks-feedback.md, 10).
+  // Like the drawer itself, only while shown (T296).
   const shown = useIsShown();
   if (!shown) {
     return null;

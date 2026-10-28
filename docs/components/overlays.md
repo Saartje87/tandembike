@@ -99,7 +99,7 @@ export function HelpPopover() {
 
 Under jsdom an open popover counts as hidden, so a component test that opens
 one calls `showOpenPopovers()` from `src/test/popover.ts` first
-(`docs/blocks-feedback.md`, 27). In a file with drag tests, call it inside
+(T299). In a file with drag tests, call it inside
 the `describe` that opens the popover: dnd-kit drags differently once the
 Popover API exists. Blocks' `Popover` renders a plain `div`;
 pass `role="dialog"` and an `aria-label` when it holds controls.
@@ -110,8 +110,7 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 2.8.1 (see proposals 10 and 17 in
-`docs/blocks-feedback.md`):
+Checked against `@blockle/blocks-react` 2.8.1 (see T296 and T298):
 
 - `Drawer.js` has no `'use client'` directive; import it only from a Client
   Component.
@@ -130,4 +129,4 @@ Checked against `@blockle/blocks-react` 2.8.1 (see proposals 10 and 17 in
   React `onKeyDown`, since Next's React root is `document` too (see
   `claimEscape` in `keep-drawer-open/keep-drawer-open.ts`). It does not join
   `Dialog`'s nesting, so a `Dialog` opened from inside it leaves its Escape
-  and outside-click handling on (proposal 17).
+  and outside-click handling on (T298).

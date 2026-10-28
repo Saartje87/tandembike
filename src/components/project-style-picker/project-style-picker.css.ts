@@ -15,7 +15,7 @@ export const icons = style({
 
 /**
  * Blocks centres a popover on its anchor and never keeps it on screen
- * (docs/blocks-feedback.md, 29), so under an icon at the page's edge it
+ * (T300), so under an icon at the page's edge it
  * would run off. Shifting it by half its width starts it at the icon's
  * centre. `translate`, not `transform`, which the theme animates.
  */

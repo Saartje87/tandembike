@@ -13,7 +13,7 @@ export const list = style({
 
 /**
  * Blocks has no `minInlineSize` or `textOverflow` atom
- * (docs/blocks-feedback.md, 14): the current entry, and the row of its icon
+ * (T314): the current entry, and the row of its icon
  * and name, may shrink, and its name gives way with an ellipsis.
  */
 export const current = style({
