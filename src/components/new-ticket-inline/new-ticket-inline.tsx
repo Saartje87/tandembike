@@ -29,6 +29,8 @@ export type NewTicketInlineProps = {
   autoFocus?: boolean;
   /** Called after a Ticket is created, and when Escape clears the field. */
   onDone?: () => void;
+  /** Called with the number of each Ticket created, before `onDone`. */
+  onCreated?: (number: number) => void;
 };
 
 /** What the field is called and says when empty, by what it creates. */
@@ -56,6 +58,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
   type = 'Ticket',
   autoFocus,
   onDone,
+  onCreated,
 }) => {
   const titleId = useId();
   const errorId = useId();
@@ -90,6 +93,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       return;
     }
     reset();
+    onCreated?.(result.number);
     onDone?.();
   });
 

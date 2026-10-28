@@ -1,6 +1,10 @@
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { useRouter, useSelectedLayoutSegments } from 'next/navigation';
+import {
+  useRouter,
+  useSearchParams,
+  useSelectedLayoutSegments,
+} from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCycle } from '../../app/cycles/actions';
@@ -11,6 +15,7 @@ import { ProjectTabs } from './project-tabs';
 
 vi.mock('next/navigation', () => ({
   useRouter: vi.fn(),
+  useSearchParams: vi.fn(),
   useSelectedLayoutSegments: vi.fn(),
 }));
 vi.mock('../../app/cycles/actions', () => ({ createCycle: vi.fn() }));
@@ -26,9 +31,15 @@ const cycle = (
   ...fields,
 });
 
-/** Renders the tabs as the Project layout does at `segments` below it. */
-const renderTabs = (cycles: Cycle[], segments: string[] = []) => {
+/**
+ * Renders the tabs as the Project layout does at `segments` below it, with
+ * search parameters `search`.
+ */
+const renderTabs = (cycles: Cycle[], segments: string[] = [], search = '') => {
   vi.mocked(useSelectedLayoutSegments).mockReturnValue(segments);
+  vi.mocked(useSearchParams).mockReturnValue(
+    new URLSearchParams(search) as ReturnType<typeof useSearchParams>,
+  );
   return renderWithTheme(<ProjectTabs projectId={3} cycles={cycles} />);
 };
 
@@ -62,6 +73,21 @@ describe('ProjectTabs', () => {
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
+    ]);
+  });
+
+  it("carries a Board filter to the Backlog's and Cycles' tabs, not to the History or Settings", () => {
+    renderTabs(
+      [cycle({ id: 7, title: 'Beta' })],
+      [],
+      'q=fix+it&label=bug&label=ui&ticket=12',
+    );
+
+    expect(tabs().map(({ href }) => href)).toEqual([
+      '/project/3?q=fix+it&label=bug&label=ui',
+      '/project/3/cycle/7?q=fix+it&label=bug&label=ui',
+      '/project/3/cycles',
+      '/project/3/settings',
     ]);
   });
 

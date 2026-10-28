@@ -10,7 +10,10 @@ export type BoardTicketDrawerProps = {
   /** The Project whose Board it opens over. */
   projectId: number;
   number: number;
-  /** The Board's own URL, without `?ticket=`: where closing goes. */
+  /**
+   * The Board's own URL, with its filter and without `?ticket=`: where
+   * closing goes.
+   */
   boardPath: string;
 };
 

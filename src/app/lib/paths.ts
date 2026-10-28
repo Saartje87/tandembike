@@ -40,11 +40,64 @@ export function projectSettingsPath(projectId: number): string {
 }
 
 /**
- * Board `boardPath` with Ticket `number` open in its drawer (ADR 0013). Open
- * it with `scroll={false}`, so the Board keeps its scroll position.
+ * A Board filter (see `GLOSSARY.md`): a search text, kept as typed, and the
+ * Labels a Ticket needs every one of, in the order picked.
  */
-export function ticketOnBoardPath(boardPath: string, number: number): string {
-  return `${boardPath}?ticket=${number}`;
+export type BoardFilter = { query: string; labels: string[] };
+
+/** The Board filter that hides nothing. */
+export const noBoardFilter: BoardFilter = { query: '', labels: [] };
+
+/**
+ * The Board filter in a Board's `?q=` and `?label=` parameters: the first
+ * `q`, and each `label` once, lower-cased as the Tickets module stores them.
+ */
+export function boardFilterOf(
+  q: string | string[] | undefined,
+  label: string | string[] | undefined,
+): BoardFilter {
+  const query = (Array.isArray(q) ? q[0] : q) ?? '';
+  const labels = (Array.isArray(label) ? label : label ? [label] : [])
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value !== '');
+  return { query, labels: [...new Set(labels)] };
+}
+
+/**
+ * Board `boardPath` narrowed by `filter`, as `?q=<text>&label=a&label=b`,
+ * with Ticket `ticket` open in its drawer when given. A blank search is
+ * left out.
+ */
+export function filteredBoardPath(
+  boardPath: string,
+  filter: BoardFilter,
+  ticket?: number,
+): string {
+  const search = new URLSearchParams();
+  if (filter.query.trim() !== '') {
+    search.set('q', filter.query);
+  }
+  for (const label of filter.labels) {
+    search.append('label', label);
+  }
+  if (ticket !== undefined) {
+    search.set('ticket', String(ticket));
+  }
+  const query = search.toString();
+  return query === '' ? boardPath : `${boardPath}?${query}`;
+}
+
+/**
+ * Board `boardPath` with Ticket `number` open in its drawer (ADR 0013),
+ * keeping the Board's `filter`. Open it with `scroll={false}`, so the Board
+ * keeps its scroll position.
+ */
+export function ticketOnBoardPath(
+  boardPath: string,
+  number: number,
+  filter: BoardFilter = noBoardFilter,
+): string {
+  return filteredBoardPath(boardPath, filter, number);
 }
 
 /**

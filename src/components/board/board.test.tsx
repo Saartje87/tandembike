@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { planTickets, unplanTickets } from '../../app/cycles/actions';
+import { noBoardFilter } from '../../app/lib/paths';
 import {
   archiveTickets,
   createTicket,
@@ -74,6 +75,7 @@ const ticket = (
 const cardsIn = (column: string) =>
   within(screen.getByRole('region', { name: column }))
     .queryAllByRole('listitem')
+    .filter((item) => isCard(item))
     .map((card) =>
       within(card).getAllByRole('link')[0].getAttribute('aria-label'),
     );
@@ -294,7 +296,7 @@ describe('Board', () => {
       />,
     );
 
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(within(cardOf(4)).queryByRole('combobox')).not.toBeInTheDocument();
   });
 
   it('moves a Ticket to the dropped-on Status and saves only that Status', async () => {
@@ -1734,5 +1736,554 @@ describe('Planning a selection into a Cycle', () => {
     expect(
       screen.queryByRole('button', { name: 'Plan into Cycle' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('Filtering the Board', () => {
+  const header = ticket({
+    number: 4,
+    title: 'Fix the header',
+    labels: ['bug', 'ui'],
+    position: 0,
+  });
+  const copy = ticket({
+    number: 7,
+    title: 'Write the copy',
+    labels: ['docs'],
+    position: 1,
+  });
+  const footer = ticket({
+    number: 12,
+    title: 'Fix the footer',
+    labels: ['bug'],
+    position: 2,
+  });
+  const deploy = ticket({
+    number: 42,
+    title: 'Deploy',
+    status: 'In progress',
+  });
+  const oldLogo = ticket({
+    number: 3,
+    title: 'Fix the old logo',
+    labels: ['legacy'],
+    archived: true,
+  });
+  const board = [header, copy, footer, deploy, oldLogo];
+
+  const search = () =>
+    screen.getByRole('searchbox', { name: 'Search Tickets' });
+  const labelPicker = () =>
+    screen.getByRole('combobox', { name: 'Filter by Label' });
+  const offeredLabels = () =>
+    within(labelPicker())
+      .getAllByRole('option')
+      .slice(1)
+      .map((option) => option.textContent);
+  const chosenLabels = () =>
+    within(screen.getByRole('list', { name: 'Chosen Labels' }))
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+  const replaceState = () => {
+    const spy = vi.spyOn(window.history, 'replaceState');
+    onTestFinished(() => spy.mockRestore());
+    return spy;
+  };
+  const checkbox = (number: number, title: string) =>
+    screen.getByRole('checkbox', { name: `Select T${number} ${title}` });
+  const selectedTitles = () =>
+    screen
+      .queryAllByRole('checkbox', { name: /^Select T/, checked: true })
+      .map((box) => box.getAttribute('aria-label'));
+
+  beforeEach(() => {
+    vi.mocked(createTicket).mockReset();
+  });
+
+  it('shows only Tickets whose title contains the search, trimmed and ignoring case', async () => {
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    await userEvent.type(search(), '  FIX THE ');
+
+    expect(cardsIn('Todo')).toEqual(['Fix the header', 'Fix the footer']);
+    expect(cardsIn('In progress')).toEqual([]);
+  });
+
+  it.each(['T42', '42'])(
+    'finds a Ticket by its number, as %s',
+    async (text) => {
+      renderWithTheme(<Board project={project} tickets={board} />);
+
+      await userEvent.type(search(), text);
+
+      expect(cardsIn('Todo')).toEqual([]);
+      expect(cardsIn('In progress')).toEqual(['Deploy']);
+    },
+  );
+
+  it("offers only the Labels on the Board's Tickets, archived ones and Epics included", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        epics={[
+          ticket({
+            number: 30,
+            title: 'Checkout',
+            type: 'Epic',
+            labels: ['payments'],
+          }),
+        ]}
+      />,
+    );
+
+    expect(offeredLabels()).toEqual([
+      'bug',
+      'docs',
+      'legacy',
+      'payments',
+      'ui',
+    ]);
+  });
+
+  it('shows only Tickets with every Label picked, and lists them as chosen in the order picked', async () => {
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    await userEvent.selectOptions(labelPicker(), 'ui');
+    await userEvent.selectOptions(labelPicker(), 'bug');
+
+    expect(cardsIn('Todo')).toEqual(['Fix the header']);
+    expect(chosenLabels()).toEqual(['ui', 'bug']);
+    expect(offeredLabels()).toEqual(['docs', 'legacy']);
+  });
+
+  it('keeps a chosen Label no Ticket has listed, so it can be removed', async () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: '', labels: ['gone'] }}
+      />,
+    );
+
+    expect(chosenLabels()).toEqual(['gone']);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove label gone' }),
+    );
+
+    expect(cardsIn('Todo')).toEqual([
+      'Fix the header',
+      'Write the copy',
+      'Fix the footer',
+    ]);
+  });
+
+  it('starts with the filter from the URL', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: ['bug'] }}
+      />,
+    );
+
+    expect(search()).toHaveValue('fix');
+    expect(cardsIn('Todo')).toEqual(['Fix the header', 'Fix the footer']);
+  });
+
+  it('puts the search in the URL after a pause, replacing the history entry', async () => {
+    const replace = replaceState();
+    renderWithTheme(<Board project={project} tickets={board} cycleId={7} />);
+
+    await userEvent.type(search(), 'fix header');
+
+    expect(replace).not.toHaveBeenCalledWith(
+      null,
+      '',
+      '/project/1/cycle/7?q=fix+h',
+    );
+    await waitFor(() =>
+      expect(replace).toHaveBeenLastCalledWith(
+        null,
+        '',
+        '/project/1/cycle/7?q=fix+header',
+      ),
+    );
+  });
+
+  it('puts picked Labels in the URL at once, and leaves a blank search out', async () => {
+    const replace = replaceState();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: ' ', labels: ['bug'] }}
+      />,
+    );
+
+    await userEvent.selectOptions(labelPicker(), 'ui');
+
+    expect(replace).toHaveBeenLastCalledWith(
+      null,
+      '',
+      '/project/1?label=bug&label=ui',
+    );
+  });
+
+  it("opens a card's, an Epic's and an archived Ticket's drawer keeping the filter", async () => {
+    const epic = ticket({ number: 30, title: 'Fix it all', type: 'Epic' });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        epics={[epic]}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Show archived/ }),
+    );
+
+    expect(
+      screen.getByRole('link', { name: 'Fix the header' }),
+    ).toHaveAttribute('href', '/project/1?q=fix&ticket=4');
+    expect(
+      screen.getByRole('link', { name: /T30 Fix it all/ }),
+    ).toHaveAttribute('href', '/project/1?q=fix&ticket=30');
+    expect(
+      screen.getByRole('link', { name: 'Fix the old logo' }),
+    ).toHaveAttribute('href', '/project/1?q=fix&ticket=3');
+  });
+
+  it('filters the archived Tickets, and counts only the matching ones', async () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ...board,
+          ticket({ number: 5, title: 'Old copy', archived: true }),
+        ]}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    const toggle = screen.getByRole('checkbox', { name: 'Show archived (1)' });
+    await userEvent.click(toggle);
+
+    const archived = within(
+      screen.getByRole('region', { name: 'Archived Tickets' }),
+    );
+    expect(archived.getByText('Fix the old logo')).toBeInTheDocument();
+    expect(archived.queryByText('Old copy')).not.toBeInTheDocument();
+  });
+
+  it('counts only the matching Tickets in each column', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    expect(
+      within(screen.getByRole('region', { name: 'Todo' })).getByText(
+        (_, element) => element?.textContent === '2 Tickets',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  describe('with Epics', () => {
+    const child = (
+      fields: Pick<Ticket, 'number' | 'title'>,
+    ): Ticket['children'][number] => ({
+      ...fields,
+      status: 'Todo',
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+    const checkout = ticket({
+      number: 10,
+      title: 'Checkout',
+      type: 'Epic',
+      children: [
+        { ...child({ number: 11, title: 'Pay by card' }), status: 'Done' },
+        child({ number: 13, title: 'Pay by invoice' }),
+      ],
+    });
+    const searchEpic = ticket({ number: 20, title: 'Search', type: 'Epic' });
+    const payByCard = ticket({
+      number: 11,
+      title: 'Pay by card',
+      status: 'Done',
+      labels: ['bug'],
+      epic: { number: 10, title: 'Checkout', color: 'teal' },
+    });
+    const payByInvoice = ticket({
+      number: 13,
+      title: 'Pay by invoice',
+      epic: { number: 10, title: 'Checkout', color: 'teal' },
+    });
+    const tickets = [checkout, searchEpic, payByCard, payByInvoice];
+    const epics = [checkout, searchEpic];
+    const chips = () =>
+      within(screen.getByRole('list', { name: 'Epics' }))
+        .queryAllByRole('link')
+        .map((link) => link.textContent);
+
+    it('keeps an Epic whose child matches, counting all its children', () => {
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={tickets}
+          epics={epics}
+          filter={{ query: '', labels: ['bug'] }}
+        />,
+      );
+
+      expect(chips()).toEqual(['T10 Checkout 1/2 Done']);
+      expect(cardsIn('Todo')).toEqual([]);
+      expect(cardsIn('Done')).toEqual(['Pay by card']);
+    });
+
+    it('keeps an Epic that matches itself, its unmatched children hidden', () => {
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={tickets}
+          epics={epics}
+          filter={{ query: 'search', labels: [] }}
+        />,
+      );
+
+      expect(chips()).toEqual(['T20 Search 0/0 Done']);
+      expect(cardsIn('Todo')).toEqual([]);
+      expect(cardsIn('Done')).toEqual([]);
+    });
+  });
+
+  it('drops Tickets the filter hides from the selection', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<Board project={project} tickets={board} />);
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.click(checkbox(7, 'Write the copy'));
+
+    await user.type(search(), 'fix');
+    await user.clear(search());
+
+    expect(selectedTitles()).toEqual(['Select T4 Fix the header']);
+  });
+
+  it('selects only shown cards in a Shift-click range', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    await user.click(checkbox(4, 'Fix the header'));
+    await user.keyboard('{Shift>}');
+    await user.click(screen.getByRole('link', { name: 'Fix the footer' }));
+    await user.keyboard('{/Shift}');
+    await user.clear(search());
+
+    expect(selectedTitles()).toEqual([
+      'Select T4 Fix the header',
+      'Select T12 Fix the footer',
+    ]);
+  });
+
+  it('says when no Ticket matches, and clears the filter', async () => {
+    const replace = replaceState();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'nothing', labels: ['bug'] }}
+      />,
+    );
+
+    expect(screen.getByText('No Tickets match')).toBeInTheDocument();
+    const clears = screen.getAllByRole('button', { name: 'Clear filter' });
+    await userEvent.click(clears[clears.length - 1]);
+
+    expect(screen.queryByText('No Tickets match')).not.toBeInTheDocument();
+    expect(search()).toHaveValue('');
+    expect(cardsIn('Todo')).toHaveLength(3);
+    expect(replace).toHaveBeenLastCalledWith(null, '', '/project/1');
+  });
+
+  it('offers Clear filter beside the controls only while a filter is active', async () => {
+    renderWithTheme(<Board project={project} tickets={board} />);
+
+    expect(
+      screen.queryByRole('button', { name: 'Clear filter' }),
+    ).not.toBeInTheDocument();
+    await userEvent.type(search(), 'fix');
+
+    expect(
+      screen.getByRole('button', { name: 'Clear filter' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No Tickets match')).not.toBeInTheDocument();
+  });
+
+  it('drops a Ticket edited out of the filter at once, without a notice', () => {
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[{ ...header, title: 'Tidy the header' }, copy, footer]}
+        filter={filter}
+      />,
+    );
+
+    expect(cardsIn('Todo')).toEqual(['Fix the footer']);
+    expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
+  });
+
+  it('says briefly when a Ticket added inline is hidden by the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 80 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Write the footer{Enter}',
+    );
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, ticket({ number: 80, title: 'Write the footer' })]}
+        filter={filter}
+      />,
+    );
+
+    expect(
+      await screen.findByText('T80 created, hidden by the filter'),
+    ).toHaveAttribute('role', 'status');
+  });
+
+  it('says nothing when a Ticket added inline matches the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 80 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Fix the logo{Enter}',
+    );
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, ticket({ number: 80, title: 'Fix the logo' })]}
+        filter={filter}
+      />,
+    );
+
+    expect(cardsIn('Todo')).toContain('Fix the logo');
+    expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
+  });
+
+  it('follows the URL when the Board is opened again without its filter', () => {
+    const { rerender } = renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    rerender(
+      <Board project={project} tickets={board} filter={noBoardFilter} />,
+    );
+
+    expect(search()).toHaveValue('');
+    expect(cardsIn('Todo')).toHaveLength(3);
+  });
+
+  it('keeps the search being typed when the Board refreshes with the URL it wrote', async () => {
+    replaceState();
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} />,
+    );
+    await userEvent.type(search(), 'fix');
+    await waitFor(() => expect(window.history.replaceState).toHaveBeenCalled());
+    await userEvent.type(search(), ' the f');
+
+    rerender(
+      <Board
+        project={project}
+        tickets={board}
+        filter={{ query: 'fix', labels: [] }}
+      />,
+    );
+
+    expect(search()).toHaveValue('fix the f');
+    expect(cardsIn('Todo')).toEqual(['Fix the footer']);
+  });
+
+  it('says briefly when an Epic added inline is hidden by the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 81 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Epic' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Epic title' }),
+      'Checkout{Enter}',
+    );
+    const epic = ticket({ number: 81, title: 'Checkout', type: 'Epic' });
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, epic]}
+        epics={[epic]}
+        filter={filter}
+      />,
+    );
+
+    expect(
+      await screen.findByText('T81 created, hidden by the filter'),
+    ).toBeInTheDocument();
+  });
+
+  it('says nothing when a Ticket added inline that matched is edited out of the filter', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 80 });
+    const filter = { query: 'fix', labels: [] };
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={board} filter={filter} />,
+    );
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Fix the logo{Enter}',
+    );
+    const logo = ticket({ number: 80, title: 'Fix the logo' });
+    rerender(
+      <Board project={project} tickets={[...board, logo]} filter={filter} />,
+    );
+
+    rerender(
+      <Board
+        project={project}
+        tickets={[...board, { ...logo, title: 'Draw the logo' }]}
+        filter={filter}
+      />,
+    );
+
+    expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
   });
 });

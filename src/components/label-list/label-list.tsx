@@ -8,19 +8,25 @@ import * as styles from './label-list.css';
 
 export type LabelListProps = {
   labels: string[];
+  /** The list's accessible name. Defaults to `Labels`. */
+  name?: string;
   /** When given, each label gets a button that removes it. */
   onRemove?: (label: string, event: MouseEvent) => void;
 };
 
 /** A Ticket's labels as small pills; nothing when it has none. */
-export const LabelList: FC<LabelListProps> = ({ labels, onRemove }) => {
+export const LabelList: FC<LabelListProps> = ({
+  labels,
+  name = 'Labels',
+  onRemove,
+}) => {
   if (labels.length === 0) {
     return null;
   }
 
   return (
     <Box asChild display="flex" flexWrap="wrap" gap={1} className={styles.list}>
-      <ul aria-label="Labels">
+      <ul aria-label={name}>
         {labels.map((label) => (
           <Box
             key={label}

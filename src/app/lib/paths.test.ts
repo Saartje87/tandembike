@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
   archivedProjectsPath,
+  boardFilterOf,
   boardPathOf,
   boardRoute,
   cyclePath,
   cycleRoute,
   cyclesPath,
+  filteredBoardPath,
   openTicketNumber,
   projectIdFromPath,
   projectPath,
@@ -74,6 +76,43 @@ describe('projectIdFromPath', () => {
     expect(ticketOnBoardPath('/project/3/cycle/7', 12)).toBe(
       '/project/3/cycle/7?ticket=12',
     );
+  });
+
+  it('narrows a Board by a Board filter through ?q= and one ?label= per Label', () => {
+    expect(
+      filteredBoardPath('/project/3', {
+        query: 'fix header',
+        labels: ['bug', 'ui'],
+      }),
+    ).toBe('/project/3?q=fix+header&label=bug&label=ui');
+  });
+
+  it('leaves a blank search and an empty filter out of a Board path', () => {
+    expect(filteredBoardPath('/project/3', { query: '  ', labels: [] })).toBe(
+      '/project/3',
+    );
+    expect(
+      filteredBoardPath('/project/3/cycle/7', { query: '', labels: ['bug'] }),
+    ).toBe('/project/3/cycle/7?label=bug');
+  });
+
+  it('opens a Ticket on a filtered Board, keeping the filter', () => {
+    expect(
+      ticketOnBoardPath('/project/3', 12, { query: 'fix', labels: ['bug'] }),
+    ).toBe('/project/3?q=fix&label=bug&ticket=12');
+  });
+
+  it.each([
+    [undefined, undefined, { query: '', labels: [] }],
+    ['fix', 'bug', { query: 'fix', labels: ['bug'] }],
+    [
+      ['fix', 'more'],
+      ['bug', 'UI', 'bug'],
+      { query: 'fix', labels: ['bug', 'ui'] },
+    ],
+    ['x', ['', ' '], { query: 'x', labels: [] }],
+  ])('reads ?q=%j&label=%j as a Board filter', (q, label, expected) => {
+    expect(boardFilterOf(q, label)).toEqual(expected);
   });
 
   it.each([

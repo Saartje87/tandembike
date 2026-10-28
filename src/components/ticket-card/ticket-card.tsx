@@ -3,7 +3,11 @@
 import { Box, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
-import { ticketByNumberPath, ticketOnBoardPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  ticketByNumberPath,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
@@ -16,6 +20,8 @@ export type TicketCardProps = {
   ticket: Ticket;
   /** The URL of the Board the card is on, which its drawer opens over. */
   boardPath: string;
+  /** The Board filter, which the card's drawer keeps. Defaults to none. */
+  filter?: BoardFilter;
   /** Makes the whole card the drag source on the Board. */
   cardRef?: (element: Element | null) => void;
   /** Whether the card is selected. Leave it out for a card that cannot be. */
@@ -127,6 +133,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
 export const TicketCard: FC<TicketCardProps> = ({
   ticket,
   boardPath,
+  filter,
   cardRef,
   selected,
   selecting = false,
@@ -183,7 +190,7 @@ export const TicketCard: FC<TicketCardProps> = ({
           <Stack gap={2} paddingBlock={3} className={styles.cardContent}>
             <Text wordBreak="break-word" className={styles.title}>
               <AppLink
-                href={ticketOnBoardPath(boardPath, ticket.number)}
+                href={ticketOnBoardPath(boardPath, ticket.number, filter)}
                 scroll={false}
                 variant="inherit"
                 aria-label={ticket.title}

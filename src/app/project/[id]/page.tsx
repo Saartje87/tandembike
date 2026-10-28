@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
 import { PageLoading } from '../../../components/page-loading/page-loading';
-import { openTicketNumber } from '../../lib/paths';
+import { boardFilterOf, openTicketNumber } from '../../lib/paths';
 import { ProjectBoard } from './project-board/project-board';
 import {
   type BacklogPageProps,
@@ -25,11 +25,13 @@ async function backlogTab(
   searchParams: BacklogPageProps['searchParams'],
 ) {
   const project = await loadProject(params);
+  const { ticket, q, label } = await searchParams;
   return (
     <ProjectBoard
       project={project}
       tab="backlog"
-      openTicket={openTicketNumber((await searchParams).ticket)}
+      openTicket={openTicketNumber(ticket)}
+      filter={boardFilterOf(q, label)}
     />
   );
 }

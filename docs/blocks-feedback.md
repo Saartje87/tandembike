@@ -842,7 +842,9 @@ changes to its text.
 
 **Workaround.** `copy-ticket-number.tsx` renders
 `<VisuallyHidden role="status">` all the time, empty until a copy succeeds
-or fails.
+or fails. The Board (T79) keeps a visible `<Text tag="p" role="status">`
+mounted, empty until a Ticket created inline is hidden by the Board filter
+("T80 created, hidden by the filter"), for the same reason.
 
 **Question.** Should Blocks ship a live region or an `announce` hook, so
 that in-place confirmations are announced the same way everywhere?
@@ -1086,6 +1088,38 @@ inward.
 
 **Question.** Can `opacity` gain a muted step (or a `vars` token for one),
 and can the inset atoms take space tokens, negative ones included?
+
+## 33. No multi-select or tag picker
+
+**Problem.** The Board filter (T79) lets the User choose several Labels, in
+the order picked, and remove each again. Blocks' only choice control for a
+set is the single-value `Select`, and it has no combobox, autocomplete or
+multi-select, so choosing several values means pairing a `Select` that adds
+one with a separate list of removable pills (proposal 16). The Ticket
+drawer's `LabelEditor` assembles the same pair.
+
+**Repro.**
+
+```tsx
+<MultiSelect
+  label="Filter by Label"
+  options={['bug', 'docs', 'ui']}
+  value={['ui', 'bug']}
+  onChange={setLabels}
+/>
+// No such export in @blockle/blocks; `Select` takes one value.
+```
+
+**Expected.** A multi-value picker, or a combobox that can hold several
+values as removable tags, with an accessible name for the field and for each
+tag's remove button.
+
+**Workaround.** `src/components/board-filter-bar/board-filter-bar.tsx`
+renders `LabelList` with `onRemove` for the chosen Labels, then a `Select`
+reset to its placeholder option after each pick, listing only the Labels
+not chosen yet; `label-editor.tsx` does the same.
+
+**Question.** Is a multi-select or tag-input combobox in scope for Blocks?
 
 ## Notes (lower priority)
 

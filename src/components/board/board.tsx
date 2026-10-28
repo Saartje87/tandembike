@@ -44,7 +44,14 @@ import {
 } from 'react';
 
 import { planTickets, unplanTickets } from '../../app/cycles/actions';
-import { boardPathOf, ticketOnBoardPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  boardPathOf,
+  filteredBoardPath,
+  noBoardFilter,
+  openTicketNumber,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
 import {
   archiveTickets,
   moveTickets,
@@ -62,13 +69,19 @@ import {
   type Ticket,
 } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { PlanIntoCycleMenu } from '../plan-into-cycle-menu/plan-into-cycle-menu';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
 import * as styles from './board.css';
-import { selectionDrop } from './selection-drop';
+import {
+  filteredSelectionDrop,
+  isFiltering,
+  mergeLaneOrder,
+  ticketMatches,
+} from './board-filter';
 
 export type BoardProps = {
   project: Project;
@@ -100,6 +113,12 @@ export type BoardProps = {
    * Prepared and Active ones. Defaults to none.
    */
   cycles?: Cycle[];
+  /**
+   * The Board filter in the URL as the Board loads (see `GLOSSARY.md`).
+   * The Board keeps it from then on, writing each change back to the URL.
+   * Defaults to none.
+   */
+  filter?: BoardFilter;
 };
 
 type CycleRefusalsProps = {
@@ -135,12 +154,16 @@ type StatusColumnProps = {
   cycleId?: number | null;
   /** The Board's own URL, which a card's drawer opens over. */
   boardPath: string;
+  /** The Board filter, which a card's drawer keeps. */
+  filter: BoardFilter;
   status: Status;
   tickets: Ticket[];
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
   carrier?: number;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
+  /** Called with the number of a Ticket created in the lane. */
+  onCreated: (number: number) => void;
 };
 
 type TicketCountProps = { count: number };
@@ -158,11 +181,13 @@ const StatusColumn: FC<StatusColumnProps> = ({
   projectId,
   cycleId,
   boardPath,
+  filter,
   status,
   tickets,
   selected,
   carrier,
   onSelect,
+  onCreated,
 }) => {
   const { ref, isDropTarget } = useDroppable({
     id: status,
@@ -199,6 +224,7 @@ const StatusColumn: FC<StatusColumnProps> = ({
                   ticket={ticket}
                   index={index}
                   boardPath={boardPath}
+                  filter={filter}
                   selected={selected.has(ticket.number)}
                   selecting={selected.size > 0}
                   carries={
@@ -221,6 +247,7 @@ const StatusColumn: FC<StatusColumnProps> = ({
             <NewTicketInline
               projectId={projectId}
               cycleId={cycleId ?? undefined}
+              onCreated={onCreated}
             />
           )}
         </Stack>
@@ -313,6 +340,7 @@ type SortableTicketCardProps = {
   ticket: Ticket;
   index: number;
   boardPath: string;
+  filter: BoardFilter;
   selected: boolean;
   selecting: boolean;
   /** How many Tickets a drag of the card carries: the selection, if it is in one. */
@@ -327,6 +355,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   ticket,
   index,
   boardPath,
+  filter,
   selected,
   selecting,
   carries,
@@ -346,6 +375,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
     <TicketCard
       ticket={ticket}
       boardPath={boardPath}
+      filter={filter}
       cardRef={ref}
       selected={selected}
       selecting={selecting}
@@ -356,10 +386,18 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   );
 };
 
-type ArchivedTicketsProps = { tickets: Ticket[]; boardPath: string };
+type ArchivedTicketsProps = {
+  tickets: Ticket[];
+  boardPath: string;
+  filter: BoardFilter;
+};
 
 /** The Project's archived Tickets, each a link that opens it in the drawer. */
-const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets, boardPath }) => {
+const ArchivedTickets: FC<ArchivedTicketsProps> = ({
+  tickets,
+  boardPath,
+  filter,
+}) => {
   const headingId = useId();
 
   return (
@@ -381,7 +419,7 @@ const ArchivedTickets: FC<ArchivedTicketsProps> = ({ tickets, boardPath }) => {
                 </Text>{' '}
                 <Text wordBreak="break-word">
                   <AppLink
-                    href={ticketOnBoardPath(boardPath, ticket.number)}
+                    href={ticketOnBoardPath(boardPath, ticket.number, filter)}
                     scroll={false}
                     variant="inherit"
                   >
@@ -505,8 +543,26 @@ export const Board: FC<BoardProps> = ({
   openTicket,
   cycleId,
   cycles = [],
+  filter: initialFilter = noBoardFilter,
 }) => {
   const boardPath = boardPathOf(project.id, cycleId ?? null);
+  const [filter, setFilter] = useState(initialFilter);
+  const filterUrlTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The URL's filter as last rendered, and as the Board last wrote it.
+  const urlFilter = filteredBoardPath('', initialFilter);
+  const [renderedUrlFilter, setRenderedUrlFilter] = useState(urlFilter);
+  const [writtenUrlFilter, setWrittenUrlFilter] = useState(urlFilter);
+  const [filterResets, setFilterResets] = useState(0);
+  if (urlFilter !== renderedUrlFilter) {
+    setRenderedUrlFilter(urlFilter);
+    if (urlFilter !== writtenUrlFilter) {
+      // Navigated to this Board with another filter, such as none: follow it.
+      setFilter(initialFilter);
+      setWrittenUrlFilter(urlFilter);
+      setFilterResets((count) => count + 1);
+    }
+  }
+  const [created, setCreated] = useState<number>();
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
   const [shownEpics, showEpicJoin] = useOptimistic(epics, applyEpicJoin);
   const [error, setError] = useState<string>();
@@ -522,23 +578,38 @@ export const Board: FC<BoardProps> = ({
   const dragging = useRef(false);
   const [carrier, setCarrier] = useState<number>();
   const switchId = useId();
+  const matches = (ticket: Ticket) => ticketMatches(ticket, filter);
   const active = shownTickets.filter(
     (ticket) => !ticket.archived && ticket.type !== 'Epic',
+  );
+  const byNumber = new Map(
+    shownTickets.map((ticket) => [ticket.number, ticket]),
   );
   const planned = new Set(
     tickets.filter((ticket) => !ticket.archived).map(({ number }) => number),
   );
-  const rowEpics =
+  const rowEpics = (
     typeof cycleId === 'number'
       ? shownEpics.filter(
           (epic) =>
             planned.has(epic.number) ||
             epic.children.some((child) => planned.has(child.number)),
         )
-      : shownEpics;
-  const archived = shownTickets.filter((ticket) => ticket.archived);
+      : shownEpics
+  ).filter(
+    // A child is judged by its Ticket on this Board, which has its Labels.
+    (epic) =>
+      matches(epic) ||
+      epic.children.some((child) => {
+        const childTicket = byNumber.get(child.number);
+        return childTicket !== undefined && matches(childTicket);
+      }),
+  );
+  const allArchived = shownTickets.filter((ticket) => ticket.archived);
+  const archived = allArchived.filter(matches);
   const plannable = cycles.filter(({ state }) => state !== 'Archived');
-  const lanes = statuses.map((status) =>
+  // Every lane in full, and as the filter shows it.
+  const fullLanes = statuses.map((status) =>
     active
       .filter((ticket) => ticket.status === status)
       .sort(
@@ -546,7 +617,27 @@ export const Board: FC<BoardProps> = ({
           left.position - right.position || left.number - right.number,
       ),
   );
+  const lanes = fullLanes.map((lane) => lane.filter(matches));
   const laneOf = (status: Status) => lanes[statuses.indexOf(status)];
+  const fullLaneOf = (status: Status) => fullLanes[statuses.indexOf(status)];
+  const filterLabels = [
+    ...new Set([...tickets, ...epics, filter].flatMap(({ labels }) => labels)),
+  ].sort();
+  const nothingMatches =
+    isFiltering(filter) &&
+    lanes.every((lane) => lane.length === 0) &&
+    rowEpics.length === 0 &&
+    archived.length === 0;
+  const createdTicket =
+    created === undefined
+      ? undefined
+      : (byNumber.get(created) ??
+        shownEpics.find(({ number }) => number === created));
+  if (createdTicket !== undefined && matches(createdTicket)) {
+    // Shown as it arrived: an edit hiding it later needs no notice.
+    setCreated(undefined);
+  }
+  const createdHidden = createdTicket !== undefined && !matches(createdTicket);
   // In Board order.
   const selection = lanes
     .flat()
@@ -557,12 +648,15 @@ export const Board: FC<BoardProps> = ({
   // selected.
   const savedOnBoard = new Set(
     tickets
-      .filter((ticket) => !ticket.archived && ticket.type !== 'Epic')
+      .filter(
+        (ticket) =>
+          !ticket.archived && ticket.type !== 'Epic' && matches(ticket),
+      )
       .map(({ number }) => number),
   );
   if ([...selected].some((number) => !savedOnBoard.has(number))) {
-    // A Ticket that left the Board drops out, so it is not selected if it
-    // comes back.
+    // A Ticket that left the Board, or that the filter hides, drops out, so
+    // it is not selected if it comes back.
     setSelected(
       new Set([...selected].filter((number) => savedOnBoard.has(number))),
     );
@@ -577,6 +671,44 @@ export const Board: FC<BoardProps> = ({
     setCycleRefusals(undefined);
     selectionAnchor.current = undefined;
   }, []);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs on each reset to the URL's filter.
+  useEffect(() => () => clearTimeout(filterUrlTimer.current), [filterResets]);
+
+  useEffect(() => {
+    if (created === undefined) {
+      return;
+    }
+    const timer = setTimeout(() => setCreated(undefined), 5000);
+    return () => clearTimeout(timer);
+  }, [created]);
+
+  /**
+   * Shows the Board under `next` at once, and puts it in the URL in place
+   * of the history entry: after a pause while the search is `typing`.
+   */
+  const changeFilter = (next: BoardFilter, typing = false) => {
+    setFilter(next);
+    setCreated(undefined);
+    clearTimeout(filterUrlTimer.current);
+    const writeUrl = () => {
+      // A drawer opened meanwhile stays open.
+      const ticket = openTicketNumber(
+        new URLSearchParams(window.location.search).get('ticket') ?? undefined,
+      );
+      window.history.replaceState(
+        null,
+        '',
+        filteredBoardPath(boardPath, next, ticket),
+      );
+      setWrittenUrlFilter(filteredBoardPath('', next));
+    };
+    if (typing) {
+      filterUrlTimer.current = setTimeout(writeUrl, 300);
+    } else {
+      writeUrl();
+    }
+  };
 
   useEffect(() => {
     if (selected.size === 0) {
@@ -680,9 +812,10 @@ export const Board: FC<BoardProps> = ({
     targetId: string | number | undefined,
   ) => {
     const moving = selection.map(({ number }) => number);
-    const lane = laneOf(status).map(({ number }) => number);
-    const { before, laneOrder } = selectionDrop(
+    const lane = fullLaneOf(status).map(({ number }) => number);
+    const { before, laneOrder } = filteredSelectionDrop(
       lane,
+      laneOf(status).map(({ number }) => number),
       moving,
       sourceId,
       typeof targetId === 'number' ? targetId : undefined,
@@ -878,14 +1011,16 @@ export const Board: FC<BoardProps> = ({
           left.position - right.position || left.number - right.number,
       )
       .map((candidate) => candidate.number);
-    const sourceIndex = lane.indexOf(sourceId);
-    const targetIndex = lane.indexOf(targetId);
+    const shownLane = laneOf(status).map(({ number }) => number);
+    const sourceIndex = shownLane.indexOf(sourceId);
+    const targetIndex = shownLane.indexOf(targetId);
     if (sourceIndex < 0 || targetIndex < 0) {
       return;
     }
-    lane.splice(sourceIndex, 1);
-    lane.splice(targetIndex, 0, sourceId);
-    changeOrder(status, lane);
+    shownLane.splice(sourceIndex, 1);
+    shownLane.splice(targetIndex, 0, sourceId);
+    // Hidden Tickets keep their places around the shown ones.
+    changeOrder(status, mergeLaneOrder(lane, shownLane, [sourceId]));
   };
 
   return (
@@ -897,6 +1032,31 @@ export const Board: FC<BoardProps> = ({
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
       <div onClick={clearOnEmptyClick}>
         {error && <Alert intent="error">{error}</Alert>}
+        <BoardFilterBar
+          filter={filter}
+          labels={filterLabels}
+          onChange={changeFilter}
+        />
+        {nothingMatches && (
+          <Inline gap={2} alignY="center">
+            <Text tag="p" color="text-600">
+              No Tickets match
+            </Text>
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              onClick={() => changeFilter(noBoardFilter)}
+            >
+              Clear filter
+            </Button>
+          </Inline>
+        )}
+        {/* Always there, so a screen reader announces what it comes to say. */}
+        <Text tag="p" role="status" color="text-600" fontSize="small">
+          {createdHidden &&
+            `T${createdTicket.number} created, hidden by the filter`}
+        </Text>
         <DndProvider
           sensors={sensors}
           plugins={plugins}
@@ -909,7 +1069,9 @@ export const Board: FC<BoardProps> = ({
             projectId={project.id}
             cycleId={cycleId ?? undefined}
             boardPath={boardPath}
+            filter={filter}
             hideDone={typeof cycleId !== 'number'}
+            onCreated={setCreated}
           />
           <Grid gap={3}>
             {statuses.map((status) => (
@@ -918,11 +1080,13 @@ export const Board: FC<BoardProps> = ({
                   projectId={project.id}
                   cycleId={cycleId}
                   boardPath={boardPath}
+                  filter={filter}
                   status={status}
                   tickets={laneOf(status)}
                   selected={selectedOnBoard}
                   carrier={carrier}
                   onSelect={select}
+                  onCreated={setCreated}
                 />
               </GridItem>
             ))}
@@ -984,7 +1148,11 @@ export const Board: FC<BoardProps> = ({
           <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
         </Inline>
         {showArchived && (
-          <ArchivedTickets tickets={archived} boardPath={boardPath} />
+          <ArchivedTickets
+            tickets={archived}
+            boardPath={boardPath}
+            filter={filter}
+          />
         )}
       </div>
     </Box>

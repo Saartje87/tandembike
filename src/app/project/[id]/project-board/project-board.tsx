@@ -7,7 +7,12 @@ import { TicketDrawerSkeleton } from '../../../../components/ticket-drawer-skele
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
 import type { Project } from '../../../../tickets/tickets';
-import { boardPathOf } from '../../../lib/paths';
+import {
+  type BoardFilter,
+  boardPathOf,
+  filteredBoardPath,
+  noBoardFilter,
+} from '../../../lib/paths';
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
 
 export type ProjectBoardProps = {
@@ -16,6 +21,8 @@ export type ProjectBoardProps = {
   tab: 'backlog' | Cycle;
   /** The Ticket `?ticket=` opens in a drawer over the Board, if any. */
   openTicket?: number;
+  /** The Board filter in `?q=` and `?label=`. Defaults to none. */
+  filter?: BoardFilter;
 };
 
 /**
@@ -29,8 +36,13 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   project,
   tab,
   openTicket,
+  filter = noBoardFilter,
 }) => {
-  const boardPath = boardPathOf(project.id, tab === 'backlog' ? null : tab.id);
+  // Closing the drawer keeps the Board filtered.
+  const boardPath = filteredBoardPath(
+    boardPathOf(project.id, tab === 'backlog' ? null : tab.id),
+    filter,
+  );
   const drawer = openTicket !== undefined && (
     <Suspense
       key={openTicket}
@@ -45,14 +57,24 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   );
   return (
     <>
-      <BoardTab project={project} tab={tab} openTicket={openTicket} />
+      <BoardTab
+        project={project}
+        tab={tab}
+        openTicket={openTicket}
+        filter={filter}
+      />
       {drawer}
     </>
   );
 };
 
 /** The tab's Board, or an Archived Cycle's read-only list. */
-const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
+const BoardTab: FC<ProjectBoardProps> = ({
+  project,
+  tab,
+  openTicket,
+  filter,
+}) => {
   const tickets = appTickets('user');
   const cycleId = tab === 'backlog' ? null : tab.id;
   const cycles = tickets.listCycles(project.id);
@@ -92,6 +114,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, openTicket }) => {
         cycleId={cycleId}
         cycles={cycles}
         openTicket={openTicket}
+        filter={filter}
       />
     </>
   );
