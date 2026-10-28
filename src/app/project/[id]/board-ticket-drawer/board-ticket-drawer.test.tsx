@@ -13,7 +13,6 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     ticket,
     comments,
     activity,
-    boardPath,
     epics,
     epicChildren,
     referenceTemplates,
@@ -21,7 +20,6 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     ticket: { number: number };
     comments: { body: string }[];
     activity: { changes: { type: string }[] }[];
-    boardPath: string;
     epics: unknown;
     epicChildren: unknown;
     referenceTemplates: { prefix: string }[];
@@ -34,7 +32,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
         .join(' ')}
       data-epic-children={JSON.stringify(epicChildren)}
     >
-      {`Ticket drawer T${ticket.number} over ${boardPath} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
+      {`Ticket drawer T${ticket.number} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
   ),
 }));
@@ -55,7 +53,7 @@ function setUp() {
 }
 
 describe('BoardTicketDrawer', () => {
-  it("renders a Ticket's drawer over the Board it was opened on", async () => {
+  it("renders a Ticket's drawer contents", async () => {
     const { website, ticket } = setUp();
 
     renderWithTheme(
@@ -64,14 +62,13 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
-            boardPath: '/project/1/cycle/7',
           })
         }
       </div>,
     );
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `Ticket drawer T${ticket.number} over /project/1/cycle/7 comments: Started. activity: created`,
+      `Ticket drawer T${ticket.number} comments: Started. activity: created`,
     );
   });
 
@@ -95,7 +92,6 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
-            boardPath: '/project/1',
           })
         }
       </div>,
@@ -124,7 +120,6 @@ describe('BoardTicketDrawer', () => {
             await BoardTicketDrawer({
               projectId,
               number: ticket.number,
-              boardPath: '/project/1',
             })
           }
         </div>,
@@ -139,29 +134,44 @@ describe('BoardTicketDrawer', () => {
     expect(screen.getByRole('dialog').dataset.referencePrefixes).toBe('ABC-');
   });
 
-  it('renders nothing for a Ticket that does not exist (any more)', async () => {
+  it('says a Ticket that does not exist (any more) is not found', async () => {
     const { tickets, website, ticket } = setUp();
     tickets.deleteTicket(ticket.number);
 
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: ticket.number,
+          })
+        }
+      </div>,
+    );
+
     expect(
-      await BoardTicketDrawer({
-        projectId: website.id,
-        number: ticket.number,
-        boardPath: '/project/1',
-      }),
-    ).toBeNull();
+      screen.getByText(`Ticket T${ticket.number} not found`),
+    ).toBeInTheDocument();
   });
 
-  it("renders nothing for another Project's Ticket", async () => {
+  it("says another Project's Ticket is not found", async () => {
     const { website, elsewhere } = setUp();
 
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: elsewhere.number,
+          })
+        }
+      </div>,
+    );
+
     expect(
-      await BoardTicketDrawer({
-        projectId: website.id,
-        number: elsewhere.number,
-        boardPath: '/project/1',
-      }),
-    ).toBeNull();
+      screen.getByText(`Ticket T${elsewhere.number} not found`),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it("gives an Epic's drawer each child's Claim and the Tickets it blocks", async () => {
@@ -185,7 +195,6 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: epic.number,
-            boardPath: '/project/1',
           })
         }
       </div>,

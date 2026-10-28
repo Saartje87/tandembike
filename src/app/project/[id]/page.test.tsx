@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -37,20 +38,25 @@ vi.mock('../../../components/board/board', () => ({
 }));
 
 vi.mock('./board-ticket-drawer/board-ticket-drawer', () => ({
-  BoardTicketDrawer: ({
+  BoardTicketDrawer: ({ number }: { number: number }) =>
+    `T${number}'s contents`,
+}));
+vi.mock('../../../components/ticket-drawer-shell/ticket-drawer-shell', () => ({
+  TicketDrawerShell: ({
     number,
     boardPath,
+    children,
   }: {
     number: number;
     boardPath: string;
-  }) => <div role="dialog">{`Drawer T${number} over ${boardPath}`}</div>,
+    children: ReactNode;
+  }) => (
+    <div role="dialog">
+      {`Drawer T${number} over ${boardPath}: `}
+      {children}
+    </div>
+  ),
 }));
-vi.mock(
-  '../../../components/ticket-drawer-skeleton/ticket-drawer-skeleton',
-  () => ({
-    TicketDrawerSkeleton: () => null,
-  }),
-);
 
 const noSearch = Promise.resolve({});
 

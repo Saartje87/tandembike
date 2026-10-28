@@ -120,8 +120,12 @@ Checked against `@blockle/blocks-react` 2.8.1 (see T296 and T298):
   attribute with a `globalStyle`, as `ticket-drawer.css.ts` does.
 - It opens with `showModal()` and does not close in an effect cleanup. In a
   route Next.js preserves in a hidden `<Activity>`, render it only while shown
-  (see `useIsShown` in `ticket-drawer.tsx`); otherwise it stays open behind
-  the next page and throws `InvalidStateError` when the route is shown again.
+  (see `useIsShown` in `ticket-drawer-shell/use-is-shown.ts`); otherwise it
+  stays open behind the next page and throws `InvalidStateError` when the
+  route is shown again.
+- Each new `Drawer` plays its slide-in again. To swap what it shows, such as
+  content streaming in or another item, keep one `Drawer` mounted and put the
+  `Suspense` boundary inside it, as `TicketDrawerShell` does (T333).
 - It does not restore focus after closing.
 - It closes on any Escape `keydown` that reaches `document`, and
   `onRequestClose` gets no reason. An in-place edit inside it that cancels on

@@ -1,3 +1,4 @@
+import { Text } from '@blockle/blocks';
 import { connection } from 'next/server';
 import type { FC } from 'react';
 
@@ -10,29 +11,24 @@ export type BoardTicketDrawerProps = {
   /** The Project whose Board it opens over. */
   projectId: number;
   number: number;
-  /**
-   * The Board's own URL, with its filter and without `?ticket=`: where
-   * closing goes.
-   */
-  boardPath: string;
 };
 
 /**
- * The drawer of the Ticket a Board's `?ticket=` parameter opens (ADR 0013),
- * streamed after the Board so the Board stays put while it loads.
- * It renders nothing for a Ticket that does not exist, such as one just
- * deleted, or that belongs to another Project: the Board shows on its own.
+ * The contents of the drawer of the Ticket a Board's `?ticket=` parameter
+ * opens (ADR 0013), streamed into its `TicketDrawerShell` after the Board so
+ * the Board and the drawer stay put while it loads. A Ticket that does not
+ * exist, such as one just deleted, or that belongs to another Project, is
+ * not found.
  */
 export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   projectId,
   number,
-  boardPath,
 }) => {
   // Request-time data, so it streams after the Board inside its Suspense.
   await connection();
   const ticket = findBoardTicket(projectId, number);
   if (ticket === null) {
-    return null;
+    return <Text tag="p">{`Ticket T${number} not found`}</Text>;
   }
   const tickets = appTickets('user');
   return (
@@ -57,7 +53,6 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         claim: tickets.getTicket(child.number).claim,
         blocks: tickets.listBlockers(child.number).blocks,
       }))}
-      boardPath={boardPath}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
     />
   );

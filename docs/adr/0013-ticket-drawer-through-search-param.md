@@ -4,4 +4,4 @@ A Ticket used to open as an intercepted route in an `@ticket` parallel slot over
 
 We traded away the URL rule that a single item gets its own path segment, and a server re-render of the Board when its drawer opens, for removing a class of stale-slot bugs and the code that worked around them.
 
-**Status:** accepted and built (#66). The drawer opens with `scroll={false}` and closes with `router.replace(…, { scroll: false })`, so the Board keeps its scroll position: Next scrolls to the top on navigation by default.
+**Status:** accepted and built (#66). The drawer opens with `scroll={false}` and closes with `router.replace(…, { scroll: false })`, so the Board keeps its scroll position: Next scrolls to the top on navigation by default. One drawer stays open over the Board while its Ticket loads and when another Ticket opens in it, so it slides in once; only its contents stream in (T333). A `?ticket=` naming a Ticket that does not exist, such as one just deleted, or that belongs to another Project, opens the drawer with "Ticket T12 not found" and Close, rather than showing the Board on its own.
