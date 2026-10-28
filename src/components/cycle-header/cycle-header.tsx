@@ -120,7 +120,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
       <Inline gap={3} alignY="center" justifyContent="space-between">
         <Inline gap={2} alignY="center">
           <CycleTitle cycle={cycle} />
-          <Text fontSize="small" color="text-600">
+          <Text fontSize="small" color="muted">
             {cycle.state === 'Archived' && cycle.archivedAt ? (
               <>
                 Archived <DateTime date={cycle.archivedAt} />

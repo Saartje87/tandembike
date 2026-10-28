@@ -185,7 +185,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
           ))}
         </Stack>
       ) : (
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           None
         </Text>
       )}

@@ -113,8 +113,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
         role="img"
         aria-label={`Acceptance criteria: ${checked.length} of ${total} checked`}
       >
-        <Icon name="check-circle" size="small" color="text-600" />
-        <Text fontSize="xsmall" color="text-600">
+        <Icon name="check-circle" size="small" color="neutral-700" />
+        <Text fontSize="xsmall" color="muted">
           {checked.length}/{total}
         </Text>
       </span>
@@ -163,7 +163,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   return (
     <Box
       asChild
-      backgroundColor={changed || selected ? 'primary-100' : 'background-100'}
+      backgroundColor={changed || selected ? 'primary-100' : 'white'}
       borderRadius={2}
       boxShadow={1}
       paddingBlock={0}
@@ -195,7 +195,7 @@ export const TicketCard: FC<TicketCardProps> = ({
                 variant="inherit"
                 aria-label={ticket.title}
               >
-                <Text color="text-600" fontSize="small" marginInlineEnd={1}>
+                <Text color="muted" fontSize="small" marginInlineEnd={1}>
                   T{ticket.number}
                 </Text>
 

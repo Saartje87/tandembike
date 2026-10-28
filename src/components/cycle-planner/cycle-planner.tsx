@@ -74,10 +74,10 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     );
   } else if (ticket.archived) {
     control = (
-      <Text color="text-600">Restore this Ticket to plan it into a Cycle.</Text>
+      <Text color="muted">Restore this Ticket to plan it into a Cycle.</Text>
     );
   } else if (plannable.length === 0) {
-    control = <Text color="text-600">Not planned</Text>;
+    control = <Text color="muted">Not planned</Text>;
   } else {
     control = (
       <>

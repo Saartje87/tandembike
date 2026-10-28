@@ -160,7 +160,7 @@ const Detail: FC<DetailProps> = ({ name, children }) => (
 type DetailNameProps = { children: ReactNode };
 
 const DetailName: FC<DetailNameProps> = ({ children }) => (
-  <Text fontSize="small" color="text-600">
+  <Text fontSize="small" color="muted">
     {children}
   </Text>
 );
@@ -445,7 +445,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       <Stack gap={2}>
         {archiveError && <Alert intent="error">{archiveError}</Alert>}
         <Inline gap={2} alignY="center" justifyContent="space-between">
-          <Text tag="p" fontSize="small" color="text-600">
+          <Text tag="p" fontSize="small" color="muted">
             Created <DateTime date={ticket.createdAt} /> · Updated{' '}
             <DateTime date={ticket.updatedAt} />
           </Text>

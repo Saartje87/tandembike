@@ -88,7 +88,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
           </Button>
         </Inline>
       ) : (
-        <Text color="text-600">None</Text>
+        <Text color="muted">None</Text>
       )}
       {choices.length > 0 && (
         <>

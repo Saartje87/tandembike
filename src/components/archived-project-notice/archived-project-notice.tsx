@@ -18,7 +18,7 @@ export const ArchivedProjectNotice: FC<ArchivedProjectNoticeProps> = ({
   <Stack gap={4} alignX="left">
     <Inline gap={2} alignY="center">
       <Heading level={1}>{project.name}</Heading>
-      <Text fontSize="small" fontWeight="strong" color="text-600">
+      <Text fontSize="small" fontWeight="strong" color="muted">
         Archived
       </Text>
     </Inline>

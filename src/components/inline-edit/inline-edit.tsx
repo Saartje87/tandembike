@@ -210,7 +210,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
 
   const content =
     shown === '' && placeholder !== undefined ? (
-      <Text color="text-600">{placeholder}</Text>
+      <Text color="muted">{placeholder}</Text>
     ) : (
       renderContent(shown)
     );

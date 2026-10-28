@@ -26,6 +26,17 @@ import { Text } from "@blockle/blocks";
 </Text>;
 ```
 
+`Text` and `Heading` use the `text.default` role when they have no `color`.
+For supporting copy, pass a text role: `color="muted"` (or `disabled`,
+`inverse`). `color` also takes a Palette shade such as `neutral-800`; see
+[Color modes and roles](./styling.md#color-modes-and-roles).
+
+```tsx
+<Text tag="p" fontSize="small" color="muted">
+  Last edited 3 days ago
+</Text>
+```
+
 `Text` supports `asChild` when another component must supply the rendered
 element. Keep the resulting HTML semantics meaningful.
 

@@ -83,7 +83,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                   aria-pressed={style.icon === null}
                   onClick={() => onPick({ icon: null })}
                 >
-                  <Icon name="no-symbol" size="medium" color="text-600" />
+                  <Icon name="no-symbol" size="medium" color="neutral-700" />
                 </Button>
                 {projectIcons.map((icon) => (
                   <Button

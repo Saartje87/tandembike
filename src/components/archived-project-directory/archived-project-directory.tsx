@@ -32,7 +32,7 @@ const ArchivedProjectList: FC<ArchivedProjectListProps> = ({
       ))}
     </Stack>
   ) : (
-    <Text tag="p" color="text-600">
+    <Text tag="p" color="muted">
       No archived Projects.
     </Text>
   );

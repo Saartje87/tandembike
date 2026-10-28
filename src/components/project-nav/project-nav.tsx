@@ -44,7 +44,7 @@ export const ProjectNav: FC<ProjectNavProps> = ({ projects: all }) => {
               ))}
             </Stack>
           ) : (
-            <Text tag="p" color="text-600" fontSize="small">
+            <Text tag="p" color="muted" fontSize="small">
               No Projects yet.
             </Text>
           )}

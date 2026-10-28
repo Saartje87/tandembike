@@ -22,7 +22,7 @@ async function settingsTab(params: ProjectPageProps['params']) {
         <Heading level={2} id="reference-templates">
           Reference templates
         </Heading>
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           Link External reference keys, such as #55 or ABC-33: a key starting
           with a prefix opens the URL, with {'{n}'} replaced by the rest of the
           key. The first matching template applies.

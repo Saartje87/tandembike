@@ -31,6 +31,6 @@ export const text = style({
   },
   ':focus-visible': {
     outline: 'none',
-    boxShadow: vars.focus.boxShadow,
+    boxShadow: vars.colorRole.focusRing.boxShadow,
   },
 });

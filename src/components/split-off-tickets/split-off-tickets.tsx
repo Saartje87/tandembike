@@ -34,7 +34,7 @@ export const SplitOffTickets: FC<SplitOffTicketsProps> = ({ items }) => {
               <AppLink href={ticketByNumberPath(split.number)}>
                 T{split.number} {split.title}
               </AppLink>
-              <Text fontSize="xsmall" color="text-600">
+              <Text fontSize="xsmall" color="muted">
                 {split.archived ? `${split.status} · Archived` : split.status}
               </Text>
             </Inline>

@@ -39,7 +39,7 @@ const ProjectList: FC<ProjectListProps> = ({ projects: pending }) => {
           ))}
         </Stack>
       ) : (
-        <Text tag="p" color="text-600">
+        <Text tag="p" color="muted">
           No Projects yet.
         </Text>
       )}

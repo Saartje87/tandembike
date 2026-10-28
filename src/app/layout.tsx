@@ -34,11 +34,18 @@ export type RootLayoutProps = {
 // time, so it streams in behind a Suspense boundary (Cache Components).
 // Pages get theirs from `loading.tsx`. `LiveUpdates` keeps one change
 // listener per tab here, where it stays mounted across navigation.
+// The app is light-only: `BlocksProvider` pins the Color mode, but writes it
+// on `<html>` only once it mounts, so the server HTML sets it too, or a
+// dark-OS User would see a dark first paint.
 const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`${geistSans.variable} ${geistMono.variable}`}
+      data-color-mode="light"
+    >
       <body>
-        <BlocksProvider theme={momotaro}>
+        <BlocksProvider theme={momotaro} colorMode="light">
           <LiveUpdates>
             <AppShell
               breadcrumbs={breadcrumbs}

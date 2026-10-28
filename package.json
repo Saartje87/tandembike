@@ -16,8 +16,8 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@blockle/blocks": "^2.4.1",
-    "@blockle/blocks-theme-momotaro": "^6.3.1",
+    "@blockle/blocks": "^3.0.0",
+    "@blockle/blocks-theme-momotaro": "^7.0.0",
     "@dnd-kit/dom": "^0.5.1",
     "@dnd-kit/react": "^0.5.1",
     "@modelcontextprotocol/sdk": "^1.32.2",
