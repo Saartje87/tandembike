@@ -33,8 +33,12 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in one column per Status. Epics are not in the columns; the Board lists them apart, with their progress.
+The view of one Project's Tickets, laid out in one Lane per Status. Epics are not in the Lanes; the Board lists them apart, with their progress.
 _Avoid_: Kanban, dashboard, list
+
+**Lane**:
+The part of a Board that holds the Tickets of one Status, in their order. Dropping a Ticket in a Lane gives it that Status.
+_Avoid_: Column, drop area
 
 **Board filter**:
 A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.
