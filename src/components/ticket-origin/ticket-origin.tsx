@@ -158,12 +158,12 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
             <AppLink href={ticketByNumberPath(origin.number)}>
               T{origin.number} {origin.title}
             </AppLink>
-            <Text fontSize="xsmall" color="text-600">
+            <Text fontSize="xsmall" color="muted">
               {origin.status}
             </Text>
           </>
         ) : (
-          <Text color="text-600">None</Text>
+          <Text color="muted">None</Text>
         )}
         <Button
           type="button"

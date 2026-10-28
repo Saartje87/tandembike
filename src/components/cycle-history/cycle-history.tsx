@@ -28,7 +28,7 @@ export const CycleHistory: FC<CycleHistoryProps> = ({ cycles }) => {
     <Stack gap={3}>
       <Heading level={2}>History</Heading>
       {archived.length === 0 ? (
-        <Text tag="p" color="text-600">
+        <Text tag="p" color="muted">
           No archived Cycles yet
         </Text>
       ) : (
@@ -44,7 +44,7 @@ export const CycleHistory: FC<CycleHistoryProps> = ({ cycles }) => {
                 <AppLink href={cyclePath(cycle.projectId, cycle.id)}>
                   {cycle.title}
                 </AppLink>
-                <Text fontSize="small" color="text-600">
+                <Text fontSize="small" color="muted">
                   {cycle.ticketNumbers.length}{' '}
                   {cycle.ticketNumbers.length === 1 ? 'Ticket' : 'Tickets'}
                   {cycle.archivedAt && (

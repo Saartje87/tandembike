@@ -183,7 +183,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                 <AppLink href={ticketByNumberPath(ticket.number)}>
                   T{ticket.number} {ticket.title}
                 </AppLink>
-                <Text fontSize="xsmall" color="text-600">
+                <Text fontSize="xsmall" color="muted">
                   {stateOf(ticket)}
                 </Text>
                 <Button
@@ -203,7 +203,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
           ))}
         </Stack>
       ) : (
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           None
         </Text>
       )}

@@ -127,7 +127,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                 <AppLink href={ticketByNumberPath(child.number)}>
                   T{child.number} {child.title}
                 </AppLink>
-                <Text fontSize="xsmall" color="text-600">
+                <Text fontSize="xsmall" color="muted">
                   {describeChild(child)}
                 </Text>
                 <Button
@@ -147,7 +147,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
           ))}
         </Stack>
       ) : (
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           No child Tickets
         </Text>
       )}

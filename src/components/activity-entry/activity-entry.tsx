@@ -77,7 +77,7 @@ export type ActivityEntryProps = { entry: Entry };
 export const ActivityEntry: FC<ActivityEntryProps> = ({ entry }) => (
   <Box asChild paddingInline={3}>
     <li>
-      <Text tag="p" fontSize="small" color="text-600">
+      <Text tag="p" fontSize="small" color="muted">
         <Text tag="strong" fontWeight="strong">
           {actorNames[entry.actor]}
         </Text>{' '}

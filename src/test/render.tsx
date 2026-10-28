@@ -6,7 +6,9 @@ import { Component, type ReactElement, type ReactNode } from 'react';
 export function renderWithTheme(ui: ReactElement, options?: RenderOptions) {
   return render(ui, {
     wrapper: ({ children }) => (
-      <BlocksProvider theme={momotaro}>{children}</BlocksProvider>
+      <BlocksProvider theme={momotaro} colorMode="light">
+        {children}
+      </BlocksProvider>
     ),
     ...options,
   });

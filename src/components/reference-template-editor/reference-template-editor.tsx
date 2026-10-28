@@ -222,7 +222,7 @@ export const ReferenceTemplateEditor: FC<ReferenceTemplateEditorProps> = ({
           ))}
         </Stack>
       ) : (
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           No Reference templates yet.
         </Text>
       )}

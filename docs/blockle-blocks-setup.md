@@ -26,15 +26,15 @@ Blocks also declares peer dependencies on `@blockle/blocks-core`,
 `createVanillaExtractPlugin`, using the Turbopack integration:
 
 ```ts
-import { createVanillaExtractPlugin } from "@vanilla-extract/next-plugin";
-import type { NextConfig } from "next";
+import { createVanillaExtractPlugin } from '@vanilla-extract/next-plugin';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   // existing Next.js options
 };
 
 const withVanillaExtract = createVanillaExtractPlugin({
-  unstable_turbopack: { mode: "auto" },
+  unstable_turbopack: { mode: 'auto' },
 });
 
 export default withVanillaExtract(nextConfig);
@@ -46,13 +46,19 @@ The root layout, [src/app/layout.tsx](../src/app/layout.tsx), imports the
 Blocks reset and wraps the app in `BlocksProvider`:
 
 ```tsx
-import "@blockle/blocks/reset";
+import '@blockle/blocks/reset';
 
-import { BlocksProvider } from "@blockle/blocks";
-import { momotaro } from "@blockle/blocks-theme-momotaro";
+import { BlocksProvider } from '@blockle/blocks';
+import { momotaro } from '@blockle/blocks-theme-momotaro';
 
-<BlocksProvider theme={momotaro}>{children}</BlocksProvider>;
+<BlocksProvider theme={momotaro} colorMode="light">
+  {children}
+</BlocksProvider>;
 ```
+
+The app is light-only: the provider pins `colorMode="light"`, and `<html>`
+carries `data-color-mode="light"` so the server-rendered first paint is light
+too. See [Providers](./components/providers.md#color-mode).
 
 The layout stays a Server Component. Components that use React state, browser
 APIs, or interaction need `"use client"`; see the component guide.
@@ -63,7 +69,7 @@ Vitest compiles `.css.ts` files through `@vanilla-extract/vite-plugin`
 (see [vitest.config.mts](../vitest.config.mts)). Render components inside the
 theme with `renderWithTheme` from
 [src/test/render.tsx](../src/test/render.tsx), which wraps the UI in
-`BlocksProvider`.
+`BlocksProvider` with `colorMode="light"`, as the root layout does.
 
 ## Verify
 

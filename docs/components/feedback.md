@@ -11,13 +11,15 @@ appears. It has no `open` prop: render it conditionally to show or hide it.
 Pass `onRequestClose` to add a dismiss button.
 
 ```tsx
-import { Alert } from "@blockle/blocks";
+import { Alert } from '@blockle/blocks';
 
-{hasError && (
-  <Alert intent="error" onRequestClose={() => setHasError(false)}>
-    Something went wrong.
-  </Alert>
-)}
+<>
+  {hasError && (
+    <Alert intent="error" onRequestClose={() => setHasError(false)}>
+      Something went wrong.
+    </Alert>
+  )}
+</>;
 ```
 
 Use an appropriate intent for the message and keep the content specific. Do
@@ -48,9 +50,9 @@ Component tree to cover the screens that need notifications, then call
 The supported intents are `info`, `success`, `warning`, and `error`.
 
 ```tsx
-"use client";
+'use client';
 
-import { useToast } from "@blockle/blocks";
+import { useToast } from '@blockle/blocks';
 
 function SaveButton() {
   const { showToast } = useToast();
@@ -59,8 +61,8 @@ function SaveButton() {
     <button
       onClick={() => {
         showToast({
-          children: "Saved",
-          intent: "success",
+          children: 'Saved',
+          intent: 'success',
           duration: 3000,
         });
       }}
@@ -74,11 +76,11 @@ function SaveButton() {
 Wrap the component that calls `useToast` in `ToastProvider`:
 
 ```tsx
-import { ToastProvider } from "@blockle/blocks";
+import { ToastProvider } from '@blockle/blocks';
 
 <ToastProvider>
   <SaveButton />
-</ToastProvider>
+</ToastProvider>;
 ```
 
 The hook returns `showToast` and `removeToast(id)`. `showToast` accepts

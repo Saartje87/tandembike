@@ -28,10 +28,10 @@ visible title and body elements with `aria-labelledby` and `aria-describedby`.
 The component handles Escape dismissal and restores focus after closing.
 
 ```tsx
-"use client";
+'use client';
 
-import { useState } from "react";
-import { Button, Dialog, Heading, Text } from "@blockle/blocks";
+import { useState } from 'react';
+import { Button, Dialog, Heading, Text } from '@blockle/blocks';
 
 export function DeleteConfirmation() {
   const [open, setOpen] = useState(false);
@@ -70,10 +70,10 @@ For a popover, attach a ref to the trigger and pass that ref as
 popover should reposition as the window scrolls or resizes.
 
 ```tsx
-"use client";
+'use client';
 
-import { useRef, useState } from "react";
-import { Popover } from "@blockle/blocks";
+import { useRef, useState } from 'react';
+import { Popover } from '@blockle/blocks';
 
 export function HelpPopover() {
   const anchorRef = useRef<HTMLButtonElement>(null);

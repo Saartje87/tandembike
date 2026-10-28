@@ -21,7 +21,7 @@ atoms each component accepts, the breakpoints, and `vars` tokens.
   margins for consistent rhythm.
 
 ```tsx
-import { Alert, Button, Stack } from "@blockle/blocks";
+import { Alert, Button, Stack } from '@blockle/blocks';
 
 <Stack gap={2}>
   {hasError && <Alert intent="error">Could not save changes.</Alert>}
@@ -46,7 +46,7 @@ requires a specific semantic element, such as a `li`, `section`, or `header`.
 It differs from wrapping that child in the primitive's default element.
 
 ```tsx
-import { Box } from "@blockle/blocks";
+import { Box } from '@blockle/blocks';
 
 <Box asChild padding={3}>
   <section aria-labelledby="results-heading">...</section>
@@ -65,10 +65,12 @@ array that lists values per breakpoint, from smallest to largest: `mobile`,
 inherit the previous value.
 
 ```tsx
-import { Grid, GridItem } from "@blockle/blocks";
+import { Grid, GridItem } from '@blockle/blocks';
 
 <Grid gap={4}>
-  <GridItem colSpan={[12, 6]}>Stacked on mobile, side by side from tablet</GridItem>
+  <GridItem colSpan={[12, 6]}>
+    Stacked on mobile, side by side from tablet
+  </GridItem>
   <GridItem colSpan={[12, 6]}>Second column</GridItem>
 </Grid>;
 ```

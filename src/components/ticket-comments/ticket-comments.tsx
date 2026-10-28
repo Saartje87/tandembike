@@ -115,11 +115,11 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
               <Text fontSize="small" fontWeight="strong">
                 {actorNames[comment.author]}
               </Text>
-              <Text fontSize="small" color="text-600">
+              <Text fontSize="small" color="muted">
                 <DateTime date={comment.createdAt} />
               </Text>
               {comment.editedAt && (
-                <Text fontSize="small" color="text-600">
+                <Text fontSize="small" color="muted">
                   edited <DateTime date={comment.editedAt} />
                 </Text>
               )}
@@ -289,7 +289,7 @@ export const TicketComments: FC<TicketCommentsProps> = ({
         Comments and Activity
       </Heading>
       {timeline.length === 0 ? (
-        <Text tag="p" color="text-600">
+        <Text tag="p" color="muted">
           No comments or Activity
         </Text>
       ) : (

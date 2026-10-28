@@ -12,7 +12,7 @@ announce, and set its text to announce it (`copy-ticket-number.tsx`). Blocks
 has no live-region component (T328).
 
 ```tsx
-import { VisuallyHidden } from "@blockle/blocks";
+import { VisuallyHidden } from '@blockle/blocks';
 
 <button>
   <SearchIcon />
@@ -22,4 +22,3 @@ import { VisuallyHidden } from "@blockle/blocks";
 
 Use meaningful text that describes the control or adds context. Do not rely on
 a decorative icon alone to communicate an action.
-

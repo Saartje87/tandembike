@@ -29,7 +29,7 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
   tickets,
 }) =>
   tickets.length === 0 ? (
-    <Text tag="p" color="text-600">
+    <Text tag="p" color="muted">
       No Tickets in this Cycle
     </Text>
   ) : (
@@ -44,7 +44,7 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
         return (
           <li key={ticket.number}>
             <Inline gap={2} alignY="center">
-              <Text color="text-600" fontSize="small">
+              <Text color="muted" fontSize="small">
                 T{ticket.number}
               </Text>
               <Text wordBreak="break-word">
@@ -63,7 +63,7 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
                   {ticket.title}
                 </AppLink>
               </Text>
-              <Text color="text-600" fontSize="small">
+              <Text color="muted" fontSize="small">
                 {ticket.status}
                 {ticket.archived && ' · archived'}
               </Text>

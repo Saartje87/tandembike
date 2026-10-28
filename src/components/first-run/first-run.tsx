@@ -10,7 +10,7 @@ export const FirstRun: FC = () => (
         <Heading id="first-run-heading" level={1}>
           Create your first Project
         </Heading>
-        <Text tag="p" color="text-600">
+        <Text tag="p" color="muted">
           A Project groups related Tickets. Give it a name to get started.
         </Text>
       </Stack>

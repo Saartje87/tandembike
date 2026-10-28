@@ -69,7 +69,7 @@ export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({ number }) => {
         {state === 'idle' ? text : outcomes[state]}
       </Button>
       {state === 'failed' && (
-        <Text fontSize="small" color="text-600">
+        <Text fontSize="small" color="muted">
           {text}
         </Text>
       )}

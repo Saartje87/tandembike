@@ -470,7 +470,7 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
           </Stack>
         </DragDropProvider>
       ) : (
-        <Text tag="p" fontSize="small" color="text-600">
+        <Text tag="p" fontSize="small" color="muted">
           No acceptance criteria
         </Text>
       )}

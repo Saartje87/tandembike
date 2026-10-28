@@ -7,7 +7,7 @@ anchor props such as `href`, the `primary`, `secondary`, and `inherit`
 variants, and the `underline` option.
 
 ```tsx
-import { Link } from "@blockle/blocks";
+import { Link } from '@blockle/blocks';
 
 <Link href="/settings" variant="primary" underline>
   Settings
@@ -18,8 +18,8 @@ In Next.js, compose with the framework's `Link` using `asChild` so navigation
 retains link semantics and Next.js behavior:
 
 ```tsx
-import NextLink from "next/link";
-import { Link } from "@blockle/blocks";
+import NextLink from 'next/link';
+import { Link } from '@blockle/blocks';
 
 <Link asChild>
   <NextLink href="/settings">Settings</NextLink>
@@ -28,4 +28,3 @@ import { Link } from "@blockle/blocks";
 
 Use `Button` for an action and `Link` for navigation. Link text should make
 the destination understandable in context.
-

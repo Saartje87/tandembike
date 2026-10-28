@@ -172,7 +172,7 @@ type TicketCountProps = { count: number };
 
 /** How many Tickets a lane holds, read out as `2 Tickets`. */
 const TicketCount: FC<TicketCountProps> = ({ count }) => (
-  <Text fontSize="small" color="text-600">
+  <Text fontSize="small" color="muted">
     {count}
     <VisuallyHidden> {count === 1 ? 'Ticket' : 'Tickets'}</VisuallyHidden>
   </Text>
@@ -218,7 +218,7 @@ const StatusColumn: FC<StatusColumnProps> = ({
             <TicketCount count={tickets.length} />
           </Inline>
           {tickets.length === 0 ? (
-            <Text tag="p" color="text-600" fontSize="small">
+            <Text tag="p" color="muted" fontSize="small">
               No Tickets
             </Text>
           ) : (
@@ -412,14 +412,14 @@ const ArchivedTickets: FC<ArchivedTicketsProps> = ({
           Archived Tickets
         </Heading>
         {tickets.length === 0 ? (
-          <Text tag="p" color="text-600" fontSize="small">
+          <Text tag="p" color="muted" fontSize="small">
             No archived Tickets
           </Text>
         ) : (
           <Stack gap={2} tag="ul" className={styles.ticketList}>
             {tickets.map((ticket) => (
               <li key={ticket.number}>
-                <Text color="text-600" fontSize="small">
+                <Text color="muted" fontSize="small">
                   T{ticket.number}
                 </Text>{' '}
                 <Text wordBreak="break-word">
@@ -1045,7 +1045,7 @@ export const Board: FC<BoardProps> = ({
         />
         {nothingMatches && (
           <Inline gap={2} alignY="center">
-            <Text tag="p" color="text-600">
+            <Text tag="p" color="muted">
               No Tickets match
             </Text>
             <Button
@@ -1059,7 +1059,7 @@ export const Board: FC<BoardProps> = ({
           </Inline>
         )}
         {/* Always there, so a screen reader announces what it comes to say. */}
-        <Text tag="p" role="status" color="text-600" fontSize="small">
+        <Text tag="p" role="status" color="muted" fontSize="small">
           {createdHidden &&
             `T${createdTicket.number} created, hidden by the filter`}
         </Text>

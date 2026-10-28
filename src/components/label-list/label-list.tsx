@@ -38,7 +38,7 @@ export const LabelList: FC<LabelListProps> = ({
           >
             <li>
               <Inline gap={0} alignY="center">
-                <Text fontSize="xsmall" color="text-700">
+                <Text fontSize="xsmall" color="neutral-800">
                   {label}
                 </Text>
                 {onRemove && (
