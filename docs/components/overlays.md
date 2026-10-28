@@ -117,7 +117,7 @@ Checked against `@blockle/blocks-react` 2.8.1 (see T296 and T298):
 - It is a fixed 300px wide (or high) with no `size` prop, and a `className`
   replaces its own classes instead of adding to them. Style the content in a
   `Box` inside it; to change the width, target the dialog by a `data-`
-  attribute with a `globalStyle`, as `ticket-drawer.css.ts` does.
+  attribute with a `globalStyle`, as `ticket-drawer-shell.css.ts` does.
 - It opens with `showModal()` and does not close in an effect cleanup. In a
   route Next.js preserves in a hidden `<Activity>`, render it only while shown
   (see `useIsShown` in `ticket-drawer-shell/use-is-shown.ts`); otherwise it

@@ -13,19 +13,22 @@ import {
 
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { Icon } from '../icon/icon';
+import './ticket-drawer-shell.css';
 import { useIsShown } from './use-is-shown';
 
-type TicketDrawerContext = {
+type TicketDrawerContextValue = {
   /** The id for the title heading, which names the drawer once loaded. */
   titleId: string;
   /** Goes to the Board, as after deleting the Ticket. */
   close: () => void;
 };
 
-const TicketDrawerContext = createContext<TicketDrawerContext | null>(null);
+const TicketDrawerContext = createContext<TicketDrawerContextValue | null>(
+  null,
+);
 
 /** The drawer around the contents rendering it. */
-export const useTicketDrawer = (): TicketDrawerContext => {
+export const useTicketDrawer = (): TicketDrawerContextValue => {
   const context = use(TicketDrawerContext);
   if (context === null) {
     throw new Error('useTicketDrawer needs a TicketDrawerShell around it.');
