@@ -927,7 +927,7 @@ export const Board: FC<BoardProps> = ({
   const followDrag = (event: DragOverEvent) => {
     const sourceId = event.operation.source?.id;
     const targetId = event.operation.target?.id;
-    // dnd-kit would move the card's element into the other column's list,
+    // dnd-kit would move the card's element into the other lane's list,
     // which React then fails to remove from its own list on the drop.
     const statusOf = (id: unknown) =>
       shownTickets.find((ticket) => ticket.number === id)?.status;
