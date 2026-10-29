@@ -10,7 +10,7 @@ if (typeof window !== 'undefined') {
   // stand in with the `open` attribute, which makes the content accessible.
   // Like a browser, move focus into the dialog: its first focusable element,
   // or the dialog itself. Blocks handles Escape on the dialog, so a key only
-  // reaches it from inside.
+  // reaches it from inside (T295).
   HTMLDialogElement.prototype.showModal ??= function showModal(
     this: HTMLDialogElement,
   ) {
