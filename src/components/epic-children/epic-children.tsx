@@ -32,7 +32,6 @@ import {
   keepDrawerOpen,
 } from '../keep-drawer-open/keep-drawer-open';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
-import * as styles from './epic-children.css';
 
 export type EpicChildrenProps = {
   epic: Pick<Ticket, 'number' | 'projectId' | 'archived'>;
@@ -116,35 +115,38 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
       </Heading>
       {shown.length > 0 ? (
         <Stack
-          tag="ul"
           gap={1}
           aria-labelledby={headingId}
-          className={styles.list}
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {shown.map((child) => (
-            <li key={child.number}>
-              <Inline gap={2} alignY="center" flexWrap="wrap">
-                <AppLink href={ticketByNumberPath(child.number)}>
-                  T{child.number} {child.title}
-                </AppLink>
-                <Text fontSize="xsmall" color="muted">
-                  {describeChild(child)}
-                </Text>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  aria-label={`Detach T${child.number}`}
-                  onClick={(event) => {
-                    keepDrawerOpen(event);
-                    detach(child.number);
-                  }}
-                >
-                  <Icon name="x-mark" size="small" />
-                </Button>
-              </Inline>
-            </li>
-          ))}
+          <ul>
+            {shown.map((child) => (
+              <li key={child.number}>
+                <Inline gap={2} alignY="center" flexWrap="wrap">
+                  <AppLink href={ticketByNumberPath(child.number)}>
+                    T{child.number} {child.title}
+                  </AppLink>
+                  <Text fontSize="xsmall" color="muted">
+                    {describeChild(child)}
+                  </Text>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    aria-label={`Detach T${child.number}`}
+                    onClick={(event) => {
+                      keepDrawerOpen(event);
+                      detach(child.number);
+                    }}
+                  >
+                    <Icon name="x-mark" size="small" />
+                  </Button>
+                </Inline>
+              </li>
+            ))}
+          </ul>
         </Stack>
       ) : (
         <Text tag="p" fontSize="small" color="muted">

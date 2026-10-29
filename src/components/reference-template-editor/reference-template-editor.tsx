@@ -169,57 +169,63 @@ export const ReferenceTemplateEditor: FC<ReferenceTemplateEditorProps> = ({
     <Stack gap={4}>
       {templates.length > 0 ? (
         <Stack
-          tag="ul"
           gap={2}
           aria-label="Reference templates"
-          className={styles.list}
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {templates.map((template) => (
-            <li key={template.id}>
-              {editing === template.id ? (
-                <TemplateForm
-                  label={`Edit Reference template ${template.prefix}`}
-                  defaultValues={{ prefix: template.prefix, url: template.url }}
-                  submitLabel="Save"
-                  onSubmit={(values) =>
-                    updateReferenceTemplate({ id: template.id, ...values })
-                  }
-                  onSaved={() => setEditing(undefined)}
-                  onCancel={() => setEditing(undefined)}
-                />
-              ) : (
-                <Inline gap={2} alignY="center" flexWrap="nowrap">
-                  <Text tag="code" fontFamily="mono">
-                    {template.prefix}
-                  </Text>
-                  <Icon name="arrow-long-right" size="small" />
-                  <Box flexGrow={1}>
-                    <Text fontSize="small" wordBreak="break-word">
-                      {template.url}
+          <ul>
+            {templates.map((template) => (
+              <li key={template.id}>
+                {editing === template.id ? (
+                  <TemplateForm
+                    label={`Edit Reference template ${template.prefix}`}
+                    defaultValues={{
+                      prefix: template.prefix,
+                      url: template.url,
+                    }}
+                    submitLabel="Save"
+                    onSubmit={(values) =>
+                      updateReferenceTemplate({ id: template.id, ...values })
+                    }
+                    onSaved={() => setEditing(undefined)}
+                    onCancel={() => setEditing(undefined)}
+                  />
+                ) : (
+                  <Inline gap={2} alignY="center" flexWrap="nowrap">
+                    <Text tag="code" fontFamily="mono">
+                      {template.prefix}
                     </Text>
-                  </Box>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="small"
-                    aria-label={`Edit Reference template ${template.prefix}`}
-                    onClick={() => setEditing(template.id)}
-                  >
-                    <Icon name="pencil" size="small" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="small"
-                    aria-label={`Remove Reference template ${template.prefix}`}
-                    onClick={() => remove(template.id)}
-                  >
-                    <Icon name="x-mark" size="small" />
-                  </Button>
-                </Inline>
-              )}
-            </li>
-          ))}
+                    <Icon name="arrow-long-right" size="small" />
+                    <Box flexGrow={1}>
+                      <Text fontSize="small" wordBreak="break-word">
+                        {template.url}
+                      </Text>
+                    </Box>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="small"
+                      aria-label={`Edit Reference template ${template.prefix}`}
+                      onClick={() => setEditing(template.id)}
+                    >
+                      <Icon name="pencil" size="small" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="small"
+                      aria-label={`Remove Reference template ${template.prefix}`}
+                      onClick={() => remove(template.id)}
+                    >
+                      <Icon name="x-mark" size="small" />
+                    </Button>
+                  </Inline>
+                )}
+              </li>
+            ))}
+          </ul>
         </Stack>
       ) : (
         <Text tag="p" fontSize="small" color="muted">

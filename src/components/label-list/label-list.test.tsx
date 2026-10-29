@@ -18,6 +18,17 @@ describe('LabelList', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
+  // WebKit drops list semantics from a list without markers unless it has an
+  // explicit role.
+  it('keeps its list role without markers', () => {
+    renderWithTheme(<LabelList labels={['bug']} />);
+
+    expect(screen.getByRole('list', { name: 'Labels' })).toHaveAttribute(
+      'role',
+      'list',
+    );
+  });
+
   it('shows nothing without labels', () => {
     renderWithTheme(<LabelList labels={[]} />);
 

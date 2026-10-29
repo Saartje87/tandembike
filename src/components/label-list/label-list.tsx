@@ -4,7 +4,6 @@ import { Box, Button, Inline, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import { Icon } from '../icon/icon';
-import * as styles from './label-list.css';
 
 export type LabelListProps = {
   labels: string[];
@@ -25,7 +24,7 @@ export const LabelList: FC<LabelListProps> = ({
   }
 
   return (
-    <Box asChild display="flex" flexWrap="wrap" gap={1} className={styles.list}>
+    <Inline gap={1} flexWrap="wrap" listStyle="none" role="list" asChild>
       <ul aria-label={name}>
         {labels.map((label) => (
           <Box
@@ -57,6 +56,6 @@ export const LabelList: FC<LabelListProps> = ({
           </Box>
         ))}
       </ul>
-    </Box>
+    </Inline>
   );
 };

@@ -23,20 +23,22 @@ const ProjectList: FC<ProjectListProps> = ({ projects: pending }) => {
   return (
     <Stack gap={4}>
       {active.length > 0 ? (
-        <Stack tag="ul" gap={2} aria-label="Projects">
-          {active.map((project) => (
-            <li key={project.id}>
-              <Inline gap={3} alignY="center">
-                <AppLink href={projectPath(project.id)} variant="inherit">
-                  <Inline gap={2} alignY="center" flexWrap="nowrap">
-                    <ProjectIcon project={project} size="small" />
-                    {project.name}
-                  </Inline>
-                </AppLink>
-                <ArchiveProjectButton project={project} />
-              </Inline>
-            </li>
-          ))}
+        <Stack gap={2} aria-label="Projects" asChild>
+          <ul>
+            {active.map((project) => (
+              <li key={project.id}>
+                <Inline gap={3} alignY="center">
+                  <AppLink href={projectPath(project.id)} intent="inherit">
+                    <Inline gap={2} alignY="center" flexWrap="nowrap">
+                      <ProjectIcon project={project} size="small" />
+                      {project.name}
+                    </Inline>
+                  </AppLink>
+                  <ArchiveProjectButton project={project} />
+                </Inline>
+              </li>
+            ))}
+          </ul>
         </Stack>
       ) : (
         <Text tag="p" color="muted">

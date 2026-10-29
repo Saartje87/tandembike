@@ -35,7 +35,6 @@ import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
 import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { Markdown } from '../markdown/markdown';
-import * as styles from './ticket-comments.css';
 
 export type TicketCommentsProps = {
   ticketNumber: number;
@@ -293,8 +292,8 @@ export const TicketComments: FC<TicketCommentsProps> = ({
           No comments or Activity
         </Text>
       ) : (
-        <Box asChild display="flex" flexDirection="column" gap={2}>
-          <ul aria-labelledby={headingId} className={styles.list}>
+        <Stack gap={2} listStyle="none" role="list" asChild>
+          <ul aria-labelledby={headingId}>
             {timeline.map((item) =>
               item.kind === 'comment' ? (
                 <CommentItem
@@ -309,7 +308,7 @@ export const TicketComments: FC<TicketCommentsProps> = ({
               ),
             )}
           </ul>
-        </Box>
+        </Stack>
       )}
       <CommentForm
         key={formKey}

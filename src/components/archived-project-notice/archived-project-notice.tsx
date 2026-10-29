@@ -15,7 +15,7 @@ export type ArchivedProjectNoticeProps = {
 export const ArchivedProjectNotice: FC<ArchivedProjectNoticeProps> = ({
   project,
 }) => (
-  <Stack gap={4} alignX="left">
+  <Stack gap={4} alignX="start">
     <Inline gap={2} alignY="center">
       <Heading level={1}>{project.name}</Heading>
       <Text fontSize="small" fontWeight="strong" color="muted">

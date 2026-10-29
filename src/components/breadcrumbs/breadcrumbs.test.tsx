@@ -17,6 +17,10 @@ describe('Breadcrumbs', () => {
     );
 
     const navigation = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(navigation).getByRole('list')).toHaveAttribute(
+      'role',
+      'list',
+    );
     expect(within(navigation).getAllByRole('listitem')).toHaveLength(3);
     expect(within(navigation).getByText('Projects')).toBeInTheDocument();
     expect(

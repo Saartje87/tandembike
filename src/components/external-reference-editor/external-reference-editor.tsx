@@ -28,7 +28,6 @@ import {
   claimEscape,
   keepDrawerOpen,
 } from '../keep-drawer-open/keep-drawer-open';
-import * as styles from './external-reference-editor.css';
 
 export type ExternalReferenceEditorProps = {
   ticketNumber: number;
@@ -75,7 +74,7 @@ const Reference: FC<ReferenceProps> = ({ reference, templates }) => {
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          variant="primary"
+          intent="primary"
           underline
         >
           {text}
@@ -159,30 +158,33 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
     <Stack gap={2}>
       {shown.length > 0 ? (
         <Stack
-          tag="ul"
           gap={1}
           aria-label="External references"
-          className={styles.list}
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {shown.map((reference) => (
-            <li key={reference}>
-              <Inline gap={2} alignY="center" flexWrap="nowrap">
-                <Reference reference={reference} templates={templates} />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  aria-label={`Remove External reference ${reference}`}
-                  onClick={(event) => {
-                    keepDrawerOpen(event);
-                    remove(reference);
-                  }}
-                >
-                  <Icon name="x-mark" size="small" />
-                </Button>
-              </Inline>
-            </li>
-          ))}
+          <ul>
+            {shown.map((reference) => (
+              <li key={reference}>
+                <Inline gap={2} alignY="center" flexWrap="nowrap">
+                  <Reference reference={reference} templates={templates} />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    aria-label={`Remove External reference ${reference}`}
+                    onClick={(event) => {
+                      keepDrawerOpen(event);
+                      remove(reference);
+                    }}
+                  >
+                    <Icon name="x-mark" size="small" />
+                  </Button>
+                </Inline>
+              </li>
+            ))}
+          </ul>
         </Stack>
       ) : (
         <Text tag="p" fontSize="small" color="muted">

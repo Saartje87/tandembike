@@ -2,14 +2,11 @@ import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
 /**
- * A card, whose checkbox shows when it is hovered or focused. It is dragged
- * from anywhere on it, which the `cursor` atom cannot show: it has only
- * `auto` and `pointer` (T319). A selected card
+ * A card, whose checkbox shows when it is hovered or focused. A selected card
  * carried along by another one's drag is faded, which the `opacity` atom,
  * with only `0` and `1`, cannot express (T320).
  */
 export const card = style({
-  cursor: 'grab',
   selectors: {
     '&[data-carried-along]': {
       opacity: 0.4,
@@ -52,13 +49,6 @@ export const title = style({
   minInlineSize: 0,
 });
 
-export const description = style({
-  display: '-webkit-box',
-  overflow: 'hidden',
-  WebkitBoxOrient: 'vertical',
-  WebkitLineClamp: 2,
-});
-
 /** The line holding the Epic badge, which it may not grow past. */
 export const epicLine = style({
   display: 'flex',
@@ -66,15 +56,11 @@ export const epicLine = style({
 });
 
 /**
- * The Epic link as a pill in the Epic's colour (set by `tinted`), on one
- * line, its title cut short with an ellipsis: Blocks has no badge (16) or
- * single-line ellipsis (14).
+ * The Epic link as a pill in the Epic's colour (set by `tinted`), never wider
+ * than its line, so its truncated title gives way: Blocks has no badge (16).
  */
 export const epicBadge = style({
   maxInlineSize: '100%',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
   borderRadius: vars.borderRadius.full,
   paddingInline: vars.space[2],
   textDecoration: 'none',

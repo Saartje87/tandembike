@@ -27,21 +27,25 @@ export const ProjectNav: FC<ProjectNavProps> = ({ projects: all }) => {
             Projects
           </Heading>
           {projects.length > 0 ? (
-            <Stack tag="ul" gap={2}>
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <AppLink
-                    href={projectPath(project.id)}
-                    variant="inherit"
-                    aria-current={project.id === currentId ? 'page' : undefined}
-                  >
-                    <Inline gap={2} alignY="center" flexWrap="nowrap">
-                      <ProjectIcon project={project} size="small" />
-                      {project.name}
-                    </Inline>
-                  </AppLink>
-                </li>
-              ))}
+            <Stack gap={2} asChild>
+              <ul>
+                {projects.map((project) => (
+                  <li key={project.id}>
+                    <AppLink
+                      href={projectPath(project.id)}
+                      intent="inherit"
+                      aria-current={
+                        project.id === currentId ? 'page' : undefined
+                      }
+                    >
+                      <Inline gap={2} alignY="center" flexWrap="nowrap">
+                        <ProjectIcon project={project} size="small" />
+                        {project.name}
+                      </Inline>
+                    </AppLink>
+                  </li>
+                ))}
+              </ul>
             </Stack>
           ) : (
             <Text tag="p" color="muted" fontSize="small">

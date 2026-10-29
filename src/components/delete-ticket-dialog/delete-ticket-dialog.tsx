@@ -16,7 +16,6 @@ import { deleteTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
 import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
-import { warningList } from './delete-ticket-dialog.css';
 
 /** One child of an Epic, with what deleting it too would affect. */
 export type ChildDeletion = Pick<Ticket, 'number' | 'title' | 'claim'> & {
@@ -146,12 +145,14 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
               </Checkbox>
             )}
             {warnings.length > 0 && (
-              <Stack tag="ul" gap={1} className={warningList}>
-                {warnings.map((warning) => (
-                  <Text key={warning} asChild>
-                    <li>{warning}</li>
-                  </Text>
-                ))}
+              <Stack gap={1} listStyle="none" role="list" asChild>
+                <ul>
+                  {warnings.map((warning) => (
+                    <Text key={warning} asChild>
+                      <li>{warning}</li>
+                    </Text>
+                  ))}
+                </ul>
               </Stack>
             )}
             {error && <Alert intent="danger">{error}</Alert>}

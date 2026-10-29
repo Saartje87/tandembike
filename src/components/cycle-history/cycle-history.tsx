@@ -5,7 +5,6 @@ import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { DateTime } from '../date-time/date-time';
-import * as styles from './cycle-history.css';
 
 export type CycleHistoryProps = {
   /** A Project's Cycles; only the Archived ones are listed. */
@@ -33,30 +32,33 @@ export const CycleHistory: FC<CycleHistoryProps> = ({ cycles }) => {
         </Text>
       ) : (
         <Stack
-          tag="ul"
           gap={2}
-          className={styles.cycleList}
           aria-label="Archived Cycles"
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {archived.map((cycle) => (
-            <li key={cycle.id}>
-              <Inline gap={2} alignY="center">
-                <AppLink href={cyclePath(cycle.projectId, cycle.id)}>
-                  {cycle.title}
-                </AppLink>
-                <Text fontSize="small" color="muted">
-                  {cycle.ticketNumbers.length}{' '}
-                  {cycle.ticketNumbers.length === 1 ? 'Ticket' : 'Tickets'}
-                  {cycle.archivedAt && (
-                    <>
-                      {' · Archived '}
-                      <DateTime date={cycle.archivedAt} />
-                    </>
-                  )}
-                </Text>
-              </Inline>
-            </li>
-          ))}
+          <ul>
+            {archived.map((cycle) => (
+              <li key={cycle.id}>
+                <Inline gap={2} alignY="center">
+                  <AppLink href={cyclePath(cycle.projectId, cycle.id)}>
+                    {cycle.title}
+                  </AppLink>
+                  <Text fontSize="small" color="muted">
+                    {cycle.ticketNumbers.length}{' '}
+                    {cycle.ticketNumbers.length === 1 ? 'Ticket' : 'Tickets'}
+                    {cycle.archivedAt && (
+                      <>
+                        {' · Archived '}
+                        <DateTime date={cycle.archivedAt} />
+                      </>
+                    )}
+                  </Text>
+                </Inline>
+              </li>
+            ))}
+          </ul>
         </Stack>
       )}
     </Stack>

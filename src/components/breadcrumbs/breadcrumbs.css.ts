@@ -4,25 +4,3 @@ import { style } from '@vanilla-extract/css';
 export const trail = style({
   minInlineSize: 0,
 });
-
-export const list = style({
-  listStyle: 'none',
-  paddingInlineStart: 0,
-  marginBlock: 0,
-});
-
-/**
- * Blocks has no `minInlineSize` or `textOverflow` atom
- * (T314): the current entry, and the row of its icon
- * and name, may shrink, and its name gives way with an ellipsis.
- */
-export const current = style({
-  minInlineSize: 0,
-});
-
-export const currentName = style({
-  minInlineSize: 0,
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-});

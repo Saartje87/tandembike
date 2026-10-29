@@ -34,7 +34,6 @@ import {
   claimEscape,
   keepDrawerOpen,
 } from '../keep-drawer-open/keep-drawer-open';
-import * as styles from './blocker-editor.css';
 
 export type BlockerEditorProps = {
   ticketNumber: number;
@@ -172,35 +171,38 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
       {direction === 'blockedBy' && <Readiness blockers={shown} />}
       {shown.length > 0 ? (
         <Stack
-          tag="ul"
           gap={1}
           aria-label={wording.list}
-          className={styles.list}
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {shown.map((ticket) => (
-            <li key={ticket.number}>
-              <Inline gap={2} alignY="center" flexWrap="wrap">
-                <AppLink href={ticketByNumberPath(ticket.number)}>
-                  T{ticket.number} {ticket.title}
-                </AppLink>
-                <Text fontSize="xsmall" color="muted">
-                  {stateOf(ticket)}
-                </Text>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  aria-label={wording.remove(ticket.number)}
-                  onClick={(event) => {
-                    keepDrawerOpen(event);
-                    remove(ticket.number);
-                  }}
-                >
-                  <Icon name="x-mark" size="small" />
-                </Button>
-              </Inline>
-            </li>
-          ))}
+          <ul>
+            {shown.map((ticket) => (
+              <li key={ticket.number}>
+                <Inline gap={2} alignY="center" flexWrap="wrap">
+                  <AppLink href={ticketByNumberPath(ticket.number)}>
+                    T{ticket.number} {ticket.title}
+                  </AppLink>
+                  <Text fontSize="xsmall" color="muted">
+                    {stateOf(ticket)}
+                  </Text>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="small"
+                    aria-label={wording.remove(ticket.number)}
+                    onClick={(event) => {
+                      keepDrawerOpen(event);
+                      remove(ticket.number);
+                    }}
+                  >
+                    <Icon name="x-mark" size="small" />
+                  </Button>
+                </Inline>
+              </li>
+            ))}
+          </ul>
         </Stack>
       ) : (
         <Text tag="p" fontSize="small" color="muted">

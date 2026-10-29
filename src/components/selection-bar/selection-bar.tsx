@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, Text } from '@blockle/blocks';
+import { Box, Button, Inline, Text } from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
 export type SelectionBarProps = {
@@ -39,16 +39,19 @@ export const SelectionBar: FC<SelectionBarProps> = ({
   >
     {/* Marked so a click inside it is not one on empty Board space. */}
     <div data-selection-bar="">
-      {/* `Inline` takes no `role` (T315). */}
-      <Box asChild display="flex" alignItems="center" gap={3}>
-        <div role="toolbar" aria-label="Selection">
-          <Text>{count} selected</Text>
-          {children}
-          <Button type="button" variant="ghost" size="small" onClick={onClear}>
-            Clear
-          </Button>
-        </div>
-      </Box>
+      <Inline
+        gap={3}
+        alignY="center"
+        flexWrap="nowrap"
+        role="toolbar"
+        aria-label="Selection"
+      >
+        <Text>{count} selected</Text>
+        {children}
+        <Button type="button" variant="ghost" size="small" onClick={onClear}>
+          Clear
+        </Button>
+      </Inline>
       {notice}
     </div>
   </Box>
