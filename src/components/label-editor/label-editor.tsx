@@ -102,7 +102,7 @@ export const LabelEditor: FC<LabelEditorProps> = ({
           ))}
         </Select>
       </Inline>
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

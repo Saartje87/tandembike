@@ -119,7 +119,7 @@ const TemplateForm: FC<TemplateFormProps> = ({
             <FieldError id={urlErrorId} reason={urlError} />
           </Stack>
         </Inline>
-        {serverError && <Alert intent="error">{serverError}</Alert>}
+        {serverError && <Alert intent="danger">{serverError}</Alert>}
         <Inline gap={2}>
           <Button type="submit" size="small" loading={isSubmitting}>
             {submitLabel}
@@ -226,7 +226,7 @@ export const ReferenceTemplateEditor: FC<ReferenceTemplateEditorProps> = ({
           No Reference templates yet.
         </Text>
       )}
-      {removeError && <Alert intent="error">{removeError}</Alert>}
+      {removeError && <Alert intent="danger">{removeError}</Alert>}
       <TemplateForm
         key={added}
         label="Add a Reference template"

@@ -163,7 +163,7 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
                 ))}
               </Stack>
             )}
-            {error && <Alert intent="error">{error}</Alert>}
+            {error && <Alert intent="danger">{error}</Alert>}
             <Inline gap={2}>
               <Button type="button" disabled={pending} onClick={confirm}>
                 Archive T{epic.number}

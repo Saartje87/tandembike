@@ -58,7 +58,7 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
           />
         </Stack>
         {error && (
-          <Alert id={errorId} intent="error">
+          <Alert id={errorId} intent="danger">
             {error}
           </Alert>
         )}

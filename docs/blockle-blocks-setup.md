@@ -71,6 +71,11 @@ theme with `renderWithTheme` from
 [src/test/render.tsx](../src/test/render.tsx), which wraps the UI in
 `BlocksProvider` with `colorMode="light"`, as the root layout does.
 
+jsdom has no modal dialogs, so [src/test/setup.ts](../src/test/setup.ts)
+stands in for `showModal()` and `close()`. Like a browser, its `showModal()`
+moves focus into the dialog. Blocks handles Escape on the `<dialog>`, so a
+test's `{Escape}` only closes a `Dialog` or `Drawer` while focus is inside it.
+
 ## Verify
 
 ```bash

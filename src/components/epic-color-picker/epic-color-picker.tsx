@@ -75,7 +75,7 @@ export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
       >
         <Stack gap={2} padding={3}>
           <ColorSwatches value={color} onPick={pick} />
-          {error && <Alert intent="error">{error}</Alert>}
+          {error && <Alert intent="danger">{error}</Alert>}
         </Stack>
       </Popover>
     </div>

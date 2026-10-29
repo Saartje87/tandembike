@@ -154,7 +154,7 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
                 ))}
               </Stack>
             )}
-            {error && <Alert intent="error">{error}</Alert>}
+            {error && <Alert intent="danger">{error}</Alert>}
             <Inline gap={2}>
               <Button
                 type="button"

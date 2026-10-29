@@ -357,7 +357,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
           </Button>
         </Inline>
         <FieldError id={errorId} reason={fieldError} />
-        {serverError && <Alert intent="error">{serverError}</Alert>}
+        {serverError && <Alert intent="danger">{serverError}</Alert>}
       </Stack>
     </form>
   );
@@ -475,7 +475,7 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
         </Text>
       )}
       <NewCriterion ticketNumber={ticketNumber} criteria={shown} />
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

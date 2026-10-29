@@ -172,7 +172,11 @@ export const EpicChips: FC<EpicChipsProps> = ({
           </Button>
           {doneCount > 0 && (
             <Inline gap={2} alignY="center">
-              <Switch id={switchId} checked={showDone} onChange={setShowDone} />
+              <Switch
+                id={switchId}
+                checked={showDone}
+                onChange={(event) => setShowDone(event.target.checked)}
+              />
               <Label htmlFor={switchId}>Show done Epics ({doneCount})</Label>
             </Inline>
           )}

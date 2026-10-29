@@ -111,7 +111,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
           </Select>
         </>
       )}
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

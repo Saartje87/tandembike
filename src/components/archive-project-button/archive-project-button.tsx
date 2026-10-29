@@ -43,7 +43,7 @@ export const ArchiveProjectButton: FC<ArchiveProjectButtonProps> = ({
       >
         Archive
       </Button>
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

@@ -250,7 +250,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
           </Button>
         </Inline>
       )}
-      {serverError && <Alert intent="error">{serverError}</Alert>}
+      {serverError && <Alert intent="danger">{serverError}</Alert>}
     </Stack>
   );
 };

@@ -405,7 +405,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 {claimPending ? 'Clearing claim...' : 'Clear claim'}
               </Button>
             )}
-            {claimError && <Alert intent="error">{claimError}</Alert>}
+            {claimError && <Alert intent="danger">{claimError}</Alert>}
           </Stack>
         </Detail>
         <Detail name={<DetailName>Blocked by</DetailName>}>
@@ -443,7 +443,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         activity={activity}
       />
       <Stack gap={2}>
-        {archiveError && <Alert intent="error">{archiveError}</Alert>}
+        {archiveError && <Alert intent="danger">{archiveError}</Alert>}
         <Inline gap={2} alignY="center" justifyContent="space-between">
           <Text tag="p" fontSize="small" color="muted">
             Created <DateTime date={ticket.createdAt} /> · Updated{' '}

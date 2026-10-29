@@ -63,11 +63,15 @@ export function DeleteConfirmation() {
 Interactive overlays use browser events and DOM measurements. In Next.js,
 place them behind a Client Component boundary. For dialogs and drawers, wire
 `onRequestClose` to the state that controls `open`; do not leave a dismiss
-request unhandled.
+request unhandled. `onRequestClose` gets the reason, `'escape'` or
+`'outside-click'`, for an overlay that should close on only one of them.
 
 For a popover, attach a ref to the trigger and pass that ref as
-`anchorElement`. Set `position` to choose its side; use `sticky` when the
-popover should reposition as the window scrolls or resizes.
+`anchorElement`. Set `placement` to choose its side and the edge to line up
+with (`bottom`, `bottom-start`, `top-end`, …; default `top`). It flips to the
+other side when there is no room and shifts to stay on screen. Use `sticky`
+when the popover should reposition as the window scrolls or resizes.
+`position` is deprecated, on `Popover` and on `Tooltip`: use `placement`.
 
 ```tsx
 'use client';
@@ -87,7 +91,7 @@ export function HelpPopover() {
       <Popover
         anchorElement={anchorRef}
         open={open}
-        position="bottom"
+        placement="bottom-start"
         onRequestClose={() => setOpen(false)}
       >
         Helpful context goes here.
@@ -110,27 +114,25 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 2.8.1 (see T296 and T298):
+Checked against `@blockle/blocks-react` 3.1.0:
 
-- `Drawer.js` has no `'use client'` directive; import it only from a Client
-  Component.
-- It is a fixed 300px wide (or high) with no `size` prop, and a `className`
-  replaces its own classes instead of adding to them. Style the content in a
-  `Box` inside it; to change the width, target the dialog by a `data-`
-  attribute with a `globalStyle`, as `ticket-drawer-shell.css.ts` does.
-- It opens with `showModal()` and does not close in an effect cleanup. In a
-  route Next.js preserves in a hidden `<Activity>`, render it only while shown
-  (see `useIsShown` in `ticket-drawer-shell/use-is-shown.ts`); otherwise it
-  stays open behind the next page and throws `InvalidStateError` when the
-  route is shown again.
+- The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
+  (`medium` 480px, `large` 640px) only accepts `undefined` in TypeScript
+  (T356), so set another width with a `className`, which adds to its own
+  classes and, being unlayered, beats the theme.
+- A server-rendered open drawer reports a hydration mismatch on `open`, then
+  opens as modal anyway; pass `suppressHydrationWarning` (T357).
+- In a route Next.js preserves in a hidden `<Activity>`, it closes while
+  hidden and opens as modal again when shown. It hydrates a server-rendered
+  open drawer without an error.
 - Each new `Drawer` plays its slide-in again. To swap what it shows, such as
   content streaming in or another item, keep one `Drawer` mounted and put the
   `Suspense` boundary inside it, as `TicketDrawerShell` does (T333).
-- It does not restore focus after closing.
-- It closes on any Escape `keydown` that reaches `document`, and
-  `onRequestClose` gets no reason. An in-place edit inside it that cancels on
-  Escape must call `event.nativeEvent.stopImmediatePropagation()` in its
-  React `onKeyDown`, since Next's React root is `document` too (see
-  `claimEscape` in `keep-drawer-open/keep-drawer-open.ts`). It does not join
-  `Dialog`'s nesting, so a `Dialog` opened from inside it leaves its Escape
-  and outside-click handling on (T298).
+- After closing, it puts focus back on the element that had it when it
+  opened.
+- It handles Escape on the `<dialog>` itself, so only a key pressed inside it
+  closes it. An in-place edit inside it that cancels on Escape calls
+  `event.preventDefault()` in its `onKeyDown` to keep the drawer open (see
+  `claimEscape` in `keep-drawer-open/keep-drawer-open.ts`). A `Dialog` opened
+  from inside it pauses the drawer's Escape and outside-click handling until
+  it closes.
