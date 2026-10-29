@@ -68,7 +68,7 @@ export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
       <Popover
         anchorElement={anchor}
         open={open}
-        position="bottom"
+        placement="bottom"
         onRequestClose={() => setOpen(false)}
         role="dialog"
         aria-label="Epic colour"

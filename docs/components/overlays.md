@@ -101,12 +101,13 @@ export function HelpPopover() {
 }
 ```
 
-Under jsdom an open popover counts as hidden, so a component test that opens
-one calls `showOpenPopovers()` from `src/test/popover.ts` first
-(T299). In a file with drag tests, call it inside
-the `describe` that opens the popover: dnd-kit drags differently once the
-Popover API exists. Blocks' `Popover` renders a plain `div`;
-pass `role="dialog"` and an `aria-label` when it holds controls.
+jsdom has no Popover API: Blocks then only logs a warning and never opens the
+popover, so its content stays hidden. A component test that opens one calls
+`showOpenPopovers()` from `src/test/popover.ts` first, which stubs the API and
+shows the open popover so Testing Library sees it (T299). In a file with drag
+tests, call it inside the `describe` that opens the popover: dnd-kit drags
+differently once the Popover API exists. Blocks' `Popover` renders a plain
+`div`; pass `role="dialog"` and an `aria-label` when it holds controls.
 
 Keep focus, accessible names, and dismissal behavior in mind when choosing an
 overlay. Do not use a tooltip for essential information or a modal dialog for

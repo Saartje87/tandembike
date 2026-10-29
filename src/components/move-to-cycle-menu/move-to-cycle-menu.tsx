@@ -78,7 +78,7 @@ export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
       <Popover
         anchorElement={anchor}
         open={open}
-        position="top"
+        placement="top"
         onRequestClose={() => setOpen(false)}
         role="dialog"
         aria-label="Move to Cycle"

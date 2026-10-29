@@ -12,13 +12,3 @@ export const icons = style({
   gridTemplateColumns: `repeat(auto-fill, minmax(${vars.space[6]}, 1fr))`,
   gap: vars.space[1],
 });
-
-/**
- * Blocks centres a popover on its anchor and never keeps it on screen
- * (T300), so under an icon at the page's edge it
- * would run off. Shifting it by half its width starts it at the icon's
- * centre. `translate`, not `transform`, which the theme animates.
- */
-export const popover = style({
-  translate: '50% 0',
-});

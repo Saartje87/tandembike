@@ -57,8 +57,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
       <Popover
         anchorElement={anchor}
         open={open}
-        position="bottom"
-        className={styles.popover}
+        placement="bottom-start"
         onRequestClose={() => setOpen(false)}
         role="dialog"
         aria-label="Colour and icon"
