@@ -2,7 +2,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { planTickets, unplanTickets } from '../../app/cycles/actions';
+import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { noBoardFilter } from '../../app/lib/paths';
 import {
   archiveTickets,
@@ -25,8 +25,7 @@ import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
 
 vi.mock('../../app/cycles/actions', () => ({
-  planTickets: vi.fn(),
-  unplanTickets: vi.fn(),
+  moveTicketsToCycle: vi.fn(),
 }));
 vi.mock('../../app/projects/actions', () => ({
   renameProject: vi.fn(),
@@ -1784,8 +1783,7 @@ describe('Planning a selection into a Cycle', () => {
   };
 
   beforeEach(() => {
-    vi.mocked(planTickets).mockReset();
-    vi.mocked(unplanTickets).mockReset();
+    vi.mocked(moveTicketsToCycle).mockReset();
   });
 
   it("lists the Project's Prepared and Active Cycles in the bar's menu", async () => {
@@ -1800,21 +1798,18 @@ describe('Planning a selection into a Cycle', () => {
     );
     await selectTwo(user);
 
-    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
 
-    const menu = screen.getByRole('dialog', { name: 'Plan into Cycle' });
+    const menu = screen.getByRole('dialog', { name: 'Move to Cycle' });
     expect(
       within(menu)
         .getAllByRole('button')
         .map((button) => button.textContent),
     ).toEqual(['Launch', 'Beta']);
-    expect(
-      screen.queryByRole('button', { name: 'Remove from Cycle' }),
-    ).not.toBeInTheDocument();
   });
 
   it('plans the whole selection into the chosen Cycle, in Board order', async () => {
-    vi.mocked(planTickets).mockResolvedValue({ ok: true, failed: [] });
+    vi.mocked(moveTicketsToCycle).mockResolvedValue({ ok: true, failed: [] });
     const user = userEvent.setup();
     renderWithTheme(
       <Board
@@ -1826,10 +1821,11 @@ describe('Planning a selection into a Cycle', () => {
     );
     await selectTwo(user);
 
-    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
     await user.click(screen.getByRole('button', { name: 'Beta' }));
 
-    expect(planTickets).toHaveBeenCalledExactlyOnceWith({
+    expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
       cycleId: beta.id,
       ticketNumbers: [4, 15],
     });
@@ -1840,7 +1836,7 @@ describe('Planning a selection into a Cycle', () => {
   it('keeps the refused Tickets selected and lists why each was refused', async () => {
     const refusal =
       'Ticket T15 is already planned into the Cycle "Launch". Remove it from that Cycle first.';
-    vi.mocked(planTickets).mockResolvedValue({
+    vi.mocked(moveTicketsToCycle).mockResolvedValue({
       ok: true,
       failed: [{ number: 15, error: refusal }],
     });
@@ -1856,10 +1852,10 @@ describe('Planning a selection into a Cycle', () => {
     await user.click(checkbox(7, 'Write the copy'));
     await selectTwo(user);
 
-    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
     await user.click(screen.getByRole('button', { name: 'Beta' }));
 
-    const refusals = await screen.findByRole('list', { name: 'Not planned' });
+    const refusals = await screen.findByRole('list', { name: 'Not moved' });
     expect(
       within(refusals)
         .getAllByRole('listitem')
@@ -1876,7 +1872,7 @@ describe('Planning a selection into a Cycle', () => {
     await user.click(checkbox(7, 'Write the copy'));
 
     expect(
-      screen.queryByRole('list', { name: 'Not planned' }),
+      screen.queryByRole('list', { name: 'Not moved' }),
     ).not.toBeInTheDocument();
   });
 
@@ -1885,7 +1881,7 @@ describe('Planning a selection into a Cycle', () => {
       ok: true;
       failed: [];
     }>();
-    vi.mocked(planTickets).mockReturnValue(promise);
+    vi.mocked(moveTicketsToCycle).mockReturnValue(promise);
     const user = userEvent.setup();
     renderWithTheme(
       <Board
@@ -1896,7 +1892,7 @@ describe('Planning a selection into a Cycle', () => {
       />,
     );
     await selectTwo(user);
-    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
     await user.click(screen.getByRole('button', { name: 'Beta' }));
 
     expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
@@ -1908,7 +1904,7 @@ describe('Planning a selection into a Cycle', () => {
   });
 
   it('keeps the selection and explains when the whole batch is refused', async () => {
-    vi.mocked(planTickets).mockResolvedValue({
+    vi.mocked(moveTicketsToCycle).mockResolvedValue({
       ok: false,
       error: 'The Cycle "Beta" is Archived and can no longer change.',
     });
@@ -1923,7 +1919,7 @@ describe('Planning a selection into a Cycle', () => {
     );
     await selectTwo(user);
 
-    await user.click(screen.getByRole('button', { name: 'Plan into Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
     await user.click(screen.getByRole('button', { name: 'Beta' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -1935,57 +1931,53 @@ describe('Planning a selection into a Cycle', () => {
     ]);
   });
 
-  it("removes the selection from the Cycle on that Cycle's Board", async () => {
-    vi.mocked(unplanTickets).mockResolvedValue({ ok: true, failed: [] });
+  it("on a Cycle's Board offers the other open Cycles, then the Backlog", async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <Board
         project={project}
         tickets={board}
         cycles={cycles}
+        cycleId={beta.id}
+      />,
+    );
+    await selectTwo(user);
+
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
+
+    const menu = screen.getByRole('dialog', { name: 'Move to Cycle' });
+    expect(
+      within(menu)
+        .getAllByRole('button')
+        .map((button) => button.textContent),
+    ).toEqual(['Launch', 'Backlog']);
+  });
+
+  it("moves the selection to the Backlog from a Cycle's Board", async () => {
+    vi.mocked(moveTicketsToCycle).mockResolvedValue({ ok: true, failed: [] });
+    const user = userEvent.setup();
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={board}
+        cycles={[launch]}
         cycleId={launch.id}
       />,
     );
     await selectTwo(user);
 
-    expect(
-      screen.queryByRole('button', { name: 'Plan into Cycle' }),
-    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
+    await user.click(screen.getByRole('button', { name: 'Backlog' }));
 
-    await user.click(screen.getByRole('button', { name: 'Remove from Cycle' }));
-
-    expect(unplanTickets).toHaveBeenCalledExactlyOnceWith({
-      cycleId: launch.id,
+    expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
+      projectId: project.id,
+      cycleId: null,
       ticketNumbers: [4, 15],
     });
     await waitFor(() => expect(selectionBar()).not.toBeInTheDocument());
   });
 
-  it('keeps the Tickets it could not remove selected, with the reasons', async () => {
-    const refusal = 'Ticket T4 is not planned into the Cycle "Launch".';
-    vi.mocked(unplanTickets).mockResolvedValue({
-      ok: true,
-      failed: [{ number: 4, error: refusal }],
-    });
-    const user = userEvent.setup();
-    renderWithTheme(
-      <Board
-        project={project}
-        tickets={board}
-        cycles={cycles}
-        cycleId={launch.id}
-      />,
-    );
-    await selectTwo(user);
-
-    await user.click(screen.getByRole('button', { name: 'Remove from Cycle' }));
-
-    const refusals = await screen.findByRole('list', { name: 'Not removed' });
-    expect(refusals).toHaveTextContent(refusal);
-    expect(selectedTitles()).toEqual(['Select T4 Fix the header']);
-  });
-
-  it('offers no menu without a Cycle to plan into', async () => {
+  it('offers no menu on the Backlog without a Cycle to move to', async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <Board
@@ -1999,7 +1991,7 @@ describe('Planning a selection into a Cycle', () => {
 
     expect(selectionBar()).toBeInTheDocument();
     expect(
-      screen.queryByRole('button', { name: 'Plan into Cycle' }),
+      screen.queryByRole('button', { name: 'Move to Cycle' }),
     ).not.toBeInTheDocument();
   });
 });

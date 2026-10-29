@@ -9,6 +9,7 @@ import {
   archiveCycle,
   createCycle,
   discardCycle,
+  moveTicketsToCycle,
   planTicket,
   planTickets,
   renameCycle,
@@ -126,6 +127,57 @@ describe('Cycle actions', () => {
     });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+  });
+
+  it("moves a selection to another Cycle or the Backlog within the Board's Project", async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: launch.id, number: ticket.number });
+
+    await expect(
+      moveTicketsToCycle({
+        projectId: project.id,
+        cycleId: beta.id,
+        ticketNumbers: [ticket.number, 42],
+      }),
+    ).resolves.toEqual({
+      ok: true,
+      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
+    });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([ticket.number]);
+    expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+
+    await expect(
+      moveTicketsToCycle({
+        projectId: project.id,
+        cycleId: null,
+        ticketNumbers: [ticket.number],
+      }),
+    ).resolves.toEqual({ ok: true, failed: [] });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+  });
+
+  it('refuses a move to a Cycle of another Project', async () => {
+    const { tickets, project, ticket } = appWithTicket();
+    const other = tickets.createProject({ name: 'App' });
+    const cycle = tickets.createCycle({ projectId: other.id, title: 'Beta' });
+
+    await expect(
+      moveTicketsToCycle({
+        projectId: project.id,
+        cycleId: cycle.id,
+        ticketNumbers: [ticket.number],
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: 'The Cycle "Beta" is in another Project.',
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
   });
 
   it('refuses a whole batch for a Cycle that cannot change', async () => {
