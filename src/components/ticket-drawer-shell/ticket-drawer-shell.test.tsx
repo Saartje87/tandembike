@@ -1,3 +1,4 @@
+import { Dialog } from '@blockle/blocks';
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
@@ -117,20 +118,26 @@ describe('TicketDrawerShell', () => {
   });
 
   it('leaves an Escape to a dialog open inside it', async () => {
-    renderWithTheme(
+    const closeDelete = vi.fn();
+    const withDelete = (open: boolean) => (
       <TicketDrawerShell number={4} boardPath="/project/1">
-        <dialog open aria-label="Delete T4" />
-      </TicketDrawerShell>,
+        <Dialog open={open} onRequestClose={closeDelete} aria-label="Delete T4">
+          <button type="button">Cancel</button>
+        </Dialog>
+      </TicketDrawerShell>
     );
+    const { rerender } = renderWithTheme(withDelete(false));
+    rerender(withDelete(true));
 
     await userEvent.keyboard('{Escape}');
 
+    expect(closeDelete).toHaveBeenCalledWith('escape');
     expect(router.replace).not.toHaveBeenCalled();
   });
 
   // Next.js keeps a route the User left in a hidden <Activity>, and shows it
   // again when they come back.
-  it('takes its dialog down while its route is hidden and reopens it', () => {
+  it('closes its dialog while its route is hidden and reopens it', () => {
     const at = (mode: 'visible' | 'hidden') => (
       <Activity mode={mode}>
         <TicketDrawerShell number={4} boardPath="/project/1">
@@ -141,7 +148,7 @@ describe('TicketDrawerShell', () => {
     const { rerender } = renderWithTheme(at('visible'));
 
     rerender(at('hidden'));
-    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.querySelector('dialog')).not.toHaveAttribute('open');
 
     rerender(at('visible'));
     expect(drawer()).toHaveAttribute('open');
