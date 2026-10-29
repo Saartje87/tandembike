@@ -39,7 +39,7 @@ export const RestoreProjectButton: FC<RestoreProjectButtonProps> = ({
       >
         Restore
       </Button>
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

@@ -225,8 +225,8 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
           </Button>
         </Inline>
       )}
-      {detachError && <Alert intent="error">{detachError}</Alert>}
-      {serverError && <Alert intent="error">{serverError}</Alert>}
+      {detachError && <Alert intent="danger">{detachError}</Alert>}
+      {serverError && <Alert intent="danger">{serverError}</Alert>}
     </Stack>
   );
 };

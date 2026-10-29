@@ -102,7 +102,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
               </Box>
             </fieldset>
           </Box>
-          {error && <Alert intent="error">{error}</Alert>}
+          {error && <Alert intent="danger">{error}</Alert>}
         </Stack>
       </Popover>
     </>

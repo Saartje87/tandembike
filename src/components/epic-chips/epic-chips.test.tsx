@@ -114,7 +114,7 @@ describe('EpicChips', () => {
     expect(chips()).toEqual(['T2 Search 0/0 Done']);
 
     await userEvent.click(
-      screen.getByRole('checkbox', { name: 'Show done Epics (1)' }),
+      screen.getByRole('switch', { name: 'Show done Epics (1)' }),
     );
 
     expect(chips()).toEqual(['T4 Checkout 1/1 Done', 'T2 Search 0/0 Done']);
@@ -130,7 +130,7 @@ describe('EpicChips', () => {
     );
 
     expect(
-      screen.queryByRole('checkbox', { name: /Show done Epics/ }),
+      screen.queryByRole('switch', { name: /Show done Epics/ }),
     ).not.toBeInTheDocument();
   });
 

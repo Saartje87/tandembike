@@ -165,7 +165,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
           </Button>
         )}
       </Inline>
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

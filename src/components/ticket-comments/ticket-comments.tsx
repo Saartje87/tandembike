@@ -175,7 +175,7 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
               </Inline>
             </Stack>
           )}
-          {error && <Alert intent="error">{error}</Alert>}
+          {error && <Alert intent="danger">{error}</Alert>}
         </Stack>
       </li>
     </Box>
@@ -253,7 +253,7 @@ const CommentForm: FC<CommentFormProps> = ({
           aria-describedby={fieldError ? errorId : undefined}
         />
         <FieldError id={errorId} reason={fieldError} />
-        {error && <Alert intent="error">{error}</Alert>}
+        {error && <Alert intent="danger">{error}</Alert>}
         <Inline gap={2}>
           <Button
             type="submit"

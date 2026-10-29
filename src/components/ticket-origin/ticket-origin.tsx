@@ -144,7 +144,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
             </Button>
           </Inline>
           <FieldError id={errorId} reason={fieldError} />
-          {serverError && <Alert intent="error">{serverError}</Alert>}
+          {serverError && <Alert intent="danger">{serverError}</Alert>}
         </Stack>
       </form>
     );
@@ -192,7 +192,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
           </Button>
         )}
       </Inline>
-      {clearError && <Alert intent="error">{clearError}</Alert>}
+      {clearError && <Alert intent="danger">{clearError}</Alert>}
     </Stack>
   );
 };

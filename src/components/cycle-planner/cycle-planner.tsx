@@ -110,7 +110,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   return (
     <Stack gap={1}>
       {control}
-      {error && <Alert intent="error">{error}</Alert>}
+      {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
 };

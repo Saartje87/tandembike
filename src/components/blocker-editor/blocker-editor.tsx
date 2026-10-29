@@ -278,7 +278,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
           </Button>
         </Inline>
       )}
-      {serverError && <Alert intent="error">{serverError}</Alert>}
+      {serverError && <Alert intent="danger">{serverError}</Alert>}
     </Stack>
   );
 };

@@ -1037,7 +1037,7 @@ export const Board: FC<BoardProps> = ({
       {/* biome-ignore lint/a11y/noStaticElementInteractions: see above */}
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
       <div onClick={clearOnEmptyClick}>
-        {error && <Alert intent="error">{error}</Alert>}
+        {error && <Alert intent="danger">{error}</Alert>}
         <BoardFilterBar
           filter={filter}
           labels={filterLabels}
@@ -1150,7 +1150,7 @@ export const Board: FC<BoardProps> = ({
           <Switch
             id={switchId}
             checked={showArchived}
-            onChange={setShowArchived}
+            onChange={(event) => setShowArchived(event.target.checked)}
           />
           <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
         </Inline>
