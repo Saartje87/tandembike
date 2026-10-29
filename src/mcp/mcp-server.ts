@@ -53,7 +53,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Refer to Tickets by number with a T, like T42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
-- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived (read-only history). list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets, and move them to another Cycle or the Backlog in one step with move_tickets.
 - Your client keeps this tool list, the tool descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then treat what you loaded as possibly out of date, and a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;
 
@@ -292,6 +292,31 @@ function respondBatch(call: () => { failed: BatchFailure[] }): CallToolResult {
     return { ...jsonResult(batch), isError: batch.failed.length > 0 };
   } catch (error) {
     return errorResult(error);
+  }
+}
+
+/** How the Tickets module's refusal to plan a Ticket planned elsewhere ends. */
+const removeItFirst = ' Remove it from that Cycle first.';
+
+/**
+ * `message`, pointing an Agent to move_tickets when it is the refusal to plan
+ * a Ticket that is in another Cycle already.
+ */
+function withMoveHint(message: string): string {
+  return message.endsWith(removeItFirst)
+    ? `${message.slice(0, -removeItFirst.length)} Move it with move_tickets, or unplan it from that Cycle first.`
+    : message;
+}
+
+/** Runs `call`, pointing its refusal to move_tickets as `withMoveHint` does. */
+function hintingMove<T>(call: () => T): T {
+  try {
+    return call();
+  } catch (error) {
+    if (error instanceof TicketsError) {
+      error.message = withMoveHint(error.message);
+    }
+    throw error;
   }
 }
 
@@ -1085,12 +1110,12 @@ export function createMcpServer(tickets: Tickets): McpServer {
     {
       title: 'Plan Ticket into Cycle',
       description:
-        "Plan a Ticket into a Prepared or Active Cycle of its Project and return the Cycle. Any non-archived Ticket can be planned, Done ones included to record finished work, and a Ticket is in at most one Cycle that is not Archived: unplan_ticket it from its current one first. Planning doesn't change its Status, and a member that becomes Done or is archived stays in it.",
+        "Plan a Ticket into a Prepared or Active Cycle of its Project and return the Cycle. Any non-archived Ticket can be planned, Done ones included to record finished work, and a Ticket is in at most one Cycle that is not Archived: move_tickets moves it from its current one, or unplan_ticket it from that first. Planning doesn't change its Status, and a member that becomes Done or is archived stays in it.",
       inputSchema: { cycleId, number: ticketNumber },
       annotations: { idempotentHint: true },
     },
     ({ cycleId, number }) =>
-      respond(() => tickets.planTicket({ cycleId, number })),
+      respond(() => hintingMove(() => tickets.planTicket({ cycleId, number }))),
   );
 
   server.registerTool(
@@ -1115,7 +1140,16 @@ export function createMcpServer(tickets: Tickets): McpServer {
       annotations: { idempotentHint: true },
     },
     ({ cycleId, ticketNumbers }) =>
-      respondBatch(() => tickets.planTickets({ cycleId, ticketNumbers })),
+      respondBatch(() => {
+        const batch = tickets.planTickets({ cycleId, ticketNumbers });
+        return {
+          ...batch,
+          failed: batch.failed.map(({ number, error }) => ({
+            number,
+            error: withMoveHint(error),
+          })),
+        };
+      }),
   );
 
   server.registerTool(
@@ -1128,6 +1162,27 @@ export function createMcpServer(tickets: Tickets): McpServer {
     },
     ({ cycleId, ticketNumbers }) =>
       respondBatch(() => tickets.unplanTickets({ cycleId, ticketNumbers })),
+  );
+
+  server.registerTool(
+    'move_tickets',
+    {
+      title: 'Move Tickets to Cycle or Backlog',
+      description: `Move each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, into one Prepared or Active Cycle, or to the Backlog with cycleId null, in one step: each leaves the Cycle that is not Archived it is in, if any, and joins the target, by the rules of plan_ticket otherwise. A Done Ticket stays in an Archived Cycle that holds it. A Ticket already there counts as moved. Each Ticket's change is atomic; the batch is not. Returns { updated, failed, cycle }: the moved Ticket numbers, the number and error of each Ticket left where it was, and the target Cycle, or null for the Backlog. If any Ticket failed the result is an error, but the Tickets in updated were still moved. A missing or Archived Cycle, or a bad list of numbers, is refused and changes nothing.`,
+      inputSchema: {
+        cycleId: cycleId
+          .nullable()
+          .describe(
+            'The id of the Cycle to move the Tickets into, as returned by list_cycles or create_cycle, or null for the Backlog.',
+          ),
+        ticketNumbers: batchTicketNumbers,
+      },
+      annotations: { idempotentHint: true },
+    },
+    ({ cycleId, ticketNumbers }) =>
+      respondBatch(() =>
+        tickets.moveTicketsToCycle({ cycleId, ticketNumbers }),
+      ),
   );
 
   server.registerTool(

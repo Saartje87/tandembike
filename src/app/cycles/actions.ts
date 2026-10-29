@@ -136,6 +136,29 @@ export async function unplanTickets(
 }
 
 /**
+ * Moves a selection of Tickets of Project `projectId`, such as the Board's,
+ * into one of its Cycles, or to the Backlog when `cycleId` is `null`, for the
+ * UI, reporting the ones it cannot as `planTickets` does.
+ */
+export async function moveTicketsToCycle(input: {
+  projectId: number;
+  cycleId: number | null;
+  ticketNumbers: number[];
+}): Promise<CycleTicketsActionResult> {
+  return actionResult(() => {
+    const { failed } = appTickets('user').moveTicketsToCycle({
+      projectId: Number(input?.projectId),
+      cycleId: input?.cycleId == null ? null : Number(input.cycleId),
+      ticketNumbers: Array.isArray(input?.ticketNumbers)
+        ? input.ticketNumbers.map(Number)
+        : [],
+    });
+    revalidateProjects();
+    return { failed };
+  });
+}
+
+/**
  * Starts a Prepared Cycle for the UI; `archiveActive` is the User's
  * confirmation to archive the Active Cycle `activeCycleId` and roll its open
  * Tickets over.

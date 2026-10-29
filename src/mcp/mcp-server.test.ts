@@ -33,6 +33,7 @@ describe('MCP server', () => {
       'list_labels',
       'list_projects',
       'list_tickets',
+      'move_tickets',
       'plan_ticket',
       'plan_tickets',
       'release_ticket_claim',
@@ -77,6 +78,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
     expect(instructions).toMatch(/list_cycles/);
     expect(instructions).toMatch(/plan_tickets/);
+    expect(instructions).toMatch(/move_tickets/);
     expect(instructions).toMatch(/split.*originNumber/);
     await client.close();
   });
@@ -175,10 +177,11 @@ describe('MCP server', () => {
       ['list_cycles', /state \(Prepared, Active or Archived\), ticketNumbers/],
       ['plan_ticket', /at most one Cycle that is not Archived/],
       ['plan_ticket', /Done ones included/],
-      ['plan_ticket', /unplan_ticket it from its current one first/],
+      ['plan_ticket', /move_tickets moves it from its current one/],
       ['plan_ticket', /a member that becomes Done or is archived stays in it/],
       ['plan_tickets', /at most 50 per call/],
       ['unplan_tickets', /at most 50 per call/],
+      ['move_tickets', /at most 50 per call/],
       ['list_tickets', /with null, the Backlog/],
       ['start_cycle', /refused, unless confirmArchiveActive is true/],
       ['start_cycle', /Set it only once the User has agreed/],
@@ -2515,6 +2518,94 @@ describe('Cycle tools', () => {
     });
     expect(refused.isError).toBe(true);
     expect(resultText(refused)).toBe('There is no Cycle with id 99.');
+    await client.close();
+  });
+
+  it('moves Tickets between Cycles and to the Backlog with move_tickets', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const alpha = tickets.createCycle({
+      projectId: project.id,
+      title: 'Alpha',
+    });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTickets({ cycleId: alpha.id, ticketNumbers: [1, 2] });
+
+    const moved = await client.callTool({
+      name: 'move_tickets',
+      arguments: { cycleId: beta.id, ticketNumbers: [2, 3] },
+    });
+    const toBacklog = await client.callTool({
+      name: 'move_tickets',
+      arguments: { cycleId: null, ticketNumbers: [1, 3] },
+    });
+
+    expect(moved.isError).toBe(false);
+    expect(resultJson(moved)).toMatchObject({
+      updated: [2, 3],
+      failed: [],
+      cycle: { id: beta.id, ticketNumbers: [2, 3] },
+    });
+    expect(toBacklog.isError).toBe(false);
+    expect(resultJson(toBacklog)).toEqual({
+      updated: [1, 3],
+      failed: [],
+      cycle: null,
+    });
+    expect(tickets.getCycle(alpha.id).ticketNumbers).toEqual([]);
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([2]);
+    await client.close();
+  });
+
+  it('reports a partly failed move_tickets call as an error, and refuses a bad Cycle', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+
+    const partly = await client.callTool({
+      name: 'move_tickets',
+      arguments: { cycleId: beta.id, ticketNumbers: [1, 42] },
+    });
+    const refused = await client.callTool({
+      name: 'move_tickets',
+      arguments: { cycleId: 99, ticketNumbers: [1] },
+    });
+
+    expect(partly.isError).toBe(true);
+    expect(JSON.parse(resultText(partly))).toMatchObject({
+      updated: [1],
+      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
+      cycle: { ticketNumbers: [1] },
+    });
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toBe('There is no Cycle with id 99.');
+    await client.close();
+  });
+
+  it('points to move_tickets when plan_ticket or plan_tickets meets a Ticket planned elsewhere', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const alpha = tickets.createCycle({
+      projectId: project.id,
+      title: 'Alpha',
+    });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: alpha.id, number: 1 });
+
+    const single = await client.callTool({
+      name: 'plan_ticket',
+      arguments: { cycleId: beta.id, number: 1 },
+    });
+    const batch = await client.callTool({
+      name: 'plan_tickets',
+      arguments: { cycleId: beta.id, ticketNumbers: [1, 2] },
+    });
+
+    const refusal =
+      'Ticket T1 is already planned into the Cycle "Alpha". Move it with move_tickets, or unplan it from that Cycle first.';
+    expect(single.isError).toBe(true);
+    expect(resultText(single)).toBe(refusal);
+    expect(JSON.parse(resultText(batch))).toMatchObject({
+      updated: [2],
+      failed: [{ number: 1, error: refusal }],
+    });
     await client.close();
   });
 

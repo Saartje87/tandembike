@@ -69,6 +69,25 @@ export type CycleTicketsResult = {
   cycle: Cycle;
 };
 
+/** Tickets to move to one Cycle, or to the Backlog. */
+export type MoveToCycleInput = {
+  /** The Cycle to move them into, or `null` for the Backlog. */
+  cycleId: number | null;
+  /** Explicit Ticket numbers, each once, at most `maxBatchSize`. */
+  ticketNumbers: number[];
+  /**
+   * The Project the move is made in, such as the Board's. When given, the
+   * Cycle must be its, and so must each Ticket.
+   */
+  projectId?: number;
+};
+
+/** Which Tickets a move moved and which it did not, and why. */
+export type MoveToCycleResult = Omit<CycleTicketsResult, 'cycle'> & {
+  /** The Cycle after the move, or `null` for the Backlog. */
+  cycle: Cycle | null;
+};
+
 const cycleColumns = {
   id: cycles.id,
   projectId: cycles.projectId,
@@ -411,6 +430,97 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   }
 
   /**
+   * Moves Ticket `number` out of its open Cycle, if any, into `target`, or
+   * to the Backlog when it is `null`, in one transaction. Returns the ids of
+   * the Cycles it changed: none when it is where it should be already.
+   */
+  function moveInto(
+    target: CycleRow | null,
+    number: number,
+    projectId: number | undefined,
+  ): number[] {
+    return db.transaction(() => {
+      const ticket = db
+        .select({
+          projectId: tickets.projectId,
+          archived: tickets.archived,
+        })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      if (!ticket) {
+        throw new NotFoundError(`There is no Ticket T${number}.`);
+      }
+      if (projectId !== undefined && ticket.projectId !== projectId) {
+        throw new NotAllowedError(`Ticket T${number} is in another Project.`);
+      }
+      const current = db
+        .select({ id: cycles.id })
+        .from(cycleTickets)
+        .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+        .where(
+          and(
+            eq(cycleTickets.ticketNumber, number),
+            ne(cycles.state, 'Archived'),
+          ),
+        )
+        .get();
+      if (current?.id === (target?.id ?? undefined)) {
+        return [];
+      }
+      if (target === null) {
+        checkProjectWritable(db, ticket.projectId);
+        return leaveOpenCycles(db, number);
+      }
+      if (ticket.projectId !== target.projectId) {
+        throw new NotAllowedError(
+          `Ticket T${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+        );
+      }
+      if (ticket.archived) {
+        throw new NotAllowedError(
+          `Ticket T${number} is archived. Restore it before planning it into a Cycle.`,
+        );
+      }
+      const left = leaveOpenCycles(db, number);
+      db.insert(cycleTickets)
+        .values({ cycleId: target.id, ticketNumber: number })
+        .run();
+      return [...left, target.id];
+    });
+  }
+
+  /**
+   * Applies `change` to each of `ticketNumbers`, collecting the Tickets it
+   * refuses, then calls `announce` with the ones it changed, even when an
+   * unexpected error stops the batch.
+   */
+  function tryEach(
+    ticketNumbers: number[],
+    change: (number: number) => void,
+    announce: (updated: number[]) => void,
+  ): Pick<CycleTicketsResult, 'updated' | 'failed'> {
+    const updated: number[] = [];
+    const failed: BatchFailure[] = [];
+    try {
+      for (const number of ticketNumbers) {
+        try {
+          change(number);
+          updated.push(number);
+        } catch (error) {
+          if (!(error instanceof TicketsError)) {
+            throw error;
+          }
+          failed.push({ number, error: error.message });
+        }
+      }
+    } finally {
+      announce(updated);
+    }
+    return { updated, failed };
+  }
+
+  /**
    * Applies `change` to each of `ticketNumbers` in Cycle `cycleId`,
    * collecting the Tickets it refuses, and announces the Cycle once when any
    * changed.
@@ -421,26 +531,16 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   ): CycleTicketsResult {
     throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
     const cycle = changeableCycle(cycleId);
-    const updated: number[] = [];
-    const failed: BatchFailure[] = [];
-    try {
-      for (const number of ticketNumbers) {
-        try {
-          change(cycle, number);
-          updated.push(number);
-        } catch (error) {
-          if (!(error instanceof TicketsError)) {
-            throw error;
-          }
-          failed.push({ number, error: error.message });
+    const result = tryEach(
+      ticketNumbers,
+      (number) => change(cycle, number),
+      (updated) => {
+        if (updated.length > 0) {
+          changes.publish({ type: 'cycle', id: cycleId });
         }
-      }
-    } finally {
-      if (updated.length > 0) {
-        changes.publish({ type: 'cycle', id: cycleId });
-      }
-    }
-    return { updated, failed, cycle: getCycle(cycleId) };
+      },
+    );
+    return { ...result, cycle: getCycle(cycleId) };
   }
 
   return {
@@ -662,6 +762,51 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     unplanTickets(input: CycleTicketsInput): CycleTicketsResult {
       return applyToEach(input, unplanFrom);
+    },
+
+    /**
+     * Moves each Ticket in `ticketNumbers` into Cycle `cycleId`, or to the
+     * Backlog when it is `null`: it leaves its Cycle that is not Archived, if
+     * any, and joins the target in one transaction, by the rules of
+     * `planTicket` otherwise. A Ticket already there counts as moved. Failures
+     * are reported as `planTickets` does; an invalid batch, or a missing or
+     * Archived Cycle, or one outside `projectId`, is refused as a whole.
+     * Every Cycle a Ticket left or joined is announced once.
+     */
+    moveTicketsToCycle({
+      cycleId,
+      ticketNumbers,
+      projectId,
+    }: MoveToCycleInput): MoveToCycleResult {
+      throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
+      const target = cycleId === null ? null : changeableCycle(cycleId);
+      if (
+        target !== null &&
+        projectId !== undefined &&
+        target.projectId !== projectId
+      ) {
+        throw new NotAllowedError(
+          `The Cycle "${target.title}" is in another Project.`,
+        );
+      }
+      const touched = new Set<number>();
+      const result = tryEach(
+        ticketNumbers,
+        (number) => {
+          for (const id of moveInto(target, number, projectId)) {
+            touched.add(id);
+          }
+        },
+        () => {
+          for (const id of touched) {
+            changes.publish({ type: 'cycle', id });
+          }
+        },
+      );
+      return {
+        ...result,
+        cycle: cycleId === null ? null : getCycle(cycleId),
+      };
     },
   };
 }

@@ -43,7 +43,7 @@ import {
   useTransition,
 } from 'react';
 
-import { planTickets, unplanTickets } from '../../app/cycles/actions';
+import { moveTicketsToCycle } from '../../app/cycles/actions';
 import {
   type BoardFilter,
   boardPathOf,
@@ -71,8 +71,8 @@ import {
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
+import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
-import { PlanIntoCycleMenu } from '../plan-into-cycle-menu/plan-into-cycle-menu';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
 import {
@@ -121,18 +121,16 @@ export type BoardProps = {
 };
 
 type CycleRefusalsProps = {
-  /** What the refused change was, such as `Not planned`; it names the list. */
-  heading: string;
   refusals: BatchFailure[];
 };
 
-/** Why each Ticket a Cycle change left out was refused. */
-const CycleRefusals: FC<CycleRefusalsProps> = ({ heading, refusals }) => {
+/** Why each Ticket a move to a Cycle left out was refused. */
+const CycleRefusals: FC<CycleRefusalsProps> = ({ refusals }) => {
   const headingId = useId();
   return (
     <Alert intent="warning">
       <Stack gap={1}>
-        <Text id={headingId}>{heading}</Text>
+        <Text id={headingId}>Not moved</Text>
         <Stack
           gap={1}
           aria-labelledby={headingId}
@@ -542,9 +540,9 @@ const escapeOwnerSelector =
  * Epic's chip, into that Epic; the dragged card shows how many Tickets it
  * carries, and the rest of the selection is dimmed in place. The bar's
  * Archive archives the selection without asking, since each Ticket can be
- * restored. On the Backlog the bar plans the selection into a Cycle, and on
- * a Cycle's Board it removes the selection from that Cycle; either leaves
- * the refused Tickets selected, with their reasons. The selection lives only
+ * restored. The bar's "Move to Cycle" moves the selection into another
+ * Cycle, or from a Cycle's Board to the Backlog, and leaves the refused
+ * Tickets selected, with their reasons. The selection lives only
  * in this tab and drops Tickets that leave the Board.
  */
 export const Board: FC<BoardProps> = ({
@@ -618,7 +616,6 @@ export const Board: FC<BoardProps> = ({
   );
   const allArchived = shownTickets.filter((ticket) => ticket.archived);
   const archived = allArchived.filter(matches);
-  const plannable = cycles.filter(({ state }) => state !== 'Archived');
   // Every lane in full, and as the filter shows it.
   const fullLanes = statuses.map((status) =>
     active
@@ -893,20 +890,18 @@ export const Board: FC<BoardProps> = ({
   };
 
   /**
-   * Plans the selection into Cycle `targetCycleId`, or takes it out of it,
-   * Ticket by Ticket. The selection shrinks to the Tickets refused, listed
-   * with their reasons; a batch refused as a whole leaves it as it was.
+   * Moves the selection into Cycle `targetCycleId`, or to the Backlog when it
+   * is `null`, Ticket by Ticket. The selection shrinks to the Tickets
+   * refused, listed with their reasons; a batch refused as a whole leaves it
+   * as it was.
    */
-  const changeSelectionCycle = (
-    action: typeof planTickets,
-    targetCycleId: number,
-    heading: string,
-  ) => {
+  const moveSelectionToCycle = (targetCycleId: number | null) => {
     const numbers = selection.map(({ number }) => number);
     setError(undefined);
     setCycleRefusals(undefined);
     startCycleChange(async () => {
-      const result = await action({
+      const result = await moveTicketsToCycle({
+        projectId: project.id,
         cycleId: targetCycleId,
         ticketNumbers: numbers,
       });
@@ -925,7 +920,7 @@ export const Board: FC<BoardProps> = ({
           ),
       );
       if (result.failed.length > 0) {
-        setCycleRefusals({ heading, refusals: result.failed });
+        setCycleRefusals({ refusals: result.failed });
       }
     });
   };
@@ -1107,36 +1102,16 @@ export const Board: FC<BoardProps> = ({
           onClear={clearSelection}
           notice={
             shownRefusals.length > 0 && (
-              <CycleRefusals
-                heading={cycleRefusals?.heading ?? ''}
-                refusals={shownRefusals}
-              />
+              <CycleRefusals refusals={shownRefusals} />
             )
           }
         >
-          {typeof cycleId === 'number' ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              disabled={changingCycle}
-              onClick={() =>
-                changeSelectionCycle(unplanTickets, cycleId, 'Not removed')
-              }
-            >
-              Remove from Cycle
-            </Button>
-          ) : (
-            plannable.length > 0 && (
-              <PlanIntoCycleMenu
-                cycles={plannable}
-                disabled={changingCycle}
-                onPick={(cycle) =>
-                  changeSelectionCycle(planTickets, cycle.id, 'Not planned')
-                }
-              />
-            )
-          )}
+          <MoveToCycleMenu
+            cycles={cycles}
+            cycleId={cycleId ?? null}
+            disabled={changingCycle}
+            onPick={moveSelectionToCycle}
+          />
           <Button
             type="button"
             variant="ghost"
