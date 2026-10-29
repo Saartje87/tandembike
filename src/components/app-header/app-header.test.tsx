@@ -1,3 +1,4 @@
+import { Dialog } from '@blockle/blocks';
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { usePathname } from 'next/navigation';
@@ -101,9 +102,9 @@ describe('AppHeader', () => {
     renderWithTheme(
       <AppHeader
         nav={
-          <dialog open aria-label="New Project">
-            Project name
-          </dialog>
+          <Dialog open onRequestClose={() => {}} aria-label="New Project">
+            <input aria-label="Project name" />
+          </Dialog>
         }
         breadcrumbs={breadcrumbs}
       />,

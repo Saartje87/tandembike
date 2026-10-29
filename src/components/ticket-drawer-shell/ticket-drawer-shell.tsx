@@ -13,8 +13,7 @@ import {
 
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { Icon } from '../icon/icon';
-import './ticket-drawer-shell.css';
-import { useIsShown } from './use-is-shown';
+import * as styles from './ticket-drawer-shell.css';
 
 type TicketDrawerContextValue = {
   /** The id for the title heading, which names the drawer once loaded. */
@@ -55,13 +54,7 @@ export type TicketDrawerShellProps = {
  * the contents give it the Ticket's title. Closing (the Close button, Escape
  * or a click outside) goes to the Board, keeping its scroll.
  */
-export const TicketDrawerShell: FC<TicketDrawerShellProps> = (props) => {
-  const shown = useIsShown();
-  return shown ? <OpenShell {...props} /> : null;
-};
-
-/** The shell itself, for as long as it is shown (T296). */
-const OpenShell: FC<TicketDrawerShellProps> = ({
+export const TicketDrawerShell: FC<TicketDrawerShellProps> = ({
   number,
   boardPath,
   children,
@@ -74,25 +67,18 @@ const OpenShell: FC<TicketDrawerShellProps> = ({
   const close = () => {
     router.replace(boardPath, { scroll: false });
   };
-  const requestClose = () => {
-    // The Blocks `Drawer` does not join `Dialog`'s nesting, so an Escape or
-    // outside click meant for a dialog in it (Delete) reaches the drawer
-    // first. Leave that one to the dialog (T298).
-    if (document.querySelector('dialog[data-ticket-drawer] dialog[open]')) {
-      return;
-    }
-    close();
-  };
-
   return (
     <Drawer
       open
-      onRequestClose={requestClose}
+      onRequestClose={close}
       placement="right"
+      className={styles.drawer}
+      // Blocks renders `open` on the server only, so hydrating a drawer
+      // opened by `?ticket=` reports a mismatch it then fixes itself (T357).
+      suppressHydrationWarning
       // The title heading names it once loaded; until then, its number.
       aria-labelledby={titleId}
       aria-label={`Ticket T${number}`}
-      data-ticket-drawer=""
     >
       <Box padding={5}>
         <Stack gap={3}>
@@ -103,7 +89,7 @@ const OpenShell: FC<TicketDrawerShellProps> = ({
               variant="ghost"
               size="small"
               aria-label="Close"
-              onClick={requestClose}
+              onClick={close}
             >
               <Icon name="x-mark" size="small" />
             </Button>

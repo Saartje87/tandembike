@@ -1343,8 +1343,9 @@ describe('TicketDrawer', () => {
   });
 
   // Next.js keeps a route the User left in a hidden <Activity>, and shows it
-  // again when they come back.
-  it('takes its dialog down while its route is hidden and reopens fresh', async () => {
+  // again when they come back. Reopening moves focus into the drawer, so a
+  // field left mid-edit saves, as leaving it does.
+  it('closes its dialog while its route is hidden and saves a draft on reopening', async () => {
     const at = (mode: 'visible' | 'hidden') => (
       <Activity mode={mode}>
         <InShell ticket={ticket} />
@@ -1355,12 +1356,13 @@ describe('TicketDrawer', () => {
     await userEvent.type(descriptionInput(), '!');
 
     rerender(at('hidden'));
-    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.querySelector('dialog')).not.toHaveAttribute('open');
 
     rerender(at('visible'));
     expect(drawer()).toHaveAttribute('open');
-    expect(
-      inDrawer().queryByRole('textbox', { name: 'Description' }),
-    ).not.toBeInTheDocument();
+    expect(updateTicket).toHaveBeenCalledWith({
+      number: 4,
+      description: `${ticket.description}!`,
+    });
   });
 });
