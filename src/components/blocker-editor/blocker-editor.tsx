@@ -28,12 +28,9 @@ import type {
   RelatedTicket,
 } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 
 export type BlockerEditorProps = {
   ticketNumber: number;
@@ -192,8 +189,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                     variant="ghost"
                     size="small"
                     aria-label={wording.remove(ticket.number)}
-                    onClick={(event) => {
-                      keepDrawerOpen(event);
+                    onClick={() => {
                       remove(ticket.number);
                     }}
                   >
@@ -239,12 +235,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby={fieldError ? errorId : undefined}
               />
-              <Button
-                type="submit"
-                size="small"
-                loading={isSubmitting}
-                onClick={keepDrawerOpen}
-              >
+              <Button type="submit" size="small" loading={isSubmitting}>
                 Add
               </Button>
               <Button
@@ -252,8 +243,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                 variant="ghost"
                 size="small"
                 disabled={isSubmitting}
-                onClick={(event) => {
-                  keepDrawerOpen(event);
+                onClick={() => {
                   stopAdding();
                 }}
               >
@@ -271,8 +261,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
             size="small"
             startSlot={<Icon name="plus" size="small" />}
             autoFocus={refocusAdd}
-            onClick={(event) => {
-              keepDrawerOpen(event);
+            onClick={() => {
               setAdding(true);
             }}
           >

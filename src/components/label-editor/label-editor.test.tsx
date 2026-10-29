@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { addTicketLabel, removeTicketLabel } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
@@ -133,26 +133,6 @@ describe('LabelEditor', () => {
     expect(labelsShown()).toEqual(['needs-triage']);
 
     await act(async () => saved.resolve({ ok: true }));
-  });
-
-  // The drawer closes on a document click whose target has left the dialog,
-  // and the removed label's button is gone by the time the click gets there.
-  it('keeps the click that removes a label from reaching the document', async () => {
-    vi.mocked(removeTicketLabel).mockResolvedValue({ ok: true });
-    const onDocumentClick = vi.fn();
-    document.addEventListener('click', onDocumentClick);
-    onTestFinished(() =>
-      document.removeEventListener('click', onDocumentClick),
-    );
-    renderWithTheme(
-      <LabelEditor ticketNumber={4} labels={['bug']} suggestions={[]} />,
-    );
-
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Remove label bug' }),
-    );
-
-    expect(onDocumentClick).not.toHaveBeenCalled();
   });
 
   it('explains a refused removal and shows the label again', async () => {

@@ -133,6 +133,6 @@ Checked against `@blockle/blocks-react` 3.1.0:
 - It handles Escape on the `<dialog>` itself, so only a key pressed inside it
   closes it. An in-place edit inside it that cancels on Escape calls
   `event.preventDefault()` in its `onKeyDown` to keep the drawer open (see
-  `claimEscape` in `keep-drawer-open/keep-drawer-open.ts`). A `Dialog` opened
+  `claimEscape` in `claim-escape/claim-escape.ts`). A `Dialog` opened
   from inside it pauses the drawer's Escape and outside-click handling until
   it closes.

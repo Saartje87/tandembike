@@ -11,13 +11,7 @@ import {
   Text,
   Textarea,
 } from '@blockle/blocks';
-import {
-  type FC,
-  type MouseEvent,
-  useId,
-  useState,
-  useTransition,
-} from 'react';
+import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { refusalReason } from '../../app/lib/action-result';
@@ -33,7 +27,6 @@ import { ActivityEntry, actorNames } from '../activity-entry/activity-entry';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { Markdown } from '../markdown/markdown';
 
 export type TicketCommentsProps = {
@@ -78,8 +71,7 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
   const [error, setError] = useState<string>();
   const [removePending, startRemove] = useTransition();
 
-  const askToRemove = (next: boolean) => (event: MouseEvent) => {
-    keepDrawerOpen(event);
+  const askToRemove = (next: boolean) => () => {
     setError(undefined);
     setRemoving(next);
   };

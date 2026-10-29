@@ -4,7 +4,7 @@ import { Button, Popover, Stack } from '@blockle/blocks';
 import { type FC, useRef, useState } from 'react';
 
 import type { Cycle } from '../../tickets/cycles';
-import { claimEscape } from '../keep-drawer-open/keep-drawer-open';
+import { claimEscape } from '../claim-escape/claim-escape';
 
 export type MoveToCycleMenuProps = {
   /** The Project's Cycles; the Archived ones are not offered. */

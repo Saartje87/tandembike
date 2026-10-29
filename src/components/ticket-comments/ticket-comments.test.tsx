@@ -418,23 +418,4 @@ describe('TicketComments', () => {
       'There is no comment 1.',
     );
   });
-
-  // Inside the drawer, a document click whose target has left the dialog
-  // closes it, and these buttons are gone by the time the click gets there.
-  it('keeps clicks that swap the buttons from reaching the document', async () => {
-    const onDocumentClick = vi.fn();
-    document.addEventListener('click', onDocumentClick);
-    onTestFinished(() =>
-      document.removeEventListener('click', onDocumentClick),
-    );
-    renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
-    const [item] = commentItems();
-
-    await userEvent.click(within(item).getByText('logo'));
-    await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
-    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
-    await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
-
-    expect(onDocumentClick).not.toHaveBeenCalled();
-  });
 });

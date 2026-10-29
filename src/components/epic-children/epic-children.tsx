@@ -25,12 +25,9 @@ import {
 } from '../../app/tickets/actions';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 
 export type EpicChildrenProps = {
@@ -136,8 +133,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                     variant="ghost"
                     size="small"
                     aria-label={`Detach T${child.number}`}
-                    onClick={(event) => {
-                      keepDrawerOpen(event);
+                    onClick={() => {
                       detach(child.number);
                     }}
                   >
@@ -186,12 +182,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby={fieldError ? errorId : undefined}
               />
-              <Button
-                type="submit"
-                size="small"
-                loading={isSubmitting}
-                onClick={keepDrawerOpen}
-              >
+              <Button type="submit" size="small" loading={isSubmitting}>
                 Attach
               </Button>
               <Button
@@ -199,8 +190,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                 variant="ghost"
                 size="small"
                 disabled={isSubmitting}
-                onClick={(event) => {
-                  keepDrawerOpen(event);
+                onClick={() => {
                   stopAttaching();
                 }}
               >
@@ -218,8 +208,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
             size="small"
             startSlot={<Icon name="link" size="small" />}
             autoFocus={refocusAttach}
-            onClick={(event) => {
-              keepDrawerOpen(event);
+            onClick={() => {
               setAttaching(true);
             }}
           >

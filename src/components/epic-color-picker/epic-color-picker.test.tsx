@@ -75,9 +75,10 @@ describe('EpicColorPicker', () => {
     await waitFor(() => expect(pressed()).toEqual(['Teal']));
   });
 
-  it('closes on Escape without letting it reach the drawer', async () => {
-    const drawerEscape = vi.fn();
-    document.addEventListener('keydown', drawerEscape);
+  it('closes on Escape, claiming it so the drawer stays open', async () => {
+    const claimed = vi.fn();
+    const onKeyDown = (event: KeyboardEvent) => claimed(event.defaultPrevented);
+    document.addEventListener('keydown', onKeyDown);
     renderWithTheme(<EpicColorPicker epic={{ number: 8, color: 'teal' }} />);
 
     await userEvent.click(screen.getByRole('button', { name: /^Epic colour/ }));
@@ -86,7 +87,7 @@ describe('EpicColorPicker', () => {
     expect(
       screen.queryByRole('group', { name: 'Colour' }),
     ).not.toBeInTheDocument();
-    expect(drawerEscape).not.toHaveBeenCalled();
-    document.removeEventListener('keydown', drawerEscape);
+    expect(claimed.mock.calls).toEqual([[true]]);
+    document.removeEventListener('keydown', onKeyDown);
   });
 });

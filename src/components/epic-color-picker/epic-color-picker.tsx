@@ -6,12 +6,12 @@ import { type FC, useOptimistic, useRef, useState, useTransition } from 'react';
 import { updateTicket } from '../../app/tickets/actions';
 import type { PaletteColor } from '../../tickets/palette';
 import type { EpicLink } from '../../tickets/tickets';
+import { claimEscape } from '../claim-escape/claim-escape';
 import {
   ColorSwatches,
   colorName,
   Swatch,
 } from '../color-swatches/color-swatches';
-import { claimEscape } from '../keep-drawer-open/keep-drawer-open';
 
 export type EpicColorPickerProps = {
   epic: Pick<EpicLink, 'number' | 'color'>;

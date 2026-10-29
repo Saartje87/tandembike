@@ -119,14 +119,16 @@ const pendingUpdate = () => {
 };
 
 /**
- * A spy on keydowns that reach the document, where the Drawer closes on
+ * A spy on keydowns that reach the document, called with whether each was
+ * claimed (`defaultPrevented`), which keeps the Drawer from closing on an
  * Escape. Call it once the edit is open.
  */
 const keysReachingDocument = () => {
-  const onKeyDown = vi.fn();
+  const claimed = vi.fn();
+  const onKeyDown = (event: KeyboardEvent) => claimed(event.defaultPrevented);
   document.addEventListener('keydown', onKeyDown);
   onTestFinished(() => document.removeEventListener('keydown', onKeyDown));
-  return onKeyDown;
+  return claimed;
 };
 
 /** Whether the elements appear in this order in the document. */
@@ -421,7 +423,7 @@ describe('TicketDrawer', () => {
       const keys = keysReachingDocument();
       await userEvent.keyboard('{Escape}');
 
-      expect(keys).not.toHaveBeenCalled();
+      expect(keys.mock.calls).toEqual([[true]]);
       expect(updateTicket).not.toHaveBeenCalled();
       expect(titleButton()).toHaveFocus();
       expect(router.replace).not.toHaveBeenCalled();
@@ -602,7 +604,7 @@ describe('TicketDrawer', () => {
       const keys = keysReachingDocument();
       await userEvent.keyboard('{Escape}');
 
-      expect(keys).not.toHaveBeenCalled();
+      expect(keys.mock.calls).toEqual([[true]]);
       expect(updateTicket).not.toHaveBeenCalled();
       expect(inDrawer().getByText('logo').tagName).toBe('STRONG');
       expect(document.activeElement).toHaveAccessibleDescription(
@@ -622,22 +624,6 @@ describe('TicketDrawer', () => {
       expect(
         inDrawer().queryByRole('textbox', { name: 'Description' }),
       ).not.toBeInTheDocument();
-    });
-
-    // The drawer closes on a document click whose target has left the dialog,
-    // and the button is gone by the time the click gets there.
-    it('keeps the click that starts editing from closing the drawer', async () => {
-      const onDocumentClick = vi.fn();
-      document.addEventListener('click', onDocumentClick);
-      onTestFinished(() =>
-        document.removeEventListener('click', onDocumentClick),
-      );
-      renderDrawer();
-
-      await editDescription();
-
-      expect(descriptionInput()).toBeInTheDocument();
-      expect(onDocumentClick).not.toHaveBeenCalled();
     });
 
     it("keeps the User's text and says why a description was refused", async () => {

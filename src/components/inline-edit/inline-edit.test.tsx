@@ -150,17 +150,18 @@ describe('InlineEdit', () => {
     expect(elsewhere()).toHaveFocus();
   });
 
-  it('cancels on Escape, keeping the Escape from the page, and drops the draft', async () => {
+  it('cancels on Escape, claiming the Escape from the page, and drops the draft', async () => {
     const { onSave } = renderEdit();
 
     await userEvent.click(text());
     await userEvent.type(input(), '!');
-    const onKeyDown = vi.fn();
+    const claimed = vi.fn();
+    const onKeyDown = (event: KeyboardEvent) => claimed(event.defaultPrevented);
     document.addEventListener('keydown', onKeyDown);
     onTestFinished(() => document.removeEventListener('keydown', onKeyDown));
     await userEvent.keyboard('{Escape}');
 
-    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(claimed.mock.calls).toEqual([[true]]);
     expect(onSave).not.toHaveBeenCalled();
     expect(text()).toHaveFocus();
     await userEvent.click(text());
@@ -389,17 +390,19 @@ describe('InlineEdit', () => {
       expect(onSave).not.toHaveBeenCalled();
     });
 
-    it('cancels on Escape, keeping the Escape from the page, and puts focus back on the text', async () => {
+    it('cancels on Escape, claiming the Escape from the page, and puts focus back on the text', async () => {
       const { onSave } = renderTextarea();
 
       await userEvent.click(screen.getByText('It overlaps the logo.'));
       await userEvent.type(textarea(), '!');
-      const onKeyDown = vi.fn();
+      const claimed = vi.fn();
+      const onKeyDown = (event: KeyboardEvent) =>
+        claimed(event.defaultPrevented);
       document.addEventListener('keydown', onKeyDown);
       onTestFinished(() => document.removeEventListener('keydown', onKeyDown));
       await userEvent.keyboard('{Escape}');
 
-      expect(onKeyDown).not.toHaveBeenCalled();
+      expect(claimed.mock.calls).toEqual([[true]]);
       expect(onSave).not.toHaveBeenCalled();
       expect(screen.getByText('It overlaps the logo.')).toBeInTheDocument();
       expect(document.activeElement).toHaveAccessibleDescription(
