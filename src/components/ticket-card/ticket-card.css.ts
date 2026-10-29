@@ -41,10 +41,6 @@ export const cardContent = style({
   minInlineSize: 0,
 });
 
-export const titleLine = style({
-  minInlineSize: 0,
-});
-
 export const title = style({
   minInlineSize: 0,
 });
