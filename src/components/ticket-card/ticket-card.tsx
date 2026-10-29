@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
+import { Box, Checkbox, Inline, Stack, Tag, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import {
@@ -56,22 +56,14 @@ type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
 /** A pill that says the Ticket is blocked by an unresolved Blocker. */
 const BlockedMarker: FC = () => (
-  <Inline
-    asChild
-    gap={1}
-    alignY="center"
-    flexWrap="nowrap"
-    backgroundColor="warning-100"
-    borderRadius="full"
-    paddingInline={2}
+  <Tag
+    intent="warning"
+    startSlot={<Icon name="lock-closed" size="small" />}
+    role="img"
+    aria-label="Blocked by an unresolved Ticket"
   >
-    <span role="img" aria-label="Blocked by an unresolved Ticket">
-      <Icon name="lock-closed" size="small" color="warning-800" />
-      <Text fontSize="xsmall" color="warning-800">
-        Blocked
-      </Text>
-    </span>
-  </Inline>
+    Blocked
+  </Tag>
 );
 
 type CarryCountProps = { count: number };
@@ -206,17 +198,21 @@ export const TicketCard: FC<TicketCardProps> = ({
 
             {ticket.epic && (
               <Text fontSize="xsmall" className={styles.epicLine}>
-                <AppLink
-                  href={ticketByNumberPath(ticket.epic.number)}
-                  intent="inherit"
-                  aria-label={`Epic T${ticket.epic.number} ${ticket.epic.title}`}
-                  data-color={ticket.epic.color}
+                <Tag
+                  asChild
                   className={`${styles.epicBadge} ${tinted[ticket.epic.color]}`}
                 >
-                  <Text truncate>
-                    T{ticket.epic.number} {ticket.epic.title}
-                  </Text>
-                </AppLink>
+                  <AppLink
+                    href={ticketByNumberPath(ticket.epic.number)}
+                    intent="inherit"
+                    aria-label={`Epic T${ticket.epic.number} ${ticket.epic.title}`}
+                    data-color={ticket.epic.color}
+                  >
+                    <Text truncate>
+                      T{ticket.epic.number} {ticket.epic.title}
+                    </Text>
+                  </AppLink>
+                </Tag>
               </Text>
             )}
             {showBlocked || ticket.labels.length > 0 ? (

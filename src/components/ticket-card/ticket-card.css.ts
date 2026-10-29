@@ -1,4 +1,3 @@
-import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
 /**
@@ -16,8 +15,8 @@ export const card = style({
 
 /**
  * The count pill of a dragged selection, centred on the card's top-right
- * corner: inset atoms take only `0` (T320), and there is no
- * badge component (16).
+ * corner: inset atoms take only `0` (T320). It is a `Box`, not a `Tag`: `Tag`
+ * has only subtle intents, not a solid one, and takes no position atoms.
  */
 export const carryCount = style({
   transform: 'translate(25%, -50%)',
@@ -52,12 +51,11 @@ export const epicLine = style({
 });
 
 /**
- * The Epic link as a pill in the Epic's colour (set by `tinted`), never wider
- * than its line, so its truncated title gives way: Blocks has no badge (16).
+ * The Epic link as a `Tag` in the Epic's colour, set by `tinted` since `Tag`'s
+ * intents are not the Epic colours, never wider than its line, so its
+ * truncated title gives way.
  */
 export const epicBadge = style({
   maxInlineSize: '100%',
-  borderRadius: vars.borderRadius.full,
-  paddingInline: vars.space[2],
   textDecoration: 'none',
 });

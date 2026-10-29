@@ -41,3 +41,42 @@ import { Icon } from '../../src/components/icon/icon';
 
 `Icon` is decorative by default. Give the surrounding control an accessible
 name when the icon appears inside an interactive control.
+
+## `Tag`
+
+Use `Tag` for a short label in a pill, such as a Ticket's label or its
+Blocked marker. It renders a `span` on one line (it never wraps), in an
+`intent` (`neutral` by default, or `primary`, `secondary`, `info`, `success`,
+`warning`, `danger`, all subtle tints) and a `size` (`small` by default,
+`medium`, `large`). It takes HTML attributes but no atoms.
+
+`startSlot` holds an icon before the text, and `endSlot` an `IconButton`
+after it, such as one that removes the Tag. Both are sized to the Tag's line
+height:
+
+```tsx
+import { IconButton, Tag } from '@blockle/blocks';
+
+<Tag
+  endSlot={
+    <IconButton
+      variant="ghost"
+      intent="inherit"
+      shape="circle"
+      size="small"
+      label="Remove label bug"
+      onClick={remove}
+    >
+      <Icon name="x-mark" size="small" />
+    </IconButton>
+  }
+>
+  bug
+</Tag>;
+```
+
+Use `asChild` to make another element, such as an `li` or a link, the Tag;
+the slots go around that element's children.
+
+For a colour the intents do not cover (an Epic's colour) or a solid pill,
+pass a `className`, or build it from `Box`.
