@@ -38,12 +38,14 @@ import { checkProjectWritable, checkTicketWritable } from './archived-projects';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { claimOwner } from './claim-owner';
 import {
+  type CycleLink,
   createCycles,
   cycleMembers,
   leaveAllCycles,
   leaveOpenCycles,
   outOfBacklog,
   planNewTicket,
+  withCycles,
 } from './cycles';
 import {
   checkChildrenArchived,
@@ -169,6 +171,12 @@ export type Ticket = {
   origin: OriginLink | null;
   /** The Tickets split from this one, archived ones included, by number. */
   splitOff: SplitOffTicket[];
+  /**
+   * The Cycle whose Board it shows on (ADR 0013): the Prepared or Active one
+   * it is planned into, else for a Done Ticket the most recently archived
+   * one that kept it, else `null` for the Backlog.
+   */
+  cycle: CycleLink | null;
   projectId: number;
   position: number;
   archived: boolean;
@@ -3360,19 +3368,22 @@ type RelationColumns = {
 
 /**
  * `rows` with each Ticket's claim, Epic, labels, Blockers, External
- * references, acceptance criteria, children, Origin and split-off Tickets.
+ * references, acceptance criteria, children, Origin, split-off Tickets and
+ * Cycle.
  */
-function withRelations<Row extends { number: number }>(
-  db: DatabaseConnection,
-  rows: (Row & RelationColumns)[],
-) {
-  return withOrigins(
+function withRelations<
+  Row extends { number: number; status: Status; projectId: number },
+>(db: DatabaseConnection, rows: (Row & RelationColumns)[]) {
+  return withCycles(
     db,
-    withChildren(
+    withOrigins(
       db,
-      withAcceptanceCriteria(
+      withChildren(
         db,
-        withExternalReferences(db, withClaimAndLinks(db, rows)),
+        withAcceptanceCriteria(
+          db,
+          withExternalReferences(db, withClaimAndLinks(db, rows)),
+        ),
       ),
     ),
   );

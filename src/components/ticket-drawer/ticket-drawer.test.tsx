@@ -67,6 +67,7 @@ const ticket: Ticket = {
   children: [],
   origin: null,
   splitOff: [],
+  cycle: null,
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-03-01T09:00:00Z'),

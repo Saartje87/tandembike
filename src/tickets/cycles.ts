@@ -173,10 +173,10 @@ function withTicketNumbers(db: DatabaseConnection, rows: CycleRow[]): Cycle[] {
  * The Cycle among `cycles` that Ticket `number` is planned into and that is
  * not Archived: the tab it shows on. `undefined` when it is in the Backlog.
  */
-export function openCycleOf(
-  cycles: readonly Cycle[],
+export function openCycleOf<C extends Pick<Cycle, 'state' | 'ticketNumbers'>>(
+  cycles: readonly C[],
   number: number,
-): Cycle | undefined {
+): C | undefined {
   return cycles.find(
     ({ state, ticketNumbers }) =>
       state !== 'Archived' && ticketNumbers.includes(number),
@@ -189,10 +189,12 @@ export function openCycleOf(
  * recently archived one that holds it, by the rule of `outOfBacklog`.
  * `undefined` means the Backlog.
  */
-export function boardCycleOf(
-  cycles: readonly Cycle[],
+export function boardCycleOf<
+  C extends Pick<Cycle, 'id' | 'state' | 'ticketNumbers' | 'archivedAt'>,
+>(
+  cycles: readonly C[],
   ticket: { number: number; status: Status },
-): Cycle | undefined {
+): C | undefined {
   const open = openCycleOf(cycles, ticket.number);
   if (open !== undefined || ticket.status !== 'Done') {
     return open;
@@ -207,6 +209,54 @@ export function boardCycleOf(
         (right.archivedAt?.getTime() ?? 0) -
           (left.archivedAt?.getTime() ?? 0) || right.id - left.id,
     )[0];
+}
+
+/** The Cycle a Ticket shows on, as the Ticket links to it. */
+export type CycleLink = Pick<Cycle, 'id' | 'title' | 'state'>;
+
+/**
+ * `rows` with the Cycle each Ticket shows on by `boardCycleOf`, among its own
+ * Project's Cycles, or `null` for the Backlog, in one query.
+ */
+export function withCycles<
+  Row extends { number: number; status: Status; projectId: number },
+>(db: DatabaseConnection, rows: Row[]): (Row & { cycle: CycleLink | null })[] {
+  const cyclesById = new Map<number, CycleRow & { ticketNumbers: number[] }>();
+  if (rows.length > 0) {
+    const memberRows = db
+      .select({ ...cycleColumns, number: cycleTickets.ticketNumber })
+      .from(cycleTickets)
+      .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+      .where(
+        inArray(
+          cycleTickets.ticketNumber,
+          rows.map(({ number }) => number),
+        ),
+      )
+      .all();
+    for (const { number, ...cycle } of memberRows) {
+      const entry = cyclesById.get(cycle.id);
+      if (entry) {
+        entry.ticketNumbers.push(number);
+      } else {
+        cyclesById.set(cycle.id, { ...cycle, ticketNumbers: [number] });
+      }
+    }
+  }
+  const memberCycles = [...cyclesById.values()];
+  return rows.map((row) => {
+    const cycle = boardCycleOf(
+      memberCycles.filter(({ projectId }) => projectId === row.projectId),
+      row,
+    );
+    return {
+      ...row,
+      cycle:
+        cycle === undefined
+          ? null
+          : { id: cycle.id, title: cycle.title, state: cycle.state },
+    };
+  });
 }
 
 /** A subquery of the numbers of the Tickets in Cycle `cycleId`. */
