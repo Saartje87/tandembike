@@ -213,7 +213,6 @@ const CriterionItem: FC<CriterionItemProps> = ({
       <Checkbox
         name={`criterion-${criterion.id}`}
         aria-label={criterion.text}
-        className={styles.checkbox}
         checked={criterion.checked}
         onChange={(event) => onCheck(event.currentTarget.checked)}
       />

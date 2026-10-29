@@ -20,11 +20,3 @@ export const handle = style({
     },
   },
 });
-
-/**
- * Blocks' Checkbox has a fixed size but shrinks beside text that wraps
- * (T308).
- */
-export const checkbox = style({
-  flexShrink: 0,
-});
