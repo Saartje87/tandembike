@@ -177,13 +177,7 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
               <Button type="button" disabled={pending} onClick={confirm}>
                 Archive T{epic.number}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  close();
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={close}>
                 Cancel
               </Button>
             </Inline>

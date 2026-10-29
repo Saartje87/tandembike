@@ -171,9 +171,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
                     variant="ghost"
                     size="small"
                     aria-label={`Remove External reference ${reference}`}
-                    onClick={() => {
-                      remove(reference);
-                    }}
+                    onClick={() => remove(reference)}
                   >
                     <Icon name="x-mark" size="small" />
                   </Button>

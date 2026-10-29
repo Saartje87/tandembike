@@ -189,9 +189,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                     variant="ghost"
                     size="small"
                     aria-label={wording.remove(ticket.number)}
-                    onClick={() => {
-                      remove(ticket.number);
-                    }}
+                    onClick={() => remove(ticket.number)}
                   >
                     <Icon name="x-mark" size="small" />
                   </Button>
@@ -243,9 +241,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                 variant="ghost"
                 size="small"
                 disabled={isSubmitting}
-                onClick={() => {
-                  stopAdding();
-                }}
+                onClick={stopAdding}
               >
                 Cancel
               </Button>
@@ -261,9 +257,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
             size="small"
             startSlot={<Icon name="plus" size="small" />}
             autoFocus={refocusAdd}
-            onClick={() => {
-              setAdding(true);
-            }}
+            onClick={() => setAdding(true)}
           >
             {wording.add}
           </Button>

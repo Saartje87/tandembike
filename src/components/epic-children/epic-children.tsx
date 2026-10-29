@@ -133,9 +133,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                     variant="ghost"
                     size="small"
                     aria-label={`Detach T${child.number}`}
-                    onClick={() => {
-                      detach(child.number);
-                    }}
+                    onClick={() => detach(child.number)}
                   >
                     <Icon name="x-mark" size="small" />
                   </Button>
@@ -190,9 +188,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
                 variant="ghost"
                 size="small"
                 disabled={isSubmitting}
-                onClick={() => {
-                  stopAttaching();
-                }}
+                onClick={stopAttaching}
               >
                 Cancel
               </Button>
@@ -208,9 +204,7 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
             size="small"
             startSlot={<Icon name="link" size="small" />}
             autoFocus={refocusAttach}
-            onClick={() => {
-              setAttaching(true);
-            }}
+            onClick={() => setAttaching(true)}
           >
             Attach Ticket
           </Button>

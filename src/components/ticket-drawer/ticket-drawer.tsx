@@ -288,9 +288,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={archivePending}
-                onClick={() => {
-                  toggleArchived();
-                }}
+                onClick={toggleArchived}
               >
                 Restore
               </Button>
@@ -395,9 +393,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={claimPending}
-                onClick={() => {
-                  clearClaim();
-                }}
+                onClick={clearClaim}
               >
                 {claimPending ? 'Clearing claim...' : 'Clear claim'}
               </Button>
@@ -461,9 +457,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={archivePending}
-                onClick={() => {
-                  toggleArchived();
-                }}
+                onClick={toggleArchived}
               >
                 Archive
               </Button>

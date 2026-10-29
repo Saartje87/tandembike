@@ -288,9 +288,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
           size="small"
           startSlot={<Icon name="plus" size="small" />}
           autoFocus={refocusAdd}
-          onClick={() => {
-            setAdding(true);
-          }}
+          onClick={() => setAdding(true)}
         >
           Add criterion
         </Button>
@@ -328,9 +326,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
             variant="ghost"
             size="small"
             disabled={isSubmitting}
-            onClick={() => {
-              stopAdding();
-            }}
+            onClick={stopAdding}
           >
             Cancel
           </Button>

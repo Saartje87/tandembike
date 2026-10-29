@@ -164,13 +164,7 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
               >
                 Delete T{ticket.number}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  close();
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={close}>
                 Cancel
               </Button>
             </Inline>

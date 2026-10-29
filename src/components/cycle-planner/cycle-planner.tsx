@@ -62,9 +62,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           intent="neutral"
           size="small"
           disabled={pending}
-          onClick={() => {
-            change(unplanTicket, current.id);
-          }}
+          onClick={() => change(unplanTicket, current.id)}
         >
           Remove from Cycle
         </Button>

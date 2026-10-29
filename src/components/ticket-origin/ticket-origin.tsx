@@ -127,9 +127,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
               variant="ghost"
               size="small"
               disabled={isSubmitting}
-              onClick={() => {
-                stopEditing();
-              }}
+              onClick={stopEditing}
             >
               Cancel
             </Button>
@@ -161,9 +159,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
           variant="ghost"
           size="small"
           autoFocus={refocusEdit}
-          onClick={() => {
-            setEditing(true);
-          }}
+          onClick={() => setEditing(true)}
         >
           {origin ? 'Change Origin' : 'Set Origin'}
         </Button>
@@ -173,9 +169,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
             variant="ghost"
             size="small"
             disabled={clearPending}
-            onClick={() => {
-              clear();
-            }}
+            onClick={clear}
           >
             Clear Origin
           </Button>

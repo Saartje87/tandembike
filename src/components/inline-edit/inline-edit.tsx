@@ -263,9 +263,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
               aria-describedby={hintId}
               // biome-ignore lint/a11y/noAutofocus: only after the User ends an edit, to put focus back where it was.
               autoFocus={refocus}
-              onClick={() => {
-                open();
-              }}
+              onClick={open}
             >
               {content}
             </button>
@@ -284,9 +282,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
       aria-label="Cancel"
       // Keeps focus in the input, so the click does not count as leaving.
       onMouseDown={(event) => event.preventDefault()}
-      onClick={() => {
-        cancel();
-      }}
+      onClick={cancel}
     >
       <Icon name="x-mark" size="small" />
     </Button>
