@@ -28,11 +28,9 @@ export const carryCount = style({
 
 /**
  * A card's select checkbox: hidden until its card is hovered or focused, or
- * anything on the Board is selected, yet still reachable by Tab. Blocks'
- * Checkbox shrinks beside text that wraps (T308).
+ * anything on the Board is selected, yet still reachable by Tab.
  */
 export const selectBox = style({
-  flexShrink: 0,
   opacity: 0,
   selectors: {
     [`${card}:hover &, ${card}:focus-within &, ${card}[data-selecting] &`]: {
