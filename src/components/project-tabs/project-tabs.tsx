@@ -92,7 +92,7 @@ const Tab: FC<TabProps> = ({ href, current, children, openTickets }) => (
         {openTickets !== undefined && (
           <>
             {' '}
-            <Tag intent={current ? 'primary' : 'neutral'}>
+            <Tag>
               <span aria-hidden>{openTickets}</span>
               <VisuallyHidden>
                 {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
