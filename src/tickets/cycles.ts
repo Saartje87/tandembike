@@ -88,6 +88,12 @@ export type MoveToCycleResult = Omit<CycleTicketsResult, 'cycle'> & {
   cycle: Cycle | null;
 };
 
+/**
+ * How the refusal to plan a Ticket that is in another open Cycle ends, so a
+ * caller can name its own way to move it instead.
+ */
+export const removeFromCycleFirst = ' Remove it from that Cycle first.';
+
 const cycleColumns = {
   id: cycles.id,
   projectId: cycles.projectId,
@@ -354,47 +360,65 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     return cycle;
   }
 
+  /**
+   * Ticket `number`'s Project and archived flag, and the Cycle that is not
+   * Archived it is planned into, if any.
+   */
+  function placementOf(number: number) {
+    const ticket = db
+      .select({
+        projectId: tickets.projectId,
+        archived: tickets.archived,
+      })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (!ticket) {
+      throw new NotFoundError(`There is no Ticket T${number}.`);
+    }
+    const current = db
+      .select({ id: cycles.id, title: cycles.title })
+      .from(cycleTickets)
+      .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
+      .where(
+        and(
+          eq(cycleTickets.ticketNumber, number),
+          ne(cycles.state, 'Archived'),
+        ),
+      )
+      .get();
+    return { ticket, current };
+  }
+
+  /** Throws unless Ticket `number`, as `ticket`, may join `cycle`. */
+  function checkPlannable(
+    ticket: { projectId: number; archived: boolean },
+    number: number,
+    cycle: CycleRow,
+  ) {
+    if (ticket.projectId !== cycle.projectId) {
+      throw new NotAllowedError(
+        `Ticket T${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
+      );
+    }
+    if (ticket.archived) {
+      throw new NotAllowedError(
+        `Ticket T${number} is archived. Restore it before planning it into a Cycle.`,
+      );
+    }
+  }
+
   /** Plans Ticket `number` into changeable `cycle`, by `planTicket`'s rules. */
   function planInto(cycle: CycleRow, number: number) {
     db.transaction(() => {
-      const ticket = db
-        .select({
-          projectId: tickets.projectId,
-          archived: tickets.archived,
-        })
-        .from(tickets)
-        .where(eq(tickets.number, number))
-        .get();
-      if (!ticket) {
-        throw new NotFoundError(`There is no Ticket T${number}.`);
-      }
-      const current = db
-        .select({ id: cycles.id, title: cycles.title })
-        .from(cycleTickets)
-        .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
-        .where(
-          and(
-            eq(cycleTickets.ticketNumber, number),
-            ne(cycles.state, 'Archived'),
-          ),
-        )
-        .get();
+      const { ticket, current } = placementOf(number);
       if (current?.id === cycle.id) {
         return;
       }
-      if (ticket.projectId !== cycle.projectId) {
-        throw new NotAllowedError(
-          `Ticket T${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
-        );
-      }
-      if (ticket.archived) {
-        throw new NotAllowedError(
-          `Ticket T${number} is archived. Restore it before planning it into a Cycle.`,
-        );
-      }
+      checkPlannable(ticket, number, cycle);
       if (current) {
         throw new NotAllowedError(
-          `Ticket T${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
+          `Ticket T${number} is already planned into the Cycle "${current.title}".${removeFromCycleFirst}`,
         );
       }
       db.insert(cycleTickets)
@@ -440,48 +464,18 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     projectId: number | undefined,
   ): number[] {
     return db.transaction(() => {
-      const ticket = db
-        .select({
-          projectId: tickets.projectId,
-          archived: tickets.archived,
-        })
-        .from(tickets)
-        .where(eq(tickets.number, number))
-        .get();
-      if (!ticket) {
-        throw new NotFoundError(`There is no Ticket T${number}.`);
-      }
+      const { ticket, current } = placementOf(number);
       if (projectId !== undefined && ticket.projectId !== projectId) {
         throw new NotAllowedError(`Ticket T${number} is in another Project.`);
       }
-      const current = db
-        .select({ id: cycles.id })
-        .from(cycleTickets)
-        .innerJoin(cycles, eq(cycles.id, cycleTickets.cycleId))
-        .where(
-          and(
-            eq(cycleTickets.ticketNumber, number),
-            ne(cycles.state, 'Archived'),
-          ),
-        )
-        .get();
-      if (current?.id === (target?.id ?? undefined)) {
+      if (current?.id === target?.id) {
         return [];
       }
       if (target === null) {
         checkProjectWritable(db, ticket.projectId);
         return leaveOpenCycles(db, number);
       }
-      if (ticket.projectId !== target.projectId) {
-        throw new NotAllowedError(
-          `Ticket T${number} is in another Project. A Cycle holds only its own Project's Tickets.`,
-        );
-      }
-      if (ticket.archived) {
-        throw new NotAllowedError(
-          `Ticket T${number} is archived. Restore it before planning it into a Cycle.`,
-        );
-      }
+      checkPlannable(ticket, number, target);
       const left = leaveOpenCycles(db, number);
       db.insert(cycleTickets)
         .values({ cycleId: target.id, ticketNumber: number })

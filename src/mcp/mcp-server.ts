@@ -4,6 +4,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { isAllowedHost } from '../http/allowed-host';
+import { removeFromCycleFirst } from '../tickets/cycles';
 import { type BatchFailure, TicketsError } from '../tickets/errors';
 import {
   maxExternalReferenceKeyLength,
@@ -295,29 +296,14 @@ function respondBatch(call: () => { failed: BatchFailure[] }): CallToolResult {
   }
 }
 
-/** How the Tickets module's refusal to plan a Ticket planned elsewhere ends. */
-const removeItFirst = ' Remove it from that Cycle first.';
-
 /**
  * `message`, pointing an Agent to move_tickets when it is the refusal to plan
  * a Ticket that is in another Cycle already.
  */
 function withMoveHint(message: string): string {
-  return message.endsWith(removeItFirst)
-    ? `${message.slice(0, -removeItFirst.length)} Move it with move_tickets, or unplan it from that Cycle first.`
+  return message.endsWith(removeFromCycleFirst)
+    ? `${message.slice(0, -removeFromCycleFirst.length)} Move it with move_tickets, or unplan it from that Cycle first.`
     : message;
-}
-
-/** Runs `call`, pointing its refusal to move_tickets as `withMoveHint` does. */
-function hintingMove<T>(call: () => T): T {
-  try {
-    return call();
-  } catch (error) {
-    if (error instanceof TicketsError) {
-      error.message = withMoveHint(error.message);
-    }
-    throw error;
-  }
 }
 
 /** An MCP server whose tools call the Tickets module `tickets` only. */
@@ -1114,8 +1100,15 @@ export function createMcpServer(tickets: Tickets): McpServer {
       inputSchema: { cycleId, number: ticketNumber },
       annotations: { idempotentHint: true },
     },
-    ({ cycleId, number }) =>
-      respond(() => hintingMove(() => tickets.planTicket({ cycleId, number }))),
+    ({ cycleId, number }) => {
+      try {
+        return jsonResult(tickets.planTicket({ cycleId, number }));
+      } catch (error) {
+        return error instanceof TicketsError
+          ? errorResult(new TicketsError(withMoveHint(error.message)))
+          : errorResult(error);
+      }
+    },
   );
 
   server.registerTool(
