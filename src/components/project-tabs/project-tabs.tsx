@@ -171,9 +171,9 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
  * one, the History of archived ones and its Settings, with a New Cycle
  * button that adds one. The Backlog's and each Cycle's tab shows its open
- * Tickets in a badge, whatever the Board filter. It marks the tab on screen from the URL, so the
- * Project's layout can keep it mounted across its tabs, and carries the
- * Board filter in the URL from one Board's tab to another's.
+ * Tickets in a badge, whatever the Board filter. It marks the tab on screen
+ * from the URL, so the Project's layout can keep it mounted across its tabs,
+ * and carries the Board filter in the URL from one Board's tab to another's.
  */
 export const ProjectTabs: FC<ProjectTabsProps> = ({
   projectId,

@@ -868,6 +868,20 @@ describe('Open Ticket counts', () => {
     });
   });
 
+  it('leaves out Epics, which are not in the Lanes', () => {
+    const { tickets, project } = ticketsWithProject();
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+
+    expect(tickets.openTicketCounts(project.id)).toEqual({
+      backlog: 0,
+      cycles: {},
+    });
+  });
+
   it("counts only the Project's own Tickets, and refuses a missing Project", () => {
     const { tickets, project } = ticketsWithProject();
     const other = tickets.createProject({ name: 'App' });

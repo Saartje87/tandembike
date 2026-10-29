@@ -569,13 +569,15 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     openTicketCounts(projectId: number): OpenTicketCounts {
       checkProjectExists(db, projectId);
-      const open = new Set(
+      // Epics are not in the Lanes, so they do not count (GLOSSARY: Board).
+      const openNumbers = new Set(
         db
           .select({ number: tickets.number })
           .from(tickets)
           .where(
             and(
               eq(tickets.projectId, projectId),
+              eq(tickets.type, 'Ticket'),
               ne(tickets.status, 'Done'),
               eq(tickets.archived, false),
             ),
@@ -583,20 +585,23 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           .all()
           .map(({ number }) => number),
       );
-      const rows = db
+      const cycleRows = db
         .select(cycleColumns)
         .from(cycles)
         .where(
           and(eq(cycles.projectId, projectId), ne(cycles.state, 'Archived')),
         )
         .all();
-      const counts: OpenTicketCounts = { backlog: open.size, cycles: {} };
-      for (const cycle of withTicketNumbers(db, rows)) {
-        const planned = cycle.ticketNumbers.filter((number) =>
-          open.has(number),
+      const counts: OpenTicketCounts = {
+        backlog: openNumbers.size,
+        cycles: {},
+      };
+      for (const cycle of withTicketNumbers(db, cycleRows)) {
+        const openInCycle = cycle.ticketNumbers.filter((number) =>
+          openNumbers.has(number),
         ).length;
-        counts.cycles[cycle.id] = planned;
-        counts.backlog -= planned;
+        counts.cycles[cycle.id] = openInCycle;
+        counts.backlog -= openInCycle;
       }
       return counts;
     },
