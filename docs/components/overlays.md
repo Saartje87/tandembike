@@ -116,9 +116,12 @@ content that can be read inline.
 
 Checked against `@blockle/blocks-react` 3.1.0:
 
-- `size` sets its width (or height): `small` (300px, the default), `medium`
-  (480px) or `large` (640px), each at most 100%. A `className` adds to its own
-  classes.
+- The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
+  (`medium` 480px, `large` 640px) only accepts `undefined` in TypeScript
+  (T356), so set another width with a `className`, which adds to its own
+  classes and, being unlayered, beats the theme.
+- A server-rendered open drawer reports a hydration mismatch on `open`, then
+  opens as modal anyway; pass `suppressHydrationWarning` (T357).
 - In a route Next.js preserves in a hidden `<Activity>`, it closes while
   hidden and opens as modal again when shown. It hydrates a server-rendered
   open drawer without an error.
