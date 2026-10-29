@@ -23,6 +23,7 @@ const ticket = (
   children: [],
   origin: null,
   splitOff: [],
+  cycle: null,
   claim: null,
   acceptanceCriteria: [],
   createdAt: new Date('2026-01-01'),

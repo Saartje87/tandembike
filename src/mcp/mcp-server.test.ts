@@ -2432,6 +2432,44 @@ describe('Cycle tools', () => {
     await client.close();
   });
 
+  it('shows the Cycle a whole Ticket is in, in every tool that returns one', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const link = { id: cycle.id, title: 'Beta', state: 'Prepared' };
+
+    const created = await client.callTool({
+      name: 'create_ticket',
+      arguments: {
+        projectId: project.id,
+        title: 'Planned',
+        cycleId: cycle.id,
+        detail: 'full',
+      },
+    });
+    const updated = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: 1, title: 'Unplanned', detail: 'full' },
+    });
+    const got = await client.callTool({
+      name: 'get_ticket',
+      arguments: { number: (resultJson(created) as { number: number }).number },
+    });
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, cycleId: cycle.id, detail: 'full' },
+    });
+    const { tools } = await client.listTools();
+
+    expect(resultJson(created)).toMatchObject({ cycle: link });
+    expect(resultJson(updated)).toMatchObject({ cycle: null });
+    expect(resultJson(got)).toMatchObject({ cycle: link });
+    expect(resultJson(listed)).toMatchObject({ tickets: [{ cycle: link }] });
+    expect(
+      tools.find((tool) => tool.name === 'get_ticket')?.description,
+    ).toMatch(/cycle is the Cycle/);
+    await client.close();
+  });
+
   it('plans a Ticket out of a Cycle, and lists the Tickets of a Cycle or the Backlog', async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });

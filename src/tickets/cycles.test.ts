@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import { createChangeChannel } from './changes';
+import { boardCycleOf } from './cycles';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
 
 /** A Tickets module with one Project. */
@@ -430,7 +431,7 @@ describe('Archiving a Cycle', () => {
     return { tickets, project, cycle };
   }
 
-  it('archives an Active Cycle, keeping only its Done Tickets and leaving every Ticket as it is', () => {
+  it('archives an Active Cycle, keeping only its Done Tickets and leaving every Ticket but its Cycle as it is', () => {
     const { tickets, cycle } = activeCycle();
     const before = [1, 2, 3].map((number) => tickets.getTicket(number));
 
@@ -444,7 +445,13 @@ describe('Archiving a Cycle', () => {
       archivedAt: expect.any(Date),
     });
     expect([1, 2, 3].map((number) => tickets.getTicket(number))).toEqual(
-      before,
+      before.map((ticket) => ({
+        ...ticket,
+        cycle:
+          ticket.number === 2
+            ? { id: cycle.id, title: 'Beta', state: 'Archived' }
+            : null,
+      })),
     );
   });
 
@@ -894,5 +901,126 @@ describe('Open Ticket counts', () => {
     expect(errorFrom(() => tickets.openTicketCounts(99))).toEqual(
       new NotFoundError('There is no Project with id 99.'),
     );
+  });
+});
+
+describe("A Ticket's Cycle", () => {
+  /** A Project with Tickets T1 to #`count`. */
+  function projectWith(count: number) {
+    const { tickets, project } = ticketsWithProject();
+    for (let index = 1; index <= count; index++) {
+      tickets.createTicket({ projectId: project.id, title: `Ticket ${index}` });
+    }
+    /** Plans `numbers` into a new Cycle, then starts and archives it. */
+    const archivedCycle = (title: string, numbers: number[]) => {
+      const cycle = tickets.createCycle({ projectId: project.id, title });
+      tickets.planTickets({ cycleId: cycle.id, ticketNumbers: numbers });
+      tickets.startCycle(cycle.id, { archiveActive: true });
+      return tickets.archiveCycle(cycle.id);
+    };
+    return { tickets, project, archivedCycle };
+  }
+
+  it('is the Prepared or Active Cycle the Ticket is planned into', () => {
+    const { tickets, project } = projectWith(2);
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.planTicket({ cycleId: beta.id, number: 1 });
+    tickets.planTicket({ cycleId: launch.id, number: 2 });
+    tickets.startCycle(launch.id);
+
+    expect(tickets.getTicket(1).cycle).toEqual({
+      id: beta.id,
+      title: 'Beta',
+      state: 'Prepared',
+    });
+    expect(tickets.getTicket(2).cycle).toEqual({
+      id: launch.id,
+      title: 'Launch',
+      state: 'Active',
+    });
+  });
+
+  it('is the most recently archived Cycle that kept a Done Ticket', () => {
+    const { tickets, archivedCycle } = projectWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1]);
+    const launch = archivedCycle('Launch', [1]);
+
+    expect(tickets.getTicket(1).cycle).toEqual({
+      id: launch.id,
+      title: 'Launch',
+      state: 'Archived',
+    });
+  });
+
+  it('is null in the Backlog, also for an unfinished Ticket an Archived Cycle once held', () => {
+    const { tickets, project, archivedCycle } = projectWith(2);
+    archivedCycle('Beta', [2]);
+
+    expect(tickets.getTicket(1).cycle).toBeNull();
+    expect(tickets.getTicket(2).cycle).toBeNull();
+    expect(
+      tickets.listTickets({ projectId: project.id }).map(({ cycle }) => cycle),
+    ).toEqual([null, null]);
+  });
+
+  it('is null for an unfinished Ticket left in a Cycle archived before unfinished ones were dropped', () => {
+    const { tickets, archivedCycle } = projectWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1]);
+
+    tickets.updateTicket(1, { status: 'Todo' });
+
+    expect(tickets.getTicket(1).cycle).toBeNull();
+  });
+
+  it("is null for a Done Ticket moved out of its Archived Cycle's Project", () => {
+    const { tickets, archivedCycle } = projectWith(1);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1]);
+    const other = tickets.createProject({ name: 'App' });
+
+    expect(tickets.updateTicket(1, { projectId: other.id }).cycle).toBeNull();
+  });
+
+  it('agrees with the Board each Ticket shows on', () => {
+    const { tickets, project, archivedCycle } = projectWith(3);
+    tickets.updateTicket(1, { status: 'Done' });
+    archivedCycle('Beta', [1, 2]);
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    tickets.planTicket({ cycleId: launch.id, number: 3 });
+    const cycles = tickets.listCycles(project.id);
+
+    for (const ticket of tickets.listTickets({ projectId: project.id })) {
+      expect(ticket.cycle?.id ?? null).toBe(
+        boardCycleOf(cycles, ticket)?.id ?? null,
+      );
+    }
+  });
+
+  it('is returned by every call that gives a whole Ticket', () => {
+    const { tickets, project } = projectWith(1);
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const cycle = { id: beta.id, title: 'Beta', state: 'Prepared' };
+
+    expect(
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Planned',
+        cycleId: beta.id,
+      }).cycle,
+    ).toEqual(cycle);
+    tickets.planTicket({ cycleId: beta.id, number: 1 });
+    expect(tickets.updateTicket(1, { title: 'Renamed' }).cycle).toEqual(cycle);
+    expect(
+      tickets.listTickets({ projectId: project.id }).map(({ cycle }) => cycle),
+    ).toEqual([cycle, cycle]);
   });
 });
