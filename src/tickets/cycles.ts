@@ -89,6 +89,17 @@ export type MoveToCycleResult = Omit<CycleTicketsResult, 'cycle'> & {
 };
 
 /**
+ * How many open Tickets, not Done and not archived, each tab of a Project's
+ * Board holds.
+ */
+export type OpenTicketCounts = {
+  /** The open Tickets in no Prepared or Active Cycle. */
+  backlog: number;
+  /** By Cycle id, each Prepared and Active Cycle's open Tickets. */
+  cycles: Record<number, number>;
+};
+
+/**
  * How the refusal to plan a Ticket that is in another open Cycle ends, so a
  * caller can name its own way to move it instead.
  */
@@ -550,6 +561,44 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         .orderBy(asc(cycles.id))
         .all();
       return withTicketNumbers(db, rows);
+    },
+
+    /**
+     * Counts the open Tickets, not Done and not archived, of Project
+     * `projectId`'s Backlog and of each of its Prepared and Active Cycles.
+     */
+    openTicketCounts(projectId: number): OpenTicketCounts {
+      checkProjectExists(db, projectId);
+      const open = new Set(
+        db
+          .select({ number: tickets.number })
+          .from(tickets)
+          .where(
+            and(
+              eq(tickets.projectId, projectId),
+              ne(tickets.status, 'Done'),
+              eq(tickets.archived, false),
+            ),
+          )
+          .all()
+          .map(({ number }) => number),
+      );
+      const rows = db
+        .select(cycleColumns)
+        .from(cycles)
+        .where(
+          and(eq(cycles.projectId, projectId), ne(cycles.state, 'Archived')),
+        )
+        .all();
+      const counts: OpenTicketCounts = { backlog: open.size, cycles: {} };
+      for (const cycle of withTicketNumbers(db, rows)) {
+        const planned = cycle.ticketNumbers.filter((number) =>
+          open.has(number),
+        ).length;
+        counts.cycles[cycle.id] = planned;
+        counts.backlog -= planned;
+      }
+      return counts;
     },
 
     /** Creates an empty, Prepared Cycle in a Project. */

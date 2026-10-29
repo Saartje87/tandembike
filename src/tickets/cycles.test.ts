@@ -823,3 +823,62 @@ describe('The Backlog', () => {
     ).toEqual([1]);
   });
 });
+
+describe('Open Ticket counts', () => {
+  it("counts each Prepared and Active Cycle's open Tickets and the Backlog's", () => {
+    const { tickets, project } = ticketsWithProject();
+    for (let index = 1; index <= 6; index++) {
+      tickets.createTicket({ projectId: project.id, title: `Ticket ${index}` });
+    }
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const launch = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+    const empty = tickets.createCycle({
+      projectId: project.id,
+      title: 'Later',
+    });
+    tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 2, 3] });
+    tickets.planTickets({ cycleId: launch.id, ticketNumbers: [4] });
+    tickets.startCycle(beta.id);
+    tickets.updateTicket(2, { status: 'Done' });
+    tickets.updateTicket(5, { status: 'Done' });
+    tickets.archiveTicket(3);
+
+    expect(tickets.openTicketCounts(project.id)).toEqual({
+      backlog: 1,
+      cycles: { [beta.id]: 1, [launch.id]: 1, [empty.id]: 0 },
+    });
+  });
+
+  it('leaves out Archived Cycles, whose unfinished Tickets count in the Backlog', () => {
+    const { tickets, project } = ticketsWithProject();
+    tickets.createTicket({ projectId: project.id, title: 'Unfinished' });
+    tickets.createTicket({ projectId: project.id, title: 'Finished' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 2] });
+    tickets.startCycle(beta.id);
+    tickets.updateTicket(2, { status: 'Done' });
+    tickets.archiveCycle(beta.id);
+
+    expect(tickets.openTicketCounts(project.id)).toEqual({
+      backlog: 1,
+      cycles: {},
+    });
+  });
+
+  it("counts only the Project's own Tickets, and refuses a missing Project", () => {
+    const { tickets, project } = ticketsWithProject();
+    const other = tickets.createProject({ name: 'App' });
+    tickets.createTicket({ projectId: other.id, title: 'Elsewhere' });
+
+    expect(tickets.openTicketCounts(project.id)).toEqual({
+      backlog: 0,
+      cycles: {},
+    });
+    expect(errorFrom(() => tickets.openTicketCounts(99))).toEqual(
+      new NotFoundError('There is no Project with id 99.'),
+    );
+  });
+});

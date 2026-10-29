@@ -5,6 +5,7 @@ import {
   Button,
   Inline,
   Label,
+  Tag,
   TextInput,
   VisuallyHidden,
 } from '@blockle/blocks';
@@ -25,7 +26,7 @@ import {
   projectPath,
   projectSettingsPath,
 } from '../../app/lib/paths';
-import type { Cycle } from '../../tickets/cycles';
+import type { Cycle, OpenTicketCounts } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 
@@ -33,6 +34,8 @@ export type ProjectTabsProps = {
   projectId: number;
   /** The Project's Cycles; a tab shows for each that is not Archived. */
   cycles: Cycle[];
+  /** The open Tickets of the Backlog and of each Cycle, unfiltered. */
+  openTicketCounts: OpenTicketCounts;
 };
 
 /** A tab of the Project: the Backlog, a Cycle by id, the History or Settings. */
@@ -67,9 +70,11 @@ type TabProps = {
   href: string;
   current: boolean;
   children: string;
+  /** The open Tickets on the tab's Board, shown in a badge when given. */
+  openTickets?: number;
 };
 
-const Tab: FC<TabProps> = ({ href, current, children }) => (
+const Tab: FC<TabProps> = ({ href, current, children, openTickets }) => (
   <Box
     asChild
     backgroundColor={current ? 'primary-100' : 'transparent'}
@@ -84,6 +89,17 @@ const Tab: FC<TabProps> = ({ href, current, children }) => (
         aria-current={current ? 'page' : undefined}
       >
         {children}
+        {openTickets !== undefined && (
+          <>
+            {' '}
+            <Tag intent={current ? 'primary' : 'neutral'}>
+              <span aria-hidden>{openTickets}</span>
+              <VisuallyHidden>
+                {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
+              </VisuallyHidden>
+            </Tag>
+          </>
+        )}
       </AppLink>
     </li>
   </Box>
@@ -154,11 +170,16 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 /**
  * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
  * one, the History of archived ones and its Settings, with a New Cycle
- * button that adds one. It marks the tab on screen from the URL, so the
+ * button that adds one. The Backlog's and each Cycle's tab shows its open
+ * Tickets in a badge, whatever the Board filter. It marks the tab on screen from the URL, so the
  * Project's layout can keep it mounted across its tabs, and carries the
  * Board filter in the URL from one Board's tab to another's.
  */
-export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
+export const ProjectTabs: FC<ProjectTabsProps> = ({
+  projectId,
+  cycles,
+  openTicketCounts,
+}) => {
   const [adding, setAdding] = useState(false);
   const current = currentTab(useSelectedLayoutSegments(), cycles);
   const searchParams = useSearchParams();
@@ -175,6 +196,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
             <Tab
               href={filteredBoardPath(projectPath(projectId), filter)}
               current={current === 'backlog'}
+              openTickets={openTicketCounts.backlog}
             >
               Backlog
             </Tab>
@@ -186,6 +208,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
                 key={cycle.id}
                 href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
                 current={current === cycle.id}
+                openTickets={openTicketCounts.cycles[cycle.id] ?? 0}
               >
                 {cycle.title}
               </Tab>

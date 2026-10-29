@@ -25,12 +25,14 @@ async function projectShell(
     // Its tabs and their content are hidden until it is restored.
     return <ArchivedProjectNotice project={project} />;
   }
+  const tickets = appTickets('user');
   return (
     <Stack gap={4}>
       <ProjectHeader project={project}>
         <ProjectTabs
           projectId={project.id}
-          cycles={appTickets('user').listCycles(project.id)}
+          cycles={tickets.listCycles(project.id)}
+          openTicketCounts={tickets.openTicketCounts(project.id)}
         />
       </ProjectHeader>
       {children}
