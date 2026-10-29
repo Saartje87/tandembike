@@ -8,14 +8,15 @@ the underlying action or form control.
 Use an alert for a message that needs attention, such as a form or request
 error. It renders with `role="alert"`, so screen readers announce it when it
 appears. It has no `open` prop: render it conditionally to show or hide it.
-Pass `onRequestClose` to add a dismiss button.
+Pass `onRequestClose` to add a dismiss button; its accessible name is
+`closeLabel`, `Close` by default.
 
 ```tsx
 import { Alert } from '@blockle/blocks';
 
 <>
   {hasError && (
-    <Alert intent="error" onRequestClose={() => setHasError(false)}>
+    <Alert intent="danger" onRequestClose={() => setHasError(false)}>
       Something went wrong.
     </Alert>
   )}
@@ -47,7 +48,8 @@ Use toast notifications for brief, non-blocking feedback that does not require
 the user to respond immediately. Place `ToastProvider` high enough in a Client
 Component tree to cover the screens that need notifications, then call
 `useToast` from a descendant. Use an appropriate intent and concise message.
-The supported intents are `info`, `success`, `warning`, and `error`.
+The supported intents are `info`, `success`, `warning`, and `danger`, the
+same as `Alert`'s.
 
 ```tsx
 'use client';
@@ -92,8 +94,9 @@ Use `Alert` instead when the message belongs inline with content or needs to
 remain visible until dismissed. Do not put essential instructions only in a
 toast.
 
-`ToastProvider` currently renders notifications at the bottom of the screen.
-Although its public props type includes `position`, the current implementation
-does not apply that prop; do not rely on it to change placement.
+`ToastProvider` renders notifications at the bottom of the screen; pass
+`placement` (`top`, `top-start`, `top-end`, `bottom`, `bottom-start`,
+`bottom-end`) to move them. Its `position` prop is deprecated: use
+`placement`.
 
 For installation and theme setup, see [Providers](./providers.md).

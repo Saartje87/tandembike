@@ -24,7 +24,7 @@ atoms each component accepts, the breakpoints, and `vars` tokens.
 import { Alert, Button, Stack } from '@blockle/blocks';
 
 <Stack gap={2}>
-  {hasError && <Alert intent="error">Could not save changes.</Alert>}
+  {hasError && <Alert intent="danger">Could not save changes.</Alert>}
   <Button onClick={save}>Save changes</Button>
 </Stack>;
 ```

@@ -24,8 +24,8 @@ do not use it merely to add another wrapper.
 
 ## Text and numeric entry
 
-- **`TextInput`** is for a single-line value. Give it a useful `name` (it is
-  required) and associate it with a `Label`. It wraps the `<input>` in a
+- **`TextInput`** is for a single-line value. Give it a useful `name` inside
+  a form and associate it with a `Label`. It wraps the `<input>` in a
   styled container: `className` goes to the container and `inputClassName`
   to the `<input>`, for example to set the input's font.
 - **`Textarea`** is for free-form multi-line text, such as a description.
@@ -89,18 +89,20 @@ with `refusalReason(result, field)` from `src/app/lib/action-result.ts`.
 
 - **`Checkbox`** represents an independent on/off choice. Put the human
   readable label in its children and use `name` for form identification.
-  Without children it renders only the box: name it with `aria-label`, and in
-  a flex row give it a `className` with `flexShrink: 0`, or it shrinks beside
-  text that wraps (T308).
+  Without children it renders only the box: name it with `aria-label`. It
+  keeps its size beside text that wraps.
 - **`Radio`** is for choosing one value from a group. Give related radios the
   same `name` and distinct `value` values.
 - **`Select`** is for choosing one item from a set of options. Provide clear
   option text and use its `variant` when a different presentation is needed.
+  `size` (`small`, `medium`, `large`) matches it to a `Button` of that size.
 - **`Switch`** represents a boolean setting that can be turned on or off.
   Supply a meaningful label; do not use it for selecting among multiple
-  choices. Its `onChange` receives the new boolean, not an event
-  (`onChange={setShowArchived}`), and its accessible role is `checkbox`, not
-  `switch`.
+  choices. Its `onChange` is the native change handler of its `<input>`:
+  read the new value from `event.target.checked`
+  (`onChange={(event) => setShowArchived(event.target.checked)}`). Its
+  accessible role is `switch`, so tests find it with
+  `getByRole('switch', { name })`.
 - **`Slider`** is for choosing a value across a range, especially when
   adjusting a continuous or stepped quantity. Use `step` when the range has
   meaningful increments and show the current value when it is not otherwise
