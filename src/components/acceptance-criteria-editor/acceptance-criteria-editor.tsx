@@ -17,7 +17,6 @@ import { DragDropProvider, type DragEndEvent } from '@dnd-kit/react';
 import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
-  type MouseEvent,
   type ReactNode,
   useId,
   useOptimistic,
@@ -32,13 +31,10 @@ import {
   setTicketAcceptanceCriteria,
 } from '../../app/tickets/actions';
 import type { AcceptanceCriterion } from '../../tickets/tickets';
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { InlineEdit } from '../inline-edit/inline-edit';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 import * as styles from './acceptance-criteria-editor.css';
 
 export type AcceptanceCriteriaEditorProps = {
@@ -162,10 +158,6 @@ const CriterionItem: FC<CriterionItemProps> = ({
   // Puts focus back on the remove button when its removal is cancelled.
   const [refocusRemove, setRefocusRemove] = useState(false);
 
-  const keepingDrawerOpen = (run: () => void) => (event: MouseEvent) => {
-    keepDrawerOpen(event);
-    run();
-  };
   const keep = () => {
     setRemoving(false);
     setRefocusRemove(true);
@@ -190,16 +182,11 @@ const CriterionItem: FC<CriterionItemProps> = ({
               size="small"
               intent="danger"
               autoFocus
-              onClick={keepingDrawerOpen(onRemove)}
+              onClick={onRemove}
             >
               Remove criterion
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={keepingDrawerOpen(keep)}
-            >
+            <Button type="button" variant="ghost" size="small" onClick={keep}>
               Cancel
             </Button>
           </Inline>
@@ -232,7 +219,7 @@ const CriterionItem: FC<CriterionItemProps> = ({
           intent="danger"
           aria-label={`Remove criterion: ${criterion.text}`}
           autoFocus={refocusRemove}
-          onClick={keepingDrawerOpen(() => setRemoving(true))}
+          onClick={() => setRemoving(true)}
         >
           <Icon name="x-mark" size="small" />
         </Button>
@@ -301,10 +288,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
           size="small"
           startSlot={<Icon name="plus" size="small" />}
           autoFocus={refocusAdd}
-          onClick={(event) => {
-            keepDrawerOpen(event);
-            setAdding(true);
-          }}
+          onClick={() => setAdding(true)}
         >
           Add criterion
         </Button>
@@ -334,12 +318,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
             aria-invalid={fieldError ? true : undefined}
             aria-describedby={fieldError ? errorId : undefined}
           />
-          <Button
-            type="submit"
-            size="small"
-            loading={isSubmitting}
-            onClick={keepDrawerOpen}
-          >
+          <Button type="submit" size="small" loading={isSubmitting}>
             Add
           </Button>
           <Button
@@ -347,10 +326,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
             variant="ghost"
             size="small"
             disabled={isSubmitting}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              stopAdding();
-            }}
+            onClick={stopAdding}
           >
             Cancel
           </Button>

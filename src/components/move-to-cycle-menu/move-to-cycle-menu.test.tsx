@@ -104,12 +104,12 @@ describe('MoveToCycleMenu', () => {
     expect(onPick).toHaveBeenLastCalledWith(null);
   });
 
-  it('closes on Escape and keeps the Escape from what holds it', async () => {
-    const onKeyDown = vi.fn();
+  it('closes on Escape, claiming it from what holds it', async () => {
+    const claimed = vi.fn();
     const user = userEvent.setup();
     renderWithTheme(
       // biome-ignore lint/a11y/noStaticElementInteractions: it only records the Escape.
-      <div onKeyDown={onKeyDown}>
+      <div onKeyDown={(event) => claimed(event.defaultPrevented)}>
         <MoveToCycleMenu cycles={[launch]} cycleId={null} onPick={vi.fn()} />
       </div>,
     );
@@ -118,7 +118,7 @@ describe('MoveToCycleMenu', () => {
     await user.keyboard('{Escape}');
 
     expect(menu()).not.toBeInTheDocument();
-    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(claimed.mock.calls).toEqual([[true]]);
   });
 
   it('cannot open while disabled', () => {

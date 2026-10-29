@@ -52,7 +52,6 @@ import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { ExternalReferenceEditor } from '../external-reference-editor/external-reference-editor';
 import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
@@ -289,10 +288,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={archivePending}
-                onClick={(event) => {
-                  keepDrawerOpen(event);
-                  toggleArchived();
-                }}
+                onClick={toggleArchived}
               >
                 Restore
               </Button>
@@ -397,10 +393,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={claimPending}
-                onClick={(event) => {
-                  keepDrawerOpen(event);
-                  clearClaim();
-                }}
+                onClick={clearClaim}
               >
                 {claimPending ? 'Clearing claim...' : 'Clear claim'}
               </Button>
@@ -464,10 +457,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 intent="neutral"
                 size="small"
                 disabled={archivePending}
-                onClick={(event) => {
-                  keepDrawerOpen(event);
-                  toggleArchived();
-                }}
+                onClick={toggleArchived}
               >
                 Archive
               </Button>

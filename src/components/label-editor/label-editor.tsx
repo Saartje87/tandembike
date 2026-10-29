@@ -11,7 +11,6 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 
 import { addTicketLabel, removeTicketLabel } from '../../app/tickets/actions';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 import { LabelList } from '../label-list/label-list';
 
 export type LabelEditorProps = {
@@ -73,8 +72,7 @@ export const LabelEditor: FC<LabelEditorProps> = ({
       <Inline gap={1} alignY="center" flexWrap="wrap">
         <LabelList
           labels={shownLabels}
-          onRemove={(label, event) => {
-            keepDrawerOpen(event);
+          onRemove={(label) => {
             change({ type: 'remove', label });
           }}
         />

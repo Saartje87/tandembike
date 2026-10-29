@@ -22,12 +22,9 @@ import {
   type ReferenceTemplateLink,
 } from '../../tickets/external-reference-display';
 import { AppLink } from '../app-link/app-link';
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 
 export type ExternalReferenceEditorProps = {
   ticketNumber: number;
@@ -174,10 +171,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
                     variant="ghost"
                     size="small"
                     aria-label={`Remove External reference ${reference}`}
-                    onClick={(event) => {
-                      keepDrawerOpen(event);
-                      remove(reference);
-                    }}
+                    onClick={() => remove(reference)}
                   >
                     <Icon name="x-mark" size="small" />
                   </Button>
@@ -215,15 +209,14 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby={fieldError ? errorId : undefined}
               />
-              <Button type="submit" size="small" onClick={keepDrawerOpen}>
+              <Button type="submit" size="small">
                 Add
               </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="small"
-                onClick={(event) => {
-                  keepDrawerOpen(event);
+                onClick={() => {
                   stopAdding();
                   reset();
                 }}
@@ -242,8 +235,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
             size="small"
             startSlot={<Icon name="plus" size="small" />}
             autoFocus={refocusAdd}
-            onClick={(event) => {
-              keepDrawerOpen(event);
+            onClick={() => {
               clearErrors();
               setAdding(true);
             }}

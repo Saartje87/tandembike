@@ -25,12 +25,9 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 import * as styles from './inline-edit.css';
 
 export type InlineEditProps = {
@@ -237,7 +234,6 @@ export const InlineEdit: FC<InlineEditProps> = ({
                 if (onLink(event)) {
                   return;
                 }
-                keepDrawerOpen(event);
                 open();
               }}
               onKeyDown={(event) => {
@@ -267,10 +263,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
               aria-describedby={hintId}
               // biome-ignore lint/a11y/noAutofocus: only after the User ends an edit, to put focus back where it was.
               autoFocus={refocus}
-              onClick={(event) => {
-                keepDrawerOpen(event);
-                open();
-              }}
+              onClick={open}
             >
               {content}
             </button>
@@ -289,10 +282,7 @@ export const InlineEdit: FC<InlineEditProps> = ({
       aria-label="Cancel"
       // Keeps focus in the input, so the click does not count as leaving.
       onMouseDown={(event) => event.preventDefault()}
-      onClick={(event) => {
-        keepDrawerOpen(event);
-        cancel();
-      }}
+      onClick={cancel}
     >
       <Icon name="x-mark" size="small" />
     </Button>

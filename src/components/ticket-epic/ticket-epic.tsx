@@ -20,7 +20,6 @@ import {
 } from '../../app/tickets/actions';
 import type { EpicLink, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 export type TicketEpicProps = {
   ticket: Pick<Ticket, 'number' | 'projectId' | 'epic'>;
@@ -77,8 +76,7 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
             intent="neutral"
             size="small"
             disabled={pending}
-            onClick={(event) => {
-              keepDrawerOpen(event);
+            onClick={() => {
               change(null, () =>
                 detachTicketFromEpic({ number: ticket.number }),
               );

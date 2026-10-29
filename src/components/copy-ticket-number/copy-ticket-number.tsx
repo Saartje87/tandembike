@@ -1,10 +1,9 @@
 'use client';
 
 import { Button, Inline, Text, VisuallyHidden } from '@blockle/blocks';
-import { type FC, type MouseEvent, useEffect, useState } from 'react';
+import { type FC, useEffect, useState } from 'react';
 
 import { Icon } from '../icon/icon';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 /** How long the confirmation shows. */
 const confirmationMs = 2000;
@@ -38,10 +37,7 @@ export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({ number }) => {
     return () => clearTimeout(timer);
   }, [state]);
 
-  const copy = async (event: MouseEvent) => {
-    // The click swaps the button's content, which can take its target out
-    // of the drawer.
-    keepDrawerOpen(event);
+  const copy = async () => {
     setState('idle');
     try {
       await navigator.clipboard.writeText(text);

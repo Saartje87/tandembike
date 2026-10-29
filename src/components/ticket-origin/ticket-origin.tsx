@@ -21,11 +21,8 @@ import {
 import { setTicketOrigin } from '../../app/tickets/actions';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { claimEscape } from '../claim-escape/claim-escape';
 import { FieldError } from '../field-error/field-error';
-import {
-  claimEscape,
-  keepDrawerOpen,
-} from '../keep-drawer-open/keep-drawer-open';
 
 export type TicketOriginProps = {
   ticket: Pick<Ticket, 'number' | 'origin'>;
@@ -122,12 +119,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
               aria-invalid={fieldError ? true : undefined}
               aria-describedby={fieldError ? errorId : undefined}
             />
-            <Button
-              type="submit"
-              size="small"
-              loading={isSubmitting}
-              onClick={keepDrawerOpen}
-            >
+            <Button type="submit" size="small" loading={isSubmitting}>
               Save
             </Button>
             <Button
@@ -135,10 +127,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
               variant="ghost"
               size="small"
               disabled={isSubmitting}
-              onClick={(event) => {
-                keepDrawerOpen(event);
-                stopEditing();
-              }}
+              onClick={stopEditing}
             >
               Cancel
             </Button>
@@ -170,10 +159,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
           variant="ghost"
           size="small"
           autoFocus={refocusEdit}
-          onClick={(event) => {
-            keepDrawerOpen(event);
-            setEditing(true);
-          }}
+          onClick={() => setEditing(true)}
         >
           {origin ? 'Change Origin' : 'Set Origin'}
         </Button>
@@ -183,10 +169,7 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
             variant="ghost"
             size="small"
             disabled={clearPending}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              clear();
-            }}
+            onClick={clear}
           >
             Clear Origin
           </Button>

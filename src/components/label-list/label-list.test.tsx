@@ -45,9 +45,6 @@ describe('LabelList', () => {
       screen.getByRole('button', { name: 'Remove label needs-triage' }),
     );
 
-    expect(onRemove).toHaveBeenCalledExactlyOnceWith(
-      'needs-triage',
-      expect.objectContaining({ type: 'click' }),
-    );
+    expect(onRemove).toHaveBeenCalledExactlyOnceWith('needs-triage');
   });
 });

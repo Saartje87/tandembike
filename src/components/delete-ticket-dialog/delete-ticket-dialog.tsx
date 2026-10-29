@@ -15,7 +15,6 @@ import { type FC, useId, useState, useTransition } from 'react';
 import { deleteTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
-import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
 
 /** One child of an Epic, with what deleting it too would affect. */
 export type ChildDeletion = Pick<Ticket, 'number' | 'title' | 'claim'> & {
@@ -165,14 +164,7 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
               >
                 Delete T{ticket.number}
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={(event) => {
-                  keepDrawerOpen(event);
-                  close();
-                }}
-              >
+              <Button type="button" variant="ghost" onClick={close}>
                 Cancel
               </Button>
             </Inline>
