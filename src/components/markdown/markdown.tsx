@@ -88,7 +88,7 @@ const componentsFor = (headingLevel: HeadingLevel): Components => ({
     </Box>
   ),
   a: ({ href, children }) => (
-    <AppLink href={href ?? ''} variant="primary" underline>
+    <AppLink href={href ?? ''} intent="primary" underline>
       {children}
     </AppLink>
   ),

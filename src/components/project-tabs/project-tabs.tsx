@@ -28,7 +28,6 @@ import {
 import type { Cycle } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
-import * as styles from './project-tabs.css';
 
 export type ProjectTabsProps = {
   projectId: number;
@@ -81,7 +80,7 @@ const Tab: FC<TabProps> = ({ href, current, children }) => (
     <li>
       <AppLink
         href={href}
-        variant="inherit"
+        intent="inherit"
         aria-current={current ? 'page' : undefined}
       >
         {children}
@@ -171,34 +170,36 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({ projectId, cycles }) => {
   return (
     <Inline gap={3} alignY="center">
       <nav aria-label="Project views">
-        <Inline tag="ul" gap={1} className={styles.tabList}>
-          <Tab
-            href={filteredBoardPath(projectPath(projectId), filter)}
-            current={current === 'backlog'}
-          >
-            Backlog
-          </Tab>
-          {[
-            ...cycles.filter((cycle) => cycle.state === 'Active'),
-            ...cycles.filter((cycle) => cycle.state === 'Prepared'),
-          ].map((cycle) => (
+        <Inline gap={1} listStyle="none" role="list" asChild>
+          <ul>
             <Tab
-              key={cycle.id}
-              href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
-              current={current === cycle.id}
+              href={filteredBoardPath(projectPath(projectId), filter)}
+              current={current === 'backlog'}
             >
-              {cycle.title}
+              Backlog
             </Tab>
-          ))}
-          <Tab href={cyclesPath(projectId)} current={current === 'history'}>
-            History
-          </Tab>
-          <Tab
-            href={projectSettingsPath(projectId)}
-            current={current === 'settings'}
-          >
-            Settings
-          </Tab>
+            {[
+              ...cycles.filter((cycle) => cycle.state === 'Active'),
+              ...cycles.filter((cycle) => cycle.state === 'Prepared'),
+            ].map((cycle) => (
+              <Tab
+                key={cycle.id}
+                href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
+                current={current === cycle.id}
+              >
+                {cycle.title}
+              </Tab>
+            ))}
+            <Tab href={cyclesPath(projectId)} current={current === 'history'}>
+              History
+            </Tab>
+            <Tab
+              href={projectSettingsPath(projectId)}
+              current={current === 'settings'}
+            >
+              Settings
+            </Tab>
+          </ul>
         </Inline>
       </nav>
       {adding ? (

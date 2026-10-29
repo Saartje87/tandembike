@@ -1,12 +1,10 @@
 import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
-/** Blocks has no `listStyle` atom, and `Inline tag="ul"` keeps the markers. */
-export const chipList = style({
-  listStyle: 'none',
-});
-
-/** A chip never grows past the row, so a long title wraps inside it. */
+/**
+ * A chip never grows past the row, so a long title wraps inside it. It is not
+ * a `Tag`: a `Tag` stays on one line, and its intents are not the Epic colours.
+ */
 export const chip = style({
   maxInlineSize: '100%',
 });

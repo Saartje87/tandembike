@@ -1,8 +1,7 @@
-import { Inline, Text } from '@blockle/blocks';
+import { Box, Inline, Text } from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
 import { AppLink } from '../app-link/app-link';
-import * as styles from './breadcrumbs.css';
 
 type BreadcrumbLink = {
   label: string;
@@ -26,35 +25,38 @@ export const Breadcrumbs: FC<BreadcrumbsProps> = ({
   current,
   currentIcon,
 }) => (
-  <nav aria-label="Breadcrumb" className={styles.trail}>
-    <Inline tag="ol" gap={2} flexWrap="nowrap" className={styles.list}>
-      {ancestors.map(({ label, href }) => (
-        <li key={href}>
-          <Inline gap={2} alignY="center" flexWrap="nowrap">
-            <AppLink href={href} variant="inherit">
-              {label}
-            </AppLink>
-            <Text aria-hidden="true">&gt;</Text>
-          </Inline>
-        </li>
-      ))}
-      <li className={styles.current}>
-        <Inline
-          gap={2}
-          alignY="center"
-          flexWrap="nowrap"
-          className={styles.current}
-        >
-          {currentIcon}
-          <Text
-            aria-current="page"
-            fontWeight="medium"
-            className={styles.currentName}
-          >
-            {current}
-          </Text>
-        </Inline>
-      </li>
-    </Inline>
-  </nav>
+  // The trail may shrink inside a flex row, so the current entry can truncate.
+  <Box asChild minInlineSize={0}>
+    <nav aria-label="Breadcrumb">
+      <Inline gap={2} flexWrap="nowrap" listStyle="none" role="list" asChild>
+        <ol>
+          {ancestors.map(({ label, href }) => (
+            <li key={href}>
+              <Inline gap={2} alignY="center" flexWrap="nowrap">
+                <AppLink href={href} intent="inherit">
+                  {label}
+                </AppLink>
+                <Text aria-hidden="true">&gt;</Text>
+              </Inline>
+            </li>
+          ))}
+          <Box asChild minInlineSize={0}>
+            <li>
+              <Inline
+                gap={2}
+                alignY="center"
+                flexWrap="nowrap"
+                minInlineSize={0}
+              >
+                {currentIcon}
+                <Text aria-current="page" fontWeight="medium" truncate>
+                  {current}
+                </Text>
+              </Inline>
+            </li>
+          </Box>
+        </ol>
+      </Inline>
+    </nav>
+  </Box>
 );

@@ -29,18 +29,22 @@ import { Alert, Button, Stack } from '@blockle/blocks';
 </Stack>;
 ```
 
-`Stack` and `Inline` support a semantic `tag`; use it when the children form
-something meaningful, such as an ordered list. The same visual arrangement
-can have different semantics, so choose the tag based on the content rather
-than its appearance.
+`Stack` and `Inline` render a `div` and take no `tag`. When the children form
+something meaningful, such as a list, render that element with `asChild`
+(below). The same visual arrangement can have different semantics, so choose
+the element based on the content rather than its appearance.
 
 `Stack` and `Inline` accept every atom except `flexDirection`, so
 `backgroundColor`, `padding`, `alignItems="baseline"` and so on work directly.
-`gap` is required. Use `alignX` / `alignY` for alignment along each axis.
+`gap` is required. Use `alignX` / `alignY` for alignment along each axis, with
+the logical values `start`, `center` and `end` (not `left` / `right`); `alignX`
+on `Inline` and `alignY` on `Stack` also take `between` and `around`. They also
+take HTML and ARIA attributes, such as `role`, `aria-label` or `onClick`.
+`Inline` wraps its items by default; pass `flexWrap="nowrap"` to keep one row.
 
 ## Composition with `asChild`
 
-Some primitives, including `Box` and `GridItem`, support `asChild`.
+`Box`, `GridItem`, `Stack` and `Inline` support `asChild`.
 Use it to pass the rendered element through a child component when composition
 requires a specific semantic element, such as a `li`, `section`, or `header`.
 It differs from wrapping that child in the primitive's default element.
@@ -51,6 +55,24 @@ import { Box } from '@blockle/blocks';
 <Box asChild padding={3}>
   <section aria-labelledby="results-heading">...</section>
 </Box>;
+```
+
+For a list, give a `Stack` or `Inline` a `ul` or `ol` child. It keeps its
+markers unless you pass `listStyle="none"`; WebKit then no longer exposes the
+element as a list, so pass `role="list"` with it. Put both on the `Stack`
+(attributes are merged onto the child), since a linter flags `role="list"` on
+a `ul` as redundant:
+
+```tsx
+import { Stack } from '@blockle/blocks';
+
+<Stack gap={1} listStyle="none" role="list" aria-label="Tickets" asChild>
+  <ul>
+    {tickets.map((ticket) => (
+      <li key={ticket.number}>{ticket.title}</li>
+    ))}
+  </ul>
+</Stack>;
 ```
 
 ## Responsive grids

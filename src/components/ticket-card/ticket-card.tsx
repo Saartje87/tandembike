@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Checkbox, Inline, Stack, Text } from '@blockle/blocks';
+import { Box, Checkbox, Inline, Stack, Tag, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import {
@@ -56,23 +56,14 @@ type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
 
 /** A pill that says the Ticket is blocked by an unresolved Blocker. */
 const BlockedMarker: FC = () => (
-  // `Inline` takes no `role` and cannot render a `span` (T315).
-  <Box
-    asChild
-    display="flex"
-    alignItems="center"
-    gap={1}
-    backgroundColor="warning-100"
-    borderRadius="full"
-    paddingInline={2}
+  <Tag
+    intent="warning"
+    startSlot={<Icon name="lock-closed" size="small" />}
+    role="img"
+    aria-label="Blocked by an unresolved Ticket"
   >
-    <span role="img" aria-label="Blocked by an unresolved Ticket">
-      <Icon name="lock-closed" size="small" color="warning-800" />
-      <Text fontSize="xsmall" color="warning-800">
-        Blocked
-      </Text>
-    </span>
-  </Box>
+    Blocked
+  </Tag>
 );
 
 type CarryCountProps = { count: number };
@@ -106,9 +97,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
   const checked = acceptanceCriteria.filter((criterion) => criterion.checked);
   const total = acceptanceCriteria.length;
 
-  // `Inline` takes no `role` and cannot render a `span` (T315).
   return (
-    <Box asChild display="flex" alignItems="center" gap={1}>
+    <Inline asChild gap={1} alignY="center" flexWrap="nowrap">
       <span
         role="img"
         aria-label={`Acceptance criteria: ${checked.length} of ${total} checked`}
@@ -119,7 +109,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
           {checked.length}/{total}
         </Text>
       </span>
-    </Box>
+    </Inline>
   );
 };
 
@@ -172,6 +162,7 @@ export const TicketCard: FC<TicketCardProps> = ({
       paddingInline={3}
       position="relative"
       transition="slow"
+      cursor="grab"
     >
       <li
         ref={cardRef}
@@ -194,7 +185,7 @@ export const TicketCard: FC<TicketCardProps> = ({
               <AppLink
                 href={ticketOnBoardPath(boardPath, ticket.number, filter)}
                 scroll={false}
-                variant="inherit"
+                intent="inherit"
                 aria-label={ticket.title}
               >
                 <Text color="muted" fontSize="small" marginInlineEnd={1}>
@@ -207,15 +198,21 @@ export const TicketCard: FC<TicketCardProps> = ({
 
             {ticket.epic && (
               <Text fontSize="xsmall" className={styles.epicLine}>
-                <AppLink
-                  href={ticketByNumberPath(ticket.epic.number)}
-                  variant="inherit"
-                  aria-label={`Epic T${ticket.epic.number} ${ticket.epic.title}`}
-                  data-color={ticket.epic.color}
+                <Tag
+                  asChild
                   className={`${styles.epicBadge} ${tinted[ticket.epic.color]}`}
                 >
-                  T{ticket.epic.number} {ticket.epic.title}
-                </AppLink>
+                  <AppLink
+                    href={ticketByNumberPath(ticket.epic.number)}
+                    intent="inherit"
+                    aria-label={`Epic T${ticket.epic.number} ${ticket.epic.title}`}
+                    data-color={ticket.epic.color}
+                  >
+                    <Text truncate>
+                      T{ticket.epic.number} {ticket.epic.title}
+                    </Text>
+                  </AppLink>
+                </Tag>
               </Text>
             )}
             {showBlocked || ticket.labels.length > 0 ? (

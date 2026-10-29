@@ -3,13 +3,14 @@
 ## `Link`
 
 Use `Link` for navigation to another page or location. It supports ordinary
-anchor props such as `href`, the `primary`, `secondary`, and `inherit`
-variants, and the `underline` option.
+anchor props such as `href`, an `intent` of `primary` (the default), `neutral`
+or `inherit` (the surrounding text's colour and weight), and the `underline`
+option.
 
 ```tsx
 import { Link } from '@blockle/blocks';
 
-<Link href="/settings" variant="primary" underline>
+<Link href="/settings" intent="primary" underline>
   Settings
 </Link>;
 ```

@@ -1,10 +1,9 @@
 'use client';
 
-import { Box, Button, Inline, Text } from '@blockle/blocks';
+import { IconButton, Inline, Tag } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import { Icon } from '../icon/icon';
-import * as styles from './label-list.css';
 
 export type LabelListProps = {
   labels: string[];
@@ -25,38 +24,32 @@ export const LabelList: FC<LabelListProps> = ({
   }
 
   return (
-    <Box asChild display="flex" flexWrap="wrap" gap={1} className={styles.list}>
+    <Inline gap={1} flexWrap="wrap" listStyle="none" role="list" asChild>
       <ul aria-label={name}>
         {labels.map((label) => (
-          <Box
+          <Tag
             key={label}
             asChild
-            backgroundColor="neutral-200"
-            borderRadius="full"
-            paddingInlineStart={2}
-            paddingInlineEnd={onRemove ? 0 : 2}
+            endSlot={
+              onRemove && (
+                <IconButton
+                  type="button"
+                  variant="ghost"
+                  intent="inherit"
+                  shape="circle"
+                  size="small"
+                  label={`Remove label ${label}`}
+                  onClick={(event) => onRemove(label, event)}
+                >
+                  <Icon name="x-mark" size="small" />
+                </IconButton>
+              )
+            }
           >
-            <li>
-              <Inline gap={0} alignY="center">
-                <Text fontSize="xsmall" color="neutral-800">
-                  {label}
-                </Text>
-                {onRemove && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="small"
-                    aria-label={`Remove label ${label}`}
-                    onClick={(event) => onRemove(label, event)}
-                  >
-                    <Icon name="x-mark" size="small" />
-                  </Button>
-                )}
-              </Inline>
-            </li>
-          </Box>
+            <li>{label}</li>
+          </Tag>
         ))}
       </ul>
-    </Box>
+    </Inline>
   );
 };

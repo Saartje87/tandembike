@@ -9,7 +9,6 @@ import {
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import * as styles from './cycle-ticket-list.css';
 
 export type CycleTicketListProps = {
   /** The archived Cycle shown. */
@@ -34,42 +33,45 @@ export const CycleTicketList: FC<CycleTicketListProps> = ({
     </Text>
   ) : (
     <Stack
-      tag="ul"
       gap={2}
-      className={styles.ticketList}
       aria-label="Tickets in this Cycle"
+      listStyle="none"
+      role="list"
+      asChild
     >
-      {tickets.map((ticket) => {
-        const stillHere = ticket.projectId === cycle.projectId;
-        return (
-          <li key={ticket.number}>
-            <Inline gap={2} alignY="center">
-              <Text color="muted" fontSize="small">
-                T{ticket.number}
-              </Text>
-              <Text wordBreak="break-word">
-                <AppLink
-                  href={
-                    stillHere
-                      ? ticketOnBoardPath(
-                          cyclePath(cycle.projectId, cycle.id),
-                          ticket.number,
-                        )
-                      : ticketByNumberPath(ticket.number)
-                  }
-                  scroll={!stillHere}
-                  variant="inherit"
-                >
-                  {ticket.title}
-                </AppLink>
-              </Text>
-              <Text color="muted" fontSize="small">
-                {ticket.status}
-                {ticket.archived && ' · archived'}
-              </Text>
-            </Inline>
-          </li>
-        );
-      })}
+      <ul>
+        {tickets.map((ticket) => {
+          const stillHere = ticket.projectId === cycle.projectId;
+          return (
+            <li key={ticket.number}>
+              <Inline gap={2} alignY="center">
+                <Text color="muted" fontSize="small">
+                  T{ticket.number}
+                </Text>
+                <Text wordBreak="break-word">
+                  <AppLink
+                    href={
+                      stillHere
+                        ? ticketOnBoardPath(
+                            cyclePath(cycle.projectId, cycle.id),
+                            ticket.number,
+                          )
+                        : ticketByNumberPath(ticket.number)
+                    }
+                    scroll={!stillHere}
+                    intent="inherit"
+                  >
+                    {ticket.title}
+                  </AppLink>
+                </Text>
+                <Text color="muted" fontSize="small">
+                  {ticket.status}
+                  {ticket.archived && ' · archived'}
+                </Text>
+              </Inline>
+            </li>
+          );
+        })}
+      </ul>
     </Stack>
   );

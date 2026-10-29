@@ -19,17 +19,19 @@ const ArchivedProjectList: FC<ArchivedProjectListProps> = ({
   const archived = use(pending).filter((project) => project.archived);
 
   return archived.length > 0 ? (
-    <Stack tag="ul" gap={2} aria-label="Archived Projects">
-      {archived.map((project) => (
-        <li key={project.id}>
-          <Inline gap={3} alignY="center">
-            <AppLink href={projectPath(project.id)} variant="inherit">
-              {project.name}
-            </AppLink>
-            <RestoreProjectButton project={project} />
-          </Inline>
-        </li>
-      ))}
+    <Stack gap={2} aria-label="Archived Projects" asChild>
+      <ul>
+        {archived.map((project) => (
+          <li key={project.id}>
+            <Inline gap={3} alignY="center">
+              <AppLink href={projectPath(project.id)} intent="inherit">
+                {project.name}
+              </AppLink>
+              <RestoreProjectButton project={project} />
+            </Inline>
+          </li>
+        ))}
+      </ul>
     </Stack>
   ) : (
     <Text tag="p" color="muted">

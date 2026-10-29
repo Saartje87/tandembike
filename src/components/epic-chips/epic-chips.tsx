@@ -89,7 +89,7 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter }) => {
           <AppLink
             href={ticketOnBoardPath(boardPath, epic.number, filter)}
             scroll={false}
-            variant="inherit"
+            intent="inherit"
           >
             <Text fontWeight="medium">T{epic.number}</Text> {epic.title}{' '}
             <Text fontWeight="medium">
@@ -144,20 +144,23 @@ export const EpicChips: FC<EpicChipsProps> = ({
           </Heading>
           <Inline
             gap={2}
-            tag="ul"
             flexWrap="wrap"
             alignY="center"
             aria-labelledby={headingId}
-            className={styles.chipList}
+            listStyle="none"
+            role="list"
+            asChild
           >
-            {shown.map((epic) => (
-              <EpicChip
-                key={epic.number}
-                epic={epic}
-                boardPath={boardPath}
-                filter={filter}
-              />
-            ))}
+            <ul>
+              {shown.map((epic) => (
+                <EpicChip
+                  key={epic.number}
+                  epic={epic}
+                  boardPath={boardPath}
+                  filter={filter}
+                />
+              ))}
+            </ul>
           </Inline>
           <Button
             ref={newEpicButton}

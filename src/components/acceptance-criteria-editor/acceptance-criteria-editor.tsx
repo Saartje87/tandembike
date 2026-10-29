@@ -434,38 +434,41 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
       {shown.length > 0 ? (
         <DragDropProvider onDragEnd={drop}>
           <Stack
-            tag="ul"
             gap={1}
             aria-labelledby={headingId}
-            className={styles.list}
+            listStyle="none"
+            role="list"
+            asChild
           >
-            {shown.map((criterion, index) => (
-              <CriterionItem
-                key={criterion.id}
-                criterion={criterion}
-                index={index}
-                onCheck={(checked) => check({ id: criterion.id, checked })}
-                onEdit={async (text) => {
-                  // The server trims it too, so spaces alone change nothing.
-                  if (text.trim() === criterion.text) {
-                    return undefined;
-                  }
-                  // Runs in InlineEdit's transition.
-                  return save(
-                    shown.map((other) =>
-                      // Editing a criterion unchecks it, as the server does.
-                      other.id === criterion.id
-                        ? { ...other, text: text.trim(), checked: false }
-                        : other,
-                    ),
-                  );
-                }}
-                onRemove={() => {
-                  document.getElementById(headingId)?.focus();
-                  replace(shown.filter(({ id }) => id !== criterion.id));
-                }}
-              />
-            ))}
+            <ul>
+              {shown.map((criterion, index) => (
+                <CriterionItem
+                  key={criterion.id}
+                  criterion={criterion}
+                  index={index}
+                  onCheck={(checked) => check({ id: criterion.id, checked })}
+                  onEdit={async (text) => {
+                    // The server trims it too, so spaces alone change nothing.
+                    if (text.trim() === criterion.text) {
+                      return undefined;
+                    }
+                    // Runs in InlineEdit's transition.
+                    return save(
+                      shown.map((other) =>
+                        // Editing a criterion unchecks it, as the server does.
+                        other.id === criterion.id
+                          ? { ...other, text: text.trim(), checked: false }
+                          : other,
+                      ),
+                    );
+                  }}
+                  onRemove={() => {
+                    document.getElementById(headingId)?.focus();
+                    replace(shown.filter(({ id }) => id !== criterion.id));
+                  }}
+                />
+              ))}
+            </ul>
           </Stack>
         </DragDropProvider>
       ) : (

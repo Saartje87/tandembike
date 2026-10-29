@@ -40,6 +40,17 @@ For supporting copy, pass a text role: `color="muted"` (or `disabled`,
 `Text` supports `asChild` when another component must supply the rendered
 element. Keep the resulting HTML semantics meaningful.
 
+To cut overflowing text short with an ellipsis, pass `truncate` (one line) or
+`lineClamp` (`1`-`5` lines) instead of writing the CSS:
+
+```tsx
+<Text truncate>{ticket.title}</Text>;
+<Text lineClamp={2}>{ticket.description}</Text>;
+```
+
+`truncate` makes the `Text` a block, so in a flex row the item holding it may
+also need `minInlineSize={0}` to shrink.
+
 `Heading` and `Text` accept the text atoms plus margin and padding, but not
 `backgroundColor`, borders, or layout atoms; see
 [Styling](./styling.md#which-component-accepts-which-atoms). `Text` renders

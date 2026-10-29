@@ -4,8 +4,7 @@ import { style } from '@vanilla-extract/css';
 /**
  * The text at rest: a button that reads as the text around it, with only a
  * hover tint and a focus ring. Blocks has no unstyled button or inline-edit
- * component, and atoms have no `cursor: text`, logical `textAlign` or
- * `:hover` (T322).
+ * component, and atoms have no `:hover` (T322).
  */
 export const text = style({
   appearance: 'none',
@@ -23,9 +22,7 @@ export const text = style({
   background: 'none',
   font: 'inherit',
   color: 'inherit',
-  textAlign: 'start',
   overflowWrap: 'anywhere',
-  cursor: 'text',
   ':hover': {
     backgroundColor: vars.color['neutral-100'],
   },

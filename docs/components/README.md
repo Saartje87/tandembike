@@ -10,7 +10,7 @@ provider, and tests), see [Blockle Blocks setup](../blockle-blocks-setup.md).
 ## Guides
 
 - [Accessibility](./accessibility.md): visually hidden accessible content.
-- [Display](./display.md): dividers and icon masks.
+- [Display](./display.md): dividers, icon masks and Tags.
 - [Feedback](./feedback.md): alerts, loading states, progress, and toast
   notifications.
 - [Forms](./forms.md): actions and form controls.

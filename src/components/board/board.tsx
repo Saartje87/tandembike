@@ -75,7 +75,6 @@ import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { PlanIntoCycleMenu } from '../plan-into-cycle-menu/plan-into-cycle-menu';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
-import * as styles from './board.css';
 import {
   filteredSelectionDrop,
   isFiltering,
@@ -136,13 +135,16 @@ const CycleRefusals: FC<CycleRefusalsProps> = ({ heading, refusals }) => {
         <Text id={headingId}>{heading}</Text>
         <Stack
           gap={1}
-          tag="ul"
-          className={styles.ticketList}
           aria-labelledby={headingId}
+          listStyle="none"
+          role="list"
+          asChild
         >
-          {refusals.map(({ number, error }) => (
-            <li key={number}>{error}</li>
-          ))}
+          <ul>
+            {refusals.map(({ number, error }) => (
+              <li key={number}>{error}</li>
+            ))}
+          </ul>
         </Stack>
       </Stack>
     </Alert>
@@ -222,30 +224,32 @@ const StatusColumn: FC<StatusColumnProps> = ({
               No Tickets
             </Text>
           ) : (
-            <Stack gap={2} tag="ul" className={styles.ticketList}>
-              {tickets.map((ticket, index) => (
-                <SortableTicketCard
-                  key={ticket.number}
-                  ticket={ticket}
-                  index={index}
-                  boardPath={boardPath}
-                  filter={filter}
-                  selected={selected.has(ticket.number)}
-                  selecting={selected.size > 0}
-                  carries={
-                    selected.size > 1 && selected.has(ticket.number)
-                      ? selected.size
-                      : 1
-                  }
-                  carrying={carrier === ticket.number}
-                  carriedAlong={
-                    carrier !== undefined &&
-                    carrier !== ticket.number &&
-                    selected.has(ticket.number)
-                  }
-                  onSelect={(mode) => onSelect(ticket, mode)}
-                />
-              ))}
+            <Stack gap={2} listStyle="none" role="list" asChild>
+              <ul>
+                {tickets.map((ticket, index) => (
+                  <SortableTicketCard
+                    key={ticket.number}
+                    ticket={ticket}
+                    index={index}
+                    boardPath={boardPath}
+                    filter={filter}
+                    selected={selected.has(ticket.number)}
+                    selecting={selected.size > 0}
+                    carries={
+                      selected.size > 1 && selected.has(ticket.number)
+                        ? selected.size
+                        : 1
+                    }
+                    carrying={carrier === ticket.number}
+                    carriedAlong={
+                      carrier !== undefined &&
+                      carrier !== ticket.number &&
+                      selected.has(ticket.number)
+                    }
+                    onSelect={(mode) => onSelect(ticket, mode)}
+                  />
+                ))}
+              </ul>
             </Stack>
           )}
           {status === 'Todo' && (
@@ -416,23 +420,25 @@ const ArchivedTickets: FC<ArchivedTicketsProps> = ({
             No archived Tickets
           </Text>
         ) : (
-          <Stack gap={2} tag="ul" className={styles.ticketList}>
-            {tickets.map((ticket) => (
-              <li key={ticket.number}>
-                <Text color="muted" fontSize="small">
-                  T{ticket.number}
-                </Text>{' '}
-                <Text wordBreak="break-word">
-                  <AppLink
-                    href={ticketOnBoardPath(boardPath, ticket.number, filter)}
-                    scroll={false}
-                    variant="inherit"
-                  >
-                    {ticket.title}
-                  </AppLink>
-                </Text>
-              </li>
-            ))}
+          <Stack gap={2} listStyle="none" role="list" asChild>
+            <ul>
+              {tickets.map((ticket) => (
+                <li key={ticket.number}>
+                  <Text color="muted" fontSize="small">
+                    T{ticket.number}
+                  </Text>{' '}
+                  <Text wordBreak="break-word">
+                    <AppLink
+                      href={ticketOnBoardPath(boardPath, ticket.number, filter)}
+                      scroll={false}
+                      intent="inherit"
+                    >
+                      {ticket.title}
+                    </AppLink>
+                  </Text>
+                </li>
+              ))}
+            </ul>
           </Stack>
         )}
       </Stack>
@@ -1030,138 +1036,133 @@ export const Board: FC<BoardProps> = ({
   };
 
   return (
-    // `Stack` takes no `onClick` and has no `asChild` (T315).
-    <Box asChild display="flex" flexDirection="column" gap={4}>
-      {/* A click on empty Board space clears the selection, a pointer
-          shortcut: Escape and the bar's Clear button do it by keyboard. */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: see above */}
-      {/* biome-ignore lint/a11y/useKeyWithClickEvents: see above */}
-      <div onClick={clearOnEmptyClick}>
-        {error && <Alert intent="danger">{error}</Alert>}
-        <BoardFilterBar
-          filter={filter}
-          labels={filterLabels}
-          onChange={changeFilter}
-        />
-        {nothingMatches && (
-          <Inline gap={2} alignY="center">
-            <Text tag="p" color="muted">
-              No Tickets match
-            </Text>
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={() => changeFilter(noBoardFilter)}
-            >
-              Clear filter
-            </Button>
-          </Inline>
-        )}
-        {/* Always there, so a screen reader announces what it comes to say. */}
-        <Text tag="p" role="status" color="muted" fontSize="small">
-          {createdHidden &&
-            `T${createdTicket.number} created, hidden by the filter`}
-        </Text>
-        <DndProvider
-          sensors={sensors}
-          plugins={plugins}
-          onDragStart={startDrag}
-          onDragOver={followDrag}
-          onDragEnd={finishDrag}
-        >
-          <EpicChips
-            epics={rowEpics}
-            projectId={project.id}
-            cycleId={cycleId ?? undefined}
-            boardPath={boardPath}
-            filter={filter}
-            hideDone={typeof cycleId !== 'number'}
-            onCreated={setCreated}
-          />
-          <Grid gap={3}>
-            {statuses.map((status) => (
-              <GridItem key={status} colSpan={[12, 4]}>
-                <StatusColumn
-                  projectId={project.id}
-                  cycleId={cycleId}
-                  boardPath={boardPath}
-                  filter={filter}
-                  status={status}
-                  tickets={laneOf(status)}
-                  selected={selectedOnBoard}
-                  carrier={carrier}
-                  highlighted={overLane === status}
-                  onSelect={select}
-                  onCreated={setCreated}
-                />
-              </GridItem>
-            ))}
-          </Grid>
-        </DndProvider>
-        {selection.length > 0 && (
-          <SelectionBar
-            count={selection.length}
-            onClear={clearSelection}
-            notice={
-              shownRefusals.length > 0 && (
-                <CycleRefusals
-                  heading={cycleRefusals?.heading ?? ''}
-                  refusals={shownRefusals}
-                />
-              )
-            }
+    // A click on empty Board space clears the selection, a pointer shortcut:
+    // Escape and the bar's Clear button do it by keyboard.
+    <Stack gap={4} onClick={clearOnEmptyClick}>
+      {error && <Alert intent="danger">{error}</Alert>}
+      <BoardFilterBar
+        filter={filter}
+        labels={filterLabels}
+        onChange={changeFilter}
+      />
+      {nothingMatches && (
+        <Inline gap={2} alignY="center">
+          <Text tag="p" color="muted">
+            No Tickets match
+          </Text>
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            onClick={() => changeFilter(noBoardFilter)}
           >
-            {typeof cycleId === 'number' ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="small"
-                disabled={changingCycle}
-                onClick={() =>
-                  changeSelectionCycle(unplanTickets, cycleId, 'Not removed')
-                }
-              >
-                Remove from Cycle
-              </Button>
-            ) : (
-              plannable.length > 0 && (
-                <PlanIntoCycleMenu
-                  cycles={plannable}
-                  disabled={changingCycle}
-                  onPick={(cycle) =>
-                    changeSelectionCycle(planTickets, cycle.id, 'Not planned')
-                  }
-                />
-              )
-            )}
+            Clear filter
+          </Button>
+        </Inline>
+      )}
+      {/* Always there, so a screen reader announces what it comes to say. */}
+      <Text tag="p" role="status" color="muted" fontSize="small">
+        {createdHidden &&
+          `T${createdTicket.number} created, hidden by the filter`}
+      </Text>
+      <DndProvider
+        sensors={sensors}
+        plugins={plugins}
+        onDragStart={startDrag}
+        onDragOver={followDrag}
+        onDragEnd={finishDrag}
+      >
+        <EpicChips
+          epics={rowEpics}
+          projectId={project.id}
+          cycleId={cycleId ?? undefined}
+          boardPath={boardPath}
+          filter={filter}
+          hideDone={typeof cycleId !== 'number'}
+          onCreated={setCreated}
+        />
+        <Grid gap={3}>
+          {statuses.map((status) => (
+            <GridItem key={status} colSpan={[12, 4]}>
+              <StatusColumn
+                projectId={project.id}
+                cycleId={cycleId}
+                boardPath={boardPath}
+                filter={filter}
+                status={status}
+                tickets={laneOf(status)}
+                selected={selectedOnBoard}
+                carrier={carrier}
+                highlighted={overLane === status}
+                onSelect={select}
+                onCreated={setCreated}
+              />
+            </GridItem>
+          ))}
+        </Grid>
+      </DndProvider>
+      {selection.length > 0 && (
+        <SelectionBar
+          count={selection.length}
+          onClear={clearSelection}
+          notice={
+            shownRefusals.length > 0 && (
+              <CycleRefusals
+                heading={cycleRefusals?.heading ?? ''}
+                refusals={shownRefusals}
+              />
+            )
+          }
+        >
+          {typeof cycleId === 'number' ? (
             <Button
               type="button"
               variant="ghost"
               size="small"
               disabled={changingCycle}
-              onClick={archiveSelection}
+              onClick={() =>
+                changeSelectionCycle(unplanTickets, cycleId, 'Not removed')
+              }
             >
-              Archive
+              Remove from Cycle
             </Button>
-          </SelectionBar>
-        )}
-        <Inline gap={2} alignY="center">
-          <Switch
-            id={switchId}
-            checked={showArchived}
-            onChange={(event) => setShowArchived(event.target.checked)}
-          />
-          <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
-        </Inline>
-        {showArchived && (
-          <ArchivedTickets
-            tickets={archived}
-            boardPath={boardPath}
-            filter={filter}
-          />
-        )}
-      </div>
-    </Box>
+          ) : (
+            plannable.length > 0 && (
+              <PlanIntoCycleMenu
+                cycles={plannable}
+                disabled={changingCycle}
+                onPick={(cycle) =>
+                  changeSelectionCycle(planTickets, cycle.id, 'Not planned')
+                }
+              />
+            )
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            disabled={changingCycle}
+            onClick={archiveSelection}
+          >
+            Archive
+          </Button>
+        </SelectionBar>
+      )}
+      <Inline gap={2} alignY="center">
+        <Switch
+          id={switchId}
+          checked={showArchived}
+          onChange={(event) => setShowArchived(event.target.checked)}
+        />
+        <Label htmlFor={switchId}>Show archived ({archived.length})</Label>
+      </Inline>
+      {showArchived && (
+        <ArchivedTickets
+          tickets={archived}
+          boardPath={boardPath}
+          filter={filter}
+        />
+      )}
+    </Stack>
   );
 };

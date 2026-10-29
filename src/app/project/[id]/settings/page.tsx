@@ -17,21 +17,23 @@ export async function generateMetadata({
 async function settingsTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   return (
-    <Stack gap={3} tag="section" aria-labelledby="reference-templates">
-      <Stack gap={1}>
-        <Heading level={2} id="reference-templates">
-          Reference templates
-        </Heading>
-        <Text tag="p" fontSize="small" color="muted">
-          Link External reference keys, such as #55 or ABC-33: a key starting
-          with a prefix opens the URL, with {'{n}'} replaced by the rest of the
-          key. The first matching template applies.
-        </Text>
-      </Stack>
-      <ReferenceTemplateEditor
-        projectId={project.id}
-        templates={appTickets('user').listReferenceTemplates(project.id)}
-      />
+    <Stack gap={3} aria-labelledby="reference-templates" asChild>
+      <section>
+        <Stack gap={1}>
+          <Heading level={2} id="reference-templates">
+            Reference templates
+          </Heading>
+          <Text tag="p" fontSize="small" color="muted">
+            Link External reference keys, such as #55 or ABC-33: a key starting
+            with a prefix opens the URL, with {'{n}'} replaced by the rest of
+            the key. The first matching template applies.
+          </Text>
+        </Stack>
+        <ReferenceTemplateEditor
+          projectId={project.id}
+          templates={appTickets('user').listReferenceTemplates(project.id)}
+        />
+      </section>
     </Stack>
   );
 }

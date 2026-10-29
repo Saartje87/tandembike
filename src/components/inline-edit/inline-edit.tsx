@@ -225,29 +225,31 @@ export const InlineEdit: FC<InlineEditProps> = ({
     return (
       <>
         {wrap(
-          // biome-ignore lint/a11y/noStaticElementInteractions: a button role would hide the links inside from assistive technology.
-          <div
-            ref={atRest}
-            className={styles.text}
-            // biome-ignore lint/a11y/noNoninteractiveTabindex: opens on Enter, like the single-line button.
-            tabIndex={0}
-            aria-describedby={hintId}
-            onClick={(event) => {
-              if (onLink(event)) {
-                return;
-              }
-              keepDrawerOpen(event);
-              open();
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' && !onLink(event)) {
-                event.preventDefault();
+          <Box asChild cursor="text" textAlign="start">
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: a button role would hide the links inside from assistive technology. */}
+            <div
+              ref={atRest}
+              className={styles.text}
+              // biome-ignore lint/a11y/noNoninteractiveTabindex: opens on Enter, like the single-line button.
+              tabIndex={0}
+              aria-describedby={hintId}
+              onClick={(event) => {
+                if (onLink(event)) {
+                  return;
+                }
+                keepDrawerOpen(event);
                 open();
-              }
-            }}
-          >
-            {content}
-          </div>,
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !onLink(event)) {
+                  event.preventDefault();
+                  open();
+                }
+              }}
+            >
+              {content}
+            </div>
+          </Box>,
         )}
         {hint}
       </>
@@ -258,19 +260,21 @@ export const InlineEdit: FC<InlineEditProps> = ({
     return (
       <>
         {wrap(
-          <button
-            type="button"
-            className={styles.text}
-            aria-describedby={hintId}
-            // biome-ignore lint/a11y/noAutofocus: only after the User ends an edit, to put focus back where it was.
-            autoFocus={refocus}
-            onClick={(event) => {
-              keepDrawerOpen(event);
-              open();
-            }}
-          >
-            {content}
-          </button>,
+          <Box asChild cursor="text" textAlign="start">
+            <button
+              type="button"
+              className={styles.text}
+              aria-describedby={hintId}
+              // biome-ignore lint/a11y/noAutofocus: only after the User ends an edit, to put focus back where it was.
+              autoFocus={refocus}
+              onClick={(event) => {
+                keepDrawerOpen(event);
+                open();
+              }}
+            >
+              {content}
+            </button>
+          </Box>,
         )}
         {hint}
       </>

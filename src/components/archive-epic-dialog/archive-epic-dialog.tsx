@@ -15,7 +15,6 @@ import { archiveTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
 import { keepDrawerOpen } from '../keep-drawer-open/keep-drawer-open';
-import { plainList } from './archive-epic-dialog.css';
 
 /** One child of an Epic, with what archiving it too would affect. */
 export type ChildArchival = Pick<
@@ -134,33 +133,44 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
                 : `${unfinished} of them ${unfinished === 1 ? 'is' : 'are'} not Done.`}{' '}
               Restoring the Epic brings them back.
             </Text>
-            <Stack tag="ul" gap={1} className={plainList} aria-label="Children">
-              {epicChildren.map(({ number, title, status }) => (
-                <Text key={number} asChild>
-                  <li>
-                    T{number} {title} ·{' '}
-                    <Text
-                      tag="span"
-                      fontWeight={status === 'Done' ? 'normal' : 'strong'}
-                    >
-                      {status}
-                    </Text>
-                  </li>
-                </Text>
-              ))}
+            <Stack
+              gap={1}
+              aria-label="Children"
+              listStyle="none"
+              role="list"
+              asChild
+            >
+              <ul>
+                {epicChildren.map(({ number, title, status }) => (
+                  <Text key={number} asChild>
+                    <li>
+                      T{number} {title} ·{' '}
+                      <Text
+                        tag="span"
+                        fontWeight={status === 'Done' ? 'normal' : 'strong'}
+                      >
+                        {status}
+                      </Text>
+                    </li>
+                  </Text>
+                ))}
+              </ul>
             </Stack>
             {warnings.length > 0 && (
               <Stack
-                tag="ul"
                 gap={1}
-                className={plainList}
                 aria-label="Warnings"
+                listStyle="none"
+                role="list"
+                asChild
               >
-                {warnings.map((warning) => (
-                  <Text key={warning} asChild>
-                    <li>{warning}</li>
-                  </Text>
-                ))}
+                <ul>
+                  {warnings.map((warning) => (
+                    <Text key={warning} asChild>
+                      <li>{warning}</li>
+                    </Text>
+                  ))}
+                </ul>
               </Stack>
             )}
             {error && <Alert intent="danger">{error}</Alert>}

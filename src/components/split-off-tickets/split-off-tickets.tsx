@@ -4,7 +4,6 @@ import { type FC, useId } from 'react';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import type { SplitOffTicket } from '../../tickets/origins';
 import { AppLink } from '../app-link/app-link';
-import * as styles from './split-off-tickets.css';
 
 export type SplitOffTicketsProps = {
   /** The Tickets split from the Origin, by Ticket number. */
@@ -23,23 +22,26 @@ export const SplitOffTickets: FC<SplitOffTicketsProps> = ({ items }) => {
         Split-off Tickets
       </Heading>
       <Stack
-        tag="ul"
         gap={1}
         aria-labelledby={headingId}
-        className={styles.list}
+        listStyle="none"
+        role="list"
+        asChild
       >
-        {items.map((split) => (
-          <li key={split.number}>
-            <Inline gap={2} alignY="center" flexWrap="wrap">
-              <AppLink href={ticketByNumberPath(split.number)}>
-                T{split.number} {split.title}
-              </AppLink>
-              <Text fontSize="xsmall" color="muted">
-                {split.archived ? `${split.status} · Archived` : split.status}
-              </Text>
-            </Inline>
-          </li>
-        ))}
+        <ul>
+          {items.map((split) => (
+            <li key={split.number}>
+              <Inline gap={2} alignY="center" flexWrap="wrap">
+                <AppLink href={ticketByNumberPath(split.number)}>
+                  T{split.number} {split.title}
+                </AppLink>
+                <Text fontSize="xsmall" color="muted">
+                  {split.archived ? `${split.status} · Archived` : split.status}
+                </Text>
+              </Inline>
+            </li>
+          ))}
+        </ul>
       </Stack>
     </Stack>
   );
