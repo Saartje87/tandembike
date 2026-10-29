@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCycle } from '../../app/cycles/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
-import type { Cycle } from '../../tickets/cycles';
+import type { Cycle, OpenTicketCounts } from '../../tickets/cycles';
 import { ProjectTabs } from './project-tabs';
 
 vi.mock('next/navigation', () => ({
@@ -33,24 +33,35 @@ const cycle = (
 
 /**
  * Renders the tabs as the Project layout does at `segments` below it, with
- * search parameters `search`.
+ * search parameters `search` and open Ticket counts `counts`.
  */
-const renderTabs = (cycles: Cycle[], segments: string[] = [], search = '') => {
+const renderTabs = (
+  cycles: Cycle[],
+  segments: string[] = [],
+  search = '',
+  counts: OpenTicketCounts = { backlog: 0, cycles: {} },
+) => {
   vi.mocked(useSelectedLayoutSegments).mockReturnValue(segments);
   vi.mocked(useSearchParams).mockReturnValue(
     new URLSearchParams(search) as ReturnType<typeof useSearchParams>,
   );
-  return renderWithTheme(<ProjectTabs projectId={3} cycles={cycles} />);
+  return renderWithTheme(
+    <ProjectTabs projectId={3} cycles={cycles} openTicketCounts={counts} />,
+  );
 };
 
+const tabLinks = () =>
+  within(
+    screen.getByRole('navigation', { name: 'Project views' }),
+  ).getAllByRole('link');
+
+/** Each tab's title, before its badge, with its link and current marker. */
 const tabs = () =>
-  within(screen.getByRole('navigation', { name: 'Project views' }))
-    .getAllByRole('link')
-    .map((link) => ({
-      name: link.textContent,
-      href: link.getAttribute('href'),
-      current: link.getAttribute('aria-current'),
-    }));
+  tabLinks().map((link) => ({
+    name: link.firstChild?.textContent,
+    href: link.getAttribute('href'),
+    current: link.getAttribute('aria-current'),
+  }));
 
 describe('ProjectTabs', () => {
   let router: ReturnType<typeof mockRouter>;
@@ -152,6 +163,45 @@ describe('ProjectTabs', () => {
       { name: 'History', href: '/project/3/cycles', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
+  });
+
+  it('shows the open Tickets of the Backlog and each Cycle in a badge, not on the History or Settings', () => {
+    renderTabs(
+      [
+        cycle({ id: 6, title: 'Old', state: 'Archived' }),
+        cycle({ id: 7, title: 'Beta' }),
+        cycle({ id: 8, title: 'Launch', state: 'Active' }),
+      ],
+      [],
+      '',
+      { backlog: 4, cycles: { 7: 0, 8: 1 } },
+    );
+
+    expect(
+      tabLinks().map((link) => ({
+        name: link.firstChild?.textContent,
+        badge:
+          within(link).queryByText(/^\d+ open Tickets?$/)?.textContent ?? null,
+      })),
+    ).toEqual([
+      { name: 'Backlog', badge: '4 open Tickets' },
+      { name: 'Launch', badge: '1 open Ticket' },
+      { name: 'Beta', badge: '0 open Tickets' },
+      { name: 'History', badge: null },
+      { name: 'Settings', badge: null },
+    ]);
+    expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
+      /^Backlog 4/,
+    );
+  });
+
+  it('shows a badge reading 0 for a Cycle missing from the counts', () => {
+    renderTabs([cycle({ id: 7, title: 'Beta' })], [], '', {
+      backlog: 2,
+      cycles: {},
+    });
+
+    expect(screen.getByText('0 open Tickets')).toBeInTheDocument();
   });
 
   it('creates a Cycle from its title and opens its tab', async () => {

@@ -13,21 +13,29 @@ vi.mock('../../../components/project-tabs/project-tabs', () => ({
   ProjectTabs: ({
     projectId,
     cycles,
+    openTicketCounts,
   }: {
     projectId: number;
-    cycles: { title: string }[];
+    cycles: { id: number; title: string }[];
+    openTicketCounts: { backlog: number; cycles: Record<number, number> };
   }) => (
-    <nav>{`Tabs of ${projectId}: ${cycles.map(({ title }) => title).join(',')}`}</nav>
+    <nav>{`Tabs of ${projectId}: Backlog ${openTicketCounts.backlog}, ${cycles
+      .map(({ id, title }) => `${title} ${openTicketCounts.cycles[id]}`)
+      .join(', ')}`}</nav>
   ),
 }));
 
 const tab = <p>The tab</p>;
 
 describe('ProjectLayout', () => {
-  it("shows the Project's header and tabs above the tab", async () => {
+  it("shows the Project's header and tabs, with their open Tickets, above the tab", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.createTicket({ projectId: project.id, title: 'Planned' });
+    tickets.createTicket({ projectId: project.id, title: 'Unplanned' });
+    tickets.createTicket({ projectId: project.id, title: 'Also unplanned' });
+    tickets.planTicket({ cycleId: beta.id, number: 1 });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     await renderPage(
@@ -45,7 +53,7 @@ describe('ProjectLayout', () => {
       screen.getByRole('heading', { level: 1, name: 'Website' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('navigation')).toHaveTextContent(
-      `Tabs of ${project.id}: Beta`,
+      `Tabs of ${project.id}: Backlog 2, Beta 1`,
     );
     expect(screen.getByText('The tab')).toBeInTheDocument();
   });
