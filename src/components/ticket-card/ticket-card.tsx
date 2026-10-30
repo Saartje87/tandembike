@@ -108,7 +108,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
         role="img"
         aria-label={`Acceptance criteria: ${checked.length} of ${total} checked`}
       >
-        <Icon name="check-circle" size="small" color={modeColors.muted} />
+        <Icon name="check-circle" size="small" color={modeColors.textMuted} />
         <Text fontSize="xsmall" color="muted">
           {checked.length}/{total}
         </Text>

@@ -170,7 +170,7 @@ uses copy a role's values and live in
 import { modeColors } from '../../app/lib/mode-colors';
 
 <Box backgroundColor={modeColors.sunken} borderRadius={2} padding={3} />;
-<Icon name="check-circle" size="small" color={modeColors.muted} />;
+<Icon name="check-circle" size="small" color={modeColors.textMuted} />;
 ```
 
 The Project and Epic palette (`src/components/palette/palette.css.ts`) keeps

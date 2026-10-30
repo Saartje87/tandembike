@@ -1,48 +1,32 @@
-import {
-  type ColorMode,
-  colorModeSelector,
-  colorModes,
-  systemColorModeQuery,
-  systemColorModeSelectors,
-} from '@blockle/blocks';
+import type { ColorMode } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
+import { colorModeSelectors } from '../../app/lib/color-mode-selectors';
+
+const descendant = (selectors: string) =>
+  selectors
+    .split(', ')
+    .map((selector) => `${selector} &`)
+    .join(', ');
+
 /**
- * Hides an element unless the resolved Color mode is `mode`: under another
- * set mode, or under `system` when the OS asks for another mode. CSS, not
+ * Hides an element where the resolved Color mode is `other`. CSS, not
  * `useColorMode`, so the first paint, before hydration, is already right.
  */
-const shownIn = (mode: ColorMode) => {
-  const others = colorModes.filter((other) => other !== mode);
+const hiddenIn = (other: ColorMode) => {
+  const { set, system, query } = colorModeSelectors(other);
   return style({
-    selectors: Object.fromEntries(
-      others.map((other) => [
-        `${colorModeSelector(other)} &`,
-        { display: 'none' },
-      ]),
-    ),
-    '@media': Object.fromEntries(
-      others.flatMap((other) => {
-        const query = systemColorModeQuery(other);
-        return query
-          ? [
-              [
-                query,
-                {
-                  selectors: {
-                    [systemColorModeSelectors
-                      .map((selector) => `${selector} &`)
-                      .join(', ')]: { display: 'none' },
-                  },
-                },
-              ],
-            ]
-          : [];
-      }),
-    ),
+    selectors: { [descendant(set)]: { display: 'none' } },
+    '@media': query
+      ? {
+          [query]: { selectors: { [descendant(system)]: { display: 'none' } } },
+        }
+      : {},
   });
 };
 
-export const light = shownIn('light');
+/** Shown in light mode only. */
+export const light = hiddenIn('dark');
 
-export const dark = shownIn('dark');
+/** Shown in dark mode only. */
+export const dark = hiddenIn('light');

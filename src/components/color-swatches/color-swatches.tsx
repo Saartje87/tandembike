@@ -57,7 +57,7 @@ export const ColorSwatches: FC<ColorSwatchesProps> = ({
             disabled={disabled}
             onClick={() => onPick(null)}
           >
-            <Icon name="no-symbol" size="small" color={modeColors.muted} />
+            <Icon name="no-symbol" size="small" color={modeColors.textMuted} />
           </Button>
         )}
         {paletteColors.map((color) => (

@@ -86,7 +86,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                   <Icon
                     name="no-symbol"
                     size="medium"
-                    color={modeColors.muted}
+                    color={modeColors.textMuted}
                   />
                 </Button>
                 {projectIcons.map((icon) => (

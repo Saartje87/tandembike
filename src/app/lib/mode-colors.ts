@@ -26,5 +26,5 @@ export const modeColors = {
   /** `success.foreground`. */
   success: { light: 'success-800', dark: 'success-400' },
   /** `text.muted`, for an Icon beside muted text. */
-  muted: { light: 'neutral-700', dark: 'neutral-400' },
+  textMuted: { light: 'neutral-700', dark: 'neutral-400' },
 } satisfies Record<string, ModeColor>;

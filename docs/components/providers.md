@@ -45,9 +45,11 @@ value, a store that also follows other tabs, and the inline script.
   with CSS on Blocks' selectors, not `useColorMode`, so the first paint shows
   the right one.
 
-For CSS that has to differ by mode beyond the Color roles, build selectors
-from `colorModeSelector(mode)`, plus `systemColorModeSelectors` under
-`systemColorModeQuery(mode)` for `system` (see `palette.css.ts`).
+For CSS that has to differ by mode beyond the Color roles, get the selectors
+from `colorModeSelectors(mode)` in
+[`src/app/lib/color-mode-selectors.ts`](../../src/app/lib/color-mode-selectors.ts):
+`set` for a picked mode, and `system` under the media query `query` for
+`system` (see `palette.css.ts`).
 
 `renderWithTheme` pins `colorMode="light"`.
 

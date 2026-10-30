@@ -1,9 +1,4 @@
 import {
-  colorModeSelector,
-  systemColorModeQueries,
-  systemColorModeSelectors,
-} from '@blockle/blocks';
-import {
   assignVars,
   createGlobalTheme,
   createThemeContract,
@@ -11,6 +6,7 @@ import {
   styleVariants,
 } from '@vanilla-extract/css';
 
+import { colorModeSelectors } from '../../app/lib/color-mode-selectors';
 import { type PaletteColor, paletteColors } from '../../tickets/palette';
 
 type Shades = { tint: string; strong: string };
@@ -56,14 +52,13 @@ createGlobalTheme(':root', palette, light);
 
 // The dark shades follow Blocks' resolved Color mode: set to dark, or set to
 // system (or not set at all) on a dark OS.
-globalStyle(colorModeSelector('dark'), {
-  vars: assignVars(palette, dark),
-});
+const darkMode = colorModeSelectors('dark');
 
-const darkQuery = systemColorModeQueries.dark;
-if (darkQuery) {
-  globalStyle(systemColorModeSelectors.join(', '), {
-    '@media': { [darkQuery]: { vars: assignVars(palette, dark) } },
+globalStyle(darkMode.set, { vars: assignVars(palette, dark) });
+
+if (darkMode.query) {
+  globalStyle(darkMode.system, {
+    '@media': { [darkMode.query]: { vars: assignVars(palette, dark) } },
   });
 }
 
