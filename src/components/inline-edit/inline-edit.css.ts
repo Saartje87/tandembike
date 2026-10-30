@@ -24,7 +24,7 @@ export const text = style({
   color: 'inherit',
   overflowWrap: 'anywhere',
   ':hover': {
-    backgroundColor: vars.color['neutral-100'],
+    backgroundColor: vars.colorRole.surface.sunken,
   },
   ':focus-visible': {
     outline: 'none',

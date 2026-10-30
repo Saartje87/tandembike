@@ -1,4 +1,9 @@
 import {
+  colorModeSelector,
+  systemColorModeQueries,
+  systemColorModeSelectors,
+} from '@blockle/blocks';
+import {
   assignVars,
   createGlobalTheme,
   createThemeContract,
@@ -49,12 +54,18 @@ const dark: Record<PaletteColor, Shades> = {
 
 createGlobalTheme(':root', palette, light);
 
-// The app's theme is light only, so the dark shades wait for a dark mode to
-// set `data-color-scheme="dark"` on the root; following the system setting
-// would put dark tints behind the light theme's dark text.
-globalStyle(':root[data-color-scheme="dark"]', {
+// The dark shades follow Blocks' resolved Color mode: set to dark, or set to
+// system (or not set at all) on a dark OS.
+globalStyle(colorModeSelector('dark'), {
   vars: assignVars(palette, dark),
 });
+
+const darkQuery = systemColorModeQueries.dark;
+if (darkQuery) {
+  globalStyle(systemColorModeSelectors.join(', '), {
+    '@media': { [darkQuery]: { vars: assignVars(palette, dark) } },
+  });
+}
 
 /** A palette colour's soft tint as the background. */
 export const tintBackground = styleVariants(palette, ({ tint }) => ({

@@ -13,6 +13,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { modeColors } from '../../app/lib/mode-colors';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import {
   parseTicketNumber,
@@ -77,7 +78,7 @@ const Readiness: FC<ReadinessProps> = ({ blockers }) => {
       tag="p"
       fontSize="small"
       fontWeight="medium"
-      color={blocked ? 'warning-800' : 'success-800'}
+      color={blocked ? modeColors.warning : modeColors.success}
     >
       {blocked ? 'Blocked' : 'Ready to start'}
     </Text>

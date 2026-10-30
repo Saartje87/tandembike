@@ -18,6 +18,7 @@ import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createCycle } from '../../app/cycles/actions';
+import { modeColors } from '../../app/lib/mode-colors';
 import {
   boardFilterOf,
   cyclePath,
@@ -77,7 +78,7 @@ type TabProps = {
 const Tab: FC<TabProps> = ({ href, current, children, openTickets }) => (
   <Box
     asChild
-    backgroundColor={current ? 'primary-100' : 'transparent'}
+    backgroundColor={current ? modeColors.primarySubtle : 'transparent'}
     borderRadius={2}
     paddingBlock={1}
     paddingInline={3}

@@ -1,6 +1,8 @@
 import { Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
+import { modeColors } from '../../app/lib/mode-colors';
+
 export type FieldErrorProps = {
   /** For the field's `aria-describedby`. */
   id: string;
@@ -11,7 +13,7 @@ export type FieldErrorProps = {
 /** The Tickets module's reason a form field was refused, under the field. */
 export const FieldError: FC<FieldErrorProps> = ({ id, reason }) =>
   reason ? (
-    <Text id={id} tag="p" fontSize="small" color="danger-600">
+    <Text id={id} tag="p" fontSize="small" color={modeColors.danger}>
       {reason}
     </Text>
   ) : null;

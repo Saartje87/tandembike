@@ -2,17 +2,16 @@ import { Box, Heading, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import type { FC } from 'react';
 
+import { modeColors } from './lib/mode-colors';
 import * as styles from './not-found.css';
 
 export const metadata: Metadata = { title: 'Page not found' };
 
-// `neutral-100` is surface.sunken's light value: atoms take no Color roles
-// (T338).
 const NotFound: FC = () => {
   return (
     <Box
       asChild
-      backgroundColor="neutral-100"
+      backgroundColor={modeColors.sunken}
       className={styles.page}
       paddingBlock={[5, 6]}
       paddingInline={[4, 5]}
@@ -21,7 +20,7 @@ const NotFound: FC = () => {
         <Stack className={styles.content} gap={5} marginInline="auto">
           <header>
             <Text
-              color="primary-600"
+              color={modeColors.primarySolid}
               fontFamily="mono"
               fontSize="xsmall"
               fontWeight="bold"

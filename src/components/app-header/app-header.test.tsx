@@ -42,6 +42,14 @@ describe('AppHeader', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('ends with the Colour mode button', () => {
+    renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+    const header = screen.getByRole('banner');
+    const buttons = within(header).getAllByRole('button');
+    expect(buttons.at(-1)).toHaveAccessibleName('Colour mode');
+  });
+
   it('opens the navigation in a drawer and closes it on Escape', async () => {
     renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
     const menu = screen.getByRole('button', { name: 'Open navigation' });

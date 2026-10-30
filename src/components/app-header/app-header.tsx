@@ -12,6 +12,7 @@ import {
   useState,
 } from 'react';
 
+import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
 import { Icon } from '../icon/icon';
 
 export type AppHeaderProps = {
@@ -45,7 +46,7 @@ const CloseOnNavigation: FC<CloseOnNavigationProps> = ({ onNavigate }) => {
 /**
  * The bar across the top of every page, in the theme's primary colour: a
  * menu button that opens `nav` in a drawer on the left, then the current
- * page's breadcrumbs, kept on one line.
+ * page's breadcrumbs, kept on one line, and the Colour mode menu at the end.
  * Picking a link in the drawer, or any other navigation, closes it.
  * Escape or a click outside closes the drawer, and focus goes back to the
  * menu button.
@@ -57,6 +58,7 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
 
   return (
     <>
+      {/* A deliberate fixed colour: the header is primary-600 with white in both Colour modes. */}
       <Box
         asChild
         backgroundColor="primary-600"
@@ -76,6 +78,9 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
               <Icon name="bars-3" color="white" />
             </Button>
             {breadcrumbs}
+            <Box marginInlineStart="auto">
+              <ColorModeMenu />
+            </Box>
           </Inline>
         </header>
       </Box>

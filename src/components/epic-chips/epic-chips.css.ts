@@ -19,6 +19,6 @@ export const newEpic = style({
  * colour.
  */
 export const dropTarget = style({
-  outline: `${vars.borderWidth.thick} solid ${vars.color['primary-500']}`,
+  outline: `${vars.borderWidth.thick} solid ${vars.colorRole.primary.solid}`,
   outlineOffset: vars.borderWidth.thick,
 });

@@ -44,6 +44,7 @@ import {
 } from 'react';
 
 import { moveTicketsToCycle } from '../../app/cycles/actions';
+import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
   boardPathOf,
@@ -200,7 +201,9 @@ const StatusColumn: FC<StatusColumnProps> = ({
   return (
     <Box
       asChild
-      backgroundColor={highlighted ? 'primary-100' : 'neutral-100'}
+      backgroundColor={
+        highlighted ? modeColors.primarySubtle : modeColors.sunken
+      }
       borderRadius={2}
       padding={3}
       blockSize="full"

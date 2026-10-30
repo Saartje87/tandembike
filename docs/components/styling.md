@@ -120,9 +120,12 @@ vanilla-extract styles:
 
 ## Color modes and roles
 
-Blocks themes have a value for each Color mode, `light` and `dark`. This app
-is light-only: the outermost `BlocksProvider` pins `colorMode="light"` (see
-[Providers](./providers.md#color-mode)).
+Blocks themes have a value for each Color mode, `light` and `dark`. The app
+follows the OS or the User's choice (see
+[Providers](./providers.md#color-mode)), so every colour has to work in both:
+use a Color role or a Mode value, never a bare Palette shade. A colour that
+stays the same in both modes is a deliberate exception with a comment, such
+as the app header's `primary-600` with `white`.
 
 **Color roles** are purpose-named colors with a value per mode. Prefer a role
 over a Palette shade when one fits:
@@ -147,8 +150,7 @@ they use `text.default`:
 ```
 
 The `color`, `backgroundColor` and `borderColor` atoms take Palette values,
-not roles (`Icon` included: use `neutral-700`, the light value of
-`text.muted`, next to muted text). In a `.css.ts` file, read a role as
+not roles (`Icon` included). In a `.css.ts` file, read a role as
 `vars.colorRole.<group>.<role>`:
 
 ```ts
@@ -159,9 +161,21 @@ export const field = style({
 });
 ```
 
-The color atoms also accept a **Mode value**, one Palette shade per mode,
-such as `color={{ light: "neutral-900", dark: "neutral-100" }}`. The app does
-not need these while it is pinned to light.
+On the atoms, use a **Mode value** instead, one Palette shade per mode, such
+as `color={{ light: "neutral-900", dark: "neutral-100" }}`. The ones this app
+uses copy a role's values and live in
+[`src/app/lib/mode-colors.ts`](../../src/app/lib/mode-colors.ts); reuse them:
+
+```tsx
+import { modeColors } from '../../app/lib/mode-colors';
+
+<Box backgroundColor={modeColors.sunken} borderRadius={2} padding={3} />;
+<Icon name="check-circle" size="small" color={modeColors.muted} />;
+```
+
+The Project and Epic palette (`src/components/palette/palette.css.ts`) keeps
+its own light and dark shades, since Blocks has no decorative palette
+(T317).
 
 ## Atoms versus custom styles
 
