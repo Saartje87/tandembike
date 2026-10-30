@@ -110,7 +110,7 @@ const StatsTable: FC<StatsTableProps> = ({ stats: pending }) => {
               Total
             </th>
             <CountCells counts={total} />
-            <td>{total.activeCycles} active</td>
+            <td className={styles.startCell}>{total.activeCycles} active</td>
             <td>{total.doneLast7Days}</td>
           </tr>
         </tfoot>
