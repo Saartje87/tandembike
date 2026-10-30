@@ -42,6 +42,16 @@ describe('AppHeader', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('links to the Stats page', () => {
+    renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+    const header = screen.getByRole('banner');
+    expect(within(header).getByRole('link', { name: 'Stats' })).toHaveAttribute(
+      'href',
+      '/stats',
+    );
+  });
+
   it('ends with the Colour mode button', () => {
     renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
 

@@ -12,6 +12,8 @@ import {
   useState,
 } from 'react';
 
+import { statsPath } from '../../app/lib/paths';
+import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
 import { Icon } from '../icon/icon';
 
@@ -46,7 +48,8 @@ const CloseOnNavigation: FC<CloseOnNavigationProps> = ({ onNavigate }) => {
 /**
  * The bar across the top of every page, in the theme's primary colour: a
  * menu button that opens `nav` in a drawer on the left, then the current
- * page's breadcrumbs, kept on one line, and the Colour mode menu at the end.
+ * page's breadcrumbs, kept on one line, and a link to the Stats page and the
+ * Colour mode menu at the end.
  * Picking a link in the drawer, or any other navigation, closes it.
  * Escape or a click outside closes the drawer, and focus goes back to the
  * menu button.
@@ -81,9 +84,17 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
               <Icon name="bars-3" color="white" />
             </Button>
             {breadcrumbs}
-            <Box marginInlineStart="auto">
+            <Inline
+              gap={3}
+              alignY="center"
+              flexWrap="nowrap"
+              marginInlineStart="auto"
+            >
+              <AppLink href={statsPath()} intent="inherit">
+                Stats
+              </AppLink>
               <ColorModeMenu />
-            </Box>
+            </Inline>
           </Inline>
         </header>
       </Box>
