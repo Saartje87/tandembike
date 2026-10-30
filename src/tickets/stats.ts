@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, ne, type SQL, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
@@ -57,6 +57,8 @@ export type Stats = {
   total: StatsTotal;
 };
 
+// A copy of the Tickets module's: importing it would make `tickets.ts` and
+// this file load each other.
 const projectColumns = {
   id: projects.id,
   name: projects.name,
@@ -67,7 +69,7 @@ const projectColumns = {
 };
 
 /** Counts the grouped rows matching `condition`. */
-const countOf = (condition: ReturnType<typeof sql>) =>
+const countOf = (condition: SQL | undefined) =>
   sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`;
 
 /** Whether the Ticket has a Blocker that is neither Done nor archived. */
@@ -83,11 +85,9 @@ function ticketCounts(db: DatabaseConnection) {
   const rows = db
     .select({
       projectId: tickets.projectId,
-      todo: countOf(sql`${tickets.status} = 'Todo'`),
-      inProgress: countOf(sql`${tickets.status} = 'In progress'`),
-      blocked: countOf(
-        sql`${tickets.status} <> 'Done' and ${hasUnresolvedBlocker}`,
-      ),
+      todo: countOf(eq(tickets.status, 'Todo')),
+      inProgress: countOf(eq(tickets.status, 'In progress')),
+      blocked: countOf(and(ne(tickets.status, 'Done'), hasUnresolvedBlocker)),
       claimed: countOf(sql`${tickets.claimAgentRunId} is not null`),
     })
     .from(tickets)
@@ -109,7 +109,7 @@ function activeCycles(db: DatabaseConnection) {
       projectId: cycles.projectId,
       id: cycles.id,
       title: cycles.title,
-      done: countOf(sql`${tickets.status} = 'Done'`),
+      done: countOf(eq(tickets.status, 'Done')),
       total: sql<number>`count(${tickets.number})`,
     })
     .from(cycles)
@@ -163,15 +163,15 @@ function doneLast7Days(db: DatabaseConnection) {
       ),
     )
     .all();
-  const numbers = new Map<number, Set<number>>();
+  const doneByProject = new Map<number, Set<number>>();
   for (const { projectId, number, changes } of rows) {
     if (changes.some(createdOrDone)) {
-      const done = numbers.get(projectId) ?? new Set();
-      numbers.set(projectId, done.add(number));
+      const done = doneByProject.get(projectId) ?? new Set();
+      doneByProject.set(projectId, done.add(number));
     }
   }
   return new Map(
-    [...numbers].map(([projectId, done]) => [projectId, done.size]),
+    [...doneByProject].map(([projectId, done]) => [projectId, done.size]),
   );
 }
 
@@ -206,7 +206,7 @@ export function createStats(db: DatabaseConnection) {
       const counts = ticketCounts(db);
       const cycleProgress = activeCycles(db);
       const recentlyDone = doneLast7Days(db);
-      const rows = db
+      const projectRows = db
         .select(projectColumns)
         .from(projects)
         .where(eq(projects.archived, false))
@@ -220,7 +220,7 @@ export function createStats(db: DatabaseConnection) {
             doneLast7Days: recentlyDone.get(project.id) ?? 0,
           }),
         );
-      return { projects: rows, total: totalOf(rows) };
+      return { projects: projectRows, total: totalOf(projectRows) };
     },
   };
 }

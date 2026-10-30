@@ -1,7 +1,7 @@
 import { vars } from '@blockle/blocks';
 import { globalStyle, style } from '@vanilla-extract/css';
 
-/** Blocks has no table component or table atoms. */
+/** Blocks has no table component or table atoms (T503). */
 export const table = style({
   borderCollapse: 'collapse',
   inlineSize: '100%',
@@ -15,8 +15,9 @@ globalStyle(`${table} th, ${table} td`, {
   whiteSpace: 'nowrap',
 });
 
-globalStyle(`${table} th:first-child, ${table} td:nth-child(6)`, {
-  textAlign: 'start',
+/** A cell aligned to the start, where the rest align their figures to the end. */
+export const startCell = style({
+  selectors: { [`${table} &`]: { textAlign: 'start' } },
 });
 
 globalStyle(`${table} tfoot th, ${table} tfoot td`, {

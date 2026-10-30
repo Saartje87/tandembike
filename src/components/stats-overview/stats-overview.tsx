@@ -14,29 +14,31 @@ export type StatsOverviewProps = {
 type StatsTableProps = StatsOverviewProps;
 
 type CountCellsProps = {
-  figures: Pick<StatsTotal, 'todo' | 'inProgress' | 'blocked' | 'claimed'>;
+  counts: Pick<StatsTotal, 'todo' | 'inProgress' | 'blocked' | 'claimed'>;
 };
 
-type ActiveCycleCellProps = Pick<ProjectStats, 'project' | 'activeCycle'>;
+type ActiveCycleCellProps = Pick<ProjectStats, 'activeCycle'> & {
+  projectId: number;
+};
 
-const CountCells: FC<CountCellsProps> = ({ figures }) => (
+const CountCells: FC<CountCellsProps> = ({ counts }) => (
   <>
-    <td>{figures.todo}</td>
-    <td>{figures.inProgress}</td>
-    <td>{figures.blocked}</td>
-    <td>{figures.claimed}</td>
+    <td>{counts.todo}</td>
+    <td>{counts.inProgress}</td>
+    <td>{counts.blocked}</td>
+    <td>{counts.claimed}</td>
   </>
 );
 
 /** The Active Cycle's name, linking to its Board, and its Done/total. */
 const ActiveCycleCell: FC<ActiveCycleCellProps> = ({
-  project,
+  projectId,
   activeCycle,
 }) => (
-  <td>
+  <td className={styles.startCell}>
     {activeCycle ? (
       <>
-        <AppLink href={cyclePath(project.id, activeCycle.id)}>
+        <AppLink href={cyclePath(projectId, activeCycle.id)}>
           {activeCycle.title}
         </AppLink>{' '}
         <Text color="muted">
@@ -67,12 +69,16 @@ const StatsTable: FC<StatsTableProps> = ({ stats: pending }) => {
       <table className={styles.table}>
         <thead>
           <tr>
-            <th scope="col">Project</th>
+            <th scope="col" className={styles.startCell}>
+              Project
+            </th>
             <th scope="col">Todo</th>
             <th scope="col">In progress</th>
             <th scope="col">Blocked</th>
             <th scope="col">Claimed</th>
-            <th scope="col">Active Cycle</th>
+            <th scope="col" className={styles.startCell}>
+              Active Cycle
+            </th>
             <th scope="col">Done, last 7 days</th>
           </tr>
         </thead>
@@ -80,7 +86,7 @@ const StatsTable: FC<StatsTableProps> = ({ stats: pending }) => {
           {projects.map(
             ({ project, activeCycle, doneLast7Days, ...counts }) => (
               <tr key={project.id}>
-                <th scope="row">
+                <th scope="row" className={styles.startCell}>
                   <AppLink href={projectPath(project.id)} intent="inherit">
                     <Inline gap={2} alignY="center" flexWrap="nowrap">
                       <ProjectIcon project={project} size="small" />
@@ -88,8 +94,11 @@ const StatsTable: FC<StatsTableProps> = ({ stats: pending }) => {
                     </Inline>
                   </AppLink>
                 </th>
-                <CountCells figures={counts} />
-                <ActiveCycleCell project={project} activeCycle={activeCycle} />
+                <CountCells counts={counts} />
+                <ActiveCycleCell
+                  projectId={project.id}
+                  activeCycle={activeCycle}
+                />
                 <td>{doneLast7Days}</td>
               </tr>
             ),
@@ -97,8 +106,10 @@ const StatsTable: FC<StatsTableProps> = ({ stats: pending }) => {
         </tbody>
         <tfoot>
           <tr>
-            <th scope="row">Total</th>
-            <CountCells figures={total} />
+            <th scope="row" className={styles.startCell}>
+              Total
+            </th>
+            <CountCells counts={total} />
             <td>{total.activeCycles} active</td>
             <td>{total.doneLast7Days}</td>
           </tr>
