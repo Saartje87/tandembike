@@ -15,12 +15,8 @@ export type AppLinkProps = Omit<LinkProps, 'asChild' | 'href'> & {
 };
 
 /**
- * A Blocks `Link` with Next.js client-side navigation.
- *
- * A Client Component, so the `NextLink` is built in the browser-side tree.
- * Built in a Server Component, it can reach `Link asChild` as a lazy element
- * inside a streamed Suspense boundary, which Blocks drops: the server renders
- * no link and hydration fails (T419, T522).
+ * A Blocks `Link` with Next.js client-side navigation. A Client Component on
+ * purpose: see `docs/components/navigation.md` (T522).
  */
 export const AppLink: FC<AppLinkProps> = ({
   href,
