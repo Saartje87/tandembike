@@ -44,6 +44,10 @@ _Avoid_: Column, drop area
 A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.
 _Avoid_: Search, view, saved filter
 
+**Stats**:
+The view of every non-archived Project's figures side by side: per Project, how many Tickets are in Todo and In progress, blocked and claimed, the Active Cycle's progress, and how many were done in the last 7 days. Epics are not counted, since their Status follows their children. A Ticket counts as done in the last 7 days when it is Done now and last reached Done within that window, even if archived since.
+_Avoid_: Dashboard, report, overview, metrics
+
 **Status**:
 Where a Ticket stands: one of a fixed set, **Todo**, **In progress** or **Done**. A Ticket can move between any two Statuses.
 _Avoid_: State, stage, column
