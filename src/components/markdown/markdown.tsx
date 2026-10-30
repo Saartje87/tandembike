@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { modeColors } from '../../app/lib/mode-colors';
 import { AppLink } from '../app-link/app-link';
 import * as styles from './markdown.css';
 
@@ -64,7 +65,7 @@ const componentsFor = (headingLevel: HeadingLevel): Components => ({
   pre: ({ children }) => (
     <Box
       asChild
-      backgroundColor="neutral-100"
+      backgroundColor={modeColors.sunken}
       borderRadius={2}
       padding={3}
       overflow="auto"

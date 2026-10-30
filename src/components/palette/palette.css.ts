@@ -6,6 +6,7 @@ import {
   styleVariants,
 } from '@vanilla-extract/css';
 
+import { colorModeSelectors } from '../../app/lib/color-mode-selectors';
 import { type PaletteColor, paletteColors } from '../../tickets/palette';
 
 type Shades = { tint: string; strong: string };
@@ -49,12 +50,17 @@ const dark: Record<PaletteColor, Shades> = {
 
 createGlobalTheme(':root', palette, light);
 
-// The app's theme is light only, so the dark shades wait for a dark mode to
-// set `data-color-scheme="dark"` on the root; following the system setting
-// would put dark tints behind the light theme's dark text.
-globalStyle(':root[data-color-scheme="dark"]', {
-  vars: assignVars(palette, dark),
-});
+// The dark shades follow Blocks' resolved Color mode: set to dark, or set to
+// system (or not set at all) on a dark OS.
+const darkMode = colorModeSelectors('dark');
+
+globalStyle(darkMode.set, { vars: assignVars(palette, dark) });
+
+if (darkMode.query) {
+  globalStyle(darkMode.system, {
+    '@media': { [darkMode.query]: { vars: assignVars(palette, dark) } },
+  });
+}
 
 /** A palette colour's soft tint as the background. */
 export const tintBackground = styleVariants(palette, ({ tint }) => ({

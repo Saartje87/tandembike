@@ -3,6 +3,8 @@
 import { Box, Button, Inline, Text } from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
+import { modeColors } from '../../app/lib/mode-colors';
+
 export type SelectionBarProps = {
   /** How many Tickets are selected. */
   count: number;
@@ -31,7 +33,7 @@ export const SelectionBar: FC<SelectionBarProps> = ({
     gap={2}
     position="sticky"
     insetBlockEnd={0}
-    backgroundColor="primary-100"
+    backgroundColor={modeColors.primarySubtle}
     borderRadius={2}
     boxShadow={1}
     paddingBlock={2}

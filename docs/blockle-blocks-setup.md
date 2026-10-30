@@ -43,22 +43,19 @@ export default withVanillaExtract(nextConfig);
 ## Reset and theme provider
 
 The root layout, [src/app/layout.tsx](../src/app/layout.tsx), imports the
-Blocks reset and wraps the app in `BlocksProvider`:
+Blocks reset and wraps the app in `ColorModeProvider`
+([src/components/color-mode-provider](../src/components/color-mode-provider/color-mode-provider.tsx)),
+a Client Component around the outermost `BlocksProvider` with the momotaro
+theme and the Color mode this browser stored:
 
 ```tsx
 import '@blockle/blocks/reset';
 
-import { BlocksProvider } from '@blockle/blocks';
-import { momotaro } from '@blockle/blocks-theme-momotaro';
-
-<BlocksProvider theme={momotaro} colorMode="light">
-  {children}
-</BlocksProvider>;
+<ColorModeProvider>{children}</ColorModeProvider>;
 ```
 
-The app is light-only: the provider pins `colorMode="light"`, and `<html>`
-carries `data-color-mode="light"` so the server-rendered first paint is light
-too. See [Providers](./components/providers.md#color-mode).
+The app follows the OS by default, and the User can pick Light, Dark or
+System from the app header. See [Providers](./components/providers.md#color-mode).
 
 The layout stays a Server Component. Components that use React state, browser
 APIs, or interaction need `"use client"`; see the component guide.
@@ -69,7 +66,9 @@ Vitest compiles `.css.ts` files through `@vanilla-extract/vite-plugin`
 (see [vitest.config.mts](../vitest.config.mts)). Render components inside the
 theme with `renderWithTheme` from
 [src/test/render.tsx](../src/test/render.tsx), which wraps the UI in
-`BlocksProvider` with `colorMode="light"`, as the root layout does.
+`BlocksProvider` with `colorMode="light"`. A test of the Color mode itself
+renders `ColorModeProvider` instead and stubs `matchMedia`, which jsdom
+lacks and `useColorMode` reads under `system`.
 
 jsdom has no modal dialogs, so [src/test/setup.ts](../src/test/setup.ts)
 stands in for `showModal()` and `close()`. Like a browser, its `showModal()`

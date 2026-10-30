@@ -3,6 +3,7 @@
 import { Alert, Box, Button, Popover, Stack, Text } from '@blockle/blocks';
 import { type FC, useRef, useState } from 'react';
 
+import { modeColors } from '../../app/lib/mode-colors';
 import {
   type ProjectIcon as IconChoice,
   projectIcons,
@@ -82,8 +83,11 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                   aria-pressed={style.icon === null}
                   onClick={() => onPick({ icon: null })}
                 >
-                  {/* neutral-700 is text.muted's light value: Icon takes no text roles (T338). */}
-                  <Icon name="no-symbol" size="medium" color="neutral-700" />
+                  <Icon
+                    name="no-symbol"
+                    size="medium"
+                    color={modeColors.textMuted}
+                  />
                 </Button>
                 {projectIcons.map((icon) => (
                   <Button

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import '@blockle/blocks/reset';
-import { BlocksProvider } from '@blockle/blocks';
-import { momotaro } from '@blockle/blocks-theme-momotaro';
 import { type FC, type ReactNode, Suspense } from 'react';
 
 import { AppShell } from '../components/app-shell/app-shell';
+import { ColorModeProvider } from '../components/color-mode-provider/color-mode-provider';
 import { LiveUpdates } from '../components/live-updates/live-updates';
 import { ProjectNavLoader } from '../components/project-nav-loader/project-nav-loader';
+import { colorModeScript } from './lib/color-mode';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -34,18 +34,25 @@ export type RootLayoutProps = {
 // time, so it streams in behind a Suspense boundary (Cache Components).
 // Pages get theirs from `loading.tsx`. `LiveUpdates` keeps one change
 // listener per tab here, where it stays mounted across navigation.
-// The app is light-only: `BlocksProvider` pins the Color mode, but writes it
-// on `<html>` only once it mounts, so the server HTML sets it too, or a
-// dark-OS User would see a dark first paint (T337).
+// The Color mode this browser stored is in `localStorage`, not a cookie, so
+// the layout stays static (ADR 0017): the `<head>` script puts it on
+// `<html>` before the first paint, which `suppressHydrationWarning` lets
+// React keep.
 const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable}`}
-      data-color-mode="light"
+      suppressHydrationWarning
     >
+      <head>
+        <script
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: a fixed script built from constants.
+          dangerouslySetInnerHTML={{ __html: colorModeScript }}
+        />
+      </head>
       <body>
-        <BlocksProvider theme={momotaro} colorMode="light">
+        <ColorModeProvider>
           <LiveUpdates>
             <AppShell
               breadcrumbs={breadcrumbs}
@@ -58,7 +65,7 @@ const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
               {children}
             </AppShell>
           </LiveUpdates>
-        </BlocksProvider>
+        </ColorModeProvider>
       </body>
     </html>
   );

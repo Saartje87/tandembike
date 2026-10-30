@@ -15,6 +15,7 @@ import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { refusalReason } from '../../app/lib/action-result';
+import { modeColors } from '../../app/lib/mode-colors';
 import {
   addTicketComment,
   editTicketComment,
@@ -94,7 +95,7 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
   return (
     <Box
       asChild
-      backgroundColor="neutral-100"
+      backgroundColor={modeColors.sunken}
       borderRadius={2}
       paddingBlock={2}
       paddingInline={3}

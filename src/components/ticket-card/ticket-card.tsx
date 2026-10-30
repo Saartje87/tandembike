@@ -3,6 +3,7 @@
 import { Box, Checkbox, Inline, Stack, Tag, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
+import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
   ticketByNumberPath,
@@ -75,13 +76,17 @@ const CarryCount: FC<CarryCountProps> = ({ count }) => (
     position="absolute"
     insetBlockStart={0}
     insetInlineEnd={0}
-    backgroundColor="primary-600"
+    backgroundColor={modeColors.primarySolid}
     borderRadius="full"
     boxShadow={1}
     paddingInline={2}
     className={styles.carryCount}
   >
-    <Text fontSize="xsmall" color="white" whiteSpace="nowrap">
+    <Text
+      fontSize="xsmall"
+      color={modeColors.primaryContrast}
+      whiteSpace="nowrap"
+    >
       {count} Tickets
     </Text>
   </Box>
@@ -103,8 +108,7 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
         role="img"
         aria-label={`Acceptance criteria: ${checked.length} of ${total} checked`}
       >
-        {/* neutral-700 is text.muted's light value: Icon takes no text roles (T338). */}
-        <Icon name="check-circle" size="small" color="neutral-700" />
+        <Icon name="check-circle" size="small" color={modeColors.textMuted} />
         <Text fontSize="xsmall" color="muted">
           {checked.length}/{total}
         </Text>
@@ -151,11 +155,12 @@ export const TicketCard: FC<TicketCardProps> = ({
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
 
-  // `white` is surface.raised's light value: atoms take no Color roles (T338).
   return (
     <Box
       asChild
-      backgroundColor={changed || selected ? 'primary-100' : 'white'}
+      backgroundColor={
+        changed || selected ? modeColors.primarySubtle : modeColors.raised
+      }
       borderRadius={2}
       boxShadow={1}
       paddingBlock={0}
