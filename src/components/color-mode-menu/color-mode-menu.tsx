@@ -42,11 +42,13 @@ export const ColorModeMenu: FC = () => {
         }
       }}
     >
-      {/* The header stays primary-600 in both modes, so white stays legible. */}
+      {/* Ghost and inherit, as the header stays primary-600 with white in both modes. */}
       <Button
         ref={anchor}
         type="button"
         size="small"
+        variant="ghost"
+        intent="inherit"
         aria-label="Colour mode"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}

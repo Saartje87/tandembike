@@ -58,7 +58,8 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
 
   return (
     <>
-      {/* A deliberate fixed colour: the header is primary-600 with white in both Colour modes. */}
+      {/* A deliberate fixed colour: the header is primary-600 with white in both
+          Colour modes, so its buttons are ghost and inherit the white. */}
       <Box
         asChild
         backgroundColor="primary-600"
@@ -71,6 +72,8 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
             <Button
               type="button"
               size="small"
+              variant="ghost"
+              intent="inherit"
               aria-label="Open navigation"
               aria-expanded={open}
               onClick={() => setOpen(true)}
