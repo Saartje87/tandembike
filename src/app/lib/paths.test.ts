@@ -14,6 +14,7 @@ import {
   projectPath,
   projectSettingsPath,
   projectsPath,
+  statsPath,
   ticketByNumberPath,
   ticketOnBoardPath,
 } from './paths';
@@ -21,6 +22,10 @@ import {
 describe('paths', () => {
   it('puts the Projects list under a plural segment', () => {
     expect(projectsPath()).toBe('/projects');
+  });
+
+  it('puts the Stats page at its own top-level segment', () => {
+    expect(statsPath()).toBe('/stats');
   });
 
   it('puts the archived Projects under the Projects list', () => {

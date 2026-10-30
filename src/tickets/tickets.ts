@@ -108,6 +108,7 @@ import {
   maxBatchSize,
   throwFieldErrors,
 } from './rules';
+import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 
@@ -1000,6 +1001,7 @@ export function createTickets(
   return {
     ...createCycles(db, changes),
     ...createReferenceTemplates(db, changes),
+    ...createStats(db),
 
     /** All Projects, oldest first. */
     listProjects(): Project[] {

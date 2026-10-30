@@ -7,6 +7,11 @@ export function projectsPath(): string {
   return '/projects';
 }
 
+/** The Stats page: every Project's figures side by side. */
+export function statsPath(): string {
+  return '/stats';
+}
+
 /** The archived Projects, which can be restored from there. */
 export function archivedProjectsPath(): string {
   return `${projectsPath()}/archived`;
