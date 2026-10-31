@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,7 +42,7 @@ describe('TicketEpic', () => {
     expect(screen.getByText('None')).toBeInTheDocument();
   });
 
-  it('detaches the Ticket from its Epic, and shows a refusal', async () => {
+  it('puts the Ticket back in its Epic and explains when detaching is refused', async () => {
     vi.mocked(detachTicketFromEpic).mockResolvedValue({
       ok: false,
       error: 'There is no Ticket T5.',
@@ -57,6 +57,11 @@ describe('TicketEpic', () => {
     expect(
       await screen.findByText('There is no Ticket T5.'),
     ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'T4 Checkout' }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe('picking an Epic', () => {
@@ -152,7 +157,9 @@ describe('TicketEpic', () => {
           'Epic T8 is archived. Restore it before adding Tickets to it.',
         ),
       ).toBeInTheDocument();
-      expect(screen.getByText('None')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('None')).toBeInTheDocument();
+      });
     });
 
     it('offers no picker when there is no other Epic to pick', () => {
