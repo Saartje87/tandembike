@@ -626,7 +626,7 @@ export function createConversations({
     /**
      * The User's answers to an Agent's question, by question text; the waiting
      * run goes on. Every question needs an answer. Refused once answered or
-     * when its run is gone.
+     * when its run is gone, each with its own reason.
      */
     async answerQuestion(
       entryId: number,
@@ -635,6 +635,9 @@ export function createConversations({
       const entry = getEntry(entryId);
       if (entry?.role !== 'question' || !entry.question) {
         throw new NotFoundError(`There is no question ${entryId}.`);
+      }
+      if (entry.question.answers !== null) {
+        throw new NotAllowedError('This question was already answered.');
       }
       const handle = live.get(entry.conversationId);
       const resolve = handle?.questioning.get(entryId);

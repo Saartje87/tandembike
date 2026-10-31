@@ -662,6 +662,9 @@ describe('Questions of the Agent', () => {
     );
 
     expect(error).toBeInstanceOf(NotAllowedError);
+    expect((error as Error).message).toBe(
+      'This question was already answered.',
+    );
   });
 
   it('resolves empty and expires a pending question when the Conversation is stopped', async () => {
@@ -700,6 +703,9 @@ describe('Questions of the Agent', () => {
       next.answerQuestion(entry?.id ?? 0, { 'Which library?': 'A' }),
     );
     expect(error).toBeInstanceOf(NotAllowedError);
+    expect((error as Error).message).toBe(
+      'This question is no longer waiting.',
+    );
   });
 });
 
