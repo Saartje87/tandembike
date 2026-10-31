@@ -5,7 +5,7 @@ import { type FC, Fragment, type KeyboardEvent } from 'react';
 
 import type { ConversationState } from '../../conversations/conversation-state';
 import type { OpenConversation } from '../../conversations/conversations';
-import { intentNames } from '../conversation-transcript/conversation-transcript';
+import { intentNames } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
 
 export type ConversationTabsProps = {

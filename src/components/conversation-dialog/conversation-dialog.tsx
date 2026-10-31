@@ -1,27 +1,17 @@
 'use client';
 
-import {
-  Alert,
-  Box,
-  Button,
-  Dialog,
-  Heading,
-  Inline,
-  Stack,
-} from '@blockle/blocks';
+import { Alert, Box, Button, Dialog, Heading, Inline } from '@blockle/blocks';
 import { type FC, useEffect, useId, useState } from 'react';
 
 import { loadConversation } from '../../app/conversations/actions';
 import type { OpenConversation } from '../../conversations/conversations';
+import { ConversationChat } from '../conversation-chat/conversation-chat';
+import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import {
   ConversationTabs,
   conversationPanelId,
   conversationTabId,
 } from '../conversation-tabs/conversation-tabs';
-import {
-  ConversationTranscript,
-  type ConversationWithTranscript,
-} from '../conversation-transcript/conversation-transcript';
 import { Icon } from '../icon/icon';
 import { useConversationRevision } from '../live-updates/live-updates';
 import * as styles from './conversation-dialog.css';
@@ -40,13 +30,14 @@ export type ConversationDialogProps = {
   error?: string | undefined;
 };
 
-type ConversationPanelProps = { conversationId: number };
+type ConversationPanelProps = { open: OpenConversation };
 
 /**
- * The shown tab's content: the Conversation's transcript, loaded when it
+ * The shown tab's content: the Conversation's chat, loaded when it
  * shows and again on every Conversation change `LiveUpdates` hears of.
  */
-const ConversationPanel: FC<ConversationPanelProps> = ({ conversationId }) => {
+const ConversationPanel: FC<ConversationPanelProps> = ({ open }) => {
+  const conversationId = open.conversation.id;
   const revision = useConversationRevision();
   const [item, setItem] = useState<ConversationWithTranscript>();
   const [error, setError] = useState<string>();
@@ -77,12 +68,21 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ conversationId }) => {
   if (error) {
     return <Alert intent="danger">{error}</Alert>;
   }
-  return item ? <ConversationTranscript item={item} /> : null;
+  return item ? (
+    <ConversationChat
+      item={item}
+      title={
+        open.conversation.ticketNumber === null
+          ? open.projectName
+          : `T${open.conversation.ticketNumber} ${open.ticketTitle ?? ''}`.trim()
+      }
+    />
+  ) : null;
 };
 
 /**
  * The one modal dialog every Conversation is held in (ADR 0019, T608): a tab
- * per open Conversation, and the shown tab's transcript below. Escape, the X
+ * per open Conversation, and the shown tab's chat below. Escape, the X
  * and a click on the backdrop hide it and keep every tab; a tab's close button
  * closes that Conversation. Mount it once, through
  * `ConversationDialogProvider`.
@@ -96,6 +96,7 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
   error,
 }) => {
   const titleId = useId();
+  const selected = tabs.find((tab) => tab.conversation.id === selectedId);
 
   return (
     <Dialog
@@ -106,7 +107,7 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
       suppressHydrationWarning
     >
       {selectedId !== undefined && (
-        <Stack gap={3} padding={4}>
+        <div className={styles.content}>
           <Inline gap={2} alignY="center" justifyContent="space-between">
             <Heading id={titleId} level={2} fontSize="large">
               Conversations
@@ -132,11 +133,11 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             role="tabpanel"
             id={conversationPanelId(selectedId)}
             aria-labelledby={conversationTabId(selectedId)}
-            overflowBlock="auto"
+            className={styles.panel}
           >
-            <ConversationPanel key={selectedId} conversationId={selectedId} />
+            {selected && <ConversationPanel key={selectedId} open={selected} />}
           </Box>
-        </Stack>
+        </div>
       )}
     </Dialog>
   );

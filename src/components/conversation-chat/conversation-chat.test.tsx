@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,10 +12,8 @@ import type {
   TranscriptEntry,
 } from '../../conversations/conversations';
 import { renderWithTheme } from '../../test/render';
-import {
-  ConversationTranscript,
-  type ConversationWithTranscript,
-} from './conversation-transcript';
+import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
+import { ConversationChat } from './conversation-chat';
 
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
@@ -63,7 +61,7 @@ const one = (
 const ok = (state: Conversation['state'] = 'running') =>
   ({ ok: true, conversation: conversation({ state }) }) as const;
 
-describe('ConversationTranscript', () => {
+describe('ConversationChat', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
     vi.mocked(replyToConversation).mockReset();
@@ -72,7 +70,8 @@ describe('ConversationTranscript', () => {
 
   it('shows the transcript with who said what', () => {
     renderWithTheme(
-      <ConversationTranscript
+      <ConversationChat
+        title="T4 A Ticket"
         item={one({}, [
           entry({ id: 1, role: 'user', text: 'Please start' }),
           entry({ id: 2, role: 'agent', text: 'On it' }),
@@ -87,14 +86,116 @@ describe('ConversationTranscript', () => {
     ).getAllByRole('listitem');
     expect(lines).toHaveLength(4);
     expect(within(lines[0]).getByText('You')).toBeInTheDocument();
+    expect(lines[0]).toHaveAttribute('data-side', 'end');
+    expect(lines[1]).toHaveAttribute('data-side', 'start');
     expect(within(lines[1]).getByText('Agent')).toBeInTheDocument();
     expect(within(lines[2]).getByText('Read {"file_path":"a"}')).toBeVisible();
     expect(within(lines[3]).getByText('Went wrong')).toBeInTheDocument();
   });
 
+  it('shows the title, intent, state and cost in the header', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ intent: 'triage', state: 'running', costUsd: 0.5 })}
+      />,
+    );
+
+    expect(screen.getByText('T4 A Ticket')).toBeInTheDocument();
+    expect(screen.getByText('Triage, working, $0.50')).toBeInTheDocument();
+  });
+
+  it('sends a reply with Enter and clears the field', async () => {
+    vi.mocked(replyToConversation).mockResolvedValue(ok());
+    renderWithTheme(<ConversationChat title="T4" item={one({ id: 7 })} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Reply' }),
+      'Go on{Enter}',
+    );
+
+    expect(replyToConversation).toHaveBeenCalledWith({
+      conversationId: 7,
+      text: 'Go on',
+    });
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Reply' })).toHaveValue(''),
+    );
+  });
+
+  it('starts a new line with Shift+Enter without sending', async () => {
+    renderWithTheme(<ConversationChat title="T4" item={one({ id: 7 })} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Reply' }),
+      'one{Shift>}{Enter}{/Shift}two',
+    );
+
+    expect(replyToConversation).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Reply' })).toHaveValue(
+      'one\ntwo',
+    );
+  });
+
+  it('does not send an empty reply with Enter', async () => {
+    renderWithTheme(<ConversationChat title="T4" item={one({ id: 7 })} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Reply' }),
+      '{Enter}',
+    );
+
+    expect(replyToConversation).not.toHaveBeenCalled();
+  });
+
+  it('keeps the reply and shows the reason when Enter is refused', async () => {
+    vi.mocked(replyToConversation).mockResolvedValue({
+      ok: false,
+      error: 'Nope.',
+    });
+    renderWithTheme(<ConversationChat title="T4" item={one({})} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Reply' }),
+      'Go on{Enter}',
+    );
+
+    expect(await screen.findByText('Nope.')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Reply' })).toHaveValue('Go on');
+  });
+
+  it('scrolls to the newest message when one arrives', () => {
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(500);
+    const first = one({}, [entry({ id: 1, text: 'a' })]);
+    const { rerender } = renderWithTheme(
+      <ConversationChat title="T4" item={first} />,
+    );
+    const list = screen.getByRole('list', { name: 'Transcript' });
+    const scroller = list.parentElement as HTMLElement;
+    scroller.scrollTop = 0;
+
+    scrollHeight.mockReturnValue(900);
+    rerender(
+      <ConversationChat
+        title="T4"
+        item={one({}, [
+          entry({ id: 1, text: 'a' }),
+          entry({ id: 2, text: 'b' }),
+        ])}
+      />,
+    );
+
+    expect(scroller.scrollTop).toBe(900);
+    scrollHeight.mockRestore();
+  });
+
   it('sends a reply and clears the field', async () => {
     vi.mocked(replyToConversation).mockResolvedValue(ok());
-    renderWithTheme(<ConversationTranscript item={one({ id: 7 })} />);
+    renderWithTheme(
+      <ConversationChat title="T4 A Ticket" item={one({ id: 7 })} />,
+    );
 
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Reply' }),
@@ -114,7 +215,7 @@ describe('ConversationTranscript', () => {
       ok: false,
       error: 'This Project has no repository path.',
     });
-    renderWithTheme(<ConversationTranscript item={one({})} />);
+    renderWithTheme(<ConversationChat title="T4 A Ticket" item={one({})} />);
 
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Reply' }),
@@ -131,7 +232,10 @@ describe('ConversationTranscript', () => {
   it('stops a Conversation whose run is alive', async () => {
     vi.mocked(stopConversation).mockResolvedValue(ok('stopped'));
     renderWithTheme(
-      <ConversationTranscript item={one({ id: 7, state: 'running' })} />,
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ id: 7, state: 'running' })}
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
@@ -142,7 +246,8 @@ describe('ConversationTranscript', () => {
   it('shows Allow and Deny for a pending permission request and sends the answer', async () => {
     vi.mocked(answerConversationPermission).mockResolvedValue(ok());
     renderWithTheme(
-      <ConversationTranscript
+      <ConversationChat
+        title="T4 A Ticket"
         item={one({ state: 'waiting' }, [
           entry({
             id: 9,
@@ -172,7 +277,8 @@ describe('ConversationTranscript', () => {
 
   it('shows how an answered or expired request ended, without buttons', () => {
     renderWithTheme(
-      <ConversationTranscript
+      <ConversationChat
+        title="T4 A Ticket"
         item={one({}, [
           entry({
             id: 1,
@@ -206,7 +312,10 @@ describe('ConversationTranscript', () => {
 
   it('says an interrupted Conversation was interrupted and lets a reply resume it', () => {
     renderWithTheme(
-      <ConversationTranscript item={one({ state: 'interrupted' })} />,
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ state: 'interrupted' })}
+      />,
     );
 
     expect(screen.getByText(/was interrupted/)).toBeInTheDocument();
@@ -218,7 +327,7 @@ describe('ConversationTranscript', () => {
 
   it('says a stopped Conversation was stopped and lets a reply resume it', () => {
     renderWithTheme(
-      <ConversationTranscript item={one({ state: 'stopped' })} />,
+      <ConversationChat title="T4 A Ticket" item={one({ state: 'stopped' })} />,
     );
 
     expect(screen.getByText(/was stopped/)).toBeInTheDocument();
@@ -227,7 +336,8 @@ describe('ConversationTranscript', () => {
 
   it('links the Tickets named in the transcript', () => {
     renderWithTheme(
-      <ConversationTranscript
+      <ConversationChat
+        title="T4 A Ticket"
         item={one({}, [entry({ id: 1, text: 'Created T41, then T42.' })])}
       />,
     );

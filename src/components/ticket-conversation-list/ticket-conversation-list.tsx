@@ -9,7 +9,7 @@ import {
   formatCost,
   intentNames,
   stateNames,
-} from '../conversation-transcript/conversation-transcript';
+} from '../conversation-labels/conversation-labels';
 
 export type TicketConversationListProps = {
   /** The Ticket's Conversations, newest first. */
