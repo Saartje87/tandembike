@@ -58,7 +58,8 @@ describe('The Claude runner', () => {
         append: 'Your situation.',
       },
     });
-    expect(options.permissionMode).toBeUndefined();
+    // A repository's defaultMode must not skip the Allow/Deny relay.
+    expect(options.permissionMode).toBe('default');
   });
 
   it('feeds the first message and every later reply into the streaming input', async () => {

@@ -110,6 +110,9 @@ export function createClaudeRunner(): AgentRunner {
         options: {
           cwd,
           ...(resume === undefined ? {} : { resume }),
+          // Pinned, so a repository's or the user's defaultMode (such as
+          // bypassPermissions) cannot skip the relay below.
+          permissionMode: 'default',
           // What a terminal would ask the User comes to the Conversation.
           canUseTool: async (toolName, toolInput) =>
             (await askPermission({ toolName, input: toolInput })) === 'allow'
