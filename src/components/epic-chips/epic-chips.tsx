@@ -14,7 +14,8 @@ import { useDroppable } from '@dnd-kit/react';
 import { type FC, useId, useRef, useState } from 'react';
 
 import { type BoardFilter, ticketOnBoardPath } from '../../app/lib/paths';
-import { epicLinkOf, type Ticket } from '../../tickets/tickets';
+import { epicLinkOf } from '../../tickets/epic-link';
+import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { Icon } from '../icon/icon';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
