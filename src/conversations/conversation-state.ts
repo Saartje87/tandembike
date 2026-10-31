@@ -32,6 +32,8 @@ export const transcriptRoles = [
   'tool',
   'error',
   'permission',
+  /** Tickets the Agent created, as "Created T1, T2". */
+  'created',
 ] as const;
 export type TranscriptRole = (typeof transcriptRoles)[number];
 

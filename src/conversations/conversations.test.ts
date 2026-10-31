@@ -299,6 +299,22 @@ describe('Replying to a Conversation', () => {
     expect(conversations.get(id).state).toBe('interrupted');
   });
 
+  it('records the Tickets a run created as one transcript entry', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add coupons',
+    });
+
+    runner.runs[0].emit({ type: 'created', numbers: [41, 42] });
+
+    expect(conversations.transcript(id).at(-1)).toMatchObject({
+      role: 'created',
+      text: 'Created T41, T42',
+    });
+  });
+
   it('resumes an idle Conversation whose run has ended', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({

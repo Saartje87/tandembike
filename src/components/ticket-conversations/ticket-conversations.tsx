@@ -65,8 +65,9 @@ export const stateNames: Record<ConversationState, string> = {
   stopped: 'stopped',
 };
 
-/** A Conversation's cost so far, in US dollars to the cent. */
-const formatCost = (costUsd: number) => `$${costUsd.toFixed(2)}`;
+/** A Conversation's cost so far, in US dollars; under a cent, to 4 places. */
+const formatCost = (costUsd: number) =>
+  `$${costUsd > 0 && costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2)}`;
 
 const speakerNames: Record<TranscriptRole, string> = {
   user: 'You',
@@ -74,6 +75,7 @@ const speakerNames: Record<TranscriptRole, string> = {
   tool: 'Tool',
   error: 'Error',
   permission: 'Permission',
+  created: 'Created',
 };
 
 const permissionOutcomes: Record<
@@ -89,7 +91,7 @@ const permissionOutcomes: Record<
 const hasRun = (state: ConversationState) =>
   state === 'running' || state === 'waiting' || state === 'idle';
 
-/** Text with each `T12` linked to that Ticket, such as those an Agent created. */
+/** Text with each `T12` linked to that Ticket. */
 const withTicketLinks = (text: string): ReactNode[] =>
   text.split(/\b(T[1-9]\d*)\b/).map((part, index) =>
     index % 2 === 1 ? (
@@ -147,7 +149,9 @@ const EntryLine: FC<EntryLineProps> = ({ entry }) => {
             fontSize={entry.role === 'tool' ? 'small' : undefined}
             color={entry.role === 'tool' ? 'muted' : undefined}
           >
-            {withTicketLinks(entry.text)}
+            {entry.role === 'created'
+              ? withTicketLinks(entry.text)
+              : entry.text}
           </Text>
           {entry.permission === 'pending' && (
             <Inline gap={2}>

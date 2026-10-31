@@ -217,6 +217,13 @@ export function createConversations({
       case 'tool':
         append(id, 'tool', event.text);
         break;
+      case 'created':
+        append(
+          id,
+          'created',
+          `Created ${event.numbers.map((number) => `T${number}`).join(', ')}`,
+        );
+        break;
       case 'turn':
         if (event.error) {
           append(id, 'error', event.error);

@@ -301,10 +301,36 @@ describe('TicketConversations', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('links the Tickets named in the transcript', () => {
+  it('shows a small cost to more than the cent', () => {
     renderWithTheme(
       <TicketConversations
-        items={[one({}, [entry({ id: 1, text: 'Created T41, then T42.' })])]}
+        items={[one({ costUsd: 0.0034 }), one({ id: 2, costUsd: 0 })]}
+      />,
+    );
+
+    expect(
+      screen.getByText(/\$0\.0034/, { selector: 'p, span' }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not link Ticket numbers the Agent merely mentions', () => {
+    renderWithTheme(
+      <TicketConversations
+        items={[one({}, [entry({ id: 1, text: 'See T41 for context.' })])]}
+      />,
+    );
+
+    expect(screen.queryByRole('link', { name: 'T41' })).not.toBeInTheDocument();
+  });
+
+  it('links the Tickets the Agent created', () => {
+    renderWithTheme(
+      <TicketConversations
+        items={[
+          one({}, [
+            entry({ id: 1, role: 'created', text: 'Created T41, T42' }),
+          ]),
+        ]}
       />,
     );
 
