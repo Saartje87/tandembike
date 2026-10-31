@@ -46,8 +46,8 @@ const item = {
     {
       id: 2,
       conversationId: 9,
-      role: 'agent' as const,
-      text: 'I created T41 and T42.',
+      role: 'created' as const,
+      text: 'Created T41, T42',
       permission: null,
       createdAt: at,
     },

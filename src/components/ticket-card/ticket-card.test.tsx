@@ -310,6 +310,7 @@ describe('Selecting a TicketCard', () => {
       vi.mocked(currentConversationActivity).mockResolvedValue({
         ...activity,
         needsYouCount: activity.needsYou.length,
+        needsYouByProject: {},
       });
       renderWithTheme(
         <ConversationActivityProvider>

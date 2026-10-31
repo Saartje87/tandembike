@@ -148,6 +148,7 @@ describe('AppHeader', () => {
       running: [],
       needsYou: [4],
       needsYouCount: 3,
+      needsYouByProject: {},
     });
     renderWithTheme(
       <ConversationActivityProvider>
@@ -165,6 +166,7 @@ describe('AppHeader', () => {
       running: [],
       needsYou: [],
       needsYouCount: 0,
+      needsYouByProject: {},
     });
     renderWithTheme(
       <ConversationActivityProvider>

@@ -14,6 +14,7 @@ import type {
   ConversationState,
 } from '../../conversations/conversation-state';
 import { AppLink } from '../app-link/app-link';
+import { useProjectNeedsYouCount } from '../conversation-activity/conversation-activity';
 import {
   intentNames,
   stateNames,
@@ -57,8 +58,13 @@ export const ProjectConversations: FC<ProjectConversationsProps> = ({
     onBoard === pathname
       ? boardFilterOf(search.get('q') ?? undefined, search.getAll('label'))
       : undefined;
-  const label =
-    items.length === 0 ? 'Conversations' : `Conversations (${items.length})`;
+  const needsYou = useProjectNeedsYouCount(projectId);
+  const label = [
+    items.length === 0 ? 'Conversations' : `Conversations (${items.length})`,
+    needsYou === 0 ? null : `${needsYou} need${needsYou === 1 ? 's' : ''} you`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   return (
     <>

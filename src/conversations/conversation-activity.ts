@@ -7,15 +7,22 @@ export type ConversationActivity = {
   needsYou: number[];
   /** How many Conversations wait for the User, on Tickets or Projects. */
   needsYouCount: number;
+  /** The same count per Project id. */
+  needsYouByProject: Record<number, number>;
 };
 
 export const noConversationActivity: ConversationActivity = {
   running: [],
   needsYou: [],
   needsYouCount: 0,
+  needsYouByProject: {},
 };
 
-type ActivityRow = { ticketNumber: number | null; state: ConversationState };
+type ActivityRow = {
+  ticketNumber: number | null;
+  projectId: number;
+  state: ConversationState;
+};
 
 /** Whether a Conversation in this state waits for the User (T593). */
 const needsYou = (state: ConversationState) =>
@@ -29,6 +36,14 @@ const ticketsOf = (rows: ActivityRow[]): number[] => [
   ),
 ];
 
+const countBy = (ids: number[]): Record<number, number> => {
+  const counts: Record<number, number> = {};
+  for (const id of ids) {
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+};
+
 /** What the Conversations are doing, for the Ticket cards and the header. */
 export function conversationActivity(
   conversations: ActivityRow[],
@@ -40,5 +55,6 @@ export function conversationActivity(
     ),
     needsYou: ticketsOf(waiting),
     needsYouCount: waiting.length,
+    needsYouByProject: countBy(waiting.map(({ projectId }) => projectId)),
   };
 }

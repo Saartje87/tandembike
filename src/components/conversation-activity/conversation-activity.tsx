@@ -68,3 +68,7 @@ export const useTicketActivity = (
 /** How many Conversations, in all Projects, wait for the User. */
 export const useNeedsYouCount = (): number =>
   useContext(Activity).needsYouCount;
+
+/** How many Conversations of Project `projectId` wait for the User. */
+export const useProjectNeedsYouCount = (projectId: number): number =>
+  useContext(Activity).needsYouByProject[projectId] ?? 0;

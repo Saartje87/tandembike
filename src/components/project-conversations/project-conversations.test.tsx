@@ -2,8 +2,10 @@ import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { currentConversationActivity } from '../../app/conversations/actions';
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
+import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { ProjectConversations } from './project-conversations';
 
 const pathname = vi.hoisted(() => ({ current: '/project/3/cycle/7' }));
@@ -13,6 +15,13 @@ vi.mock('next/navigation', () => ({
     new URLSearchParams(
       pathname.current.endsWith('settings') ? '' : 'q=a&label=bug',
     ),
+}));
+
+vi.mock('../../app/conversations/actions', () => ({
+  currentConversationActivity: vi.fn(),
+}));
+vi.mock('../live-updates/live-updates', () => ({
+  useConversationRevision: () => 0,
 }));
 
 showOpenPopovers();
@@ -42,6 +51,26 @@ describe('ProjectConversations', () => {
 
     expect(
       screen.getByRole('button', { name: 'Conversations (2)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows how many Conversations of the Project need the User', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue({
+      running: [],
+      needsYou: [],
+      needsYouCount: 5,
+      needsYouByProject: { 3: 2, 8: 3 },
+    });
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <ProjectConversations projectId={3} items={items} />
+      </ConversationActivityProvider>,
+    );
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Conversations (2), 2 need you',
+      }),
     ).toBeInTheDocument();
   });
 

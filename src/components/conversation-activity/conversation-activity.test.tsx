@@ -72,6 +72,7 @@ describe('ConversationActivityProvider', () => {
       running: [4],
       needsYou: [],
       needsYouCount: 0,
+      needsYouByProject: {},
     });
     show();
     expect(
@@ -82,6 +83,7 @@ describe('ConversationActivityProvider', () => {
       running: [],
       needsYou: [4],
       needsYouCount: 2,
+      needsYouByProject: {},
     });
     act(() => {
       FakeEventSource.instances[0]?.onmessage?.(
