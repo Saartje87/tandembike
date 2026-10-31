@@ -8,21 +8,31 @@ import type { OpenConversation } from '../../conversations/conversations';
 import { intentNames } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
 
+/** A draft's tab: a Conversation the User has not started yet (T611). */
+export type DraftTab = { key: string; label: string };
+
 export type ConversationTabsProps = {
   tabs: OpenConversation[];
-  /** The Conversation whose tab is shown. */
-  selectedId: number;
+  /** The Conversation whose tab is shown; none while a draft is shown. */
+  selectedId: number | undefined;
   onSelect: (conversationId: number) => void;
   /** Called with the Conversation whose close button was pressed. */
   onClose: (conversationId: number) => void;
+  /** Draft tabs, after the Conversations. */
+  drafts?: DraftTab[];
+  /** The draft whose tab is shown. */
+  selectedDraftKey?: string | undefined;
+  onSelectDraft?: (key: string) => void;
+  /** Called with the draft whose close button was pressed. */
+  onCloseDraft?: (key: string) => void;
 };
 
 /** The DOM id of a Conversation's tab, for the panel that `aria-labelledby` names. */
-export const conversationTabId = (conversationId: number) =>
+export const conversationTabId = (conversationId: number | string) =>
   `conversation-tab-${conversationId}`;
 
 /** The DOM id of a Conversation's tab panel. */
-export const conversationPanelId = (conversationId: number) =>
+export const conversationPanelId = (conversationId: number | string) =>
   `conversation-panel-${conversationId}`;
 
 /** `T42 · Triage`, or `<Project> · New Ticket` for a Conversation about a Project. */
@@ -50,9 +60,32 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
   selectedId,
   onSelect,
   onClose,
+  drafts = [],
+  selectedDraftKey,
+  onSelectDraft,
+  onCloseDraft,
 }) => {
+  const items = [
+    ...tabs.map((item) => ({
+      key: item.conversation.id,
+      label: tabLabel(item),
+      text: `${tabLabel(item)} · ${tabStates[item.conversation.state]}`,
+      selected: item.conversation.id === selectedId,
+      select: () => onSelect(item.conversation.id),
+      close: () => onClose(item.conversation.id),
+    })),
+    ...drafts.map((draft) => ({
+      key: draft.key,
+      label: draft.label,
+      text: draft.label,
+      selected: draft.key === selectedDraftKey,
+      select: () => onSelectDraft?.(draft.key),
+      close: () => onCloseDraft?.(draft.key),
+    })),
+  ];
+
   const move = (event: KeyboardEvent, index: number) => {
-    const last = tabs.length - 1;
+    const last = items.length - 1;
     const target = {
       ArrowRight: index === last ? 0 : index + 1,
       ArrowLeft: index === 0 ? last : index - 1,
@@ -63,9 +96,8 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
       return;
     }
     event.preventDefault();
-    const id = tabs[target].conversation.id;
-    onSelect(id);
-    document.getElementById(conversationTabId(id))?.focus();
+    items[target].select();
+    document.getElementById(conversationTabId(items[target].key))?.focus();
   };
 
   return (
@@ -76,37 +108,33 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
         gap={1}
         flexWrap="nowrap"
       >
-        {tabs.map((item, index) => {
-          const { id, state } = item.conversation;
-          const selected = id === selectedId;
-          return (
-            <Fragment key={id}>
-              <Button
-                id={conversationTabId(id)}
-                type="button"
-                role="tab"
-                size="small"
-                variant={selected ? 'solid' : 'ghost'}
-                aria-selected={selected}
-                aria-controls={conversationPanelId(id)}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => onSelect(id)}
-                onKeyDown={(event) => move(event, index)}
-              >
-                {`${tabLabel(item)} · ${tabStates[state]}`}
-              </Button>
-              <Button
-                type="button"
-                size="small"
-                variant="ghost"
-                aria-label={`Close ${tabLabel(item)}`}
-                onClick={() => onClose(id)}
-              >
-                <Icon name="x-mark" size="small" />
-              </Button>
-            </Fragment>
-          );
-        })}
+        {items.map((item, index) => (
+          <Fragment key={item.key}>
+            <Button
+              id={conversationTabId(item.key)}
+              type="button"
+              role="tab"
+              size="small"
+              variant={item.selected ? 'solid' : 'ghost'}
+              aria-selected={item.selected}
+              aria-controls={conversationPanelId(item.key)}
+              tabIndex={item.selected ? 0 : -1}
+              onClick={item.select}
+              onKeyDown={(event) => move(event, index)}
+            >
+              {item.text}
+            </Button>
+            <Button
+              type="button"
+              size="small"
+              variant="ghost"
+              aria-label={`Close ${item.label}`}
+              onClick={item.close}
+            >
+              <Icon name="x-mark" size="small" />
+            </Button>
+          </Fragment>
+        ))}
       </Inline>
     </Box>
   );

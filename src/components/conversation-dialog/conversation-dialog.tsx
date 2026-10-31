@@ -4,8 +4,16 @@ import { Alert, Box, Button, Dialog, Heading, Inline } from '@blockle/blocks';
 import { type FC, useEffect, useId, useState } from 'react';
 
 import { loadConversation } from '../../app/conversations/actions';
-import type { OpenConversation } from '../../conversations/conversations';
+import type {
+  Conversation,
+  OpenConversation,
+} from '../../conversations/conversations';
 import { ConversationChat } from '../conversation-chat/conversation-chat';
+import {
+  ConversationDraft,
+  type Draft,
+  draftLabel,
+} from '../conversation-draft/conversation-draft';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import {
   ConversationTabs,
@@ -19,8 +27,18 @@ import * as styles from './conversation-dialog.css';
 export type ConversationDialogProps = {
   /** Every open Conversation, in the order opened: one tab each. */
   tabs: OpenConversation[];
-  /** The Conversation whose tab is shown; the dialog is hidden without one. */
+  /** The Conversation whose tab is shown; the dialog is hidden without one or a draft. */
   selectedId: number | undefined;
+  /** Drafts (T611), after the Conversations: one tab each. */
+  drafts?: Draft[];
+  /** The draft whose tab is shown. */
+  selectedDraftKey?: string | undefined;
+  onSelectDraft?: (key: string) => void;
+  /** Closing a draft discards it. */
+  onCloseDraft?: (key: string) => void;
+  onDraftTextChange?: (key: string, text: string) => void;
+  /** Called with the Conversation a draft's Send started and the draft that became it. */
+  onDraftStarted?: (key: string, conversation: Conversation) => void;
   onSelect: (conversationId: number) => void;
   /** Hides the dialog; every tab stays. */
   onHide: () => void;
@@ -90,6 +108,12 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open }) => {
 export const ConversationDialog: FC<ConversationDialogProps> = ({
   tabs,
   selectedId,
+  drafts = [],
+  selectedDraftKey,
+  onSelectDraft,
+  onCloseDraft,
+  onDraftTextChange,
+  onDraftStarted,
   onSelect,
   onHide,
   onClose,
@@ -97,16 +121,18 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
 }) => {
   const titleId = useId();
   const selected = tabs.find((tab) => tab.conversation.id === selectedId);
+  const selectedDraft = drafts.find((draft) => draft.key === selectedDraftKey);
+  const shownKey = selected ? selectedId : selectedDraft?.key;
 
   return (
     <Dialog
-      open={selectedId !== undefined}
+      open={shownKey !== undefined}
       onRequestClose={onHide}
       className={styles.dialog}
       aria-labelledby={titleId}
       suppressHydrationWarning
     >
-      {selectedId !== undefined && (
+      {shownKey !== undefined && (
         <div className={styles.content}>
           <Inline gap={2} alignY="center" justifyContent="space-between">
             <Heading id={titleId} level={2} fontSize="large">
@@ -127,15 +153,34 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             selectedId={selectedId}
             onSelect={onSelect}
             onClose={onClose}
+            drafts={drafts.map((draft) => ({
+              key: draft.key,
+              label: draftLabel(draft),
+            }))}
+            selectedDraftKey={selectedDraftKey}
+            {...(onSelectDraft ? { onSelectDraft } : {})}
+            {...(onCloseDraft ? { onCloseDraft } : {})}
           />
           {error && <Alert intent="danger">{error}</Alert>}
           <Box
             role="tabpanel"
-            id={conversationPanelId(selectedId)}
-            aria-labelledby={conversationTabId(selectedId)}
+            id={conversationPanelId(shownKey)}
+            aria-labelledby={conversationTabId(shownKey)}
             className={styles.panel}
           >
             {selected && <ConversationPanel key={selectedId} open={selected} />}
+            {selectedDraft && (
+              <ConversationDraft
+                key={selectedDraft.key}
+                draft={selectedDraft}
+                onTextChange={(text) =>
+                  onDraftTextChange?.(selectedDraft.key, text)
+                }
+                onStarted={(conversation) =>
+                  onDraftStarted?.(selectedDraft.key, conversation)
+                }
+              />
+            )}
           </Box>
         </div>
       )}

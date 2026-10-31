@@ -463,6 +463,9 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       <TicketAgentActions
         ticketNumber={ticket.number}
         onStarted={dialog.open}
+        onAsk={() =>
+          dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })
+        }
       />
       <TicketConversationList conversations={conversations} />
       <TicketComments
