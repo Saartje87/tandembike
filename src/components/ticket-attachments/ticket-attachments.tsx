@@ -9,19 +9,32 @@ import {
   Stack,
   Text,
 } from '@blockle/blocks';
-import { type FC, useId, useState, useTransition } from 'react';
+import {
+  type DragEvent,
+  type FC,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
+import { useForm } from 'react-hook-form';
 
 import { modeColors } from '../../app/lib/mode-colors';
 import { attachmentPath } from '../../app/lib/paths';
-import { removeTicketAttachment } from '../../app/tickets/actions';
+import {
+  addTicketAttachments,
+  removeTicketAttachment,
+} from '../../app/tickets/actions';
 import { formatSize, isPreviewable } from '../../tickets/attachment-preview';
 import type { Attachment } from '../../tickets/attachments';
 import { actorNames } from '../activity-entry/activity-entry';
 import { AppLink } from '../app-link/app-link';
 import { DateTime } from '../date-time/date-time';
+import { FieldError } from '../field-error/field-error';
 import * as styles from './ticket-attachments.css';
 
 export type TicketAttachmentsProps = {
+  ticketNumber: number;
   /** The Ticket's Attachments, in the order they were added. */
   attachments: Attachment[];
 };
@@ -137,29 +150,98 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
   );
 };
 
-/** A Ticket's Attachments, below its description. */
+/**
+ * A Ticket's Attachments, below its description, with a button to add files
+ * and a drop target for them. A refusal shows on the section.
+ */
 export const TicketAttachments: FC<TicketAttachmentsProps> = ({
+  ticketNumber,
   attachments,
 }) => {
   const headingId = useId();
+  const errorId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const {
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm();
+  const reason = errors.root?.server?.message;
+
+  const add = (files: File[]) => {
+    if (files.length === 0 || isSubmitting) {
+      return;
+    }
+    clearErrors('root.server');
+    void handleSubmit(async () => {
+      const form = new FormData();
+      form.set('number', String(ticketNumber));
+      for (const file of files) {
+        form.append('files', file);
+      }
+      const result = await addTicketAttachments(form);
+      if (!result.ok) {
+        setError('root.server', { message: result.error });
+      }
+    })();
+  };
+
+  const drop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    add(Array.from(event.dataTransfer.files));
+  };
+
   return (
-    <Stack gap={2}>
-      <Heading id={headingId} level={3} fontSize="medium">
-        Attachments
-      </Heading>
-      {attachments.length === 0 ? (
-        <Text tag="p" color="muted">
-          No Attachments
-        </Text>
-      ) : (
-        <Stack gap={2} listStyle="none" role="list" asChild>
-          <ul aria-labelledby={headingId}>
-            {attachments.map((attachment) => (
-              <AttachmentItem key={attachment.id} attachment={attachment} />
-            ))}
-          </ul>
-        </Stack>
-      )}
+    <Stack gap={2} asChild>
+      <section
+        aria-labelledby={headingId}
+        aria-describedby={reason ? errorId : undefined}
+        // A drop only reaches onDrop when dragover stops the browser opening the file.
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={drop}
+      >
+        <Inline gap={2} alignY="center" justifyContent="space-between">
+          <Heading id={headingId} level={3} fontSize="medium">
+            Attachments
+          </Heading>
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            disabled={isSubmitting}
+            onClick={() => input.current?.click()}
+          >
+            {isSubmitting ? 'Adding...' : 'Add files'}
+          </Button>
+          <input
+            ref={input}
+            type="file"
+            multiple
+            hidden
+            aria-label="Files to attach"
+            onChange={(event) => {
+              add(Array.from(event.target.files ?? []));
+              // So picking the same file again still fires a change.
+              event.target.value = '';
+            }}
+          />
+        </Inline>
+        <FieldError id={errorId} reason={reason} />
+        {attachments.length === 0 ? (
+          <Text tag="p" color="muted">
+            No Attachments
+          </Text>
+        ) : (
+          <Stack gap={2} listStyle="none" role="list" asChild>
+            <ul aria-labelledby={headingId}>
+              {attachments.map((attachment) => (
+                <AttachmentItem key={attachment.id} attachment={attachment} />
+              ))}
+            </ul>
+          </Stack>
+        )}
+      </section>
     </Stack>
   );
 };

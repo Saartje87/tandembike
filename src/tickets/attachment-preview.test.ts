@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatSize, isPreviewable } from './attachment-preview';
+import {
+  formatSize,
+  isPreviewable,
+  isTextMediaType,
+} from './attachment-preview';
 
 describe('isPreviewable', () => {
   it('accepts PNG, JPEG, GIF and WebP only', () => {
@@ -11,6 +15,26 @@ describe('isPreviewable', () => {
     ).toBe(true);
     expect(isPreviewable('image/svg+xml')).toBe(false);
     expect(isPreviewable('application/pdf')).toBe(false);
+  });
+});
+
+describe('isTextMediaType', () => {
+  it('accepts text/*, JSON, XML, YAML and JavaScript types', () => {
+    for (const type of [
+      'text/plain',
+      'text/html',
+      'application/json',
+      'application/ld+json',
+      'application/xml',
+      'image/svg+xml',
+      'application/yaml',
+      'application/javascript',
+    ]) {
+      expect(isTextMediaType(type)).toBe(true);
+    }
+    expect(isTextMediaType('application/pdf')).toBe(false);
+    expect(isTextMediaType('image/png')).toBe(false);
+    expect(isTextMediaType('application/octet-stream')).toBe(false);
   });
 });
 
