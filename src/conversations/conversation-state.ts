@@ -21,5 +21,23 @@ export const conversationStates = [
 export type ConversationState = (typeof conversationStates)[number];
 
 /** Who wrote a transcript entry. */
-export const transcriptRoles = ['user', 'agent', 'tool', 'error'] as const;
+export const transcriptRoles = [
+  'user',
+  'agent',
+  'tool',
+  'error',
+  'permission',
+] as const;
 export type TranscriptRole = (typeof transcriptRoles)[number];
+
+/**
+ * Where a permission request in the transcript is: `pending` waits for the
+ * User's Allow or Deny; `expired` was never answered because its run ended.
+ */
+export const permissionStatuses = [
+  'pending',
+  'allowed',
+  'denied',
+  'expired',
+] as const;
+export type PermissionStatus = (typeof permissionStatuses)[number];

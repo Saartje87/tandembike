@@ -428,3 +428,102 @@ describe('Live updates', () => {
     expect(seen).toHaveBeenCalledWith({ type: 'conversation', id });
   });
 });
+
+describe('Permission requests', () => {
+  const request = { toolName: 'Bash', input: { command: 'npm test' } };
+
+  async function started() {
+    const world = setup();
+    const conversation = await world.conversations.start({
+      projectId: world.project.id,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    return { ...world, conversation, run: world.runner.runs[0] };
+  }
+
+  it('shows a request in the transcript, marks the Conversation waiting and holds the run until the User answers', async () => {
+    const { conversations, conversation, run } = await started();
+
+    let answer: string | undefined;
+    void run.options.askPermission(request).then((result) => {
+      answer = result;
+    });
+    await Promise.resolve();
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      role: 'permission',
+      text: 'Bash {"command":"npm test"}',
+      permission: 'pending',
+    });
+    expect(answer).toBeUndefined();
+  });
+
+  it('lets the run go on after Allow', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    await conversations.answerPermission(entry?.id ?? 0, true);
+
+    expect(await pending).toBe('allow');
+    expect(conversations.get(conversation.id).state).toBe('running');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'allowed',
+    });
+  });
+
+  it('tells the run no after Deny', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    await conversations.answerPermission(entry?.id ?? 0, false);
+
+    expect(await pending).toBe('deny');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'denied',
+    });
+  });
+
+  it('refuses a second answer', async () => {
+    const { conversations, run, conversation } = await started();
+    void run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+    await conversations.answerPermission(entry?.id ?? 0, true);
+
+    const error = await failure(
+      conversations.answerPermission(entry?.id ?? 0, false),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('denies a pending request when the Conversation is stopped', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askPermission(request);
+
+    await conversations.stop(conversation.id);
+
+    expect(await pending).toBe('deny');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'expired',
+    });
+  });
+
+  it('expires pending requests when the server restarts', async () => {
+    const { conversations, conversation, run, restart } = await started();
+    void run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    const next = restart();
+    next.interruptStale();
+
+    expect(next.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'expired',
+    });
+    const error = await failure(next.answerPermission(entry?.id ?? 0, true));
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+});

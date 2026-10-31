@@ -169,6 +169,13 @@
       "when": 1793480811039,
       "tag": "0023_cool_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1793481217665,
+      "tag": "0024_dear_outlaw_kid",
+      "breakpoints": true
     }
   ]
 }

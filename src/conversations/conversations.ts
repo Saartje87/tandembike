@@ -9,10 +9,17 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import type { Tickets } from '../tickets/tickets';
-import type { AgentRun, AgentRunner, RunEvent } from './agent-runner';
+import type {
+  AgentRun,
+  AgentRunner,
+  PermissionAnswer,
+  PermissionRequest,
+  RunEvent,
+} from './agent-runner';
 import type {
   ConversationIntent,
   ConversationState,
+  PermissionStatus,
   TranscriptRole,
 } from './conversation-state';
 import { runBrief } from './run-brief';
@@ -34,6 +41,8 @@ export type TranscriptEntry = {
   conversationId: number;
   role: TranscriptRole;
   text: string;
+  /** For a permission request, where it is; null for other entries. */
+  permission: PermissionStatus | null;
   createdAt: Date;
 };
 
@@ -62,7 +71,12 @@ export type ConversationsDeps = {
 };
 
 /** A live run of a Conversation, and what the Conversation cost before it. */
-type LiveRun = { run: AgentRun | null; costBefore: number };
+type LiveRun = {
+  run: AgentRun | null;
+  costBefore: number;
+  /** Permission requests waiting for the User, by transcript entry id. */
+  asking: Map<number, (answer: PermissionAnswer) => void>;
+};
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
@@ -112,10 +126,59 @@ export function createConversations({
       .run();
   };
 
-  const append = (id: number, role: TranscriptRole, text: string) => {
-    db.insert(conversationEntries)
-      .values({ conversationId: id, role, text, createdAt: new Date() })
+  const append = (
+    id: number,
+    role: TranscriptRole,
+    text: string,
+    permission: PermissionStatus | null = null,
+  ): number =>
+    db
+      .insert(conversationEntries)
+      .values({
+        conversationId: id,
+        role,
+        text,
+        permission,
+        createdAt: new Date(),
+      })
+      .returning({ id: conversationEntries.id })
+      .get().id;
+
+  const setPermission = (entryId: number, permission: PermissionStatus) => {
+    db.update(conversationEntries)
+      .set({ permission })
+      .where(eq(conversationEntries.id, entryId))
       .run();
+  };
+
+  /** Denies the requests a run still waits on, as its Conversation ended. */
+  const expireAsking = (handle: LiveRun) => {
+    for (const [entryId, resolve] of handle.asking) {
+      setPermission(entryId, 'expired');
+      resolve('deny');
+    }
+    handle.asking.clear();
+  };
+
+  const askPermission = (
+    id: number,
+    handle: LiveRun,
+    request: PermissionRequest,
+  ): Promise<PermissionAnswer> => {
+    if (live.get(id) !== handle) {
+      return Promise.resolve('deny');
+    }
+    const entryId = append(
+      id,
+      'permission',
+      `${request.toolName} ${JSON.stringify(request.input)}`,
+      'pending',
+    );
+    update(id, { state: 'waiting' });
+    announce(id);
+    return new Promise((resolve) => {
+      handle.asking.set(entryId, resolve);
+    });
   };
 
   const handleEvent = (id: number, handle: LiveRun, event: RunEvent) => {
@@ -147,6 +210,7 @@ export function createConversations({
         break;
       case 'exit': {
         live.delete(id);
+        expireAsking(handle);
         if (event.error) {
           append(id, 'error', event.error);
         }
@@ -171,7 +235,11 @@ export function createConversations({
         ? null
         : tickets.getTicket(conversation.ticketNumber);
 
-    const handle: LiveRun = { run: null, costBefore: conversation.costUsd };
+    const handle: LiveRun = {
+      run: null,
+      costBefore: conversation.costUsd,
+      asking: new Map(),
+    };
     live.set(id, handle);
     try {
       handle.run = runner.start({
@@ -187,6 +255,7 @@ export function createConversations({
         }),
         prompt,
         ...(resume === undefined ? {} : { resume }),
+        askPermission: (request) => askPermission(id, handle, request),
         onEvent: (event) => handleEvent(id, handle, event),
       });
     } catch (error) {
@@ -312,6 +381,9 @@ export function createConversations({
       }
       const handle = live.get(id);
       live.delete(id);
+      if (handle) {
+        expireAsking(handle);
+      }
       update(id, { state: 'stopped' });
       announce(id);
       if (handle?.run) {
@@ -325,6 +397,38 @@ export function createConversations({
     },
 
     /**
+     * The User's Allow (`true`) or Deny (`false`) of a permission request in a
+     * transcript; the waiting run goes on. Refused once answered or when its
+     * run is gone.
+     */
+    async answerPermission(
+      entryId: number,
+      allow: boolean,
+    ): Promise<Conversation> {
+      const entry = db
+        .select()
+        .from(conversationEntries)
+        .where(eq(conversationEntries.id, entryId))
+        .get();
+      if (entry?.role !== 'permission') {
+        throw new NotFoundError(`There is no permission request ${entryId}.`);
+      }
+      const handle = live.get(entry.conversationId);
+      const resolve = handle?.asking.get(entryId);
+      if (!handle || !resolve) {
+        throw new NotAllowedError('This request is no longer waiting.');
+      }
+      handle.asking.delete(entryId);
+      setPermission(entryId, allow ? 'allowed' : 'denied');
+      if (handle.asking.size === 0) {
+        update(entry.conversationId, { state: 'running' });
+      }
+      announce(entry.conversationId);
+      resolve(allow ? 'allow' : 'deny');
+      return get(entry.conversationId);
+    },
+
+    /**
      * Marks as interrupted every Conversation that says its run is alive,
      * for the server to call once on start, when all its runs are dead.
      * Returns how many it marked.
@@ -335,6 +439,10 @@ export function createConversations({
         .from(conversations)
         .where(inArray(conversations.state, liveStates))
         .all();
+      db.update(conversationEntries)
+        .set({ permission: 'expired' })
+        .where(eq(conversationEntries.permission, 'pending'))
+        .run();
       for (const { id } of stale) {
         update(id, { state: 'interrupted' });
         announce(id);

@@ -93,7 +93,15 @@ function createInput() {
  */
 export function createClaudeRunner(): AgentRunner {
   return {
-    start({ cwd, mcpUrl, systemPrompt, prompt, resume, onEvent }) {
+    start({
+      cwd,
+      mcpUrl,
+      systemPrompt,
+      prompt,
+      resume,
+      askPermission,
+      onEvent,
+    }) {
       const input = createInput();
       input.push(prompt);
 
@@ -102,6 +110,11 @@ export function createClaudeRunner(): AgentRunner {
         options: {
           cwd,
           ...(resume === undefined ? {} : { resume }),
+          // What a terminal would ask the User comes to the Conversation.
+          canUseTool: async (toolName, toolInput) =>
+            (await askPermission({ toolName, input: toolInput })) === 'allow'
+              ? { behavior: 'allow', updatedInput: toolInput }
+              : { behavior: 'deny', message: 'The User denied this.' },
           mcpServers: { tandembike: { type: 'http', url: mcpUrl } },
           systemPrompt: {
             type: 'preset',

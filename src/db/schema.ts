@@ -14,6 +14,7 @@ import {
 import {
   conversationIntents,
   conversationStates,
+  permissionStatuses,
   transcriptRoles,
 } from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
@@ -345,6 +346,8 @@ export const conversationEntries = sqliteTable(
       .references(() => conversations.id),
     role: text('role', { enum: transcriptRoles }).notNull(),
     text: text('text').notNull(),
+    /** For a permission request: where it is; null for other entries. */
+    permission: text('permission', { enum: permissionStatuses }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [

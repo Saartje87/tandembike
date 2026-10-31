@@ -73,3 +73,16 @@ export async function stopConversation(input: {
     appConversations().stop(Number(input?.conversationId)),
   );
 }
+
+/** Allows or denies a permission request a run is waiting on. */
+export async function answerConversationPermission(input: {
+  entryId: number;
+  allow: boolean;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().answerPermission(
+      Number(input?.entryId),
+      input?.allow === true,
+    ),
+  );
+}

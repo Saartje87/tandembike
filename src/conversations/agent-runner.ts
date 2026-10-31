@@ -21,7 +21,20 @@ export type RunEvent =
   /** The run's process ended; `error` says why when it was not on purpose. */
   | { type: 'exit'; error?: string };
 
+/** A tool the Agent wants to use that needs the User's say-so. */
+export type PermissionRequest = {
+  toolName: string;
+  input: Record<string, unknown>;
+};
+
+export type PermissionAnswer = 'allow' | 'deny';
+
 export type RunOptions = {
+  /**
+   * Asks the User whether the Agent may use a tool; the run waits for the
+   * answer. Resolves `deny` when the Conversation ends first.
+   */
+  askPermission(request: PermissionRequest): Promise<PermissionAnswer>;
   /** The Project's repository path. */
   cwd: string;
   /** The Tandembike MCP server the run connects to. */

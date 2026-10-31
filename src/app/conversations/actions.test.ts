@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appConversations } from '../../conversations/app-conversations';
 import { createTestConversations } from '../../test/conversations';
 import {
+  answerConversationPermission,
   replyToConversation,
   startConversation,
   stopConversation,
@@ -84,6 +85,37 @@ describe('Conversation actions', () => {
       ok: true,
       conversation: { state: 'stopped' },
     });
+  });
+
+  it('answer a permission request and let the run go on', async () => {
+    const { project, runner, conversations } = setup();
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    if (!started.ok) {
+      throw new Error('start failed');
+    }
+    const pending = runner.runs[0].options.askPermission({
+      toolName: 'Bash',
+      input: {},
+    });
+    const entry = conversations.transcript(started.conversation.id).at(-1);
+
+    const result = await answerConversationPermission({
+      entryId: entry?.id ?? 0,
+      allow: true,
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(await pending).toBe('allow');
+    expect(
+      await answerConversationPermission({
+        entryId: entry?.id ?? 0,
+        allow: true,
+      }),
+    ).toMatchObject({ ok: false });
   });
 
   it('return a refusal as an error', async () => {

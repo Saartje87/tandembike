@@ -22,6 +22,11 @@ import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketDrawer, type TicketDrawerProps } from './ticket-drawer';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  answerConversationPermission: vi.fn(),
+  replyToConversation: vi.fn(),
+  stopConversation: vi.fn(),
+}));
 vi.mock('../../app/cycles/actions', () => ({
   planTicket: vi.fn(),
   unplanTicket: vi.fn(),
@@ -169,6 +174,41 @@ describe('TicketDrawer', () => {
     expect(
       inDrawer().queryByRole('button', { name: 'Save' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the Ticket’s Conversations above its comments', () => {
+    const at = new Date('2026-03-03T09:00:00Z');
+    renderWithTheme(
+      <InShell
+        ticket={ticket}
+        conversations={[
+          {
+            conversation: {
+              id: 1,
+              projectId: 1,
+              ticketNumber: 4,
+              intent: 'start',
+              state: 'idle',
+              sdkSessionId: null,
+              costUsd: 0,
+              createdAt: at,
+              updatedAt: at,
+            },
+            transcript: [],
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      inDrawer().getByRole('textbox', { name: 'Reply' }),
+    ).toBeInTheDocument();
+    expect(
+      inDocumentOrder(
+        inDrawer().getByRole('heading', { name: 'Conversations' }),
+        inDrawer().getByRole('heading', { name: 'Comments and Activity' }),
+      ),
+    ).toBe(true);
   });
 
   it('shows the number and Close, title, details, description, then the footer', () => {

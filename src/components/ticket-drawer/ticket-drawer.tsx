@@ -58,6 +58,10 @@ import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
 import { TicketAttachments } from '../ticket-attachments/ticket-attachments';
 import { TicketComments } from '../ticket-comments/ticket-comments';
+import {
+  type ConversationWithTranscript,
+  TicketConversations,
+} from '../ticket-conversations/ticket-conversations';
 import { useTicketDrawer } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
@@ -92,6 +96,11 @@ export type TicketDrawerProps = {
    * External reference keys. Defaults to none.
    */
   referenceTemplates?: ReferenceTemplateLink[];
+  /**
+   * The Ticket's Conversations with Agents with their transcripts, newest
+   * first. Defaults to none.
+   */
+  conversations?: ConversationWithTranscript[];
 };
 
 /** The fields the drawer saves one at a time. */
@@ -191,6 +200,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   epicClaim = null,
   epicChildren,
   referenceTemplates,
+  conversations = [],
 }) => {
   const { titleId, close } = useTicketDrawer();
   const statusId = useId();
@@ -435,6 +445,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}
       />
+      <TicketConversations items={conversations} />
       <TicketComments
         ticketNumber={ticket.number}
         comments={comments}

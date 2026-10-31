@@ -41,6 +41,7 @@ describe('The Claude runner', () => {
       systemPrompt: 'Your situation.',
       prompt: 'Hi',
       resume: 'sess-1',
+      askPermission: async () => 'deny',
       onEvent: () => {},
     });
 
@@ -67,6 +68,7 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'First',
+      askPermission: async () => 'deny',
       onEvent: () => {},
     });
     const input: AsyncIterator<{ message: { content: string } }> =
@@ -115,6 +117,7 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
+      askPermission: async () => 'deny',
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -146,6 +149,7 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
+      askPermission: async () => 'deny',
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -160,6 +164,7 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
+      askPermission: async () => 'deny',
       onEvent: () => {},
     });
 
@@ -168,5 +173,31 @@ describe('The Claude runner', () => {
 
     expect(controls.interrupt).toHaveBeenCalled();
     expect(controls.close).toHaveBeenCalled();
+  });
+
+  it('relays the SDK permission callback to askPermission and maps the answer', async () => {
+    query.mockReturnValue(fakeQuery([]));
+    const askPermission = vi
+      .fn()
+      .mockResolvedValueOnce('allow')
+      .mockResolvedValueOnce('deny');
+    createClaudeRunner().start({
+      cwd: '/repo',
+      mcpUrl: 'http://x',
+      systemPrompt: '',
+      prompt: 'Hi',
+      askPermission,
+      onEvent: () => {},
+    });
+    const { canUseTool } = query.mock.calls[0][0].options;
+    const input = { command: 'ls' };
+
+    const allowed = await canUseTool('Bash', input, {});
+    const denied = await canUseTool('Bash', input, {});
+
+    expect(askPermission).toHaveBeenCalledWith({ toolName: 'Bash', input });
+    expect(allowed).toEqual({ behavior: 'allow', updatedInput: input });
+    expect(denied).toMatchObject({ behavior: 'deny' });
+    expect(denied.message).toBeTruthy();
   });
 });
