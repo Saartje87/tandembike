@@ -285,7 +285,7 @@ export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
   checked?: boolean;
 };
 
-/** Normal Tickets to create in one Project, all or none. */
+/** Tickets, and Epics, to create in one Project, all or none. */
 export type CreateTicketBatchInput = {
   projectId: number;
   /** An Epic of the same Project to create them all under. */
@@ -307,12 +307,24 @@ export type BatchTicketInput = Pick<
   | 'labels'
   | 'externalReferences'
   | 'acceptanceCriteria'
+  | 'type'
+  | 'color'
 > & {
   /**
    * The positions, from 0, of the earlier Tickets in the batch that block
    * this one. Defaults to none.
    */
   blockedByPositions?: number[];
+  /**
+   * The position, from 0, of an earlier Epic in the batch to create this
+   * Ticket under. Not with the batch's `epicNumber`, and not for an Epic.
+   */
+  epicPosition?: number;
+  /**
+   * The position, from 0, of an earlier Ticket in the batch this one was
+   * split from. Not with the batch's `originNumber`.
+   */
+  originPosition?: number;
 };
 
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
@@ -722,7 +734,12 @@ function checkBatchTicket(
         ? undefined
         : `Ticket at position ${position}: ${reason}`;
   };
-  const { blockedByPositions = [], ...input } = batchTicket;
+  const {
+    blockedByPositions = [],
+    epicPosition: _epicPosition,
+    originPosition: _originPosition,
+    ...input
+  } = batchTicket;
   // Until the numbers exist, a placeholder stands in as a one-digit number, so
   // that a limit is checked against roughly the stored text; the text is
   // checked again with the real numbers.
@@ -754,6 +771,64 @@ function checkBatchTicket(
   throwFieldErrors(reasons);
   // Without a ValidationError, `checkNewTicket` returned.
   return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+}
+
+/**
+ * Refuses the batch, naming each Ticket by position, when its `epicPosition`
+ * or `originPosition` breaks the rules: only an earlier position, an Epic of
+ * the batch as the Epic, no Epic with an Epic, and no position field next to
+ * the matching batch-level field.
+ */
+function checkBatchLinks(
+  batch: CreateTicketBatchInput,
+  types: readonly TicketType[],
+) {
+  const reasons: Record<string, string | undefined> = {};
+  batch.tickets.forEach((ticket, position) => {
+    const reasonAt = (field: string, reason: string | undefined) => {
+      reasons[`tickets[${position}].${field}`] =
+        reason === undefined
+          ? undefined
+          : `Ticket at position ${position}: ${reason}`;
+    };
+    const earlier = (at: number) =>
+      Number.isInteger(at) && at >= 0 && at < position;
+    const { epicPosition, originPosition } = ticket;
+    if (epicPosition !== undefined) {
+      reasonAt(
+        'epicPosition',
+        batch.epicNumber !== undefined
+          ? 'give epicPosition or the batch epicNumber, not both.'
+          : types[position] === 'Epic'
+            ? 'an Epic cannot be a child of another Epic. Leave epicPosition out.'
+            : !earlier(epicPosition)
+              ? position === 0
+                ? 'epicPosition can only name an earlier position, and it is first.'
+                : `epicPosition can only name an earlier position, from 0 to ${position - 1}.`
+              : types[epicPosition] !== 'Epic'
+                ? `epicPosition names position ${epicPosition}, which is not created as an Epic. Give it type "Epic".`
+                : undefined,
+      );
+    } else if (batch.epicNumber !== undefined && types[position] === 'Epic') {
+      reasonAt(
+        'epicNumber',
+        'an Epic cannot be a child of another Epic, so the batch epicNumber cannot apply to it.',
+      );
+    }
+    if (originPosition !== undefined) {
+      reasonAt(
+        'originPosition',
+        batch.originNumber !== undefined
+          ? 'give originPosition or the batch originNumber, not both.'
+          : !earlier(originPosition)
+            ? position === 0
+              ? 'originPosition can only name an earlier position, and it is first.'
+              : `originPosition can only name an earlier position, from 0 to ${position - 1}.`
+            : undefined,
+      );
+    }
+  });
+  throwFieldErrors(reasons);
 }
 
 const placeholder = /\{\{T:(\d+)\}\}/g;
@@ -1556,6 +1631,10 @@ export function createTickets(
       const checked = input.tickets.map((ticket, position) =>
         checkBatchTicket(ticket, position, batchSize),
       );
+      checkBatchLinks(
+        input,
+        checked.map(({ ticket }) => ticket.values.type),
+      );
       checkProjectWritable(db, input.projectId);
       const project = { id: input.projectId };
       const epicNumber = input.epicNumber ?? null;
@@ -1573,13 +1652,37 @@ export function createTickets(
         }
         const createdAt = new Date();
         const created: number[] = [];
-        for (const { ticket, blockedByPositions } of checked) {
+        const epics = new Set<number>();
+        const origins = new Set<number>();
+        if (epicNumber !== null) {
+          epics.add(epicNumber);
+        }
+        if (originNumber !== null) {
+          origins.add(originNumber);
+        }
+        for (const [
+          position,
+          { ticket, blockedByPositions },
+        ] of checked.entries()) {
+          const { epicPosition, originPosition } = input.tickets[position];
+          const ticketEpic =
+            epicPosition === undefined ? epicNumber : created[epicPosition];
+          const ticketOrigin =
+            originPosition === undefined
+              ? originNumber
+              : created[originPosition];
           const number = insertTicket(db, actor, ticket, {
             projectId: project.id,
-            epicNumber,
-            originNumber,
+            epicNumber: ticketEpic,
+            originNumber: ticketOrigin,
             createdAt,
           });
+          if (epicPosition !== undefined) {
+            epics.add(ticketEpic as number);
+          }
+          if (originPosition !== undefined) {
+            origins.add(ticketOrigin as number);
+          }
           if (blockedByPositions.length > 0) {
             db.insert(ticketBlockers)
               .values(
@@ -1629,18 +1732,25 @@ export function createTickets(
               .run();
           });
         });
-        if (originNumber !== null) {
-          touchTicket(db, originNumber);
+        // An Origin made in this batch is new, not changed by it.
+        for (const origin of origins) {
+          if (!created.includes(origin)) {
+            touchTicket(db, origin);
+          }
         }
-        syncEpicStatus(db, epicNumber);
+        for (const epic of epics) {
+          syncEpicStatus(db, epic);
+        }
         return created;
       });
       changes.publish({
         type: 'tickets',
         numbers: [
-          ...numbers,
-          ...(epicNumber === null ? [] : [epicNumber]),
-          ...(originNumber === null ? [] : [originNumber]),
+          ...new Set([
+            ...numbers,
+            ...(epicNumber === null ? [] : [epicNumber]),
+            ...(originNumber === null ? [] : [originNumber]),
+          ]),
         ],
       });
       return numbers.map(getTicket);
