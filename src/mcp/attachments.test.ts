@@ -93,6 +93,17 @@ describe('Attachment tools', () => {
     expect(resultText(badBase64)).toMatch(/base64/);
     expect(noName.isError).toBe(true);
     expect(resultText(noName)).toBe('Enter a file name.');
+    const badType = await client.callTool({
+      name: 'add_attachment',
+      arguments: {
+        number: ticket.number,
+        name: 'a.txt',
+        mediaType: 'text/plain; charset=utf-8',
+        content: base64('x'),
+      },
+    });
+    expect(badType.isError).toBe(true);
+    expect(resultText(badType)).toMatch(/media type/);
     expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
     await client.close();
   });

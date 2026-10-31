@@ -73,6 +73,10 @@ const extensionMediaTypes: Record<string, string> = {
   wav: 'audio/wav',
 };
 
+/** A bare `type/subtype` of RFC 6838 restricted-name characters. */
+const mediaTypePattern =
+  /^[a-z0-9][a-z0-9!#$&^_.+-]{0,126}\/[a-z0-9][a-z0-9!#$&^_.+-]{0,126}$/i;
+
 const fallbackMediaType = 'application/octet-stream';
 
 /** The media type for file `name` from its extension, else octet-stream. */
@@ -98,6 +102,10 @@ export function checkedAttachment({
           : name.length > maxAttachmentNameLength
             ? `Keep the file name to ${maxAttachmentNameLength} characters or fewer.`
             : undefined,
+    mediaType:
+      rawMediaType?.trim() && !mediaTypePattern.test(rawMediaType.trim())
+        ? 'Use a media type such as text/plain, without parameters or spaces.'
+        : undefined,
     content:
       content.byteLength === 0
         ? 'The file is empty.'
@@ -105,7 +113,7 @@ export function checkedAttachment({
           ? 'Keep the file to 10 MB or smaller.'
           : undefined,
   });
-  const given = rawMediaType?.trim();
+  const given = rawMediaType?.trim().toLowerCase();
   return { name, mediaType: given ? given : inferMediaType(name) };
 }
 

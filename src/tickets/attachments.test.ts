@@ -175,6 +175,37 @@ describe('Attachments on Tickets', () => {
     expect(mediaTypeOf('a.png', '  ')).toBe('image/png');
   });
 
+  it('stores a given media type lower-cased and refuses one that is not a bare type/subtype', () => {
+    const { tickets, ticket } = ticketsWithOne();
+    const add = (mediaType: string) => () =>
+      tickets.addAttachment(ticket.number, {
+        name: 'a.bin',
+        mediaType,
+        content: bytes('x'),
+        author: 'agent',
+      });
+
+    expect(add('  Image/SVG+XML ')().mediaType).toBe('image/svg+xml');
+    for (const bad of [
+      'text/plain; charset=utf-8',
+      'text',
+      'text/',
+      '/plain',
+      'text/plain/extra',
+      'te xt/plain',
+      'text/pl\nain',
+      'text/*',
+    ]) {
+      expect(errorFrom(add(bad))).toEqual(
+        new ValidationError({
+          mediaType:
+            'Use a media type such as text/plain, without parameters or spaces.',
+        }),
+      );
+    }
+    expect(tickets.getTicket(ticket.number).attachments).toHaveLength(1);
+  });
+
   it('records an Activity entry naming the file, by the module actor', () => {
     const tickets = createTestTickets(undefined, 'agent');
     const project = tickets.createProject({ name: 'Website' });
