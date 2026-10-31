@@ -1,9 +1,12 @@
 import { Box, Divider, Heading, Stack, Text } from '@blockle/blocks';
+import { findAndReplace } from 'mdast-util-find-and-replace';
 import type { FC } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 
 import { modeColors } from '../../app/lib/mode-colors';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import { AppLink } from '../app-link/app-link';
 import * as styles from './markdown.css';
 
@@ -14,6 +17,11 @@ export type MarkdownProps = {
   children: string;
   /** The level a Markdown `#` heading gets; deeper ones follow from it. */
   headingLevel: HeadingLevel;
+  /**
+   * Break the line at every newline, as a chat message does, instead of
+   * joining the lines of a paragraph.
+   */
+  breaks?: boolean;
 };
 
 const headingAt = (level: number) => Math.min(level, 6) as HeadingLevel;
@@ -101,6 +109,27 @@ const componentsFor = (headingLevel: HeadingLevel): Components => ({
   ),
 });
 
+/**
+ * A remark plugin that links each `T12` to that Ticket. Code is not text, so
+ * it stays as written, and a Ticket named inside a link keeps that link.
+ */
+const remarkTicketLinks = () => (tree: Parameters<typeof findAndReplace>[0]) =>
+  findAndReplace(
+    tree,
+    [
+      /\bT([1-9]\d*)\b/g,
+      (value: string, number: string) => ({
+        type: 'link',
+        url: ticketByNumberPath(Number(number)),
+        children: [{ type: 'text', value }],
+      }),
+    ],
+    { ignore: ['link', 'linkReference'] },
+  );
+
+const plugins = [remarkGfm, remarkTicketLinks];
+const pluginsWithBreaks = [...plugins, remarkBreaks];
+
 const componentsByLevel = new Map<HeadingLevel, Components>();
 
 /**
@@ -118,12 +147,17 @@ const components = (headingLevel: HeadingLevel): Components => {
 
 /**
  * Markdown, such as an Agent writes, rendered with Blocks. GitHub-flavoured
- * extras (tables, strikethrough, task lists) work; raw HTML is not rendered.
+ * extras (tables, strikethrough, task lists) work, and each `T12` links to its
+ * Ticket; raw HTML is not rendered.
  */
-export const Markdown: FC<MarkdownProps> = ({ children, headingLevel }) => (
+export const Markdown: FC<MarkdownProps> = ({
+  children,
+  headingLevel,
+  breaks = false,
+}) => (
   <Stack gap={3}>
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={breaks ? pluginsWithBreaks : plugins}
       components={components(headingLevel)}
     >
       {children}

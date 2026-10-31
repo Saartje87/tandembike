@@ -9,6 +9,7 @@ import type { TranscriptEntry } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
 import { ConversationPermissionPrompt } from '../conversation-permission-prompt/conversation-permission-prompt';
 import { ConversationQuestionForm } from '../conversation-question-form/conversation-question-form';
+import { Markdown } from '../markdown/markdown';
 import * as styles from './conversation-message.css';
 
 export type ConversationMessageProps = { entry: TranscriptEntry };
@@ -78,13 +79,17 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
                   ? 'Question'
                   : 'Permission'}
           </Text>
-          {entry.question === null ? (
-            <Text tag="p">{withTicketLinks(entry.text)}</Text>
-          ) : (
+          {entry.question !== null ? (
             <ConversationQuestionForm
               entryId={entry.id}
               question={entry.question}
             />
+          ) : entry.role === 'agent' || entry.role === 'user' ? (
+            <Markdown headingLevel={4} breaks>
+              {entry.text}
+            </Markdown>
+          ) : (
+            <Text tag="p">{withTicketLinks(entry.text)}</Text>
           )}
           {entry.permission !== null && (
             <ConversationPermissionPrompt
