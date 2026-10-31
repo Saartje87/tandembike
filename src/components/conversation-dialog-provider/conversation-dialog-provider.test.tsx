@@ -174,15 +174,22 @@ describe('ConversationDialogProvider', () => {
     const tablist = within(dialog).getByRole('tablist', {
       name: 'Conversations',
     });
+    const names = within(tablist)
+      .getAllByRole('tab')
+      .map((item) => item.textContent);
+    expect(names).toEqual(['T42 · Triage', 'Website · New Ticket', 'T7 · Ask']);
+    // Each tab shows its state as an indicator the cards share.
     expect(
-      within(tablist)
-        .getAllByRole('tab')
-        .map((item) => item.textContent),
-    ).toEqual([
-      'T42 · Triage · working',
-      'Website · New Ticket · needs you',
-      'T7 · Ask · needs you',
-    ]);
+      within(tabNamed(/T42/)).getByRole('img', { name: 'Agent running' }),
+    ).toBeVisible();
+    expect(
+      within(tabNamed(/Website · New Ticket/)).getByRole('img', {
+        name: 'Needs you',
+      }),
+    ).toBeVisible();
+    expect(
+      within(tabNamed(/T7 · Ask/)).getByRole('img', { name: 'Needs you' }),
+    ).toBeVisible();
     expect(tabNamed(/Website · New Ticket/)).toHaveAttribute(
       'aria-selected',
       'true',
