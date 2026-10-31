@@ -8,7 +8,12 @@ type GlobalWithConversations = typeof globalThis & {
   [globalKey]?: Conversations;
 };
 
-/** Where runs reach Tandembike's MCP server; the app serves it on its own port. */
+/**
+ * Where runs reach Tandembike's MCP server. The app serves it on 4747. Set
+ * `TANDEMBIKE_MCP_URL` when the app runs on another port, such as a
+ * throwaway `next dev -p 3100` server in a worktree, so its runs reach that
+ * server's own database (see docs/agents/issue-tracker.md).
+ */
 const mcpUrl =
   process.env.TANDEMBIKE_MCP_URL ?? 'http://localhost:4747/api/mcp';
 
