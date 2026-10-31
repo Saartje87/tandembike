@@ -35,6 +35,7 @@ describe('ConversationMessageInput Skills', () => {
       name: '/mattpocock-skills:grilling',
     });
     expect(chips).toContainElement(chip);
+    expect(chips).toHaveTextContent(/^Skills/);
     expect(chip).toHaveTextContent('grilling');
     expect(chip).toHaveAttribute('title', '/mattpocock-skills:grilling');
     expect(

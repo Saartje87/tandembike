@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Inline } from '@blockle/blocks';
+import { Button, Inline, Text } from '@blockle/blocks';
 import { type FC, useEffect, useState } from 'react';
 
 import { loadProjectSkills } from '../../app/projects/actions';
@@ -26,7 +26,10 @@ export const ConversationSkillChips: FC<ConversationSkillChipsProps> = ({
   onChoose,
 }) =>
   skills.length === 0 ? null : (
-    <Inline gap={1} role="group" aria-label="Skills">
+    <Inline gap={1} alignY="center" role="group" aria-label="Skills">
+      <Text fontSize="small" color="muted">
+        Skills
+      </Text>
       {skills.map((command) => (
         <Button
           key={command}
