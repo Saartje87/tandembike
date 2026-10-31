@@ -234,7 +234,7 @@ describe('CycleHeader', () => {
     );
 
     expect(window.confirm).toHaveBeenCalledWith(
-      'Archive the Cycle "Launch the beta"? Its unfinished Tickets go back to the Backlog. Finished Epics are archived with their children.',
+      'Archive the Cycle "Launch the beta"? Its unfinished Tickets go back to the Backlog.',
     );
     expect(archiveCycle).toHaveBeenCalledExactlyOnceWith({ cycleId: 7 });
     expect(router.push).toHaveBeenCalledWith('/project/3');
@@ -290,7 +290,7 @@ describe('CycleHeader', () => {
       );
 
       expect(window.confirm).toHaveBeenCalledWith(
-        'Start "Launch the beta" and archive the Active Cycle "Beta"? Its open Tickets move to "Launch the beta". Finished Epics are archived with their children.',
+        'Start "Launch the beta" and archive the Active Cycle "Beta"? Its open Tickets move to "Launch the beta".',
       );
       expect(startCycle).toHaveBeenCalledExactlyOnceWith({
         cycleId: 7,

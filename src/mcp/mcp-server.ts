@@ -691,7 +691,7 @@ export function createMcpServer(
           .enum(ticketTypes)
           .optional()
           .describe(
-            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise), so give it none.",
+            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise), and is Done once every child is archived, so give it none.",
           ),
         color: epicColor
           .optional()
@@ -1472,7 +1472,7 @@ export function createMcpServer(
     {
       title: 'Start Cycle',
       description:
-        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step. Finished Epics of the archived Cycle are archived with their children.",
+        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step.",
       inputSchema: {
         cycleId,
         confirmArchiveActive: z
@@ -1494,7 +1494,7 @@ export function createMcpServer(
     {
       title: 'Archive Cycle',
       description:
-        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history. Finished Epics are archived with their children.',
+        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history. Its Epics and their children are left as they are.',
       inputSchema: { cycleId },
     },
     ({ cycleId }) => respond(() => tickets.archiveCycle(cycleId)),

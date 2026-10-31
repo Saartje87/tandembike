@@ -938,6 +938,42 @@ describe('Archived children', () => {
     expect(tickets.getTicket(epic.number).status).toBe('Done');
   });
 
+  it('moves an Epic to Done once every child is archived, finished or not', () => {
+    const { tickets, project, epic } = setUp();
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      status: 'Done',
+    });
+    const dropped = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by cheque',
+      epicNumber: epic.number,
+    });
+    expect(tickets.getTicket(epic.number).status).toBe('In progress');
+
+    tickets.archiveTicket(dropped.number);
+    tickets.archiveTicket(done.number);
+
+    expect(tickets.getTicket(epic.number).status).toBe('Done');
+  });
+
+  it('moves an Epic back from Done when an archived child that is not Done is restored', () => {
+    const { tickets, project, epic } = setUp();
+    const dropped = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by cheque',
+      epicNumber: epic.number,
+    });
+    tickets.archiveTicket(dropped.number);
+    expect(tickets.getTicket(epic.number).status).toBe('Done');
+
+    tickets.restoreTicket(dropped.number);
+
+    expect(tickets.getTicket(epic.number).status).toBe('Todo');
+  });
+
   it('refuses to restore a child of an archived Epic', () => {
     const { tickets, project, epic } = setUp();
     const child = tickets.createTicket({

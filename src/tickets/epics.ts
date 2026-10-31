@@ -125,8 +125,8 @@ export function derivedStatus(children: readonly Status[]): Status {
 
 /**
  * Sets Epic `epicNumber`'s Status from its children that are not archived,
- * or from all of them when every one is, moving it to the end of a new
- * Status lane. Run it in the transaction
+ * or to Done when it has children and every one is archived, moving it to
+ * the end of a new Status lane. Run it in the transaction
  * that changed a child. Returns whether the Status changed.
  */
 export function syncEpicStatus(
@@ -150,12 +150,12 @@ export function syncEpicStatus(
     .where(eq(tickets.epicNumber, epicNumber))
     .all();
   const unarchived = children.filter((child) => !child.archived);
-  // Once every child is archived, the Epic keeps the Status they ended in.
-  const status = derivedStatus(
-    (unarchived.length > 0 ? unarchived : children).map(
-      (child) => child.status,
-    ),
-  );
+  // An archived child counts as finished, as an archived Blocker is
+  // resolved: once every child is archived, the Epic is Done (T595).
+  const status =
+    children.length > 0 && unarchived.length === 0
+      ? 'Done'
+      : derivedStatus(unarchived.map((child) => child.status));
   if (status === epic.status) {
     return false;
   }

@@ -30,8 +30,13 @@ const archivedOf = (
   numbers: number[],
 ) => numbers.map((number) => tickets.getTicket(number).archived);
 
-describe('Archiving a Cycle archives its finished Epics', () => {
-  it('archives an Epic with children Done in the Cycle and Done outside it, and restoring brings them back', () => {
+const statusOf = (
+  tickets: ReturnType<typeof setup>['tickets'],
+  numbers: number[],
+) => numbers.map((number) => tickets.getTicket(number).status);
+
+describe('Archiving a Cycle leaves its Epics alone', () => {
+  it('keeps a finished Epic and its children live, with their Status, and announces no Tickets', () => {
     const { tickets, cycle, epic, child } = setup();
     const e = epic('Checkout');
     const inCycle = child(e.number, 'Done', cycle.id);
@@ -42,28 +47,18 @@ describe('Archiving a Cycle archives its finished Epics', () => {
 
     tickets.archiveCycle(cycle.id);
 
-    expect(
-      archivedOf(tickets, [e.number, inCycle.number, outside.number]),
-    ).toEqual([true, true, true]);
-    expect(changes).toContainEqual({
-      type: 'tickets',
-      numbers: expect.arrayContaining([
-        e.number,
-        inCycle.number,
-        outside.number,
-      ]),
-    });
+    const numbers = [e.number, inCycle.number, outside.number];
+    expect(archivedOf(tickets, numbers)).toEqual([false, false, false]);
+    expect(statusOf(tickets, numbers)).toEqual(['Done', 'Done', 'Done']);
+    expect(changes).not.toContainEqual(
+      expect.objectContaining({ type: 'tickets' }),
+    );
     expect(tickets.listCycles(cycle.projectId)[0].ticketNumbers).toContain(
       inCycle.number,
     );
-
-    tickets.restoreTicket(e.number);
-    expect(
-      archivedOf(tickets, [e.number, inCycle.number, outside.number]),
-    ).toEqual([false, false, false]);
   });
 
-  it('archives an Epic planned in the Cycle itself, with no child in it', () => {
+  it('keeps an Epic planned in the Cycle itself live', () => {
     const { tickets, cycle, epic, child } = setup();
     const e = epic('Checkout');
     const done = child(e.number, 'Done');
@@ -72,46 +67,13 @@ describe('Archiving a Cycle archives its finished Epics', () => {
 
     tickets.archiveCycle(cycle.id);
 
-    expect(archivedOf(tickets, [e.number, done.number])).toEqual([true, true]);
+    expect(archivedOf(tickets, [e.number, done.number])).toEqual([
+      false,
+      false,
+    ]);
   });
 
-  it('leaves alone an Epic without children, with an unfinished child, or not touched by the Cycle', () => {
-    const { tickets, cycle, epic, child } = setup();
-    const empty = epic('Empty');
-    tickets.planTicket({ cycleId: cycle.id, number: empty.number });
-    const unfinished = epic('Unfinished');
-    child(unfinished.number, 'Done', cycle.id);
-    child(unfinished.number, 'Todo');
-    const untouched = epic('Untouched');
-    const doneElsewhere = child(untouched.number, 'Done');
-    tickets.startCycle(cycle.id);
-
-    tickets.archiveCycle(cycle.id);
-
-    expect(
-      archivedOf(tickets, [
-        empty.number,
-        unfinished.number,
-        untouched.number,
-        doneElsewhere.number,
-      ]),
-    ).toEqual([false, false, false, false]);
-  });
-
-  it('counts an Epic whose only unfinished child is archived as finished', () => {
-    const { tickets, cycle, epic, child } = setup();
-    const e = epic('Checkout');
-    const done = child(e.number, 'Done', cycle.id);
-    const dropped = child(e.number, 'Todo');
-    tickets.archiveTicket(dropped.number);
-    tickets.startCycle(cycle.id);
-
-    tickets.archiveCycle(cycle.id);
-
-    expect(archivedOf(tickets, [e.number, done.number])).toEqual([true, true]);
-  });
-
-  it('applies the rule to the Cycle archived by starting another', () => {
+  it('keeps a finished Epic live when the Cycle is archived by starting another', () => {
     const { tickets, project, cycle, epic, child } = setup();
     const e = epic('Checkout');
     const done = child(e.number, 'Done', cycle.id);
@@ -120,6 +82,13 @@ describe('Archiving a Cycle archives its finished Epics', () => {
 
     tickets.startCycle(next.id, { archiveActive: true });
 
-    expect(archivedOf(tickets, [e.number, done.number])).toEqual([true, true]);
+    expect(archivedOf(tickets, [e.number, done.number])).toEqual([
+      false,
+      false,
+    ]);
+    expect(statusOf(tickets, [e.number, done.number])).toEqual([
+      'Done',
+      'Done',
+    ]);
   });
 });
