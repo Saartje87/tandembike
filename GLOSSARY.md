@@ -101,6 +101,10 @@ _Avoid_: Pending Conversation, unsent Conversation
 A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
 _Avoid_: First-time setup, onboarding, readiness check
 
+**Skill**:
+A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
+_Avoid_: Command chip, preset, slash command (for the setting)
+
 **Activity**:
 A Ticket's record of the changes made to it, one **Activity entry** per action. Each entry lists every change the action made, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.
 _Avoid_: History, event, audit log, changelog

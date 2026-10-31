@@ -76,6 +76,7 @@ export const ConversationChat: FC<ConversationChatProps> = ({
       <ConversationReplyForm
         key={conversation.id}
         conversationId={conversation.id}
+        projectId={conversation.projectId}
         control={reply}
       />
     </div>

@@ -7,6 +7,7 @@ import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { NewTicketDefaults } from '../../conversations/run-brief';
 import { ConversationMessageInput } from '../conversation-message-input/conversation-message-input';
+import { useProjectSkills } from '../conversation-skill-chips/conversation-skill-chips';
 import * as styles from './conversation-draft.css';
 
 /**
@@ -45,52 +46,65 @@ export type ConversationDraftProps = {
 };
 
 /**
- * The shown tab of a draft: an input and Send. Nothing starts until Send;
- * a refusal, such as the Start run limit, keeps the text and shows the reason.
+ * The shown tab of a draft: the Project's Skills as chips, an input and Send.
+ * Nothing starts until Send; a refusal, such as the Start run limit, keeps the
+ * text and shows the reason.
  */
 export const ConversationDraft: FC<ConversationDraftProps> = ({
   draft,
   onTextChange,
   onStarted,
-}) => (
-  <div className={styles.draft}>
-    <Heading level={3} fontSize="medium">
-      {draftLabel(draft)}
-    </Heading>
-    <ConversationMessageInput
-      className={styles.form}
-      initialText={draft.text}
-      onTextChange={onTextChange}
-      label={draft.intent === 'ask' ? 'Question' : 'Message'}
-      placeholder={
-        draft.intent === 'ask'
-          ? 'Ask a question (Enter sends, Shift+Enter adds a line)'
-          : 'Describe the Ticket (Enter sends, Shift+Enter adds a line)'
-      }
-      rows={4}
-      autoFocus
-      onSend={async (text) => {
-        const result = await startConversation({
-          intent: draft.intent,
-          prompt: text,
-          ...(draft.ticketNumber === undefined
-            ? {}
-            : { ticketNumber: draft.ticketNumber }),
-          ...(draft.projectId === undefined
-            ? {}
-            : { projectId: draft.projectId }),
-          ...(draft.defaults === undefined ? {} : { defaults: draft.defaults }),
-        });
-        if (!result.ok) {
-          return {
-            ok: false,
-            error: result.error,
-            textError: result.fieldErrors?.prompt,
-          };
+}) => {
+  const skills = useProjectSkills(
+    draft.ticketNumber !== undefined
+      ? { ticketNumber: draft.ticketNumber }
+      : draft.projectId !== undefined
+        ? { projectId: draft.projectId }
+        : undefined,
+  );
+  return (
+    <div className={styles.draft}>
+      <Heading level={3} fontSize="medium">
+        {draftLabel(draft)}
+      </Heading>
+      <ConversationMessageInput
+        className={styles.form}
+        initialText={draft.text}
+        onTextChange={onTextChange}
+        label={draft.intent === 'ask' ? 'Question' : 'Message'}
+        placeholder={
+          draft.intent === 'ask'
+            ? 'Ask a question (Enter sends, Shift+Enter adds a line)'
+            : 'Describe the Ticket (Enter sends, Shift+Enter adds a line)'
         }
-        onStarted(result.conversation);
-        return { ok: true };
-      }}
-    />
-  </div>
-);
+        rows={4}
+        skills={skills}
+        autoFocus
+        onSend={async (text) => {
+          const result = await startConversation({
+            intent: draft.intent,
+            prompt: text,
+            ...(draft.ticketNumber === undefined
+              ? {}
+              : { ticketNumber: draft.ticketNumber }),
+            ...(draft.projectId === undefined
+              ? {}
+              : { projectId: draft.projectId }),
+            ...(draft.defaults === undefined
+              ? {}
+              : { defaults: draft.defaults }),
+          });
+          if (!result.ok) {
+            return {
+              ok: false,
+              error: result.error,
+              textError: result.fieldErrors?.prompt,
+            };
+          }
+          onStarted(result.conversation);
+          return { ok: true };
+        }}
+      />
+    </div>
+  );
+};

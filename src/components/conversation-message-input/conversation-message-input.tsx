@@ -7,9 +7,11 @@ import {
   type Ref,
   useId,
   useImperativeHandle,
+  useRef,
 } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { ConversationSkillChips } from '../conversation-skill-chips/conversation-skill-chips';
 import { FieldError } from '../field-error/field-error';
 
 /** What the chat does to the message input besides the User typing (T613). */
@@ -44,7 +46,13 @@ export type ConversationMessageInputProps = {
   onTextChange?: (text: string) => void;
   control?: Ref<MessageInputControl>;
   className?: string;
+  /** The Project's Skill commands, offered as chips above the input (T620). */
+  skills?: string[];
 };
+
+/** `text` starting with `command`, in place of a command it started with. */
+const withSkill = (text: string, command: string) =>
+  `${command} ${text.replace(/^\/\S*[ \t]*/, '')}`;
 
 /**
  * The text input and Send button of a Conversation message, shared by the
@@ -62,8 +70,10 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   onTextChange,
   control,
   className,
+  skills = [],
 }) => {
   const errorId = useId();
+  const field = useRef<HTMLTextAreaElement | null>(null);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -108,6 +118,14 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
     },
   }));
 
+  const chooseSkill = (command: string) => {
+    const next = withSkill(watch('text'), command);
+    setValue('text', next);
+    onTextChange?.(next);
+    field.current?.focus();
+    field.current?.setSelectionRange(next.length, next.length);
+  };
+
   const send = (event: { preventDefault: () => void }) => {
     event.preventDefault();
     if (!isSubmitting && !empty) {
@@ -128,8 +146,13 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   return (
     <form onSubmit={send} className={className}>
       <Stack gap={1}>
+        <ConversationSkillChips skills={skills} onChoose={chooseSkill} />
         <Textarea
           {...text}
+          ref={(element) => {
+            text.ref(element);
+            field.current = element;
+          }}
           onChange={(event) => {
             text.onChange(event);
             onTextChange?.(event.target.value);

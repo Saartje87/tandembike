@@ -22,6 +22,7 @@ import type { ActivityChange } from '../tickets/activity-change';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
+import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 
@@ -48,6 +49,11 @@ export const projects = sqliteTable('projects', {
   agentMode: integer('agent_mode', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /** The Skill commands its Conversations offer as chips, in order. */
+  skills: text('skills', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(defaultSkills),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
