@@ -494,7 +494,7 @@ export type TicketSummary = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'labels' | 'blocked'
 > &
-  Partial<Pick<Ticket, 'projectId'>>;
+  Partial<Pick<Ticket, 'projectId' | 'type'>>;
 
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
@@ -1038,6 +1038,7 @@ const summaryColumns = {
   number: tickets.number,
   title: tickets.title,
   status: tickets.status,
+  type: tickets.type,
   projectId: tickets.projectId,
 };
 
@@ -3548,11 +3549,12 @@ function inOrder<Row extends { number: number }>(
  */
 function summaries(
   db: DatabaseConnection,
-  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'projectId'>[],
+  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'>[],
   withProject: boolean,
 ): TicketSummary[] {
   return withBlockers(db, withLabels(db, rows)).map((row) => ({
     ...ticketSummary(row),
+    type: row.type,
     ...(withProject ? { projectId: row.projectId } : {}),
   }));
 }
