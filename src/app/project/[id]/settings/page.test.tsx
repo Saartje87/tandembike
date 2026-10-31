@@ -34,6 +34,15 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  '../../../../components/agent-settings-form/agent-settings-form',
+  () => ({
+    AgentSettingsForm: ({ settings }: { settings: { agentMode: boolean } }) => (
+      <p>{`Agent mode ${settings.agentMode ? 'on' : 'off'}`}</p>
+    ),
+  }),
+);
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     notFound.mockClear();
@@ -51,6 +60,7 @@ describe('SettingsPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
+    expect(screen.getByText('Agent mode off')).toBeInTheDocument();
     // The Project's layout shows its header and tabs.
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(

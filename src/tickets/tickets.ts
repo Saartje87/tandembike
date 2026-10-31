@@ -122,6 +122,8 @@ import {
 import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 
 export type Project = {
   id: number;
@@ -146,6 +148,23 @@ export type StyleProjectInput = {
 };
 
 /**
+ * A Project's settings for Agent runs. Only the User sets them, so they are
+ * not part of `Project`, which the MCP tools show (ADR 0019).
+ */
+export type ProjectAgentSettings = {
+  /** An absolute directory where runs start, or `null` while unset. */
+  repositoryPath: string | null;
+  /** Whether Start runs may overlap, each in a worktree of its own. */
+  parallelRuns: boolean;
+  /** The most Start runs running at once; at least 1. */
+  maxConcurrentRuns: number;
+  /** Whether the title fields create through a Conversation. */
+  agentMode: boolean;
+};
+
+export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
+
+/**
  * A Project by its id, its name (ignoring case and surrounding spaces) or
  * both, when they name the same Project.
  */
@@ -161,6 +180,28 @@ const projectColumns = {
   archived: projects.archived,
   createdAt: projects.createdAt,
 };
+
+const agentSettingsColumns = {
+  repositoryPath: projects.repositoryPath,
+  parallelRuns: projects.parallelRuns,
+  maxConcurrentRuns: projects.maxConcurrentRuns,
+  agentMode: projects.agentMode,
+};
+
+/** Why `path` cannot be a repository path, or `undefined` when it can. */
+function repositoryPathProblem(path: string): string | undefined {
+  if (!isAbsolute(path)) {
+    return 'Enter an absolute path, starting with /.';
+  }
+  try {
+    if (statSync(path).isDirectory()) {
+      return undefined;
+    }
+  } catch {
+    return 'There is no directory at this path.';
+  }
+  return 'This path is not a directory.';
+}
 
 export type Ticket = {
   number: number;
@@ -1273,6 +1314,70 @@ export function createTickets(
       }
       changes.publish({ type: 'project', id });
       return project;
+    },
+
+    /** Project `id`'s settings for Agent runs. */
+    getProjectAgentSettings(id: number): ProjectAgentSettings {
+      const settings = db
+        .select(agentSettingsColumns)
+        .from(projects)
+        .where(eq(projects.id, id))
+        .get();
+      if (!settings) {
+        throw new NotFoundError(`There is no Project with id ${id}.`);
+      }
+      return settings;
+    },
+
+    /**
+     * Sets Project `id`'s settings for Agent runs; fields left out stay as
+     * they are. The repository path must be an existing absolute directory,
+     * or `null` to clear it, which also turns agent mode off; agent mode
+     * needs a path.
+     */
+    setProjectAgentSettings(
+      id: number,
+      input: SetProjectAgentSettingsInput,
+    ): ProjectAgentSettings {
+      checkProjectWritable(db, id);
+      const before = this.getProjectAgentSettings(id);
+      const { repositoryPath, parallelRuns, maxConcurrentRuns, agentMode } =
+        input;
+      const nextPath =
+        repositoryPath === undefined
+          ? before.repositoryPath
+          : repositoryPath === null || repositoryPath.trim() === ''
+            ? null
+            : repositoryPath.trim();
+      throwFieldErrors({
+        repositoryPath:
+          repositoryPath === undefined || nextPath === null
+            ? undefined
+            : repositoryPathProblem(nextPath),
+        maxConcurrentRuns:
+          maxConcurrentRuns === undefined ||
+          (Number.isInteger(maxConcurrentRuns) && maxConcurrentRuns >= 1)
+            ? undefined
+            : 'Enter a whole number of at least 1.',
+        agentMode:
+          agentMode === true && nextPath === null
+            ? 'Set a repository path before turning on agent mode.'
+            : undefined,
+      });
+      const settings = db
+        .update(projects)
+        .set({
+          repositoryPath: nextPath,
+          ...(parallelRuns === undefined ? {} : { parallelRuns }),
+          ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
+          agentMode:
+            nextPath === null ? false : (agentMode ?? before.agentMode),
+        })
+        .where(eq(projects.id, id))
+        .returning(agentSettingsColumns)
+        .get();
+      changes.publish({ type: 'project', id });
+      return settings;
     },
 
     /**

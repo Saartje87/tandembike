@@ -2,6 +2,7 @@ import { Heading, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
+import { AgentSettingsForm } from '../../../../components/agent-settings-form/agent-settings-form';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { ReferenceTemplateEditor } from '../../../../components/reference-template-editor/reference-template-editor';
 import { appTickets } from '../../../../tickets/app-tickets';
@@ -17,23 +18,42 @@ export async function generateMetadata({
 async function settingsTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   return (
-    <Stack gap={3} aria-labelledby="reference-templates" asChild>
-      <section>
-        <Stack gap={1}>
-          <Heading level={2} id="reference-templates">
-            Reference templates
-          </Heading>
-          <Text tag="p" fontSize="small" color="muted">
-            Link External reference keys, such as #55 or ABC-33: a key starting
-            with a prefix opens the URL, with {'{n}'} replaced by the rest of
-            the key. The first matching template applies.
-          </Text>
-        </Stack>
-        <ReferenceTemplateEditor
-          projectId={project.id}
-          templates={appTickets('user').listReferenceTemplates(project.id)}
-        />
-      </section>
+    <Stack gap={6}>
+      <Stack gap={3} aria-labelledby="agent-settings" asChild>
+        <section>
+          <Stack gap={1}>
+            <Heading level={2} id="agent-settings">
+              Agents
+            </Heading>
+            <Text tag="p" fontSize="small" color="muted">
+              The repository where Agent runs start. Only you can set these;
+              Agents cannot read or change them.
+            </Text>
+          </Stack>
+          <AgentSettingsForm
+            projectId={project.id}
+            settings={appTickets('user').getProjectAgentSettings(project.id)}
+          />
+        </section>
+      </Stack>
+      <Stack gap={3} aria-labelledby="reference-templates" asChild>
+        <section>
+          <Stack gap={1}>
+            <Heading level={2} id="reference-templates">
+              Reference templates
+            </Heading>
+            <Text tag="p" fontSize="small" color="muted">
+              Link External reference keys, such as #55 or ABC-33: a key
+              starting with a prefix opens the URL, with {'{n}'} replaced by the
+              rest of the key. The first matching template applies.
+            </Text>
+          </Stack>
+          <ReferenceTemplateEditor
+            projectId={project.id}
+            templates={appTickets('user').listReferenceTemplates(project.id)}
+          />
+        </section>
+      </Stack>
     </Stack>
   );
 }

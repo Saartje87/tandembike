@@ -9,6 +9,7 @@ import { boardRoute } from '../lib/paths';
 import {
   addReferenceTemplate,
   removeReferenceTemplate,
+  setProjectAgentSettings,
   styleProject,
   updateReferenceTemplate,
 } from './actions';
@@ -69,6 +70,47 @@ describe('Project actions', () => {
       fieldErrors: {
         color: expect.stringMatching(/^Choose one of these colours/),
       },
+    });
+  });
+});
+
+describe('setProjectAgentSettings', () => {
+  it("saves a Project's agent settings and refreshes its pages", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      repositoryPath: '/',
+      parallelRuns: true,
+      maxConcurrentRuns: 2,
+      agentMode: true,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toEqual({
+      repositoryPath: '/',
+      parallelRuns: true,
+      maxConcurrentRuns: 2,
+      agentMode: true,
+    });
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('returns a refusal with the field it names', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      repositoryPath: '/no/such/dir-xyz',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: { repositoryPath: 'There is no directory at this path.' },
     });
   });
 });

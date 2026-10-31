@@ -28,6 +28,18 @@ export const projects = sqliteTable('projects', {
   icon: text('icon', { enum: projectIcons }),
   /** An archived Project and its Tickets are hidden and read-only. */
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  /** Where Agent runs start: an absolute directory, set only by the User. */
+  repositoryPath: text('repository_path'),
+  /** Whether Start runs of this Project may overlap, each in its own worktree. */
+  parallelRuns: integer('parallel_runs', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** The most Start runs of this Project running at once. */
+  maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
+  /** Whether the title fields create through a Conversation. */
+  agentMode: integer('agent_mode', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
