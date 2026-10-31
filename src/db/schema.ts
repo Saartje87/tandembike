@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   type AnySQLiteColumn,
+  blob,
   index,
   integer,
   primaryKey,
@@ -265,4 +266,26 @@ export const ticketActivity = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [index('ticket_activity_ticket_number').on(table.ticketNumber)],
+);
+
+/**
+ * A Ticket's Attachments (ADR 0018), in the order added by `id`. The content
+ * is a BLOB; name and content never change. Removing one deletes the row.
+ */
+export const ticketAttachments = sqliteTable(
+  'ticket_attachments',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+    name: text('name').notNull(),
+    mediaType: text('media_type').notNull(),
+    /** The content's length in bytes. */
+    size: integer('size').notNull(),
+    author: text('author', { enum: commentAuthors }).notNull(),
+    content: blob('content', { mode: 'buffer' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [index('ticket_attachments_ticket_number').on(table.ticketNumber)],
 );

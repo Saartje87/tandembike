@@ -12,6 +12,7 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'add_attachment',
       'add_blocker',
       'add_comment',
       'add_ticket_labels',
@@ -25,6 +26,7 @@ describe('MCP server', () => {
       'create_tickets',
       'detach_from_epic',
       'edit_comment',
+      'get_attachment',
       'get_ticket',
       'list_activity',
       'list_blockers',
@@ -68,6 +70,7 @@ describe('MCP server', () => {
     expect(instructions).not.toMatch(/#\d/);
     expect(instructions).toMatch(/list_labels/);
     expect(instructions).toMatch(/add_comment/);
+    expect(instructions).toMatch(/add_attachment/);
     expect(instructions).toMatch(/list_activity/);
     expect(instructions).toMatch(/add_blocker/);
     expect(instructions).toMatch(/create_tickets/);

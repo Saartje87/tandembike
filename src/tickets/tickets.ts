@@ -21,6 +21,7 @@ import type { DatabaseConnection } from '../db/connection';
 import {
   projects,
   ticketAcceptanceCriteria,
+  ticketAttachments,
   ticketBlockers,
   ticketComments,
   ticketLabels,
@@ -35,6 +36,16 @@ import {
 } from './activity';
 import type { ActivityChange } from './activity-change';
 import { checkProjectWritable, checkTicketWritable } from './archived-projects';
+import {
+  type AddAttachmentInput,
+  type Attachment,
+  attachmentColumns,
+  checkAttachmentCount,
+  checkedAttachment,
+  deleteAttachments,
+  type StoredAttachment,
+  withAttachments,
+} from './attachments';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { claimOwner } from './claim-owner';
 import {
@@ -188,6 +199,8 @@ export type Ticket = {
    * they were added; empty when the Ticket has none.
    */
   externalReferences: string[];
+  /** Files added to the Ticket (ADR 0018), in the order added, without content. */
+  attachments: Attachment[];
   /** The numbers of the Ticket's Blockers, sorted, resolved ones included. */
   blockedBy: number[];
   /** Whether any Blocker is unresolved: neither Done nor archived. */
@@ -2195,6 +2208,50 @@ export function createTickets(
     },
 
     /**
+     * Adds a file to Ticket `number` (ADR 0018) and returns its metadata. The
+     * name is trimmed; the media type comes from the input, else the name's
+     * extension. Recorded as Activity in the same transaction.
+     */
+    addAttachment(number: number, input: AddAttachmentInput): Attachment {
+      const { name, mediaType } = checkedAttachment(input);
+      const attachment = db.transaction(() => {
+        checkTicketWritable(db, number);
+        touchTicket(db, number);
+        checkAttachmentCount(db, number);
+        const added = db
+          .insert(ticketAttachments)
+          .values({
+            ticketNumber: number,
+            name,
+            mediaType,
+            size: input.content.byteLength,
+            author: input.author,
+            content: Buffer.from(input.content),
+            createdAt: new Date(),
+          })
+          .returning(attachmentColumns)
+          .get();
+        recordActivity(db, number, actor, [{ type: 'attachmentAdded', name }]);
+        return added;
+      });
+      changes.publish({ type: 'ticket', number });
+      return attachment;
+    },
+
+    /** Attachment `id` with its metadata and content. */
+    getAttachment(id: number): StoredAttachment {
+      const attachment = db
+        .select({ ...attachmentColumns, content: ticketAttachments.content })
+        .from(ticketAttachments)
+        .where(eq(ticketAttachments.id, id))
+        .get();
+      if (!attachment) {
+        throw new NotFoundError(`There is no Attachment ${id}.`);
+      }
+      return attachment;
+    },
+
+    /**
      * Archives Ticket `number`: it leaves the normal views but keeps
      * everything, so restoring brings it back (ADR 0003). An Epic is refused
      * while any child is not archived, unless `withChildren` archives those
@@ -2889,6 +2946,7 @@ function removeTicket(db: DatabaseConnection, number: number) {
   db.delete(ticketComments)
     .where(eq(ticketComments.ticketNumber, number))
     .run();
+  deleteAttachments(db, number);
   db.delete(ticketAcceptanceCriteria)
     .where(eq(ticketAcceptanceCriteria.ticketNumber, number))
     .run();
@@ -3384,7 +3442,10 @@ function withRelations<
         db,
         withAcceptanceCriteria(
           db,
-          withExternalReferences(db, withClaimAndLinks(db, rows)),
+          withAttachments(
+            db,
+            withExternalReferences(db, withClaimAndLinks(db, rows)),
+          ),
         ),
       ),
     ),

@@ -55,6 +55,7 @@ const ticket = (number: number): Ticket => ({
   archived: false,
   labels: [],
   externalReferences: [],
+  attachments: [],
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
