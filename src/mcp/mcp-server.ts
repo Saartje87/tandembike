@@ -439,7 +439,7 @@ export function createMcpServer(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -457,6 +457,12 @@ export function createMcpServer(
           .optional()
           .describe(
             'Only list Tickets in this Status, or with a list such as ["Todo", "In progress"], in any of those Statuses.',
+          ),
+        type: z
+          .enum(ticketTypes)
+          .optional()
+          .describe(
+            'Only list Tickets of this type: "Epic" lists only Epics, "Ticket" only normal Tickets. Use type: "Epic" to find a Project\'s Epics without detail: "full".',
           ),
         labels: z
           .array(label)
@@ -510,7 +516,7 @@ export function createMcpServer(
           .enum(ticketDetails)
           .optional()
           .describe(
-            'How much of each Ticket to list. "summary", the default: number, title, status, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
           ),
         sort: z
           .enum(ticketSorts)

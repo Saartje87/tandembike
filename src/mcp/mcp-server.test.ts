@@ -188,6 +188,7 @@ describe('MCP server', () => {
       ['unplan_tickets', /at most 50 per call/],
       ['move_tickets', /at most 50 per call/],
       ['list_tickets', /with null, the Backlog/],
+      ['list_tickets', /only Tickets or only Epics \(type:/],
       ['start_cycle', /refused, unless confirmArchiveActive is true/],
       ['start_cycle', /Set it only once the User has agreed/],
     ];
@@ -517,9 +518,33 @@ describe('Ticket tools', () => {
           status: 'In progress',
           labels: [],
           blocked: false,
+          type: 'Ticket',
         },
       ],
       nextCursor: null,
+      total: 1,
+    });
+    await client.close();
+  });
+
+  it('lists only Epics or only Tickets with the type filter', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Header' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, type: 'Epic' },
+    });
+
+    expect(resultJson(result)).toMatchObject({
+      tickets: [{ number: epic.number, type: 'Epic' }],
       total: 1,
     });
     await client.close();
@@ -554,6 +579,7 @@ describe('Ticket tools', () => {
           status: 'Todo',
           labels: [],
           blocked: false,
+          type: 'Ticket',
           projectId: project.id,
         },
       ],
