@@ -278,6 +278,15 @@ function returnsSummary({
   return `Returns ${subject}'s summary: ${summaryFields}${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
 }
 
+/** What the text fields of a `create_tickets` Ticket say about `{{T:n}}`. */
+const placeholderNote =
+  '{{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.';
+
+/** `field` with `placeholderNote` added to its description. */
+function withPlaceholderNote<Field extends z.ZodType>(field: Field): Field {
+  return field.describe(`${field.description} ${placeholderNote}`);
+}
+
 /** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
 const newTicketFields = {
   title: z.string().describe('A one-line title, at most 200 characters.'),
@@ -439,7 +448,7 @@ export function createMcpServer(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -457,6 +466,17 @@ export function createMcpServer(
           .optional()
           .describe(
             'Only list Tickets in this Status, or with a list such as ["Todo", "In progress"], in any of those Statuses.',
+          ),
+        type: z
+          .enum(ticketTypes)
+          .optional()
+          .describe(
+            'Only list Tickets of this type: "Epic" lists only Epics, "Ticket" only normal Tickets. Use type: "Epic" to find a Project\'s Epics without detail: "full".',
+          ),
+        epicNumber: ticketNumber
+          .optional()
+          .describe(
+            "Only list the children of this Epic. Combines with the other filters, such as status, blocked, claimed and labels. Use it to see an Epic's children, Statuses and blocked flags without reading the Epic with get_ticket.",
           ),
         labels: z
           .array(label)
@@ -510,7 +530,7 @@ export function createMcpServer(
           .enum(ticketDetails)
           .optional()
           .describe(
-            'How much of each Ticket to list. "summary", the default: number, title, status, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
           ),
         sort: z
           .enum(ticketSorts)
@@ -540,11 +560,27 @@ export function createMcpServer(
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added. Read it before starting work on the Ticket.',
-      inputSchema: { number: ticketNumber },
+        "Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added. Read it before starting work on the Ticket. Pass description: false to leave the description out and get everything else, which is much shorter when you only need an Epic's children with their Statuses and Blockers, or a Ticket's labels, claim or criteria.",
+      inputSchema: {
+        number: ticketNumber,
+        description: z
+          .boolean()
+          .optional()
+          .describe(
+            'Whether to include the Markdown description. Defaults to true; false leaves it out and returns everything else unchanged.',
+          ),
+      },
       annotations: { readOnlyHint: true },
     },
-    ({ number }) => respond(() => tickets.getTicket(number)),
+    ({ number, description }) =>
+      respond(() => {
+        const ticket = tickets.getTicket(number);
+        if (description !== false) {
+          return ticket;
+        }
+        const { description: _description, ...rest } = ticket;
+        return rest;
+      }),
   );
 
   server.registerTool(
@@ -653,7 +689,7 @@ export function createMcpServer(
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type "Epic", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -685,6 +721,36 @@ export function createMcpServer(
           .array(
             z.object({
               ...newTicketFields,
+              title: withPlaceholderNote(newTicketFields.title),
+              description: withPlaceholderNote(newTicketFields.description),
+              acceptanceCriteria: withPlaceholderNote(
+                newTicketFields.acceptanceCriteria,
+              ),
+              type: z
+                .enum(ticketTypes)
+                .optional()
+                .describe(
+                  "Ticket, the default, or Epic: a Ticket that groups child Tickets. Name an Epic of this list by epicPosition to create Tickets under it. An Epic's Status follows its children, so give it none; an Epic cannot have epicPosition or the batch epicNumber.",
+                ),
+              color: epicColor
+                .optional()
+                .describe(
+                  `For an Epic: its colour, one of ${paletteColors.join(', ')}. Left out, it gets the colour fewest live Epics in the Project use. Only an Epic has a colour.`,
+                ),
+              epicPosition: z
+                .number()
+                .int()
+                .optional()
+                .describe(
+                  'The position, counted from 0, of an earlier Ticket in this list created with type "Epic", to create this Ticket under. Not together with the batch epicNumber.',
+                ),
+              originPosition: z
+                .number()
+                .int()
+                .optional()
+                .describe(
+                  'The position, counted from 0, of an earlier Ticket in this list that this one was split from. Not together with the batch originNumber.',
+                ),
               blockedByPositions: z
                 .array(z.number().int())
                 .optional()
@@ -1369,7 +1435,7 @@ export function createMcpServer(
     {
       title: 'Start Cycle',
       description:
-        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step.",
+        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step. Finished Epics of the archived Cycle are archived with their children.",
       inputSchema: {
         cycleId,
         confirmArchiveActive: z
@@ -1391,7 +1457,7 @@ export function createMcpServer(
     {
       title: 'Archive Cycle',
       description:
-        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history.',
+        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history. Finished Epics are archived with their children.',
       inputSchema: { cycleId },
     },
     ({ cycleId }) => respond(() => tickets.archiveCycle(cycleId)),

@@ -285,7 +285,7 @@ export type NewAcceptanceCriterion = Pick<AcceptanceCriterion, 'text'> & {
   checked?: boolean;
 };
 
-/** Normal Tickets to create in one Project, all or none. */
+/** Tickets, and Epics, to create in one Project, all or none. */
 export type CreateTicketBatchInput = {
   projectId: number;
   /** An Epic of the same Project to create them all under. */
@@ -307,12 +307,24 @@ export type BatchTicketInput = Pick<
   | 'labels'
   | 'externalReferences'
   | 'acceptanceCriteria'
+  | 'type'
+  | 'color'
 > & {
   /**
    * The positions, from 0, of the earlier Tickets in the batch that block
    * this one. Defaults to none.
    */
   blockedByPositions?: number[];
+  /**
+   * The position, from 0, of an earlier Epic in the batch to create this
+   * Ticket under. Not with the batch's `epicNumber`, and not for an Epic.
+   */
+  epicPosition?: number;
+  /**
+   * The position, from 0, of an earlier Ticket in the batch this one was
+   * split from. Not with the batch's `originNumber`.
+   */
+  originPosition?: number;
 };
 
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
@@ -440,6 +452,8 @@ export type ListTicketsFilter = {
   originNumber?: number;
   /** Only normal Tickets, or only Epics. */
   type?: TicketType;
+  /** Only the children of this Epic. */
+  epicNumber?: number;
 };
 
 export const defaultPageSize = 50;
@@ -496,6 +510,9 @@ export type TicketSummary = Pick<
 > &
   Partial<Pick<Ticket, 'projectId'>>;
 
+/** A `TicketSummary` as `list_tickets` lists it: always with its type. */
+export type ListedTicketSummary = TicketSummary & Pick<Ticket, 'type'>;
+
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
   number,
@@ -513,7 +530,7 @@ export function ticketSummary({
 /** One page of `findTickets`. */
 export type TicketPage = {
   /** Whole Tickets when `detail` is `full`. */
-  tickets: TicketSummary[] | Ticket[];
+  tickets: ListedTicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
   /** How many Tickets match the filters, over all pages. */
@@ -711,8 +728,9 @@ type CheckedNewTicket = ReturnType<typeof checkNewTicket>;
  * keyed `tickets[2].title`, and each reason starts with the position.
  */
 function checkBatchTicket(
-  { blockedByPositions = [], ...input }: BatchTicketInput,
+  batchTicket: BatchTicketInput,
   position: number,
+  batchSize: number,
 ): { ticket: CheckedNewTicket; blockedByPositions: number[] } {
   const reasons: Record<string, string | undefined> = {};
   const reasonAt = (field: string, reason: string | undefined) => {
@@ -721,9 +739,28 @@ function checkBatchTicket(
         ? undefined
         : `Ticket at position ${position}: ${reason}`;
   };
+  const {
+    blockedByPositions = [],
+    epicPosition: _epicPosition,
+    originPosition: _originPosition,
+    ...input
+  } = batchTicket;
+  // Until the numbers exist, a placeholder stands in as a one-digit number, so
+  // that a limit is checked against roughly the stored text; the text is
+  // checked again with the real numbers.
+  const standIn = fillPlaceholders(input, () => 'T0');
+  reasonAt('title', outsidePositions(input.title, batchSize));
+  reasonAt('description', outsidePositions(input.description, batchSize));
+  reasonAt(
+    'acceptanceCriteria',
+    outsidePositions(
+      (input.acceptanceCriteria ?? []).map(({ text }) => text).join('\n'),
+      batchSize,
+    ),
+  );
   let ticket: CheckedNewTicket | undefined;
   try {
-    ticket = checkNewTicket(input);
+    ticket = checkNewTicket(standIn);
   } catch (error) {
     if (!(error instanceof ValidationError)) {
       throw error;
@@ -739,6 +776,114 @@ function checkBatchTicket(
   throwFieldErrors(reasons);
   // Without a ValidationError, `checkNewTicket` returned.
   return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+}
+
+/** Why `field` cannot name a position other than an earlier one. */
+function earlierOnly(field: string, position: number): string {
+  return position === 0
+    ? `${field} can only name an earlier position, and it is first.`
+    : `${field} can only name an earlier position, from 0 to ${position - 1}.`;
+}
+
+/**
+ * Refuses the batch, naming each Ticket by position, when its `epicPosition`
+ * or `originPosition` breaks the rules: only an earlier position, an Epic of
+ * the batch as the Epic, no Epic with an Epic, and no position field next to
+ * the matching batch-level field.
+ */
+function checkBatchLinks(
+  batch: CreateTicketBatchInput,
+  types: readonly TicketType[],
+) {
+  const reasons: Record<string, string | undefined> = {};
+  batch.tickets.forEach((ticket, position) => {
+    const reasonAt = (field: string, reason: string | undefined) => {
+      reasons[`tickets[${position}].${field}`] =
+        reason === undefined
+          ? undefined
+          : `Ticket at position ${position}: ${reason}`;
+    };
+    const earlier = (at: number) =>
+      Number.isInteger(at) && at >= 0 && at < position;
+    const { epicPosition, originPosition } = ticket;
+    if (epicPosition !== undefined) {
+      reasonAt(
+        'epicPosition',
+        batch.epicNumber !== undefined
+          ? 'give epicPosition or the batch epicNumber, not both.'
+          : types[position] === 'Epic'
+            ? 'an Epic cannot be a child of another Epic. Leave epicPosition out.'
+            : !earlier(epicPosition)
+              ? earlierOnly('epicPosition', position)
+              : types[epicPosition] !== 'Epic'
+                ? `epicPosition names position ${epicPosition}, which is not created as an Epic. Give it type "Epic".`
+                : undefined,
+      );
+    } else if (batch.epicNumber !== undefined && types[position] === 'Epic') {
+      reasonAt(
+        'epicNumber',
+        'an Epic cannot be a child of another Epic, so the batch epicNumber cannot apply to it.',
+      );
+    }
+    if (originPosition !== undefined) {
+      reasonAt(
+        'originPosition',
+        batch.originNumber !== undefined
+          ? 'give originPosition or the batch originNumber, not both.'
+          : !earlier(originPosition)
+            ? earlierOnly('originPosition', position)
+            : undefined,
+      );
+    }
+  });
+  throwFieldErrors(reasons);
+}
+
+/** A fresh global regex per use, so no `lastIndex` is shared. */
+const placeholders = () => /\{\{T:(\d+)\}\}/g;
+
+/** Why a `{{T:n}}` in `text` names a position outside the batch, if one does. */
+function outsidePositions(
+  text: string | undefined,
+  batchSize: number,
+): string | undefined {
+  for (const [found, position] of text?.matchAll(placeholders()) ?? []) {
+    if (Number(position) >= batchSize) {
+      return `${found} names a position outside the batch; use positions 0 to ${batchSize - 1}.`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `input` with every `{{T:n}}` in its title, description and criteria text
+ * replaced by `replacement(n)`.
+ */
+function fillPlaceholders<
+  T extends Pick<
+    BatchTicketInput,
+    'title' | 'description' | 'acceptanceCriteria'
+  >,
+>(input: T, replacement: (position: number) => string): T {
+  const fill = (text: string) =>
+    text.replace(placeholders(), (_, position) =>
+      replacement(Number(position)),
+    );
+  return {
+    ...input,
+    title: fill(input.title),
+    ...(input.description === undefined
+      ? {}
+      : { description: fill(input.description) }),
+    ...(input.acceptanceCriteria === undefined
+      ? {}
+      : {
+          acceptanceCriteria: input.acceptanceCriteria.map((criterion) => ({
+            ...criterion,
+            text: fill(criterion.text),
+          })),
+        }),
+  };
 }
 
 /** Why a batch Ticket's Blocker positions break the rules, if they do. */
@@ -979,6 +1124,7 @@ const summaryColumns = {
   number: tickets.number,
   title: tickets.title,
   status: tickets.status,
+  type: tickets.type,
   projectId: tickets.projectId,
 };
 
@@ -1017,7 +1163,9 @@ export function createTickets(
   changes: ChangeChannel = createChangeChannel(),
 ) {
   return {
-    ...createCycles(db, changes),
+    ...createCycles(db, changes, (numbers) =>
+      archiveStep(numbers, { withChildren: true }),
+    ),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
 
@@ -1479,8 +1627,10 @@ export function createTickets(
      * the rules for creating one, with the Blockers each names by position
      * among the earlier ones, under an Epic when `epicNumber` is given, and
      * planned into a Cycle when `cycleId` is.
-     * All or nothing: a refusal names the offending Ticket by position and
-     * creates none. The new Tickets are announced once.
+     * A `{{T:n}}` in a title, description or criterion text becomes
+     * `T<number>` of the Ticket at position n of the batch, anywhere in the
+     * text. All or nothing: a refusal names the offending Ticket by position
+     * and creates none. The new Tickets are announced once.
      */
     createTicketBatch(input: CreateTicketBatchInput): Ticket[] {
       throwFieldErrors({
@@ -1491,7 +1641,14 @@ export function createTickets(
               ? `Create at most ${maxBatchSize} Tickets at a time.`
               : undefined,
       });
-      const checked = input.tickets.map(checkBatchTicket);
+      const batchSize = input.tickets.length;
+      const checked = input.tickets.map((ticket, position) =>
+        checkBatchTicket(ticket, position, batchSize),
+      );
+      checkBatchLinks(
+        input,
+        checked.map(({ ticket }) => ticket.values.type),
+      );
       checkProjectWritable(db, input.projectId);
       const project = { id: input.projectId };
       const epicNumber = input.epicNumber ?? null;
@@ -1509,13 +1666,37 @@ export function createTickets(
         }
         const createdAt = new Date();
         const created: number[] = [];
-        for (const { ticket, blockedByPositions } of checked) {
+        const epics = new Set<number>();
+        const origins = new Set<number>();
+        if (epicNumber !== null) {
+          epics.add(epicNumber);
+        }
+        if (originNumber !== null) {
+          origins.add(originNumber);
+        }
+        for (const [
+          position,
+          { ticket, blockedByPositions },
+        ] of checked.entries()) {
+          const { epicPosition, originPosition } = input.tickets[position];
+          const ticketEpic =
+            epicPosition === undefined ? epicNumber : created[epicPosition];
+          const ticketOrigin =
+            originPosition === undefined
+              ? originNumber
+              : created[originPosition];
           const number = insertTicket(db, actor, ticket, {
             projectId: project.id,
-            epicNumber,
-            originNumber,
+            epicNumber: ticketEpic,
+            originNumber: ticketOrigin,
             createdAt,
           });
+          if (epicPosition !== undefined) {
+            epics.add(ticketEpic as number);
+          }
+          if (originPosition !== undefined) {
+            origins.add(ticketOrigin as number);
+          }
           if (blockedByPositions.length > 0) {
             db.insert(ticketBlockers)
               .values(
@@ -1531,18 +1712,59 @@ export function createTickets(
           }
           created.push(number);
         }
-        if (originNumber !== null) {
-          touchTicket(db, originNumber);
+        // Only now are all the numbers known; a refusal rolls everything back.
+        input.tickets.forEach((ticket, position) => {
+          const filled = fillPlaceholders(ticket, (at) => `T${created[at]}`);
+          if (
+            filled.title === ticket.title &&
+            filled.description === ticket.description &&
+            filled.acceptanceCriteria?.every(
+              ({ text }, i) => text === ticket.acceptanceCriteria?.[i].text,
+            ) !== false
+          ) {
+            return;
+          }
+          const { values, acceptanceCriteria } = checkBatchTicket(
+            filled,
+            position,
+            batchSize,
+          ).ticket;
+          const number = created[position];
+          db.update(tickets)
+            .set({ title: values.title, description: values.description })
+            .where(eq(tickets.number, number))
+            .run();
+          acceptanceCriteria.forEach(({ text }, criterionPosition) => {
+            db.update(ticketAcceptanceCriteria)
+              .set({ text })
+              .where(
+                and(
+                  eq(ticketAcceptanceCriteria.ticketNumber, number),
+                  eq(ticketAcceptanceCriteria.position, criterionPosition),
+                ),
+              )
+              .run();
+          });
+        });
+        // An Origin made in this batch is new, not changed by it.
+        for (const origin of origins) {
+          if (!created.includes(origin)) {
+            touchTicket(db, origin);
+          }
         }
-        syncEpicStatus(db, epicNumber);
+        for (const epic of epics) {
+          syncEpicStatus(db, epic);
+        }
         return created;
       });
       changes.publish({
         type: 'tickets',
         numbers: [
-          ...numbers,
-          ...(epicNumber === null ? [] : [epicNumber]),
-          ...(originNumber === null ? [] : [originNumber]),
+          ...new Set([
+            ...numbers,
+            ...(epicNumber === null ? [] : [epicNumber]),
+            ...(originNumber === null ? [] : [originNumber]),
+          ]),
         ],
       });
       return numbers.map(getTicket);
@@ -2857,6 +3079,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
       ? undefined
       : eq(tickets.originNumber, filter.originNumber),
     filter.type === undefined ? undefined : eq(tickets.type, filter.type),
+    filter.epicNumber === undefined
+      ? undefined
+      : eq(tickets.epicNumber, filter.epicNumber),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
@@ -3448,11 +3673,12 @@ function inOrder<Row extends { number: number }>(
  */
 function summaries(
   db: DatabaseConnection,
-  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'projectId'>[],
+  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'>[],
   withProject: boolean,
-): TicketSummary[] {
+): ListedTicketSummary[] {
   return withBlockers(db, withLabels(db, rows)).map((row) => ({
     ...ticketSummary(row),
+    type: row.type,
     ...(withProject ? { projectId: row.projectId } : {}),
   }));
 }

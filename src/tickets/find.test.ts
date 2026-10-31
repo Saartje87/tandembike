@@ -24,6 +24,7 @@ describe('Finding Tickets', () => {
           title: 'Fix the header',
           status: 'Todo',
           labels: ['bug'],
+          type: 'Ticket',
           blocked: false,
           projectId: project.id,
         },
@@ -31,6 +32,89 @@ describe('Finding Tickets', () => {
       nextCursor: null,
       total: 1,
     });
+  });
+
+  it('filters by type and shows the type in summaries', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      labels: ['bug'],
+    });
+
+    const all = tickets.findTickets({ projectId: project.id });
+    expect(all.tickets.map(({ number }) => number)).toEqual([
+      epic.number,
+      ticket.number,
+    ]);
+    expect(all.tickets.map((row) => 'type' in row && row.type)).toEqual([
+      'Epic',
+      'Ticket',
+    ]);
+    expect(
+      tickets
+        .findTickets({ projectId: project.id, type: 'Epic' })
+        .tickets.map(({ number }) => number),
+    ).toEqual([epic.number]);
+    const onlyTickets = tickets.findTickets({
+      projectId: project.id,
+      type: 'Ticket',
+      labels: ['bug'],
+    });
+    expect(onlyTickets.tickets.map(({ number }) => number)).toEqual([
+      ticket.number,
+    ]);
+    expect(onlyTickets.total).toBe(1);
+  });
+
+  it("lists only one Epic's children, combined with the other filters", () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Other',
+      type: 'Epic',
+    });
+    const todo = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      epicNumber: epic.number,
+    });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Footer',
+      epicNumber: epic.number,
+      status: 'Done',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Elsewhere',
+      epicNumber: other.number,
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Loose' });
+
+    expect(
+      tickets
+        .findTickets({ epicNumber: epic.number })
+        .tickets.map(({ number }) => number),
+    ).toEqual([todo.number, done.number]);
+    const open = tickets.findTickets({
+      epicNumber: epic.number,
+      status: 'Todo',
+    });
+    expect(open.tickets.map(({ number }) => number)).toEqual([todo.number]);
+    expect(open.total).toBe(1);
   });
 
   it('leaves the Project out of summaries filtered to one Project', () => {
@@ -43,8 +127,8 @@ describe('Finding Tickets', () => {
     const byName = tickets.findTickets({ projectName: 'Website' }).tickets;
 
     expect(byId.map((row) => Object.keys(row))).toEqual([
-      ['number', 'title', 'status', 'labels', 'blocked'],
-      ['number', 'title', 'status', 'labels', 'blocked'],
+      ['number', 'title', 'status', 'labels', 'blocked', 'type'],
+      ['number', 'title', 'status', 'labels', 'blocked', 'type'],
     ]);
     expect(byName).toEqual(byId);
   });
