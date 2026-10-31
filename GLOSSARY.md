@@ -93,6 +93,10 @@ An exchange between the User and an Agent that Tandembike starts for them, about
 A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
+**Draft**:
+A Conversation the User has begun but not yet sent: an intent, its Ticket or Project, and the text typed so far, with a New Ticket draft also holding its title field's defaults. Nothing runs until the User sends it, which starts the Conversation. A Draft lives only in the browser tab: a reload loses it, and closing it discards it.
+_Avoid_: Pending Conversation, unsent Conversation
+
 **Setup**:
 A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
 _Avoid_: First-time setup, onboarding, readiness check
