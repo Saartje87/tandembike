@@ -388,4 +388,25 @@ describe('Referring to a Ticket in the batch by position', () => {
     );
     expect(tickets.listTickets().map(({ number }) => number)).toEqual([1]);
   });
+
+  it('names the Ticket by position when only the real numbers exceed a limit', () => {
+    const { tickets, project } = setUp();
+    const fillers = Array.from({ length: 10 }, (_, i) => ({ title: `F${i}` }));
+
+    // `T0` stands in for the number first (200 characters); `T11` is one longer.
+    const error = errorFrom(() =>
+      tickets.createTicketBatch({
+        projectId: project.id,
+        tickets: [...fillers, { title: `${'a'.repeat(198)}{{T:10}}` }],
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+    const { fieldErrors } = error as ValidationError;
+    expect(Object.keys(fieldErrors)).toEqual(['tickets[10].title']);
+    expect(fieldErrors['tickets[10].title']).toMatch(
+      /^Ticket at position 10: /,
+    );
+    expect(tickets.listTickets()).toEqual([]);
+  });
 });

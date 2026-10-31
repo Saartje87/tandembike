@@ -833,14 +833,15 @@ function checkBatchLinks(
   throwFieldErrors(reasons);
 }
 
-const placeholder = /\{\{T:(\d+)\}\}/g;
+/** A fresh global regex per use, so no `lastIndex` is shared. */
+const placeholders = () => /\{\{T:(\d+)\}\}/g;
 
 /** Why a `{{T:n}}` in `text` names a position outside the batch, if one does. */
 function outsidePositions(
   text: string | undefined,
   batchSize: number,
 ): string | undefined {
-  for (const [found, position] of text?.matchAll(placeholder) ?? []) {
+  for (const [found, position] of text?.matchAll(placeholders()) ?? []) {
     if (Number(position) >= batchSize) {
       return `${found} names a position outside the batch; use positions 0 to ${batchSize - 1}.`;
     }
@@ -859,7 +860,9 @@ function fillPlaceholders<
   >,
 >(input: T, replacement: (position: number) => string): T {
   const fill = (text: string) =>
-    text.replace(placeholder, (_, position) => replacement(Number(position)));
+    text.replace(placeholders(), (_, position) =>
+      replacement(Number(position)),
+    );
   return {
     ...input,
     title: fill(input.title),
