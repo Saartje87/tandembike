@@ -555,6 +555,89 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
+  it("lists only one Epic's children with epicNumber, combined with other filters", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      epicNumber: epic.number,
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Loose' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'list_tickets',
+      arguments: { epicNumber: epic.number, status: 'Todo', blocked: false },
+    });
+
+    expect(resultJson(result)).toMatchObject({
+      tickets: [{ number: child.number }],
+      total: 1,
+    });
+    await client.close();
+  });
+
+  it('gets a Ticket without its description when description is false', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      description: '## Steps\n\n- Open the page',
+      labels: ['bug'],
+      acceptanceCriteria: [{ text: 'It lines up' }],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const lean = resultJson(
+      await client.callTool({
+        name: 'get_ticket',
+        arguments: { number: ticket.number, description: false },
+      }),
+    ) as Record<string, unknown>;
+    const full = resultJson(
+      await client.callTool({
+        name: 'get_ticket',
+        arguments: { number: ticket.number },
+      }),
+    ) as Record<string, unknown>;
+    const explicit = resultJson(
+      await client.callTool({
+        name: 'get_ticket',
+        arguments: { number: ticket.number, description: true },
+      }),
+    );
+
+    expect(lean).not.toHaveProperty('description');
+    const { description, ...rest } = full;
+    expect(description).toBe('## Steps\n\n- Open the page');
+    expect(lean).toEqual(rest);
+    expect(lean).toMatchObject({
+      status: 'Todo',
+      labels: ['bug'],
+      acceptanceCriteria: [{ text: 'It lines up' }],
+    });
+    expect(explicit).toEqual(full);
+    await client.close();
+  });
+
+  it('mentions the lighter reads in the get_ticket and list_tickets descriptions', async () => {
+    const client = await connectMcpClient(createTestTickets());
+    const { tools } = await client.listTools();
+    const describe = (name: string) =>
+      tools.find((tool) => tool.name === name)?.description;
+
+    expect(describe('get_ticket')).toMatch(/description: false/);
+    expect(describe('list_tickets')).toMatch(/epicNumber/);
+    await client.close();
+  });
+
   it('lists whole Tickets in full detail, and only summaries by default', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

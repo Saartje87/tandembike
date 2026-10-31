@@ -443,7 +443,7 @@ export function createMcpServer(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -467,6 +467,11 @@ export function createMcpServer(
           .optional()
           .describe(
             'Only list Tickets of this type: "Epic" lists only Epics, "Ticket" only normal Tickets. Use type: "Epic" to find a Project\'s Epics without detail: "full".',
+          ),
+        epicNumber: ticketNumber
+          .optional()
+          .describe(
+            "Only list the children of this Epic. Combines with the other filters, such as status, blocked, claimed and labels. Use it to see an Epic's children, Statuses and blocked flags without reading the Epic with get_ticket.",
           ),
         labels: z
           .array(label)
@@ -550,11 +555,27 @@ export function createMcpServer(
     {
       title: 'Get Ticket',
       description:
-        'Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added. Read it before starting work on the Ticket.',
-      inputSchema: { number: ticketNumber },
+        "Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added. Read it before starting work on the Ticket. Pass description: false to leave the description out and get everything else, which is much shorter when you only need an Epic's children with their Statuses and Blockers, or a Ticket's labels, claim or criteria.",
+      inputSchema: {
+        number: ticketNumber,
+        description: z
+          .boolean()
+          .optional()
+          .describe(
+            'Whether to include the Markdown description. Defaults to true; false leaves it out and returns everything else unchanged.',
+          ),
+      },
       annotations: { readOnlyHint: true },
     },
-    ({ number }) => respond(() => tickets.getTicket(number)),
+    ({ number, description }) =>
+      respond(() => {
+        const ticket = tickets.getTicket(number);
+        if (description !== false) {
+          return ticket;
+        }
+        const { description: _description, ...rest } = ticket;
+        return rest;
+      }),
   );
 
   server.registerTool(

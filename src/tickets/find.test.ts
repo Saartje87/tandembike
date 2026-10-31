@@ -73,6 +73,50 @@ describe('Finding Tickets', () => {
     expect(onlyTickets.total).toBe(1);
   });
 
+  it("lists only one Epic's children, combined with the other filters", () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Other',
+      type: 'Epic',
+    });
+    const todo = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      epicNumber: epic.number,
+    });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Footer',
+      epicNumber: epic.number,
+      status: 'Done',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Elsewhere',
+      epicNumber: other.number,
+    });
+    tickets.createTicket({ projectId: project.id, title: 'Loose' });
+
+    expect(
+      tickets
+        .findTickets({ epicNumber: epic.number })
+        .tickets.map(({ number }) => number),
+    ).toEqual([todo.number, done.number]);
+    const open = tickets.findTickets({
+      epicNumber: epic.number,
+      status: 'Todo',
+    });
+    expect(open.tickets.map(({ number }) => number)).toEqual([todo.number]);
+    expect(open.total).toBe(1);
+  });
+
   it('leaves the Project out of summaries filtered to one Project', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
