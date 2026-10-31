@@ -1017,7 +1017,9 @@ export function createTickets(
   changes: ChangeChannel = createChangeChannel(),
 ) {
   return {
-    ...createCycles(db, changes),
+    ...createCycles(db, changes, (numbers) =>
+      archiveStep(numbers, { withChildren: true }),
+    ),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
 

@@ -396,7 +396,16 @@ export function leaveAllCycles(
  * The Tickets module's Cycle functions, spread into `createTickets`: they
  * share its database and change channel.
  */
-export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
+export function createCycles(
+  db: DatabaseConnection,
+  changes: ChangeChannel,
+  /**
+   * Archives the Epics `numbers` with their non-archived children, as
+   * `archiveTicket` with `withChildren` does, in the running transaction.
+   * Returns every Ticket archived and the Epics whose Status changed.
+   */
+  archiveEpicsWithChildren: (numbers: number[]) => number[],
+) {
   function cycleRow(id: number): CycleRow {
     const cycle = db
       .select(cycleColumns)
@@ -407,6 +416,59 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       throw new NotFoundError(`There is no Cycle with id ${id}.`);
     }
     return cycle;
+  }
+
+  /**
+   * Archives the finished Epics Cycle `cycleId` touched, with their
+   * children (ADR 0010): Epics of its Project with a child, whose
+   * non-archived children are all Done, and that are planned in it or have a
+   * child in it. Run it in the archiving transaction, before the Cycle's
+   * unfinished Tickets leave it. Returns every Ticket archived.
+   */
+  function archiveFinishedEpics(cycleId: number, projectId: number): number[] {
+    const members = new Set(
+      cycleMembers(db, cycleId)
+        .all()
+        .map(({ number }) => number),
+    );
+    const epics = db
+      .select({ number: tickets.number })
+      .from(tickets)
+      .where(
+        and(
+          eq(tickets.projectId, projectId),
+          eq(tickets.type, 'Epic'),
+          eq(tickets.archived, false),
+        ),
+      )
+      .orderBy(asc(tickets.number))
+      .all();
+    const finished = epics.flatMap(({ number }) => {
+      const children = db
+        .select({
+          number: tickets.number,
+          status: tickets.status,
+          archived: tickets.archived,
+        })
+        .from(tickets)
+        .where(eq(tickets.epicNumber, number))
+        .all();
+      const touched =
+        members.has(number) ||
+        children.some((child) => members.has(child.number));
+      const done = children.every(
+        (child) => child.archived || child.status === 'Done',
+      );
+      return children.length > 0 && touched && done ? [number] : [];
+    });
+    return finished.length === 0 ? [] : archiveEpicsWithChildren(finished);
+  }
+
+  /** Announces the Tickets archived with a Cycle, if any. */
+  function publishArchived(numbers: number[]) {
+    if (numbers.length > 0) {
+      changes.publish({ type: 'tickets', numbers });
+    }
   }
 
   function getCycle(id: number): Cycle {
@@ -713,7 +775,9 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       id: number,
       { archiveActive = false, activeCycleId }: StartCycleInput = {},
     ): Cycle {
+      let archivedTickets: number[] = [];
       const archivedId = db.transaction(() => {
+        archivedTickets = [];
         const cycle = cycleRow(id);
         checkProjectWritable(db, cycle.projectId);
         if (cycle.state === 'Active') {
@@ -763,6 +827,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
               ),
             )
             .all();
+          archivedTickets = archiveFinishedEpics(active.id, cycle.projectId);
           db.update(cycles)
             .set({ state: 'Archived', archivedAt: new Date() })
             .where(eq(cycles.id, active.id))
@@ -785,6 +850,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           .run();
         return active?.id;
       });
+      publishArchived(archivedTickets);
       if (archivedId !== undefined) {
         changes.publish({ type: 'cycle', id: archivedId });
       }
@@ -811,13 +877,16 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           `The Cycle "${cycle.title}" is Prepared. Only an Active Cycle can be archived; discard a Prepared one instead.`,
         );
       }
-      db.transaction(() => {
+      const archivedTickets = db.transaction(() => {
+        const archived = archiveFinishedEpics(id, cycle.projectId);
         db.update(cycles)
           .set({ state: 'Archived', archivedAt: new Date() })
           .where(eq(cycles.id, id))
           .run();
         dropUnfinished(db, id);
+        return archived;
       });
+      publishArchived(archivedTickets);
       changes.publish({ type: 'cycle', id });
       return getCycle(id);
     },
