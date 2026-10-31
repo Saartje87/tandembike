@@ -12,6 +12,7 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'add_attachment',
       'add_blocker',
       'add_comment',
       'add_ticket_labels',
@@ -25,6 +26,7 @@ describe('MCP server', () => {
       'create_tickets',
       'detach_from_epic',
       'edit_comment',
+      'get_attachment',
       'get_ticket',
       'list_activity',
       'list_blockers',
@@ -37,6 +39,7 @@ describe('MCP server', () => {
       'plan_ticket',
       'plan_tickets',
       'release_ticket_claim',
+      'remove_attachment',
       'remove_blocker',
       'remove_comment',
       'remove_ticket_labels',
@@ -68,6 +71,7 @@ describe('MCP server', () => {
     expect(instructions).not.toMatch(/#\d/);
     expect(instructions).toMatch(/list_labels/);
     expect(instructions).toMatch(/add_comment/);
+    expect(instructions).toMatch(/add_attachment/);
     expect(instructions).toMatch(/list_activity/);
     expect(instructions).toMatch(/add_blocker/);
     expect(instructions).toMatch(/create_tickets/);
@@ -167,6 +171,7 @@ describe('MCP server', () => {
       ],
       ['edit_comment', /only edit comments written by an Agent/],
       ['remove_comment', /only remove comments written by an Agent/],
+      ['remove_attachment', /only remove Attachments added by an Agent/],
       ['get_ticket', /an Epic lists its children/],
       ['attach_to_epic', /detach_from_epic it first/],
       ['update_ticket', /An Epic's follows its children and cannot be set/],

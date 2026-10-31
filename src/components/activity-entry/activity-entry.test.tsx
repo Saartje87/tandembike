@@ -50,6 +50,14 @@ describe('ActivityEntry', () => {
       'added the External reference #55',
     ],
     [
+      { type: 'attachmentAdded', name: 'screenshot.png' },
+      'attached screenshot.png',
+    ],
+    [
+      { type: 'attachmentRemoved', name: 'screenshot.png' },
+      'removed the attachment screenshot.png',
+    ],
+    [
       { type: 'externalReferenceRemoved', reference: 'ABC-33' },
       'removed the External reference ABC-33',
     ],

@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 
 import { appTickets } from '../../tickets/app-tickets';
 import type { EpicChildInput, EpicChildrenInput } from '../../tickets/epics';
-import { ValidationError } from '../../tickets/errors';
+import { TicketsError, ValidationError } from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
 import type { TicketType } from '../../tickets/ticket-type';
 import type {
@@ -395,6 +395,17 @@ export async function removeTicketComment(input: {
   );
 }
 
+export type TicketAttachmentResult = ActionResult;
+
+/** Deletes any Attachment for good as the User (ADR 0018), for the UI. */
+export async function removeTicketAttachment(input: {
+  id: number;
+}): Promise<TicketAttachmentResult> {
+  return changeComment(() =>
+    appTickets('user').removeAttachment(Number(input?.id), { by: 'user' }),
+  );
+}
+
 export type TicketBlockerResult = ActionResult;
 
 /**
@@ -566,6 +577,64 @@ export async function setTicketOrigin(input: {
     });
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}
+
+export type TicketAttachmentsResult = ActionResult;
+
+/**
+ * Adds the files of a form (`number`, and one `files` entry per file) to a
+ * Ticket as the User's Attachments, for the UI. The Tickets module enforces
+ * the size and count limits; at the first refusal the files before it stay
+ * added and the rest are dropped; the refusal names that file and counts the
+ * earlier ones. Domain errors come back as `error`, like
+ * `createTicket`.
+ */
+export async function addTicketAttachments(
+  form: FormData,
+): Promise<TicketAttachmentsResult> {
+  const number = Number(form?.get('number'));
+  const files = (form?.getAll('files') ?? []).filter(
+    (entry): entry is File => typeof entry !== 'string',
+  );
+  const uploads = await Promise.all(
+    files.map(async (file) => ({
+      name: file.name,
+      // Browsers may add parameters such as a charset; the module wants the bare type.
+      mediaType: file.type.split(';')[0],
+      content: new Uint8Array(await file.arrayBuffer()),
+    })),
+  );
+  return actionResult(() => {
+    if (uploads.length === 0) {
+      throw new ValidationError({ files: 'Choose a file to add.' });
+    }
+    const tickets = appTickets('user');
+    let added = 0;
+    try {
+      for (const upload of uploads) {
+        try {
+          tickets.addAttachment(number, { ...upload, author: 'user' });
+        } catch (error) {
+          if (!(error instanceof TicketsError)) {
+            throw error;
+          }
+          // Name the file and what already went in, as the User chose several.
+          const earlier =
+            added === 0
+              ? ''
+              : ` ${added} earlier ${added === 1 ? 'file was' : 'files were'} added.`;
+          throw new TicketsError(
+            `"${upload.name}" was not added: ${error.message}${earlier}`,
+          );
+        }
+        added += 1;
+      }
+    } finally {
+      revalidatePath(boardRoute, 'page');
+      revalidatePath(cycleRoute, 'page');
+    }
     return {};
   });
 }

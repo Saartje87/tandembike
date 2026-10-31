@@ -41,6 +41,10 @@ function describeChange(change: ActivityChange): string {
       return `added the External reference ${change.reference}`;
     case 'externalReferenceRemoved':
       return `removed the External reference ${change.reference}`;
+    case 'attachmentAdded':
+      return `attached ${change.name}`;
+    case 'attachmentRemoved':
+      return `removed the attachment ${change.name}`;
     case 'blockedByAdded':
       return `added Blocker T${change.number}`;
     case 'blockedByRemoved':

@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    serverActions: {
+      // A 10 MB Attachment plus form overhead; the Tickets module enforces 10 MB.
+      bodySizeLimit: '11mb',
+    },
+  },
 };
 
 const withVanillaExtract = createVanillaExtractPlugin({

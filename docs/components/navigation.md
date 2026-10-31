@@ -34,5 +34,9 @@ in later, such as a list read with `use(promise)`, the `NextLink` reaches
 `asChild` as a lazy element, and Blocks renders nothing for it: the server
 HTML has no link and hydration fails (T419, T522).
 
+Links to files served by route handlers (not pages), such as
+`/attachment/<id>`, use a plain Blocks `Link`, not `AppLink`: Next's `Link`
+prefetches in-viewport hrefs in production and would download every file.
+
 Use `Button` for an action and `Link` for navigation. Link text should make
 the destination understandable in context.

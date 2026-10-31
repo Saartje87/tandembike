@@ -24,6 +24,9 @@ export type ActivityChange =
   | { type: 'labelRemoved'; label: string }
   | { type: 'externalReferenceAdded'; reference: string }
   | { type: 'externalReferenceRemoved'; reference: string }
+  /** The file name as it was at the time. */
+  | { type: 'attachmentAdded'; name: string }
+  | { type: 'attachmentRemoved'; name: string }
   /** On the blocked Ticket: Ticket `number` became one of its Blockers. */
   | { type: 'blockedByAdded'; number: number }
   | { type: 'blockedByRemoved'; number: number }

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
 import {
+  addTicketAttachments,
   addTicketComment,
   addTicketExternalReference,
   addTicketLabel,
@@ -19,6 +20,7 @@ import {
   editTicketComment,
   moveTickets,
   moveTicketsToEpic,
+  removeTicketAttachment,
   removeTicketComment,
   removeTicketExternalReference,
   removeTicketLabel,
@@ -553,6 +555,29 @@ describe('Ticket actions', () => {
     expect(tickets.listComments(ticket.number)).toEqual([]);
   });
 
+  it('removes an Attachment as the User and refreshes the drawer', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const attachment = tickets.addAttachment(ticket.number, {
+      name: 'a.txt',
+      content: new Uint8Array([1]),
+      author: 'agent',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    expect(await removeTicketAttachment({ id: attachment.id })).toEqual({
+      ok: true,
+    });
+    expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+
+    expect(await removeTicketAttachment({ id: attachment.id })).toEqual({
+      ok: false,
+      error: `There is no Attachment ${attachment.id}.`,
+    });
+  });
+
   it("lets the User edit and remove an Agent's comment", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -721,6 +746,119 @@ describe('Ticket actions', () => {
       ok: false,
       error: 'A Ticket cannot be its own Origin.',
       fieldErrors: { originNumber: 'A Ticket cannot be its own Origin.' },
+    });
+  });
+
+  describe('adding Attachments', () => {
+    const setup = () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const ticket = tickets.createTicket({
+        projectId: project.id,
+        title: 'Fix the header',
+      });
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      return { tickets, ticket };
+    };
+    const formOf = (number: number, ...files: File[]) => {
+      const form = new FormData();
+      form.set('number', String(number));
+      for (const file of files) {
+        form.append('files', file);
+      }
+      return form;
+    };
+
+    it("adds each file as the User's Attachment and refreshes the drawer", async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['one'], 'a.txt', { type: 'text/plain' }),
+          new File(['two'], 'b.png', { type: 'image/png' }),
+        ),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(tickets.getTicket(ticket.number).attachments).toMatchObject([
+        { name: 'a.txt', mediaType: 'text/plain', size: 3, author: 'user' },
+        { name: 'b.png', mediaType: 'image/png', size: 3, author: 'user' },
+      ]);
+      expect(tickets.listActivity(ticket.number).slice(-2)).toMatchObject([
+        {
+          actor: 'user',
+          changes: [{ type: 'attachmentAdded', name: 'a.txt' }],
+        },
+        {
+          actor: 'user',
+          changes: [{ type: 'attachmentAdded', name: 'b.png' }],
+        },
+      ]);
+      expect(revalidatePath).toHaveBeenCalledWith(
+        '/project/[id]/cycle/[cycleId]',
+        'page',
+      );
+    });
+
+    it('refuses a file over 10 MB with the module reason, keeping the files before it', async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['ok'], 'small.txt'),
+          new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.bin'),
+          new File(['later'], 'later.txt'),
+        ),
+      );
+
+      expect(result).toMatchObject({
+        ok: false,
+        error:
+          '"big.bin" was not added: Keep the file to 10 MB or smaller. 1 earlier file was added.',
+      });
+      expect(
+        tickets.getTicket(ticket.number).attachments.map(({ name }) => name),
+      ).toEqual(['small.txt']);
+      expect(revalidatePath).toHaveBeenCalled();
+    });
+
+    it('adds a file whose browser-given type carries a charset', async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['a'], 'a.txt', { type: 'text/plain;charset=utf-8' }),
+        ),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(tickets.getTicket(ticket.number).attachments[0].mediaType).toBe(
+        'text/plain',
+      );
+    });
+
+    it('names the refused file but not the count when none were added before it', async () => {
+      const { ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(ticket.number, new File([], 'empty.txt')),
+      );
+
+      expect(result).toEqual({
+        ok: false,
+        error: '"empty.txt" was not added: The file is empty.',
+      });
+    });
+
+    it('refuses a form without files', async () => {
+      const { ticket } = setup();
+
+      const result = await addTicketAttachments(formOf(ticket.number));
+
+      expect(result).toMatchObject({ ok: false });
     });
   });
 });

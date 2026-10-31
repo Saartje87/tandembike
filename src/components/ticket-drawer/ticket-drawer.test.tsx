@@ -59,6 +59,7 @@ const ticket: Ticket = {
   archived: false,
   labels: [],
   externalReferences: [],
+  attachments: [],
   blockedBy: [],
   blocked: false,
   type: 'Ticket',
@@ -296,6 +297,35 @@ describe('TicketDrawer', () => {
     ).toBeInTheDocument();
     expect(
       inDrawer().getByRole('textbox', { name: 'Add a comment' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows its Attachments below the description', () => {
+    renderDrawer({
+      ...ticket,
+      attachments: [
+        {
+          id: 3,
+          ticketNumber: 4,
+          name: 'shot.png',
+          mediaType: 'image/png',
+          size: 10,
+          author: 'agent',
+          createdAt: new Date('2026-03-01T09:00:00Z'),
+        },
+      ],
+    });
+
+    const heading = inDrawer().getByRole('heading', { name: 'Attachments' });
+    const description = inDrawer().getByRole('heading', {
+      name: 'Description',
+    });
+    expect(
+      description.compareDocumentPosition(heading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      inDrawer().getByRole('img', { name: 'shot.png' }),
     ).toBeInTheDocument();
   });
 

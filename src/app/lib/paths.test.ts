@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   archivedProjectsPath,
+  attachmentPath,
   boardFilterOf,
   boardPathOf,
   boardRoute,
@@ -46,6 +47,10 @@ describe('paths', () => {
 
   it("puts a Project's settings under its own segment", () => {
     expect(projectSettingsPath(3)).toBe('/project/3/settings');
+  });
+
+  it('serves an Attachment under a singular segment', () => {
+    expect(attachmentPath(9)).toBe('/attachment/9');
   });
 
   it('finds a Ticket by its number alone', () => {

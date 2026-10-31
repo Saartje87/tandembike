@@ -1,0 +1,265 @@
+'use client';
+
+import {
+  Alert,
+  Box,
+  Button,
+  Dialog,
+  Heading,
+  Inline,
+  Link,
+  Stack,
+  Text,
+} from '@blockle/blocks';
+import {
+  type DragEvent,
+  type FC,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
+import { useForm } from 'react-hook-form';
+
+import { modeColors } from '../../app/lib/mode-colors';
+import { attachmentPath } from '../../app/lib/paths';
+import {
+  addTicketAttachments,
+  removeTicketAttachment,
+} from '../../app/tickets/actions';
+import { formatSize, isPreviewable } from '../../tickets/attachment-preview';
+import type { Attachment } from '../../tickets/attachments';
+import { actorNames } from '../activity-entry/activity-entry';
+import { DateTime } from '../date-time/date-time';
+import { FieldError } from '../field-error/field-error';
+import * as styles from './ticket-attachments.css';
+
+export type TicketAttachmentsProps = {
+  ticketNumber: number;
+  /** The Ticket's Attachments, in the order they were added. */
+  attachments: Attachment[];
+};
+
+type AttachmentItemProps = { attachment: Attachment };
+
+/**
+ * One Attachment: a thumbnail that opens a previewable image full size in a
+ * new tab, or a name-and-size link that downloads any other file, with who
+ * added it and when, and a button to remove it after a confirmation.
+ */
+const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
+  // Whether the removal confirmation is open.
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string>();
+  const [removePending, startRemove] = useTransition();
+  const headingId = useId();
+  const descriptionId = useId();
+
+  const closeDialog = () => {
+    setConfirming(false);
+    setError(undefined);
+  };
+
+  const remove = () => {
+    setError(undefined);
+    startRemove(async () => {
+      const result = await removeTicketAttachment({ id: attachment.id });
+      if (result.ok) {
+        setConfirming(false);
+      } else {
+        setError(result.error);
+      }
+    });
+  };
+
+  const previewable = isPreviewable(attachment.mediaType);
+  const href = attachmentPath(attachment.id);
+  return (
+    <Box
+      asChild
+      backgroundColor={modeColors.sunken}
+      borderRadius={2}
+      paddingBlock={2}
+      paddingInline={3}
+    >
+      <li>
+        <Stack gap={2}>
+          {/* A plain Blocks Link, not AppLink: Next's Link would prefetch the file (up to 10 MB). */}
+          <Link
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            download={previewable ? undefined : ''}
+          >
+            {previewable ? (
+              // Blocks has no Image component (T572).
+              // biome-ignore lint/performance/noImgElement: a plain served file, not an optimizable asset
+              <img
+                className={styles.thumbnail}
+                src={href}
+                alt={attachment.name}
+                loading="lazy"
+              />
+            ) : (
+              `${attachment.name} (${formatSize(attachment.size)})`
+            )}
+          </Link>
+          <Inline gap={2} alignY="center" justifyContent="space-between">
+            <Inline gap={2} alignY="center" flexWrap="wrap">
+              <Text fontSize="small" fontWeight="strong">
+                {actorNames[attachment.author]}
+              </Text>
+              <Text fontSize="small" color="muted">
+                <DateTime date={attachment.createdAt} />
+              </Text>
+            </Inline>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              intent="danger"
+              onClick={() => setConfirming(true)}
+            >
+              Remove
+            </Button>
+          </Inline>
+          <Dialog
+            open={confirming}
+            onRequestClose={closeDialog}
+            aria-labelledby={headingId}
+            aria-describedby={descriptionId}
+          >
+            {confirming && (
+              <Stack gap={4}>
+                <Heading id={headingId} level={2}>
+                  {`Remove ${attachment.name}?`}
+                </Heading>
+                <Text id={descriptionId} tag="p">
+                  It cannot be restored once removed.
+                </Text>
+                {error && <Alert intent="danger">{error}</Alert>}
+                <Inline gap={2}>
+                  <Button
+                    type="button"
+                    intent="danger"
+                    loading={removePending}
+                    disabled={removePending}
+                    onClick={remove}
+                  >
+                    Remove attachment
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={removePending}
+                    onClick={closeDialog}
+                  >
+                    Cancel
+                  </Button>
+                </Inline>
+              </Stack>
+            )}
+          </Dialog>
+        </Stack>
+      </li>
+    </Box>
+  );
+};
+
+/**
+ * A Ticket's Attachments, below its description, with a button to add files
+ * and a drop target for them. A refusal shows on the section.
+ */
+export const TicketAttachments: FC<TicketAttachmentsProps> = ({
+  ticketNumber,
+  attachments,
+}) => {
+  const headingId = useId();
+  const errorId = useId();
+  const input = useRef<HTMLInputElement>(null);
+  const {
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm({ defaultValues: {} });
+  const reason = errors.root?.server?.message;
+
+  const add = (files: File[]) => {
+    if (files.length === 0 || isSubmitting) {
+      return;
+    }
+    clearErrors('root.server');
+    void handleSubmit(async () => {
+      const form = new FormData();
+      form.set('number', String(ticketNumber));
+      for (const file of files) {
+        form.append('files', file);
+      }
+      const result = await addTicketAttachments(form);
+      if (!result.ok) {
+        setError('root.server', { message: result.error });
+      }
+    })();
+  };
+
+  const drop = (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    add(Array.from(event.dataTransfer.files));
+  };
+
+  return (
+    <Stack gap={2} asChild>
+      <section
+        aria-labelledby={headingId}
+        aria-describedby={reason ? errorId : undefined}
+        // A drop only reaches onDrop when dragover stops the browser opening the file.
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={drop}
+      >
+        <Inline gap={2} alignY="center" justifyContent="space-between">
+          <Heading id={headingId} level={3} fontSize="medium">
+            Attachments
+          </Heading>
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            disabled={isSubmitting}
+            onClick={() => input.current?.click()}
+          >
+            {isSubmitting ? 'Adding...' : 'Add files'}
+          </Button>
+          {/* Blocks has no file input, so a hidden native one sits behind the button (T404). */}
+          <input
+            ref={input}
+            type="file"
+            multiple
+            hidden
+            aria-label="Files to attach"
+            onChange={(event) => {
+              add(Array.from(event.target.files ?? []));
+              // So picking the same file again still fires a change.
+              event.target.value = '';
+            }}
+          />
+        </Inline>
+        <FieldError id={errorId} reason={reason} />
+        {attachments.length === 0 ? (
+          <Text tag="p" color="muted">
+            No Attachments
+          </Text>
+        ) : (
+          <Stack gap={2} listStyle="none" role="list" asChild>
+            <ul aria-labelledby={headingId}>
+              {attachments.map((attachment) => (
+                <AttachmentItem key={attachment.id} attachment={attachment} />
+              ))}
+            </ul>
+          </Stack>
+        )}
+      </section>
+    </Stack>
+  );
+};
