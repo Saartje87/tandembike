@@ -415,7 +415,7 @@ export function createMcpServer(
    * list, naming it, instead of dropping it (T417). Register every tool
    * through this; nested input objects use `z.strictObject` for the same.
    */
-  function registerTool<Shape extends z.ZodRawShape = Record<string, never>>(
+  function registerTool<Shape extends z.ZodRawShape>(
     name: string,
     {
       inputSchema,
@@ -423,14 +423,14 @@ export function createMcpServer(
     }: {
       title: string;
       description: string;
-      inputSchema?: Shape;
+      inputSchema: Shape;
       annotations?: ToolAnnotations;
     },
     handler: ToolCallback<StrictInput<Shape>>,
   ) {
     return server.registerTool<z.ZodRawShape, StrictInput<Shape>>(
       name,
-      { ...config, inputSchema: z.strictObject(inputSchema ?? ({} as Shape)) },
+      { ...config, inputSchema: z.strictObject(inputSchema) },
       handler,
     );
   }
@@ -441,6 +441,7 @@ export function createMcpServer(
       title: 'List Projects',
       description:
         'List all Projects, oldest first, with their id, name, archived flag and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools. An archived Project is read-only, with its Tickets and Cycles, until the User restores it; its name stays taken.',
+      inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     () => respond(() => tickets.listProjects().map(agentProject)),
@@ -995,6 +996,7 @@ export function createMcpServer(
       title: 'List labels',
       description:
         'List every label in use on any Ticket, archived ones included, sorted. Reuse one of these before inventing a new label.',
+      inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     () => respond(() => tickets.listLabels()),

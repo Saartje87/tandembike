@@ -1938,7 +1938,7 @@ describe('Epic tools', () => {
     await client.close();
   });
 
-  it("keeps an Epic's type: update_ticket has no type to change", async () => {
+  it("refuses a type on update_ticket and keeps the Epic's type", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const epic = tickets.createTicket({
