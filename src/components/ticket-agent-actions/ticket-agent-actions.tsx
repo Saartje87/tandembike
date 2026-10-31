@@ -1,98 +1,16 @@
 'use client';
 
-import { Alert, Button, Inline, Label, Stack, Textarea } from '@blockle/blocks';
-import { type FC, useId, useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { Alert, Button, Inline, Stack } from '@blockle/blocks';
+import { type FC, useState, useTransition } from 'react';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { ConversationIntent } from '../../conversations/conversation-state';
-import { FieldError } from '../field-error/field-error';
+import { MessageForm } from '../message-form/message-form';
 
 export type TicketAgentActionsProps = {
   ticketNumber: number;
   /** Called with the id of the Conversation a click started. */
   onStarted?: (conversationId: number) => void;
-};
-
-type AskFormProps = {
-  ticketNumber: number;
-  onStarted: (conversationId: number) => void;
-  onClose: () => void;
-};
-
-/** The Ask field. A refused Ask keeps its text and shows the reason. */
-const AskForm: FC<AskFormProps> = ({ ticketNumber, onStarted, onClose }) => {
-  const inputId = useId();
-  const errorId = useId();
-  const {
-    formState: { errors, isSubmitting },
-    handleSubmit,
-    register,
-    setError,
-    watch,
-  } = useForm<{ prompt: string }>({
-    defaultValues: { prompt: '' },
-    reValidateMode: 'onSubmit',
-  });
-  const fieldError = errors.prompt?.message;
-  const error = errors.root?.server?.message;
-
-  const submit = handleSubmit(async ({ prompt }) => {
-    const result = await startConversation({
-      ticketNumber,
-      intent: 'ask',
-      prompt,
-    });
-    if (!result.ok) {
-      const reason = result.fieldErrors?.prompt;
-      if (reason) {
-        setError('prompt', { type: 'server', message: reason });
-      } else {
-        setError('root.server', { message: result.error });
-      }
-      return;
-    }
-    onStarted(result.conversation.id);
-    onClose();
-  });
-
-  return (
-    <form
-      onSubmit={(event) => {
-        if (isSubmitting) {
-          event.preventDefault();
-          return;
-        }
-        submit(event);
-      }}
-    >
-      <Stack gap={1}>
-        <Label htmlFor={inputId}>Question</Label>
-        <Textarea
-          {...register('prompt')}
-          id={inputId}
-          rows={3}
-          aria-invalid={fieldError ? true : undefined}
-          aria-describedby={fieldError ? errorId : undefined}
-        />
-        <FieldError id={errorId} reason={fieldError} />
-        {error && <Alert intent="danger">{error}</Alert>}
-        <Inline gap={2}>
-          <Button
-            type="submit"
-            size="small"
-            loading={isSubmitting}
-            disabled={isSubmitting || watch('prompt').trim() === ''}
-          >
-            Send
-          </Button>
-          <Button type="button" size="small" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-        </Inline>
-      </Stack>
-    </form>
-  );
 };
 
 /**
@@ -153,10 +71,26 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
       </Inline>
       {error && <Alert intent="danger">{error}</Alert>}
       {asking && (
-        <AskForm
-          ticketNumber={ticketNumber}
-          onStarted={(id) => onStarted?.(id)}
-          onClose={() => setAsking(false)}
+        <MessageForm
+          label="Question"
+          onCancel={() => setAsking(false)}
+          onSend={async (prompt) => {
+            const result = await startConversation({
+              ticketNumber,
+              intent: 'ask',
+              prompt,
+            });
+            if (!result.ok) {
+              return {
+                ok: false,
+                error: result.error,
+                reason: result.fieldErrors?.prompt,
+              };
+            }
+            onStarted?.(result.conversation.id);
+            setAsking(false);
+            return { ok: true };
+          }}
         />
       )}
     </Stack>

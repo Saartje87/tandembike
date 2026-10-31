@@ -6,13 +6,10 @@ import {
   Button,
   Heading,
   Inline,
-  Label,
   Stack,
   Text,
-  Textarea,
 } from '@blockle/blocks';
-import { type FC, type ReactNode, useId, useState, useTransition } from 'react';
-import { useForm } from 'react-hook-form';
+import { type FC, type ReactNode, useState, useTransition } from 'react';
 
 import {
   answerConversationPermission,
@@ -32,7 +29,7 @@ import type {
   TranscriptEntry,
 } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
-import { FieldError } from '../field-error/field-error';
+import { MessageForm } from '../message-form/message-form';
 
 export type ConversationWithTranscript = {
   conversation: Conversation;
@@ -187,76 +184,6 @@ const EntryLine: FC<EntryLineProps> = ({ entry }) => {
   );
 };
 
-type ReplyFormProps = { conversationId: number };
-
-/** The reply field. A refused reply keeps its text and shows the reason. */
-const ReplyForm: FC<ReplyFormProps> = ({ conversationId }) => {
-  const inputId = useId();
-  const errorId = useId();
-  const {
-    formState: { errors, isSubmitting },
-    handleSubmit,
-    register,
-    reset,
-    setError,
-    watch,
-  } = useForm<{ text: string }>({
-    defaultValues: { text: '' },
-    reValidateMode: 'onSubmit',
-  });
-  const fieldError = errors.text?.message;
-  const error = errors.root?.server?.message;
-
-  const submit = handleSubmit(async ({ text }) => {
-    const result = await replyToConversation({ conversationId, text });
-    if (!result.ok) {
-      const reason = result.fieldErrors?.text;
-      if (reason) {
-        setError('text', { type: 'server', message: reason });
-      } else {
-        setError('root.server', { message: result.error });
-      }
-      return;
-    }
-    reset();
-  });
-
-  return (
-    <form
-      onSubmit={(event) => {
-        if (isSubmitting) {
-          event.preventDefault();
-          return;
-        }
-        submit(event);
-      }}
-    >
-      <Stack gap={1}>
-        <Label htmlFor={inputId}>Reply</Label>
-        <Textarea
-          {...register('text')}
-          id={inputId}
-          rows={3}
-          aria-invalid={fieldError ? true : undefined}
-          aria-describedby={fieldError ? errorId : undefined}
-        />
-        <FieldError id={errorId} reason={fieldError} />
-        {error && <Alert intent="danger">{error}</Alert>}
-        <Inline gap={2}>
-          <Button
-            type="submit"
-            size="small"
-            loading={isSubmitting}
-            disabled={isSubmitting || watch('text').trim() === ''}
-          >
-            Send
-          </Button>
-        </Inline>
-      </Stack>
-    </form>
-  );
-};
-
 type StopButtonProps = { conversationId: number };
 
 const StopButton: FC<StopButtonProps> = ({ conversationId }) => {
@@ -368,7 +295,23 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
           This Conversation was stopped. Start a new one.
         </Text>
       ) : (
-        <ReplyForm key={conversation.id} conversationId={conversation.id} />
+        <MessageForm
+          key={conversation.id}
+          label="Reply"
+          onSend={async (text) => {
+            const result = await replyToConversation({
+              conversationId: conversation.id,
+              text,
+            });
+            return result.ok
+              ? { ok: true }
+              : {
+                  ok: false,
+                  error: result.error,
+                  reason: result.fieldErrors?.text,
+                };
+          }}
+        />
       )}
     </Stack>
   );
