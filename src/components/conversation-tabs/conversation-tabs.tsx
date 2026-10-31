@@ -145,7 +145,7 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
   };
 
   return (
-    <Box overflowInline="auto">
+    <Box overflowInline="auto" flexShrink={0}>
       <Inline
         role="tablist"
         aria-label="Conversations"

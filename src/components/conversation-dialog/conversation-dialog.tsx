@@ -136,7 +136,12 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
     >
       {shownKey !== undefined && (
         <div className={styles.content}>
-          <Inline gap={2} alignY="center" justifyContent="space-between">
+          <Inline
+            gap={2}
+            alignY="center"
+            justifyContent="space-between"
+            flexShrink={0}
+          >
             <Heading id={titleId} level={2} fontSize="large">
               Conversations
             </Heading>

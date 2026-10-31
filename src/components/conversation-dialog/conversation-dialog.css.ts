@@ -5,13 +5,18 @@ import { style } from '@vanilla-extract/css';
  * The dialog's width and height: the theme's `large` width, 800px up to 90%
  * of the window, and as high as the window allows, so the tab panel scrolls
  * and not the page. `size="large"` does not typecheck (T356), and the default
- * `small` caps `max-inline-size` at 400px, so this sets both. Blocks styles sit
- * in cascade layers, so this unlayered class wins.
+ * `small` sets the width to 400px. The theme's size styles are unlayered and
+ * as specific as one class, so whichever stylesheet loads last would win; the
+ * doubled class outranks them (T616).
  */
 export const dialog = style({
-  inlineSize: '50rem',
-  maxInlineSize: '90%',
-  blockSize: 'min(48rem, 100%)',
+  selectors: {
+    '&&': {
+      inlineSize: '50rem',
+      maxInlineSize: '90%',
+      blockSize: 'min(48rem, 100%)',
+    },
+  },
 });
 
 /**
