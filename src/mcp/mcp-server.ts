@@ -282,6 +282,11 @@ function returnsSummary({
 const placeholderNote =
   '{{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.';
 
+/** `field` with `placeholderNote` added to its description. */
+function withPlaceholderNote<Field extends z.ZodType>(field: Field): Field {
+  return field.describe(`${field.description} ${placeholderNote}`);
+}
+
 /** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
 const newTicketFields = {
   title: z.string().describe('A one-line title, at most 200 characters.'),
@@ -716,23 +721,11 @@ export function createMcpServer(
           .array(
             z.object({
               ...newTicketFields,
-              title: z
-                .string()
-                .describe(
-                  `A one-line title, at most 200 characters. ${placeholderNote}`,
-                ),
-              description: z
-                .string()
-                .optional()
-                .describe(
-                  `Optional details in Markdown, at most 50,000 characters. ${placeholderNote}`,
-                ),
-              acceptanceCriteria: z
-                .array(newCriterion)
-                .optional()
-                .describe(
-                  `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome. ${placeholderNote}`,
-                ),
+              title: withPlaceholderNote(newTicketFields.title),
+              description: withPlaceholderNote(newTicketFields.description),
+              acceptanceCriteria: withPlaceholderNote(
+                newTicketFields.acceptanceCriteria,
+              ),
               type: z
                 .enum(ticketTypes)
                 .optional()
