@@ -127,6 +127,11 @@ export function ticketByNumberPath(number: number): string {
   return `/ticket/${number}`;
 }
 
+/** The content of Attachment `id`, as a route handler serves it. */
+export function attachmentPath(id: number): string {
+  return `/attachment/${id}`;
+}
+
 /**
  * Route patterns, for revalidating every Backlog or Cycle Board, and with
  * them the Ticket drawers they open (ADR 0013). A

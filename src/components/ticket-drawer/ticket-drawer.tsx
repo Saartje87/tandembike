@@ -56,6 +56,7 @@ import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
+import { TicketAttachments } from '../ticket-attachments/ticket-attachments';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import { useTicketDrawer } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
@@ -426,6 +427,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         description={fields.description}
         onSave={saveDescription}
       />
+      <TicketAttachments attachments={ticket.attachments} />
       <AcceptanceCriteriaEditor
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}
