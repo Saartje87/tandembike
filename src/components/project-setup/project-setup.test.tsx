@@ -79,7 +79,7 @@ describe('ProjectSetup', () => {
       <ProjectSetup
         projectId={3}
         agentMode
-        offer="Agent mode is on."
+        offer="agent-mode"
         latestSetup={null}
       />,
     );

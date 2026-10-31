@@ -48,7 +48,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     agentMode: settings.agentMode,
     parallelRuns: settings.parallelRuns,
   });
-  const [offer, setOffer] = useState<string | null>(null);
+  const [offer, setOffer] = useState<SetupOffer | null>(null);
   const pathId = useId();
   const parallelId = useId();
   const modeId = useId();
@@ -87,13 +87,13 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
       if (values.agentMode && !saved.agentMode) {
-        setOffer('Agent mode is on.');
+        setOffer('agent-mode');
       } else if (
         values.agentMode &&
         values.parallelRuns &&
         !saved.parallelRuns
       ) {
-        setOffer('Parallel runs is on.');
+        setOffer('parallel-runs');
       } else {
         setOffer(null);
       }
