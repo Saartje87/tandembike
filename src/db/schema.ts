@@ -5,11 +5,17 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import {
+  conversationIntents,
+  conversationStates,
+  transcriptRoles,
+} from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
@@ -300,4 +306,48 @@ export const ticketAttachments = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [index('ticket_attachments_ticket_number').on(table.ticketNumber)],
+);
+
+/**
+ * A Conversation (ADR 0019): an exchange between the User and an Agent run
+ * that Tandembike starts, about a Project and optionally one of its Tickets.
+ * `costUsd` adds up every run of it.
+ */
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    ticketNumber: integer('ticket_number').references(() => tickets.number),
+    intent: text('intent', { enum: conversationIntents }).notNull(),
+    state: text('state', { enum: conversationStates }).notNull(),
+    /** The Claude Agent SDK session a reply resumes; set by the first run. */
+    sdkSessionId: text('sdk_session_id'),
+    costUsd: real('cost_usd').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('conversations_project_id').on(table.projectId),
+    index('conversations_ticket_number').on(table.ticketNumber),
+  ],
+);
+
+/** A Conversation's transcript, in the order written by `id`. */
+export const conversationEntries = sqliteTable(
+  'conversation_entries',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    role: text('role', { enum: transcriptRoles }).notNull(),
+    text: text('text').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('conversation_entries_conversation_id').on(table.conversationId),
+  ],
 );

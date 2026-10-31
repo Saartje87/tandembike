@@ -25,6 +25,19 @@ describe('MCP server and Project agent settings', () => {
   });
 });
 
+describe('MCP server and Conversations', () => {
+  it('offers no tool to start, reply to or stop an Agent run', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
+      /conversation|agent_run|reply|stop|send/,
+    );
+    await client.close();
+  });
+});
+
 describe('MCP server', () => {
   it('lists every tool with a description', async () => {
     const client = await connectMcpClient(createTestTickets());
