@@ -564,6 +564,11 @@ export type EditCommentInput = {
 
 export type RemoveCommentInput = Pick<EditCommentInput, 'by'>;
 
+export type RemoveAttachmentInput = {
+  /** Who is removing; an Agent may only remove an Agent's Attachment. */
+  by: Actor;
+};
+
 export const maxDescriptionLength = 50_000;
 
 function checkDescription(description: string): string | undefined {
@@ -2249,6 +2254,40 @@ export function createTickets(
         throw new NotFoundError(`There is no Attachment ${id}.`);
       }
       return attachment;
+    },
+
+    /**
+     * Deletes Attachment `id` for good (ADR 0018), by the Comment rule: the
+     * User may remove any, an Agent only one an Agent added. Recorded as
+     * Activity naming the file, in the same transaction.
+     */
+    removeAttachment(id: number, { by }: RemoveAttachmentInput): void {
+      const attachment = db
+        .select({
+          ticketNumber: ticketAttachments.ticketNumber,
+          name: ticketAttachments.name,
+          author: ticketAttachments.author,
+        })
+        .from(ticketAttachments)
+        .where(eq(ticketAttachments.id, id))
+        .get();
+      if (!attachment) {
+        throw new NotFoundError(`There is no Attachment ${id}.`);
+      }
+      if (by === 'agent' && attachment.author !== 'agent') {
+        throw new NotAllowedError(
+          `Attachment ${id} was added by the User. Agents can only remove Attachments added by an Agent.`,
+        );
+      }
+      db.transaction(() => {
+        checkTicketWritable(db, attachment.ticketNumber);
+        touchTicket(db, attachment.ticketNumber);
+        db.delete(ticketAttachments).where(eq(ticketAttachments.id, id)).run();
+        recordActivity(db, attachment.ticketNumber, actor, [
+          { type: 'attachmentRemoved', name: attachment.name },
+        ]);
+      });
+      changes.publish({ type: 'ticket', number: attachment.ticketNumber });
     },
 
     /**

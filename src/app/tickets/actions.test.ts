@@ -19,6 +19,7 @@ import {
   editTicketComment,
   moveTickets,
   moveTicketsToEpic,
+  removeTicketAttachment,
   removeTicketComment,
   removeTicketExternalReference,
   removeTicketLabel,
@@ -551,6 +552,29 @@ describe('Ticket actions', () => {
 
     expect(removed).toEqual({ ok: true });
     expect(tickets.listComments(ticket.number)).toEqual([]);
+  });
+
+  it('removes an Attachment as the User and refreshes the drawer', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const attachment = tickets.addAttachment(ticket.number, {
+      name: 'a.txt',
+      content: new Uint8Array([1]),
+      author: 'agent',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    expect(await removeTicketAttachment({ id: attachment.id })).toEqual({
+      ok: true,
+    });
+    expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
+    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+
+    expect(await removeTicketAttachment({ id: attachment.id })).toEqual({
+      ok: false,
+      error: `There is no Attachment ${attachment.id}.`,
+    });
   });
 
   it("lets the User edit and remove an Agent's comment", async () => {

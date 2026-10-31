@@ -178,4 +178,47 @@ describe('Attachment tools', () => {
     ]);
     await client.close();
   });
+
+  it("removes an Agent's Attachment by id, refuses the User's, and shows it in list_activity", async () => {
+    const { tickets, ticket } = ticketsWithOne();
+    const mine = tickets.addAttachment(ticket.number, {
+      name: 'mine.txt',
+      content: bytes('a'),
+      author: 'agent',
+    });
+    const theirs = tickets.addAttachment(ticket.number, {
+      name: 'theirs.txt',
+      content: bytes('b'),
+      author: 'user',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const removed = await client.callTool({
+      name: 'remove_attachment',
+      arguments: { id: mine.id },
+    });
+    const refused = await client.callTool({
+      name: 'remove_attachment',
+      arguments: { id: theirs.id },
+    });
+    const missing = await client.callTool({
+      name: 'remove_attachment',
+      arguments: { id: 99 },
+    });
+
+    expect(resultJson(removed)).toEqual({ removed: mine.id });
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toMatch(/added by the User/);
+    expect(missing.isError).toBe(true);
+    expect(tickets.getTicket(ticket.number).attachments).toEqual([theirs]);
+    const activity = await client.callTool({
+      name: 'list_activity',
+      arguments: { number: ticket.number },
+    });
+    const entries = resultJson(activity) as { changes: unknown[] }[];
+    expect(entries.at(-1)?.changes).toEqual([
+      { type: 'attachmentRemoved', name: 'mine.txt' },
+    ]);
+    await client.close();
+  });
 });

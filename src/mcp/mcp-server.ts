@@ -1051,6 +1051,22 @@ export function createMcpServer(tickets: Tickets): McpServer {
   );
 
   server.registerTool(
+    'remove_attachment',
+    {
+      title: 'Remove attachment',
+      description:
+        "Delete an Attachment permanently by its id; it cannot be restored. Agents can only remove Attachments added by an Agent, not the User's.",
+      inputSchema: { id: attachmentId },
+      annotations: { destructiveHint: true },
+    },
+    ({ id }) =>
+      respond(() => {
+        tickets.removeAttachment(id, { by: 'agent' });
+        return { removed: id };
+      }),
+  );
+
+  server.registerTool(
     'remove_comment',
     {
       title: 'Remove comment',

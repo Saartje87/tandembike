@@ -395,6 +395,17 @@ export async function removeTicketComment(input: {
   );
 }
 
+export type TicketAttachmentResult = ActionResult;
+
+/** Deletes any Attachment for good as the User (ADR 0018), for the UI. */
+export async function removeTicketAttachment(input: {
+  id: number;
+}): Promise<TicketAttachmentResult> {
+  return changeComment(() =>
+    appTickets('user').removeAttachment(Number(input?.id), { by: 'user' }),
+  );
+}
+
 export type TicketBlockerResult = ActionResult;
 
 /**

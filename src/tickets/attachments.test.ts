@@ -284,4 +284,91 @@ describe('Attachments on Tickets', () => {
       ),
     ).toBeInstanceOf(NotAllowedError);
   });
+
+  describe('removing', () => {
+    const added = (author: 'user' | 'agent') => {
+      const { tickets, project, ticket } = ticketsWithOne();
+      const attachment = tickets.addAttachment(ticket.number, {
+        name: ' shot.png ',
+        content: bytes('x'),
+        author,
+      });
+      return { tickets, project, ticket, attachment };
+    };
+
+    it('lets the User remove any Attachment for good and records the file name', () => {
+      for (const author of ['user', 'agent'] as const) {
+        const { tickets, ticket, attachment } = added(author);
+
+        tickets.removeAttachment(attachment.id, { by: 'user' });
+
+        expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
+        expect(
+          errorFrom(() => tickets.getAttachment(attachment.id)),
+        ).toBeInstanceOf(NotFoundError);
+        expect(tickets.listActivity(ticket.number).at(-1)).toMatchObject({
+          actor: 'user',
+          changes: [{ type: 'attachmentRemoved', name: 'shot.png' }],
+        });
+      }
+    });
+
+    it('lets an Agent remove only an Attachment an Agent added', () => {
+      const mine = added('agent');
+      mine.tickets.removeAttachment(mine.attachment.id, { by: 'agent' });
+      expect(mine.tickets.getTicket(mine.ticket.number).attachments).toEqual(
+        [],
+      );
+
+      const users = added('user');
+      const error = errorFrom(() =>
+        users.tickets.removeAttachment(users.attachment.id, { by: 'agent' }),
+      );
+      expect(error).toBeInstanceOf(NotAllowedError);
+      expect((error as Error).message).toMatch(
+        /written by the User|added by the User/,
+      );
+      expect(
+        users.tickets.getTicket(users.ticket.number).attachments,
+      ).toHaveLength(1);
+    });
+
+    it('refuses an unknown id and a Ticket in an archived Project', () => {
+      const { tickets, project, attachment } = added('user');
+      expect(
+        errorFrom(() => tickets.removeAttachment(99, { by: 'user' })),
+      ).toEqual(new NotFoundError('There is no Attachment 99.'));
+
+      tickets.archiveProject(project.id);
+      expect(
+        errorFrom(() =>
+          tickets.removeAttachment(attachment.id, { by: 'user' }),
+        ),
+      ).toBeInstanceOf(NotAllowedError);
+    });
+
+    it('announces a change to the Ticket, and nothing when refused', () => {
+      const changes = createChangeChannel();
+      const tickets = createTestTickets(changes);
+      const project = tickets.createProject({ name: 'Website' });
+      const ticket = tickets.createTicket({
+        projectId: project.id,
+        title: 'T',
+      });
+      const attachment = tickets.addAttachment(ticket.number, {
+        name: 'a.txt',
+        content: bytes('x'),
+        author: 'user',
+      });
+      const listener = vi.fn();
+      changes.subscribe(listener);
+
+      errorFrom(() => tickets.removeAttachment(99, { by: 'user' }));
+      tickets.removeAttachment(attachment.id, { by: 'user' });
+
+      expect(listener.mock.calls).toEqual([
+        [{ type: 'ticket', number: ticket.number }],
+      ]);
+    });
+  });
 });

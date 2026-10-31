@@ -1,9 +1,15 @@
 import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { userEvent } from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { removeTicketAttachment } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
 import type { Attachment } from '../../tickets/attachments';
 import { TicketAttachments } from './ticket-attachments';
+
+vi.mock('../../app/tickets/actions', () => ({
+  removeTicketAttachment: vi.fn(),
+}));
 
 const attachment = (overrides: Partial<Attachment>): Attachment => ({
   id: 1,
@@ -17,6 +23,10 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
 });
 
 describe('TicketAttachments', () => {
+  beforeEach(() => {
+    vi.mocked(removeTicketAttachment).mockReset();
+  });
+
   it('says there are no Attachments', () => {
     renderWithTheme(<TicketAttachments attachments={[]} />);
 
@@ -90,6 +100,54 @@ describe('TicketAttachments', () => {
     expect(within(first).getByRole('time')).toHaveAttribute(
       'datetime',
       '2026-03-01T09:00:00.000Z',
+    );
+  });
+
+  it('asks before removing an Attachment for good', async () => {
+    vi.mocked(removeTicketAttachment).mockResolvedValue({ ok: true });
+    renderWithTheme(
+      <TicketAttachments attachments={[attachment({ id: 7 })]} />,
+    );
+    const item = screen.getByRole('listitem');
+
+    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
+
+    expect(removeTicketAttachment).not.toHaveBeenCalled();
+    expect(
+      within(item).getByText('Remove shot.png? It cannot be restored.'),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      within(item).getByRole('button', { name: 'Remove attachment' }),
+    );
+
+    expect(removeTicketAttachment).toHaveBeenCalledExactlyOnceWith({ id: 7 });
+  });
+
+  it('keeps an Attachment when removing it is cancelled or refused', async () => {
+    vi.mocked(removeTicketAttachment).mockResolvedValue({
+      ok: false,
+      error: 'There is no Attachment 7.',
+    });
+    renderWithTheme(
+      <TicketAttachments attachments={[attachment({ id: 7 })]} />,
+    );
+    const item = screen.getByRole('listitem');
+
+    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
+    await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
+    expect(removeTicketAttachment).not.toHaveBeenCalled();
+    expect(
+      within(item).queryByRole('button', { name: 'Remove attachment' }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
+    await userEvent.click(
+      within(item).getByRole('button', { name: 'Remove attachment' }),
+    );
+
+    expect(within(item).getByRole('alert')).toHaveTextContent(
+      'There is no Attachment 7.',
     );
   });
 });
