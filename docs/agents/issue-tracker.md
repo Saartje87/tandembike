@@ -39,6 +39,8 @@ An idea Ticket that grilling, for example in `/triage`, shows to be a multi-sess
 3. `/to-tickets` creates the Epic's children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. "Working an Epic" then applies.
 4. Comment `Refined into Epic T<number>` on the idea Ticket, remove its triage state label, and archive it with `archive_ticket`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
 
+When the spec is feedback on an Epic that is already built or in review, such as follow-up requests after its PR, publish a new Epic with the existing Epic as its `originNumber`, and leave the existing Epic unchanged: no comment, no archive. Its new branch starts from the existing Epic's branch, and its PR targets that branch while the earlier PR is open.
+
 ## Acceptance criteria
 
 When a skill's template (such as a `to-tickets` issue or a `triage` agent brief) has an acceptance-criteria checklist, pass those items as `acceptanceCriteria` on `create_ticket` or `update_ticket` and leave that section out of the description or comment. Confirm with `get_ticket` that they were stored.
