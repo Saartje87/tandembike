@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -155,9 +155,11 @@ describe('AcceptanceCriteriaEditor', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Ticket T4.',
     );
-    expect(criteriaShown()).toEqual([
-      { text: 'The logo is centred', checked: true },
-    ]);
+    await waitFor(() =>
+      expect(criteriaShown()).toEqual([
+        { text: 'The logo is centred', checked: true },
+      ]),
+    );
   });
 
   it('removes a confirmed criterion at once and saves the rest of the list', async () => {
@@ -261,10 +263,12 @@ describe('AcceptanceCriteriaEditor', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Ticket T4.',
     );
-    expect(criteriaShown().map(({ text }) => text)).toEqual([
-      'The logo is centred',
-      'The menu collapses on phones',
-    ]);
+    await waitFor(() =>
+      expect(criteriaShown().map(({ text }) => text)).toEqual([
+        'The logo is centred',
+        'The menu collapses on phones',
+      ]),
+    );
   });
 
   it('cannot drag a criterion while it is edited or about to be removed', async () => {
@@ -297,10 +301,12 @@ describe('AcceptanceCriteriaEditor', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Ticket T4.',
     );
-    expect(criteriaShown().map(({ text }) => text)).toEqual([
-      'The logo is centred',
-      'The menu collapses on phones',
-    ]);
+    await waitFor(() =>
+      expect(criteriaShown().map(({ text }) => text)).toEqual([
+        'The logo is centred',
+        'The menu collapses on phones',
+      ]),
+    );
   });
 
   const newCriterionInput = () =>
@@ -345,8 +351,10 @@ describe('AcceptanceCriteriaEditor', () => {
     );
     await userEvent.type(newCriterionInput(), '  {Enter}');
 
-    expect(newCriterionInput()).toHaveAccessibleDescription(
-      'Enter text for each acceptance criterion.',
+    await waitFor(() =>
+      expect(newCriterionInput()).toHaveAccessibleDescription(
+        'Enter text for each acceptance criterion.',
+      ),
     );
     expect(newCriterionInput()).toHaveValue('  ');
   });
@@ -550,8 +558,10 @@ describe('AcceptanceCriteriaEditor', () => {
     expect(
       await screen.findByRole('textbox', { name: 'Acceptance criterion' }),
     ).toHaveValue(' ');
-    expect(editInput()).toHaveAccessibleDescription(
-      'Enter text for each acceptance criterion.',
+    await waitFor(() =>
+      expect(editInput()).toHaveAccessibleDescription(
+        'Enter text for each acceptance criterion.',
+      ),
     );
   });
 
