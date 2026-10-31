@@ -170,7 +170,9 @@ describe('ExternalReferenceEditor', () => {
     expect(field).toHaveAccessibleDescription(
       '"ABC 33" is not a valid URL or key.',
     );
-    expect(screen.getByText('None')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('None')).toBeInTheDocument();
+    });
   });
 
   it('removes a reference at once', async () => {
@@ -215,6 +217,8 @@ describe('ExternalReferenceEditor', () => {
         'This Project is archived.',
       ),
     );
-    expect(referencesShown()).toEqual(['#55']);
+    await waitFor(() => {
+      expect(referencesShown()).toEqual(['#55']);
+    });
   });
 });
