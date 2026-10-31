@@ -82,7 +82,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
     }
     if (
       window.confirm(
-        `Start "${cycle.title}" and archive the Active Cycle "${activeCycle.title}"? Its open Tickets move to "${cycle.title}". Finished Epics are archived with their children.`,
+        `Start "${cycle.title}" and archive the Active Cycle "${activeCycle.title}"? Its open Tickets move to "${cycle.title}".`,
       )
     ) {
       run(({ cycleId }) =>
@@ -98,7 +98,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
   const archive = () => {
     if (
       window.confirm(
-        `Archive the Cycle "${cycle.title}"? Its unfinished Tickets go back to the Backlog. Finished Epics are archived with their children.`,
+        `Archive the Cycle "${cycle.title}"? Its unfinished Tickets go back to the Backlog.`,
       )
     ) {
       run(archiveCycle, () => router.push(projectPath(cycle.projectId)));

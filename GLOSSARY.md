@@ -25,7 +25,7 @@ A Project's Tickets that are in no Prepared or Active Cycle, the work not yet pl
 _Avoid_: Inbox, unplanned list
 
 **Epic**:
-A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children, and claiming it covers them. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out.
+A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children: it is Done once it has at least one child and every child is Done or archived. Claiming it covers its children. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out.
 _Avoid_: Feature, parent Ticket, story
 
 **Origin**:
@@ -97,7 +97,7 @@ A Ticket's record of the changes made to it, one **Activity entry** per action. 
 _Avoid_: History, event, audit log, changelog
 
 **Archived**:
-A Ticket or Project taken out of the normal views without being destroyed; it can be restored. An archived Project hides its Tickets and keeps them, and itself, read-only until it is restored; only the User archives a Project. An Epic is archived only once its children are: the User can archive it with its children in one step, and restoring it brings back the children archived with it, not ones archived before. Archiving a Cycle also archives each finished Epic it touched, with its children: an Epic with at least one child, whose non-archived children are all Done, and that is itself in the Cycle or has a child there.
+A Ticket or Project taken out of the normal views without being destroyed; it can be restored. An archived Project hides its Tickets and keeps them, and itself, read-only until it is restored; only the User archives a Project. An Epic is archived only once its children are: the User can archive it with its children in one step, and restoring it brings back the children archived with it, not ones archived before. Archiving a Cycle leaves its Epics and their children as they are.
 _Avoid_: Removed, trashed, closed
 
 **Deleted**:
