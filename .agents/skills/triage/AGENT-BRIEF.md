@@ -34,6 +34,16 @@ The agent needs to know when it's done. Every agent brief must have concrete, te
 
 In this repo, store the criteria in the Ticket's acceptance criteria field (`update_ticket` with `acceptanceCriteria`), never as a checklist in the brief: agents check them off there with `set_acceptance_criteria_checked`. The brief points to the field. The examples below show criteria inline only to illustrate what good ones look like.
 
+### One constraint per open decision
+
+A decision the brief leaves to the implementer (placement, naming, UX flow, data shape) gets at most one constraint, or its constraints in priority order, so a conflict has a clear winner. Two unranked constraints that pull apart force a guess.
+
+When a constraint leaves only one acceptable option, the decision is not the implementer's: make it in the brief.
+
+- **Bad:** "Add a new Project settings area (the implementer's call), consistent with how the Project's colour, icon and name are edited." Those are edited in place in the header, so the constraints conflict.
+- **Good:** "Add a new Project settings area." Or: "Edit it in place in the Project header, like colour, icon and name."
+- **Good:** "Add a new Project settings area; where the two conflict, consistency with in-place editing wins."
+
 ### Explicit scope boundaries
 
 State what is out of scope. This prevents the agent from gold-plating or making assumptions about adjacent features.

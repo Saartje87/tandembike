@@ -711,8 +711,9 @@ type CheckedNewTicket = ReturnType<typeof checkNewTicket>;
  * keyed `tickets[2].title`, and each reason starts with the position.
  */
 function checkBatchTicket(
-  { blockedByPositions = [], ...input }: BatchTicketInput,
+  batchTicket: BatchTicketInput,
   position: number,
+  batchSize: number,
 ): { ticket: CheckedNewTicket; blockedByPositions: number[] } {
   const reasons: Record<string, string | undefined> = {};
   const reasonAt = (field: string, reason: string | undefined) => {
@@ -721,9 +722,23 @@ function checkBatchTicket(
         ? undefined
         : `Ticket at position ${position}: ${reason}`;
   };
+  const { blockedByPositions = [], ...input } = batchTicket;
+  // Until the numbers exist, a placeholder stands in as a one-digit number, so
+  // that a limit is checked against roughly the stored text; the text is
+  // checked again with the real numbers.
+  const standIn = fillPlaceholders(input, () => 'T0');
+  reasonAt('title', outsidePositions(input.title, batchSize));
+  reasonAt('description', outsidePositions(input.description, batchSize));
+  reasonAt(
+    'acceptanceCriteria',
+    outsidePositions(
+      (input.acceptanceCriteria ?? []).map(({ text }) => text).join('\n'),
+      batchSize,
+    ),
+  );
   let ticket: CheckedNewTicket | undefined;
   try {
-    ticket = checkNewTicket(input);
+    ticket = checkNewTicket(standIn);
   } catch (error) {
     if (!(error instanceof ValidationError)) {
       throw error;
@@ -739,6 +754,50 @@ function checkBatchTicket(
   throwFieldErrors(reasons);
   // Without a ValidationError, `checkNewTicket` returned.
   return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+}
+
+const placeholder = /\{\{T:(\d+)\}\}/g;
+
+/** Why a `{{T:n}}` in `text` names a position outside the batch, if one does. */
+function outsidePositions(
+  text: string | undefined,
+  batchSize: number,
+): string | undefined {
+  for (const [found, position] of text?.matchAll(placeholder) ?? []) {
+    if (Number(position) >= batchSize) {
+      return `${found} names a position outside the batch; use positions 0 to ${batchSize - 1}.`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * `input` with every `{{T:n}}` in its title, description and criteria text
+ * replaced by `replacement(n)`.
+ */
+function fillPlaceholders<
+  T extends Pick<
+    BatchTicketInput,
+    'title' | 'description' | 'acceptanceCriteria'
+  >,
+>(input: T, replacement: (position: number) => string): T {
+  const fill = (text: string) =>
+    text.replace(placeholder, (_, position) => replacement(Number(position)));
+  return {
+    ...input,
+    title: fill(input.title),
+    ...(input.description === undefined
+      ? {}
+      : { description: fill(input.description) }),
+    ...(input.acceptanceCriteria === undefined
+      ? {}
+      : {
+          acceptanceCriteria: input.acceptanceCriteria.map((criterion) => ({
+            ...criterion,
+            text: fill(criterion.text),
+          })),
+        }),
+  };
 }
 
 /** Why a batch Ticket's Blocker positions break the rules, if they do. */
@@ -1018,7 +1077,9 @@ export function createTickets(
   changes: ChangeChannel = createChangeChannel(),
 ) {
   return {
-    ...createCycles(db, changes),
+    ...createCycles(db, changes, (numbers) =>
+      archiveStep(numbers, { withChildren: true }),
+    ),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
 
@@ -1480,8 +1541,10 @@ export function createTickets(
      * the rules for creating one, with the Blockers each names by position
      * among the earlier ones, under an Epic when `epicNumber` is given, and
      * planned into a Cycle when `cycleId` is.
-     * All or nothing: a refusal names the offending Ticket by position and
-     * creates none. The new Tickets are announced once.
+     * A `{{T:n}}` in a title, description or criterion text becomes
+     * `T<number>` of the Ticket at position n of the batch, anywhere in the
+     * text. All or nothing: a refusal names the offending Ticket by position
+     * and creates none. The new Tickets are announced once.
      */
     createTicketBatch(input: CreateTicketBatchInput): Ticket[] {
       throwFieldErrors({
@@ -1492,7 +1555,10 @@ export function createTickets(
               ? `Create at most ${maxBatchSize} Tickets at a time.`
               : undefined,
       });
-      const checked = input.tickets.map(checkBatchTicket);
+      const batchSize = input.tickets.length;
+      const checked = input.tickets.map((ticket, position) =>
+        checkBatchTicket(ticket, position, batchSize),
+      );
       checkProjectWritable(db, input.projectId);
       const project = { id: input.projectId };
       const epicNumber = input.epicNumber ?? null;
@@ -1532,6 +1598,40 @@ export function createTickets(
           }
           created.push(number);
         }
+        // Only now are all the numbers known; a refusal rolls everything back.
+        input.tickets.forEach((ticket, position) => {
+          const filled = fillPlaceholders(ticket, (at) => `T${created[at]}`);
+          if (
+            filled.title === ticket.title &&
+            filled.description === ticket.description &&
+            filled.acceptanceCriteria?.every(
+              ({ text }, i) => text === ticket.acceptanceCriteria?.[i].text,
+            ) !== false
+          ) {
+            return;
+          }
+          const { values, acceptanceCriteria } = checkBatchTicket(
+            filled,
+            position,
+            batchSize,
+          ).ticket;
+          const number = created[position];
+          db.update(tickets)
+            .set({ title: values.title, description: values.description })
+            .where(eq(tickets.number, number))
+            .run();
+          acceptanceCriteria.forEach(({ text }, criterionPosition) => {
+            db.update(ticketAcceptanceCriteria)
+              .set({ text })
+              .where(
+                and(
+                  eq(ticketAcceptanceCriteria.ticketNumber, number),
+                  eq(ticketAcceptanceCriteria.position, criterionPosition),
+                ),
+              )
+              .run();
+          });
+        });
         if (originNumber !== null) {
           touchTicket(db, originNumber);
         }
