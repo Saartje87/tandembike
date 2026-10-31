@@ -13,6 +13,20 @@ export function isPreviewable(mediaType: string): boolean {
   return previewableMediaTypes.has(mediaType);
 }
 
+/**
+ * Whether an Attachment of `mediaType` holds text an Agent can read as text:
+ * text/*, and JSON, XML, YAML and JavaScript types.
+ */
+export function isTextMediaType(mediaType: string): boolean {
+  return (
+    mediaType.startsWith('text/') ||
+    /^application\/(json|xml|yaml|x-yaml|javascript|ecmascript)$/.test(
+      mediaType,
+    ) ||
+    /\+(json|xml|yaml)$/.test(mediaType)
+  );
+}
+
 /** A byte count as people read it, such as "1.5 MB". */
 export function formatSize(bytes: number): string {
   if (bytes < 1024) {

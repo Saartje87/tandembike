@@ -1,8 +1,12 @@
 // @vitest-environment node
+
 import { describe, expect, it } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function ticketsWithOne() {
   const tickets = createTestTickets();
@@ -143,6 +147,7 @@ describe('Attachment tools', () => {
 
     expect(resultJson(found)).toEqual({
       id: attachment.id,
+      url: `http://localhost:3000/attachment/${attachment.id}`,
       ticketNumber: ticket.number,
       name: 'notes.txt',
       mediaType: 'text/plain',
@@ -177,5 +182,217 @@ describe('Attachment tools', () => {
       { type: 'attachmentAdded', name: 'notes.txt' },
     ]);
     await client.close();
+  });
+
+  describe('from a local path', () => {
+    const tempFile = (name: string, content: string | Uint8Array) => {
+      const dir = mkdtempSync(join(tmpdir(), 'attachment-'));
+      const path = join(dir, name);
+      writeFileSync(path, content);
+      return { dir, path };
+    };
+
+    it('reads the file on the server and names it by its base name', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const client = await connectMcpClient(tickets);
+      const { path } = tempFile('shot.png', bytes('png-bytes'));
+
+      const result = await client.callTool({
+        name: 'add_attachment',
+        arguments: { number: ticket.number, path },
+      });
+
+      expect(resultJson(result)).toMatchObject({
+        name: 'shot.png',
+        mediaType: 'image/png',
+        size: 9,
+        author: 'agent',
+      });
+      const [attachment] = tickets.getTicket(ticket.number).attachments;
+      expect(
+        new TextDecoder().decode(tickets.getAttachment(attachment.id).content),
+      ).toBe('png-bytes');
+      await client.close();
+    });
+
+    it('takes a given name over the base name', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const client = await connectMcpClient(tickets);
+      const { path } = tempFile('tmp123', bytes('x'));
+
+      await client.callTool({
+        name: 'add_attachment',
+        arguments: { number: ticket.number, path, name: 'report.pdf' },
+      });
+
+      expect(tickets.getTicket(ticket.number).attachments[0]).toMatchObject({
+        name: 'report.pdf',
+        mediaType: 'application/pdf',
+      });
+      await client.close();
+    });
+
+    it('refuses both or neither of path and content, with a reason', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const client = await connectMcpClient(tickets);
+      const { path } = tempFile('a.txt', 'x');
+
+      const both = await client.callTool({
+        name: 'add_attachment',
+        arguments: {
+          number: ticket.number,
+          path,
+          name: 'a.txt',
+          content: base64('x'),
+        },
+      });
+      const neither = await client.callTool({
+        name: 'add_attachment',
+        arguments: { number: ticket.number, name: 'a.txt' },
+      });
+
+      expect(both.isError).toBe(true);
+      expect(resultText(both)).toMatch(/either.*path.*content/i);
+      expect(neither.isError).toBe(true);
+      expect(resultText(neither)).toMatch(/either.*path.*content/i);
+      expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
+      await client.close();
+    });
+
+    it('refuses content without a name', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const client = await connectMcpClient(tickets);
+
+      const result = await client.callTool({
+        name: 'add_attachment',
+        arguments: { number: ticket.number, content: base64('x') },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toBe('Enter a file name.');
+      await client.close();
+    });
+
+    it('refuses a relative path, a missing path and a path that is not a file', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const client = await connectMcpClient(tickets);
+      const { dir } = tempFile('a.txt', 'x');
+      const add = (path: string) =>
+        client.callTool({
+          name: 'add_attachment',
+          arguments: { number: ticket.number, path },
+        });
+      mkdirSync(join(dir, 'folder'));
+
+      const relative = await add('a.txt');
+      const missing = await add(join(dir, 'missing.txt'));
+      const folder = await add(join(dir, 'folder'));
+
+      expect(relative.isError).toBe(true);
+      expect(resultText(relative)).toMatch(/absolute/);
+      expect(missing.isError).toBe(true);
+      expect(resultText(missing)).toMatch(/no file/i);
+      expect(folder.isError).toBe(true);
+      expect(resultText(folder)).toMatch(/not a file/i);
+      expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
+      await client.close();
+    });
+  });
+
+  describe('get_attachment content', () => {
+    const add = (
+      tickets: ReturnType<typeof createTestTickets>,
+      number: number,
+      name: string,
+      content: Uint8Array,
+      mediaType?: string,
+    ) =>
+      tickets.addAttachment(number, {
+        name,
+        content,
+        mediaType,
+        author: 'user',
+      });
+
+    it.each([
+      ['shot.png', 'image/png'],
+      ['shot.jpg', 'image/jpeg'],
+      ['shot.gif', 'image/gif'],
+      ['shot.webp', 'image/webp'],
+    ])(
+      'returns %s as image content after the metadata',
+      async (name, mimeType) => {
+        const { tickets, ticket } = ticketsWithOne();
+        const attachment = add(tickets, ticket.number, name, bytes('pixels'));
+        const client = await connectMcpClient(tickets);
+
+        const result = await client.callTool({
+          name: 'get_attachment',
+          arguments: { id: attachment.id },
+        });
+
+        expect(resultJson(result)).toMatchObject({
+          id: attachment.id,
+          mediaType: mimeType,
+        });
+        expect(result.content).toEqual([
+          expect.objectContaining({ type: 'text' }),
+          { type: 'image', data: base64('pixels'), mimeType },
+        ]);
+        await client.close();
+      },
+    );
+
+    it.each([
+      ['notes.txt', undefined],
+      ['data.json', undefined],
+      ['feed.blob', 'application/ld+json'],
+      ['page.html', undefined],
+    ])('returns %s as text content', async (name, mediaType) => {
+      const { tickets, ticket } = ticketsWithOne();
+      const attachment = add(
+        tickets,
+        ticket.number,
+        name,
+        bytes('héllo'),
+        mediaType,
+      );
+      const client = await connectMcpClient(tickets);
+
+      const result = await client.callTool({
+        name: 'get_attachment',
+        arguments: { id: attachment.id },
+      });
+
+      expect(result.content).toEqual([
+        expect.objectContaining({ type: 'text' }),
+        { type: 'text', text: 'héllo' },
+      ]);
+      await client.close();
+    });
+
+    it('returns only metadata and the localhost URL for any other type', async () => {
+      const { tickets, ticket } = ticketsWithOne();
+      const attachment = add(
+        tickets,
+        ticket.number,
+        'report.pdf',
+        bytes('%PDF'),
+      );
+      const client = await connectMcpClient(tickets);
+
+      const result = await client.callTool({
+        name: 'get_attachment',
+        arguments: { id: attachment.id },
+      });
+
+      expect(result.content).toHaveLength(1);
+      expect(resultJson(result)).toMatchObject({
+        id: attachment.id,
+        mediaType: 'application/pdf',
+        url: `http://localhost:3000/attachment/${attachment.id}`,
+      });
+      await client.close();
+    });
   });
 });
