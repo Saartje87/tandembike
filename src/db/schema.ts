@@ -327,6 +327,14 @@ export const conversations = sqliteTable(
     /** The Claude Agent SDK session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
     costUsd: real('cost_usd').notNull().default(0),
+    /** Closed by the User: stopped and left out of the Project's list. */
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /** New Ticket: the Cycle the title field was on, a default for the Agent. */
+    defaultCycleId: integer('default_cycle_id'),
+    /** New Ticket: the Epic the title field was under, a default. */
+    defaultEpicNumber: integer('default_epic_number'),
+    /** New Ticket: what the title field creates, a default. */
+    defaultType: text('default_type', { enum: ticketTypes }),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },

@@ -1,5 +1,10 @@
-/** Why a Conversation was started (GLOSSARY: Start, Triage, Ask). */
-export const conversationIntents = ['start', 'triage', 'ask'] as const;
+/** Why a Conversation was started (GLOSSARY: Start, Triage, Ask, New Ticket). */
+export const conversationIntents = [
+  'start',
+  'triage',
+  'ask',
+  'new_ticket',
+] as const;
 export type ConversationIntent = (typeof conversationIntents)[number];
 
 /**

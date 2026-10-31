@@ -643,3 +643,114 @@ describe('The Start run limit', () => {
     await conversations.reply(triage.id, 'Again');
   });
 });
+
+describe('New Ticket Conversations', () => {
+  it('tells the Agent the field it came from as defaults, and keeps them when it resumes', async () => {
+    const { conversations, restart, runner, tickets, project } = setup();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+
+    const conversation = await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add a coupon field',
+      defaults: { cycleId: 7, epicNumber: epic.number, type: 'Ticket' },
+    });
+
+    expect(conversation.ticketNumber).toBeNull();
+    expect(runner.runs[0].options.prompt).toBe('Add a coupon field');
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toContain('Website');
+    expect(brief).toContain('new Ticket');
+    expect(brief).toContain('Cycle 7');
+    expect(brief).toContain(`Epic T${epic.number}`);
+    expect(brief).toContain('type Ticket');
+
+    const resumed = restart();
+    await resumed.reply(conversation.id, 'Make it optional');
+    expect(runner.runs[1].options.systemPrompt).toContain('Cycle 7');
+  });
+
+  it('gives only the defaults the field has', async () => {
+    const { conversations, runner, project } = setup();
+
+    await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add an Epic',
+      defaults: { type: 'Epic' },
+    });
+
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toContain('type Epic');
+    expect(brief).not.toContain('Cycle');
+  });
+
+  it('does not count toward the Start run limit', async () => {
+    const { conversations, tickets, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+
+    await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'One',
+    });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Two',
+    });
+
+    const other = tickets.createTicket({ projectId: project.id, title: 'B' });
+    const refusal = await failure(
+      conversations.start({
+        ticketNumber: other.number,
+        intent: 'start',
+        prompt: 'Go',
+      }),
+    );
+    expect((refusal as Error).message).toContain('a Start run working');
+  });
+
+  it('lists open Project Conversations, and Close stops one and hides it but keeps it stored', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'ask',
+      prompt: 'On a Ticket',
+    });
+    const first = await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'First',
+    });
+    const second = await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Second',
+    });
+
+    expect(
+      conversations.listOpenForProject(project.id).map(({ id }) => id),
+    ).toEqual([second.id, first.id]);
+
+    const closed = await conversations.close(first.id);
+
+    expect(closed.state).toBe('stopped');
+    expect(runner.runs[1].interrupted).toBe(true);
+    expect(
+      conversations.listOpenForProject(project.id).map(({ id }) => id),
+    ).toEqual([second.id]);
+    expect(conversations.get(first.id).hidden).toBe(true);
+    expect(conversations.transcript(first.id)).toHaveLength(1);
+  });
+});

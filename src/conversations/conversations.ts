@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -8,6 +8,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../tickets/errors';
+import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
 import type {
   AgentRun,
@@ -22,7 +23,7 @@ import type {
   PermissionStatus,
   TranscriptRole,
 } from './conversation-state';
-import { runBrief } from './run-brief';
+import { type NewTicketDefaults, runBrief } from './run-brief';
 
 export type Conversation = {
   id: number;
@@ -32,6 +33,11 @@ export type Conversation = {
   state: ConversationState;
   sdkSessionId: string | null;
   costUsd: number;
+  /** Closed by the User: stopped, and left out of the Project's list. */
+  hidden: boolean;
+  defaultCycleId: number | null;
+  defaultEpicNumber: number | null;
+  defaultType: TicketType | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -53,6 +59,8 @@ export type StartConversationInput = {
   intent: ConversationIntent;
   /** The User's first message. */
   prompt: string;
+  /** New Ticket: where the title field was; the Agent's defaults. */
+  defaults?: NewTicketDefaults;
 };
 
 export type ListConversationsFilter = {
@@ -288,6 +296,11 @@ export function createConversations({
           projectName: tickets.getProject(conversation.projectId).name,
           intent: conversation.intent,
           parallelRuns: settings.parallelRuns,
+          defaults: {
+            cycleId: conversation.defaultCycleId,
+            epicNumber: conversation.defaultEpicNumber,
+            type: conversation.defaultType,
+          },
         }),
         prompt,
         ...(resume === undefined ? {} : { resume }),
@@ -317,6 +330,25 @@ export function createConversations({
           (filter.ticketNumber === undefined ||
             row.ticketNumber === filter.ticketNumber),
       );
+    },
+
+    /**
+     * The Project's Conversations about no Ticket that the User has not
+     * closed, newest first: what the Board header lists.
+     */
+    listOpenForProject(projectId: number): Conversation[] {
+      return db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.projectId, projectId),
+            isNull(conversations.ticketNumber),
+            eq(conversations.hidden, false),
+          ),
+        )
+        .orderBy(desc(conversations.id))
+        .all();
     },
 
     /** A Conversation's transcript, oldest entry first. */
@@ -361,6 +393,9 @@ export function createConversations({
           projectId,
           ticketNumber: input.ticketNumber ?? null,
           intent: input.intent,
+          defaultCycleId: input.defaults?.cycleId ?? null,
+          defaultEpicNumber: input.defaults?.epicNumber ?? null,
+          defaultType: input.defaults?.type ?? null,
           state: 'running',
           createdAt: now,
           updatedAt: now,
@@ -430,6 +465,17 @@ export function createConversations({
           handle.run.close();
         }
       }
+      return get(id);
+    },
+
+    /** Stops the Conversation's run and hides it from the Project's list. */
+    async close(id: number): Promise<Conversation> {
+      await this.stop(id);
+      db.update(conversations)
+        .set({ hidden: true, updatedAt: new Date() })
+        .where(eq(conversations.id, id))
+        .run();
+      announce(id);
       return get(id);
     },
 

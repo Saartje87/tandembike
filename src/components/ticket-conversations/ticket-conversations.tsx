@@ -50,6 +50,7 @@ const intentNames: Record<ConversationIntent, string> = {
   start: 'Start',
   triage: 'Triage',
   ask: 'Ask',
+  new_ticket: 'New Ticket',
 };
 
 const stateNames: Record<ConversationState, string> = {
