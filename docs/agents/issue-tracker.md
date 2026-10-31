@@ -16,6 +16,15 @@ A Claim covers the work of one Agent run, not the wait for a merge:
 - A later Agent run that works on the open PR, for example to fix review findings, claims the Ticket for that work and releases it again when done.
 - After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose PR, in its External references, is merged with CI green does; failing both, the User does.
 
+## Worktrees for parallel runs
+
+When Tandembike starts a run with Parallel runs on, it tells the run to work in a git worktree of its own, by this section. Follow it for any Agent run that shares the checkout with another.
+
+- **Where.** `.claude/worktrees/<slug>/` inside the repository, which is git-ignored. `EnterWorktree` puts one there. Otherwise create it by hand off `main`, on the branch `AGENTS.md` names: `git worktree add -b ticket-<number>-<slug> .claude/worktrees/<slug> origin/main`. Create it before you change any file, and stay inside it.
+- **Prepare it.** The app keeps its database in the folder (`data/`), so a fresh worktree starts with an empty one and needs no env file. Run `npm ci --prefer-offline --no-audit --no-fund --ignore-scripts`, then `npm rebuild better-sqlite3`. Do not symlink `node_modules` (steps 2–3 of `browser-checks.md`).
+- **Ports.** Port 4747 belongs to the User's running app, and your MCP tools reach Tickets through it, so never run `npm run dev` or `npm run start` in a worktree: both bind 4747. To serve the app, run `npx next dev -H localhost -p <port>` on a free port, such as 3100 and up. Use that throwaway server and its own `data/` for anything that creates or deletes Tickets, as `browser-checks.md` requires. `npm run check` needs no server.
+- **Clean up.** After the PR is open, stop any server you started, then from the main checkout run `git worktree remove .claude/worktrees/<slug>` and `git worktree prune`. If removal refuses because of uncommitted files, commit or discard them first; do not use `--force` on work you have not pushed. Leave the branch: it is the PR's.
+
 ## Working an Epic
 
 An Epic is handed off, worked and delivered as one unit:
