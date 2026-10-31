@@ -106,7 +106,7 @@ const TemplateForm: FC<TemplateFormProps> = ({
             />
             <FieldError id={prefixErrorId} reason={prefixError} />
           </Stack>
-          <Stack gap={1} className={styles.urlField}>
+          <Stack gap={1} flexGrow={1} className={styles.urlField}>
             <Label htmlFor={urlId}>URL</Label>
             <TextInput
               {...register('url')}
