@@ -452,6 +452,8 @@ export type ListTicketsFilter = {
   originNumber?: number;
   /** Only normal Tickets, or only Epics. */
   type?: TicketType;
+  /** Only the children of this Epic. */
+  epicNumber?: number;
 };
 
 export const defaultPageSize = 50;
@@ -3068,6 +3070,9 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
       ? undefined
       : eq(tickets.originNumber, filter.originNumber),
     filter.type === undefined ? undefined : eq(tickets.type, filter.type),
+    filter.epicNumber === undefined
+      ? undefined
+      : eq(tickets.epicNumber, filter.epicNumber),
     filter.cycleId === undefined
       ? undefined
       : (filter.cycleId === null ? notInArray : inArray)(
