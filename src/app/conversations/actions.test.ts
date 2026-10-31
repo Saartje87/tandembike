@@ -147,7 +147,7 @@ describe('Conversation actions', () => {
     });
     await startConversation({
       ticketNumber: asking.number,
-      intent: 'start',
+      intent: 'ask',
       prompt: 'Go',
     });
     runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
