@@ -64,7 +64,3 @@ export const useTicketActivity = (
     needsYou: activity.needsYou.includes(number),
   };
 };
-
-/** How many Conversations, in all Projects, wait for the User. */
-export const useNeedsYouCount = (): number =>
-  useContext(Activity).needsYouCount;

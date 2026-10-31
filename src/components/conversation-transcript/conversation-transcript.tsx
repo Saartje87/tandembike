@@ -4,7 +4,6 @@ import {
   Alert,
   Box,
   Button,
-  Heading,
   Inline,
   Label,
   Stack,
@@ -39,15 +38,8 @@ export type ConversationWithTranscript = {
   transcript: TranscriptEntry[];
 };
 
-export type TicketConversationsProps = {
-  /** The Ticket's Conversations with their transcripts, newest first. */
-  items: ConversationWithTranscript[];
-  /** The Conversation to show open, when the parent picks it. */
-  openId?: number | undefined;
-  /** Called with the id of a Conversation the User picks from the list. */
-  onOpen?: (conversationId: number) => void;
-  /** Whether to list the Conversations above the open one; defaults to true. */
-  showList?: boolean;
+export type ConversationTranscriptProps = {
+  item: ConversationWithTranscript;
 };
 
 export const intentNames: Record<ConversationIntent, string> = {
@@ -66,7 +58,7 @@ export const stateNames: Record<ConversationState, string> = {
 };
 
 /** A Conversation's cost so far, in US dollars to the cent. */
-const formatCost = (costUsd: number) => `$${costUsd.toFixed(2)}`;
+export const formatCost = (costUsd: number) => `$${costUsd.toFixed(2)}`;
 
 const speakerNames: Record<TranscriptRole, string> = {
   user: 'You',
@@ -286,86 +278,40 @@ const StopButton: FC<StopButtonProps> = ({ conversationId }) => {
 };
 
 /**
- * A Ticket's Conversations with Agents (ADR 0019): a list of them, newest
- * first, with the newest open. The open one shows its transcript, which the
- * drawer refreshes while the run works, a reply field, Stop, and Allow and
- * Deny for each permission request the run waits on. Renders nothing for a
- * Ticket without Conversations.
+ * One Conversation with an Agent (ADR 0019), as the Conversation dialog shows
+ * it: its state and cost, the transcript, which the dialog refreshes while the
+ * run works, a reply field, Stop, and Allow and Deny for each permission
+ * request the run waits on.
  */
-export const TicketConversations: FC<TicketConversationsProps> = ({
-  items,
-  openId,
-  onOpen,
-  showList = true,
-}) => {
-  const [pickedId, setPickedId] = useState<number>();
-
-  if (items.length === 0) {
-    return null;
-  }
-  const open =
-    items.find((item) => item.conversation.id === (openId ?? pickedId)) ??
-    items[0];
-  const { conversation, transcript } = open;
-
-  return (
-    <Stack gap={2}>
-      {showList && (
-        <Heading level={3} fontSize="medium">
-          Conversations
-        </Heading>
+export const ConversationTranscript: FC<ConversationTranscriptProps> = ({
+  item: { conversation, transcript },
+}) => (
+  <Stack gap={2}>
+    <Inline gap={2} alignY="center" justifyContent="space-between">
+      <Text fontSize="small" color="muted">
+        {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}, ${formatCost(conversation.costUsd)}`}
+      </Text>
+      {hasRun(conversation.state) && (
+        <StopButton conversationId={conversation.id} />
       )}
-      {showList && (
-        <Stack gap={1} listStyle="none" role="list" asChild>
-          <ul aria-label="Conversations">
-            {items.map((item) => (
-              <li key={item.conversation.id}>
-                <Button
-                  type="button"
-                  size="small"
-                  variant={
-                    item.conversation.id === conversation.id ? 'solid' : 'ghost'
-                  }
-                  aria-pressed={item.conversation.id === conversation.id}
-                  onClick={() => {
-                    setPickedId(item.conversation.id);
-                    onOpen?.(item.conversation.id);
-                  }}
-                >
-                  {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]} · ${formatCost(item.conversation.costUsd)}`}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </Stack>
-      )}
-      <Inline gap={2} alignY="center" justifyContent="space-between">
-        <Text fontSize="small" color="muted">
-          {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}, ${formatCost(conversation.costUsd)}`}
-        </Text>
-        {hasRun(conversation.state) && (
-          <StopButton conversationId={conversation.id} />
-        )}
-      </Inline>
-      <Stack gap={1} listStyle="none" role="list" asChild>
-        <ul aria-label="Transcript">
-          {transcript.map((entry) => (
-            <EntryLine key={entry.id} entry={entry} />
-          ))}
-        </ul>
-      </Stack>
-      {conversation.state === 'interrupted' && (
-        <Alert intent="warning">
-          This Conversation was interrupted. Reply to resume it.
-        </Alert>
-      )}
-      {conversation.state === 'stopped' ? (
-        <Text tag="p" color="muted">
-          This Conversation was stopped. Start a new one.
-        </Text>
-      ) : (
-        <ReplyForm key={conversation.id} conversationId={conversation.id} />
-      )}
+    </Inline>
+    <Stack gap={1} listStyle="none" role="list" asChild>
+      <ul aria-label="Transcript">
+        {transcript.map((entry) => (
+          <EntryLine key={entry.id} entry={entry} />
+        ))}
+      </ul>
     </Stack>
-  );
-};
+    {conversation.state === 'interrupted' && (
+      <Alert intent="warning">
+        This Conversation was interrupted. Reply to resume it.
+      </Alert>
+    )}
+    {conversation.state === 'stopped' && (
+      <Alert intent="info">
+        This Conversation was stopped. Reply to resume it.
+      </Alert>
+    )}
+    <ReplyForm key={conversation.id} conversationId={conversation.id} />
+  </Stack>
+);

@@ -5,7 +5,6 @@ import { ArchivedProjectNotice } from '../../../components/archived-project-noti
 import { PageLoading } from '../../../components/page-loading/page-loading';
 import { ProjectHeader } from '../../../components/project-header/project-header';
 import { ProjectTabs } from '../../../components/project-tabs/project-tabs';
-import { appConversations } from '../../../conversations/app-conversations';
 import { appTickets } from '../../../tickets/app-tickets';
 import { findProject, type ProjectPageProps } from './project-data';
 
@@ -27,20 +26,9 @@ async function projectShell(
     return <ArchivedProjectNotice project={project} />;
   }
   const tickets = appTickets('user');
-  const conversations = appConversations();
   return (
     <Stack gap={4}>
-      <ProjectHeader
-        project={project}
-        conversations={conversations
-          .listOpenForProject(project.id)
-          .map(({ id, intent, state }) => ({
-            id,
-            intent,
-            state,
-            title: conversations.transcript(id)[0]?.text ?? '',
-          }))}
-      >
+      <ProjectHeader project={project}>
         <ProjectTabs
           projectId={project.id}
           cycles={tickets.listCycles(project.id)}

@@ -8,7 +8,6 @@ import { renderWithTheme } from '../../test/render';
 import { LiveUpdates } from '../live-updates/live-updates';
 import {
   ConversationActivityProvider,
-  useNeedsYouCount,
   useTicketActivity,
 } from './conversation-activity';
 
@@ -30,10 +29,7 @@ class FakeEventSource {
 
 const Probe = () => {
   const activity = useTicketActivity(4);
-  const count = useNeedsYouCount();
-  return (
-    <p>{`running=${activity.running} needsYou=${activity.needsYou} count=${count}`}</p>
-  );
+  return <p>{`running=${activity.running} needsYou=${activity.needsYou}`}</p>;
 };
 
 const show = () =>
@@ -63,7 +59,7 @@ describe('ConversationActivityProvider', () => {
     show();
 
     expect(
-      screen.getByText('running=false needsYou=false count=0'),
+      screen.getByText('running=false needsYou=false'),
     ).toBeInTheDocument();
   });
 
@@ -75,7 +71,7 @@ describe('ConversationActivityProvider', () => {
     });
     show();
     expect(
-      await screen.findByText('running=true needsYou=false count=0'),
+      await screen.findByText('running=true needsYou=false'),
     ).toBeInTheDocument();
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce({
@@ -93,7 +89,7 @@ describe('ConversationActivityProvider', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('running=false needsYou=true count=2'),
+        screen.getByText('running=false needsYou=true'),
       ).toBeInTheDocument(),
     );
   });

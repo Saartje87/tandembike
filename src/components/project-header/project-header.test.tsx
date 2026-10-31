@@ -183,24 +183,4 @@ describe('ProjectHeader', () => {
     await waitFor(() => expect(pressed(picker())).toEqual(['Default']));
     expect(header()).not.toHaveAttribute('data-color');
   });
-
-  it('shows the Conversations button with the count of open ones, when given them', () => {
-    renderWithTheme(
-      <ProjectHeader
-        project={project}
-        conversations={[
-          {
-            id: 9,
-            intent: 'new_ticket',
-            state: 'running',
-            title: 'Add coupons',
-          },
-        ]}
-      />,
-    );
-
-    expect(
-      screen.getByRole('button', { name: 'Conversations (1)' }),
-    ).toBeInTheDocument();
-  });
 });

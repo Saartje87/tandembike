@@ -3,7 +3,7 @@ import { connection } from 'next/server';
 
 import { appTickets } from '../../../tickets/app-tickets';
 import { NotFoundError } from '../../../tickets/errors';
-import { openConversationId, openTicketNumber } from '../../lib/paths';
+import { openTicketNumber } from '../../lib/paths';
 
 /**
  * A Board's search parameters: `?ticket=` opens a Ticket (ADR 0013), and
@@ -11,27 +11,9 @@ import { openConversationId, openTicketNumber } from '../../lib/paths';
  */
 export type BoardSearchParams = Promise<{
   ticket?: string | string[];
-  conversation?: string | string[];
-  from?: string | string[];
   q?: string | string[];
   label?: string | string[];
 }>;
-
-/**
- * The `openConversation` and `fromTicket` props of a Board for its
- * `?conversation=` and `?from=` parameters; each is left out unless valid.
- */
-export function openedConversation(
-  conversation: string | string[] | undefined,
-  from: string | string[] | undefined,
-): { openConversation?: number; fromTicket?: number } {
-  const id = openConversationId(conversation);
-  const fromTicket = openTicketNumber(from);
-  return {
-    ...(id === undefined ? {} : { openConversation: id }),
-    ...(id === undefined || fromTicket === undefined ? {} : { fromTicket }),
-  };
-}
 
 export type ProjectPageProps = {
   params: Promise<{ id: string }>;

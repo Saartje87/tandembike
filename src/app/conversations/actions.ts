@@ -7,7 +7,9 @@ import {
 } from '../../conversations/conversation-activity';
 import type {
   Conversation,
+  OpenConversation,
   StartConversationInput,
+  TranscriptEntry,
 } from '../../conversations/conversations';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
@@ -92,13 +94,49 @@ export async function answerConversationPermission(input: {
   );
 }
 
-/** Stops a Conversation's run and hides it from the Project's list. */
+/** Stops a Conversation's run and closes it; its transcript stays. */
 export async function closeConversation(input: {
   conversationId: number;
 }): Promise<ActionResult<{ conversation: Conversation }>> {
   return conversationResult(() =>
     appConversations().close(Number(input?.conversationId)),
   );
+}
+
+/** Opens a closed Conversation again. */
+export async function reopenConversation(input: {
+  conversationId: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().reopen(Number(input?.conversationId)),
+  );
+}
+
+/** Every open Conversation of the app, for the Conversation dialog's tabs. */
+export async function listOpenConversations(): Promise<OpenConversation[]> {
+  return appConversations().listOpen();
+}
+
+/** A Conversation with its transcript, for the tab the dialog shows. */
+export async function loadConversation(input: {
+  conversationId: number;
+}): Promise<
+  ActionResult<{ conversation: Conversation; transcript: TranscriptEntry[] }>
+> {
+  try {
+    const conversations = appConversations();
+    const id = Number(input?.conversationId);
+    return {
+      ok: true,
+      conversation: conversations.get(id),
+      transcript: conversations.transcript(id),
+    };
+  } catch (error) {
+    if (error instanceof TicketsError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 /**

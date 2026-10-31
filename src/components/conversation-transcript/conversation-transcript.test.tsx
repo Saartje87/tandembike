@@ -13,9 +13,9 @@ import type {
 } from '../../conversations/conversations';
 import { renderWithTheme } from '../../test/render';
 import {
+  ConversationTranscript,
   type ConversationWithTranscript,
-  TicketConversations,
-} from './ticket-conversations';
+} from './conversation-transcript';
 
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
@@ -63,92 +63,22 @@ const one = (
 const ok = (state: Conversation['state'] = 'running') =>
   ({ ok: true, conversation: conversation({ state }) }) as const;
 
-describe('TicketConversations', () => {
+describe('ConversationTranscript', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
     vi.mocked(replyToConversation).mockReset();
     vi.mocked(stopConversation).mockReset();
   });
 
-  it('shows nothing when the Ticket has no Conversations', () => {
-    renderWithTheme(<TicketConversations items={[]} />);
-
-    expect(screen.queryByText('Conversations')).not.toBeInTheDocument();
-  });
-
-  it('lists the Conversations newest first and opens the newest', () => {
-    renderWithTheme(
-      <TicketConversations
-        items={[
-          one({ id: 2, intent: 'ask' }, [
-            entry({ id: 5, conversationId: 2, text: 'Newest answer' }),
-          ]),
-          one({ id: 1 }, [
-            entry({ id: 1, conversationId: 1, text: 'Oldest answer' }),
-          ]),
-        ]}
-      />,
-    );
-
-    const buttons = within(
-      screen.getByRole('list', { name: 'Conversations' }),
-    ).getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      expect.stringContaining('Ask'),
-      expect.stringContaining('Start'),
-    ]);
-    expect(screen.getByText('Newest answer')).toBeInTheDocument();
-    expect(screen.queryByText('Oldest answer')).not.toBeInTheDocument();
-  });
-
-  it('shows each Conversation with its running cost', () => {
-    renderWithTheme(
-      <TicketConversations
-        items={[
-          one({ id: 2, intent: 'ask', costUsd: 1.2345 }),
-          one({ id: 1, costUsd: 0.5 }),
-        ]}
-      />,
-    );
-
-    const buttons = within(
-      screen.getByRole('list', { name: 'Conversations' }),
-    ).getAllByRole('button');
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      'Ask · waiting for you · $1.23',
-      'Start · waiting for you · $0.50',
-    ]);
-    expect(screen.getByText('Ask, waiting for you, $1.23')).toBeInTheDocument();
-  });
-
-  it('opens another Conversation when picked', async () => {
-    renderWithTheme(
-      <TicketConversations
-        items={[
-          one({ id: 2, intent: 'ask' }),
-          one({ id: 1 }, [
-            entry({ id: 1, conversationId: 1, text: 'Oldest answer' }),
-          ]),
-        ]}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /Start/ }));
-
-    expect(screen.getByText('Oldest answer')).toBeInTheDocument();
-  });
-
   it('shows the transcript with who said what', () => {
     renderWithTheme(
-      <TicketConversations
-        items={[
-          one({}, [
-            entry({ id: 1, role: 'user', text: 'Please start' }),
-            entry({ id: 2, role: 'agent', text: 'On it' }),
-            entry({ id: 3, role: 'tool', text: 'Read {"file_path":"a"}' }),
-            entry({ id: 4, role: 'error', text: 'Went wrong' }),
-          ]),
-        ]}
+      <ConversationTranscript
+        item={one({}, [
+          entry({ id: 1, role: 'user', text: 'Please start' }),
+          entry({ id: 2, role: 'agent', text: 'On it' }),
+          entry({ id: 3, role: 'tool', text: 'Read {"file_path":"a"}' }),
+          entry({ id: 4, role: 'error', text: 'Went wrong' }),
+        ])}
       />,
     );
 
@@ -164,7 +94,7 @@ describe('TicketConversations', () => {
 
   it('sends a reply and clears the field', async () => {
     vi.mocked(replyToConversation).mockResolvedValue(ok());
-    renderWithTheme(<TicketConversations items={[one({ id: 7 })]} />);
+    renderWithTheme(<ConversationTranscript item={one({ id: 7 })} />);
 
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Reply' }),
@@ -184,7 +114,7 @@ describe('TicketConversations', () => {
       ok: false,
       error: 'This Project has no repository path.',
     });
-    renderWithTheme(<TicketConversations items={[one({})]} />);
+    renderWithTheme(<ConversationTranscript item={one({})} />);
 
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Reply' }),
@@ -201,7 +131,7 @@ describe('TicketConversations', () => {
   it('stops a Conversation whose run is alive', async () => {
     vi.mocked(stopConversation).mockResolvedValue(ok('stopped'));
     renderWithTheme(
-      <TicketConversations items={[one({ id: 7, state: 'running' })]} />,
+      <ConversationTranscript item={one({ id: 7, state: 'running' })} />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
@@ -212,17 +142,15 @@ describe('TicketConversations', () => {
   it('shows Allow and Deny for a pending permission request and sends the answer', async () => {
     vi.mocked(answerConversationPermission).mockResolvedValue(ok());
     renderWithTheme(
-      <TicketConversations
-        items={[
-          one({ state: 'waiting' }, [
-            entry({
-              id: 9,
-              role: 'permission',
-              text: 'Bash {"command":"npm test"}',
-              permission: 'pending',
-            }),
-          ]),
-        ]}
+      <ConversationTranscript
+        item={one({ state: 'waiting' }, [
+          entry({
+            id: 9,
+            role: 'permission',
+            text: 'Bash {"command":"npm test"}',
+            permission: 'pending',
+          }),
+        ])}
       />,
     );
 
@@ -244,29 +172,27 @@ describe('TicketConversations', () => {
 
   it('shows how an answered or expired request ended, without buttons', () => {
     renderWithTheme(
-      <TicketConversations
-        items={[
-          one({}, [
-            entry({
-              id: 1,
-              role: 'permission',
-              text: 'Bash a',
-              permission: 'allowed',
-            }),
-            entry({
-              id: 2,
-              role: 'permission',
-              text: 'Bash b',
-              permission: 'denied',
-            }),
-            entry({
-              id: 3,
-              role: 'permission',
-              text: 'Bash c',
-              permission: 'expired',
-            }),
-          ]),
-        ]}
+      <ConversationTranscript
+        item={one({}, [
+          entry({
+            id: 1,
+            role: 'permission',
+            text: 'Bash a',
+            permission: 'allowed',
+          }),
+          entry({
+            id: 2,
+            role: 'permission',
+            text: 'Bash b',
+            permission: 'denied',
+          }),
+          entry({
+            id: 3,
+            role: 'permission',
+            text: 'Bash c',
+            permission: 'expired',
+          }),
+        ])}
       />,
     );
 
@@ -280,7 +206,7 @@ describe('TicketConversations', () => {
 
   it('says an interrupted Conversation was interrupted and lets a reply resume it', () => {
     renderWithTheme(
-      <TicketConversations items={[one({ state: 'interrupted' })]} />,
+      <ConversationTranscript item={one({ state: 'interrupted' })} />,
     );
 
     expect(screen.getByText(/was interrupted/)).toBeInTheDocument();
@@ -290,21 +216,19 @@ describe('TicketConversations', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('takes no reply once stopped', () => {
+  it('says a stopped Conversation was stopped and lets a reply resume it', () => {
     renderWithTheme(
-      <TicketConversations items={[one({ state: 'stopped' })]} />,
+      <ConversationTranscript item={one({ state: 'stopped' })} />,
     );
 
     expect(screen.getByText(/was stopped/)).toBeInTheDocument();
-    expect(
-      screen.queryByRole('textbox', { name: 'Reply' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Reply' })).toBeEnabled();
   });
 
   it('links the Tickets named in the transcript', () => {
     renderWithTheme(
-      <TicketConversations
-        items={[one({}, [entry({ id: 1, text: 'Created T41, then T42.' })])]}
+      <ConversationTranscript
+        item={one({}, [entry({ id: 1, text: 'Created T41, then T42.' })])}
       />,
     );
 
@@ -316,14 +240,5 @@ describe('TicketConversations', () => {
       'href',
       '/ticket/42',
     );
-  });
-
-  it('leaves out the list of Conversations when asked', () => {
-    renderWithTheme(<TicketConversations items={[one({})]} showList={false} />);
-
-    expect(
-      screen.queryByRole('list', { name: 'Conversations' }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Reply' })).toBeInTheDocument();
   });
 });

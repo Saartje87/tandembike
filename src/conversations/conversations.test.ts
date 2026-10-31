@@ -302,7 +302,7 @@ describe('Replying to a Conversation', () => {
     expect(runner.runs[1].options.resume).toBe('sess-1');
   });
 
-  it('is refused for a stopped Conversation, an empty reply or an unknown Conversation', async () => {
+  it('is refused for an empty reply or an unknown Conversation', async () => {
     const { conversations, project } = setup();
     const { id } = await conversations.start({
       projectId: project.id,
@@ -316,10 +316,22 @@ describe('Replying to a Conversation', () => {
     expect(await failure(conversations.reply(999, 'Hi'))).toBeInstanceOf(
       NotFoundError,
     );
+  });
+
+  it('resumes a stopped Conversation from its stored SDK session ID', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
     await conversations.stop(id);
-    expect(await failure(conversations.reply(id, 'Hi'))).toBeInstanceOf(
-      NotAllowedError,
-    );
+
+    const replied = await conversations.reply(id, 'More');
+
+    expect(replied.state).toBe('running');
+    expect(runner.runs[1].options.resume).toBe('sess-1');
   });
 
   it('is refused once the Project lost its repository path', async () => {
@@ -719,38 +731,136 @@ describe('New Ticket Conversations', () => {
     );
     expect((refusal as Error).message).toContain('a Start run working');
   });
+});
 
-  it('lists open Project Conversations, and Close stops one and hides it but keeps it stored', async () => {
-    const { conversations, runner, tickets, project } = setup();
-    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
-    await conversations.start({
+describe('Open Conversations', () => {
+  it('lists every open Conversation of the app in the order opened, with what a tab needs', async () => {
+    const { conversations, tickets, project } = setup();
+    const other = tickets.createProject({ name: 'Blog' });
+    tickets.setProjectAgentSettings(other.id, {
+      repositoryPath: setup().repositoryDir,
+    });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the footer',
+    });
+    const first = await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'triage',
+      prompt: 'Triage it',
+    });
+    const second = await conversations.start({
+      projectId: other.id,
+      intent: 'new_ticket',
+      prompt: 'Add coupons',
+    });
+
+    const open = conversations.listOpen();
+
+    expect(open.map(({ conversation }) => conversation.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    expect(open[0]).toMatchObject({
+      ticketTitle: 'Fix the footer',
+      projectName: 'Website',
+      firstMessage: 'Triage it',
+    });
+    expect(open[0].conversation).toMatchObject({
+      ticketNumber: ticket.number,
+      intent: 'triage',
+      state: 'running',
+      costUsd: 0,
+    });
+    expect(open[1]).toMatchObject({
+      ticketTitle: null,
+      projectName: 'Blog',
+      firstMessage: 'Add coupons',
+    });
+  });
+
+  it('closes any Conversation, a Ticket’s too: it stops the run, keeps the transcript and announces it', async () => {
+    const changes = createChangeChannel();
+    const published = vi.fn();
+    changes.subscribe(published);
+    const world = createTestConversations(changes);
+    const project = world.tickets.createProject({ name: 'Website' });
+    world.tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+    });
+    const ticket = world.tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+    });
+    const { conversations, runner } = world;
+    const about = await conversations.start({
       ticketNumber: ticket.number,
       intent: 'ask',
       prompt: 'On a Ticket',
     });
-    const first = await conversations.start({
+    const kept = await conversations.start({
       projectId: project.id,
       intent: 'new_ticket',
-      prompt: 'First',
+      prompt: 'On a Project',
+    });
+    published.mockClear();
+
+    const closed = await conversations.close(about.id);
+
+    expect(closed).toMatchObject({ state: 'stopped', hidden: true });
+    expect(runner.runs[0].interrupted).toBe(true);
+    expect(
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toEqual([kept.id]);
+    expect(conversations.transcript(about.id)).toHaveLength(1);
+    expect(published).toHaveBeenCalledWith({
+      type: 'conversation',
+      id: about.id,
+    });
+  });
+
+  it('reopens a closed Conversation, keeping its place in the order opened', async () => {
+    const { conversations, project } = setup();
+    const first = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'One',
     });
     const second = await conversations.start({
       projectId: project.id,
-      intent: 'new_ticket',
-      prompt: 'Second',
+      intent: 'ask',
+      prompt: 'Two',
     });
+    await conversations.close(first.id);
 
+    const reopened = await conversations.reopen(first.id);
+
+    expect(reopened.hidden).toBe(false);
+    expect(reopened.state).toBe('stopped');
     expect(
-      conversations.listOpenForProject(project.id).map(({ id }) => id),
-    ).toEqual([second.id, first.id]);
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toEqual([first.id, second.id]);
+    expect(await failure(conversations.reopen(999))).toBeInstanceOf(
+      NotFoundError,
+    );
+  });
 
-    const closed = await conversations.close(first.id);
+  it('reopens and resumes a closed Conversation when the User replies', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
+    await conversations.close(id);
 
-    expect(closed.state).toBe('stopped');
-    expect(runner.runs[1].interrupted).toBe(true);
+    const replied = await conversations.reply(id, 'More');
+
+    expect(replied).toMatchObject({ hidden: false, state: 'running' });
+    expect(runner.runs[1].options.resume).toBe('sess-1');
     expect(
-      conversations.listOpenForProject(project.id).map(({ id }) => id),
-    ).toEqual([second.id]);
-    expect(conversations.get(first.id).hidden).toBe(true);
-    expect(conversations.transcript(first.id)).toHaveLength(1);
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toEqual([id]);
   });
 });

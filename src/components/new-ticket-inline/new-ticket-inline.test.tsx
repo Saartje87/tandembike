@@ -1,12 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
-import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import {
   type ProjectAgentMode,
   ProjectAgentProvider,
@@ -17,10 +16,8 @@ vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
 vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
 }));
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  usePathname: () => '/project/3',
-  useSearchParams: () => new URLSearchParams(),
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
 }));
 
 const titleField = () =>
@@ -224,8 +221,13 @@ describe('NewTicketInline', () => {
       mode: ProjectAgentMode,
       props: Partial<Parameters<typeof NewTicketInline>[0]> = {},
     ) => {
-      const router = mockRouter();
-      vi.mocked(useRouter).mockReturnValue(router);
+      const dialog = {
+        conversations: [],
+        open: vi.fn(),
+        show: vi.fn(),
+        reopenAndOpen: vi.fn(),
+      };
+      vi.mocked(useConversationDialog).mockReturnValue(dialog);
       vi.mocked(startConversation).mockResolvedValue({
         ok: true,
         conversation: { id: 9 } as never,
@@ -236,11 +238,11 @@ describe('NewTicketInline', () => {
           <NewTicketInline projectId={3} {...props} />
         </ProjectAgentProvider>,
       );
-      return router;
+      return dialog;
     };
 
     it('starts a New Ticket Conversation on Enter in agent mode, and opens it', async () => {
-      const router = renderWithAgent('default', { cycleId: 7 });
+      const dialog = renderWithAgent('default', { cycleId: 7 });
 
       await userEvent.type(titleField(), 'Add coupons{Enter}');
 
@@ -251,9 +253,7 @@ describe('NewTicketInline', () => {
         defaults: { cycleId: 7, type: 'Ticket' },
       });
       expect(createTicket).not.toHaveBeenCalled();
-      expect(router.push).toHaveBeenCalledWith('/project/3?conversation=9', {
-        scroll: false,
-      });
+      expect(dialog.open).toHaveBeenCalledExactlyOnceWith(9);
       await waitFor(() => expect(titleField()).toHaveValue(''));
     });
 
@@ -297,8 +297,8 @@ describe('NewTicketInline', () => {
       ).toBeInTheDocument();
     });
 
-    it('opens it in place of the Epic drawer it was typed in, linking back', async () => {
-      const router = renderWithAgent('default', { epicNumber: 8 });
+    it('opens the dialog over the Epic drawer it was typed in, with the Epic as a default', async () => {
+      const dialog = renderWithAgent('default', { epicNumber: 8 });
 
       await userEvent.type(
         screen.getByRole('textbox', { name: 'New child Ticket title' }),
@@ -310,10 +310,7 @@ describe('NewTicketInline', () => {
           defaults: { epicNumber: 8, type: 'Ticket' },
         }),
       );
-      expect(router.push).toHaveBeenCalledWith(
-        '/project/3?conversation=9&from=8',
-        { scroll: false },
-      );
+      expect(dialog.open).toHaveBeenCalledWith(9);
     });
 
     it('shows a refusal under the field and keeps the title', async () => {

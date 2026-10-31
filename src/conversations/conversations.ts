@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -33,7 +33,7 @@ export type Conversation = {
   state: ConversationState;
   sdkSessionId: string | null;
   costUsd: number;
-  /** Closed by the User: stopped, and left out of the Project's list. */
+  /** Closed by the User: stopped, and left out of the open Conversations. */
   hidden: boolean;
   defaultCycleId: number | null;
   defaultEpicNumber: number | null;
@@ -61,6 +61,16 @@ export type StartConversationInput = {
   prompt: string;
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
+};
+
+/** An open Conversation with what its tab in the Conversation dialog shows. */
+export type OpenConversation = {
+  conversation: Conversation;
+  /** The title of its Ticket; null for a Conversation about a Project. */
+  ticketTitle: string | null;
+  projectName: string;
+  /** The User's first message. */
+  firstMessage: string;
 };
 
 export type ListConversationsFilter = {
@@ -266,6 +276,13 @@ export function createConversations({
     }
   };
 
+  const setHidden = (id: number, hidden: boolean) => {
+    db.update(conversations)
+      .set({ hidden, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .run();
+  };
+
   /** Starts a run for Conversation `id` with `prompt`, resuming `resume`. */
   const startRun = (id: number, prompt: string, resume?: string) => {
     const conversation = get(id);
@@ -333,22 +350,33 @@ export function createConversations({
     },
 
     /**
-     * The Project's Conversations about no Ticket that the User has not
-     * closed, newest first: what the Board header lists.
+     * Every Conversation the User has not closed, across all Projects and
+     * Tickets, in the order they were opened: the tabs of the Conversation
+     * dialog.
      */
-    listOpenForProject(projectId: number): Conversation[] {
-      return db
+    listOpen(): OpenConversation[] {
+      const rows = db
         .select()
         .from(conversations)
-        .where(
-          and(
-            eq(conversations.projectId, projectId),
-            isNull(conversations.ticketNumber),
-            eq(conversations.hidden, false),
-          ),
-        )
-        .orderBy(desc(conversations.id))
+        .where(eq(conversations.hidden, false))
+        .orderBy(conversations.id)
         .all();
+      return rows.map((conversation) => ({
+        conversation,
+        ticketTitle:
+          conversation.ticketNumber === null
+            ? null
+            : tickets.getTicket(conversation.ticketNumber).title,
+        projectName: tickets.getProject(conversation.projectId).name,
+        firstMessage:
+          db
+            .select({ text: conversationEntries.text })
+            .from(conversationEntries)
+            .where(eq(conversationEntries.conversationId, conversation.id))
+            .orderBy(conversationEntries.id)
+            .limit(1)
+            .get()?.text ?? '',
+      }));
     },
 
     /** A Conversation's transcript, oldest entry first. */
@@ -425,10 +453,10 @@ export function createConversations({
         throw new ValidationError({ text: 'Write a reply first.' });
       }
       const conversation = get(id);
-      if (conversation.state === 'stopped') {
-        throw new NotAllowedError(
-          'This Conversation was stopped. Start a new one.',
-        );
+      // A stopped or closed Conversation keeps its tab, and a reply resumes
+      // it from its SDK session, reopening it when it was closed.
+      if (conversation.hidden) {
+        setHidden(id, false);
       }
 
       const handle = live.get(id);
@@ -468,13 +496,21 @@ export function createConversations({
       return get(id);
     },
 
-    /** Stops the Conversation's run and hides it from the Project's list. */
+    /**
+     * Closes a Conversation, about a Ticket or a Project: stops its run and
+     * takes it off the open Conversations. Its transcript stays.
+     */
     async close(id: number): Promise<Conversation> {
       await this.stop(id);
-      db.update(conversations)
-        .set({ hidden: true, updatedAt: new Date() })
-        .where(eq(conversations.id, id))
-        .run();
+      setHidden(id, true);
+      announce(id);
+      return get(id);
+    },
+
+    /** Opens a closed Conversation again. It stays stopped until a reply. */
+    async reopen(id: number): Promise<Conversation> {
+      get(id);
+      setHidden(id, false);
       announce(id);
       return get(id);
     },

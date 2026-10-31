@@ -15,6 +15,7 @@ import { useForm } from 'react-hook-form';
 import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
 import type { TicketType } from '../../tickets/ticket-type';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { useProjectAgent } from '../project-agent/project-agent';
@@ -57,7 +58,7 @@ const copy = {
  * In a Project with an Agent (`ProjectAgentProvider`, T592) one of Enter and
  * Ctrl/Cmd+Enter creates through a New Ticket Conversation instead: the title
  * is the first message, the field's Cycle, Epic and type go as defaults, and
- * the Conversation opens in its drawer. A hint under the focused field says
+ * the Conversation opens in the Conversation dialog. A hint under the focused field says
  * which key does which.
  */
 export const NewTicketInline: FC<NewTicketInlineProps> = ({
@@ -73,6 +74,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
   const errorId = useId();
   const hintId = useId();
   const agent = useProjectAgent();
+  const dialog = useConversationDialog();
   const [focused, setFocused] = useState(false);
   const {
     formState: { errors, isSubmitting },
@@ -116,10 +118,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
     onDone?.();
   };
 
-  const createWithAgent = async (
-    title: string,
-    open: (id: number, from?: number) => void,
-  ) => {
+  const createWithAgent = async (title: string) => {
     const result = await startConversation({
       projectId,
       intent: 'new_ticket',
@@ -136,16 +135,14 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
     }
     reset();
     onDone?.();
-    open(result.conversation.id, epicNumber);
+    dialog.open(result.conversation.id);
   };
 
   // With an Agent, the default mode decides what Enter does; Ctrl/Cmd+Enter
   // does the other.
   const submitWith = (withAgent: boolean) =>
     handleSubmit(({ title }) =>
-      agent && withAgent
-        ? createWithAgent(title, agent.openConversation)
-        : create(title),
+      agent && withAgent ? createWithAgent(title) : create(title),
     );
   const submit = submitWith(agent?.mode === 'default');
   const noun = type === 'Epic' ? 'Epic' : 'Ticket';

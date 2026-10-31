@@ -8,6 +8,9 @@ import {
   answerConversationPermission,
   closeConversation,
   currentConversationActivity,
+  listOpenConversations,
+  loadConversation,
+  reopenConversation,
   replyToConversation,
   startConversation,
   stopConversation,
@@ -165,6 +168,39 @@ describe('Conversation actions', () => {
       conversation: { state: 'stopped', hidden: true },
     });
     expect(runner.runs[0].interrupted).toBe(true);
+  });
+
+  it('reopen a closed Conversation and list the open ones with a transcript to show', async () => {
+    const { project } = setup();
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Hi',
+    });
+    if (!started.ok) {
+      throw new Error('Expected a start.');
+    }
+    const conversationId = started.conversation.id;
+    await closeConversation({ conversationId });
+    expect(await listOpenConversations()).toEqual([]);
+
+    const reopened = await reopenConversation({ conversationId });
+
+    expect(reopened).toMatchObject({
+      ok: true,
+      conversation: { hidden: false },
+    });
+    expect(await listOpenConversations()).toMatchObject([
+      { conversation: { id: conversationId }, projectName: 'Website' },
+    ]);
+    expect(await loadConversation({ conversationId })).toMatchObject({
+      ok: true,
+      conversation: { id: conversationId },
+      transcript: [{ role: 'user', text: 'Hi' }],
+    });
+    expect(await loadConversation({ conversationId: 999 })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('report which Tickets have running or waiting Conversations', async () => {
