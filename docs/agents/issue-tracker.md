@@ -49,7 +49,7 @@ Move a Ticket to `Done` only once every criterion is checked; if one is delibera
 
 ## When a skill says “publish to the issue tracker”
 
-Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in one `create_tickets` call, in dependency order, with each dependency in `blockedByPositions`; for more than 50 items, or a dependency on an existing Ticket, use further calls and `add_blocker`.
+Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in one `create_tickets` call, in dependency order, with each dependency in `blockedByPositions`; for more than 50 items, or a dependency on an existing Ticket, use further calls and `add_blocker`. To name a sibling in a title, description or criterion, write `{{T:n}}` (n its position in the call, from 0) instead of guessing its number.
 
 When the items are split from an existing Ticket that is not an Epic, such as a spec, pass that Ticket as `originNumber` so they form its Origin group (ADR 0015). Then move the split Ticket to `Done`, removing its triage state label, and do not archive it: its drawer lists the split-off Tickets and stays on the Board as the group's view. Each split-off Ticket is then worked on its own, by "Development work in this repository".
 

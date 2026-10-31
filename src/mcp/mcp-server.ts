@@ -278,6 +278,10 @@ function returnsSummary({
   return `Returns ${subject}'s summary: ${summaryFields}${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
 }
 
+/** What the text fields of a `create_tickets` Ticket say about `{{T:n}}`. */
+const placeholderNote =
+  '{{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.';
+
 /** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
 const newTicketFields = {
   title: z.string().describe('A one-line title, at most 200 characters.'),
@@ -653,7 +657,7 @@ export function createMcpServer(
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -685,6 +689,23 @@ export function createMcpServer(
           .array(
             z.object({
               ...newTicketFields,
+              title: z
+                .string()
+                .describe(
+                  `A one-line title, at most 200 characters. ${placeholderNote}`,
+                ),
+              description: z
+                .string()
+                .optional()
+                .describe(
+                  `Optional details in Markdown, at most 50,000 characters. ${placeholderNote}`,
+                ),
+              acceptanceCriteria: z
+                .array(newCriterion)
+                .optional()
+                .describe(
+                  `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome. ${placeholderNote}`,
+                ),
               blockedByPositions: z
                 .array(z.number().int())
                 .optional()
