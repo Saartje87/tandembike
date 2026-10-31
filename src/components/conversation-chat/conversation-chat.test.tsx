@@ -357,6 +357,39 @@ describe('ConversationChat', () => {
     );
   });
 
+  it('renders the Markdown and line breaks of Agent and User messages', () => {
+    const { container } = renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({}, [
+          entry({
+            id: 1,
+            role: 'agent',
+            text: '# Plan\n\nFix **the** header.',
+          }),
+          entry({ id: 2, role: 'user', text: 'first line\nsecond line' }),
+        ])}
+      />,
+    );
+
+    expect(
+      screen.getByRole('heading', { level: 4, name: 'Plan' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('the').tagName).toBe('STRONG');
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
+
+  it('shows tool lines as plain text', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({}, [entry({ id: 1, role: 'tool', text: 'Read **x**' })])}
+      />,
+    );
+
+    expect(screen.getByText('Read **x**')).toBeInTheDocument();
+  });
+
   describe('option chips', () => {
     const asking = (text: string, state: Conversation['state'] = 'idle') =>
       one({ id: 7, state }, [entry({ id: 1, text })]);
