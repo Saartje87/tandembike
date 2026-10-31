@@ -31,6 +31,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - Build every form with `react-hook-form`: `useForm` with `defaultValues`, `register` for fields, `handleSubmit` for submit, and `formState.isSubmitting` for pending state. Show a Server Action's refusal with `setError`: on the field it names, or on `'root.server'` when it names none. Example: `src/components/new-project-form/new-project-form.tsx`.
 - A form that saves optimistically and closes on submit does not use `isSubmitting`: the optimistic value is its pending state, and a refusal reopens the form and shows the reason with `setError`. Keep `useForm` in a component that stays mounted, so the draft outlives the form. Example: the add field in `src/components/external-reference-editor/external-reference-editor.tsx`.
+- A form whose submits can overlap, such as adding Attachments while an earlier add is still uploading, tracks a count of pending submits as its pending state, since `isSubmitting` covers one `handleSubmit` call at a time. Keep showing a refusal with `setError`.
 
 ### Structure
 
