@@ -775,6 +775,13 @@ function checkBatchTicket(
   return { ticket: ticket as CheckedNewTicket, blockedByPositions };
 }
 
+/** Why `field` cannot name a position other than an earlier one. */
+function earlierOnly(field: string, position: number): string {
+  return position === 0
+    ? `${field} can only name an earlier position, and it is first.`
+    : `${field} can only name an earlier position, from 0 to ${position - 1}.`;
+}
+
 /**
  * Refuses the batch, naming each Ticket by position, when its `epicPosition`
  * or `originPosition` breaks the rules: only an earlier position, an Epic of
@@ -804,9 +811,7 @@ function checkBatchLinks(
           : types[position] === 'Epic'
             ? 'an Epic cannot be a child of another Epic. Leave epicPosition out.'
             : !earlier(epicPosition)
-              ? position === 0
-                ? 'epicPosition can only name an earlier position, and it is first.'
-                : `epicPosition can only name an earlier position, from 0 to ${position - 1}.`
+              ? earlierOnly('epicPosition', position)
               : types[epicPosition] !== 'Epic'
                 ? `epicPosition names position ${epicPosition}, which is not created as an Epic. Give it type "Epic".`
                 : undefined,
@@ -823,9 +828,7 @@ function checkBatchLinks(
         batch.originNumber !== undefined
           ? 'give originPosition or the batch originNumber, not both.'
           : !earlier(originPosition)
-            ? position === 0
-              ? 'originPosition can only name an earlier position, and it is first.'
-              : `originPosition can only name an earlier position, from 0 to ${position - 1}.`
+            ? earlierOnly('originPosition', position)
             : undefined,
       );
     }
