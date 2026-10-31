@@ -663,7 +663,7 @@ export function createMcpServer(
     'create_tickets',
     {
       title: 'Create Tickets',
-      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. Returns { numbers }: the new Ticket numbers, in the order given.`,
+      description: `Create from 1 to ${maxBatchSize} Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type "Epic", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. Returns { numbers }: the new Ticket numbers, in the order given.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -711,6 +711,31 @@ export function createMcpServer(
                 .optional()
                 .describe(
                   `Optional acceptance criteria, in order, at most ${maxAcceptanceCriteria}: independently verifiable conditions for the Ticket's outcome. ${placeholderNote}`,
+                ),
+              type: z
+                .enum(ticketTypes)
+                .optional()
+                .describe(
+                  "Ticket, the default, or Epic: a Ticket that groups child Tickets. Name an Epic of this list by epicPosition to create Tickets under it. An Epic's Status follows its children, so give it none; an Epic cannot have epicPosition or the batch epicNumber.",
+                ),
+              color: epicColor
+                .optional()
+                .describe(
+                  `For an Epic: its colour, one of ${paletteColors.join(', ')}. Left out, it gets the colour fewest live Epics in the Project use. Only an Epic has a colour.`,
+                ),
+              epicPosition: z
+                .number()
+                .int()
+                .optional()
+                .describe(
+                  'The position, counted from 0, of an earlier Ticket in this list created with type "Epic", to create this Ticket under. Not together with the batch epicNumber.',
+                ),
+              originPosition: z
+                .number()
+                .int()
+                .optional()
+                .describe(
+                  'The position, counted from 0, of an earlier Ticket in this list that this one was split from. Not together with the batch originNumber.',
                 ),
               blockedByPositions: z
                 .array(z.number().int())
