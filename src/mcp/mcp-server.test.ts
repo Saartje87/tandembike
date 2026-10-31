@@ -163,6 +163,11 @@ describe('MCP server', () => {
       ['create_project', /names must be unique, ignoring case/],
       ['create_tickets', /All or nothing/],
       ['create_tickets', /Only earlier positions can be named/],
+      ['create_tickets', /write \{\{T:n\}\}/],
+      [
+        'create_tickets',
+        /is replaced by the number of the Ticket at position n/,
+      ],
       ['add_blocker', /must be resolved \(Done or archived\)/],
       ['update_ticket', /To only check or uncheck criteria/],
       [
