@@ -27,5 +27,12 @@ import { Link } from '@blockle/blocks';
 </Link>;
 ```
 
+In this app use [`AppLink`](../../src/components/app-link/app-link.tsx),
+which does this inside a Client Component. Do not build the `Link asChild` +
+`NextLink` pair in a Server Component. Inside a Suspense boundary that streams
+in later, such as a list read with `use(promise)`, the `NextLink` reaches
+`asChild` as a lazy element, and Blocks renders nothing for it: the server
+HTML has no link and hydration fails (T419, T522).
+
 Use `Button` for an action and `Link` for navigation. Link text should make
 the destination understandable in context.

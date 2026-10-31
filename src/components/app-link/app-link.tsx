@@ -1,3 +1,5 @@
+'use client';
+
 import { Link, type LinkProps } from '@blockle/blocks';
 import NextLink from 'next/link';
 import type { FC } from 'react';
@@ -12,7 +14,10 @@ export type AppLinkProps = Omit<LinkProps, 'asChild' | 'href'> & {
   scroll?: boolean;
 };
 
-/** A Blocks `Link` with Next.js client-side navigation. */
+/**
+ * A Blocks `Link` with Next.js client-side navigation. A Client Component on
+ * purpose: see `docs/components/navigation.md` (T522).
+ */
 export const AppLink: FC<AppLinkProps> = ({
   href,
   scroll,
