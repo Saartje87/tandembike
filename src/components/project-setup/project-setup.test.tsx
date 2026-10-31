@@ -40,6 +40,7 @@ const control = (conversations: OpenConversation[] = []) => ({
   open: vi.fn(),
   show: vi.fn(),
   reopenAndOpen: vi.fn().mockResolvedValue(undefined),
+  openDraft: vi.fn(),
 });
 
 describe('ProjectSetup', () => {
