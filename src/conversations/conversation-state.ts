@@ -32,6 +32,7 @@ export const transcriptRoles = [
   'tool',
   'error',
   'permission',
+  'question',
 ] as const;
 export type TranscriptRole = (typeof transcriptRoles)[number];
 
@@ -46,3 +47,19 @@ export const permissionStatuses = [
   'expired',
 ] as const;
 export type PermissionStatus = (typeof permissionStatuses)[number];
+
+/**
+ * A question of the Agent in the transcript (AskUserQuestion): what it asked,
+ * and once answered the User's answers by question text. `expired` was never
+ * answered because its run ended.
+ */
+export type QuestionEntry = {
+  questions: {
+    question: string;
+    header: string;
+    options: { label: string; description: string }[];
+    multiSelect: boolean;
+  }[];
+  answers: Record<string, string> | null;
+  expired: boolean;
+};

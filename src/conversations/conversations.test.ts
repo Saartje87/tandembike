@@ -78,6 +78,8 @@ describe('Starting a Conversation', () => {
     expect(brief).toContain(`Agent-run ID: ${conversation.id}`);
     expect(brief).toContain(`T${ticket.number}`);
     expect(brief).toContain('triage');
+    expect(brief).toContain('AskUserQuestion');
+    expect(brief).not.toContain('ask your questions in your messages');
     expect(brief).not.toContain('worktree');
   });
 
@@ -564,6 +566,139 @@ describe('Permission requests', () => {
       permission: 'expired',
     });
     const error = await failure(next.answerPermission(entry?.id ?? 0, true));
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+});
+
+describe('Questions of the Agent', () => {
+  const questions = [
+    {
+      question: 'Which library?',
+      header: 'Library',
+      multiSelect: false,
+      options: [
+        { label: 'A', description: 'The first' },
+        { label: 'B', description: 'The second' },
+      ],
+    },
+    {
+      question: 'Which features?',
+      header: 'Features',
+      multiSelect: true,
+      options: [
+        { label: 'X', description: 'Ex' },
+        { label: 'Y', description: 'Why' },
+      ],
+    },
+  ];
+
+  async function started() {
+    const world = setup();
+    const conversation = await world.conversations.start({
+      projectId: world.project.id,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    return { ...world, conversation, run: world.runner.runs[0] };
+  }
+
+  it('records a question entry with its choices, marks the Conversation waiting and holds the run', async () => {
+    const { conversations, conversation, run } = await started();
+
+    let answers: unknown;
+    void run.options.askQuestion(questions).then((result) => {
+      answers = result;
+    });
+    await Promise.resolve();
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      role: 'question',
+      question: { questions, answers: null, expired: false },
+    });
+    expect(answers).toBeUndefined();
+  });
+
+  it('gives the run the answers and records them', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askQuestion(questions);
+    const entry = conversations.transcript(conversation.id).at(-1);
+    const given = { 'Which library?': 'A', 'Which features?': 'X, Y' };
+
+    await conversations.answerQuestion(entry?.id ?? 0, given);
+
+    expect(await pending).toEqual(given);
+    expect(conversations.get(conversation.id).state).toBe('running');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      question: { answers: given },
+    });
+  });
+
+  it('refuses an answer that leaves a question unanswered', async () => {
+    const { conversations, conversation, run } = await started();
+    void run.options.askQuestion(questions);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    const error = await failure(
+      conversations.answerQuestion(entry?.id ?? 0, {
+        'Which library?': 'A',
+        'Which features?': '  ',
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+  });
+
+  it('refuses a second answer', async () => {
+    const { conversations, conversation, run } = await started();
+    void run.options.askQuestion(questions);
+    const entry = conversations.transcript(conversation.id).at(-1);
+    const given = { 'Which library?': 'A', 'Which features?': 'X' };
+    await conversations.answerQuestion(entry?.id ?? 0, given);
+
+    const error = await failure(
+      conversations.answerQuestion(entry?.id ?? 0, given),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('resolves empty and expires a pending question when the Conversation is stopped', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askQuestion(questions);
+
+    await conversations.stop(conversation.id);
+
+    expect(await pending).toEqual({});
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      question: { answers: null, expired: true },
+    });
+  });
+
+  it('resolves empty when the Conversation is closed', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askQuestion(questions);
+
+    await conversations.close(conversation.id);
+
+    expect(await pending).toEqual({});
+  });
+
+  it('refuses to answer once the run is gone, and expires pending questions when the server restarts', async () => {
+    const { conversations, conversation, run, restart } = await started();
+    void run.options.askQuestion(questions);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    const next = restart();
+    next.interruptStale();
+
+    expect(next.transcript(conversation.id).at(-1)).toMatchObject({
+      question: { answers: null, expired: true },
+    });
+    const error = await failure(
+      next.answerQuestion(entry?.id ?? 0, { 'Which library?': 'A' }),
+    );
     expect(error).toBeInstanceOf(NotAllowedError);
   });
 });

@@ -11,7 +11,7 @@ const { query, controls } = vi.hoisted(() => ({
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query }));
 
-import { createClaudeRunner } from './claude-runner';
+import { createClaudeRunner, eventsOf } from './claude-runner';
 
 /** A `Query` that yields `messages`, then ends. */
 function fakeQuery(messages: unknown[]) {
@@ -42,6 +42,7 @@ describe('The Claude runner', () => {
       prompt: 'Hi',
       resume: 'sess-1',
       askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
       onEvent: () => {},
     });
 
@@ -69,6 +70,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'First',
       askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
       onEvent: () => {},
     });
     const input: AsyncIterator<{ message: { content: string } }> =
@@ -118,6 +120,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -150,6 +153,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -165,6 +169,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
       onEvent: () => {},
     });
 
@@ -187,6 +192,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission,
+      askQuestion: async () => ({}),
       onEvent: () => {},
     });
     const { canUseTool } = query.mock.calls[0][0].options;
@@ -199,5 +205,84 @@ describe('The Claude runner', () => {
     expect(allowed).toEqual({ behavior: 'allow', updatedInput: input });
     expect(denied).toMatchObject({ behavior: 'deny' });
     expect(denied.message).toBeTruthy();
+  });
+
+  describe('AskUserQuestion', () => {
+    const askInput = {
+      questions: [
+        {
+          question: 'Which library?',
+          header: 'Library',
+          multiSelect: false,
+          options: [
+            { label: 'A', description: 'The first', preview: 'x' },
+            { label: 'B', description: 'The second' },
+          ],
+        },
+      ],
+    };
+
+    const startWith = (askQuestion: (questions: unknown[]) => unknown) => {
+      query.mockReturnValue(fakeQuery([]));
+      const askPermission = vi.fn();
+      createClaudeRunner().start({
+        cwd: '/repo',
+        mcpUrl: 'http://x',
+        systemPrompt: '',
+        prompt: 'Hi',
+        askPermission,
+        askQuestion: askQuestion as never,
+        onEvent: () => {},
+      });
+      return {
+        askPermission,
+        canUseTool: query.mock.calls[0][0].options.canUseTool,
+      };
+    };
+
+    it('routes it to askQuestion, not askPermission, and returns the answers as the tool input', async () => {
+      const askQuestion = vi.fn().mockResolvedValue({ 'Which library?': 'A' });
+      const { askPermission, canUseTool } = startWith(askQuestion);
+
+      const result = await canUseTool('AskUserQuestion', askInput, {});
+
+      expect(askPermission).not.toHaveBeenCalled();
+      expect(askQuestion).toHaveBeenCalledWith([
+        {
+          question: 'Which library?',
+          header: 'Library',
+          multiSelect: false,
+          options: [
+            { label: 'A', description: 'The first' },
+            { label: 'B', description: 'The second' },
+          ],
+        },
+      ]);
+      expect(result).toEqual({
+        behavior: 'allow',
+        updatedInput: { ...askInput, answers: { 'Which library?': 'A' } },
+      });
+    });
+
+    it('denies when nothing was answered', async () => {
+      const { canUseTool } = startWith(async () => ({}));
+
+      expect(await canUseTool('AskUserQuestion', askInput, {})).toMatchObject({
+        behavior: 'deny',
+      });
+    });
+
+    it('reports no tool line for the call, as the chat shows a form', () => {
+      expect(
+        eventsOf({
+          type: 'assistant',
+          message: {
+            content: [
+              { type: 'tool_use', name: 'AskUserQuestion', input: askInput },
+            ],
+          },
+        } as never),
+      ).toEqual([]);
+    });
   });
 });

@@ -11,6 +11,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import type { QuestionEntry } from '../conversations/conversation-state';
 import {
   conversationIntents,
   conversationStates,
@@ -356,6 +357,8 @@ export const conversationEntries = sqliteTable(
     text: text('text').notNull(),
     /** For a permission request: where it is; null for other entries. */
     permission: text('permission', { enum: permissionStatuses }),
+    /** For a question of the Agent: what it asked and the answers; null for other entries. */
+    question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [

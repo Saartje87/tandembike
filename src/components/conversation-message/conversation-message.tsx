@@ -8,6 +8,7 @@ import { ticketByNumberPath } from '../../app/lib/paths';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
 import { ConversationPermissionPrompt } from '../conversation-permission-prompt/conversation-permission-prompt';
+import { ConversationQuestionForm } from '../conversation-question-form/conversation-question-form';
 import * as styles from './conversation-message.css';
 
 export type ConversationMessageProps = { entry: TranscriptEntry };
@@ -69,9 +70,22 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
       <li data-side={fromUser ? 'end' : 'start'}>
         <Stack gap={1}>
           <Text fontSize="small" fontWeight="strong" color="muted">
-            {fromUser ? 'You' : entry.role === 'agent' ? 'Agent' : 'Permission'}
+            {fromUser
+              ? 'You'
+              : entry.role === 'agent'
+                ? 'Agent'
+                : entry.role === 'question'
+                  ? 'Question'
+                  : 'Permission'}
           </Text>
-          <Text tag="p">{withTicketLinks(entry.text)}</Text>
+          {entry.question === null ? (
+            <Text tag="p">{withTicketLinks(entry.text)}</Text>
+          ) : (
+            <ConversationQuestionForm
+              entryId={entry.id}
+              question={entry.question}
+            />
+          )}
           {entry.permission !== null && (
             <ConversationPermissionPrompt
               entryId={entry.id}

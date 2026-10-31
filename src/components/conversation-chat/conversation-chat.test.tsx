@@ -4,9 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   answerConversationPermission,
+  answerConversationQuestion,
   replyToConversation,
   stopConversation,
 } from '../../app/conversations/actions';
+import type { QuestionEntry } from '../../conversations/conversation-state';
 import type {
   Conversation,
   TranscriptEntry,
@@ -17,6 +19,7 @@ import { ConversationChat } from './conversation-chat';
 
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
+  answerConversationQuestion: vi.fn(),
   replyToConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
@@ -46,6 +49,7 @@ const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   role: 'agent',
   text: '',
   permission: null,
+  question: null,
   createdAt: at,
   ...values,
 });
@@ -64,6 +68,7 @@ const ok = (state: Conversation['state'] = 'running') =>
 describe('ConversationChat', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
+    vi.mocked(answerConversationQuestion).mockReset();
     vi.mocked(replyToConversation).mockReset();
     vi.mocked(stopConversation).mockReset();
   });
@@ -350,5 +355,144 @@ describe('ConversationChat', () => {
       'href',
       '/ticket/42',
     );
+  });
+
+  describe('an Agent question', () => {
+    const library = {
+      question: 'Which library?',
+      header: 'Library',
+      multiSelect: false,
+      options: [
+        { label: 'Alpha', description: 'The first' },
+        { label: 'Beta', description: 'The second' },
+      ],
+    };
+    const features = {
+      question: 'Which features?',
+      header: 'Features',
+      multiSelect: true,
+      options: [
+        { label: 'Fast', description: 'Quick' },
+        { label: 'Small', description: 'Tiny' },
+      ],
+    };
+
+    const renderQuestion = (question: Partial<QuestionEntry>) =>
+      renderWithTheme(
+        <ConversationChat
+          title="T4 A Ticket"
+          item={one({ state: 'waiting' }, [
+            entry({
+              id: 5,
+              role: 'question',
+              text: 'Which library?',
+              question: {
+                questions: [library],
+                answers: null,
+                expired: false,
+                ...question,
+              },
+            }),
+          ])}
+        />,
+      );
+
+    it('answers a single single-choice question with one click on a choice', async () => {
+      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
+      renderQuestion({});
+
+      await userEvent.click(screen.getByRole('button', { name: 'Beta' }));
+
+      expect(answerConversationQuestion).toHaveBeenCalledWith({
+        entryId: 5,
+        answers: { 'Which library?': 'Beta' },
+      });
+    });
+
+    it('also takes an Other answer for a single question', async () => {
+      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
+      renderQuestion({});
+      const send = screen.getByRole('button', { name: 'Send answer' });
+      expect(send).toBeDisabled();
+
+      await userEvent.type(
+        screen.getByRole('textbox', { name: 'Other answer to Which library?' }),
+        'Gamma',
+      );
+      await userEvent.click(send);
+
+      expect(answerConversationQuestion).toHaveBeenCalledWith({
+        entryId: 5,
+        answers: { 'Which library?': 'Gamma' },
+      });
+    });
+
+    it('shows checkboxes for a multi-select question and sends the picked choices with Other', async () => {
+      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
+      renderQuestion({ questions: [features] });
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Fast' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
+      await userEvent.type(
+        screen.getByRole('textbox', {
+          name: 'Other answer to Which features?',
+        }),
+        'Cheap',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+      expect(answerConversationQuestion).toHaveBeenCalledWith({
+        entryId: 5,
+        answers: { 'Which features?': 'Fast, Small, Cheap' },
+      });
+    });
+
+    it('activates Submit only once every question has an answer, and sends all in one answer', async () => {
+      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
+      renderQuestion({ questions: [library, features] });
+      const submit = screen.getByRole('button', { name: 'Submit' });
+      expect(submit).toBeDisabled();
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Alpha' }));
+      expect(submit).toBeDisabled();
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
+      expect(submit).toBeEnabled();
+      await userEvent.click(submit);
+
+      expect(answerConversationQuestion).toHaveBeenCalledTimes(1);
+      expect(answerConversationQuestion).toHaveBeenCalledWith({
+        entryId: 5,
+        answers: { 'Which library?': 'Alpha', 'Which features?': 'Small' },
+      });
+    });
+
+    it('shows a refusal', async () => {
+      vi.mocked(answerConversationQuestion).mockResolvedValue({
+        ok: false,
+        error: 'This question is no longer waiting.',
+      });
+      renderQuestion({});
+
+      await userEvent.click(screen.getByRole('button', { name: 'Alpha' }));
+
+      expect(
+        await screen.findByText('This question is no longer waiting.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows what was answered, without choices', () => {
+      renderQuestion({ answers: { 'Which library?': 'Beta' } });
+
+      expect(screen.getByText('Which library?')).toBeInTheDocument();
+      expect(screen.getByText('Beta')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull();
+    });
+
+    it('shows an expired question as not answered', () => {
+      renderQuestion({ expired: true });
+
+      expect(screen.getByText('Not answered')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull();
+    });
   });
 });

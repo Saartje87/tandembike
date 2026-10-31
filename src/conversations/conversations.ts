@@ -15,12 +15,15 @@ import type {
   AgentRunner,
   PermissionAnswer,
   PermissionRequest,
+  Question,
+  QuestionAnswers,
   RunEvent,
 } from './agent-runner';
 import type {
   ConversationIntent,
   ConversationState,
   PermissionStatus,
+  QuestionEntry,
   TranscriptRole,
 } from './conversation-state';
 import { type NewTicketDefaults, runBrief } from './run-brief';
@@ -49,6 +52,8 @@ export type TranscriptEntry = {
   text: string;
   /** For a permission request, where it is; null for other entries. */
   permission: PermissionStatus | null;
+  /** For a question of the Agent, what it asked and the answers; null for other entries. */
+  question: QuestionEntry | null;
   createdAt: Date;
 };
 
@@ -94,6 +99,8 @@ type LiveRun = {
   costBefore: number;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
+  /** Questions waiting for the User, by transcript entry id. */
+  questioning: Map<number, (answers: QuestionAnswers) => void>;
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -155,6 +162,7 @@ export function createConversations({
     role: TranscriptRole,
     text: string,
     permission: PermissionStatus | null = null,
+    question: QuestionEntry | null = null,
   ): number =>
     db
       .insert(conversationEntries)
@@ -163,6 +171,7 @@ export function createConversations({
         role,
         text,
         permission,
+        question,
         createdAt: new Date(),
       })
       .returning({ id: conversationEntries.id })
@@ -182,6 +191,54 @@ export function createConversations({
       resolve('deny');
     }
     handle.asking.clear();
+  };
+
+  const setQuestion = (entryId: number, question: QuestionEntry) => {
+    db.update(conversationEntries)
+      .set({ question })
+      .where(eq(conversationEntries.id, entryId))
+      .run();
+  };
+
+  const getEntry = (entryId: number) =>
+    db
+      .select()
+      .from(conversationEntries)
+      .where(eq(conversationEntries.id, entryId))
+      .get();
+
+  /** Resolves empty the questions a run still waits on, as its Conversation ended. */
+  const expireQuestioning = (handle: LiveRun) => {
+    for (const [entryId, resolve] of handle.questioning) {
+      const question = getEntry(entryId)?.question;
+      if (question) {
+        setQuestion(entryId, { ...question, expired: true });
+      }
+      resolve({});
+    }
+    handle.questioning.clear();
+  };
+
+  const askQuestion = (
+    id: number,
+    handle: LiveRun,
+    questions: Question[],
+  ): Promise<QuestionAnswers> => {
+    if (live.get(id) !== handle) {
+      return Promise.resolve({});
+    }
+    const entryId = append(
+      id,
+      'question',
+      questions.map((question) => question.question).join('\n'),
+      null,
+      { questions, answers: null, expired: false },
+    );
+    update(id, { state: 'waiting' });
+    announce(id);
+    return new Promise((resolve) => {
+      handle.questioning.set(entryId, resolve);
+    });
   };
 
   const askPermission = (
@@ -235,6 +292,7 @@ export function createConversations({
       case 'exit': {
         live.delete(id);
         expireAsking(handle);
+        expireQuestioning(handle);
         if (event.error) {
           append(id, 'error', event.error);
         }
@@ -300,6 +358,7 @@ export function createConversations({
       run: null,
       costBefore: conversation.costUsd,
       asking: new Map(),
+      questioning: new Map(),
     };
     live.set(id, handle);
     try {
@@ -322,6 +381,7 @@ export function createConversations({
         prompt,
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
+        askQuestion: (questions) => askQuestion(id, handle, questions),
         onEvent: (event) => handleEvent(id, handle, event),
       });
     } catch (error) {
@@ -483,6 +543,7 @@ export function createConversations({
       live.delete(id);
       if (handle) {
         expireAsking(handle);
+        expireQuestioning(handle);
       }
       update(id, { state: 'stopped' });
       announce(id);
@@ -539,11 +600,52 @@ export function createConversations({
       }
       handle.asking.delete(entryId);
       setPermission(entryId, allow ? 'allowed' : 'denied');
-      if (handle.asking.size === 0) {
+      if (handle.asking.size === 0 && handle.questioning.size === 0) {
         update(entry.conversationId, { state: 'running' });
       }
       announce(entry.conversationId);
       resolve(allow ? 'allow' : 'deny');
+      return get(entry.conversationId);
+    },
+
+    /**
+     * The User's answers to an Agent's question, by question text; the waiting
+     * run goes on. Every question needs an answer. Refused once answered or
+     * when its run is gone.
+     */
+    async answerQuestion(
+      entryId: number,
+      answers: QuestionAnswers,
+    ): Promise<Conversation> {
+      const entry = getEntry(entryId);
+      if (entry?.role !== 'question' || !entry.question) {
+        throw new NotFoundError(`There is no question ${entryId}.`);
+      }
+      const handle = live.get(entry.conversationId);
+      const resolve = handle?.questioning.get(entryId);
+      if (!handle || !resolve) {
+        throw new NotAllowedError('This question is no longer waiting.');
+      }
+      const given: QuestionAnswers = {};
+      const missing: Record<string, string> = {};
+      for (const { question } of entry.question.questions) {
+        const answer = String(answers?.[question] ?? '').trim();
+        if (answer === '') {
+          missing[question] = 'Answer this question.';
+        } else {
+          given[question] = answer;
+        }
+      }
+      if (Object.keys(missing).length > 0) {
+        throw new ValidationError(missing);
+      }
+      handle.questioning.delete(entryId);
+      setQuestion(entryId, { ...entry.question, answers: given });
+      if (handle.asking.size === 0 && handle.questioning.size === 0) {
+        update(entry.conversationId, { state: 'running' });
+      }
+      announce(entry.conversationId);
+      resolve(given);
       return get(entry.conversationId);
     },
 
@@ -562,6 +664,16 @@ export function createConversations({
         .set({ permission: 'expired' })
         .where(eq(conversationEntries.permission, 'pending'))
         .run();
+      const questions = db
+        .select()
+        .from(conversationEntries)
+        .where(eq(conversationEntries.role, 'question'))
+        .all();
+      for (const { id, question } of questions) {
+        if (question && question.answers === null && !question.expired) {
+          setQuestion(id, { ...question, expired: true });
+        }
+      }
       for (const { id } of stale) {
         update(id, { state: 'interrupted' });
         announce(id);

@@ -94,6 +94,24 @@ export async function answerConversationPermission(input: {
   );
 }
 
+/** Answers an Agent's question a run is waiting on, by question text. */
+export async function answerConversationQuestion(input: {
+  entryId: number;
+  answers: Record<string, string>;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().answerQuestion(
+      Number(input?.entryId),
+      Object.fromEntries(
+        Object.entries(input?.answers ?? {}).map(([question, answer]) => [
+          question,
+          String(answer),
+        ]),
+      ),
+    ),
+  );
+}
+
 /** Stops a Conversation's run and closes it; its transcript stays. */
 export async function closeConversation(input: {
   conversationId: number;
