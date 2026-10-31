@@ -1,12 +1,21 @@
 import { screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../conversations/app-conversations';
+import { createTestConversations } from '../../../test/conversations';
 import { renderPage, renderWithTheme } from '../../../test/render';
 import { createTestTickets } from '../../../test/tickets';
 import { appTickets } from '../../../tickets/app-tickets';
 import ProjectLayout from './layout';
 
-vi.mock('next/navigation', () => ({ notFound: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  notFound: vi.fn(),
+  usePathname: () => '/project/1',
+  useSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('../../../conversations/app-conversations', () => ({
+  appConversations: vi.fn(),
+}));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../components/project-tabs/project-tabs', () => ({
@@ -27,7 +36,49 @@ vi.mock('../../../components/project-tabs/project-tabs', () => ({
 
 const tab = <p>The tab</p>;
 
+beforeEach(() => {
+  vi.mocked(appConversations).mockReturnValue(
+    createTestConversations().conversations,
+  );
+});
+
 describe('ProjectLayout', () => {
+  it("counts the Project's open Conversations on the header's Conversations button", async () => {
+    const world = createTestConversations();
+    const project = world.tickets.createProject({ name: 'Website' });
+    world.tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+    });
+    const first = await world.conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add coupons',
+    });
+    await world.conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Fix header',
+    });
+    await world.conversations.close(first.id);
+    vi.mocked(appTickets).mockReturnValue(world.tickets);
+    vi.mocked(appConversations).mockReturnValue(world.conversations);
+
+    await renderPage(
+      <main>
+        {
+          await ProjectLayout({
+            params: Promise.resolve({ id: String(project.id) }),
+            children: tab,
+          })
+        }
+      </main>,
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Conversations (1)' }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the Project's header and tabs, with their open Tickets, above the tab", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

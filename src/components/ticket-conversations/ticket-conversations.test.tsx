@@ -280,4 +280,30 @@ describe('TicketConversations', () => {
       screen.queryByRole('textbox', { name: 'Reply' }),
     ).not.toBeInTheDocument();
   });
+
+  it('links the Tickets named in the transcript', () => {
+    renderWithTheme(
+      <TicketConversations
+        items={[one({}, [entry({ id: 1, text: 'Created T41, then T42.' })])]}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'T41' })).toHaveAttribute(
+      'href',
+      '/ticket/41',
+    );
+    expect(screen.getByRole('link', { name: 'T42' })).toHaveAttribute(
+      'href',
+      '/ticket/42',
+    );
+  });
+
+  it('leaves out the list of Conversations when asked', () => {
+    renderWithTheme(<TicketConversations items={[one({})]} showList={false} />);
+
+    expect(
+      screen.queryByRole('list', { name: 'Conversations' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Reply' })).toBeInTheDocument();
+  });
 });

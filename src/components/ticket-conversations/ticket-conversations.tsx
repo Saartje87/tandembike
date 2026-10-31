@@ -11,7 +11,7 @@ import {
   Text,
   Textarea,
 } from '@blockle/blocks';
-import { type FC, useId, useState, useTransition } from 'react';
+import { type FC, type ReactNode, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
 import {
@@ -20,6 +20,7 @@ import {
   stopConversation,
 } from '../../app/conversations/actions';
 import { modeColors } from '../../app/lib/mode-colors';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import type {
   ConversationIntent,
   ConversationState,
@@ -30,6 +31,7 @@ import type {
   Conversation,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 
 export type ConversationWithTranscript = {
@@ -44,16 +46,18 @@ export type TicketConversationsProps = {
   openId?: number | undefined;
   /** Called with the id of a Conversation the User picks from the list. */
   onOpen?: (conversationId: number) => void;
+  /** Whether to list the Conversations above the open one; defaults to true. */
+  showList?: boolean;
 };
 
-const intentNames: Record<ConversationIntent, string> = {
+export const intentNames: Record<ConversationIntent, string> = {
   start: 'Start',
   triage: 'Triage',
   ask: 'Ask',
   new_ticket: 'New Ticket',
 };
 
-const stateNames: Record<ConversationState, string> = {
+export const stateNames: Record<ConversationState, string> = {
   running: 'working',
   waiting: 'needs you',
   idle: 'waiting for you',
@@ -81,6 +85,19 @@ const permissionOutcomes: Record<
 /** Whether a run of the Conversation is alive, so it can be stopped. */
 const hasRun = (state: ConversationState) =>
   state === 'running' || state === 'waiting' || state === 'idle';
+
+/** Text with each `T12` linked to that Ticket, such as those an Agent created. */
+const withTicketLinks = (text: string): ReactNode[] =>
+  text.split(/\b(T[1-9]\d*)\b/).map((part, index) =>
+    index % 2 === 1 ? (
+      // biome-ignore lint/suspicious/noArrayIndexKey: the parts never reorder
+      <AppLink key={index} href={ticketByNumberPath(Number(part.slice(1)))}>
+        {part}
+      </AppLink>
+    ) : (
+      part
+    ),
+  );
 
 type EntryLineProps = { entry: TranscriptEntry };
 
@@ -127,7 +144,7 @@ const EntryLine: FC<EntryLineProps> = ({ entry }) => {
             fontSize={entry.role === 'tool' ? 'small' : undefined}
             color={entry.role === 'tool' ? 'muted' : undefined}
           >
-            {entry.text}
+            {withTicketLinks(entry.text)}
           </Text>
           {entry.permission === 'pending' && (
             <Inline gap={2}>
@@ -276,6 +293,7 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
   items,
   openId,
   onOpen,
+  showList = true,
 }) => {
   const [pickedId, setPickedId] = useState<number>();
 
@@ -289,31 +307,35 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
 
   return (
     <Stack gap={2}>
-      <Heading level={3} fontSize="medium">
-        Conversations
-      </Heading>
-      <Stack gap={1} listStyle="none" role="list" asChild>
-        <ul aria-label="Conversations">
-          {items.map((item) => (
-            <li key={item.conversation.id}>
-              <Button
-                type="button"
-                size="small"
-                variant={
-                  item.conversation.id === conversation.id ? 'solid' : 'ghost'
-                }
-                aria-pressed={item.conversation.id === conversation.id}
-                onClick={() => {
-                  setPickedId(item.conversation.id);
-                  onOpen?.(item.conversation.id);
-                }}
-              >
-                {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]}`}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      </Stack>
+      {showList && (
+        <Heading level={3} fontSize="medium">
+          Conversations
+        </Heading>
+      )}
+      {showList && (
+        <Stack gap={1} listStyle="none" role="list" asChild>
+          <ul aria-label="Conversations">
+            {items.map((item) => (
+              <li key={item.conversation.id}>
+                <Button
+                  type="button"
+                  size="small"
+                  variant={
+                    item.conversation.id === conversation.id ? 'solid' : 'ghost'
+                  }
+                  aria-pressed={item.conversation.id === conversation.id}
+                  onClick={() => {
+                    setPickedId(item.conversation.id);
+                    onOpen?.(item.conversation.id);
+                  }}
+                >
+                  {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]}`}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Stack>
+      )}
       <Inline gap={2} alignY="center" justifyContent="space-between">
         <Text fontSize="small" color="muted">
           {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}`}

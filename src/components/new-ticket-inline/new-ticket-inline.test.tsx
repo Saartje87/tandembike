@@ -1,12 +1,27 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
+import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
+import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
+import {
+  type ProjectAgentMode,
+  ProjectAgentProvider,
+} from '../project-agent/project-agent';
 import { NewTicketInline } from './new-ticket-inline';
 
 vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  startConversation: vi.fn(),
+}));
+vi.mock('next/navigation', () => ({
+  useRouter: vi.fn(),
+  usePathname: () => '/project/3',
+  useSearchParams: () => new URLSearchParams(),
+}));
 
 const titleField = () =>
   screen.getByRole<HTMLInputElement>('textbox', { name: 'New Ticket title' });
@@ -202,5 +217,128 @@ describe('NewTicketInline', () => {
       title: 'Fix the header',
     });
     await waitFor(() => expect(titleField()).toHaveValue(''));
+  });
+
+  describe('with an Agent', () => {
+    const renderWithAgent = (
+      mode: ProjectAgentMode,
+      props: Partial<Parameters<typeof NewTicketInline>[0]> = {},
+    ) => {
+      const router = mockRouter();
+      vi.mocked(useRouter).mockReturnValue(router);
+      vi.mocked(startConversation).mockResolvedValue({
+        ok: true,
+        conversation: { id: 9 } as never,
+      });
+      vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+      renderWithTheme(
+        <ProjectAgentProvider mode={mode}>
+          <NewTicketInline projectId={3} {...props} />
+        </ProjectAgentProvider>,
+      );
+      return router;
+    };
+
+    it('starts a New Ticket Conversation on Enter in agent mode, and opens it', async () => {
+      const router = renderWithAgent('default', { cycleId: 7 });
+
+      await userEvent.type(titleField(), 'Add coupons{Enter}');
+
+      expect(startConversation).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        intent: 'new_ticket',
+        prompt: 'Add coupons',
+        defaults: { cycleId: 7, type: 'Ticket' },
+      });
+      expect(createTicket).not.toHaveBeenCalled();
+      expect(router.push).toHaveBeenCalledWith('/project/3?conversation=9', {
+        scroll: false,
+      });
+      await waitFor(() => expect(titleField()).toHaveValue(''));
+    });
+
+    it('creates a plain Ticket on Mod+Enter in agent mode', async () => {
+      renderWithAgent('default');
+
+      await userEvent.type(titleField(), 'Fix it{Control>}{Enter}{/Control}');
+
+      expect(createTicket).toHaveBeenCalledOnce();
+      expect(startConversation).not.toHaveBeenCalled();
+    });
+
+    it('does the reverse with agent mode off', async () => {
+      renderWithAgent('optional');
+
+      await userEvent.type(titleField(), 'Fix it{Enter}');
+      expect(createTicket).toHaveBeenCalledOnce();
+      expect(startConversation).not.toHaveBeenCalled();
+
+      await userEvent.type(titleField(), 'Plan it{Meta>}{Enter}{/Meta}');
+      expect(startConversation).toHaveBeenCalledOnce();
+    });
+
+    it('says which key does which', async () => {
+      renderWithAgent('default');
+      await userEvent.click(titleField());
+      expect(
+        screen.getByText(
+          'Enter asks an Agent to create it. Ctrl/Cmd+Enter creates the Ticket yourself.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('says which key does which with agent mode off', async () => {
+      renderWithAgent('optional');
+      await userEvent.click(titleField());
+      expect(
+        screen.getByText(
+          'Enter creates the Ticket. Ctrl/Cmd+Enter asks an Agent to create it.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('opens it in place of the Epic drawer it was typed in, linking back', async () => {
+      const router = renderWithAgent('default', { epicNumber: 8 });
+
+      await userEvent.type(
+        screen.getByRole('textbox', { name: 'New child Ticket title' }),
+        'Pay by card{Enter}',
+      );
+
+      expect(startConversation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaults: { epicNumber: 8, type: 'Ticket' },
+        }),
+      );
+      expect(router.push).toHaveBeenCalledWith(
+        '/project/3?conversation=9&from=8',
+        { scroll: false },
+      );
+    });
+
+    it('shows a refusal under the field and keeps the title', async () => {
+      renderWithAgent('default');
+      vi.mocked(startConversation).mockResolvedValue({
+        ok: false,
+        error: 'Set a repository path first.',
+      });
+
+      await userEvent.type(titleField(), 'Add coupons{Enter}');
+
+      expect(
+        await screen.findByText('Set a repository path first.'),
+      ).toBeInTheDocument();
+      expect(titleField()).toHaveValue('Add coupons');
+    });
+  });
+
+  it('gives no hint and creates plainly on Mod+Enter without an Agent', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderWithTheme(<NewTicketInline projectId={3} />);
+
+    await userEvent.type(titleField(), 'Fix it{Control>}{Enter}{/Control}');
+
+    expect(screen.queryByText(/Ctrl\/Cmd\+Enter/)).not.toBeInTheDocument();
+    expect(createTicket).toHaveBeenCalledOnce();
   });
 });

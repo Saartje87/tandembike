@@ -8,6 +8,7 @@ import {
   boardPageTitle,
   type CyclePageProps,
   loadProjectCycle,
+  openedConversation,
 } from '../../project-data';
 
 export async function generateMetadata({
@@ -29,12 +30,13 @@ async function cycleTab(
   searchParams: CyclePageProps['searchParams'],
 ) {
   const { project, cycle } = await loadProjectCycle(params);
-  const { ticket, q, label } = await searchParams;
+  const { ticket, conversation, from, q, label } = await searchParams;
   return (
     <ProjectBoard
       project={project}
       tab={cycle}
       openTicket={openTicketNumber(ticket)}
+      {...openedConversation(conversation, from)}
       filter={boardFilterOf(q, label)}
     />
   );

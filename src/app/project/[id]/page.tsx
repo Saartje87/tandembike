@@ -8,6 +8,7 @@ import {
   type BacklogPageProps,
   boardPageTitle,
   loadProject,
+  openedConversation,
 } from './project-data';
 
 export async function generateMetadata({
@@ -25,12 +26,13 @@ async function backlogTab(
   searchParams: BacklogPageProps['searchParams'],
 ) {
   const project = await loadProject(params);
-  const { ticket, q, label } = await searchParams;
+  const { ticket, conversation, from, q, label } = await searchParams;
   return (
     <ProjectBoard
       project={project}
       tab="backlog"
       openTicket={openTicketNumber(ticket)}
+      {...openedConversation(conversation, from)}
       filter={boardFilterOf(q, label)}
     />
   );
