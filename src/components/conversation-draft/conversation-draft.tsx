@@ -1,20 +1,12 @@
 'use client';
 
-import {
-  Alert,
-  Button,
-  Heading,
-  Inline,
-  Stack,
-  Textarea,
-} from '@blockle/blocks';
-import { type FC, type KeyboardEvent, useId } from 'react';
-import { useForm } from 'react-hook-form';
+import { Heading } from '@blockle/blocks';
+import type { FC } from 'react';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { NewTicketDefaults } from '../../conversations/run-brief';
-import { FieldError } from '../field-error/field-error';
+import { ConversationMessageInput } from '../conversation-message-input/conversation-message-input';
 import * as styles from './conversation-draft.css';
 
 /**
@@ -60,100 +52,45 @@ export const ConversationDraft: FC<ConversationDraftProps> = ({
   draft,
   onTextChange,
   onStarted,
-}) => {
-  const errorId = useId();
-  const {
-    formState: { errors, isSubmitting },
-    handleSubmit,
-    register,
-    setError,
-    watch,
-  } = useForm<{ text: string }>({
-    defaultValues: { text: draft.text },
-    reValidateMode: 'onSubmit',
-  });
-  const fieldError = errors.text?.message;
-  const error = errors.root?.server?.message;
-  const text = register('text');
-
-  const submit = handleSubmit(async ({ text }) => {
-    const result = await startConversation({
-      intent: draft.intent,
-      prompt: text,
-      ...(draft.ticketNumber === undefined
-        ? {}
-        : { ticketNumber: draft.ticketNumber }),
-      ...(draft.projectId === undefined ? {} : { projectId: draft.projectId }),
-      ...(draft.defaults === undefined ? {} : { defaults: draft.defaults }),
-    });
-    if (!result.ok) {
-      const reason = result.fieldErrors?.prompt;
-      if (reason) {
-        setError('text', { type: 'server', message: reason });
-      } else {
-        setError('root.server', { message: result.error });
+}) => (
+  <div className={styles.draft}>
+    <Heading level={3} fontSize="medium">
+      {draftLabel(draft)}
+    </Heading>
+    <ConversationMessageInput
+      className={styles.form}
+      initialText={draft.text}
+      onTextChange={onTextChange}
+      label={draft.intent === 'ask' ? 'Question' : 'Message'}
+      placeholder={
+        draft.intent === 'ask'
+          ? 'Ask a question (Enter sends, Shift+Enter adds a line)'
+          : 'Describe the Ticket (Enter sends, Shift+Enter adds a line)'
       }
-      return;
-    }
-    onStarted(result.conversation);
-  });
-
-  const send = (event: { preventDefault: () => void }) => {
-    event.preventDefault();
-    if (!isSubmitting && watch('text').trim() !== '') {
-      submit();
-    }
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (
-      event.key === 'Enter' &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      send(event);
-    }
-  };
-
-  return (
-    <div className={styles.draft}>
-      <Heading level={3} fontSize="medium">
-        {draftLabel(draft)}
-      </Heading>
-      <form onSubmit={send} className={styles.form}>
-        <Stack gap={1}>
-          <Textarea
-            {...text}
-            onChange={(event) => {
-              text.onChange(event);
-              onTextChange(event.target.value);
-            }}
-            aria-label={draft.intent === 'ask' ? 'Question' : 'Message'}
-            placeholder={
-              draft.intent === 'ask'
-                ? 'Ask a question (Enter sends, Shift+Enter adds a line)'
-                : 'Describe the Ticket (Enter sends, Shift+Enter adds a line)'
-            }
-            rows={4}
-            autoFocus
-            onKeyDown={onKeyDown}
-            aria-invalid={fieldError ? true : undefined}
-            aria-describedby={fieldError ? errorId : undefined}
-          />
-          <FieldError id={errorId} reason={fieldError} />
-          {error && <Alert intent="danger">{error}</Alert>}
-          <Inline gap={2} alignX="end">
-            <Button
-              type="submit"
-              size="small"
-              loading={isSubmitting}
-              disabled={isSubmitting || watch('text').trim() === ''}
-            >
-              Send
-            </Button>
-          </Inline>
-        </Stack>
-      </form>
-    </div>
-  );
-};
+      rows={4}
+      autoFocus
+      onSend={async (text) => {
+        const result = await startConversation({
+          intent: draft.intent,
+          prompt: text,
+          ...(draft.ticketNumber === undefined
+            ? {}
+            : { ticketNumber: draft.ticketNumber }),
+          ...(draft.projectId === undefined
+            ? {}
+            : { projectId: draft.projectId }),
+          ...(draft.defaults === undefined ? {} : { defaults: draft.defaults }),
+        });
+        if (!result.ok) {
+          return {
+            ok: false,
+            error: result.error,
+            textError: result.fieldErrors?.prompt,
+          };
+        }
+        onStarted(result.conversation);
+        return { ok: true };
+      }}
+    />
+  </div>
+);

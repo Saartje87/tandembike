@@ -24,21 +24,26 @@ import { Icon } from '../icon/icon';
 import { useConversationRevision } from '../live-updates/live-updates';
 import * as styles from './conversation-dialog.css';
 
+/** The drafts the dialog shows, and what its tabs and inputs do to them. */
+export type DialogDrafts = {
+  items: Draft[];
+  /** The draft whose tab is shown. */
+  selectedKey: string | undefined;
+  onSelect: (key: string) => void;
+  /** Closing a draft discards it. */
+  onClose: (key: string) => void;
+  onTextChange: (key: string, text: string) => void;
+  /** Called with the draft a Send started and the Conversation it became. */
+  onStarted: (key: string, conversation: Conversation) => void;
+};
+
 export type ConversationDialogProps = {
   /** Every open Conversation, in the order opened: one tab each. */
   tabs: OpenConversation[];
   /** The Conversation whose tab is shown; the dialog is hidden without one or a draft. */
   selectedId: number | undefined;
   /** Drafts (T611), after the Conversations: one tab each. */
-  drafts?: Draft[];
-  /** The draft whose tab is shown. */
-  selectedDraftKey?: string | undefined;
-  onSelectDraft?: (key: string) => void;
-  /** Closing a draft discards it. */
-  onCloseDraft?: (key: string) => void;
-  onDraftTextChange?: (key: string, text: string) => void;
-  /** Called with the Conversation a draft's Send started and the draft that became it. */
-  onDraftStarted?: (key: string, conversation: Conversation) => void;
+  drafts: DialogDrafts;
   onSelect: (conversationId: number) => void;
   /** Hides the dialog; every tab stays. */
   onHide: () => void;
@@ -108,12 +113,7 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open }) => {
 export const ConversationDialog: FC<ConversationDialogProps> = ({
   tabs,
   selectedId,
-  drafts = [],
-  selectedDraftKey,
-  onSelectDraft,
-  onCloseDraft,
-  onDraftTextChange,
-  onDraftStarted,
+  drafts,
   onSelect,
   onHide,
   onClose,
@@ -121,7 +121,9 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
 }) => {
   const titleId = useId();
   const selected = tabs.find((tab) => tab.conversation.id === selectedId);
-  const selectedDraft = drafts.find((draft) => draft.key === selectedDraftKey);
+  const selectedDraft = drafts.items.find(
+    (draft) => draft.key === drafts.selectedKey,
+  );
   const shownKey = selected ? selectedId : selectedDraft?.key;
 
   return (
@@ -153,13 +155,15 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             selectedId={selectedId}
             onSelect={onSelect}
             onClose={onClose}
-            drafts={drafts.map((draft) => ({
-              key: draft.key,
-              label: draftLabel(draft),
-            }))}
-            selectedDraftKey={selectedDraftKey}
-            {...(onSelectDraft ? { onSelectDraft } : {})}
-            {...(onCloseDraft ? { onCloseDraft } : {})}
+            drafts={{
+              items: drafts.items.map((draft) => ({
+                key: draft.key,
+                label: draftLabel(draft),
+              })),
+              selectedKey: drafts.selectedKey,
+              onSelect: drafts.onSelect,
+              onClose: drafts.onClose,
+            }}
           />
           {error && <Alert intent="danger">{error}</Alert>}
           <Box
@@ -174,10 +178,10 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
                 key={selectedDraft.key}
                 draft={selectedDraft}
                 onTextChange={(text) =>
-                  onDraftTextChange?.(selectedDraft.key, text)
+                  drafts.onTextChange(selectedDraft.key, text)
                 }
                 onStarted={(conversation) =>
-                  onDraftStarted?.(selectedDraft.key, conversation)
+                  drafts.onStarted(selectedDraft.key, conversation)
                 }
               />
             )}

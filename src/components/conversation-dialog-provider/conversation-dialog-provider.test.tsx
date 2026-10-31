@@ -174,15 +174,22 @@ describe('ConversationDialogProvider', () => {
     const tablist = within(dialog).getByRole('tablist', {
       name: 'Conversations',
     });
+    const names = within(tablist)
+      .getAllByRole('tab')
+      .map((item) => item.textContent);
+    expect(names).toEqual(['T42 · Triage', 'Website · New Ticket', 'T7 · Ask']);
+    // Each tab shows its state as an indicator the cards share.
     expect(
-      within(tablist)
-        .getAllByRole('tab')
-        .map((item) => item.textContent),
-    ).toEqual([
-      'T42 · Triage · working',
-      'Website · New Ticket · needs you',
-      'T7 · Ask · needs you',
-    ]);
+      within(tabNamed(/T42/)).getByRole('img', { name: 'Agent running' }),
+    ).toBeVisible();
+    expect(
+      within(tabNamed(/Website · New Ticket/)).getByRole('img', {
+        name: 'Needs you',
+      }),
+    ).toBeVisible();
+    expect(
+      within(tabNamed(/T7 · Ask/)).getByRole('img', { name: 'Needs you' }),
+    ).toBeVisible();
     expect(tabNamed(/Website · New Ticket/)).toHaveAttribute(
       'aria-selected',
       'true',
@@ -445,24 +452,41 @@ describe('ConversationDialogProvider', () => {
       // The entry point sits behind the modal dialog here, so click it
       // without the pointer events a backdrop click would hide the dialog with.
       fireEvent.click(screen.getByRole('button', { name: 'Ask about 42' }));
-      await userEvent.type(draftBox(), 'Why?');
-      expect(router.replace).toHaveBeenCalledWith('/project/3', {
-        scroll: false,
+      // One change event, not four typed keys: the many pointer and key steps
+      // of `userEvent` can outlast the test timeout on a loaded machine.
+      fireEvent.change(
+        await screen.findByRole('textbox', { name: 'Question' }),
+        {
+          target: { value: 'Why?' },
+        },
+      );
+      await waitFor(() => {
+        expect(router.replace).toHaveBeenCalledWith('/project/3', {
+          scroll: false,
+        });
       });
 
-      await userEvent.click(tabNamed(/T42 · Triage/));
-      expect(router.replace).toHaveBeenLastCalledWith(
-        '/project/3?conversation=1',
-        { scroll: false },
-      );
-      await userEvent.click(tabNamed('Draft · Ask T42'));
-      expect(draftBox()).toHaveValue('Why?');
+      fireEvent.click(tabNamed(/T42 · Triage/));
+      await waitFor(() => {
+        expect(router.replace).toHaveBeenLastCalledWith(
+          '/project/3?conversation=1',
+          { scroll: false },
+        );
+      });
+      fireEvent.click(tabNamed('Draft · Ask T42'));
+      await waitFor(() => {
+        expect(draftBox()).toHaveValue('Why?');
+      });
 
-      await userEvent.click(
+      fireEvent.click(
         screen.getByRole('button', { name: 'Close Draft · Ask T42' }),
       );
 
-      expect(screen.queryByRole('tab', { name: 'Draft · Ask T42' })).toBeNull();
+      await waitFor(() => {
+        expect(
+          screen.queryByRole('tab', { name: 'Draft · Ask T42' }),
+        ).toBeNull();
+      });
       expect(closeConversation).not.toHaveBeenCalled();
       expect(startConversation).not.toHaveBeenCalled();
     });

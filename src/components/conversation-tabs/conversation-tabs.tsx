@@ -3,6 +3,7 @@
 import { Box, Button, Inline } from '@blockle/blocks';
 import { type FC, Fragment, type KeyboardEvent } from 'react';
 
+import { needsYou } from '../../conversations/conversation-activity';
 import type { ConversationState } from '../../conversations/conversation-state';
 import type { OpenConversation } from '../../conversations/conversations';
 import { intentNames } from '../conversation-labels/conversation-labels';
@@ -19,12 +20,32 @@ export type ConversationTabsProps = {
   /** Called with the Conversation whose close button was pressed. */
   onClose: (conversationId: number) => void;
   /** Draft tabs, after the Conversations. */
-  drafts?: DraftTab[];
+  drafts: TabDrafts;
+};
+
+/** The draft tabs, which one is shown, and what their buttons do. */
+export type TabDrafts = {
+  items: DraftTab[];
   /** The draft whose tab is shown. */
-  selectedDraftKey?: string | undefined;
-  onSelectDraft?: (key: string) => void;
+  selectedKey: string | undefined;
+  onSelect: (key: string) => void;
   /** Called with the draft whose close button was pressed. */
-  onCloseDraft?: (key: string) => void;
+  onClose: (key: string) => void;
+};
+
+/** A tab of either kind, in one list. */
+type TabItem = {
+  /** A Conversation's id, or a draft's key. */
+  id: number | string;
+  /** Names the close button. */
+  label: string;
+  /** The tab's text. */
+  text: string;
+  selected: boolean;
+  /** Shows the state indicator of a Conversation; drafts have none. */
+  state: ConversationState | null;
+  select: () => void;
+  close: () => void;
 };
 
 /** The DOM id of a Conversation's tab, for the panel that `aria-labelledby` names. */
@@ -39,13 +60,34 @@ export const conversationPanelId = (conversationId: number | string) =>
 export const tabLabel = ({ conversation, projectName }: OpenConversation) =>
   `${conversation.ticketNumber === null ? projectName : `T${conversation.ticketNumber}`} · ${intentNames[conversation.intent]}`;
 
-/** What a tab says about its Agent: working, or needing the User. */
-const tabStates: Record<ConversationState, string> = {
-  running: 'working',
-  waiting: 'needs you',
-  idle: 'needs you',
+/** What a tab says in words about a Conversation that is neither running nor waiting. */
+const endedStates: Partial<Record<ConversationState, string>> = {
   interrupted: 'interrupted',
   stopped: 'stopped',
+};
+
+type StateMarkerProps = { state: ConversationState };
+
+/**
+ * The tab's visible state indicator, with the icons and names the Ticket
+ * cards use (T593): running, or needing the User.
+ */
+const StateMarker: FC<StateMarkerProps> = ({ state }) => {
+  if (state === 'running') {
+    return (
+      <span role="img" aria-label="Agent running">
+        <Icon name="arrow-path" size="small" />
+      </span>
+    );
+  }
+  if (needsYou(state)) {
+    return (
+      <span role="img" aria-label="Needs you">
+        <Icon name="bell-alert" size="small" />
+      </span>
+    );
+  }
+  return null;
 };
 
 /**
@@ -60,27 +102,28 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
   selectedId,
   onSelect,
   onClose,
-  drafts = [],
-  selectedDraftKey,
-  onSelectDraft,
-  onCloseDraft,
+  drafts,
 }) => {
-  const items = [
+  const items: TabItem[] = [
     ...tabs.map((item) => ({
-      key: item.conversation.id,
+      id: item.conversation.id,
       label: tabLabel(item),
-      text: `${tabLabel(item)} · ${tabStates[item.conversation.state]}`,
+      text: endedStates[item.conversation.state]
+        ? `${tabLabel(item)} · ${endedStates[item.conversation.state]}`
+        : tabLabel(item),
+      state: item.conversation.state,
       selected: item.conversation.id === selectedId,
       select: () => onSelect(item.conversation.id),
       close: () => onClose(item.conversation.id),
     })),
-    ...drafts.map((draft) => ({
-      key: draft.key,
+    ...drafts.items.map((draft) => ({
+      id: draft.key,
       label: draft.label,
       text: draft.label,
-      selected: draft.key === selectedDraftKey,
-      select: () => onSelectDraft?.(draft.key),
-      close: () => onCloseDraft?.(draft.key),
+      state: null,
+      selected: draft.key === drafts.selectedKey,
+      select: () => drafts.onSelect(draft.key),
+      close: () => drafts.onClose(draft.key),
     })),
   ];
 
@@ -97,7 +140,7 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
     }
     event.preventDefault();
     items[target].select();
-    document.getElementById(conversationTabId(items[target].key))?.focus();
+    document.getElementById(conversationTabId(items[target].id))?.focus();
   };
 
   return (
@@ -109,20 +152,21 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
         flexWrap="nowrap"
       >
         {items.map((item, index) => (
-          <Fragment key={item.key}>
+          <Fragment key={item.id}>
             <Button
-              id={conversationTabId(item.key)}
+              id={conversationTabId(item.id)}
               type="button"
               role="tab"
               size="small"
               variant={item.selected ? 'solid' : 'ghost'}
               aria-selected={item.selected}
-              aria-controls={conversationPanelId(item.key)}
+              aria-controls={conversationPanelId(item.id)}
               tabIndex={item.selected ? 0 : -1}
               onClick={item.select}
               onKeyDown={(event) => move(event, index)}
             >
               {item.text}
+              {item.state && <StateMarker state={item.state} />}
             </Button>
             <Button
               type="button"

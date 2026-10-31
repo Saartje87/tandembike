@@ -7,12 +7,21 @@ import { startSetup } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { stateNames } from '../conversation-labels/conversation-labels';
+import { latestSetup } from './latest-setup';
+
+/** Which setting the User just turned on: it offers to run Setup. */
+export type SetupOffer = 'agent-mode' | 'parallel-runs';
+
+const offerWords: Record<SetupOffer, string> = {
+  'agent-mode': 'Agent mode is on.',
+  'parallel-runs': 'Parallel runs is on.',
+};
 
 export type ProjectSetupProps = {
   projectId: number;
   agentMode: boolean;
-  /** A call to action to show, such as after the User turned agent mode on. */
-  offer: string | null;
+  /** The setting the User just turned on, which offers Setup. */
+  offer: SetupOffer | null;
   /** The latest Setup the page loaded; the dialog may know a newer one. */
   latestSetup: Conversation | null;
 };
@@ -27,7 +36,7 @@ export const ProjectSetup: FC<ProjectSetupProps> = ({
   projectId,
   agentMode,
   offer,
-  latestSetup,
+  latestSetup: loadedSetup,
 }) => {
   const dialog = useConversationDialog();
   const [pending, setPending] = useState(false);
@@ -37,18 +46,10 @@ export const ProjectSetup: FC<ProjectSetupProps> = ({
     return null;
   }
 
-  const latest = [
-    latestSetup,
-    ...dialog.conversations.map(({ conversation }) => conversation),
-  ].reduce<Conversation | null>(
-    (best, conversation) =>
-      conversation !== null &&
-      conversation.intent === 'setup' &&
-      conversation.projectId === projectId &&
-      (best === null || conversation.id >= best.id)
-        ? conversation
-        : best,
-    null,
+  const latest = latestSetup(
+    projectId,
+    loadedSetup,
+    dialog.conversations.map(({ conversation }) => conversation),
   );
 
   const run = async () => {
@@ -69,20 +70,18 @@ export const ProjectSetup: FC<ProjectSetupProps> = ({
     }
   };
 
-  const message =
-    offer ??
-    (latest === null
+  const message = offer
+    ? `${offerWords[offer]} Run Setup to check the repository is ready.`
+    : latest === null
       ? "This repository has not been checked by Setup. Setup looks for what Tandembike's Agent runs rely on and offers to add what is missing. It is optional."
-      : null);
+      : null;
 
   return (
     <Stack gap={2} aria-label="Setup" asChild>
       <section>
         {message && (
           <Text tag="p" fontSize="small" color="muted">
-            {offer
-              ? `${offer} Run Setup to check the repository is ready.`
-              : message}
+            {message}
           </Text>
         )}
         {latest && (
