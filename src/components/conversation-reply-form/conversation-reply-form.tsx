@@ -1,13 +1,30 @@
 'use client';
 
 import { Alert, Button, Inline, Stack, Textarea } from '@blockle/blocks';
-import { type FC, type KeyboardEvent, useId } from 'react';
+import {
+  type FC,
+  type KeyboardEvent,
+  type Ref,
+  useId,
+  useImperativeHandle,
+} from 'react';
 import { useForm } from 'react-hook-form';
 
 import { replyToConversation } from '../../app/conversations/actions';
 import { FieldError } from '../field-error/field-error';
 
-export type ConversationReplyFormProps = { conversationId: number };
+/** What the chat does to the reply input besides the User typing (T613). */
+export type ReplyControl = {
+  /** Adds a line to the input, replacing an earlier line with the same prefix. */
+  addLine: (prefix: string, line: string) => void;
+  /** Sends the input's text with this line at once. */
+  sendWith: (line: string) => void;
+};
+
+export type ConversationReplyFormProps = {
+  conversationId: number;
+  control?: Ref<ReplyControl>;
+};
 
 /**
  * The reply input fixed at the bottom of the chat. Enter sends and
@@ -16,6 +33,7 @@ export type ConversationReplyFormProps = { conversationId: number };
  */
 export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
   conversationId,
+  control,
 }) => {
   const errorId = useId();
   const {
@@ -24,6 +42,7 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
     register,
     reset,
     setError,
+    setValue,
     watch,
   } = useForm<{ text: string }>({
     defaultValues: { text: '' },
@@ -32,7 +51,7 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
   const fieldError = errors.text?.message;
   const error = errors.root?.server?.message;
 
-  const submit = handleSubmit(async ({ text }) => {
+  const sendText = async (text: string) => {
     const result = await replyToConversation({ conversationId, text });
     if (!result.ok) {
       const reason = result.fieldErrors?.text;
@@ -44,7 +63,24 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
       return;
     }
     reset();
-  });
+  };
+  const submit = handleSubmit(({ text }) => sendText(text));
+
+  useImperativeHandle(control, () => ({
+    addLine: (prefix, line) => {
+      const lines = watch('text')
+        .split('\n')
+        .filter((existing) => existing !== '' && !existing.startsWith(prefix));
+      setValue('text', [...lines, line].join('\n'));
+    },
+    sendWith: (line) => {
+      if (!isSubmitting) {
+        const typed = watch('text').trim();
+        setValue('text', typed === '' ? line : `${typed}\n${line}`);
+        submit();
+      }
+    },
+  }));
 
   const send = (event: { preventDefault: () => void }) => {
     event.preventDefault();
