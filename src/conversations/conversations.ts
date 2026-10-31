@@ -85,6 +85,12 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
+/** How many Start runs a Project allows at once (T588 settings). */
+const startRunLimit = (settings: {
+  parallelRuns: boolean;
+  maxConcurrentRuns: number;
+}) => (settings.parallelRuns ? settings.maxConcurrentRuns : 1);
+
 /**
  * Conversations (ADR 0019): the User's exchanges with Agent runs that
  * Tandembike starts. Runs begin, receive replies and stop only through this
@@ -223,6 +229,35 @@ export function createConversations({
     announce(id);
   };
 
+  /**
+   * Refuses a Start run beyond the Project's limit: a Start is not queued
+   * (ADR 0019). Triage and Ask are never limited, and do not count.
+   */
+  const checkStartLimit = (
+    projectId: number,
+    intent: ConversationIntent,
+    settings: { parallelRuns: boolean; maxConcurrentRuns: number },
+  ) => {
+    if (intent !== 'start') {
+      return;
+    }
+    const limit = startRunLimit(settings);
+    let running = 0;
+    for (const id of live.keys()) {
+      const other = get(id);
+      if (other.projectId === projectId && other.intent === 'start') {
+        running += 1;
+      }
+    }
+    if (running >= limit) {
+      throw new NotAllowedError(
+        settings.parallelRuns
+          ? `This Project already has ${running} Start runs working, the most it allows at once. Stop one, or raise max concurrent Start runs in the Project settings.`
+          : 'This Project already has a Start run working. Stop it first, or turn on Parallel runs in the Project settings to allow more.',
+      );
+    }
+  };
+
   /** Starts a run for Conversation `id` with `prompt`, resuming `resume`. */
   const startRun = (id: number, prompt: string, resume?: string) => {
     const conversation = get(id);
@@ -230,6 +265,7 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
+    checkStartLimit(conversation.projectId, conversation.intent, settings);
     const ticket =
       conversation.ticketNumber === null
         ? null
@@ -316,6 +352,7 @@ export function createConversations({
       if (settings.repositoryPath === null) {
         throw new ValidationError(noRepositoryPath);
       }
+      checkStartLimit(projectId, input.intent, settings);
 
       const now = new Date();
       const created = db

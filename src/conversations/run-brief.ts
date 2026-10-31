@@ -30,9 +30,9 @@ export function runBrief(brief: RunBrief): string {
     'A human answers in the Tandembike UI, not in a terminal: ask your questions in your messages.',
     `Your Agent-run ID: ${brief.conversationId}. Use it when you claim a Ticket with the Tandembike tools.`,
   ];
-  if (brief.parallelRuns) {
+  if (brief.parallelRuns && brief.intent === 'start') {
     lines.push(
-      'Other runs may work in this repository at the same time: when you change files, work in a git worktree of your own, following the repository conventions for worktrees.',
+      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules.",
     );
   }
   return lines.join('\n');

@@ -40,6 +40,10 @@ export type ConversationWithTranscript = {
 export type TicketConversationsProps = {
   /** The Ticket's Conversations with their transcripts, newest first. */
   items: ConversationWithTranscript[];
+  /** The Conversation to show open, when the parent picks it. */
+  openId?: number | undefined;
+  /** Called with the id of a Conversation the User picks from the list. */
+  onOpen?: (conversationId: number) => void;
 };
 
 const intentNames: Record<ConversationIntent, string> = {
@@ -269,6 +273,8 @@ const StopButton: FC<StopButtonProps> = ({ conversationId }) => {
  */
 export const TicketConversations: FC<TicketConversationsProps> = ({
   items,
+  openId,
+  onOpen,
 }) => {
   const [pickedId, setPickedId] = useState<number>();
 
@@ -276,7 +282,8 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
     return null;
   }
   const open =
-    items.find((item) => item.conversation.id === pickedId) ?? items[0];
+    items.find((item) => item.conversation.id === (openId ?? pickedId)) ??
+    items[0];
   const { conversation, transcript } = open;
 
   return (
@@ -295,7 +302,10 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
                   item.conversation.id === conversation.id ? 'solid' : 'ghost'
                 }
                 aria-pressed={item.conversation.id === conversation.id}
-                onClick={() => setPickedId(item.conversation.id)}
+                onClick={() => {
+                  setPickedId(item.conversation.id);
+                  onOpen?.(item.conversation.id);
+                }}
               >
                 {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]}`}
               </Button>

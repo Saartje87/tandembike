@@ -25,6 +25,7 @@ vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
   replyToConversation: vi.fn(),
+  startConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
 vi.mock('../../app/cycles/actions', () => ({
@@ -209,6 +210,59 @@ describe('TicketDrawer', () => {
         inDrawer().getByRole('heading', { name: 'Comments and Activity' }),
       ),
     ).toBe(true);
+  });
+
+  it('offers Start, Triage and Ask on the Ticket', () => {
+    renderDrawer(ticket);
+
+    expect(button('Start')).toBeInTheDocument();
+    expect(button('Triage')).toBeInTheDocument();
+    expect(button('Ask')).toBeInTheDocument();
+  });
+
+  it('links a Claim made with a Conversation’s id to that Conversation', async () => {
+    const at = new Date('2026-03-03T09:00:00Z');
+    const conversation = (id: number, state: 'idle' | 'stopped') => ({
+      conversation: {
+        id,
+        projectId: 1,
+        ticketNumber: 4,
+        intent: 'start' as const,
+        state,
+        sdkSessionId: null,
+        costUsd: 0,
+        createdAt: at,
+        updatedAt: at,
+      },
+      transcript: [],
+    });
+    renderWithTheme(
+      <InShell
+        ticket={{
+          ...ticket,
+          claim: { agentRunId: '7', agentName: 'Claude' },
+        }}
+        conversations={[conversation(8, 'idle'), conversation(7, 'stopped')]}
+      />,
+    );
+    expect(inDrawer().queryByText(/This Conversation was stopped/)).toBeNull();
+
+    await userEvent.click(button('Conversation 7'));
+
+    expect(
+      inDrawer().getByText(/This Conversation was stopped/),
+    ).toBeInTheDocument();
+  });
+
+  it('does not link a Claim whose run is no Conversation of the Ticket', () => {
+    renderDrawer({
+      ...ticket,
+      claim: { agentRunId: 'run-1', agentName: 'Frontend Agent' },
+    });
+
+    expect(
+      inDrawer().queryByRole('button', { name: /^Conversation / }),
+    ).toBeNull();
   });
 
   it('shows the number and Close, title, details, description, then the footer', () => {
