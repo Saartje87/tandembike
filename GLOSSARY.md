@@ -89,8 +89,9 @@ A unique identifier for one Agent run, used to claim Tickets independently of it
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
-An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; only the User starts one.
-_Avoid_: Session, run, chat, thread
+An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; only the User starts one, by sending its first message.
+A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
+_Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
 **Setup**:
 A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
