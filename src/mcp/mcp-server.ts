@@ -1390,7 +1390,7 @@ export function createMcpServer(
     {
       title: 'Start Cycle',
       description:
-        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step.",
+        "Make a Prepared Cycle its Project's Active Cycle and return it. While another Cycle is Active this is refused, unless confirmArchiveActive is true: then that Cycle is archived and its open, non-archived Tickets roll into this one, all in one step. Finished Epics of the archived Cycle are archived with their children.",
       inputSchema: {
         cycleId,
         confirmArchiveActive: z
@@ -1412,7 +1412,7 @@ export function createMcpServer(
     {
       title: 'Archive Cycle',
       description:
-        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history.',
+        'Archive the Active Cycle, finished or not, and return it. Its Tickets keep their Status: its unfinished ones leave it and return to the Backlog, and its Done ones stay with it as read-only history. Finished Epics are archived with their children.',
       inputSchema: { cycleId },
     },
     ({ cycleId }) => respond(() => tickets.archiveCycle(cycleId)),
