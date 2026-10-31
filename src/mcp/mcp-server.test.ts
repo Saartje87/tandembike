@@ -264,10 +264,7 @@ describe('MCP server', () => {
       ['get_ticket', /an Epic lists its children/],
       ['attach_to_epic', /detach_from_epic it first/],
       ['update_ticket', /An Epic's follows its children and cannot be set/],
-      [
-        'create_ticket',
-        /Todo with none or all Todo, Done when all are Done, In progress otherwise/,
-      ],
+      ['create_ticket', /Done when every child is Done or archived/],
       ['list_cycles', /state \(Prepared, Active or Archived\), ticketNumbers/],
       ['plan_ticket', /at most one Cycle that is not Archived/],
       ['plan_ticket', /Done ones included/],

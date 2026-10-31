@@ -691,7 +691,7 @@ export function createMcpServer(
           .enum(ticketTypes)
           .optional()
           .describe(
-            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children that are not archived (Todo with none or all Todo, Done when all are Done, In progress otherwise), and is Done once every child is archived, so give it none.",
+            "Ticket, the default, or Epic: a Ticket that groups child Tickets of its Project. Fixed once created. An Epic's Status follows its children (Done when every child is Done or archived, Todo with none or when every child that is not archived is Todo, In progress otherwise), so give it none.",
           ),
         color: epicColor
           .optional()

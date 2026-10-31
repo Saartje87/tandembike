@@ -110,23 +110,28 @@ export function epicStatusRule(number: number) {
 }
 
 /**
- * An Epic's Status from its children's: Todo with none or all Todo, Done
- * when all are Done, and In progress otherwise.
+ * An Epic's Status from its children: Todo with none or with every child
+ * that is not archived in Todo, Done when every child is Done or archived,
+ * and In progress otherwise. An archived child counts as finished, as an
+ * archived Blocker is resolved (T595).
  */
-export function derivedStatus(children: readonly Status[]): Status {
-  if (children.every((status) => status === 'Todo')) {
-    return 'Todo';
-  }
-  if (children.every((status) => status === 'Done')) {
+export function derivedStatus(
+  children: readonly { status: Status; archived: boolean }[],
+): Status {
+  const finished = (child: { status: Status; archived: boolean }) =>
+    child.archived || child.status === 'Done';
+  if (children.length > 0 && children.every(finished)) {
     return 'Done';
+  }
+  if (children.every((child) => child.archived || child.status === 'Todo')) {
+    return 'Todo';
   }
   return 'In progress';
 }
 
 /**
- * Sets Epic `epicNumber`'s Status from its children that are not archived,
- * or to Done when it has children and every one is archived, moving it to
- * the end of a new Status lane. Run it in the transaction
+ * Sets Epic `epicNumber`'s Status from its children by `derivedStatus`,
+ * moving it to the end of a new Status lane. Run it in the transaction
  * that changed a child. Returns whether the Status changed.
  */
 export function syncEpicStatus(
@@ -149,13 +154,7 @@ export function syncEpicStatus(
     .from(tickets)
     .where(eq(tickets.epicNumber, epicNumber))
     .all();
-  const unarchived = children.filter((child) => !child.archived);
-  // An archived child counts as finished, as an archived Blocker is
-  // resolved: once every child is archived, the Epic is Done (T595).
-  const status =
-    children.length > 0 && unarchived.length === 0
-      ? 'Done'
-      : derivedStatus(unarchived.map((child) => child.status));
+  const status = derivedStatus(children);
   if (status === epic.status) {
     return false;
   }
