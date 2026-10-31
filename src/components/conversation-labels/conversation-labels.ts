@@ -17,6 +17,7 @@ export const intentNames: Record<ConversationIntent, string> = {
   triage: 'Triage',
   ask: 'Ask',
   new_ticket: 'New Ticket',
+  setup: 'Setup',
 };
 
 export const stateNames: Record<ConversationState, string> = {
