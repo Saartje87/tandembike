@@ -17,7 +17,7 @@ import { setProjectAgentSettings } from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { FieldError } from '../field-error/field-error';
-import { ProjectSetup } from '../project-setup/project-setup';
+import { ProjectSetup, type SetupOffer } from '../project-setup/project-setup';
 
 export type AgentSettingsFormProps = {
   projectId: number;
