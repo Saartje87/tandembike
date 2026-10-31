@@ -2,11 +2,13 @@ import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { startSetup } from '../../app/conversations/actions';
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { AgentSettingsForm } from './agent-settings-form';
 
+vi.mock('../../app/conversations/actions', () => ({ startSetup: vi.fn() }));
 vi.mock('../../app/projects/actions', () => ({
   setProjectAgentSettings: vi.fn(),
 }));
@@ -96,5 +98,54 @@ describe('AgentSettingsForm', () => {
       await screen.findByText('There is no directory at this path.'),
     ).toBeInTheDocument();
     expect(screen.getByLabelText('Repository path')).toHaveValue('/nope');
+  });
+
+  it('offers Setup after agent mode is turned on, without starting one', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+    expect(
+      screen.queryByRole('button', { name: 'Run Setup' }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Agent mode' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText(/Agent mode is on\. Run Setup/),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Run Setup' })).toBeVisible();
+    expect(startSetup).not.toHaveBeenCalled();
+  });
+
+  it('offers Setup after Parallel runs is turned on while agent mode is on', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, agentMode: true }}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('switch', { name: 'Parallel runs' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText(/Parallel runs is on\. Run Setup/),
+    ).toBeVisible();
+  });
+
+  it('does not offer Setup when saving other settings', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, agentMode: true }}
+      />,
+    );
+
+    await userEvent.type(screen.getByLabelText('Repository path'), '2');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(setProjectAgentSettings).toHaveBeenCalled());
+    expect(screen.queryByText(/Run Setup to check/)).not.toBeInTheDocument();
   });
 });

@@ -59,6 +59,26 @@ export async function startConversation(
   );
 }
 
+/** The User's first message of a Setup: the Agent's brief holds the checklist. */
+const setupPrompt =
+  "Check that this repository is ready for Tandembike's Agent runs.";
+
+/**
+ * Starts a Setup Conversation about a Project, or returns its running one
+ * (ADR 0020). Setup is startable only here, from the Project's agent settings.
+ */
+export async function startSetup(input: {
+  projectId: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().start({
+      projectId: Number(input?.projectId),
+      intent: 'setup',
+      prompt: setupPrompt,
+    }),
+  );
+}
+
 /** Sends the User's reply into a Conversation, resuming it if its run ended. */
 export async function replyToConversation(input: {
   conversationId: number;
