@@ -1,6 +1,10 @@
+import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  CallToolResult,
+  ToolAnnotations,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 
 import { attachmentPath } from '../app/lib/paths';
@@ -213,7 +217,7 @@ const criterionText = z
     `The criterion: one line of at most ${maxAcceptanceCriterionLength} characters. It is trimmed and may not be empty.`,
   );
 
-const newCriterion = z.object({
+const newCriterion = z.strictObject({
   text: criterionText,
   checked: z
     .boolean()
@@ -390,6 +394,12 @@ function withMoveHint(message: string): string {
     : message;
 }
 
+/** A tool's input: an object of `Shape` that refuses any other field. */
+type StrictInput<Shape extends z.ZodRawShape> = z.ZodObject<
+  Shape,
+  z.core.$strict
+>;
+
 /** An MCP server whose tools call the Tickets module `tickets` only. */
 export function createMcpServer(
   tickets: Tickets,
@@ -400,18 +410,44 @@ export function createMcpServer(
     { instructions },
   );
 
-  server.registerTool(
+  /**
+   * Registers a tool on `server` whose input refuses any field it does not
+   * list, naming it, instead of dropping it (T417). Register every tool
+   * through this; nested input objects use `z.strictObject` for the same.
+   */
+  function registerTool<Shape extends z.ZodRawShape>(
+    name: string,
+    {
+      inputSchema,
+      ...config
+    }: {
+      title: string;
+      description: string;
+      inputSchema: Shape;
+      annotations?: ToolAnnotations;
+    },
+    handler: ToolCallback<StrictInput<Shape>>,
+  ) {
+    return server.registerTool<z.ZodRawShape, StrictInput<Shape>>(
+      name,
+      { ...config, inputSchema: z.strictObject(inputSchema) },
+      handler,
+    );
+  }
+
+  registerTool(
     'list_projects',
     {
       title: 'List Projects',
       description:
         'List all Projects, oldest first, with their id, name, archived flag and creation time. Call this before create_project to reuse an existing Project, and to find the projectId for Ticket tools. An archived Project is read-only, with its Tickets and Cycles, until the User restores it; its name stays taken.',
+      inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     () => respond(() => tickets.listProjects().map(agentProject)),
   );
 
-  server.registerTool(
+  registerTool(
     'create_project',
     {
       title: 'Create Project',
@@ -426,7 +462,7 @@ export function createMcpServer(
     ({ name }) => respond(() => agentProject(tickets.createProject({ name }))),
   );
 
-  server.registerTool(
+  registerTool(
     'rename_project',
     {
       title: 'Rename Project',
@@ -444,7 +480,7 @@ export function createMcpServer(
       respond(() => agentProject(tickets.renameProject(id, { name }))),
   );
 
-  server.registerTool(
+  registerTool(
     'list_tickets',
     {
       title: 'List Tickets',
@@ -555,7 +591,7 @@ export function createMcpServer(
     (input) => respond(() => tickets.findTickets(input)),
   );
 
-  server.registerTool(
+  registerTool(
     'get_ticket',
     {
       title: 'Get Ticket',
@@ -583,7 +619,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'claim_ticket',
     {
       title: 'Claim Ticket',
@@ -611,7 +647,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'release_ticket_claim',
     {
       title: 'Release Ticket claim',
@@ -633,7 +669,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'create_ticket',
     {
       title: 'Create Ticket',
@@ -685,7 +721,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'create_tickets',
     {
       title: 'Create Tickets',
@@ -719,7 +755,7 @@ export function createMcpServer(
           ),
         tickets: z
           .array(
-            z.object({
+            z.strictObject({
               ...newTicketFields,
               title: withPlaceholderNote(newTicketFields.title),
               description: withPlaceholderNote(newTicketFields.description),
@@ -775,7 +811,7 @@ export function createMcpServer(
       })),
   );
 
-  server.registerTool(
+  registerTool(
     'update_ticket',
     {
       title: 'Update Ticket',
@@ -856,7 +892,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'update_tickets',
     {
       title: 'Update Tickets',
@@ -883,7 +919,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'attach_to_epic',
     {
       title: 'Attach Ticket to Epic',
@@ -905,7 +941,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'detach_from_epic',
     {
       title: 'Detach Ticket from Epic',
@@ -921,7 +957,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'set_acceptance_criteria_checked',
     {
       title: 'Check acceptance criteria',
@@ -930,7 +966,7 @@ export function createMcpServer(
         number: ticketNumber,
         criteria: z
           .array(
-            z.object({
+            z.strictObject({
               id: criterionId,
               checked: z
                 .boolean()
@@ -954,18 +990,19 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'list_labels',
     {
       title: 'List labels',
       description:
         'List every label in use on any Ticket, archived ones included, sorted. Reuse one of these before inventing a new label.',
+      inputSchema: {},
       annotations: { readOnlyHint: true },
     },
     () => respond(() => tickets.listLabels()),
   );
 
-  server.registerTool(
+  registerTool(
     'add_ticket_labels',
     {
       title: 'Add Ticket labels',
@@ -981,7 +1018,7 @@ export function createMcpServer(
       respondTicket(detail, () => tickets.addLabels(number, labels)),
   );
 
-  server.registerTool(
+  registerTool(
     'remove_ticket_labels',
     {
       title: 'Remove Ticket labels',
@@ -997,7 +1034,7 @@ export function createMcpServer(
       respondTicket(detail, () => tickets.removeLabels(number, labels)),
   );
 
-  server.registerTool(
+  registerTool(
     'list_blockers',
     {
       title: 'List Blockers',
@@ -1009,7 +1046,7 @@ export function createMcpServer(
     ({ number }) => respond(() => tickets.listBlockers(number)),
   );
 
-  server.registerTool(
+  registerTool(
     'add_blocker',
     {
       title: 'Add Blocker',
@@ -1033,7 +1070,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'remove_blocker',
     {
       title: 'Remove Blocker',
@@ -1057,7 +1094,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'list_comments',
     {
       title: 'List comments',
@@ -1069,7 +1106,7 @@ export function createMcpServer(
     ({ number }) => respond(() => tickets.listComments(number)),
   );
 
-  server.registerTool(
+  registerTool(
     'list_activity',
     {
       title: 'List Activity',
@@ -1091,7 +1128,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'add_comment',
     {
       title: 'Add comment',
@@ -1103,7 +1140,7 @@ export function createMcpServer(
       respond(() => tickets.addComment(number, { body, author: 'agent' })),
   );
 
-  server.registerTool(
+  registerTool(
     'add_attachment',
     {
       title: 'Add attachment',
@@ -1155,7 +1192,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'get_attachment',
     {
       title: 'Get attachment',
@@ -1195,7 +1232,7 @@ export function createMcpServer(
     },
   );
 
-  server.registerTool(
+  registerTool(
     'edit_comment',
     {
       title: 'Edit comment',
@@ -1207,7 +1244,7 @@ export function createMcpServer(
       respond(() => tickets.editComment(id, { body, by: 'agent' })),
   );
 
-  server.registerTool(
+  registerTool(
     'remove_attachment',
     {
       title: 'Remove attachment',
@@ -1223,7 +1260,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'remove_comment',
     {
       title: 'Remove comment',
@@ -1239,7 +1276,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'archive_ticket',
     {
       title: 'Archive Ticket',
@@ -1255,7 +1292,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'restore_ticket',
     {
       title: 'Restore Ticket',
@@ -1271,7 +1308,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'list_cycles',
     {
       title: 'List Cycles',
@@ -1300,7 +1337,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'create_cycle',
     {
       title: 'Create Cycle',
@@ -1330,7 +1367,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'rename_cycle',
     {
       title: 'Rename Cycle',
@@ -1343,7 +1380,7 @@ export function createMcpServer(
       respond(() => tickets.renameCycle(cycleId, { title })),
   );
 
-  server.registerTool(
+  registerTool(
     'plan_ticket',
     {
       title: 'Plan Ticket into Cycle',
@@ -1363,7 +1400,7 @@ export function createMcpServer(
     },
   );
 
-  server.registerTool(
+  registerTool(
     'unplan_ticket',
     {
       title: 'Unplan Ticket from Cycle',
@@ -1376,7 +1413,7 @@ export function createMcpServer(
       respond(() => tickets.unplanTicket({ cycleId, number })),
   );
 
-  server.registerTool(
+  registerTool(
     'plan_tickets',
     {
       title: 'Plan Tickets into Cycle',
@@ -1397,7 +1434,7 @@ export function createMcpServer(
       }),
   );
 
-  server.registerTool(
+  registerTool(
     'unplan_tickets',
     {
       title: 'Unplan Tickets from Cycle',
@@ -1409,7 +1446,7 @@ export function createMcpServer(
       respondBatch(() => tickets.unplanTickets({ cycleId, ticketNumbers })),
   );
 
-  server.registerTool(
+  registerTool(
     'move_tickets',
     {
       title: 'Move Tickets to Cycle or Backlog',
@@ -1430,7 +1467,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'start_cycle',
     {
       title: 'Start Cycle',
@@ -1452,7 +1489,7 @@ export function createMcpServer(
       ),
   );
 
-  server.registerTool(
+  registerTool(
     'archive_cycle',
     {
       title: 'Archive Cycle',
