@@ -162,3 +162,40 @@ export async function removeReferenceTemplate(input: {
     return {};
   });
 }
+
+/**
+ * Replaces a Project's Skills with the lines of the Settings textarea and
+ * refreshes its pages; returns them as saved. A refusal names the `skills`
+ * field.
+ */
+export async function setProjectSkills(input: {
+  projectId: number;
+  text: string;
+}): Promise<ActionResult<{ skills: string[] }>> {
+  return actionResult(() => {
+    const skills = appTickets('user').setProjectSkills(
+      Number(input?.projectId),
+      String(input?.text ?? '').split('\n'),
+    );
+    revalidatePath(boardRoute, 'layout');
+    return { skills };
+  });
+}
+
+/**
+ * The Skills a Conversation offers as chips: those of the Project, or of the
+ * Ticket's Project. It only reads.
+ */
+export async function loadProjectSkills(input: {
+  projectId?: number;
+  ticketNumber?: number;
+}): Promise<ActionResult<{ skills: string[] }>> {
+  return actionResult(() => {
+    const tickets = appTickets('user');
+    const projectId =
+      input?.ticketNumber === undefined
+        ? Number(input?.projectId)
+        : tickets.getTicket(Number(input.ticketNumber)).projectId;
+    return { skills: tickets.getProjectSkills(projectId) };
+  });
+}
