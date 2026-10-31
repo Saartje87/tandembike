@@ -72,6 +72,10 @@ _Avoid_: Link template, URL pattern
 A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent`.
 _Avoid_: Note, reply, update
 
+**Attachment**:
+A file the User or an Agent adds to a Ticket, an Epic included, such as a screenshot or a log, kept with the Ticket. It belongs to the Ticket, not to a Comment or the description. Its author is `user` or `agent`, as for a Comment; its name and content never change once added, and two Attachments may share a name. Removing one destroys it for good: the User can remove any Attachment, an Agent only one an Agent added. Archiving a Ticket keeps its Attachments; deleting it destroys them.
+_Avoid_: File, upload, asset
+
 **Blocker**:
 A Ticket that must be resolved before another Ticket can start. A Blocker is resolved once it is Done or Archived; a Ticket is **blocked** while any of its Blockers is unresolved, and ready to start when none is. A Ticket cannot block itself, Blockers never form a cycle, and they may cross Projects. Archiving a Ticket keeps its Blockers.
 _Avoid_: Dependency, prerequisite, `Blocked by:` lines
