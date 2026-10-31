@@ -357,6 +357,80 @@ describe('ConversationChat', () => {
     );
   });
 
+  describe('option chips', () => {
+    const asking = (text: string, state: Conversation['state'] = 'idle') =>
+      one({ id: 7, state }, [entry({ id: 1, text })]);
+
+    it('sends the choice of a single question with the typed text', async () => {
+      vi.mocked(replyToConversation).mockResolvedValue(ok());
+      renderWithTheme(
+        <ConversationChat
+          title="T4"
+          item={asking('Which way?\n1. Left\n2. Right')}
+        />,
+      );
+
+      await userEvent.type(
+        screen.getByRole('textbox', { name: 'Reply' }),
+        'because',
+      );
+      await userEvent.click(screen.getByRole('button', { name: '2) Right' }));
+
+      expect(replyToConversation).toHaveBeenCalledWith({
+        conversationId: 7,
+        text: 'because\n2',
+      });
+    });
+
+    it('adds a line per question to the input without sending', async () => {
+      renderWithTheme(
+        <ConversationChat
+          title="T4"
+          item={asking(
+            '1. DB?\n   a) SQLite\n   b) Postgres\n2. UI?\n   a) Web\n   b) CLI',
+          )}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'b) Postgres' }),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'a) Web' }));
+      await userEvent.click(screen.getByRole('button', { name: 'a) SQLite' }));
+
+      expect(replyToConversation).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox', { name: 'Reply' })).toHaveValue(
+        'Q2: a\nQ1: a',
+      );
+    });
+
+    it('shows chips only on the latest agent message', () => {
+      renderWithTheme(
+        <ConversationChat
+          title="T4"
+          item={one({ state: 'idle' }, [
+            entry({ id: 1, text: '1. Left\n2. Right' }),
+            entry({ id: 2, role: 'user', text: '1' }),
+            entry({ id: 3, text: 'Done' }),
+          ])}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: /Left/ })).toBeNull();
+    });
+
+    it('shows no chips while the Agent is working', () => {
+      renderWithTheme(
+        <ConversationChat
+          title="T4"
+          item={asking('1. Left\n2. Right', 'running')}
+        />,
+      );
+
+      expect(screen.queryByRole('button', { name: /Left/ })).toBeNull();
+    });
+  });
+
   describe('an Agent question', () => {
     const library = {
       question: 'Which library?',

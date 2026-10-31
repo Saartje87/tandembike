@@ -468,6 +468,21 @@ export function createConversations({
           projectId: 'Choose a Project or a Ticket.',
         });
       }
+      if (input.intent === 'setup') {
+        if (input.ticketNumber !== undefined) {
+          throw new ValidationError({
+            ticketNumber: 'Setup is about a Project, not a Ticket.',
+          });
+        }
+        // At most one running Setup per Project: two would edit the same
+        // checkout (ADR 0020). Starting another opens the running one.
+        for (const id of live.keys()) {
+          const other = get(id);
+          if (other.projectId === projectId && other.intent === 'setup') {
+            return other;
+          }
+        }
+      }
       const settings = tickets.getProjectAgentSettings(projectId);
       if (settings.repositoryPath === null) {
         throw new ValidationError(noRepositoryPath);

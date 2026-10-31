@@ -999,3 +999,100 @@ describe('Open Conversations', () => {
     ).toEqual([id]);
   });
 });
+
+describe('Setup', () => {
+  const startSetup = (
+    conversations: ReturnType<typeof setup>['conversations'],
+    projectId: number,
+  ) =>
+    conversations.start({
+      projectId,
+      intent: 'setup',
+      prompt: 'Check this repository.',
+    });
+
+  it('is about the Project, and the brief lists the checklist and the no-commit rule', async () => {
+    const { conversations, runner, project } = setup();
+
+    const conversation = await startSetup(conversations, project.id);
+
+    expect(conversation).toMatchObject({ intent: 'setup', ticketNumber: null });
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toContain('Website');
+    expect(brief).toContain('CLAUDE.md');
+    expect(brief).toContain('AGENTS.md');
+    expect(brief).toContain('.mcp.json');
+    expect(brief).toContain('allowlist');
+    expect(brief).toMatch(/main checkout/);
+    expect(brief).toMatch(/never commit, push or open a pull request/i);
+    expect(brief).toContain('added (uncommitted)');
+    expect(brief).toContain('skipped by the User');
+    expect(brief).toContain('missing');
+  });
+
+  it('lists the worktree item only with Parallel runs on', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const first = await startSetup(conversations, project.id);
+    expect(runner.runs[0].options.systemPrompt).not.toContain('worktree');
+
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    await conversations.stop(first.id);
+    await startSetup(conversations, project.id);
+    expect(runner.runs[1].options.systemPrompt).toContain('worktree');
+  });
+
+  it('refuses a Ticket: Setup is about a Project', async () => {
+    const { conversations, tickets, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+
+    const error = await failure(
+      conversations.start({
+        ticketNumber: ticket.number,
+        intent: 'setup',
+        prompt: 'Check.',
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+  });
+
+  it('opens the running Setup instead of starting another', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startSetup(conversations, project.id);
+
+    const again = await startSetup(conversations, project.id);
+
+    expect(again.id).toBe(first.id);
+    expect(runner.runs).toHaveLength(1);
+    expect(conversations.list({ projectId: project.id })).toHaveLength(1);
+  });
+
+  it('starts a new Setup once the earlier one is stopped, and keeps one per Project', async () => {
+    const { conversations, tickets, project } = setup();
+    const other = tickets.createProject({ name: 'Other' });
+    tickets.setProjectAgentSettings(other.id, {
+      repositoryPath: tickets.getProjectAgentSettings(project.id)
+        .repositoryPath,
+    });
+    const first = await startSetup(conversations, project.id);
+    expect((await startSetup(conversations, other.id)).id).not.toBe(first.id);
+
+    await conversations.stop(first.id);
+    const second = await startSetup(conversations, project.id);
+
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('does not count toward the Start run limit', async () => {
+    const { conversations, project } = setup();
+    await startSetup(conversations, project.id);
+
+    const start = await conversations.start({
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(start.intent).toBe('start');
+  });
+});

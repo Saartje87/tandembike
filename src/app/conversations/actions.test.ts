@@ -13,6 +13,7 @@ import {
   reopenConversation,
   replyToConversation,
   startConversation,
+  startSetup,
   stopConversation,
 } from './actions';
 
@@ -67,6 +68,31 @@ describe('Conversation actions', () => {
       fieldErrors: { repositoryPath: expect.any(String) },
     });
     expect(runner.runs).toHaveLength(0);
+  });
+
+  it('start a Setup on a Project, and return the running one the second time', async () => {
+    const { project, runner } = setup();
+
+    const first = await startSetup({ projectId: project.id });
+    const second = await startSetup({ projectId: project.id });
+
+    expect(first).toMatchObject({
+      ok: true,
+      conversation: { intent: 'setup', ticketNumber: null },
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      conversation: { id: first.ok ? first.conversation.id : 0 },
+    });
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('refuse a Setup when the Project has no repository path', async () => {
+    const { project } = setup(false);
+
+    expect(await startSetup({ projectId: project.id })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('send a reply and stop the run', async () => {

@@ -5,6 +5,7 @@ import { type FC, Suspense } from 'react';
 import { AgentSettingsForm } from '../../../../components/agent-settings-form/agent-settings-form';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { ReferenceTemplateEditor } from '../../../../components/reference-template-editor/reference-template-editor';
+import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { loadProject, type ProjectPageProps } from '../project-data';
 
@@ -33,6 +34,11 @@ async function settingsTab(params: ProjectPageProps['params']) {
           <AgentSettingsForm
             projectId={project.id}
             settings={appTickets('user').getProjectAgentSettings(project.id)}
+            latestSetup={
+              appConversations()
+                .list({ projectId: project.id })
+                .find(({ intent }) => intent === 'setup') ?? null
+            }
           />
         </section>
       </Stack>
