@@ -21,6 +21,12 @@ const ChangedTickets = createContext<ReadonlySet<number>>(new Set());
 export const useTicketChanged = (number: number): boolean =>
   useContext(ChangedTickets).has(number);
 
+const ConversationRevision = createContext(0);
+
+/** A number that goes up whenever a Conversation changes, to load again by. */
+export const useConversationRevision = (): number =>
+  useContext(ConversationRevision);
+
 export type LiveUpdatesProps = {
   children: ReactNode;
 };
@@ -39,6 +45,7 @@ export type LiveUpdatesProps = {
 export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
   const router = useRouter();
   const [changed, setChanged] = useState<ReadonlySet<number>>(new Set());
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     const source = new EventSource('/api/events');
@@ -64,7 +71,9 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
     source.onmessage = (event: MessageEvent<string>) => {
       const change = JSON.parse(event.data) as Change;
       router.refresh();
-      if (change.type === 'ticket') {
+      if (change.type === 'conversation') {
+        setRevision((current) => current + 1);
+      } else if (change.type === 'ticket') {
         highlight(change.number);
       } else if (change.type === 'tickets') {
         change.numbers.forEach(highlight);
@@ -77,6 +86,7 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
       if (dropped) {
         dropped = false;
         router.refresh();
+        setRevision((current) => current + 1);
       }
     };
 
@@ -89,8 +99,10 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
   }, [router]);
 
   return (
-    <ChangedTickets.Provider value={changed}>
-      {children}
-    </ChangedTickets.Provider>
+    <ConversationRevision.Provider value={revision}>
+      <ChangedTickets.Provider value={changed}>
+        {children}
+      </ChangedTickets.Provider>
+    </ConversationRevision.Provider>
   );
 };

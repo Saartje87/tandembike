@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, Drawer, Inline } from '@blockle/blocks';
+import { Box, Button, Drawer, Inline, Tag } from '@blockle/blocks';
 import { usePathname } from 'next/navigation';
 import {
   type FC,
@@ -15,6 +15,7 @@ import {
 import { statsPath } from '../../app/lib/paths';
 import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
+import { useNeedsYouCount } from '../conversation-activity/conversation-activity';
 import { Icon } from '../icon/icon';
 
 export type AppHeaderProps = {
@@ -56,6 +57,7 @@ const CloseOnNavigation: FC<CloseOnNavigationProps> = ({ onNavigate }) => {
  */
 export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
   const [open, setOpen] = useState(false);
+  const needsYou = useNeedsYouCount();
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -90,6 +92,14 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
               flexWrap="nowrap"
               marginInlineStart="auto"
             >
+              {needsYou > 0 && (
+                <Tag
+                  intent="warning"
+                  startSlot={<Icon name="bell-alert" size="small" />}
+                >
+                  {`${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`}
+                </Tag>
+              )}
               <AppLink href={statsPath()} intent="inherit">
                 Stats
               </AppLink>

@@ -1,6 +1,10 @@
 'use server';
 
 import { appConversations } from '../../conversations/app-conversations';
+import {
+  type ConversationActivity,
+  conversationActivity,
+} from '../../conversations/conversation-activity';
 import type {
   Conversation,
   StartConversationInput,
@@ -85,4 +89,12 @@ export async function answerConversationPermission(input: {
       input?.allow === true,
     ),
   );
+}
+
+/**
+ * What the Conversations of every Project are doing now, for the Ticket
+ * cards and the header. It only reads, and starts nothing.
+ */
+export async function currentConversationActivity(): Promise<ConversationActivity> {
+  return conversationActivity(appConversations().list());
 }

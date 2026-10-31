@@ -11,6 +11,7 @@ import {
 } from '../../app/lib/paths';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { useTicketActivity } from '../conversation-activity/conversation-activity';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
@@ -65,6 +66,40 @@ const BlockedMarker: FC = () => (
   >
     Blocked
   </Tag>
+);
+
+type ConversationMarkersProps = { running: boolean; needsYou: boolean };
+
+/**
+ * A pill while one of the Ticket's Conversations runs, and an amber one
+ * while one waits for the User (T593).
+ */
+const ConversationMarkers: FC<ConversationMarkersProps> = ({
+  running,
+  needsYou,
+}) => (
+  <>
+    {running && (
+      <Tag
+        intent="info"
+        startSlot={<Icon name="arrow-path" size="small" />}
+        role="img"
+        aria-label="Agent running"
+      >
+        Agent running
+      </Tag>
+    )}
+    {needsYou && (
+      <Tag
+        intent="warning"
+        startSlot={<Icon name="bell-alert" size="small" />}
+        role="img"
+        aria-label="Needs you"
+      >
+        Needs you
+      </Tag>
+    )}
+  </>
 );
 
 type CarryCountProps = { count: number };
@@ -137,6 +172,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   carriedAlong = false,
 }) => {
   const changed = useTicketChanged(ticket.number);
+  const activity = useTicketActivity(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
 
   // Runs before the link's own click, so it neither navigates nor opens a tab.
@@ -220,8 +256,12 @@ export const TicketCard: FC<TicketCardProps> = ({
                 </Tag>
               </Text>
             )}
-            {showBlocked || ticket.labels.length > 0 ? (
+            {showBlocked ||
+            ticket.labels.length > 0 ||
+            activity.running ||
+            activity.needsYou ? (
               <Inline gap={1} alignY="center" flexWrap="wrap">
+                <ConversationMarkers {...activity} />
                 {showBlocked && <BlockedMarker />}
                 <LabelList labels={ticket.labels} />
               </Inline>

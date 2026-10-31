@@ -5,6 +5,7 @@ import { type FC, type ReactNode, Suspense } from 'react';
 
 import { AppShell } from '../components/app-shell/app-shell';
 import { ColorModeProvider } from '../components/color-mode-provider/color-mode-provider';
+import { ConversationActivityProvider } from '../components/conversation-activity/conversation-activity';
 import { LiveUpdates } from '../components/live-updates/live-updates';
 import { ProjectNavLoader } from '../components/project-nav-loader/project-nav-loader';
 import { colorModeScript } from './lib/color-mode';
@@ -54,16 +55,18 @@ const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
       <body>
         <ColorModeProvider>
           <LiveUpdates>
-            <AppShell
-              breadcrumbs={breadcrumbs}
-              nav={
-                <Suspense>
-                  <ProjectNavLoader />
-                </Suspense>
-              }
-            >
-              {children}
-            </AppShell>
+            <ConversationActivityProvider>
+              <AppShell
+                breadcrumbs={breadcrumbs}
+                nav={
+                  <Suspense>
+                    <ProjectNavLoader />
+                  </Suspense>
+                }
+              >
+                {children}
+              </AppShell>
+            </ConversationActivityProvider>
           </LiveUpdates>
         </ColorModeProvider>
       </body>

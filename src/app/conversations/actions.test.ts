@@ -6,6 +6,7 @@ import { appConversations } from '../../conversations/app-conversations';
 import { createTestConversations } from '../../test/conversations';
 import {
   answerConversationPermission,
+  currentConversationActivity,
   replyToConversation,
   startConversation,
   stopConversation,
@@ -126,6 +127,35 @@ describe('Conversation actions', () => {
     ).toEqual({
       ok: false,
       error: 'There is no Conversation with id 999.',
+    });
+  });
+
+  it('report which Tickets have running or waiting Conversations', async () => {
+    const { project, tickets, runner } = setup();
+    const running = tickets.createTicket({
+      projectId: project.id,
+      title: 'Running',
+    });
+    const asking = tickets.createTicket({
+      projectId: project.id,
+      title: 'Asking',
+    });
+    await startConversation({
+      ticketNumber: running.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    await startConversation({
+      ticketNumber: asking.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
+
+    expect(await currentConversationActivity()).toEqual({
+      running: [running.number],
+      needsYou: [asking.number],
+      needsYouCount: 1,
     });
   });
 });
