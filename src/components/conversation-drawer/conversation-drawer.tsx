@@ -22,6 +22,9 @@ import {
 } from '../ticket-conversations/ticket-conversations';
 import * as styles from './conversation-drawer.css';
 
+/** The Epic whose drawer a Conversation drawer replaced, and the URL that reopens it. */
+export type ConversationBackLink = { number: number; href: string };
+
 export type ConversationDrawerProps = {
   item: ConversationWithTranscript;
   /**
@@ -29,8 +32,8 @@ export type ConversationDrawerProps = {
    * hiding or closing goes.
    */
   boardPath: string;
-  /** The Epic whose drawer this one replaced, and the URL that reopens it. */
-  backTo?: { number: number; href: string };
+  /** Where a link back goes, when this drawer replaced an Epic's. */
+  backTo?: ConversationBackLink;
 };
 
 /**
@@ -66,13 +69,15 @@ export const ConversationDrawer: FC<ConversationDrawerProps> = ({
     >
       <Box padding={5}>
         <Stack gap={3}>
-          <Inline gap={2} alignY="center" justifyContent="space-between">
-            {backTo ? (
+          <Inline
+            gap={2}
+            alignY="center"
+            justifyContent={backTo ? 'space-between' : 'flex-end'}
+          >
+            {backTo && (
               <AppLink href={backTo.href} scroll={false}>
                 {`Back to T${backTo.number}`}
               </AppLink>
-            ) : (
-              <span />
             )}
             <Button
               type="button"

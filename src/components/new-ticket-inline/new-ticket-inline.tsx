@@ -87,11 +87,11 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       type === 'Epic' ? 'epic' : epicNumber === undefined ? 'ticket' : 'child'
     ];
 
-  const showRefusal = (
-    result: { error: string; fieldErrors?: Record<string, string> | undefined },
-    field: 'title',
-  ) => {
-    const titleReason = result.fieldErrors?.[field];
+  const showRefusal = (result: {
+    error: string;
+    fieldErrors?: Record<string, string> | undefined;
+  }) => {
+    const titleReason = result.fieldErrors?.title;
     if (titleReason) {
       setError('title', { type: 'server', message: titleReason });
     } else {
@@ -108,7 +108,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       ...(type === 'Epic' ? { type } : {}),
     });
     if (!result.ok) {
-      showRefusal(result, 'title');
+      showRefusal(result);
       return;
     }
     reset();
@@ -131,7 +131,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       },
     });
     if (!result.ok) {
-      showRefusal(result, 'title');
+      showRefusal(result);
       return;
     }
     reset();
@@ -141,18 +141,18 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
 
   // With an Agent, the default mode decides what Enter does; Ctrl/Cmd+Enter
   // does the other.
+  const enterAsksAgent = agent?.mode === 'default';
   const submitWith = (withAgent: boolean) =>
     handleSubmit(({ title }) =>
       agent && withAgent
         ? createWithAgent(title, agent.openConversation)
         : create(title),
     );
-  const submit = submitWith(agent?.mode === 'default');
+  const submit = submitWith(enterAsksAgent);
   const noun = type === 'Epic' ? 'Epic' : 'Ticket';
-  const hint =
-    agent?.mode === 'default'
-      ? `Enter asks an Agent to create it. Ctrl/Cmd+Enter creates the ${noun} yourself.`
-      : `Enter creates the ${noun}. Ctrl/Cmd+Enter asks an Agent to create it.`;
+  const hint = enterAsksAgent
+    ? `Enter asks an Agent to create it. Ctrl/Cmd+Enter creates the ${noun} yourself.`
+    : `Enter creates the ${noun}. Ctrl/Cmd+Enter asks an Agent to create it.`;
 
   // While a Ticket saves, the field is read-only and ignores Enter and
   // Escape, so a Ticket is created once and what was saved is what clears.
@@ -179,7 +179,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
             if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
               event.preventDefault();
               if (!isSubmitting) {
-                submitWith(agent?.mode === 'optional')(event);
+                submitWith(!enterAsksAgent)(event);
               }
               return;
             }

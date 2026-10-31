@@ -68,11 +68,13 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
       setChanged((current) => new Set(current).add(number));
     };
 
+    const reloadConversations = () => setRevision((current) => current + 1);
+
     source.onmessage = (event: MessageEvent<string>) => {
       const change = JSON.parse(event.data) as Change;
       router.refresh();
       if (change.type === 'conversation') {
-        setRevision((current) => current + 1);
+        reloadConversations();
       } else if (change.type === 'ticket') {
         highlight(change.number);
       } else if (change.type === 'tickets') {
@@ -86,7 +88,7 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
       if (dropped) {
         dropped = false;
         router.refresh();
-        setRevision((current) => current + 1);
+        reloadConversations();
       }
     };
 
