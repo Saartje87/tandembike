@@ -11,6 +11,5 @@ export const prefixField = style({
 
 /** The URL field takes the rest of the row. */
 export const urlField = style({
-  flexGrow: 1,
   minInlineSize: '16rem',
 });

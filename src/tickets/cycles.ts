@@ -443,23 +443,41 @@ export function createCycles(
       )
       .orderBy(asc(tickets.number))
       .all();
+    if (epics.length === 0) {
+      return [];
+    }
+    const childrenByEpic = new Map<
+      number,
+      { number: number; status: Status; archived: boolean }[]
+    >();
+    const children = db
+      .select({
+        number: tickets.number,
+        status: tickets.status,
+        archived: tickets.archived,
+        epicNumber: tickets.epicNumber,
+      })
+      .from(tickets)
+      .where(
+        inArray(
+          tickets.epicNumber,
+          epics.map(({ number }) => number),
+        ),
+      )
+      .all();
+    for (const child of children) {
+      const siblings = childrenByEpic.get(child.epicNumber as number) ?? [];
+      siblings.push(child);
+      childrenByEpic.set(child.epicNumber as number, siblings);
+    }
     const finished = epics.flatMap(({ number }) => {
-      const children = db
-        .select({
-          number: tickets.number,
-          status: tickets.status,
-          archived: tickets.archived,
-        })
-        .from(tickets)
-        .where(eq(tickets.epicNumber, number))
-        .all();
+      const own = childrenByEpic.get(number) ?? [];
       const touched =
-        members.has(number) ||
-        children.some((child) => members.has(child.number));
-      const done = children.every(
+        members.has(number) || own.some((child) => members.has(child.number));
+      const done = own.every(
         (child) => child.archived || child.status === 'Done',
       );
-      return children.length > 0 && touched && done ? [number] : [];
+      return own.length > 0 && touched && done ? [number] : [];
     });
     return finished.length === 0 ? [] : archiveEpicsWithChildren(finished);
   }

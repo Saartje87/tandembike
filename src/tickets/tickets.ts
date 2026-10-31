@@ -508,7 +508,10 @@ export type TicketSummary = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'labels' | 'blocked'
 > &
-  Partial<Pick<Ticket, 'projectId' | 'type'>>;
+  Partial<Pick<Ticket, 'projectId'>>;
+
+/** A `TicketSummary` as `list_tickets` lists it: always with its type. */
+export type ListedTicketSummary = TicketSummary & Pick<Ticket, 'type'>;
 
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
@@ -527,7 +530,7 @@ export function ticketSummary({
 /** One page of `findTickets`. */
 export type TicketPage = {
   /** Whole Tickets when `detail` is `full`. */
-  tickets: TicketSummary[] | Ticket[];
+  tickets: ListedTicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
   /** How many Tickets match the filters, over all pages. */
@@ -775,6 +778,13 @@ function checkBatchTicket(
   return { ticket: ticket as CheckedNewTicket, blockedByPositions };
 }
 
+/** Why `field` cannot name a position other than an earlier one. */
+function earlierOnly(field: string, position: number): string {
+  return position === 0
+    ? `${field} can only name an earlier position, and it is first.`
+    : `${field} can only name an earlier position, from 0 to ${position - 1}.`;
+}
+
 /**
  * Refuses the batch, naming each Ticket by position, when its `epicPosition`
  * or `originPosition` breaks the rules: only an earlier position, an Epic of
@@ -804,9 +814,7 @@ function checkBatchLinks(
           : types[position] === 'Epic'
             ? 'an Epic cannot be a child of another Epic. Leave epicPosition out.'
             : !earlier(epicPosition)
-              ? position === 0
-                ? 'epicPosition can only name an earlier position, and it is first.'
-                : `epicPosition can only name an earlier position, from 0 to ${position - 1}.`
+              ? earlierOnly('epicPosition', position)
               : types[epicPosition] !== 'Epic'
                 ? `epicPosition names position ${epicPosition}, which is not created as an Epic. Give it type "Epic".`
                 : undefined,
@@ -823,9 +831,7 @@ function checkBatchLinks(
         batch.originNumber !== undefined
           ? 'give originPosition or the batch originNumber, not both.'
           : !earlier(originPosition)
-            ? position === 0
-              ? 'originPosition can only name an earlier position, and it is first.'
-              : `originPosition can only name an earlier position, from 0 to ${position - 1}.`
+            ? earlierOnly('originPosition', position)
             : undefined,
       );
     }
@@ -833,14 +839,15 @@ function checkBatchLinks(
   throwFieldErrors(reasons);
 }
 
-const placeholder = /\{\{T:(\d+)\}\}/g;
+/** A fresh global regex per use, so no `lastIndex` is shared. */
+const placeholders = () => /\{\{T:(\d+)\}\}/g;
 
 /** Why a `{{T:n}}` in `text` names a position outside the batch, if one does. */
 function outsidePositions(
   text: string | undefined,
   batchSize: number,
 ): string | undefined {
-  for (const [found, position] of text?.matchAll(placeholder) ?? []) {
+  for (const [found, position] of text?.matchAll(placeholders()) ?? []) {
     if (Number(position) >= batchSize) {
       return `${found} names a position outside the batch; use positions 0 to ${batchSize - 1}.`;
     }
@@ -859,7 +866,9 @@ function fillPlaceholders<
   >,
 >(input: T, replacement: (position: number) => string): T {
   const fill = (text: string) =>
-    text.replace(placeholder, (_, position) => replacement(Number(position)));
+    text.replace(placeholders(), (_, position) =>
+      replacement(Number(position)),
+    );
   return {
     ...input,
     title: fill(input.title),
@@ -3666,7 +3675,7 @@ function summaries(
   db: DatabaseConnection,
   rows: Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'>[],
   withProject: boolean,
-): TicketSummary[] {
+): ListedTicketSummary[] {
   return withBlockers(db, withLabels(db, rows)).map((row) => ({
     ...ticketSummary(row),
     type: row.type,
