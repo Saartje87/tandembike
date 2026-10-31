@@ -569,3 +569,43 @@ export async function setTicketOrigin(input: {
     return {};
   });
 }
+
+export type TicketAttachmentsResult = ActionResult;
+
+/**
+ * Adds the files of a form (`number`, and one `files` entry per file) to a
+ * Ticket as the User's Attachments, for the UI. The Tickets module enforces
+ * the size and count limits; at the first refusal the files before it stay
+ * added and the rest are dropped. Domain errors come back as `error`, like
+ * `createTicket`.
+ */
+export async function addTicketAttachments(
+  form: FormData,
+): Promise<TicketAttachmentsResult> {
+  const number = Number(form?.get('number'));
+  const files = (form?.getAll('files') ?? []).filter(
+    (entry): entry is File => typeof entry !== 'string',
+  );
+  const uploads = await Promise.all(
+    files.map(async (file) => ({
+      name: file.name,
+      mediaType: file.type,
+      content: new Uint8Array(await file.arrayBuffer()),
+    })),
+  );
+  return actionResult(() => {
+    if (uploads.length === 0) {
+      throw new ValidationError({ files: 'Choose a file to add.' });
+    }
+    const tickets = appTickets('user');
+    try {
+      for (const upload of uploads) {
+        tickets.addAttachment(number, { ...upload, author: 'user' });
+      }
+    } finally {
+      revalidatePath(boardRoute, 'page');
+      revalidatePath(cycleRoute, 'page');
+    }
+    return {};
+  });
+}

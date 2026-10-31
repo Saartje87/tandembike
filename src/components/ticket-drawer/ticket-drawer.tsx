@@ -427,7 +427,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         description={fields.description}
         onSave={saveDescription}
       />
-      <TicketAttachments attachments={ticket.attachments} />
+      <TicketAttachments
+        ticketNumber={ticket.number}
+        attachments={ticket.attachments}
+      />
       <AcceptanceCriteriaEditor
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}

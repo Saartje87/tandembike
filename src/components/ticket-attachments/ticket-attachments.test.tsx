@@ -1,9 +1,15 @@
-import { screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, screen, within } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { addTicketAttachments } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
 import type { Attachment } from '../../tickets/attachments';
 import { TicketAttachments } from './ticket-attachments';
+
+vi.mock('../../app/tickets/actions', () => ({
+  addTicketAttachments: vi.fn(),
+}));
 
 const attachment = (overrides: Partial<Attachment>): Attachment => ({
   id: 1,
@@ -17,8 +23,12 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
 });
 
 describe('TicketAttachments', () => {
+  beforeEach(() => {
+    vi.mocked(addTicketAttachments).mockReset();
+  });
+
   it('says there are no Attachments', () => {
-    renderWithTheme(<TicketAttachments attachments={[]} />);
+    renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
 
     expect(
       screen.getByRole('heading', { name: 'Attachments' }),
@@ -28,7 +38,10 @@ describe('TicketAttachments', () => {
 
   it('shows a previewable image as a thumbnail that opens it in a new tab', () => {
     renderWithTheme(
-      <TicketAttachments attachments={[attachment({ id: 7 })]} />,
+      <TicketAttachments
+        ticketNumber={4}
+        attachments={[attachment({ id: 7 })]}
+      />,
     );
 
     const link = screen.getByRole('link', { name: /shot\.png/ });
@@ -43,6 +56,7 @@ describe('TicketAttachments', () => {
   it('shows any other file, SVG included, as a name and size link', () => {
     renderWithTheme(
       <TicketAttachments
+        ticketNumber={4}
         attachments={[
           attachment({
             id: 8,
@@ -72,6 +86,7 @@ describe('TicketAttachments', () => {
   it('shows who added each Attachment and when', () => {
     renderWithTheme(
       <TicketAttachments
+        ticketNumber={4}
         attachments={[
           attachment({ id: 1, author: 'user' }),
           attachment({
@@ -91,5 +106,75 @@ describe('TicketAttachments', () => {
       'datetime',
       '2026-03-01T09:00:00.000Z',
     );
+  });
+
+  describe('adding', () => {
+    const sent = () => {
+      const [form] = vi.mocked(addTicketAttachments).mock.calls[0];
+      return {
+        number: form.get('number'),
+        names: form.getAll('files').map((file) => (file as File).name),
+      };
+    };
+
+    it('adds the files picked with the add button', async () => {
+      vi.mocked(addTicketAttachments).mockResolvedValue({ ok: true });
+      renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
+
+      expect(screen.getByRole('button', { name: 'Add files' })).toBeEnabled();
+      await userEvent.upload(screen.getByLabelText('Files to attach'), [
+        new File(['a'], 'a.txt', { type: 'text/plain' }),
+        new File(['b'], 'b.png', { type: 'image/png' }),
+      ]);
+
+      expect(sent()).toEqual({ number: '4', names: ['a.txt', 'b.png'] });
+    });
+
+    it('adds the files dropped on the section', async () => {
+      vi.mocked(addTicketAttachments).mockResolvedValue({ ok: true });
+      renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
+
+      fireEvent.drop(screen.getByRole('region', { name: 'Attachments' }), {
+        dataTransfer: {
+          files: [new File(['a'], 'a.txt'), new File(['b'], 'b.txt')],
+        },
+      });
+
+      await vi.waitFor(() => expect(addTicketAttachments).toHaveBeenCalled());
+      expect(sent()).toEqual({ number: '4', names: ['a.txt', 'b.txt'] });
+    });
+
+    it('shows why a file was refused on the section', async () => {
+      vi.mocked(addTicketAttachments).mockResolvedValue({
+        ok: false,
+        error: 'Keep the file to 10 MB or smaller.',
+      });
+      renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
+
+      await userEvent.upload(
+        screen.getByLabelText('Files to attach'),
+        new File(['a'], 'big.bin'),
+      );
+
+      expect(
+        await screen.findByText('Keep the file to 10 MB or smaller.'),
+      ).toBeInTheDocument();
+    });
+
+    it('clears the reason when the next add succeeds', async () => {
+      vi.mocked(addTicketAttachments)
+        .mockResolvedValueOnce({ ok: false, error: 'Too big.' })
+        .mockResolvedValueOnce({ ok: true });
+      renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
+      const input = screen.getByLabelText('Files to attach');
+
+      await userEvent.upload(input, new File(['a'], 'big.bin'));
+      expect(await screen.findByText('Too big.')).toBeInTheDocument();
+      await userEvent.upload(input, new File(['b'], 'b.txt'));
+
+      await vi.waitFor(() =>
+        expect(screen.queryByText('Too big.')).not.toBeInTheDocument(),
+      );
+    });
   });
 });

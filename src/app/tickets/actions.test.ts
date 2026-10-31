@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
 import {
+  addTicketAttachments,
   addTicketComment,
   addTicketExternalReference,
   addTicketLabel,
@@ -721,6 +722,89 @@ describe('Ticket actions', () => {
       ok: false,
       error: 'A Ticket cannot be its own Origin.',
       fieldErrors: { originNumber: 'A Ticket cannot be its own Origin.' },
+    });
+  });
+
+  describe('adding Attachments', () => {
+    const setup = () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const ticket = tickets.createTicket({
+        projectId: project.id,
+        title: 'Fix the header',
+      });
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      return { tickets, ticket };
+    };
+    const formOf = (number: number, ...files: File[]) => {
+      const form = new FormData();
+      form.set('number', String(number));
+      for (const file of files) {
+        form.append('files', file);
+      }
+      return form;
+    };
+
+    it("adds each file as the User's Attachment and refreshes the drawer", async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['one'], 'a.txt', { type: 'text/plain' }),
+          new File(['two'], 'b.png', { type: 'image/png' }),
+        ),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(tickets.getTicket(ticket.number).attachments).toMatchObject([
+        { name: 'a.txt', mediaType: 'text/plain', size: 3, author: 'user' },
+        { name: 'b.png', mediaType: 'image/png', size: 3, author: 'user' },
+      ]);
+      expect(tickets.listActivity(ticket.number).slice(-2)).toMatchObject([
+        {
+          actor: 'user',
+          changes: [{ type: 'attachmentAdded', name: 'a.txt' }],
+        },
+        {
+          actor: 'user',
+          changes: [{ type: 'attachmentAdded', name: 'b.png' }],
+        },
+      ]);
+      expect(revalidatePath).toHaveBeenCalledWith(
+        '/project/[id]/cycle/[cycleId]',
+        'page',
+      );
+    });
+
+    it('refuses a file over 10 MB with the module reason, keeping the files before it', async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['ok'], 'small.txt'),
+          new File([new Uint8Array(10 * 1024 * 1024 + 1)], 'big.bin'),
+          new File(['later'], 'later.txt'),
+        ),
+      );
+
+      expect(result).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('10 MB'),
+      });
+      expect(
+        tickets.getTicket(ticket.number).attachments.map(({ name }) => name),
+      ).toEqual(['small.txt']);
+      expect(revalidatePath).toHaveBeenCalled();
+    });
+
+    it('refuses a form without files', async () => {
+      const { ticket } = setup();
+
+      const result = await addTicketAttachments(formOf(ticket.number));
+
+      expect(result).toMatchObject({ ok: false });
     });
   });
 });
