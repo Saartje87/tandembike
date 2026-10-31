@@ -508,7 +508,10 @@ export type TicketSummary = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'labels' | 'blocked'
 > &
-  Partial<Pick<Ticket, 'projectId' | 'type'>>;
+  Partial<Pick<Ticket, 'projectId'>>;
+
+/** A `TicketSummary` as `list_tickets` lists it: always with its type. */
+export type ListedTicketSummary = TicketSummary & Pick<Ticket, 'type'>;
 
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
@@ -527,7 +530,7 @@ export function ticketSummary({
 /** One page of `findTickets`. */
 export type TicketPage = {
   /** Whole Tickets when `detail` is `full`. */
-  tickets: TicketSummary[] | Ticket[];
+  tickets: ListedTicketSummary[] | Ticket[];
   /** The `cursor` for the next page, or `null` on the last page. */
   nextCursor: number | null;
   /** How many Tickets match the filters, over all pages. */
@@ -3672,7 +3675,7 @@ function summaries(
   db: DatabaseConnection,
   rows: Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'>[],
   withProject: boolean,
-): TicketSummary[] {
+): ListedTicketSummary[] {
   return withBlockers(db, withLabels(db, rows)).map((row) => ({
     ...ticketSummary(row),
     type: row.type,
