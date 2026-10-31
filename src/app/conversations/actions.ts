@@ -48,6 +48,7 @@ export async function startConversation(
         : { ticketNumber: Number(input.ticketNumber) }),
       intent: input?.intent,
       prompt: String(input?.prompt ?? ''),
+      ...(input?.defaults === undefined ? {} : { defaults: input.defaults }),
     }),
   );
 }
@@ -84,5 +85,14 @@ export async function answerConversationPermission(input: {
       Number(input?.entryId),
       input?.allow === true,
     ),
+  );
+}
+
+/** Stops a Conversation's run and hides it from the Project's list. */
+export async function closeConversation(input: {
+  conversationId: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().close(Number(input?.conversationId)),
   );
 }

@@ -120,6 +120,28 @@ export function openTicketNumber(
 }
 
 /**
+ * Board `boardPath` with Conversation `id` open in its drawer, keeping the
+ * Board's `filter`. `fromTicket` is the Epic whose drawer it replaced, which
+ * the drawer links back to.
+ */
+export function conversationOnBoardPath(
+  boardPath: string,
+  id: number,
+  filter: BoardFilter = noBoardFilter,
+  fromTicket?: number,
+): string {
+  const path = filteredBoardPath(boardPath, filter);
+  const search = new URLSearchParams({ conversation: String(id) });
+  if (fromTicket !== undefined) {
+    search.set('from', String(fromTicket));
+  }
+  return `${path}${path.includes('?') ? '&' : '?'}${search.toString()}`;
+}
+
+/** The Conversation a Board's `?conversation=` opens, if it is one id. */
+export const openConversationId = openTicketNumber;
+
+/**
  * Finds a Ticket by number alone and opens it on its own Board: its open
  * Cycle's, or the Backlog (ADR 0013). Every link to another Ticket uses it.
  */

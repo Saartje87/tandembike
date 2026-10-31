@@ -6,6 +6,7 @@ import { appConversations } from '../../conversations/app-conversations';
 import { createTestConversations } from '../../test/conversations';
 import {
   answerConversationPermission,
+  closeConversation,
   replyToConversation,
   startConversation,
   stopConversation,
@@ -127,5 +128,41 @@ describe('Conversation actions', () => {
       ok: false,
       error: 'There is no Conversation with id 999.',
     });
+  });
+
+  it('start a New Ticket Conversation with the title field defaults', async () => {
+    const { project, runner } = setup();
+
+    const result = await startConversation({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add a coupon field',
+      defaults: { type: 'Epic' },
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    expect(runner.runs[0].options.systemPrompt).toContain('type Epic');
+  });
+
+  it('close a Conversation, stopping its run', async () => {
+    const { project, runner } = setup();
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Hi',
+    });
+    if (!started.ok) {
+      throw new Error('Expected a start.');
+    }
+
+    const result = await closeConversation({
+      conversationId: started.conversation.id,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      conversation: { state: 'stopped', hidden: true },
+    });
+    expect(runner.runs[0].interrupted).toBe(true);
   });
 });
