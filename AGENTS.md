@@ -50,6 +50,7 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 - Every new or changed behaviour gets a test in the same change, written test-first (see the `tdd` skill). Pure logic: unit tests next to the code they cover (e.g. `src/tickets/`). Components: render and behaviour tests with Testing Library via `renderWithTheme` from `src/test/render.tsx`.
 - Tickets module tests: start the file with `// @vitest-environment node` and build a fresh module per test with `createTestTickets()` from `src/test/tickets.ts` (in-memory SQLite, real migrations). Assert errors with `errorFrom()` from the same file. Test through the module's public functions, never the tables.
 - Component tests mock Server Actions (`vi.mock('../../app/projects/actions', ...)`) and `next/navigation` (with `mockRouter()` from `src/test/navigation.ts`) at the module boundary.
+- Flaky tests, and tests of an optimistic save that can be refused: read `docs/agents/flaky-tests.md`.
 - Exempt: pure styling or copy changes.
 - Test runner is Vitest (`npm test`). Do not add a second runner.
 
