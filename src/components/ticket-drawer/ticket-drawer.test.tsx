@@ -162,6 +162,7 @@ const dialog = {
   show: vi.fn(),
   reopenAndOpen: vi.fn(),
   openDraft: vi.fn(),
+  shown: false,
 };
 
 const at = new Date('2026-03-03T09:00:00Z');

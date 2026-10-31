@@ -8,6 +8,7 @@ import type { ConversationState } from '../../conversations/conversation-state';
 import type { OpenConversation } from '../../conversations/conversations';
 import { intentNames } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
+import * as styles from './conversation-tabs.css';
 
 /** A draft's tab: a Conversation the User has not started yet (T611). */
 export type DraftTab = { key: string; label: string };
@@ -158,6 +159,7 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
               type="button"
               role="tab"
               size="small"
+              className={styles.tabButton}
               variant={item.selected ? 'solid' : 'ghost'}
               aria-selected={item.selected}
               aria-controls={conversationPanelId(item.id)}
@@ -172,6 +174,7 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
               type="button"
               size="small"
               variant="ghost"
+              className={styles.tabButton}
               aria-label={`Close ${item.label}`}
               onClick={item.close}
             >

@@ -227,6 +227,7 @@ describe('NewTicketInline', () => {
         show: vi.fn(),
         reopenAndOpen: vi.fn(),
         openDraft: vi.fn(),
+        shown: false,
       };
       vi.mocked(useConversationDialog).mockReturnValue(dialog);
       vi.mocked(startConversation).mockResolvedValue({

@@ -48,6 +48,11 @@ export type ConversationDialogControl = {
    * presses Send in it. Drafts live in the browser, not in the URL.
    */
   openDraft: (draft: DraftInput) => void;
+  /**
+   * Whether the dialog is shown. An overlay under it ignores clicks outside
+   * itself meanwhile: those land in the dialog (T608).
+   */
+  shown: boolean;
 };
 
 const noControl: ConversationDialogControl = {
@@ -56,6 +61,7 @@ const noControl: ConversationDialogControl = {
   show: () => {},
   reopenAndOpen: async () => undefined,
   openDraft: () => {},
+  shown: false,
 };
 
 const ConversationDialogContext =
@@ -251,9 +257,17 @@ export const ConversationDialogProvider: FC<
     }
   };
 
+  const dialogShown = shown !== undefined || drafts.shown !== undefined;
   const control = useMemo(
-    () => ({ conversations, open, show, reopenAndOpen, openDraft }),
-    [conversations, open, show, reopenAndOpen, openDraft],
+    () => ({
+      conversations,
+      open,
+      show,
+      reopenAndOpen,
+      openDraft,
+      shown: dialogShown,
+    }),
+    [conversations, open, show, reopenAndOpen, openDraft, dialogShown],
   );
 
   return (

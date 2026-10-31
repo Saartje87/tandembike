@@ -18,6 +18,7 @@ import type {
 } from '../../conversations/conversations';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
+import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
 import {
   ConversationDialogProvider,
   useConversationDialog,
@@ -265,6 +266,50 @@ describe('ConversationDialogProvider', () => {
 
     expect(router.replace).toHaveBeenCalledTimes(2);
     expect(closeConversation).not.toHaveBeenCalled();
+  });
+
+  it('leaves the Ticket drawer under it open while the User works in it', async () => {
+    at$('/project/3', 'ticket=12&conversation=2');
+    vi.mocked(closeConversation).mockResolvedValue({
+      ok: true,
+      conversation: conversation({ id: 3, hidden: true }),
+    });
+    const drawerOver = () => (
+      <ConversationDialogProvider>
+        <TicketDrawerShell number={12} boardPath="/project/3">
+          <Opener />
+        </TicketDrawerShell>
+      </ConversationDialogProvider>
+    );
+    const { rerender } = renderWithTheme(drawerOver());
+    const dialog = await screen.findByRole('dialog', { name: 'Conversations' });
+    // Blocks listens for clicks outside an overlay one frame after it opens.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    await userEvent.click(tabNamed(/T42/));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Close T7 · Ask' }),
+    );
+    await userEvent.click(dialog);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Hide' }));
+
+    expect(router.replace).not.toHaveBeenCalledWith('/project/3', {
+      scroll: false,
+    });
+
+    // Hidden, the dialog no longer holds the drawer open.
+    at$('/project/3', 'ticket=12');
+    rerender(drawerOver());
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Conversations' }),
+      ).not.toBeInTheDocument(),
+    );
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await userEvent.click(document.body);
+    expect(router.replace).toHaveBeenLastCalledWith('/project/3', {
+      scroll: false,
+    });
   });
 
   it('closes a Conversation from its tab, removes the tab and shows its neighbour', async () => {
