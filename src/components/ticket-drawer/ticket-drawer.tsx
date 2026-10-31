@@ -56,6 +56,7 @@ import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
+import { TicketAgentActions } from '../ticket-agent-actions/ticket-agent-actions';
 import { TicketAttachments } from '../ticket-attachments/ticket-attachments';
 import { TicketComments } from '../ticket-comments/ticket-comments';
 import {
@@ -215,6 +216,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const [archiveError, setArchiveError] = useState<string>();
   const [archivePending, startArchive] = useTransition();
   const [claim, showClaim] = useOptimistic(ticket.claim);
+  const [openConversationId, setOpenConversationId] = useState<number>();
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
 
@@ -274,6 +276,11 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       }
     });
   };
+
+  // A Claim made with a Conversation's id (its Agent-run ID) links to it.
+  const claimConversation = conversations.find(
+    (item) => String(item.conversation.id) === claim?.agentRunId,
+  )?.conversation.id;
 
   const clearClaim = () => {
     setClaimError(undefined);
@@ -397,6 +404,16 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                   : `Agent run ${claim.agentRunId}`
                 : 'Unclaimed'}
             </Text>
+            {claimConversation !== undefined && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="small"
+                onClick={() => setOpenConversationId(claimConversation)}
+              >
+                {`Conversation ${claimConversation}`}
+              </Button>
+            )}
             {claim && (
               <Button
                 type="button"
@@ -445,7 +462,15 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}
       />
-      <TicketConversations items={conversations} />
+      <TicketAgentActions
+        ticketNumber={ticket.number}
+        onStarted={setOpenConversationId}
+      />
+      <TicketConversations
+        items={conversations}
+        openId={openConversationId}
+        onOpen={setOpenConversationId}
+      />
       <TicketComments
         ticketNumber={ticket.number}
         comments={comments}

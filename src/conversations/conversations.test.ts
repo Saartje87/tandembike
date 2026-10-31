@@ -94,6 +94,34 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options.systemPrompt).toContain('worktree');
   });
 
+  it('gives only Start runs the worktree instruction, and says how to make the worktree', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+
+    await conversations.start({
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'triage',
+      prompt: 'Go.',
+    });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Go.',
+    });
+
+    const start = runner.runs[0].options.systemPrompt;
+    expect(start).toContain('EnterWorktree');
+    expect(start).toContain('before you change any file');
+    expect(start).toContain('branch');
+    expect(runner.runs[1].options.systemPrompt).not.toContain('worktree');
+    expect(runner.runs[2].options.systemPrompt).not.toContain('worktree');
+  });
+
   it('is refused when the Project has no repository path', async () => {
     const { conversations, tickets, runner } = setup();
     const bare = tickets.createProject({ name: 'Bare' });
@@ -525,5 +553,93 @@ describe('Permission requests', () => {
     });
     const error = await failure(next.answerPermission(entry?.id ?? 0, true));
     expect(error).toBeInstanceOf(NotAllowedError);
+  });
+});
+
+describe('The Start run limit', () => {
+  const startOn = (
+    conversations: ReturnType<typeof setup>['conversations'],
+    projectId: number,
+    intent: 'start' | 'triage' | 'ask' = 'start',
+  ) => conversations.start({ projectId, intent, prompt: 'Go.' });
+
+  it('refuses a second running Start with Parallel runs off, with a reason', async () => {
+    const { conversations, project } = setup();
+    await startOn(conversations, project.id);
+
+    const error = await failure(startOn(conversations, project.id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect((error as Error).message).toMatch(/Start run/);
+    expect((error as Error).message).toMatch(/Parallel runs/);
+    expect(conversations.list({ projectId: project.id })).toHaveLength(1);
+  });
+
+  it('allows Starts up to the max concurrent Start runs with Parallel runs on', async () => {
+    const { conversations, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      parallelRuns: true,
+      maxConcurrentRuns: 2,
+    });
+    await startOn(conversations, project.id);
+    await startOn(conversations, project.id);
+
+    const error = await failure(startOn(conversations, project.id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect((error as Error).message).toMatch(/2/);
+  });
+
+  it('never refuses Triage or Ask by the limit, and does not count them', async () => {
+    const { conversations, project } = setup();
+    await startOn(conversations, project.id, 'triage');
+    await startOn(conversations, project.id, 'ask');
+    await startOn(conversations, project.id, 'start');
+    await startOn(conversations, project.id, 'triage');
+
+    expect(conversations.list({ projectId: project.id })).toHaveLength(4);
+  });
+
+  it('counts only the Project’s own Start runs', async () => {
+    const { conversations, tickets, project } = setup();
+    const other = tickets.createProject({ name: 'Other' });
+    tickets.setProjectAgentSettings(other.id, {
+      repositoryPath: tickets.getProjectAgentSettings(project.id)
+        .repositoryPath,
+    });
+    await startOn(conversations, project.id);
+
+    await startOn(conversations, other.id);
+  });
+
+  it('frees the slot when a Start is stopped or its run ends', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    await conversations.stop(first.id);
+    await startOn(conversations, project.id);
+    runner.runs[1].emit({ type: 'exit' });
+
+    await startOn(conversations, project.id);
+  });
+
+  it('refuses a reply that would resume a Start beyond the limit', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    runner.runs[0].emit({ type: 'exit', error: 'died' });
+    await startOn(conversations, project.id);
+
+    const error = await failure(conversations.reply(first.id, 'Go on'));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('lets a reply into a live Start through, and resumes Triage at any time', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    const triage = await startOn(conversations, project.id, 'triage');
+    runner.runs[1].emit({ type: 'exit', error: 'died' });
+
+    await conversations.reply(first.id, 'More');
+    await conversations.reply(triage.id, 'Again');
   });
 });
