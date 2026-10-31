@@ -59,6 +59,90 @@ describe('MCP server', () => {
     await client.close();
   });
 
+  it('refuses an unknown top-level field and names it', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Site' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { projectId: project.id, title: 'Typo', lables: ['bug'] },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/Unrecognized key.*"lables"/);
+    expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
+    await client.close();
+  });
+
+  it('refuses an argument to a tool that takes none', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const result = await client.callTool({
+      name: 'list_projects',
+      arguments: { includeArchived: true },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/Unrecognized key.*"includeArchived"/);
+    await client.close();
+  });
+
+  it('refuses an unknown field on a create_tickets Ticket, naming it and its position', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Site' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [{ title: 'Fine' }, { title: 'Typo', tpye: 'Epic' }],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(
+      /Unrecognized key.*"tpye".*tickets\[1\]/,
+    );
+    expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
+    await client.close();
+  });
+
+  it('refuses an unknown field on an acceptance criterion, naming it', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Site' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: {
+        projectId: project.id,
+        title: 'Criteria',
+        acceptanceCriteria: [{ text: 'Works', chekced: true }],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(
+      /Unrecognized key.*"chekced".*acceptanceCriteria\[0\]/,
+    );
+    expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
+    await client.close();
+  });
+
+  it('publishes every input object, at every depth, as closed to unknown fields', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    for (const tool of tools) {
+      const open = openObjects(tool.inputSchema, tool.name);
+      expect(open, tool.name).toEqual([]);
+    }
+    await client.close();
+  });
+
   it('tells Agents how to work with Tickets', async () => {
     const client = await connectMcpClient(createTestTickets());
 
@@ -1864,14 +1948,16 @@ describe('Epic tools', () => {
     });
     const client = await connectMcpClient(tickets);
 
-    await client.callTool({
+    const result = await client.callTool({
       name: 'update_ticket',
       arguments: { number: epic.number, type: 'Ticket', title: 'Pay' },
     });
 
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/Unrecognized key.*"type"/);
     expect(tickets.getTicket(epic.number)).toMatchObject({
       type: 'Epic',
-      title: 'Pay',
+      title: 'Checkout',
     });
     await client.close();
   });
@@ -3179,3 +3265,27 @@ describe('Write tool responses', () => {
     await client.close();
   });
 });
+
+/**
+ * The paths in JSON schema `schema` of the objects that accept fields they do
+ * not list: those without `additionalProperties: false`.
+ */
+function openObjects(schema: unknown, path: string): string[] {
+  if (Array.isArray(schema)) {
+    return schema.flatMap((item, index) =>
+      openObjects(item, `${path}[${index}]`),
+    );
+  }
+  if (typeof schema !== 'object' || schema === null) {
+    return [];
+  }
+  const node = schema as Record<string, unknown>;
+  const own =
+    node.type === 'object' && node.additionalProperties !== false ? [path] : [];
+  return [
+    ...own,
+    ...Object.entries(node).flatMap(([key, value]) =>
+      openObjects(value, `${path}.${key}`),
+    ),
+  ];
+}
