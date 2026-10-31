@@ -161,6 +161,7 @@ const dialog = {
   open: vi.fn(),
   show: vi.fn(),
   reopenAndOpen: vi.fn(),
+  openDraft: vi.fn(),
 };
 
 const at = new Date('2026-03-03T09:00:00Z');
@@ -199,6 +200,7 @@ describe('TicketDrawer', () => {
     vi.mocked(useConversationDialog).mockReturnValue(dialog);
     dialog.open.mockReset();
     dialog.reopenAndOpen.mockReset().mockResolvedValue(undefined);
+    dialog.openDraft.mockReset();
   });
 
   it('is named after the Ticket and shows its number, with no form-wide Save', () => {
@@ -261,6 +263,18 @@ describe('TicketDrawer', () => {
     await userEvent.click(button('Start'));
 
     await waitFor(() => expect(dialog.open).toHaveBeenCalledWith(12));
+  });
+
+  it('opens an Ask draft for the Ticket, with no inline field', async () => {
+    renderDrawer(ticket);
+
+    await userEvent.click(button('Ask'));
+
+    expect(dialog.openDraft).toHaveBeenCalledExactlyOnceWith({
+      intent: 'ask',
+      ticketNumber: ticket.number,
+    });
+    expect(screen.queryByLabelText('Question')).toBeNull();
   });
 
   it('offers Start, Triage and Ask on the Ticket', () => {

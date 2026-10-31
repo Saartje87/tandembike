@@ -36,6 +36,7 @@ describe('AppHeader', () => {
       open: vi.fn(),
       show: vi.fn(),
       reopenAndOpen: vi.fn(),
+      openDraft: vi.fn(),
     });
   });
 
@@ -168,6 +169,7 @@ describe('AppHeader', () => {
         open: vi.fn(),
         show: vi.fn(),
         reopenAndOpen: vi.fn(),
+        openDraft: vi.fn(),
       };
       vi.mocked(useConversationDialog).mockReturnValue(control);
       return control;

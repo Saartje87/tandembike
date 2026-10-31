@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { FC } from 'react';
@@ -9,6 +9,7 @@ import {
   listOpenConversations,
   loadConversation,
   reopenConversation,
+  startConversation,
 } from '../../app/conversations/actions';
 import type {
   Conversation,
@@ -34,6 +35,7 @@ vi.mock('../../app/conversations/actions', () => ({
   loadConversation: vi.fn(),
   reopenConversation: vi.fn(),
   replyToConversation: vi.fn(),
+  startConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
 
@@ -101,6 +103,25 @@ const Opener: FC = () => {
       </button>
       <button
         type="button"
+        onClick={() => dialog.openDraft({ intent: 'ask', ticketNumber: 42 })}
+      >
+        Ask about 42
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          dialog.openDraft({
+            intent: 'new_ticket',
+            projectId: 3,
+            text: 'Add coupons',
+            defaults: { cycleId: 7, type: 'Ticket' },
+          })
+        }
+      >
+        Draft a Ticket
+      </button>
+      <button
+        type="button"
         onClick={() =>
           dialog.reopenAndOpen(conversation({ id: 9, hidden: true }))
         }
@@ -134,6 +155,7 @@ describe('ConversationDialogProvider', () => {
         transcript: [entry(conversationId, `Hello from ${conversationId}`)],
       }));
     vi.mocked(closeConversation).mockReset();
+    vi.mocked(startConversation).mockReset();
     vi.mocked(reopenConversation).mockReset();
   });
 
@@ -326,5 +348,123 @@ describe('ConversationDialogProvider', () => {
         scroll: false,
       }),
     );
+  });
+
+  describe('drafts', () => {
+    const draftBox = () =>
+      screen.getByRole('textbox', { name: /Question|Message/ });
+
+    it('opens an Ask draft tab with an empty input, starting nothing', async () => {
+      show();
+      await waitFor(() => expect(listOpenConversations).toHaveBeenCalled());
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Ask about 42' }),
+      );
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(tabNamed('Draft · Ask T42')).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+      expect(draftBox()).toHaveValue('');
+      expect(startConversation).not.toHaveBeenCalled();
+      expect(router.push).not.toHaveBeenCalled();
+    });
+
+    it('opens a New Ticket draft holding the typed title', async () => {
+      show();
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Draft a Ticket' }),
+      );
+
+      expect(tabNamed('Draft · New Ticket')).toBeInTheDocument();
+      expect(draftBox()).toHaveValue('Add coupons');
+      expect(startConversation).not.toHaveBeenCalled();
+    });
+
+    it('starts the Conversation on Send, with the defaults, and the draft becomes its tab', async () => {
+      const started = conversation({ id: 4, intent: 'new_ticket' });
+      vi.mocked(startConversation).mockResolvedValue({
+        ok: true,
+        conversation: started,
+      });
+      show();
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Draft a Ticket' }),
+      );
+      vi.mocked(listOpenConversations).mockResolvedValue([
+        ...tabs,
+        tab({ id: 4, intent: 'new_ticket', state: 'running' }),
+      ]);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      expect(startConversation).toHaveBeenCalledExactlyOnceWith({
+        intent: 'new_ticket',
+        prompt: 'Add coupons',
+        projectId: 3,
+        defaults: { cycleId: 7, type: 'Ticket' },
+      });
+      await waitFor(() =>
+        expect(router.push).toHaveBeenCalledWith('/project/3?conversation=4', {
+          scroll: false,
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('tab', { name: 'Draft · New Ticket' }),
+        ).toBeNull(),
+      );
+    });
+
+    it('keeps the draft and its text and shows the reason when the start is refused', async () => {
+      vi.mocked(startConversation).mockResolvedValue({
+        ok: false,
+        error: 'This Project already has a Start run working.',
+      });
+      show();
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Ask about 42' }),
+      );
+      await userEvent.type(draftBox(), 'Why?');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Start run working',
+      );
+      expect(draftBox()).toHaveValue('Why?');
+      expect(tabNamed('Draft · Ask T42')).toBeInTheDocument();
+    });
+
+    it('keeps the text when switching tabs, and discards the draft when closed', async () => {
+      at$('/project/3', 'conversation=1');
+      show();
+      await screen.findByRole('dialog');
+      // The entry point sits behind the modal dialog here, so click it
+      // without the pointer events a backdrop click would hide the dialog with.
+      fireEvent.click(screen.getByRole('button', { name: 'Ask about 42' }));
+      await userEvent.type(draftBox(), 'Why?');
+      expect(router.replace).toHaveBeenCalledWith('/project/3', {
+        scroll: false,
+      });
+
+      await userEvent.click(tabNamed(/T42 · Triage/));
+      expect(router.replace).toHaveBeenLastCalledWith(
+        '/project/3?conversation=1',
+        { scroll: false },
+      );
+      await userEvent.click(tabNamed('Draft · Ask T42'));
+      expect(draftBox()).toHaveValue('Why?');
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Close Draft · Ask T42' }),
+      );
+
+      expect(screen.queryByRole('tab', { name: 'Draft · Ask T42' })).toBeNull();
+      expect(closeConversation).not.toHaveBeenCalled();
+      expect(startConversation).not.toHaveBeenCalled();
+    });
   });
 });

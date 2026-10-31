@@ -226,6 +226,7 @@ describe('NewTicketInline', () => {
         open: vi.fn(),
         show: vi.fn(),
         reopenAndOpen: vi.fn(),
+        openDraft: vi.fn(),
       };
       vi.mocked(useConversationDialog).mockReturnValue(dialog);
       vi.mocked(startConversation).mockResolvedValue({
@@ -241,19 +242,19 @@ describe('NewTicketInline', () => {
       return dialog;
     };
 
-    it('starts a New Ticket Conversation on Enter in agent mode, and opens it', async () => {
+    it('opens a New Ticket draft on Enter in agent mode, starting nothing', async () => {
       const dialog = renderWithAgent('default', { cycleId: 7 });
 
       await userEvent.type(titleField(), 'Add coupons{Enter}');
 
-      expect(startConversation).toHaveBeenCalledExactlyOnceWith({
-        projectId: 3,
+      expect(dialog.openDraft).toHaveBeenCalledExactlyOnceWith({
         intent: 'new_ticket',
-        prompt: 'Add coupons',
+        projectId: 3,
+        text: 'Add coupons',
         defaults: { cycleId: 7, type: 'Ticket' },
       });
+      expect(startConversation).not.toHaveBeenCalled();
       expect(createTicket).not.toHaveBeenCalled();
-      expect(dialog.open).toHaveBeenCalledExactlyOnceWith(9);
       await waitFor(() => expect(titleField()).toHaveValue(''));
     });
 
@@ -267,14 +268,14 @@ describe('NewTicketInline', () => {
     });
 
     it('does the reverse with agent mode off', async () => {
-      renderWithAgent('optional');
+      const dialog = renderWithAgent('optional');
 
       await userEvent.type(titleField(), 'Fix it{Enter}');
       expect(createTicket).toHaveBeenCalledOnce();
       expect(startConversation).not.toHaveBeenCalled();
 
       await userEvent.type(titleField(), 'Plan it{Meta>}{Enter}{/Meta}');
-      expect(startConversation).toHaveBeenCalledOnce();
+      expect(dialog.openDraft).toHaveBeenCalledOnce();
     });
 
     it('says which key does which', async () => {
@@ -297,7 +298,7 @@ describe('NewTicketInline', () => {
       ).toBeInTheDocument();
     });
 
-    it('opens the dialog over the Epic drawer it was typed in, with the Epic as a default', async () => {
+    it('keeps the Epic of the Epic drawer it was typed in as a default of the draft', async () => {
       const dialog = renderWithAgent('default', { epicNumber: 8 });
 
       await userEvent.type(
@@ -305,27 +306,11 @@ describe('NewTicketInline', () => {
         'Pay by card{Enter}',
       );
 
-      expect(startConversation).toHaveBeenCalledWith(
+      expect(dialog.openDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           defaults: { epicNumber: 8, type: 'Ticket' },
         }),
       );
-      expect(dialog.open).toHaveBeenCalledWith(9);
-    });
-
-    it('shows a refusal under the field and keeps the title', async () => {
-      renderWithAgent('default');
-      vi.mocked(startConversation).mockResolvedValue({
-        ok: false,
-        error: 'Set a repository path first.',
-      });
-
-      await userEvent.type(titleField(), 'Add coupons{Enter}');
-
-      expect(
-        await screen.findByText('Set a repository path first.'),
-      ).toBeInTheDocument();
-      expect(titleField()).toHaveValue('Add coupons');
     });
   });
 

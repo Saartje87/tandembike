@@ -25,6 +25,10 @@ import type {
   OpenConversation,
 } from '../../conversations/conversations';
 import { ConversationDialog } from '../conversation-dialog/conversation-dialog';
+import type {
+  Draft,
+  DraftInput,
+} from '../conversation-draft/conversation-draft';
 import { useConversationRevision } from '../live-updates/live-updates';
 
 /** What the rest of the app may do with the Conversation dialog. */
@@ -40,6 +44,11 @@ export type ConversationDialogControl = {
    * with the reason when reopening is refused.
    */
   reopenAndOpen: (conversation: Conversation) => Promise<string | undefined>;
+  /**
+   * Opens a draft tab (T611): a Conversation that starts only when the User
+   * presses Send in it. Drafts live in the browser, not in the URL.
+   */
+  openDraft: (draft: DraftInput) => void;
 };
 
 const noControl: ConversationDialogControl = {
@@ -47,6 +56,7 @@ const noControl: ConversationDialogControl = {
   open: () => {},
   show: () => {},
   reopenAndOpen: async () => undefined,
+  openDraft: () => {},
 };
 
 const ConversationDialogContext =
@@ -102,6 +112,9 @@ export const ConversationDialogProvider: FC<
   const [conversations, setConversations] = useState<OpenConversation[]>([]);
   const [url, setUrl] = useState<UrlState>({ id: undefined, href: '' });
   const [error, setError] = useState<string>();
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [draftKey, setDraftKey] = useState<string>();
+  const nextDraft = useRef(0);
   const lastShown = useRef<number | undefined>(undefined);
 
   const load = useCallback(async () => {
@@ -117,11 +130,15 @@ export const ConversationDialogProvider: FC<
     load();
   }, [load, revision]);
 
-  const shown = conversations.some(
-    ({ conversation }) => conversation.id === url.id,
-  )
-    ? url.id
+  // A draft in front wins over the URL, which only catches up after it.
+  const shownDraft = drafts.some((draft) => draft.key === draftKey)
+    ? draftKey
     : undefined;
+  const shown =
+    shownDraft === undefined &&
+    conversations.some(({ conversation }) => conversation.id === url.id)
+      ? url.id
+      : undefined;
   if (shown !== undefined) {
     lastShown.current = shown;
   }
@@ -141,6 +158,7 @@ export const ConversationDialogProvider: FC<
   const open = useCallback(
     (id: number) => {
       setError(undefined);
+      setDraftKey(undefined);
       lastShown.current = id;
       // The Conversation may be new: its tab needs the list to be current.
       load();
@@ -158,8 +176,10 @@ export const ConversationDialogProvider: FC<
       : first;
     if (last !== undefined) {
       open(last);
+    } else if (drafts[0]) {
+      setDraftKey(drafts[0].key);
     }
-  }, [conversations, open]);
+  }, [conversations, drafts, open]);
 
   const reopenAndOpen = useCallback(
     async (conversation: Conversation) => {
@@ -176,6 +196,54 @@ export const ConversationDialogProvider: FC<
     },
     [open],
   );
+
+  const openDraft = useCallback(
+    (input: DraftInput) => {
+      nextDraft.current += 1;
+      const key = `draft-${nextDraft.current}`;
+      setDrafts((all) => [...all, { text: '', ...input, key }]);
+      setError(undefined);
+      setDraftKey(key);
+      // A draft is shown by the provider, not by the URL.
+      if (url.id !== undefined) {
+        go(undefined, true);
+      }
+    },
+    [go, url.id],
+  );
+
+  const selectDraft = (key: string) => {
+    setDraftKey(key);
+    if (url.id !== undefined) {
+      go(undefined, true);
+    }
+  };
+
+  const closeDraft = (key: string) => {
+    const index = drafts.findIndex((draft) => draft.key === key);
+    const remaining = drafts.filter((draft) => draft.key !== key);
+    setDrafts(remaining);
+    if (key === shownDraft) {
+      const next = remaining[index] ?? remaining[index - 1];
+      if (next) {
+        setDraftKey(next.key);
+      } else {
+        setDraftKey(undefined);
+        go(conversations.at(-1)?.conversation.id, true);
+      }
+    }
+  };
+
+  const startDraft = async (key: string, started: Conversation) => {
+    // Show the new tab at once: the list must hold it before the draft goes.
+    try {
+      setConversations(await listOpenConversations());
+    } catch {
+      // The next change loads it again.
+    }
+    setDrafts((all) => all.filter((draft) => draft.key !== key));
+    open(started.id);
+  };
 
   const close = async (id: number) => {
     setError(undefined);
@@ -198,8 +266,8 @@ export const ConversationDialogProvider: FC<
   };
 
   const control = useMemo(
-    () => ({ conversations, open, show, reopenAndOpen }),
-    [conversations, open, show, reopenAndOpen],
+    () => ({ conversations, open, show, reopenAndOpen, openDraft }),
+    [conversations, open, show, reopenAndOpen, openDraft],
   );
 
   return (
@@ -211,8 +279,26 @@ export const ConversationDialogProvider: FC<
       <ConversationDialog
         tabs={conversations}
         selectedId={shown}
-        onSelect={(id) => go(id, true)}
-        onHide={() => go(undefined, true)}
+        drafts={drafts}
+        selectedDraftKey={shownDraft}
+        onSelectDraft={selectDraft}
+        onCloseDraft={closeDraft}
+        onDraftTextChange={(key, text) =>
+          setDrafts((all) =>
+            all.map((draft) =>
+              draft.key === key ? { ...draft, text } : draft,
+            ),
+          )
+        }
+        onDraftStarted={startDraft}
+        onSelect={(id) => {
+          setDraftKey(undefined);
+          go(id, true);
+        }}
+        onHide={() => {
+          setDraftKey(undefined);
+          go(undefined, true);
+        }}
         onClose={close}
         error={error}
       />

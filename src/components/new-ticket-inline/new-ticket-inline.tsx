@@ -12,7 +12,6 @@ import type { FC } from 'react';
 import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
 import type { TicketType } from '../../tickets/ticket-type';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -58,7 +57,7 @@ const copy = {
  * In a Project with an Agent (`ProjectAgentProvider`, T592) one of Enter and
  * Ctrl/Cmd+Enter creates through a New Ticket Conversation instead: the title
  * is the first message, the field's Cycle, Epic and type go as defaults, and
- * the Conversation opens in the Conversation dialog. A hint under the focused field says
+ * a `Draft · New Ticket` tab opens in the Conversation dialog and Send there starts the Conversation. A hint under the focused field says
  * which key does which.
  */
 export const NewTicketInline: FC<NewTicketInlineProps> = ({
@@ -118,24 +117,20 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
     onDone?.();
   };
 
-  const createWithAgent = async (title: string) => {
-    const result = await startConversation({
-      projectId,
+  // The title opens a draft; nothing starts until the User sends it.
+  const createWithAgent = (title: string) => {
+    dialog.openDraft({
       intent: 'new_ticket',
-      prompt: title,
+      projectId,
+      text: title,
       defaults: {
         ...(cycleId === undefined ? {} : { cycleId }),
         ...(epicNumber === undefined ? {} : { epicNumber }),
         type,
       },
     });
-    if (!result.ok) {
-      showRefusal(result, 'title');
-      return;
-    }
     reset();
     onDone?.();
-    dialog.open(result.conversation.id);
   };
 
   // With an Agent, the default mode decides what Enter does; Ctrl/Cmd+Enter
