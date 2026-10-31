@@ -29,14 +29,13 @@ import {
 } from '../../app/tickets/actions';
 import type { ActivityEntry } from '../../tickets/activity';
 import type { Cycle } from '../../tickets/cycles';
+import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
-import {
-  type Blockers,
-  type Comment,
-  type EpicLink,
-  epicLinkOf,
-  type Ticket,
-  type TicketClaim,
+import type {
+  Blockers,
+  Comment,
+  Ticket,
+  TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';

@@ -65,6 +65,9 @@ export const stateNames: Record<ConversationState, string> = {
   stopped: 'stopped',
 };
 
+/** A Conversation's cost so far, in US dollars to the cent. */
+const formatCost = (costUsd: number) => `$${costUsd.toFixed(2)}`;
+
 const speakerNames: Record<TranscriptRole, string> = {
   user: 'You',
   agent: 'Agent',
@@ -329,7 +332,7 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
                     onOpen?.(item.conversation.id);
                   }}
                 >
-                  {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]}`}
+                  {`${intentNames[item.conversation.intent]} · ${stateNames[item.conversation.state]} · ${formatCost(item.conversation.costUsd)}`}
                 </Button>
               </li>
             ))}
@@ -338,7 +341,7 @@ export const TicketConversations: FC<TicketConversationsProps> = ({
       )}
       <Inline gap={2} alignY="center" justifyContent="space-between">
         <Text fontSize="small" color="muted">
-          {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}`}
+          {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}, ${formatCost(conversation.costUsd)}`}
         </Text>
         {hasRun(conversation.state) && (
           <StopButton conversationId={conversation.id} />

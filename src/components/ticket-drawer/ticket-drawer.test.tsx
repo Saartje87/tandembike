@@ -17,7 +17,8 @@ import {
 } from '../../app/tickets/actions';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
-import type { EpicLink, Ticket } from '../../tickets/tickets';
+import type { EpicLink } from '../../tickets/epic-link';
+import type { Ticket } from '../../tickets/tickets';
 import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketDrawer, type TicketDrawerProps } from './ticket-drawer';
 

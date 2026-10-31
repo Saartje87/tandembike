@@ -18,7 +18,8 @@ import {
   attachTicketToEpic,
   detachTicketFromEpic,
 } from '../../app/tickets/actions';
-import type { EpicLink, Ticket } from '../../tickets/tickets';
+import type { EpicLink } from '../../tickets/epic-link';
+import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 
 export type TicketEpicProps = {

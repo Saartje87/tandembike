@@ -4,10 +4,15 @@ import { userEvent } from '@testing-library/user-event';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { currentConversationActivity } from '../../app/conversations/actions';
 import { renderWithTheme } from '../../test/render';
+import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { AppHeader } from './app-header';
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  currentConversationActivity: vi.fn(),
+}));
 
 // The link navigates on the client, as a Next.js `Link` does.
 const nav = (
@@ -136,5 +141,40 @@ describe('AppHeader', () => {
     expect(
       screen.getByRole('dialog', { name: 'Navigation' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows how many Conversations wait for the User', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue({
+      running: [],
+      needsYou: [4],
+      needsYouCount: 3,
+    });
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <AppHeader nav={nav} breadcrumbs={breadcrumbs} />
+      </ConversationActivityProvider>,
+    );
+
+    expect(
+      await within(screen.getByRole('banner')).findByText('3 need you'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no count when no Conversation waits', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue({
+      running: [],
+      needsYou: [],
+      needsYouCount: 0,
+    });
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <AppHeader nav={nav} breadcrumbs={breadcrumbs} />
+      </ConversationActivityProvider>,
+    );
+
+    await vi.waitFor(() =>
+      expect(currentConversationActivity).toHaveBeenCalled(),
+    );
+    expect(screen.queryByText(/need you|needs you/)).not.toBeInTheDocument();
   });
 });

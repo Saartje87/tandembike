@@ -1,9 +1,15 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
+import { currentConversationActivity } from '../../app/conversations/actions';
 import { renderWithTheme } from '../../test/render';
+import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { TicketCard } from './ticket-card';
+
+vi.mock('../../app/conversations/actions', () => ({
+  currentConversationActivity: vi.fn(),
+}));
 
 const ticket = {
   number: 4,
@@ -297,5 +303,43 @@ describe('Selecting a TicketCard', () => {
     await user.keyboard('{/Shift}');
 
     expect(onSelect.mock.calls).toEqual([['toggle'], ['range']]);
+  });
+
+  describe('Conversation activity', () => {
+    const showWith = (activity: { running: number[]; needsYou: number[] }) => {
+      vi.mocked(currentConversationActivity).mockResolvedValue({
+        ...activity,
+        needsYouCount: activity.needsYou.length,
+      });
+      renderWithTheme(
+        <ConversationActivityProvider>
+          <TicketCard ticket={ticket} boardPath="/project/1" />
+        </ConversationActivityProvider>,
+      );
+    };
+
+    it('shows a running indicator while one of its Conversations runs', async () => {
+      showWith({ running: [4], needsYou: [] });
+
+      expect(await screen.findByText('Agent running')).toBeInTheDocument();
+      expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
+    });
+
+    it('shows a needs-you mark while one of its Conversations waits for the User', async () => {
+      showWith({ running: [], needsYou: [4] });
+
+      expect(await screen.findByText('Needs you')).toBeInTheDocument();
+      expect(screen.queryByText('Agent running')).not.toBeInTheDocument();
+    });
+
+    it('shows neither for another Ticket', async () => {
+      showWith({ running: [5], needsYou: [6] });
+
+      await waitFor(() =>
+        expect(currentConversationActivity).toHaveBeenCalled(),
+      );
+      expect(screen.queryByText('Agent running')).not.toBeInTheDocument();
+      expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
+    });
   });
 });

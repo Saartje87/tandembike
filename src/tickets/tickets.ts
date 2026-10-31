@@ -58,6 +58,7 @@ import {
   planNewTicket,
   withCycles,
 } from './cycles';
+import { type EpicLink, epicLinkOf } from './epic-link';
 import {
   checkChildrenArchived,
   checkEpicChild,
@@ -253,23 +254,6 @@ export type Ticket = {
   createdAt: Date;
   updatedAt: Date;
 };
-
-/** The Epic a child Ticket belongs to. */
-export type EpicLink = Pick<Ticket, 'number' | 'title'> & {
-  color: PaletteColor;
-};
-
-/**
- * Epic `epic` as its children link to it. Every Epic has a colour; grey
- * only stands in should one ever lack it.
- */
-export function epicLinkOf({
-  number,
-  title,
-  color,
-}: Pick<Ticket, 'number' | 'title' | 'color'>): EpicLink {
-  return { number, title, color: color ?? 'grey' };
-}
 
 /** A child Ticket as its Epic lists it. */
 export type EpicChild = Pick<

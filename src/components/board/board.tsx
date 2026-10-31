@@ -61,14 +61,10 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
+import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { BatchFailure } from '../../tickets/errors';
 import { isStatus, type Status, statuses } from '../../tickets/status';
-import {
-  type EpicLink,
-  epicLinkOf,
-  type Project,
-  type Ticket,
-} from '../../tickets/tickets';
+import type { Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';

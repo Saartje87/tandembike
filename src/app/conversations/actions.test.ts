@@ -7,6 +7,7 @@ import { createTestConversations } from '../../test/conversations';
 import {
   answerConversationPermission,
   closeConversation,
+  currentConversationActivity,
   replyToConversation,
   startConversation,
   stopConversation,
@@ -164,5 +165,34 @@ describe('Conversation actions', () => {
       conversation: { state: 'stopped', hidden: true },
     });
     expect(runner.runs[0].interrupted).toBe(true);
+  });
+
+  it('report which Tickets have running or waiting Conversations', async () => {
+    const { project, tickets, runner } = setup();
+    const running = tickets.createTicket({
+      projectId: project.id,
+      title: 'Running',
+    });
+    const asking = tickets.createTicket({
+      projectId: project.id,
+      title: 'Asking',
+    });
+    await startConversation({
+      ticketNumber: running.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    await startConversation({
+      ticketNumber: asking.number,
+      intent: 'ask',
+      prompt: 'Go',
+    });
+    runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
+
+    expect(await currentConversationActivity()).toEqual({
+      running: [running.number],
+      needsYou: [asking.number],
+      needsYouCount: 1,
+    });
   });
 });

@@ -101,6 +101,26 @@ describe('TicketConversations', () => {
     expect(screen.queryByText('Oldest answer')).not.toBeInTheDocument();
   });
 
+  it('shows each Conversation with its running cost', () => {
+    renderWithTheme(
+      <TicketConversations
+        items={[
+          one({ id: 2, intent: 'ask', costUsd: 1.2345 }),
+          one({ id: 1, costUsd: 0.5 }),
+        ]}
+      />,
+    );
+
+    const buttons = within(
+      screen.getByRole('list', { name: 'Conversations' }),
+    ).getAllByRole('button');
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      'Ask · waiting for you · $1.23',
+      'Start · waiting for you · $0.50',
+    ]);
+    expect(screen.getByText('Ask, waiting for you, $1.23')).toBeInTheDocument();
+  });
+
   it('opens another Conversation when picked', async () => {
     renderWithTheme(
       <TicketConversations

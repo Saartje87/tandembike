@@ -5,7 +5,7 @@ import type { FC } from 'react';
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
-import { epicLinkOf } from '../../../../tickets/tickets';
+import { epicLinkOf } from '../../../../tickets/epic-link';
 import { findBoardTicket } from '../project-data';
 
 export type BoardTicketDrawerProps = {
