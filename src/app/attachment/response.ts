@@ -27,7 +27,7 @@ export function attachmentResponse(
     }
     throw error;
   }
-  return new Response(attachment.content as BodyInit, {
+  return new Response(new Uint8Array(attachment.content), {
     headers: {
       'Content-Type': attachment.mediaType,
       'X-Content-Type-Options': 'nosniff',

@@ -815,12 +815,42 @@ describe('Ticket actions', () => {
 
       expect(result).toMatchObject({
         ok: false,
-        error: expect.stringContaining('10 MB'),
+        error:
+          '"big.bin" was not added: Keep the file to 10 MB or smaller. 1 earlier file was added.',
       });
       expect(
         tickets.getTicket(ticket.number).attachments.map(({ name }) => name),
       ).toEqual(['small.txt']);
       expect(revalidatePath).toHaveBeenCalled();
+    });
+
+    it('adds a file whose browser-given type carries a charset', async () => {
+      const { tickets, ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(
+          ticket.number,
+          new File(['a'], 'a.txt', { type: 'text/plain;charset=utf-8' }),
+        ),
+      );
+
+      expect(result).toEqual({ ok: true });
+      expect(tickets.getTicket(ticket.number).attachments[0].mediaType).toBe(
+        'text/plain',
+      );
+    });
+
+    it('names the refused file but not the count when none were added before it', async () => {
+      const { ticket } = setup();
+
+      const result = await addTicketAttachments(
+        formOf(ticket.number, new File([], 'empty.txt')),
+      );
+
+      expect(result).toEqual({
+        ok: false,
+        error: '"empty.txt" was not added: The file is empty.',
+      });
     });
 
     it('refuses a form without files', async () => {
