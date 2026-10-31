@@ -52,6 +52,8 @@ describe('TicketAttachments', () => {
     const link = screen.getByRole('link', { name: /shot\.png/ });
     expect(link).toHaveAttribute('href', '/attachment/7');
     expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noreferrer');
+    expect(link).not.toHaveAttribute('download');
     expect(within(link).getByRole('img', { name: 'shot.png' })).toHaveAttribute(
       'src',
       '/attachment/7',
@@ -86,6 +88,12 @@ describe('TicketAttachments', () => {
     expect(
       screen.getByRole('link', { name: 'report.pdf (3 MB)' }),
     ).toHaveAttribute('href', '/attachment/9');
+    for (const name of ['logo.svg (1.5 KB)', 'report.pdf (3 MB)']) {
+      const link = screen.getByRole('link', { name });
+      expect(link).toHaveAttribute('download');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noreferrer');
+    }
   });
 
   it('shows who added each Attachment and when', () => {
@@ -113,58 +121,64 @@ describe('TicketAttachments', () => {
     );
   });
 
-  it('asks before removing an Attachment for good', async () => {
-    vi.mocked(removeTicketAttachment).mockResolvedValue({ ok: true });
-    renderWithTheme(
-      <TicketAttachments
-        ticketNumber={4}
-        attachments={[attachment({ id: 7 })]}
-      />,
-    );
-    const item = screen.getByRole('listitem');
+  describe('removing', () => {
+    const openDialog = async () => {
+      renderWithTheme(
+        <TicketAttachments
+          ticketNumber={4}
+          attachments={[attachment({ id: 7 })]}
+        />,
+      );
+      await userEvent.click(
+        within(screen.getByRole('listitem')).getByRole('button', {
+          name: 'Remove',
+        }),
+      );
+      return screen.getByRole('dialog', { name: 'Remove shot.png?' });
+    };
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
+    it('asks in a dialog before removing an Attachment for good', async () => {
+      vi.mocked(removeTicketAttachment).mockResolvedValue({ ok: true });
+      const dialog = await openDialog();
 
-    expect(removeTicketAttachment).not.toHaveBeenCalled();
-    expect(
-      within(item).getByText('Remove shot.png? It cannot be restored.'),
-    ).toBeInTheDocument();
+      expect(removeTicketAttachment).not.toHaveBeenCalled();
+      expect(
+        within(dialog).getByText('It cannot be restored once removed.'),
+      ).toBeInTheDocument();
 
-    await userEvent.click(
-      within(item).getByRole('button', { name: 'Remove attachment' }),
-    );
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Remove attachment' }),
+      );
 
-    expect(removeTicketAttachment).toHaveBeenCalledExactlyOnceWith({ id: 7 });
-  });
-
-  it('keeps an Attachment when removing it is cancelled or refused', async () => {
-    vi.mocked(removeTicketAttachment).mockResolvedValue({
-      ok: false,
-      error: 'There is no Attachment 7.',
+      expect(removeTicketAttachment).toHaveBeenCalledExactlyOnceWith({ id: 7 });
     });
-    renderWithTheme(
-      <TicketAttachments
-        ticketNumber={4}
-        attachments={[attachment({ id: 7 })]}
-      />,
-    );
-    const item = screen.getByRole('listitem');
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
-    await userEvent.click(within(item).getByRole('button', { name: 'Cancel' }));
-    expect(removeTicketAttachment).not.toHaveBeenCalled();
-    expect(
-      within(item).queryByRole('button', { name: 'Remove attachment' }),
-    ).not.toBeInTheDocument();
+    it('keeps an Attachment when removing it is cancelled', async () => {
+      const dialog = await openDialog();
 
-    await userEvent.click(within(item).getByRole('button', { name: 'Remove' }));
-    await userEvent.click(
-      within(item).getByRole('button', { name: 'Remove attachment' }),
-    );
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Cancel' }),
+      );
 
-    expect(within(item).getByRole('alert')).toHaveTextContent(
-      'There is no Attachment 7.',
-    );
+      expect(removeTicketAttachment).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('shows why removing was refused in the dialog', async () => {
+      vi.mocked(removeTicketAttachment).mockResolvedValue({
+        ok: false,
+        error: 'There is no Attachment 7.',
+      });
+      const dialog = await openDialog();
+
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Remove attachment' }),
+      );
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'There is no Attachment 7.',
+      );
+    });
   });
 
   describe('adding', () => {

@@ -4,8 +4,10 @@ import {
   Alert,
   Box,
   Button,
+  Dialog,
   Heading,
   Inline,
+  Link,
   Stack,
   Text,
 } from '@blockle/blocks';
@@ -28,7 +30,6 @@ import {
 import { formatSize, isPreviewable } from '../../tickets/attachment-preview';
 import type { Attachment } from '../../tickets/attachments';
 import { actorNames } from '../activity-entry/activity-entry';
-import { AppLink } from '../app-link/app-link';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
 import * as styles from './ticket-attachments.css';
@@ -47,26 +48,31 @@ type AttachmentItemProps = { attachment: Attachment };
  * added it and when, and a button to remove it after a confirmation.
  */
 const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
-  // Whether it asks to confirm the removal.
-  const [removing, setRemoving] = useState(false);
+  // Whether the removal confirmation is open.
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
   const [removePending, startRemove] = useTransition();
+  const headingId = useId();
+  const descriptionId = useId();
 
-  const askToRemove = (next: boolean) => () => {
+  const closeDialog = () => {
+    setConfirming(false);
     setError(undefined);
-    setRemoving(next);
   };
 
   const remove = () => {
     setError(undefined);
     startRemove(async () => {
       const result = await removeTicketAttachment({ id: attachment.id });
-      if (!result.ok) {
+      if (result.ok) {
+        setConfirming(false);
+      } else {
         setError(result.error);
       }
     });
   };
 
+  const previewable = isPreviewable(attachment.mediaType);
   const href = attachmentPath(attachment.id);
   return (
     <Box
@@ -78,21 +84,26 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
     >
       <li>
         <Stack gap={2}>
-          {isPreviewable(attachment.mediaType) ? (
-            <AppLink href={href} target="_blank" rel="noreferrer">
-              {/* biome-ignore lint/performance/noImgElement: a plain served file, not an optimizable asset */}
+          {/* A plain Blocks Link, not AppLink: Next's Link would prefetch the file (up to 10 MB). */}
+          <Link
+            href={href}
+            target="_blank"
+            rel="noreferrer"
+            download={previewable ? undefined : ''}
+          >
+            {previewable ? (
+              // Blocks has no Image component (T572).
+              // biome-ignore lint/performance/noImgElement: a plain served file, not an optimizable asset
               <img
                 className={styles.thumbnail}
                 src={href}
                 alt={attachment.name}
                 loading="lazy"
               />
-            </AppLink>
-          ) : (
-            <AppLink href={href} target="_blank" rel="noreferrer">
-              {`${attachment.name} (${formatSize(attachment.size)})`}
-            </AppLink>
-          )}
+            ) : (
+              `${attachment.name} (${formatSize(attachment.size)})`
+            )}
+          </Link>
           <Inline gap={2} alignY="center" justifyContent="space-between">
             <Inline gap={2} alignY="center" flexWrap="wrap">
               <Text fontSize="small" fontWeight="strong">
@@ -103,47 +114,53 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
               </Text>
             </Inline>
 
-            {!removing && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="small"
-                intent="danger"
-                onClick={askToRemove(true)}
-              >
-                Remove
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              intent="danger"
+              onClick={() => setConfirming(true)}
+            >
+              Remove
+            </Button>
           </Inline>
-          {removing && (
-            <Stack gap={2}>
-              <Text tag="p" fontSize="small">
-                {`Remove ${attachment.name}? It cannot be restored.`}
-              </Text>
-              <Inline gap={2}>
-                <Button
-                  type="button"
-                  size="small"
-                  intent="danger"
-                  loading={removePending}
-                  disabled={removePending}
-                  onClick={remove}
-                >
-                  Remove attachment
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="small"
-                  disabled={removePending}
-                  onClick={askToRemove(false)}
-                >
-                  Cancel
-                </Button>
-              </Inline>
-            </Stack>
-          )}
-          {error && <Alert intent="danger">{error}</Alert>}
+          <Dialog
+            open={confirming}
+            onRequestClose={closeDialog}
+            aria-labelledby={headingId}
+            aria-describedby={descriptionId}
+          >
+            {confirming && (
+              <Stack gap={4}>
+                <Heading id={headingId} level={2}>
+                  {`Remove ${attachment.name}?`}
+                </Heading>
+                <Text id={descriptionId} tag="p">
+                  It cannot be restored once removed.
+                </Text>
+                {error && <Alert intent="danger">{error}</Alert>}
+                <Inline gap={2}>
+                  <Button
+                    type="button"
+                    intent="danger"
+                    loading={removePending}
+                    disabled={removePending}
+                    onClick={remove}
+                  >
+                    Remove attachment
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={removePending}
+                    onClick={closeDialog}
+                  >
+                    Cancel
+                  </Button>
+                </Inline>
+              </Stack>
+            )}
+          </Dialog>
         </Stack>
       </li>
     </Box>
@@ -166,7 +183,7 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
     setError,
     clearErrors,
     formState: { errors, isSubmitting },
-  } = useForm();
+  } = useForm({ defaultValues: {} });
   const reason = errors.root?.server?.message;
 
   const add = (files: File[]) => {
@@ -214,6 +231,7 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
           >
             {isSubmitting ? 'Adding...' : 'Add files'}
           </Button>
+          {/* Blocks has no file input, so a hidden native one sits behind the button (T404). */}
           <input
             ref={input}
             type="file"
