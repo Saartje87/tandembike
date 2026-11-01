@@ -19,3 +19,4 @@ Starting a process with shell access changes what ADR 0001's missing authenticat
 - A repository whose instructions live only in `AGENTS.md` needs a `CLAUDE.md` that includes it, since the SDK loads `CLAUDE.md`.
 - A Project caps its concurrent Start runs; a Start beyond the cap is refused, not queued.
 - Setup is the one Conversation whose brief says what to check in the repository; see ADR 0020.
+- Triage and Start send the Project's Agent command and the Ticket number as the run's first message (`/mattpocock-skills:triage T42`), never in the brief (T621). Many skills, such as `triage` and `implement`, set `disable-model-invocation: true`: the Agent cannot open them with the Skill tool, so a brief line such as "use /triage" does nothing, and only a message that starts with the command runs the skill. Keep the command at the start of the first message.

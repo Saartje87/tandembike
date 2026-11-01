@@ -29,6 +29,7 @@ import {
 } from '../../app/tickets/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { ActivityEntry } from '../../tickets/activity';
+import type { ProjectAgentCommands } from '../../tickets/agent-commands';
 import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
@@ -97,6 +98,17 @@ export type TicketDrawerProps = {
   referenceTemplates?: ReferenceTemplateLink[];
   /** The Ticket's Conversations with Agents, newest first. Defaults to none. */
   conversations?: Conversation[];
+  /**
+   * The commands of the Ticket's Project that Triage and Start send.
+   * Defaults to none, which sends the plain "Triage T42" and "Start T42".
+   */
+  agentCommands?: ProjectAgentCommands;
+};
+
+const noAgentCommands: ProjectAgentCommands = {
+  triageCommand: null,
+  startCommand: null,
+  startEpicCommand: null,
 };
 
 /** The fields the drawer saves one at a time. */
@@ -197,6 +209,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   epicChildren,
   referenceTemplates,
   conversations = [],
+  agentCommands = noAgentCommands,
 }) => {
   const { titleId, close } = useTicketDrawer();
   const statusId = useId();
@@ -462,6 +475,8 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       />
       <TicketAgentActions
         ticketNumber={ticket.number}
+        ticketType={ticket.type}
+        commands={agentCommands}
         onStarted={dialog.open}
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })

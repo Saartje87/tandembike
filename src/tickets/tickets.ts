@@ -35,6 +35,10 @@ import {
   recordActivity,
 } from './activity';
 import type { ActivityChange } from './activity-change';
+import {
+  normalizeAgentCommand,
+  type ProjectAgentCommands,
+} from './agent-commands';
 import { checkProjectWritable, checkTicketWritable } from './archived-projects';
 import {
   type AddAttachmentInput,
@@ -181,6 +185,12 @@ const projectColumns = {
   icon: projects.icon,
   archived: projects.archived,
   createdAt: projects.createdAt,
+};
+
+const agentCommandColumns = {
+  triageCommand: projects.triageCommand,
+  startCommand: projects.startCommand,
+  startEpicCommand: projects.startEpicCommand,
 };
 
 const agentSettingsColumns = {
@@ -1399,6 +1409,58 @@ export function createTickets(
         .run();
       changes.publish({ type: 'project', id });
       return result.skills;
+    },
+
+    /**
+     * Project `id`'s agent commands: what its Triage and Start buttons send
+     * before the Ticket number. Like its Skills, only the User sets them.
+     */
+    getProjectAgentCommands(id: number): ProjectAgentCommands {
+      const commands = db
+        .select(agentCommandColumns)
+        .from(projects)
+        .where(eq(projects.id, id))
+        .get();
+      if (!commands) {
+        throw new NotFoundError(`There is no Project with id ${id}.`);
+      }
+      return commands;
+    },
+
+    /**
+     * Replaces Project `id`'s agent commands, each validated like a Skill:
+     * trimmed, a missing leading `/` added and blank stored as none. One
+     * with a space or over 100 characters is refused under its field name,
+     * and nothing changes.
+     */
+    setProjectAgentCommands(
+      id: number,
+      input: Record<keyof ProjectAgentCommands, string>,
+    ): ProjectAgentCommands {
+      checkProjectWritable(db, id);
+      const commands: Partial<ProjectAgentCommands> = {};
+      const problems: Record<string, string> = {};
+      for (const field of Object.keys(agentCommandColumns) as Array<
+        keyof ProjectAgentCommands
+      >) {
+        const result = normalizeAgentCommand(String(input[field] ?? ''));
+        if ('problem' in result) {
+          problems[field] = result.problem;
+        } else {
+          commands[field] = result.command;
+        }
+      }
+      if (Object.keys(problems).length > 0) {
+        throw new ValidationError(problems);
+      }
+      const saved = db
+        .update(projects)
+        .set(commands)
+        .where(eq(projects.id, id))
+        .returning(agentCommandColumns)
+        .get();
+      changes.publish({ type: 'project', id });
+      return saved;
     },
 
     /**

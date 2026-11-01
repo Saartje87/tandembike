@@ -19,6 +19,7 @@ import {
   transcriptRoles,
 } from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
+import { defaultAgentCommands } from '../tickets/agent-commands';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
@@ -54,6 +55,18 @@ export const projects = sqliteTable('projects', {
     .$type<string[]>()
     .notNull()
     .default(defaultSkills),
+  /** The command Triage sends before the Ticket number; null for none. */
+  triageCommand: text('triage_command').default(
+    defaultAgentCommands.triageCommand,
+  ),
+  /** The command Start sends before the Ticket number; null for none. */
+  startCommand: text('start_command').default(
+    defaultAgentCommands.startCommand,
+  ),
+  /** The command Start sends for an Epic; null falls back to startCommand. */
+  startEpicCommand: text('start_epic_command').default(
+    defaultAgentCommands.startEpicCommand,
+  ),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

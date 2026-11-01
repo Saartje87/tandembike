@@ -22,6 +22,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     epicChildren,
     referenceTemplates,
     conversations,
+    agentCommands,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
@@ -30,6 +31,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     epicChildren: unknown;
     referenceTemplates: { prefix: string }[];
     conversations: unknown[];
+    agentCommands: unknown;
   }) => (
     <div
       role="dialog"
@@ -39,6 +41,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
         .join(' ')}
       data-epic-children={JSON.stringify(epicChildren)}
       data-conversations={conversations.length}
+      data-agent-commands={JSON.stringify(agentCommands)}
     >
       {`Ticket drawer T${ticket.number} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
@@ -116,6 +119,36 @@ describe('BoardTicketDrawer', () => {
       'data-conversations',
       '1',
     );
+  });
+
+  it("gives the drawer its Project's Triage and Start commands", async () => {
+    const { tickets, website, ticket } = setUp();
+    tickets.setProjectAgentCommands(website.id, {
+      triageCommand: '/triage',
+      startCommand: '/implement',
+      startEpicCommand: '',
+    });
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: ticket.number,
+          })
+        }
+      </div>,
+    );
+
+    expect(
+      JSON.parse(
+        screen.getByRole('dialog').getAttribute('data-agent-commands') ?? '',
+      ),
+    ).toEqual({
+      triageCommand: '/triage',
+      startCommand: '/implement',
+      startEpicCommand: null,
+    });
   });
 
   it("offers the Project's live Epics to attach the Ticket to", async () => {

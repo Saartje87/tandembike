@@ -8,6 +8,7 @@ import {
   renderWithTheme,
 } from '../../../../test/render';
 import { createTestTickets } from '../../../../test/tickets';
+import type { ProjectAgentCommands } from '../../../../tickets/agent-commands';
 import { appTickets } from '../../../../tickets/app-tickets';
 import SettingsPage, { generateMetadata } from './page';
 
@@ -63,6 +64,21 @@ vi.mock('../../../../components/skills-form/skills-form', () => ({
   }) => <p>{`Skills of ${projectId}: ${skills.join(' ')}`}</p>,
 }));
 
+vi.mock(
+  '../../../../components/agent-commands-form/agent-commands-form',
+  () => ({
+    AgentCommandsForm: ({
+      projectId,
+      commands,
+    }: {
+      projectId: number;
+      commands: ProjectAgentCommands;
+    }) => (
+      <p>{`Commands of ${projectId}: ${commands.triageCommand} ${commands.startCommand} ${commands.startEpicCommand}`}</p>
+    ),
+  }),
+);
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     notFound.mockClear();
@@ -111,6 +127,27 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(`Skills of ${project.id}: /review /plan`),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the Project's Triage and Start commands", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentCommands(project.id, {
+      triageCommand: '/triage',
+      startCommand: '/implement',
+      startEpicCommand: '',
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Agent commands' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`Commands of ${project.id}: /triage /implement null`),
     ).toBeInTheDocument();
   });
 
