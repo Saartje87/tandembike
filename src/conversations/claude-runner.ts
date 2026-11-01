@@ -1,4 +1,5 @@
 import {
+  type PermissionUpdate,
   query,
   type SDKMessage,
   type SDKUserMessage,
@@ -98,6 +99,23 @@ export function eventsOf(
   return [];
 }
 
+/** The allow rules among an SDK call's suggestions; any other kind is dropped. */
+function allowRules(suggestions: PermissionUpdate[] = []): PermissionUpdate[] {
+  return suggestions.filter(
+    (suggestion) =>
+      suggestion.type === 'addRules' &&
+      suggestion.behavior === 'allow' &&
+      suggestion.rules.length > 0,
+  );
+}
+
+/** A rule in Claude Code's syntax: `Tool` or `Tool(pattern)`. */
+function ruleString(rule: { toolName: string; ruleContent?: string }): string {
+  return rule.ruleContent
+    ? `${rule.toolName}(${rule.ruleContent})`
+    : rule.toolName;
+}
+
 const userMessage = (text: string): SDKUserMessage => ({
   type: 'user',
   message: { role: 'user', content: text },
@@ -168,7 +186,7 @@ export function createClaudeRunner(): AgentRunner {
           // The server injected below is ours, so its tools never prompt (ADR 0021).
           allowedTools: ['mcp__tandembike'],
           // What a terminal would ask the User comes to the Conversation.
-          canUseTool: async (toolName, toolInput) => {
+          canUseTool: async (toolName, toolInput, { suggestions }) => {
             if (toolName === askTool) {
               const answers = await askQuestion(
                 (toolInput as { questions: Question[] }).questions.map(
@@ -190,10 +208,29 @@ export function createClaudeRunner(): AgentRunner {
                     updatedInput: { ...toolInput, answers },
                   };
             }
-            return (await askPermission({ toolName, input: toolInput })) ===
-              'allow'
-              ? { behavior: 'allow', updatedInput: toolInput }
-              : { behavior: 'deny', message: 'The User denied this.' };
+            const proposed = allowRules(suggestions);
+            const answer = await askPermission({
+              toolName,
+              input: toolInput,
+              rules: proposed.flatMap((update) =>
+                'rules' in update ? update.rules.map(ruleString) : [],
+              ),
+            });
+            if (answer === 'deny') {
+              return { behavior: 'deny', message: 'The User denied this.' };
+            }
+            // Saved to the repository's gitignored local settings, never the
+            // committed file (ADR 0021).
+            return answer === 'allow-always'
+              ? {
+                  behavior: 'allow',
+                  updatedInput: toolInput,
+                  updatedPermissions: proposed.map((update) => ({
+                    ...update,
+                    destination: 'localSettings',
+                  })),
+                }
+              : { behavior: 'allow', updatedInput: toolInput };
           },
           mcpServers: { tandembike: { type: 'http', url: mcpUrl } },
           systemPrompt: {

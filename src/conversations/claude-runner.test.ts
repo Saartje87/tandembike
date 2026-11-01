@@ -268,10 +268,123 @@ describe('The Claude runner', () => {
     const allowed = await canUseTool('Bash', input, {});
     const denied = await canUseTool('Bash', input, {});
 
-    expect(askPermission).toHaveBeenCalledWith({ toolName: 'Bash', input });
+    expect(askPermission).toHaveBeenCalledWith({
+      toolName: 'Bash',
+      input,
+      rules: [],
+    });
     expect(allowed).toEqual({ behavior: 'allow', updatedInput: input });
     expect(denied).toMatchObject({ behavior: 'deny' });
     expect(denied.message).toBeTruthy();
+  });
+
+  describe('Always allow', () => {
+    const input = { command: 'npm run check' };
+    const bashRule = {
+      type: 'addRules',
+      behavior: 'allow',
+      destination: 'session',
+      rules: [{ toolName: 'Bash', ruleContent: 'npm run check:*' }],
+    };
+
+    function canUseTool(answer: string) {
+      query.mockReturnValue(fakeQuery([]));
+      const askPermission = vi.fn().mockResolvedValue(answer);
+      createClaudeRunner().start({
+        cwd: '/repo',
+        mcpUrl: 'http://x',
+        systemPrompt: '',
+        prompt: 'Hi',
+        askPermission,
+        askQuestion: async () => ({}),
+        onEvent: () => {},
+      });
+      return {
+        askPermission,
+        canUseTool: query.mock.calls[0][0].options.canUseTool,
+      };
+    }
+
+    it('turns proposed allow rules into rule strings', async () => {
+      const { askPermission, canUseTool: can } = canUseTool('allow');
+
+      await can('Bash', input, {
+        suggestions: [
+          {
+            ...bashRule,
+            rules: [
+              ...bashRule.rules,
+              { toolName: 'Read' },
+              { toolName: 'mcp__x', ruleContent: '' },
+            ],
+          },
+        ],
+      });
+
+      expect(askPermission).toHaveBeenCalledWith({
+        toolName: 'Bash',
+        input,
+        rules: ['Bash(npm run check:*)', 'Read', 'mcp__x'],
+      });
+    });
+
+    it('drops every suggestion that is not an allow rule', async () => {
+      const { askPermission, canUseTool: can } = canUseTool('allow');
+
+      await can('Edit', input, {
+        suggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+          {
+            type: 'addDirectories',
+            directories: ['/x'],
+            destination: 'session',
+          },
+          { ...bashRule, behavior: 'deny' },
+          { ...bashRule, type: 'replaceRules' },
+        ],
+      });
+
+      expect(askPermission).toHaveBeenCalledWith({
+        toolName: 'Edit',
+        input,
+        rules: [],
+      });
+    });
+
+    it('saves the rules to the local settings on allow-always, and allows the call', async () => {
+      const { canUseTool: can } = canUseTool('allow-always');
+
+      const result = await can('Bash', input, { suggestions: [bashRule] });
+
+      expect(result).toEqual({
+        behavior: 'allow',
+        updatedInput: input,
+        updatedPermissions: [{ ...bashRule, destination: 'localSettings' }],
+      });
+    });
+
+    it('sends back only the allow rules on allow-always', async () => {
+      const { canUseTool: can } = canUseTool('allow-always');
+
+      const result = await can('Bash', input, {
+        suggestions: [
+          { type: 'setMode', mode: 'acceptEdits', destination: 'session' },
+          bashRule,
+        ],
+      });
+
+      expect(result.updatedPermissions).toEqual([
+        { ...bashRule, destination: 'localSettings' },
+      ]);
+    });
+
+    it('sends no updatedPermissions on allow', async () => {
+      const { canUseTool: can } = canUseTool('allow');
+
+      const result = await can('Bash', input, { suggestions: [bashRule] });
+
+      expect(result).toEqual({ behavior: 'allow', updatedInput: input });
+    });
   });
 
   describe('AskUserQuestion', () => {

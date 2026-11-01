@@ -27,9 +27,18 @@ export type RunEvent =
 export type PermissionRequest = {
   toolName: string;
   input: Record<string, unknown>;
+  /**
+   * Allow rules the run proposes for this request, in Claude Code's rule
+   * syntax (`Tool` or `Tool(pattern)`); empty when it proposes none.
+   */
+  rules: string[];
 };
 
-export type PermissionAnswer = 'allow' | 'deny';
+/**
+ * `allow-always` also saves the request's `rules`, so the run need not ask
+ * again. It is only a valid answer to a request that has rules.
+ */
+export type PermissionAnswer = 'allow' | 'allow-always' | 'deny';
 
 /** One question of the Agent's AskUserQuestion, with its choices. */
 export type Question = {
