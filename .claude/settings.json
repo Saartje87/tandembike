@@ -37,14 +37,10 @@
       "Bash(git worktree *)"
     ],
     "ask": [
-      "Bash(git push)",
-      "Bash(git push *)",
-      "Bash(git reset --hard)",
-      "Bash(git reset --hard *)",
-      "Bash(git clean)",
-      "Bash(git clean *)",
-      "Bash(git branch -D *)",
-      "Bash(git branch --delete --force *)",
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin HEAD:main)",
+      "Bash(git push origin HEAD:main *)",
       "Bash(gh pr merge *)"
     ]
   }
