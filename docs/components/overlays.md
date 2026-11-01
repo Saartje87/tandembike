@@ -186,3 +186,10 @@ import { Button, Menu } from '@blockle/blocks';
 - It is uncontrolled unless you pass `open` and `onOpenChange`. `placement`
   defaults to `bottom-start`.
 - Its other props (`className`, `aria-*`) go to the popover element.
+- Caveat: a `Menu` inside a `Drawer` (or `Dialog`): Escape closes both, since
+  the menu closes on Escape but leaves the key unclaimed (Blocks T675). Claim
+  Escape before the drawer handles it: control the menu (`open`,
+  `onOpenChange`), wrap it in an element whose `onKeyDown` calls
+  `claimEscape` and closes it, and focus the trigger yourself. Tandembike has
+  no menu in the drawer today (`MoveToCycleMenu` sits on the Board), so none
+  does this yet.

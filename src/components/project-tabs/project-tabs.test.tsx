@@ -181,9 +181,7 @@ describe('ProjectTabs', () => {
       tabLinks().map((link) => ({
         name: link.firstChild?.textContent,
         badge:
-          within(link.parentElement as HTMLElement).queryByText(
-            /^\d+ open Tickets?$/,
-          )?.textContent ?? null,
+          within(link).queryByText(/^\d+ open Tickets?$/)?.textContent ?? null,
       })),
     ).toEqual([
       { name: 'Backlog', badge: '4 open Tickets' },
@@ -192,6 +190,9 @@ describe('ProjectTabs', () => {
       { name: 'History', badge: null },
       { name: 'Settings', badge: null },
     ]);
+    expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
+      /^Backlog 4/,
+    );
   });
 
   it('shows a badge reading 0 for a Cycle missing from the counts', () => {

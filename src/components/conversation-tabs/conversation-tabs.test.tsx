@@ -62,7 +62,7 @@ const setup = (props: Partial<ConversationTabsProps> = {}) => {
       onClose={onClose}
       drafts={drafts}
       renderConversation={(open) => <p>Chat {open.conversation.id}</p>}
-      renderDraft={(key) => <p>Draft {key}</p>}
+      renderDraft={(draft) => <p>Draft {draft.key}</p>}
       {...props}
     />,
   );

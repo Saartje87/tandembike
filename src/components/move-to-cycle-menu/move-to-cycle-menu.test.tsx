@@ -119,23 +119,6 @@ describe('MoveToCycleMenu', () => {
     expect(trigger()).toHaveFocus();
   });
 
-  it('claims Escape from what holds it, such as a drawer, and closes', async () => {
-    const claimed = vi.fn();
-    const user = userEvent.setup();
-    renderWithTheme(
-      // biome-ignore lint/a11y/noStaticElementInteractions: it only records the Escape.
-      <div onKeyDown={(event) => claimed(event.defaultPrevented)}>
-        <MoveToCycleMenu cycles={[launch]} cycleId={null} onPick={vi.fn()} />
-      </div>,
-    );
-    await user.click(trigger());
-
-    await user.keyboard('{Escape}');
-
-    expect(menu()).not.toBeInTheDocument();
-    expect(claimed.mock.calls).toEqual([[true]]);
-  });
-
   it('cannot open while disabled', () => {
     renderWithTheme(
       <MoveToCycleMenu

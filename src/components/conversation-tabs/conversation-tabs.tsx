@@ -13,26 +13,9 @@ import * as styles from './conversation-tabs.css';
 /** A draft's tab: a Conversation the User has not started yet (T611). */
 export type DraftTab = { key: string; label: string };
 
-export type ConversationTabsProps = {
-  tabs: OpenConversation[];
-  /** The Conversation whose tab is shown; none while a draft is shown. */
-  selectedId: number | undefined;
-  onSelect: (conversationId: number) => void;
-  /** Called with the Conversation whose close button was pressed. */
-  onClose: (conversationId: number) => void;
-  /** Draft tabs, after the Conversations. */
-  drafts: TabDrafts;
-  /** The content of a Conversation's panel; every panel stays mounted. */
-  renderConversation?: (open: OpenConversation) => ReactNode;
-  /** The content of a draft's panel; every panel stays mounted. */
-  renderDraft?: (key: string) => ReactNode;
-  /** Shown between the tab row and the panels, such as an error. */
-  notice?: ReactNode;
-};
-
 /** The draft tabs, which one is shown, and what their buttons do. */
-export type TabDrafts = {
-  items: DraftTab[];
+export type TabDrafts<D extends DraftTab = DraftTab> = {
+  items: D[];
   /** The draft whose tab is shown. */
   selectedKey: string | undefined;
   onSelect: (key: string) => void;
@@ -40,9 +23,26 @@ export type TabDrafts = {
   onClose: (key: string) => void;
 };
 
+export type ConversationTabsProps<D extends DraftTab = DraftTab> = {
+  tabs: OpenConversation[];
+  /** The Conversation whose tab is shown; none while a draft is shown. */
+  selectedId: number | undefined;
+  onSelect: (conversationId: number) => void;
+  /** Called with the Conversation whose close button was pressed. */
+  onClose: (conversationId: number) => void;
+  /** Draft tabs, after the Conversations. */
+  drafts: TabDrafts<D>;
+  /** The content of a Conversation's panel; every panel stays mounted. */
+  renderConversation?: (open: OpenConversation) => ReactNode;
+  /** The content of a draft's panel, given the draft item; every panel stays mounted. */
+  renderDraft?: (draft: D) => ReactNode;
+  /** Shown between the tab row and the panels, such as an error. */
+  notice?: ReactNode;
+};
+
 /** A tab of either kind, in one list. */
 type TabItem = {
-  /** Identifies the tab: `conversation:<id>` or `draft:<key>`. */
+  /** Identifies the tab to Blocks `Tabs`; only ever compared. */
   value: string;
   /** Names the close button. */
   label: string;
@@ -50,13 +50,11 @@ type TabItem = {
   text: string;
   /** Shows the state indicator of a Conversation; drafts have none. */
   state: ConversationState | null;
+  selected: boolean;
+  select: () => void;
   close: () => void;
   panel: ReactNode;
 };
-
-const conversationValue = (conversationId: number) =>
-  `conversation:${conversationId}`;
-const draftValue = (key: string) => `draft:${key}`;
 
 /** `T42 · Triage`, or `<Project> · New Ticket` for a Conversation about a Project. */
 export const tabLabel = ({ conversation, projectName }: OpenConversation) =>
@@ -100,7 +98,7 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
  * panel stays mounted, so a draft reply and the scroll position survive a
  * switch of tab.
  */
-export const ConversationTabs: FC<ConversationTabsProps> = ({
+export const ConversationTabs = <D extends DraftTab>({
   tabs,
   selectedId,
   onSelect,
@@ -109,49 +107,43 @@ export const ConversationTabs: FC<ConversationTabsProps> = ({
   renderConversation,
   renderDraft,
   notice,
-}) => {
+}: ConversationTabsProps<D>) => {
   const items: TabItem[] = [
-    ...tabs.map((item) => ({
-      value: conversationValue(item.conversation.id),
-      label: tabLabel(item),
-      text: endedStates[item.conversation.state]
-        ? `${tabLabel(item)} · ${endedStates[item.conversation.state]}`
-        : tabLabel(item),
-      state: item.conversation.state,
-      close: () => onClose(item.conversation.id),
-      panel: renderConversation?.(item),
-    })),
-    ...drafts.items.map((draft) => ({
-      value: draftValue(draft.key),
-      label: draft.label,
-      text: draft.label,
-      state: null,
-      close: () => drafts.onClose(draft.key),
-      panel: renderDraft?.(draft.key),
-    })),
+    ...tabs.map((item): TabItem => {
+      const { id, state } = item.conversation;
+      const label = tabLabel(item);
+      return {
+        value: `conversation-${id}`,
+        label,
+        text: endedStates[state] ? `${label} · ${endedStates[state]}` : label,
+        state,
+        selected: id === selectedId,
+        select: () => onSelect(id),
+        close: () => onClose(id),
+        panel: renderConversation?.(item),
+      };
+    }),
+    ...drafts.items.map(
+      (draft): TabItem => ({
+        value: `draft-${draft.key}`,
+        label: draft.label,
+        text: draft.label,
+        state: null,
+        selected: selectedId === undefined && draft.key === drafts.selectedKey,
+        select: () => drafts.onSelect(draft.key),
+        close: () => drafts.onClose(draft.key),
+        panel: renderDraft?.(draft),
+      }),
+    ),
   ];
-
-  const selected =
-    selectedId === undefined
-      ? drafts.selectedKey === undefined
-        ? undefined
-        : draftValue(drafts.selectedKey)
-      : conversationValue(selectedId);
-
-  const select = (value: string) => {
-    const [kind, key] = [
-      value.slice(0, value.indexOf(':')),
-      value.slice(value.indexOf(':') + 1),
-    ];
-    if (kind === 'draft') {
-      drafts.onSelect(key);
-    } else {
-      onSelect(Number(key));
-    }
-  };
+  const itemOf = new Map(items.map((item) => [item.value, item]));
 
   return (
-    <Tabs value={selected} onValueChange={select} className={styles.tabs}>
+    <Tabs
+      value={items.find((item) => item.selected)?.value}
+      onValueChange={(value) => itemOf.get(value)?.select()}
+      className={styles.tabs}
+    >
       <TabList aria-label="Conversations" className={styles.tabList}>
         {items.map((item) => (
           <Tab

@@ -27,6 +27,7 @@ import {
   projectPath,
   projectSettingsPath,
 } from '../../app/lib/paths';
+import { openCyclesInOrder } from '../../tickets/cycle-state';
 import type { Cycle, OpenTicketCounts } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
@@ -84,19 +85,20 @@ const ProjectTab: FC<ProjectTabProps> = ({
   <Tab
     asChild
     current={current}
-    endSlot={
-      openTickets !== undefined && (
-        <Tag>
-          <span aria-hidden>{openTickets}</span>
-          <VisuallyHidden>
-            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
-          </VisuallyHidden>
-        </Tag>
-      )
-    }
+    // The badge sits outside the link (a Tab's slots do), so it is only shown
+    // here; the count is read out as part of the link's name below.
+    endSlot={openTickets !== undefined && <Tag aria-hidden>{openTickets}</Tag>}
   >
     <AppLink href={href} intent="inherit">
       {children}
+      {openTickets !== undefined && (
+        <>
+          {' '}
+          <VisuallyHidden>
+            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
+          </VisuallyHidden>
+        </>
+      )}
     </AppLink>
   </Tab>
 );
@@ -194,10 +196,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
         >
           Backlog
         </ProjectTab>
-        {[
-          ...cycles.filter((cycle) => cycle.state === 'Active'),
-          ...cycles.filter((cycle) => cycle.state === 'Prepared'),
-        ].map((cycle) => (
+        {openCyclesInOrder(cycles).map((cycle) => (
           <ProjectTab
             key={cycle.id}
             href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
