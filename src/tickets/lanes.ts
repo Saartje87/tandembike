@@ -21,12 +21,22 @@ export type LaneScope = {
 
 type LaneTicket = { number: number; archived: boolean };
 
+/** A Status lane as `laneOf` reads it. */
+export type Lane = {
+  /** The whole lane in Board order, archived Tickets included. */
+  tickets: LaneTicket[];
+  /** The numbers of the Tickets in scope, in Board order. */
+  scopeOrder: number[];
+  /** Whether a Ticket of the lane is in scope; only these move. */
+  inScope: (ticket: LaneTicket) => boolean;
+};
+
 /**
  * A Project's Status lane in Board order, archived Tickets included, and
  * the numbers of the Tickets in `scope` in that order: the active ones on
  * the Board the scope names. Only these move; the others keep their slots.
  */
-export function laneOf(db: DatabaseConnection, scope: LaneScope) {
+export function laneOf(db: DatabaseConnection, scope: LaneScope): Lane {
   const { projectId, status, cycleId } = scope;
   const lane: LaneTicket[] = db
     .select({ number: tickets.number, archived: tickets.archived })
@@ -46,8 +56,8 @@ export function laneOf(db: DatabaseConnection, scope: LaneScope) {
     !archived &&
     (members === undefined || members.has(number) === (cycleId !== null));
   return {
-    lane,
-    scoped: lane.filter(inScope).map(({ number }) => number),
+    tickets: lane,
+    scopeOrder: lane.filter(inScope).map(({ number }) => number),
     inScope,
   };
 }
@@ -60,7 +70,7 @@ export function laneOf(db: DatabaseConnection, scope: LaneScope) {
 export function writeLaneOrder(
   db: DatabaseConnection,
   changes: ChangeChannel,
-  { lane, inScope }: ReturnType<typeof laneOf>,
+  { tickets: lane, inScope }: Lane,
   ordered: readonly number[],
 ): number[] {
   let index = 0;

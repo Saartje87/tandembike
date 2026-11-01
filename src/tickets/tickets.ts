@@ -2370,8 +2370,8 @@ export function createTickets(
 
       const lane = laneOf(db, input);
       if (
-        lane.scoped.length !== ticketNumbers.length ||
-        lane.scoped.some((number) => !ticketNumbers.includes(number))
+        lane.scopeOrder.length !== ticketNumbers.length ||
+        lane.scopeOrder.some((number) => !ticketNumbers.includes(number))
       ) {
         throw new ValidationError({
           ticketNumbers: 'Refresh the Board and try reordering again.',
@@ -2403,13 +2403,13 @@ export function createTickets(
 
       const lane = laneOf(db, input);
       for (const number of ticketNumbers) {
-        if (!lane.scoped.includes(number)) {
+        if (!lane.scopeOrder.includes(number)) {
           throwOutOfScope(db, input, number, cycle?.title);
         }
       }
       return writeLaneOrder(db, changes, lane, [
         ...ticketNumbers,
-        ...lane.scoped.filter((number) => !ticketNumbers.includes(number)),
+        ...lane.scopeOrder.filter((number) => !ticketNumbers.includes(number)),
       ]);
     },
 
