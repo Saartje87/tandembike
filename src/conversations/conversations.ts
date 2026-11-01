@@ -97,6 +97,8 @@ export type ConversationsDeps = {
 type LiveRun = {
   run: AgentRun | null;
   costBefore: number;
+  /** Set when the User stopped the run; it still reports its last cost. */
+  stopped?: boolean;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
   /** Questions waiting for the User, by transcript entry id. */
@@ -265,6 +267,11 @@ export function createConversations({
   const handleEvent = (id: number, handle: LiveRun, event: RunEvent) => {
     // A run that was replaced or stopped no longer speaks for the Conversation.
     if (live.get(id) !== handle) {
+      // An interrupted turn reports its cost after the stop (T587).
+      if (handle.stopped && event.type === 'turn') {
+        update(id, { costUsd: handle.costBefore + event.costUsd });
+        announce(id);
+      }
       return;
     }
     switch (event.type) {
@@ -276,6 +283,13 @@ export function createConversations({
         break;
       case 'tool':
         append(id, 'tool', event.text);
+        break;
+      case 'created':
+        append(
+          id,
+          'created',
+          `Created ${event.numbers.map((number) => `T${number}`).join(', ')}`,
+        );
         break;
       case 'turn':
         if (event.error) {
@@ -296,9 +310,9 @@ export function createConversations({
         if (event.error) {
           append(id, 'error', event.error);
         }
-        if (event.error || get(id).state !== 'idle') {
-          update(id, { state: 'interrupted' });
-        }
+        // A run that ends is interrupted, even between turns: a reply
+        // resumes it, but nothing waits on the User (T587).
+        update(id, { state: 'interrupted' });
         break;
       }
     }
@@ -307,12 +321,16 @@ export function createConversations({
 
   /**
    * Refuses a Start run beyond the Project's limit: a Start is not queued
-   * (ADR 0019). Triage and Ask are never limited, and do not count.
+   * (ADR 0019). Triage and Ask are never limited, and do not count. Only
+   * Starts that are working count, running or waiting on a permission: an
+   * idle Start waits for a reply and holds no slot. `exceptId` is the
+   * Conversation about to work, not counted against itself.
    */
   const checkStartLimit = (
     projectId: number,
     intent: ConversationIntent,
     settings: { parallelRuns: boolean; maxConcurrentRuns: number },
+    exceptId?: number,
   ) => {
     if (intent !== 'start') {
       return;
@@ -321,7 +339,12 @@ export function createConversations({
     let running = 0;
     for (const id of live.keys()) {
       const other = get(id);
-      if (other.projectId === projectId && other.intent === 'start') {
+      if (
+        id !== exceptId &&
+        other.projectId === projectId &&
+        other.intent === 'start' &&
+        (other.state === 'running' || other.state === 'waiting')
+      ) {
         running += 1;
       }
     }
@@ -348,7 +371,7 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
-    checkStartLimit(conversation.projectId, conversation.intent, settings);
+    checkStartLimit(conversation.projectId, conversation.intent, settings, id);
     const ticket =
       conversation.ticketNumber === null
         ? null
@@ -536,6 +559,15 @@ export function createConversations({
 
       const handle = live.get(id);
       if (handle?.run) {
+        const settings = tickets.getProjectAgentSettings(
+          conversation.projectId,
+        );
+        checkStartLimit(
+          conversation.projectId,
+          conversation.intent,
+          settings,
+          id,
+        );
         append(id, 'user', message);
         update(id, { state: 'running' });
         handle.run.send(message);
@@ -557,6 +589,7 @@ export function createConversations({
       const handle = live.get(id);
       live.delete(id);
       if (handle) {
+        handle.stopped = true;
         expireAsking(handle);
         expireQuestioning(handle);
       }

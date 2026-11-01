@@ -288,6 +288,35 @@ describe('Replying to a Conversation', () => {
     });
   });
 
+  it('is interrupted, not idle, when its run ends after a finished turn', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'exit' });
+
+    expect(conversations.get(id).state).toBe('interrupted');
+  });
+
+  it('records the Tickets a run created as one transcript entry', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Add coupons',
+    });
+
+    runner.runs[0].emit({ type: 'created', numbers: [41, 42] });
+
+    expect(conversations.transcript(id).at(-1)).toMatchObject({
+      role: 'created',
+      text: 'Created T41, T42',
+    });
+  });
+
   it('resumes an idle Conversation whose run has ended', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
@@ -370,6 +399,22 @@ describe('Stopping a Conversation', () => {
     // The run's exit after a stop does not turn it into interrupted.
     runner.runs[0].emit({ type: 'exit' });
     expect(conversations.get(id).state).toBe('stopped');
+  });
+
+  it('records the cost the interrupted turn reports after the stop', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+
+    await conversations.stop(id);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.25, error: 'interrupted' });
+
+    const stopped = conversations.get(id);
+    expect(stopped.costUsd).toBe(0.25);
+    expect(stopped.state).toBe('stopped');
   });
 
   it('stops a Conversation with no live run too', async () => {
@@ -726,6 +771,36 @@ describe('The Start run limit', () => {
     expect((error as Error).message).toMatch(/Start run/);
     expect((error as Error).message).toMatch(/Parallel runs/);
     expect(conversations.list({ projectId: project.id })).toHaveLength(1);
+  });
+
+  it('does not count a Start that waits idle for a reply', async () => {
+    const { conversations, runner, project } = setup();
+    await startOn(conversations, project.id);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    await startOn(conversations, project.id);
+  });
+
+  it('refuses a reply to an idle Start while another Start works', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await startOn(conversations, project.id);
+
+    const error = await failure(conversations.reply(first.id, 'More'));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(conversations.get(first.id).state).toBe('idle');
+  });
+
+  it('counts a Start that waits for a permission', async () => {
+    const { conversations, runner, project } = setup();
+    await startOn(conversations, project.id);
+    void runner.runs[0].options.askPermission({ toolName: 'Bash', input: {} });
+
+    const error = await failure(startOn(conversations, project.id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
   });
 
   it('allows Starts up to the max concurrent Start runs with Parallel runs on', async () => {

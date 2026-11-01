@@ -401,6 +401,32 @@ describe('ConversationChat', () => {
     expect(loadProjectSkills).toHaveBeenCalledWith({ projectId: 3 });
   });
 
+  it('shows the Tickets the Agent created as a line linking each', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4"
+        item={one({}, [
+          entry({ id: 1, role: 'created', text: 'Created T41, T42' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: 'T41' })).toHaveAttribute(
+      'href',
+      '/ticket/41',
+    );
+    expect(screen.getByRole('link', { name: 'T42' })).toBeInTheDocument();
+    expect(screen.queryByText('Permission')).toBeNull();
+  });
+
+  it('shows a cost under a cent to 4 places', () => {
+    renderWithTheme(
+      <ConversationChat title="T4" item={one({ costUsd: 0.0034 })} />,
+    );
+
+    expect(screen.getByText(/\$0\.0034/)).toBeInTheDocument();
+  });
+
   it('shows tool lines as plain text', () => {
     renderWithTheme(
       <ConversationChat

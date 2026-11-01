@@ -255,6 +255,7 @@ describe('Conversation actions', () => {
       running: [running.number],
       needsYou: [asking.number],
       needsYouCount: 1,
+      needsYouByProject: { [project.id]: 1 },
     });
   });
 });

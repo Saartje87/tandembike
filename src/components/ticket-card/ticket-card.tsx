@@ -190,6 +190,11 @@ export const TicketCard: FC<TicketCardProps> = ({
   };
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
+  const hasMarkers =
+    showBlocked ||
+    ticket.labels.length > 0 ||
+    activity.running ||
+    activity.needsYou;
 
   return (
     <Box
@@ -256,10 +261,7 @@ export const TicketCard: FC<TicketCardProps> = ({
                 </Tag>
               </Text>
             )}
-            {showBlocked ||
-            ticket.labels.length > 0 ||
-            activity.running ||
-            activity.needsYou ? (
+            {hasMarkers ? (
               <Inline gap={1} alignY="center" flexWrap="wrap">
                 <ConversationMarkers {...activity} />
                 {showBlocked && <BlockedMarker />}

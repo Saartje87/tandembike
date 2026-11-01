@@ -29,13 +29,13 @@ const withTicketLinks = (text: string): ReactNode[] =>
 
 /**
  * One transcript entry as a chat message: the User's on the right, the
- * Agent's, an error and a permission request on the left, and a tool call as a
- * muted, compact line.
+ * Agent's, an error and a permission request on the left, and a tool call or
+ * the Tickets the Agent created as a muted, compact line.
  */
 export const ConversationMessage: FC<ConversationMessageProps> = ({
   entry,
 }) => {
-  if (entry.role === 'tool') {
+  if (entry.role === 'tool' || entry.role === 'created') {
     return (
       <Box asChild alignSelf="flex-start" className={styles.bubble}>
         <li data-side="start">

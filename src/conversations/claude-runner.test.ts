@@ -59,7 +59,8 @@ describe('The Claude runner', () => {
         append: 'Your situation.',
       },
     });
-    expect(options.permissionMode).toBeUndefined();
+    // A repository's defaultMode must not skip the Allow/Deny relay.
+    expect(options.permissionMode).toBe('default');
   });
 
   it('feeds the first message and every later reply into the streaming input', async () => {
@@ -132,6 +133,55 @@ describe('The Claude runner', () => {
       { type: 'turn', costUsd: 0.42 },
       { type: 'turn', costUsd: 0.5, error: 'error_max_turns' },
       { type: 'exit' },
+    ]);
+  });
+
+  it('reports the Tickets the Agent created from the results of create_ticket and create_tickets', async () => {
+    const toolUse = (id: string, name: string) => ({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id, name, input: {} }] },
+    });
+    const toolResult = (id: string, text: string, isError = false) => ({
+      type: 'user',
+      message: {
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: id,
+            is_error: isError,
+            content: [{ type: 'text', text }],
+          },
+        ],
+      },
+    });
+    query.mockReturnValue(
+      fakeQuery([
+        toolUse('a', 'mcp__tandembike__create_ticket'),
+        toolResult('a', JSON.stringify({ number: 41, title: 'X' })),
+        toolUse('b', 'mcp__tandembike__create_tickets'),
+        toolResult('b', JSON.stringify({ numbers: [42, 43] })),
+        toolUse('c', 'mcp__tandembike__get_ticket'),
+        toolResult('c', JSON.stringify({ number: 7 })),
+        toolUse('d', 'mcp__tandembike__create_ticket'),
+        toolResult('d', 'Refused.', true),
+      ]),
+    );
+    const events: RunEvent[] = [];
+
+    createClaudeRunner().start({
+      cwd: '/repo',
+      mcpUrl: 'http://x',
+      systemPrompt: '',
+      prompt: 'Hi',
+      askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
+      onEvent: (event) => events.push(event),
+    });
+    await settle();
+
+    expect(events.filter((event) => event.type === 'created')).toEqual([
+      { type: 'created', numbers: [41] },
+      { type: 'created', numbers: [42, 43] },
     ]);
   });
 

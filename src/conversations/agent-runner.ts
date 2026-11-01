@@ -16,6 +16,8 @@ export type RunEvent =
    * counting earlier runs of the Conversation.
    */
   | { type: 'turn'; costUsd: number; error?: string }
+  /** Tickets the Agent created over MCP, by number. */
+  | { type: 'created'; numbers: number[] }
   /** The run waits for the User (`true`) or goes on again (`false`). */
   | { type: 'waiting'; waiting: boolean }
   /** The run's process ended; `error` says why when it was not on purpose. */
