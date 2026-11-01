@@ -37,27 +37,11 @@
       "Bash(git worktree *)"
     ],
     "ask": [
-      "Bash(git push)",
-      "Bash(git push *)",
-      "Bash(git reset --hard)",
-      "Bash(git reset --hard *)",
-      "Bash(git clean)",
-      "Bash(git clean *)",
-      "Bash(git branch -D *)",
-      "Bash(git branch --delete --force *)",
-      "Bash(gh pr merge *)",
-      "Bash(gh pr create *)",
-      "Bash(gh pr edit *)",
-      "Bash(gh pr close *)",
-      "Bash(gh pr reopen *)",
-      "Bash(gh pr comment *)",
-      "Bash(gh pr review *)",
-      "Bash(gh pr ready *)",
-      "Bash(npm install)",
-      "Bash(npm install *)",
-      "Bash(npm i *)",
-      "Bash(npm add *)",
-      "Bash(npx *)"
+      "Bash(git push origin main)",
+      "Bash(git push origin main *)",
+      "Bash(git push origin HEAD:main)",
+      "Bash(git push origin HEAD:main *)",
+      "Bash(gh pr merge *)"
     ]
   }
 }
