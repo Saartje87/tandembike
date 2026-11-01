@@ -17,13 +17,13 @@ const renderMenu = () =>
   );
 
 const trigger = () => screen.getByRole('button', { name: 'Colour mode' });
-const menu = () => screen.queryByRole('dialog', { name: 'Colour mode' });
+const menu = () => screen.queryByRole('menu', { name: 'Colour mode' });
 
 /** Each option the open menu offers, with whether it is the current one. */
 const options = () =>
-  within(screen.getByRole('dialog', { name: 'Colour mode' }))
-    .getAllByRole('button')
-    .map((button) => [button.textContent, button.getAttribute('aria-pressed')]);
+  within(screen.getByRole('menu', { name: 'Colour mode' }))
+    .getAllByRole('menuitemradio')
+    .map((item) => [item.textContent, item.getAttribute('aria-checked')]);
 
 // jsdom has no `matchMedia`, which `useColorMode` reads under System: a
 // light OS.
@@ -75,7 +75,7 @@ describe('ColorModeMenu', () => {
     renderMenu();
 
     await user.click(trigger());
-    await user.click(screen.getByRole('button', { name: 'Dark' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Dark' }));
 
     expect(localStorage.getItem(colorModeStorageKey)).toBe('dark');
     expect(document.documentElement).toHaveAttribute('data-color-mode', 'dark');
@@ -91,5 +91,18 @@ describe('ColorModeMenu', () => {
 
     expect(menu()).not.toBeInTheDocument();
     expect(trigger()).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('moves between the options with the arrow keys', async () => {
+    const user = userEvent.setup();
+    renderMenu();
+
+    await user.click(trigger());
+    const [light, dark] = screen.getAllByRole('menuitemradio');
+    light.focus();
+    await user.keyboard('{ArrowDown}');
+
+    expect(dark).toHaveFocus();
   });
 });
