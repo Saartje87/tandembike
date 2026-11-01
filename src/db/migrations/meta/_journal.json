@@ -204,6 +204,13 @@
       "when": 1793494025974,
       "tag": "0028_project_agent_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1793534439287,
+      "tag": "0029_conversation_permission_rules",
+      "breakpoints": true
     }
   ]
 }

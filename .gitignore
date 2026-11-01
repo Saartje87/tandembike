@@ -46,3 +46,6 @@ next-env.d.ts
 
 # agent worktrees
 /.claude/worktrees
+
+# always-allowed permission rules (per-user)
+/.claude/settings.local.json

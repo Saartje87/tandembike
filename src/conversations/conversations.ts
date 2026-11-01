@@ -13,18 +13,20 @@ import type { Tickets } from '../tickets/tickets';
 import type {
   AgentRun,
   AgentRunner,
-  PermissionAnswer,
   PermissionRequest,
   Question,
   QuestionAnswers,
   RunEvent,
 } from './agent-runner';
-import type {
-  ConversationIntent,
-  ConversationState,
-  PermissionStatus,
-  QuestionEntry,
-  TranscriptRole,
+import {
+  type ConversationIntent,
+  type ConversationState,
+  type PermissionAnswer,
+  type PermissionStatus,
+  permissionAnswers,
+  permissionStatusOf,
+  type QuestionEntry,
+  type TranscriptRole,
 } from './conversation-state';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 
@@ -52,6 +54,8 @@ export type TranscriptEntry = {
   text: string;
   /** For a permission request, where it is; null for other entries. */
   permission: PermissionStatus | null;
+  /** For a permission request, the allow rules its run proposed; null for none. */
+  permissionRules: string[] | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
   createdAt: Date;
@@ -163,8 +167,11 @@ export function createConversations({
     id: number,
     role: TranscriptRole,
     text: string,
-    permission: PermissionStatus | null = null,
-    question: QuestionEntry | null = null,
+    extra: {
+      permission?: PermissionStatus;
+      question?: QuestionEntry;
+      permissionRules?: string[] | null;
+    } = {},
   ): number =>
     db
       .insert(conversationEntries)
@@ -172,8 +179,9 @@ export function createConversations({
         conversationId: id,
         role,
         text,
-        permission,
-        question,
+        permission: extra.permission ?? null,
+        permissionRules: extra.permissionRules ?? null,
+        question: extra.question ?? null,
         createdAt: new Date(),
       })
       .returning({ id: conversationEntries.id })
@@ -233,8 +241,7 @@ export function createConversations({
       id,
       'question',
       questions.map((question) => question.question).join('\n'),
-      null,
-      { questions, answers: null, expired: false },
+      { question: { questions, answers: null, expired: false } },
     );
     update(id, { state: 'waiting' });
     announce(id);
@@ -255,7 +262,10 @@ export function createConversations({
       id,
       'permission',
       `${request.toolName} ${JSON.stringify(request.input)}`,
-      'pending',
+      {
+        permission: 'pending',
+        permissionRules: request.rules.length === 0 ? null : request.rules,
+      },
     );
     update(id, { state: 'waiting' });
     announce(id);
@@ -626,14 +636,20 @@ export function createConversations({
     },
 
     /**
-     * The User's Allow (`true`) or Deny (`false`) of a permission request in a
-     * transcript; the waiting run goes on. Refused once answered or when its
-     * run is gone.
+     * The User's Allow, Always allow or Deny of a permission request in a
+     * transcript; the waiting run goes on. Always allow also saves the rules
+     * the run proposed, so it is refused on a request without any. Refused
+     * once answered or when its run is gone.
      */
     async answerPermission(
       entryId: number,
-      allow: boolean,
+      answer: PermissionAnswer,
     ): Promise<Conversation> {
+      if (!permissionAnswers.includes(answer)) {
+        throw new ValidationError({
+          answer: 'Answer Allow, Always allow or Deny.',
+        });
+      }
       const entry = db
         .select()
         .from(conversationEntries)
@@ -647,13 +663,16 @@ export function createConversations({
       if (!handle || !resolve) {
         throw new NotAllowedError('This request is no longer waiting.');
       }
+      if (answer === 'allow-always' && !entry.permissionRules?.length) {
+        throw new NotAllowedError('This request proposes no rule to allow.');
+      }
       handle.asking.delete(entryId);
-      setPermission(entryId, allow ? 'allowed' : 'denied');
+      setPermission(entryId, permissionStatusOf[answer]);
       if (handle.asking.size === 0 && handle.questioning.size === 0) {
         update(entry.conversationId, { state: 'running' });
       }
       announce(entry.conversationId);
-      resolve(allow ? 'allow' : 'deny');
+      resolve(answer);
       return get(entry.conversationId);
     },
 

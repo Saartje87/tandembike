@@ -118,7 +118,7 @@ describe('Conversation actions', () => {
     });
   });
 
-  it('answer a permission request and let the run go on', async () => {
+  it('answer a permission request with Always allow and let the run go on', async () => {
     const { project, runner, conversations } = setup();
     const started = await startConversation({
       projectId: project.id,
@@ -131,20 +131,21 @@ describe('Conversation actions', () => {
     const pending = runner.runs[0].options.askPermission({
       toolName: 'Bash',
       input: {},
+      rules: ['Bash(ls:*)'],
     });
     const entry = conversations.transcript(started.conversation.id).at(-1);
 
     const result = await answerConversationPermission({
       entryId: entry?.id ?? 0,
-      allow: true,
+      answer: 'allow-always',
     });
 
     expect(result).toMatchObject({ ok: true });
-    expect(await pending).toBe('allow');
+    expect(await pending).toBe('allow-always');
     expect(
       await answerConversationPermission({
         entryId: entry?.id ?? 0,
-        allow: true,
+        answer: 'allow',
       }),
     ).toMatchObject({ ok: false });
   });

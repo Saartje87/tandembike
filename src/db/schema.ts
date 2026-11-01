@@ -376,6 +376,10 @@ export const conversationEntries = sqliteTable(
     text: text('text').notNull(),
     /** For a permission request: where it is; null for other entries. */
     permission: text('permission', { enum: permissionStatuses }),
+    /** For a permission request: the allow rules its run proposed; null for none. */
+    permissionRules: text('permission_rules', { mode: 'json' }).$type<
+      string[]
+    >(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

@@ -41,15 +41,31 @@ export type TranscriptRole = (typeof transcriptRoles)[number];
 
 /**
  * Where a permission request in the transcript is: `pending` waits for the
- * User's Allow or Deny; `expired` was never answered because its run ended.
+ * User's answer; `always-allowed` was allowed together with saving its rules;
+ * `expired` was never answered because its run ended.
  */
 export const permissionStatuses = [
   'pending',
   'allowed',
+  'always-allowed',
   'denied',
   'expired',
 ] as const;
 export type PermissionStatus = (typeof permissionStatuses)[number];
+
+/**
+ * The User's answers to a permission request, and the status each leaves it
+ * in. The one source of the `PermissionAnswer` type and its runtime list.
+ */
+export const permissionStatusOf = {
+  allow: 'allowed',
+  'allow-always': 'always-allowed',
+  deny: 'denied',
+} as const satisfies Record<string, PermissionStatus>;
+export type PermissionAnswer = keyof typeof permissionStatusOf;
+export const permissionAnswers = Object.keys(
+  permissionStatusOf,
+) as PermissionAnswer[];
 
 /**
  * A question of the Agent in the transcript (AskUserQuestion): what it asked,
