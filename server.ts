@@ -14,7 +14,7 @@ import { createServer as createNetServer, type Socket } from 'node:net';
 
 const loopbackAddresses = ['127.0.0.1', '::1'];
 
-const refusal = 'Tandembike only accepts connections from this machine.\n';
+const refusal = 'Tandembike only accepts connections from this machine.';
 const refusalResponse = [
   'HTTP/1.1 403 Forbidden',
   'Content-Type: text/plain; charset=utf-8',
@@ -25,15 +25,9 @@ const refusalResponse = [
 ].join('\r\n');
 
 async function main(): Promise<void> {
-  let port: number;
-  try {
-    port = serverPort(process.argv.slice(2));
-  } catch (error) {
-    console.error((error as Error).message);
-    process.exit(1);
-  }
-
+  const port = serverPort(process.argv.slice(2));
   const dev = process.env.NODE_ENV !== 'production';
+
   // One HTTP server, fed by a listener per loopback address: Next attaches its
   // upgrade handler (HMR) to the server it is given, and a server listens once.
   const httpServer = createHttpServer();
@@ -44,26 +38,30 @@ async function main(): Promise<void> {
     handle(req, res);
   });
 
-  const accept = (socket: Socket) => {
-    // Never expected while listening on loopback only; a second line of
-    // defence. Checked on the connection, so it covers upgrades too.
-    if (!isLoopbackAddress(socket.remoteAddress)) {
-      console.warn(
-        `Refused a connection from ${socket.remoteAddress}: Tandembike only accepts connections from this machine.`,
-      );
-      socket.end(refusalResponse);
+  // Never expected while listening on loopback only; a second line of
+  // defence. Checked on the connection, so it covers upgrades too.
+  const admitLoopbackOnly = (socket: Socket) => {
+    if (isLoopbackAddress(socket.remoteAddress)) {
+      httpServer.emit('connection', socket);
       return;
     }
-    httpServer.emit('connection', socket);
+    console.warn(
+      `Refused a connection from ${socket.remoteAddress}: ${refusal}`,
+    );
+    // A peer that resets the connection must not crash the server.
+    socket.on('error', () => {});
+    socket.end(refusalResponse);
   };
 
-  const listening = await Promise.all(
-    loopbackAddresses.map((address) => listen(accept, address, port)),
-  );
-  const bound = loopbackAddresses.filter((_, i) => listening[i]);
+  const bound = (
+    await Promise.all(
+      loopbackAddresses.map((address) =>
+        listen(admitLoopbackOnly, address, port),
+      ),
+    )
+  ).filter((address) => address !== null);
   if (bound.length === 0) {
-    console.error('Could not listen on any loopback address.');
-    process.exit(1);
+    throw new Error('Could not listen on any loopback address.');
   }
   console.log(
     `> Tandembike ${dev ? 'development' : 'production'} server at http://localhost:${port} (listening on ${bound.join(', ')})`,
@@ -77,32 +75,36 @@ async function main(): Promise<void> {
 }
 
 /**
- * Listens on one loopback address. A port in use stops the server, since the
- * MCP URL is fixed; an address this machine lacks (IPv6 turned off) is skipped.
+ * Listens on one loopback address and resolves to it. A port in use rejects,
+ * since the MCP URL is fixed; an address this machine lacks (IPv6 turned off)
+ * resolves to null and is skipped.
  */
 function listen(
-  accept: (socket: Socket) => void,
+  onConnection: (socket: Socket) => void,
   address: string,
   port: number,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createNetServer(accept);
+): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer(onConnection);
     server.once('error', (error: NodeJS.ErrnoException) => {
       if (error.code === 'EADDRNOTAVAIL' || error.code === 'EAFNOSUPPORT') {
         console.warn(`Skipping ${address}: ${error.code}.`);
-        resolve(false);
+        resolve(null);
         return;
       }
-      console.error(
-        `Could not listen on ${address}:${port}: ${error.code ?? error.message}`,
+      reject(
+        new Error(
+          `Could not listen on ${address}:${port}: ${error.code ?? error.message}`,
+        ),
       );
-      process.exit(1);
     });
-    server.listen({ host: address, port, ipv6Only: true }, () => resolve(true));
+    server.listen({ host: address, port, ipv6Only: true }, () =>
+      resolve(address),
+    );
   });
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch((error: Error) => {
+  console.error(error.message);
   process.exit(1);
 });

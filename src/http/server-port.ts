@@ -1,5 +1,5 @@
 /** The port the app serves on unless told otherwise; the MCP URL names it. */
-export const defaultPort = 4747;
+const defaultPort = 4747;
 
 /**
  * The port from the server's command-line arguments: `-p <port>`,
