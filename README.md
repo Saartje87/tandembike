@@ -6,8 +6,22 @@ organise Tickets into Projects and move them across a Board of Statuses:
 same Tickets through an MCP server built into the app, and the Board updates
 live when an Agent makes a change.
 
-The app is local-only: it binds to localhost and has no login, accounts or
-permissions (see `docs/adr/0001-local-only-no-auth.md`).
+The app is local-only: it has no login, accounts or permissions (see
+`docs/adr/0001-local-only-no-auth.md`), so it makes sure only this machine can
+reach it (see `docs/adr/0022-local-only-enforced-in-four-layers.md`):
+
+- `npm run dev` and `npm run start` run a small custom server (`server.ts`)
+  that listens on `127.0.0.1` and `::1` only. There is no option to listen on
+  another address.
+- It refuses any connection from another address with a 403 and logs it.
+- It refuses requests for any Host other than `localhost`, `127.0.0.1` or
+  `[::1]`, against DNS rebinding.
+- It refuses requests whose `Origin` is not the app's own, so other websites
+  open in your browser cannot call the MCP server or other routes. Requests
+  without an `Origin`, as CLI MCP clients send them, pass.
+
+Start the app with the npm scripts: running `next dev` or `next start`
+directly skips the first two guards.
 
 ## Getting started
 
@@ -24,8 +38,8 @@ separate setup step.
 
 The app runs on port 4747 by default, so it does not clash with other Next.js
 projects on the default 3000. To run it on another port once, pass it after
-`--`, for example `npm run dev -- -p 4848` (the same works for
-`npm run start`). If the port is taken, the server stops with an
+`--`, for example `npm run dev -- -p 4848` or `npm run dev -- --port 4848`
+(the same works for `npm run start`). The port is the only option. If the port is taken, the server stops with an
 "address in use" error instead of moving to another port, because the MCP URL
 is fixed: when you change the port, register the MCP server with the same
 port (`http://localhost:<port>/api/mcp`).
