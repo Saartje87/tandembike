@@ -13,18 +13,20 @@ import type { Tickets } from '../tickets/tickets';
 import type {
   AgentRun,
   AgentRunner,
-  PermissionAnswer,
   PermissionRequest,
   Question,
   QuestionAnswers,
   RunEvent,
 } from './agent-runner';
-import type {
-  ConversationIntent,
-  ConversationState,
-  PermissionStatus,
-  QuestionEntry,
-  TranscriptRole,
+import {
+  type ConversationIntent,
+  type ConversationState,
+  type PermissionAnswer,
+  type PermissionStatus,
+  permissionAnswers,
+  permissionStatusOf,
+  type QuestionEntry,
+  type TranscriptRole,
 } from './conversation-state';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 
@@ -107,14 +109,6 @@ type LiveRun = {
   questioning: Map<number, (answers: QuestionAnswers) => void>;
 };
 
-const permissionAnswers: PermissionAnswer[] = ['allow', 'allow-always', 'deny'];
-
-const permissionStatusOf: Record<PermissionAnswer, PermissionStatus> = {
-  allow: 'allowed',
-  'allow-always': 'always-allowed',
-  deny: 'denied',
-};
-
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
 const noRepositoryPath = {
@@ -173,9 +167,11 @@ export function createConversations({
     id: number,
     role: TranscriptRole,
     text: string,
-    permission: PermissionStatus | null = null,
-    question: QuestionEntry | null = null,
-    permissionRules: string[] | null = null,
+    extra: {
+      permission?: PermissionStatus;
+      question?: QuestionEntry;
+      permissionRules?: string[] | null;
+    } = {},
   ): number =>
     db
       .insert(conversationEntries)
@@ -183,9 +179,9 @@ export function createConversations({
         conversationId: id,
         role,
         text,
-        permission,
-        permissionRules,
-        question,
+        permission: extra.permission ?? null,
+        permissionRules: extra.permissionRules ?? null,
+        question: extra.question ?? null,
         createdAt: new Date(),
       })
       .returning({ id: conversationEntries.id })
@@ -245,8 +241,7 @@ export function createConversations({
       id,
       'question',
       questions.map((question) => question.question).join('\n'),
-      null,
-      { questions, answers: null, expired: false },
+      { question: { questions, answers: null, expired: false } },
     );
     update(id, { state: 'waiting' });
     announce(id);
@@ -267,9 +262,10 @@ export function createConversations({
       id,
       'permission',
       `${request.toolName} ${JSON.stringify(request.input)}`,
-      'pending',
-      null,
-      request.rules.length === 0 ? null : request.rules,
+      {
+        permission: 'pending',
+        permissionRules: request.rules.length === 0 ? null : request.rules,
+      },
     );
     update(id, { state: 'waiting' });
     announce(id);

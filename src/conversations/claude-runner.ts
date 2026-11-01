@@ -100,9 +100,13 @@ export function eventsOf(
 }
 
 /** The allow rules among an SDK call's suggestions; any other kind is dropped. */
-function allowRules(suggestions: PermissionUpdate[] = []): PermissionUpdate[] {
+function allowRules(
+  suggestions: PermissionUpdate[] = [],
+): Extract<PermissionUpdate, { type: 'addRules' }>[] {
   return suggestions.filter(
-    (suggestion) =>
+    (
+      suggestion,
+    ): suggestion is Extract<PermissionUpdate, { type: 'addRules' }> =>
       suggestion.type === 'addRules' &&
       suggestion.behavior === 'allow' &&
       suggestion.rules.length > 0,
@@ -212,9 +216,7 @@ export function createClaudeRunner(): AgentRunner {
             const answer = await askPermission({
               toolName,
               input: toolInput,
-              rules: proposed.flatMap((update) =>
-                'rules' in update ? update.rules.map(ruleString) : [],
-              ),
+              rules: proposed.flatMap((update) => update.rules.map(ruleString)),
             });
             if (answer === 'deny') {
               return { behavior: 'deny', message: 'The User denied this.' };

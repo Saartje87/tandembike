@@ -23,8 +23,8 @@ const outcomes: Record<Exclude<PermissionStatus, 'pending'>, string> = {
 
 /**
  * What a permission request says below its text, inline in the chat: Allow,
- * Always allow (when the run proposed rules) and Deny while the run waits on it, then the outcome. The run waits until the
- * User picks one.
+ * Always allow (when the run proposed rules) and Deny while the run waits on
+ * it, then the outcome. The run waits until the User picks one.
  */
 export const ConversationPermissionPrompt: FC<
   ConversationPermissionPromptProps
@@ -32,7 +32,7 @@ export const ConversationPermissionPrompt: FC<
   const [pending, startAnswer] = useTransition();
   const [error, setError] = useState<string>();
 
-  const answer = (answer: PermissionAnswer) => () => {
+  const answerWith = (answer: PermissionAnswer) => () => {
     setError(undefined);
     startAnswer(async () => {
       const result = await answerConversationPermission({ entryId, answer });
@@ -64,7 +64,7 @@ export const ConversationPermissionPrompt: FC<
           type="button"
           size="small"
           disabled={pending}
-          onClick={answer('allow')}
+          onClick={answerWith('allow')}
         >
           Allow
         </Button>
@@ -74,7 +74,7 @@ export const ConversationPermissionPrompt: FC<
             size="small"
             variant="outline"
             disabled={pending}
-            onClick={answer('allow-always')}
+            onClick={answerWith('allow-always')}
           >
             Always allow {ruleText}
           </Button>
@@ -85,7 +85,7 @@ export const ConversationPermissionPrompt: FC<
           variant="outline"
           intent="danger"
           disabled={pending}
-          onClick={answer('deny')}
+          onClick={answerWith('deny')}
         >
           Deny
         </Button>

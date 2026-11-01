@@ -1,3 +1,5 @@
+import type { PermissionAnswer } from './conversation-state';
+
 /**
  * The seam between Conversations and the Agent that does the work (ADR 0019).
  * Only `claude-runner.ts` knows the Claude Agent SDK; tests use a fake.
@@ -38,7 +40,7 @@ export type PermissionRequest = {
  * `allow-always` also saves the request's `rules`, so the run need not ask
  * again. It is only a valid answer to a request that has rules.
  */
-export type PermissionAnswer = 'allow' | 'allow-always' | 'deny';
+export type { PermissionAnswer };
 
 /** One question of the Agent's AskUserQuestion, with its choices. */
 export type Question = {
