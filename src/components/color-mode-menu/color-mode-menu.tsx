@@ -22,7 +22,7 @@ const options: { value: ColorModeSetting; label: string }[] = [
  * A button for the app header showing the resolved Color mode, a sun or a
  * moon, that opens a menu of Light, Dark and System as radio items, the
  * current one checked. A pick applies at once, is stored for this browser and
- * closes the menu. Escape closes the menu and not what holds the button.
+ * closes the menu.
  */
 export const ColorModeMenu: FC = () => {
   const { colorMode } = useColorMode();
@@ -33,7 +33,13 @@ export const ColorModeMenu: FC = () => {
         {
           type: 'radio-group',
           value: colorMode,
-          onChange: (value) => writeColorMode(value as ColorModeSetting),
+          // Blocks types a radio value as `string` (T676), so find the option.
+          onChange: (value) => {
+            const option = options.find((item) => item.value === value);
+            if (option) {
+              writeColorMode(option.value);
+            }
+          },
           items: options,
         },
       ]}
