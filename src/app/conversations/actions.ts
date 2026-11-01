@@ -1,5 +1,6 @@
 'use server';
 
+import type { PermissionAnswer } from '../../conversations/agent-runner';
 import { appConversations } from '../../conversations/app-conversations';
 import {
   type ConversationActivity,
@@ -101,16 +102,16 @@ export async function stopConversation(input: {
   );
 }
 
-/** Allows or denies a permission request a run is waiting on. */
+/**
+ * Allows, always allows (saving the rules the run proposed) or denies a
+ * permission request a run is waiting on.
+ */
 export async function answerConversationPermission(input: {
   entryId: number;
-  allow: boolean;
+  answer: PermissionAnswer;
 }): Promise<ActionResult<{ conversation: Conversation }>> {
   return conversationResult(() =>
-    appConversations().answerPermission(
-      Number(input?.entryId),
-      input?.allow === true,
-    ),
+    appConversations().answerPermission(Number(input?.entryId), input?.answer),
   );
 }
 

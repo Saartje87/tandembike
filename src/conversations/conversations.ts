@@ -52,6 +52,8 @@ export type TranscriptEntry = {
   text: string;
   /** For a permission request, where it is; null for other entries. */
   permission: PermissionStatus | null;
+  /** For a permission request, the allow rules its run proposed; null for none. */
+  permissionRules: string[] | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
   createdAt: Date;
@@ -103,6 +105,14 @@ type LiveRun = {
   asking: Map<number, (answer: PermissionAnswer) => void>;
   /** Questions waiting for the User, by transcript entry id. */
   questioning: Map<number, (answers: QuestionAnswers) => void>;
+};
+
+const permissionAnswers: PermissionAnswer[] = ['allow', 'allow-always', 'deny'];
+
+const permissionStatusOf: Record<PermissionAnswer, PermissionStatus> = {
+  allow: 'allowed',
+  'allow-always': 'always-allowed',
+  deny: 'denied',
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -165,6 +175,7 @@ export function createConversations({
     text: string,
     permission: PermissionStatus | null = null,
     question: QuestionEntry | null = null,
+    permissionRules: string[] | null = null,
   ): number =>
     db
       .insert(conversationEntries)
@@ -173,6 +184,7 @@ export function createConversations({
         role,
         text,
         permission,
+        permissionRules,
         question,
         createdAt: new Date(),
       })
@@ -256,6 +268,8 @@ export function createConversations({
       'permission',
       `${request.toolName} ${JSON.stringify(request.input)}`,
       'pending',
+      null,
+      request.rules.length === 0 ? null : request.rules,
     );
     update(id, { state: 'waiting' });
     announce(id);
@@ -626,14 +640,20 @@ export function createConversations({
     },
 
     /**
-     * The User's Allow (`true`) or Deny (`false`) of a permission request in a
-     * transcript; the waiting run goes on. Refused once answered or when its
-     * run is gone.
+     * The User's Allow, Always allow or Deny of a permission request in a
+     * transcript; the waiting run goes on. Always allow also saves the rules
+     * the run proposed, so it is refused on a request without any. Refused
+     * once answered or when its run is gone.
      */
     async answerPermission(
       entryId: number,
-      allow: boolean,
+      answer: PermissionAnswer,
     ): Promise<Conversation> {
+      if (!permissionAnswers.includes(answer)) {
+        throw new ValidationError({
+          answer: 'Answer Allow, Always allow or Deny.',
+        });
+      }
       const entry = db
         .select()
         .from(conversationEntries)
@@ -647,13 +667,16 @@ export function createConversations({
       if (!handle || !resolve) {
         throw new NotAllowedError('This request is no longer waiting.');
       }
+      if (answer === 'allow-always' && !entry.permissionRules?.length) {
+        throw new NotAllowedError('This request proposes no rule to allow.');
+      }
       handle.asking.delete(entryId);
-      setPermission(entryId, allow ? 'allowed' : 'denied');
+      setPermission(entryId, permissionStatusOf[answer]);
       if (handle.asking.size === 0 && handle.questioning.size === 0) {
         update(entry.conversationId, { state: 'running' });
       }
       announce(entry.conversationId);
-      resolve(allow ? 'allow' : 'deny');
+      resolve(answer);
       return get(entry.conversationId);
     },
 

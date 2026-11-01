@@ -590,7 +590,12 @@ describe('Live updates', () => {
 });
 
 describe('Permission requests', () => {
-  const request = { toolName: 'Bash', input: { command: 'npm test' } };
+  const request = {
+    toolName: 'Bash',
+    input: { command: 'npm test' },
+    rules: [] as string[],
+  };
+  const withRules = { ...request, rules: ['Bash(npm test:*)'] };
 
   async function started() {
     const world = setup();
@@ -625,7 +630,7 @@ describe('Permission requests', () => {
     const pending = run.options.askPermission(request);
     const entry = conversations.transcript(conversation.id).at(-1);
 
-    await conversations.answerPermission(entry?.id ?? 0, true);
+    await conversations.answerPermission(entry?.id ?? 0, 'allow');
 
     expect(await pending).toBe('allow');
     expect(conversations.get(conversation.id).state).toBe('running');
@@ -639,7 +644,7 @@ describe('Permission requests', () => {
     const pending = run.options.askPermission(request);
     const entry = conversations.transcript(conversation.id).at(-1);
 
-    await conversations.answerPermission(entry?.id ?? 0, false);
+    await conversations.answerPermission(entry?.id ?? 0, 'deny');
 
     expect(await pending).toBe('deny');
     expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
@@ -647,14 +652,104 @@ describe('Permission requests', () => {
     });
   });
 
+  it('stores the rules a request proposes and returns them in the transcript', async () => {
+    const { conversations, conversation, run } = await started();
+
+    void run.options.askPermission(withRules);
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permissionRules: ['Bash(npm test:*)'],
+    });
+
+    void run.options.askPermission(request);
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permissionRules: null,
+    });
+  });
+
+  it('lets the run go on after Always allow and records it', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askPermission(withRules);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    await conversations.answerPermission(entry?.id ?? 0, 'allow-always');
+
+    expect(await pending).toBe('allow-always');
+    expect(conversations.get(conversation.id).state).toBe('running');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'always-allowed',
+      permissionRules: ['Bash(npm test:*)'],
+    });
+  });
+
+  it('refuses Always allow on a request without rules and leaves it waiting', async () => {
+    const { conversations, conversation, run } = await started();
+    void run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    const error = await failure(
+      conversations.answerPermission(entry?.id ?? 0, 'allow-always'),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'pending',
+    });
+    await conversations.answerPermission(entry?.id ?? 0, 'allow');
+  });
+
+  it.each(['allow', 'allow-always', 'deny'] as const)(
+    'refuses %s on an answered request',
+    async (choice) => {
+      const { conversations, conversation, run } = await started();
+      void run.options.askPermission(withRules);
+      const entry = conversations.transcript(conversation.id).at(-1);
+      await conversations.answerPermission(entry?.id ?? 0, 'deny');
+
+      const error = await failure(
+        conversations.answerPermission(entry?.id ?? 0, choice),
+      );
+
+      expect(error).toBeInstanceOf(NotAllowedError);
+    },
+  );
+
+  it.each(['allow', 'allow-always', 'deny'] as const)(
+    'refuses %s on an expired request',
+    async (choice) => {
+      const { conversations, conversation, run, restart } = await started();
+      void run.options.askPermission(withRules);
+      const entry = conversations.transcript(conversation.id).at(-1);
+      const next = restart();
+      next.interruptStale();
+
+      const error = await failure(
+        next.answerPermission(entry?.id ?? 0, choice),
+      );
+
+      expect(error).toBeInstanceOf(NotAllowedError);
+    },
+  );
+
+  it('refuses an answer that is none of the three', async () => {
+    const { conversations, conversation, run } = await started();
+    void run.options.askPermission(request);
+    const entry = conversations.transcript(conversation.id).at(-1);
+
+    const error = await failure(
+      conversations.answerPermission(entry?.id ?? 0, 'maybe' as never),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+  });
+
   it('refuses a second answer', async () => {
     const { conversations, run, conversation } = await started();
     void run.options.askPermission(request);
     const entry = conversations.transcript(conversation.id).at(-1);
-    await conversations.answerPermission(entry?.id ?? 0, true);
+    await conversations.answerPermission(entry?.id ?? 0, 'allow');
 
     const error = await failure(
-      conversations.answerPermission(entry?.id ?? 0, false),
+      conversations.answerPermission(entry?.id ?? 0, 'deny'),
     );
 
     expect(error).toBeInstanceOf(NotAllowedError);
@@ -683,7 +778,7 @@ describe('Permission requests', () => {
     expect(next.transcript(conversation.id).at(-1)).toMatchObject({
       permission: 'expired',
     });
-    const error = await failure(next.answerPermission(entry?.id ?? 0, true));
+    const error = await failure(next.answerPermission(entry?.id ?? 0, 'allow'));
     expect(error).toBeInstanceOf(NotAllowedError);
   });
 });
@@ -869,7 +964,11 @@ describe('The Start run limit', () => {
   it('counts a Start that waits for a permission', async () => {
     const { conversations, runner, project } = setup();
     await startOn(conversations, project.id);
-    void runner.runs[0].options.askPermission({ toolName: 'Bash', input: {} });
+    void runner.runs[0].options.askPermission({
+      toolName: 'Bash',
+      input: {},
+      rules: [],
+    });
 
     const error = await failure(startOn(conversations, project.id));
 

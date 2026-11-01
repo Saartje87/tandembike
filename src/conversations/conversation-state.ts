@@ -41,11 +41,13 @@ export type TranscriptRole = (typeof transcriptRoles)[number];
 
 /**
  * Where a permission request in the transcript is: `pending` waits for the
- * User's Allow or Deny; `expired` was never answered because its run ended.
+ * User's answer; `always-allowed` was allowed together with saving its rules;
+ * `expired` was never answered because its run ended.
  */
 export const permissionStatuses = [
   'pending',
   'allowed',
+  'always-allowed',
   'denied',
   'expired',
 ] as const;
