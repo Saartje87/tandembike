@@ -57,11 +57,10 @@ describe('MCP server', () => {
       'update_ticket',
     ]);
     expect(
-      tools.filter(
-        (tool) =>
-          tool._meta !== undefined && 'anthropic/alwaysLoad' in tool._meta,
-      ),
-    ).toHaveLength(5);
+      tools
+        .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] !== true)
+        .filter((tool) => tool._meta && 'anthropic/alwaysLoad' in tool._meta),
+    ).toEqual([]);
     await client.close();
   });
 
