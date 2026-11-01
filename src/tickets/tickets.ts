@@ -36,7 +36,7 @@ import {
 } from './activity';
 import type { ActivityChange } from './activity-change';
 import {
-  normalizeAgentCommand,
+  normalizeAgentCommands,
   type ProjectAgentCommands,
 } from './agent-commands';
 import { checkProjectWritable, checkTicketWritable } from './archived-projects';
@@ -1438,24 +1438,13 @@ export function createTickets(
       input: Record<keyof ProjectAgentCommands, string>,
     ): ProjectAgentCommands {
       checkProjectWritable(db, id);
-      const commands: Partial<ProjectAgentCommands> = {};
-      const problems: Record<string, string> = {};
-      for (const field of Object.keys(agentCommandColumns) as Array<
-        keyof ProjectAgentCommands
-      >) {
-        const result = normalizeAgentCommand(String(input[field] ?? ''));
-        if ('problem' in result) {
-          problems[field] = result.problem;
-        } else {
-          commands[field] = result.command;
-        }
-      }
-      if (Object.keys(problems).length > 0) {
-        throw new ValidationError(problems);
+      const result = normalizeAgentCommands(input);
+      if ('problems' in result) {
+        throw new ValidationError(result.problems);
       }
       const saved = db
         .update(projects)
-        .set(commands)
+        .set(result.commands)
         .where(eq(projects.id, id))
         .returning(agentCommandColumns)
         .get();

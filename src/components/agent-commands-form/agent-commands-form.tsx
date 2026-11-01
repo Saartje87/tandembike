@@ -14,7 +14,7 @@ export type AgentCommandsFormProps = {
   commands: ProjectAgentCommands;
 };
 
-type Values = Record<keyof ProjectAgentCommands, string>;
+type AgentCommandsFormValues = Record<keyof ProjectAgentCommands, string>;
 
 const fields: { name: keyof ProjectAgentCommands; label: string }[] = [
   { name: 'triageCommand', label: 'Triage command' },
@@ -22,7 +22,7 @@ const fields: { name: keyof ProjectAgentCommands; label: string }[] = [
   { name: 'startEpicCommand', label: 'Start command for Epics' },
 ];
 
-const valuesOf = (commands: ProjectAgentCommands): Values => ({
+const valuesOf = (commands: ProjectAgentCommands): AgentCommandsFormValues => ({
   triageCommand: commands.triageCommand ?? '',
   startCommand: commands.startCommand ?? '',
   startEpicCommand: commands.startEpicCommand ?? '',
@@ -44,7 +44,7 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
     register,
     reset,
     setError,
-  } = useForm<Values>({ defaultValues: valuesOf(commands) });
+  } = useForm<AgentCommandsFormValues>({ defaultValues: valuesOf(commands) });
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
@@ -53,11 +53,15 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
       reset(valuesOf(result.commands));
       return;
     }
-    const named = fields.filter(({ name }) => result.fieldErrors?.[name]);
-    for (const { name } of named) {
-      setError(name, { type: 'server', message: result.fieldErrors?.[name] });
+    let named = false;
+    for (const { name } of fields) {
+      const message = result.fieldErrors?.[name];
+      if (message) {
+        setError(name, { type: 'server', message });
+        named = true;
+      }
     }
-    if (named.length === 0) {
+    if (!named) {
       setError('root.server', { message: result.error });
     }
   });

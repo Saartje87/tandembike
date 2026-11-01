@@ -5,6 +5,7 @@ import { type FC, useState, useTransition } from 'react';
 
 import { startConversation } from '../../app/conversations/actions';
 import {
+  type AgentCommandIntent,
   agentCommandMessage,
   type ProjectAgentCommands,
 } from '../../tickets/agent-commands';
@@ -39,7 +40,7 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
 
-  const begin = (intent: 'start' | 'triage') => () => {
+  const begin = (intent: AgentCommandIntent) => () => {
     const prompt = agentCommandMessage(
       intent,
       { number: ticketNumber, type: ticketType },

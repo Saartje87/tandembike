@@ -19,6 +19,16 @@ export const defaultAgentCommands = {
   startEpicCommand: '/mattpocock-skills:implement-spec',
 } satisfies ProjectAgentCommands;
 
+/** No commands: Triage and Start send the plain `Triage T42` / `Start T42`. */
+export const noAgentCommands: ProjectAgentCommands = {
+  triageCommand: null,
+  startCommand: null,
+  startEpicCommand: null,
+};
+
+/** The buttons that send an agent command. */
+export type AgentCommandIntent = 'triage' | 'start';
+
 /**
  * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
  * leading `/` added, and `null` when blank. Returns why it cannot be one.
@@ -43,13 +53,35 @@ export function normalizeAgentCommand(
 }
 
 /**
+ * `entries` as a Project's agent commands, each by `normalizeAgentCommand`.
+ * Returns why they cannot be, keyed by the field of each one at fault.
+ */
+export function normalizeAgentCommands(
+  entries: Record<keyof ProjectAgentCommands, string>,
+): { commands: ProjectAgentCommands } | { problems: Record<string, string> } {
+  const commands = { ...noAgentCommands };
+  const problems: Record<string, string> = {};
+  for (const field of Object.keys(noAgentCommands) as Array<
+    keyof ProjectAgentCommands
+  >) {
+    const result = normalizeAgentCommand(String(entries[field] ?? ''));
+    if ('problem' in result) {
+      problems[field] = result.problem;
+    } else {
+      commands[field] = result.command;
+    }
+  }
+  return Object.keys(problems).length > 0 ? { problems } : { commands };
+}
+
+/**
  * The first message Triage or Start sends about Ticket `number`: the
  * Project's command for it followed by `T<number>`, or the plain
  * `Triage T42` / `Start T42` when it has none. Start on an Epic uses the
  * Epic command, falling back to the Start command.
  */
 export function agentCommandMessage(
-  intent: 'triage' | 'start',
+  intent: AgentCommandIntent,
   ticket: { number: number; type: TicketType },
   commands: ProjectAgentCommands,
 ): string {
