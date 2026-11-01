@@ -400,6 +400,22 @@ type StrictInput<Shape extends z.ZodRawShape> = z.ZodObject<
   z.core.$strict
 >;
 
+/**
+ * The tools a client loads up front rather than deferring behind a tool
+ * search (`_meta["anthropic/alwaysLoad"]`, T623). Without it, Claude Code
+ * spent about three ToolSearch calls per Triage run loading these schemas
+ * before its first `get_ticket`. Keep the set small: every tool in it costs
+ * context in every request, whether the run uses it or not. It holds the
+ * tools every stored Triage transcript called; leave the rest deferred.
+ */
+const alwaysLoadedTools = new Set([
+  'get_ticket',
+  'list_comments',
+  'add_comment',
+  'update_ticket',
+  'claim_ticket',
+]);
+
 /** An MCP server whose tools call the Tickets module `tickets` only. */
 export function createMcpServer(
   tickets: Tickets,
@@ -414,6 +430,7 @@ export function createMcpServer(
    * Registers a tool on `server` whose input refuses any field it does not
    * list, naming it, instead of dropping it (T417). Register every tool
    * through this; nested input objects use `z.strictObject` for the same.
+   * It also marks the tools in `alwaysLoadedTools` to load up front.
    */
   function registerTool<Shape extends z.ZodRawShape>(
     name: string,
@@ -430,7 +447,13 @@ export function createMcpServer(
   ) {
     return server.registerTool<z.ZodRawShape, StrictInput<Shape>>(
       name,
-      { ...config, inputSchema: z.strictObject(inputSchema) },
+      {
+        ...config,
+        inputSchema: z.strictObject(inputSchema),
+        ...(alwaysLoadedTools.has(name) && {
+          _meta: { 'anthropic/alwaysLoad': true },
+        }),
+      },
       handler,
     );
   }

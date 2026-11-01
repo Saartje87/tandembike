@@ -39,6 +39,31 @@ describe('MCP server and Conversations', () => {
 });
 
 describe('MCP server', () => {
+  it('marks only the core tools to load up front, not deferred', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(
+      tools
+        .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
+        .map((tool) => tool.name)
+        .sort(),
+    ).toEqual([
+      'add_comment',
+      'claim_ticket',
+      'get_ticket',
+      'list_comments',
+      'update_ticket',
+    ]);
+    expect(
+      tools
+        .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] !== true)
+        .filter((tool) => tool._meta && 'anthropic/alwaysLoad' in tool._meta),
+    ).toEqual([]);
+    await client.close();
+  });
+
   it('lists every tool with a description', async () => {
     const client = await connectMcpClient(createTestTickets());
 
