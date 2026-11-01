@@ -136,7 +136,7 @@ describe('Starting a Conversation', () => {
       title: 'Fix the footer',
       description: 'The footer overlaps the drawer.',
       status: 'In progress',
-      labels: ['needs-triage-label'],
+      labels: ['some-label'],
       cycleId: cycle.id,
       epicNumber: epic.number,
     });
@@ -149,9 +149,9 @@ describe('Starting a Conversation', () => {
 
     const brief = runner.runs[0].options.systemPrompt;
     expect(brief).not.toContain('In progress');
-    expect(brief).not.toContain('needs-triage-label');
+    expect(brief).not.toContain('some-label');
     expect(brief).not.toContain('Grouping epic');
-    expect(brief).not.toContain(`T${epic.number}`);
+    expect(brief).not.toMatch(new RegExp(`T${epic.number}\\b`));
     expect(brief).not.toContain('Spring goal');
     expect(brief).not.toContain('overlaps the drawer');
   });

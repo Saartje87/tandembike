@@ -12,7 +12,7 @@ export type RunBrief = {
   conversationId: number;
   ticketNumber: number | null;
   ticketTitle: string | null;
-  /** Whether it is an Epic changes what Start means, and never goes stale. */
+  /** The Ticket's type: an Epic changes what Start means, and it never goes stale. */
   ticketType: TicketType | null;
   projectName: string;
   intent: ConversationIntent;
