@@ -1,4 +1,10 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { FC } from 'react';
@@ -95,8 +101,12 @@ const at$ = (path: string, search = '') => {
   );
 };
 
+/** The dialog's control, for opening a draft while the dialog is modal. */
+let opener: ReturnType<typeof useConversationDialog> | undefined;
+
 const Opener: FC = () => {
   const dialog = useConversationDialog();
+  opener = dialog;
   return (
     <>
       <button type="button" onClick={() => dialog.open(2)}>
@@ -497,9 +507,11 @@ describe('ConversationDialogProvider', () => {
       at$('/project/3', 'conversation=1');
       show();
       await screen.findByRole('dialog');
-      // The entry point sits behind the modal dialog here, so click it
-      // without the pointer events a backdrop click would hide the dialog with.
-      fireEvent.click(screen.getByRole('button', { name: 'Ask about 42' }));
+      // The entry point sits behind the modal dialog here, and a click on it
+      // can count as a click outside the dialog, which hides it and drops the
+      // draft, depending on pointer state an earlier test left. Open the draft
+      // through the dialog's API instead.
+      act(() => opener?.openDraft({ intent: 'ask', ticketNumber: 42 }));
       // One change event, not four typed keys: the many pointer and key steps
       // of `userEvent` can outlast the test timeout on a loaded machine.
       fireEvent.change(
