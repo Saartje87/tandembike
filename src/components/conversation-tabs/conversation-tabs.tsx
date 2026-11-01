@@ -93,9 +93,8 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
 
 /**
  * The row of tabs in the Conversation dialog, one per open Conversation in the
- * order opened, scrolling sideways when they overflow. Blocks has no Tabs
- * component, so this builds the tablist, tab and tabpanel pattern by hand
- * (T324): only the selected tab is in the Tab order, and the arrow keys, Home
+ * order opened, scrolling sideways when they overflow. It builds the tablist,
+ * tab and tabpanel pattern by hand until it moves to Blocks `Tabs` (T672): only the selected tab is in the Tab order, and the arrow keys, Home
  * and End move to another tab and select it.
  */
 export const ConversationTabs: FC<ConversationTabsProps> = ({

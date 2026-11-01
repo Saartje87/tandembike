@@ -22,7 +22,6 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { Icon } from '../icon/icon';
-import * as styles from './ticket-drawer-shell.css';
 
 type TicketDrawerContextValue = {
   /** The id for the title heading, which names the drawer once loaded. */
@@ -91,10 +90,7 @@ export const TicketDrawerShell: FC<TicketDrawerShellProps> = ({
       open
       onRequestClose={requestClose}
       placement="right"
-      className={styles.drawer}
-      // Blocks renders `open` on the server only, so hydrating a drawer
-      // opened by `?ticket=` reports a mismatch it then fixes itself (T357).
-      suppressHydrationWarning
+      size="large"
       // The title heading names it once loaded; until then, its number.
       aria-labelledby={titleId}
       aria-label={`Ticket T${number}`}
