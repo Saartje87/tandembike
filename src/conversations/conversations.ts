@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -15,12 +15,15 @@ import type {
   AgentRunner,
   PermissionAnswer,
   PermissionRequest,
+  Question,
+  QuestionAnswers,
   RunEvent,
 } from './agent-runner';
 import type {
   ConversationIntent,
   ConversationState,
   PermissionStatus,
+  QuestionEntry,
   TranscriptRole,
 } from './conversation-state';
 import { type NewTicketDefaults, runBrief } from './run-brief';
@@ -33,7 +36,7 @@ export type Conversation = {
   state: ConversationState;
   sdkSessionId: string | null;
   costUsd: number;
-  /** Closed by the User: stopped, and left out of the Project's list. */
+  /** Closed by the User: stopped, and left out of the open Conversations. */
   hidden: boolean;
   defaultCycleId: number | null;
   defaultEpicNumber: number | null;
@@ -49,6 +52,8 @@ export type TranscriptEntry = {
   text: string;
   /** For a permission request, where it is; null for other entries. */
   permission: PermissionStatus | null;
+  /** For a question of the Agent, what it asked and the answers; null for other entries. */
+  question: QuestionEntry | null;
   createdAt: Date;
 };
 
@@ -61,6 +66,16 @@ export type StartConversationInput = {
   prompt: string;
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
+};
+
+/** An open Conversation with what its tab in the Conversation dialog shows. */
+export type OpenConversation = {
+  conversation: Conversation;
+  /** The title of its Ticket; null for a Conversation about a Project. */
+  ticketTitle: string | null;
+  projectName: string;
+  /** The User's first message. */
+  firstMessage: string;
 };
 
 export type ListConversationsFilter = {
@@ -86,6 +101,8 @@ type LiveRun = {
   stopped?: boolean;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
+  /** Questions waiting for the User, by transcript entry id. */
+  questioning: Map<number, (answers: QuestionAnswers) => void>;
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -147,6 +164,7 @@ export function createConversations({
     role: TranscriptRole,
     text: string,
     permission: PermissionStatus | null = null,
+    question: QuestionEntry | null = null,
   ): number =>
     db
       .insert(conversationEntries)
@@ -155,6 +173,7 @@ export function createConversations({
         role,
         text,
         permission,
+        question,
         createdAt: new Date(),
       })
       .returning({ id: conversationEntries.id })
@@ -174,6 +193,54 @@ export function createConversations({
       resolve('deny');
     }
     handle.asking.clear();
+  };
+
+  const setQuestion = (entryId: number, question: QuestionEntry) => {
+    db.update(conversationEntries)
+      .set({ question })
+      .where(eq(conversationEntries.id, entryId))
+      .run();
+  };
+
+  const getEntry = (entryId: number) =>
+    db
+      .select()
+      .from(conversationEntries)
+      .where(eq(conversationEntries.id, entryId))
+      .get();
+
+  /** Resolves empty the questions a run still waits on, as its Conversation ended. */
+  const expireQuestioning = (handle: LiveRun) => {
+    for (const [entryId, resolve] of handle.questioning) {
+      const question = getEntry(entryId)?.question;
+      if (question) {
+        setQuestion(entryId, { ...question, expired: true });
+      }
+      resolve({});
+    }
+    handle.questioning.clear();
+  };
+
+  const askQuestion = (
+    id: number,
+    handle: LiveRun,
+    questions: Question[],
+  ): Promise<QuestionAnswers> => {
+    if (live.get(id) !== handle) {
+      return Promise.resolve({});
+    }
+    const entryId = append(
+      id,
+      'question',
+      questions.map((question) => question.question).join('\n'),
+      null,
+      { questions, answers: null, expired: false },
+    );
+    update(id, { state: 'waiting' });
+    announce(id);
+    return new Promise((resolve) => {
+      handle.questioning.set(entryId, resolve);
+    });
   };
 
   const askPermission = (
@@ -239,6 +306,7 @@ export function createConversations({
       case 'exit': {
         live.delete(id);
         expireAsking(handle);
+        expireQuestioning(handle);
         if (event.error) {
           append(id, 'error', event.error);
         }
@@ -289,6 +357,13 @@ export function createConversations({
     }
   };
 
+  const setHidden = (id: number, hidden: boolean) => {
+    db.update(conversations)
+      .set({ hidden, updatedAt: new Date() })
+      .where(eq(conversations.id, id))
+      .run();
+  };
+
   /** Starts a run for Conversation `id` with `prompt`, resuming `resume`. */
   const startRun = (id: number, prompt: string, resume?: string) => {
     const conversation = get(id);
@@ -306,6 +381,7 @@ export function createConversations({
       run: null,
       costBefore: conversation.costUsd,
       asking: new Map(),
+      questioning: new Map(),
     };
     live.set(id, handle);
     try {
@@ -328,6 +404,7 @@ export function createConversations({
         prompt,
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
+        askQuestion: (questions) => askQuestion(id, handle, questions),
         onEvent: (event) => handleEvent(id, handle, event),
       });
     } catch (error) {
@@ -356,22 +433,33 @@ export function createConversations({
     },
 
     /**
-     * The Project's Conversations about no Ticket that the User has not
-     * closed, newest first: what the Board header lists.
+     * Every Conversation the User has not closed, across all Projects and
+     * Tickets, in the order they were opened: the tabs of the Conversation
+     * dialog.
      */
-    listOpenForProject(projectId: number): Conversation[] {
-      return db
+    listOpen(): OpenConversation[] {
+      const rows = db
         .select()
         .from(conversations)
-        .where(
-          and(
-            eq(conversations.projectId, projectId),
-            isNull(conversations.ticketNumber),
-            eq(conversations.hidden, false),
-          ),
-        )
-        .orderBy(desc(conversations.id))
+        .where(eq(conversations.hidden, false))
+        .orderBy(conversations.id)
         .all();
+      return rows.map((conversation) => ({
+        conversation,
+        ticketTitle:
+          conversation.ticketNumber === null
+            ? null
+            : tickets.getTicket(conversation.ticketNumber).title,
+        projectName: tickets.getProject(conversation.projectId).name,
+        firstMessage:
+          db
+            .select({ text: conversationEntries.text })
+            .from(conversationEntries)
+            .where(eq(conversationEntries.conversationId, conversation.id))
+            .orderBy(conversationEntries.id)
+            .limit(1)
+            .get()?.text ?? '',
+      }));
     },
 
     /** A Conversation's transcript, oldest entry first. */
@@ -402,6 +490,21 @@ export function createConversations({
         throw new ValidationError({
           projectId: 'Choose a Project or a Ticket.',
         });
+      }
+      if (input.intent === 'setup') {
+        if (input.ticketNumber !== undefined) {
+          throw new ValidationError({
+            ticketNumber: 'Setup is about a Project, not a Ticket.',
+          });
+        }
+        // At most one running Setup per Project: two would edit the same
+        // checkout (ADR 0020). Starting another opens the running one.
+        for (const id of live.keys()) {
+          const other = get(id);
+          if (other.projectId === projectId && other.intent === 'setup') {
+            return other;
+          }
+        }
       }
       const settings = tickets.getProjectAgentSettings(projectId);
       if (settings.repositoryPath === null) {
@@ -448,10 +551,10 @@ export function createConversations({
         throw new ValidationError({ text: 'Write a reply first.' });
       }
       const conversation = get(id);
-      if (conversation.state === 'stopped') {
-        throw new NotAllowedError(
-          'This Conversation was stopped. Start a new one.',
-        );
+      // A stopped or closed Conversation keeps its tab, and a reply resumes
+      // it from its SDK session, reopening it when it was closed.
+      if (conversation.hidden) {
+        setHidden(id, false);
       }
 
       const handle = live.get(id);
@@ -488,6 +591,7 @@ export function createConversations({
       if (handle) {
         handle.stopped = true;
         expireAsking(handle);
+        expireQuestioning(handle);
       }
       update(id, { state: 'stopped' });
       announce(id);
@@ -501,13 +605,21 @@ export function createConversations({
       return get(id);
     },
 
-    /** Stops the Conversation's run and hides it from the Project's list. */
+    /**
+     * Closes a Conversation, about a Ticket or a Project: stops its run and
+     * takes it off the open Conversations. Its transcript stays.
+     */
     async close(id: number): Promise<Conversation> {
       await this.stop(id);
-      db.update(conversations)
-        .set({ hidden: true, updatedAt: new Date() })
-        .where(eq(conversations.id, id))
-        .run();
+      setHidden(id, true);
+      announce(id);
+      return get(id);
+    },
+
+    /** Opens a closed Conversation again. It stays stopped until a reply. */
+    async reopen(id: number): Promise<Conversation> {
+      get(id);
+      setHidden(id, false);
       announce(id);
       return get(id);
     },
@@ -536,11 +648,55 @@ export function createConversations({
       }
       handle.asking.delete(entryId);
       setPermission(entryId, allow ? 'allowed' : 'denied');
-      if (handle.asking.size === 0) {
+      if (handle.asking.size === 0 && handle.questioning.size === 0) {
         update(entry.conversationId, { state: 'running' });
       }
       announce(entry.conversationId);
       resolve(allow ? 'allow' : 'deny');
+      return get(entry.conversationId);
+    },
+
+    /**
+     * The User's answers to an Agent's question, by question text; the waiting
+     * run goes on. Every question needs an answer. Refused once answered or
+     * when its run is gone, each with its own reason.
+     */
+    async answerQuestion(
+      entryId: number,
+      answers: QuestionAnswers,
+    ): Promise<Conversation> {
+      const entry = getEntry(entryId);
+      if (entry?.role !== 'question' || !entry.question) {
+        throw new NotFoundError(`There is no question ${entryId}.`);
+      }
+      if (entry.question.answers !== null) {
+        throw new NotAllowedError('This question was already answered.');
+      }
+      const handle = live.get(entry.conversationId);
+      const resolve = handle?.questioning.get(entryId);
+      if (!handle || !resolve) {
+        throw new NotAllowedError('This question is no longer waiting.');
+      }
+      const given: QuestionAnswers = {};
+      const missing: Record<string, string> = {};
+      for (const { question } of entry.question.questions) {
+        const answer = String(answers?.[question] ?? '').trim();
+        if (answer === '') {
+          missing[question] = 'Answer this question.';
+        } else {
+          given[question] = answer;
+        }
+      }
+      if (Object.keys(missing).length > 0) {
+        throw new ValidationError(missing);
+      }
+      handle.questioning.delete(entryId);
+      setQuestion(entryId, { ...entry.question, answers: given });
+      if (handle.asking.size === 0 && handle.questioning.size === 0) {
+        update(entry.conversationId, { state: 'running' });
+      }
+      announce(entry.conversationId);
+      resolve(given);
       return get(entry.conversationId);
     },
 
@@ -559,6 +715,16 @@ export function createConversations({
         .set({ permission: 'expired' })
         .where(eq(conversationEntries.permission, 'pending'))
         .run();
+      const questions = db
+        .select()
+        .from(conversationEntries)
+        .where(eq(conversationEntries.role, 'question'))
+        .all();
+      for (const { id, question } of questions) {
+        if (question && question.answers === null && !question.expired) {
+          setQuestion(id, { ...question, expired: true });
+        }
+      }
       for (const { id } of stale) {
         update(id, { state: 'interrupted' });
         announce(id);

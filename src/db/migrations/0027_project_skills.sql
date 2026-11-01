@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `skills` text DEFAULT '["/mattpocock-skills:grilling","/mattpocock-skills:grill-with-docs","/mattpocock-skills:retro","/mattpocock-skills:to-spec","/mattpocock-skills:to-tickets"]' NOT NULL;

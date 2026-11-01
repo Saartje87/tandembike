@@ -6,7 +6,7 @@ import {
   boardFilterOf,
   boardPathOf,
   boardRoute,
-  conversationOnBoardPath,
+  conversationOnPath,
   cyclePath,
   cycleRoute,
   cyclesPath,
@@ -139,22 +139,23 @@ describe('projectIdFromPath', () => {
     expect(openTicketNumber(value)).toBe(expected);
   });
 
-  it('opens a Conversation over a Board with ?conversation=, keeping the filter', () => {
-    expect(conversationOnBoardPath('/project/3', 9)).toBe(
+  it('opens a Conversation on any page with ?conversation=, keeping the rest of the URL', () => {
+    expect(conversationOnPath('/project/3', 9)).toBe(
       '/project/3?conversation=9',
     );
-    expect(
-      conversationOnBoardPath('/project/3/cycle/7', 9, {
-        query: 'a b',
-        labels: ['bug'],
-      }),
-    ).toBe('/project/3/cycle/7?q=a+b&label=bug&conversation=9');
+    expect(conversationOnPath('/project/3?q=a+b&ticket=12', 9)).toBe(
+      '/project/3?q=a+b&ticket=12&conversation=9',
+    );
+    expect(conversationOnPath('/stats?conversation=4', 9)).toBe(
+      '/stats?conversation=9',
+    );
   });
 
-  it('links a Conversation back to the Ticket it replaced with from=', () => {
-    expect(conversationOnBoardPath('/project/3', 9, undefined, 12)).toBe(
-      '/project/3?conversation=9&from=12',
+  it('hides the Conversation dialog by removing ?conversation=', () => {
+    expect(conversationOnPath('/project/3?ticket=12&conversation=9')).toBe(
+      '/project/3?ticket=12',
     );
+    expect(conversationOnPath('/stats?conversation=9')).toBe('/stats');
   });
 
   it.each([

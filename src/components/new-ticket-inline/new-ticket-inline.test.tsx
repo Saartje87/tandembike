@@ -1,12 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
-import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import {
   type ProjectAgentMode,
   ProjectAgentProvider,
@@ -17,10 +16,8 @@ vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
 vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
 }));
-vi.mock('next/navigation', () => ({
-  useRouter: vi.fn(),
-  usePathname: () => '/project/3',
-  useSearchParams: () => new URLSearchParams(),
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
 }));
 
 const titleField = () =>
@@ -224,8 +221,15 @@ describe('NewTicketInline', () => {
       mode: ProjectAgentMode,
       props: Partial<Parameters<typeof NewTicketInline>[0]> = {},
     ) => {
-      const router = mockRouter();
-      vi.mocked(useRouter).mockReturnValue(router);
+      const dialog = {
+        conversations: [],
+        open: vi.fn(),
+        show: vi.fn(),
+        reopenAndOpen: vi.fn(),
+        openDraft: vi.fn(),
+        shown: false,
+      };
+      vi.mocked(useConversationDialog).mockReturnValue(dialog);
       vi.mocked(startConversation).mockResolvedValue({
         ok: true,
         conversation: { id: 9 } as never,
@@ -236,24 +240,22 @@ describe('NewTicketInline', () => {
           <NewTicketInline projectId={3} {...props} />
         </ProjectAgentProvider>,
       );
-      return router;
+      return dialog;
     };
 
-    it('starts a New Ticket Conversation on Enter in agent mode, and opens it', async () => {
-      const router = renderWithAgent('default', { cycleId: 7 });
+    it('opens a New Ticket draft on Enter in agent mode, starting nothing', async () => {
+      const dialog = renderWithAgent('default', { cycleId: 7 });
 
       await userEvent.type(titleField(), 'Add coupons{Enter}');
 
-      expect(startConversation).toHaveBeenCalledExactlyOnceWith({
-        projectId: 3,
+      expect(dialog.openDraft).toHaveBeenCalledExactlyOnceWith({
         intent: 'new_ticket',
-        prompt: 'Add coupons',
+        projectId: 3,
+        text: 'Add coupons',
         defaults: { cycleId: 7, type: 'Ticket' },
       });
+      expect(startConversation).not.toHaveBeenCalled();
       expect(createTicket).not.toHaveBeenCalled();
-      expect(router.push).toHaveBeenCalledWith('/project/3?conversation=9', {
-        scroll: false,
-      });
       await waitFor(() => expect(titleField()).toHaveValue(''));
     });
 
@@ -267,14 +269,14 @@ describe('NewTicketInline', () => {
     });
 
     it('does the reverse with agent mode off', async () => {
-      renderWithAgent('optional');
+      const dialog = renderWithAgent('optional');
 
       await userEvent.type(titleField(), 'Fix it{Enter}');
       expect(createTicket).toHaveBeenCalledOnce();
       expect(startConversation).not.toHaveBeenCalled();
 
       await userEvent.type(titleField(), 'Plan it{Meta>}{Enter}{/Meta}');
-      expect(startConversation).toHaveBeenCalledOnce();
+      expect(dialog.openDraft).toHaveBeenCalledOnce();
     });
 
     it('says which key does which', async () => {
@@ -297,38 +299,19 @@ describe('NewTicketInline', () => {
       ).toBeInTheDocument();
     });
 
-    it('opens it in place of the Epic drawer it was typed in, linking back', async () => {
-      const router = renderWithAgent('default', { epicNumber: 8 });
+    it('keeps the Epic of the Epic drawer it was typed in as a default of the draft', async () => {
+      const dialog = renderWithAgent('default', { epicNumber: 8 });
 
       await userEvent.type(
         screen.getByRole('textbox', { name: 'New child Ticket title' }),
         'Pay by card{Enter}',
       );
 
-      expect(startConversation).toHaveBeenCalledWith(
+      expect(dialog.openDraft).toHaveBeenCalledWith(
         expect.objectContaining({
           defaults: { epicNumber: 8, type: 'Ticket' },
         }),
       );
-      expect(router.push).toHaveBeenCalledWith(
-        '/project/3?conversation=9&from=8',
-        { scroll: false },
-      );
-    });
-
-    it('shows a refusal under the field and keeps the title', async () => {
-      renderWithAgent('default');
-      vi.mocked(startConversation).mockResolvedValue({
-        ok: false,
-        error: 'Set a repository path first.',
-      });
-
-      await userEvent.type(titleField(), 'Add coupons{Enter}');
-
-      expect(
-        await screen.findByText('Set a repository path first.'),
-      ).toBeInTheDocument();
-      expect(titleField()).toHaveValue('Add coupons');
     });
   });
 

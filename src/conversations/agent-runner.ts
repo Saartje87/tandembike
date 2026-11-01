@@ -31,12 +31,30 @@ export type PermissionRequest = {
 
 export type PermissionAnswer = 'allow' | 'deny';
 
+/** One question of the Agent's AskUserQuestion, with its choices. */
+export type Question = {
+  question: string;
+  /** A very short label for the question. */
+  header: string;
+  options: { label: string; description: string }[];
+  /** Whether several choices may be picked. */
+  multiSelect: boolean;
+};
+
+/** The User's answers, by question text; several choices are comma-separated. */
+export type QuestionAnswers = Record<string, string>;
+
 export type RunOptions = {
   /**
    * Asks the User whether the Agent may use a tool; the run waits for the
    * answer. Resolves `deny` when the Conversation ends first.
    */
   askPermission(request: PermissionRequest): Promise<PermissionAnswer>;
+  /**
+   * Asks the User the Agent's questions; the run waits for the answers.
+   * Resolves empty when the Conversation ends first.
+   */
+  askQuestion(questions: Question[]): Promise<QuestionAnswers>;
   /** The Project's repository path. */
   cwd: string;
   /** The Tandembike MCP server the run connects to. */

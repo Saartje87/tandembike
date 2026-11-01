@@ -8,8 +8,12 @@ import {
   answerConversationPermission,
   closeConversation,
   currentConversationActivity,
+  listOpenConversations,
+  loadConversation,
+  reopenConversation,
   replyToConversation,
   startConversation,
+  startSetup,
   stopConversation,
 } from './actions';
 
@@ -64,6 +68,31 @@ describe('Conversation actions', () => {
       fieldErrors: { repositoryPath: expect.any(String) },
     });
     expect(runner.runs).toHaveLength(0);
+  });
+
+  it('start a Setup on a Project, and return the running one the second time', async () => {
+    const { project, runner } = setup();
+
+    const first = await startSetup({ projectId: project.id });
+    const second = await startSetup({ projectId: project.id });
+
+    expect(first).toMatchObject({
+      ok: true,
+      conversation: { intent: 'setup', ticketNumber: null },
+    });
+    expect(second).toMatchObject({
+      ok: true,
+      conversation: { id: first.ok ? first.conversation.id : 0 },
+    });
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('refuse a Setup when the Project has no repository path', async () => {
+    const { project } = setup(false);
+
+    expect(await startSetup({ projectId: project.id })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('send a reply and stop the run', async () => {
@@ -165,6 +194,39 @@ describe('Conversation actions', () => {
       conversation: { state: 'stopped', hidden: true },
     });
     expect(runner.runs[0].interrupted).toBe(true);
+  });
+
+  it('reopen a closed Conversation and list the open ones with a transcript to show', async () => {
+    const { project } = setup();
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'new_ticket',
+      prompt: 'Hi',
+    });
+    if (!started.ok) {
+      throw new Error('Expected a start.');
+    }
+    const conversationId = started.conversation.id;
+    await closeConversation({ conversationId });
+    expect(await listOpenConversations()).toEqual([]);
+
+    const reopened = await reopenConversation({ conversationId });
+
+    expect(reopened).toMatchObject({
+      ok: true,
+      conversation: { hidden: false },
+    });
+    expect(await listOpenConversations()).toMatchObject([
+      { conversation: { id: conversationId }, projectName: 'Website' },
+    ]);
+    expect(await loadConversation({ conversationId })).toMatchObject({
+      ok: true,
+      conversation: { id: conversationId },
+      transcript: [{ role: 'user', text: 'Hi' }],
+    });
+    expect(await loadConversation({ conversationId: 999 })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('report which Tickets have running or waiting Conversations', async () => {

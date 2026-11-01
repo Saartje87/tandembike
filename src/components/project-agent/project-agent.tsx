@@ -1,13 +1,6 @@
 'use client';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createContext, type FC, type ReactNode, use } from 'react';
-
-import {
-  type BoardFilter,
-  boardFilterOf,
-  conversationOnBoardPath,
-} from '../../app/lib/paths';
 
 /**
  * What the title fields of a Project's Board may do with an Agent:
@@ -18,8 +11,6 @@ export type ProjectAgentMode = 'default' | 'optional';
 
 type ProjectAgentValue = {
   mode: ProjectAgentMode;
-  /** Opens a Conversation in its drawer over the Board on screen. */
-  openConversation: (id: number, fromTicket?: number) => void;
 };
 
 const ProjectAgentContext = createContext<ProjectAgentValue | null>(null);
@@ -35,28 +26,10 @@ export type ProjectAgentProviderProps = {
 
 /**
  * Tells the title fields below it that the Project has a repository path
- * and how Enter behaves (T588, T592), and how to open a Conversation over
- * the Board on screen, keeping its filter.
+ * and how Enter behaves (T588, T592). A Conversation they start opens in the
+ * Conversation dialog (T608).
  */
 export const ProjectAgentProvider: FC<ProjectAgentProviderProps> = ({
   mode,
   children,
-}) => {
-  const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
-  const filter: BoardFilter = boardFilterOf(
-    search.get('q') ?? undefined,
-    search.getAll('label'),
-  );
-  const openConversation = (id: number, fromTicket?: number) => {
-    router.push(conversationOnBoardPath(pathname, id, filter, fromTicket), {
-      scroll: false,
-    });
-  };
-  return (
-    <ProjectAgentContext value={{ mode, openConversation }}>
-      {children}
-    </ProjectAgentContext>
-  );
-};
+}) => <ProjectAgentContext value={{ mode }}>{children}</ProjectAgentContext>;

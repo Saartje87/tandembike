@@ -11,6 +11,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import type { QuestionEntry } from '../conversations/conversation-state';
 import {
   conversationIntents,
   conversationStates,
@@ -21,6 +22,7 @@ import type { ActivityChange } from '../tickets/activity-change';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
+import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 
@@ -47,6 +49,11 @@ export const projects = sqliteTable('projects', {
   agentMode: integer('agent_mode', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /** The Skill commands its Conversations offer as chips, in order. */
+  skills: text('skills', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(defaultSkills),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -356,6 +363,8 @@ export const conversationEntries = sqliteTable(
     text: text('text').notNull(),
     /** For a permission request: where it is; null for other entries. */
     permission: text('permission', { enum: permissionStatuses }),
+    /** For a question of the Agent: what it asked and the answers; null for other entries. */
+    question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [

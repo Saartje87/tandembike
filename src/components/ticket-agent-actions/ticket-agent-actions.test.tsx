@@ -51,19 +51,14 @@ describe('TicketAgentActions', () => {
     });
   });
 
-  it('asks with the User’s own text', async () => {
-    vi.mocked(startConversation).mockResolvedValue(started);
-    renderWithTheme(<TicketAgentActions ticketNumber={42} />);
+  it('asks through onAsk, starting nothing and showing no field', async () => {
+    const onAsk = vi.fn();
+    renderWithTheme(<TicketAgentActions ticketNumber={42} onAsk={onAsk} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
-    await userEvent.type(screen.getByLabelText('Question'), 'Why is it slow?');
-    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(startConversation).toHaveBeenCalledWith({
-      ticketNumber: 42,
-      intent: 'ask',
-      prompt: 'Why is it slow?',
-    });
+    expect(onAsk).toHaveBeenCalledOnce();
+    expect(startConversation).not.toHaveBeenCalled();
     expect(screen.queryByLabelText('Question')).toBeNull();
   });
 
@@ -79,22 +74,5 @@ describe('TicketAgentActions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This Project already has a Start run working.',
     );
-  });
-
-  it('keeps the question and shows the reason when an Ask is refused', async () => {
-    vi.mocked(startConversation).mockResolvedValue({
-      ok: false,
-      error: 'This Project has no repository path.',
-    });
-    renderWithTheme(<TicketAgentActions ticketNumber={42} />);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
-    await userEvent.type(screen.getByLabelText('Question'), 'Hi');
-    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'no repository path',
-    );
-    expect(screen.getByLabelText('Question')).toHaveValue('Hi');
   });
 });

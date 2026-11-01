@@ -56,12 +56,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         blocks: tickets.listBlockers(child.number).blocks,
       }))}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
-      conversations={conversations
-        .list({ ticketNumber: ticket.number })
-        .map((conversation) => ({
-          conversation,
-          transcript: conversations.transcript(conversation.id),
-        }))}
+      conversations={conversations.list({ ticketNumber: ticket.number })}
     />
   );
 };

@@ -120,25 +120,23 @@ export function openTicketNumber(
 }
 
 /**
- * Board `boardPath` with Conversation `id` open in its drawer, keeping the
- * Board's `filter`. `fromTicket` is the Epic whose drawer it replaced, which
- * the drawer links back to.
+ * `href`, a path with its search parameters, with Conversation `id` open in
+ * the Conversation dialog as `?conversation=<id>`, or without any when `id`
+ * is left out (the dialog hidden). Every other parameter, such as `?ticket=`,
+ * stays. Open it with `scroll={false}`.
  */
-export function conversationOnBoardPath(
-  boardPath: string,
-  id: number,
-  filter: BoardFilter = noBoardFilter,
-  fromTicket?: number,
-): string {
-  const path = filteredBoardPath(boardPath, filter);
-  const search = new URLSearchParams({ conversation: String(id) });
-  if (fromTicket !== undefined) {
-    search.set('from', String(fromTicket));
+export function conversationOnPath(href: string, id?: number): string {
+  const [path, search = ''] = href.split('?');
+  const params = new URLSearchParams(search);
+  params.delete('conversation');
+  if (id !== undefined) {
+    params.set('conversation', String(id));
   }
-  return `${path}${path.includes('?') ? '&' : '?'}${search.toString()}`;
+  const query = params.toString();
+  return query === '' ? path : `${path}?${query}`;
 }
 
-/** The Conversation a Board's `?conversation=` opens, if it is one id. */
+/** The Conversation `?conversation=` opens, if it is one id. */
 export const openConversationId = openTicketNumber;
 
 /**

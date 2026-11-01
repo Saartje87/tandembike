@@ -25,7 +25,7 @@ type ActivityRow = {
 };
 
 /** Whether a Conversation in this state waits for the User (T593). */
-const needsYou = (state: ConversationState) =>
+export const needsYou = (state: ConversationState) =>
   state === 'waiting' || state === 'idle';
 
 const ticketsOf = (rows: ActivityRow[]): number[] => [

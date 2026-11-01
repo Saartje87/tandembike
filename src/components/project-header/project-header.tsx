@@ -12,10 +12,6 @@ import {
 import { styleProject } from '../../app/projects/actions';
 import type { Project, StyleProjectInput } from '../../tickets/tickets';
 import { tintBackground } from '../palette/palette.css';
-import {
-  type ProjectConversationItem,
-  ProjectConversations,
-} from '../project-conversations/project-conversations';
 import { ProjectStylePicker } from '../project-style-picker/project-style-picker';
 import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
 
@@ -23,8 +19,6 @@ export type ProjectHeaderProps = {
   project: Project;
   /** Shown under the name, inside the band: the Project's tabs. */
   children?: ReactNode;
-  /** The Project's open Conversations, for the Conversations button. */
-  conversations?: ProjectConversationItem[];
 };
 
 type Style = Pick<Project, 'color' | 'icon'>;
@@ -44,7 +38,6 @@ const applyPick = (style: Style, pick: StyleProjectInput): Style => ({
 export const ProjectHeader: FC<ProjectHeaderProps> = ({
   project,
   children,
-  conversations,
 }) => {
   const [style, showPick] = useOptimistic<Style, StyleProjectInput>(
     { color: project.color, icon: project.icon },
@@ -77,12 +70,6 @@ export const ProjectHeader: FC<ProjectHeaderProps> = ({
           <Inline gap={1} alignY="center" flexWrap="nowrap">
             <ProjectStylePicker style={style} onPick={pick} error={error} />
             <RenameProjectInlineEdit key={project.id} project={project} />
-            {conversations && (
-              <ProjectConversations
-                projectId={project.id}
-                items={conversations}
-              />
-            )}
           </Inline>
           {children}
         </Stack>

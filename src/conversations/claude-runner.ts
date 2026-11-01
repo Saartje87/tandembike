@@ -4,9 +4,12 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
-import type { AgentRunner, RunEvent } from './agent-runner';
+import type { AgentRunner, Question, RunEvent } from './agent-runner';
 
 const maxToolTextLength = 300;
+
+/** The tool the Agent asks the User questions with; the chat shows it as a form. */
+const askTool = 'AskUserQuestion';
 
 const createToolName = /(^|__)create_tickets?$/;
 
@@ -46,7 +49,7 @@ export function eventsOf(
     for (const block of message.message.content) {
       if (block.type === 'text' && block.text.trim() !== '') {
         events.push({ type: 'agent', text: block.text });
-      } else if (block.type === 'tool_use') {
+      } else if (block.type === 'tool_use' && block.name !== askTool) {
         if (createToolName.test(block.name)) {
           createCalls.add(block.id);
         }
@@ -148,6 +151,7 @@ export function createClaudeRunner(): AgentRunner {
       prompt,
       resume,
       askPermission,
+      askQuestion,
       onEvent,
     }) {
       const input = createInput();
@@ -162,10 +166,33 @@ export function createClaudeRunner(): AgentRunner {
           // bypassPermissions) cannot skip the relay below.
           permissionMode: 'default',
           // What a terminal would ask the User comes to the Conversation.
-          canUseTool: async (toolName, toolInput) =>
-            (await askPermission({ toolName, input: toolInput })) === 'allow'
+          canUseTool: async (toolName, toolInput) => {
+            if (toolName === askTool) {
+              const answers = await askQuestion(
+                (toolInput as { questions: Question[] }).questions.map(
+                  ({ question, header, options, multiSelect }) => ({
+                    question,
+                    header,
+                    options: options.map(({ label, description }) => ({
+                      label,
+                      description,
+                    })),
+                    multiSelect: multiSelect === true,
+                  }),
+                ),
+              );
+              return Object.keys(answers).length === 0
+                ? { behavior: 'deny', message: 'The User did not answer.' }
+                : {
+                    behavior: 'allow',
+                    updatedInput: { ...toolInput, answers },
+                  };
+            }
+            return (await askPermission({ toolName, input: toolInput })) ===
+              'allow'
               ? { behavior: 'allow', updatedInput: toolInput }
-              : { behavior: 'deny', message: 'The User denied this.' },
+              : { behavior: 'deny', message: 'The User denied this.' };
+          },
           mcpServers: { tandembike: { type: 'http', url: mcpUrl } },
           systemPrompt: {
             type: 'preset',

@@ -120,6 +120,7 @@ import {
   maxBatchSize,
   throwFieldErrors,
 } from './rules';
+import { normalizeSkills } from './skills';
 import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
@@ -1362,6 +1363,42 @@ export function createTickets(
         .get();
       changes.publish({ type: 'project', id });
       return settings;
+    },
+
+    /**
+     * Project `id`'s Skills: the commands its Conversations offer as chips,
+     * in order. Like the agent settings, only the User sets them.
+     */
+    getProjectSkills(id: number): string[] {
+      const project = db
+        .select({ skills: projects.skills })
+        .from(projects)
+        .where(eq(projects.id, id))
+        .get();
+      if (!project) {
+        throw new NotFoundError(`There is no Project with id ${id}.`);
+      }
+      return project.skills;
+    },
+
+    /**
+     * Replaces Project `id`'s Skills with `entries`, in order: each trimmed,
+     * blank ones dropped and a missing leading `/` added. An entry with a
+     * space, a duplicate, more than 20 entries or one over 100 characters is
+     * refused, naming it.
+     */
+    setProjectSkills(id: number, entries: string[]): string[] {
+      checkProjectWritable(db, id);
+      const result = normalizeSkills(entries);
+      if ('problem' in result) {
+        throw new ValidationError({ skills: result.problem });
+      }
+      db.update(projects)
+        .set({ skills: result.skills })
+        .where(eq(projects.id, id))
+        .run();
+      changes.publish({ type: 'project', id });
+      return result.skills;
     },
 
     /**
