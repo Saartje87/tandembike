@@ -3,6 +3,7 @@
 import { Button, Menu, type MenuItem } from '@blockle/blocks';
 import type { FC } from 'react';
 
+import { openCyclesInOrder } from '../../tickets/cycle-state';
 import type { Cycle } from '../../tickets/cycles';
 
 export type MoveToCycleMenuProps = {
@@ -22,13 +23,8 @@ type Target = { cycleId: number | null; title: string };
  * first, then the Backlog when the Board is a Cycle's.
  */
 function targetsOf(cycles: Cycle[], cycleId: number | null): Target[] {
-  const open = cycles.filter(
-    ({ id, state }) => state !== 'Archived' && id !== cycleId,
-  );
-  return [
-    ...open.filter(({ state }) => state === 'Active'),
-    ...open.filter(({ state }) => state === 'Prepared'),
-  ]
+  const open = cycles.filter(({ id }) => id !== cycleId);
+  return openCyclesInOrder(open)
     .map(({ id, title }): Target => ({ cycleId: id, title }))
     .concat(cycleId === null ? [] : [{ cycleId: null, title: 'Backlog' }]);
 }

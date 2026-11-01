@@ -27,6 +27,7 @@ import {
   projectPath,
   projectSettingsPath,
 } from '../../app/lib/paths';
+import { openCyclesInOrder } from '../../tickets/cycle-state';
 import type { Cycle, OpenTicketCounts } from '../../tickets/cycles';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
@@ -195,10 +196,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
         >
           Backlog
         </ProjectTab>
-        {[
-          ...cycles.filter((cycle) => cycle.state === 'Active'),
-          ...cycles.filter((cycle) => cycle.state === 'Prepared'),
-        ].map((cycle) => (
+        {openCyclesInOrder(cycles).map((cycle) => (
           <ProjectTab
             key={cycle.id}
             href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
