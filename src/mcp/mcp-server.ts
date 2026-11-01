@@ -53,23 +53,24 @@ export const maxInstructionsLength = 3500;
 
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
-- When you start working on a Ticket, move it to In progress. When you finish it, move it to Done. The User follows your progress this way.
+- Move a Ticket to In progress when you start it and to Done when you finish it, so the User can follow your progress.
 - When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
-- Only the User archives and restores Projects. An archived Project is read-only: its Tickets can be read, but any change to them, or to its Cycles, is refused until it is restored.
+- Only the User archives and restores Projects. An archived Project is read-only until restored: its Tickets can be read, but changes to them or its Cycles are refused.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
 - Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
 - Attach files to a Ticket with add_attachment, not comments; get_attachment reads one.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
+- Rank work in a Board lane with sort_lane, never with Blockers.
 - To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
 - When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
-- A Ticket may have an ordered checklist of acceptanceCriteria, separate from its description. Store criteria in that field, never as a checklist in the description or a comment. Check each off with set_acceptance_criteria_checked as you verify it.
+- A Ticket may have an ordered checklist of acceptanceCriteria. Store criteria there, never as a checklist in the description or a comment, and check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access.
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a T, like T42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets, and move them to another Cycle or the Backlog in one step with move_tickets.
-- Your client keeps this tool list, the tool descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then treat what you loaded as possibly out of date, and a tool missing from your list may still exist.
+- Your client keeps these tools, their descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then what you loaded may be out of date, and a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;
 
 const projectId = z
@@ -1488,6 +1489,49 @@ export function createMcpServer(
       respondBatch(() =>
         tickets.moveTicketsToCycle({ cycleId, ticketNumbers }),
       ),
+  );
+
+  registerTool(
+    'sort_lane',
+    {
+      title: 'Sort Status lane',
+      description: `Set the Board order of a Project's Status lane, given by projectId or projectName, as the User does by dragging: the listed Tickets, at most ${maxBatchSize}, take the top slots in the order given, and the lane's other Tickets keep their order below them. List every Ticket for a full sort, or a few to rank them first. With cycleId it sorts only that Cycle's Board, or with null only the Backlog's; Tickets outside it keep their slots. Epics sort like any Ticket. It changes only the order, never a Status, Claim or Cycle: change a Status with update_ticket and a Cycle with move_tickets. Use it to rank work, never Blockers. All or nothing: a listed Ticket that is missing, archived, in another Project, not in the Status, or not on that Board refuses the whole call, naming it. Returns { ticketNumbers }: the sorted Board's order of the lane, top first, as list_tickets with sort: "position" now lists it.`,
+      inputSchema: {
+        projectId: projectId
+          .optional()
+          .describe(
+            'The Project whose lane to sort (id from list_projects). Give this or projectName.',
+          ),
+        projectName: z
+          .string()
+          .optional()
+          .describe(
+            'The name of the Project whose lane to sort, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
+          ),
+        status: status.describe(
+          'The Status lane to sort: "Todo", "In progress" or "Done".',
+        ),
+        cycleId: cycleId
+          .nullable()
+          .optional()
+          .describe(
+            "Sort only this Cycle's Board (id from list_cycles), or with null only the Backlog. Left out, the Project's whole lane is sorted.",
+          ),
+        ticketNumbers: z
+          .array(ticketNumber)
+          .describe(
+            `The Tickets to put on top of the lane, in order, each once, from 1 to ${maxBatchSize} of them.`,
+          ),
+      },
+      annotations: { idempotentHint: true },
+    },
+    ({ projectId, projectName, ...input }) =>
+      respond(() => ({
+        ticketNumbers: tickets.sortLane({
+          projectId: tickets.resolveProjectId({ projectId, projectName }),
+          ...input,
+        }),
+      })),
   );
 
   registerTool(

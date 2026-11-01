@@ -105,6 +105,7 @@ describe('MCP server', () => {
       'rename_project',
       'restore_ticket',
       'set_acceptance_criteria_checked',
+      'sort_lane',
       'start_cycle',
       'unplan_ticket',
       'unplan_tickets',
@@ -225,6 +226,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/list_cycles/);
     expect(instructions).toMatch(/plan_tickets/);
     expect(instructions).toMatch(/move_tickets/);
+    expect(instructions).toMatch(/sort_lane/);
     expect(instructions).toMatch(/split.*originNumber/);
     await client.close();
   });
@@ -2875,6 +2877,55 @@ describe('Cycle tools', () => {
     });
     expect(refused.isError).toBe(true);
     expect(resultText(refused)).toBe('There is no Cycle with id 99.');
+    await client.close();
+  });
+
+  it("sorts a Cycle's Todo lane with sort_lane, named by projectName, and returns its order", async () => {
+    const { tickets, project, client } = await cycleSetup();
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 3] });
+
+    const sorted = await client.callTool({
+      name: 'sort_lane',
+      arguments: {
+        projectName: project.name,
+        status: 'Todo',
+        cycleId: beta.id,
+        ticketNumbers: [3],
+      },
+    });
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { projectId: project.id, status: 'Todo', sort: 'position' },
+    });
+
+    expect(sorted.isError).not.toBe(true);
+    expect(resultJson(sorted)).toEqual({ ticketNumbers: [3, 1] });
+    expect(
+      (resultJson(listed) as { tickets: { number: number }[] }).tickets.map(
+        ({ number }) => number,
+      ),
+    ).toEqual([3, 2, 1]);
+    await client.close();
+  });
+
+  it('refuses a sort_lane call as a whole, naming the Ticket', async () => {
+    const { tickets, project, client } = await cycleSetup();
+    tickets.updateTicket(2, { status: 'Done' });
+
+    const refused = await client.callTool({
+      name: 'sort_lane',
+      arguments: {
+        projectId: project.id,
+        status: 'Todo',
+        ticketNumbers: [3, 2],
+      },
+    });
+
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toBe(
+      'Ticket T2 is Done, not Todo. Sorting a lane never changes a Status.',
+    );
     await client.close();
   });
 
