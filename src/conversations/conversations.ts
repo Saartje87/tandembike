@@ -392,6 +392,7 @@ export function createConversations({
           conversationId: id,
           ticketNumber: ticket?.number ?? null,
           ticketTitle: ticket?.title ?? null,
+          ticketType: ticket?.type ?? null,
           projectName: tickets.getProject(conversation.projectId).name,
           intent: conversation.intent,
           parallelRuns: settings.parallelRuns,
