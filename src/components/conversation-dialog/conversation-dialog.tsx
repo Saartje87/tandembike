@@ -158,7 +158,7 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             onClose={onClose}
             drafts={{
               items: drafts.items.map((draft) => ({
-                key: draft.key,
+                ...draft,
                 label: draftLabel(draft),
               })),
               selectedKey: drafts.selectedKey,
@@ -169,23 +169,16 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             renderConversation={(open) => (
               <ConversationPanel key={open.conversation.id} open={open} />
             )}
-            renderDraft={(key) => {
-              const draft = drafts.items.find((item) => item.key === key);
-              return (
-                draft && (
-                  <ConversationDraft
-                    key={draft.key}
-                    draft={draft}
-                    onTextChange={(text) =>
-                      drafts.onTextChange(draft.key, text)
-                    }
-                    onStarted={(conversation) =>
-                      drafts.onStarted(draft.key, conversation)
-                    }
-                  />
-                )
-              );
-            }}
+            renderDraft={(draft) => (
+              <ConversationDraft
+                key={draft.key}
+                draft={draft}
+                onTextChange={(text) => drafts.onTextChange(draft.key, text)}
+                onStarted={(conversation) =>
+                  drafts.onStarted(draft.key, conversation)
+                }
+              />
+            )}
           />
         </div>
       )}
