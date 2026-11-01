@@ -1,10 +1,9 @@
 'use client';
 
 import { Button, Menu, type MenuItem } from '@blockle/blocks';
-import { type FC, useRef, useState } from 'react';
+import type { FC } from 'react';
 
 import type { Cycle } from '../../tickets/cycles';
-import { claimEscape } from '../claim-escape/claim-escape';
 
 export type MoveToCycleMenuProps = {
   /** The Project's Cycles; the Archived ones are not offered. */
@@ -45,8 +44,6 @@ export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   disabled,
   onPick,
 }) => {
-  const button = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
   const targets = targetsOf(cycles, cycleId);
 
   if (targets.length === 0) {
@@ -54,39 +51,18 @@ export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   }
 
   return (
-    // Blocks `Menu` closes on Escape but leaves it unclaimed, so a Drawer
-    // around it closes too (Blocks T675). Claiming it here, ahead of the
-    // Drawer, closes only the menu; `Menu` is controlled so it still closes.
-    // biome-ignore lint/a11y/noStaticElementInteractions: it only claims Escape for the menu inside.
-    <div
-      onKeyDown={(event) => {
-        if (open && claimEscape(event)) {
-          setOpen(false);
-          button.current?.focus();
-        }
-      }}
+    <Menu
+      placement="top"
+      items={targets.map(
+        (target): MenuItem => ({
+          label: target.title,
+          onSelect: () => onPick(target.cycleId),
+        }),
+      )}
     >
-      <Menu
-        placement="top"
-        open={open}
-        onOpenChange={setOpen}
-        items={targets.map(
-          (target): MenuItem => ({
-            label: target.title,
-            onSelect: () => onPick(target.cycleId),
-          }),
-        )}
-      >
-        <Button
-          ref={button}
-          type="button"
-          variant="ghost"
-          size="small"
-          disabled={disabled}
-        >
-          Move to Cycle
-        </Button>
-      </Menu>
-    </div>
+      <Button type="button" variant="ghost" size="small" disabled={disabled}>
+        Move to Cycle
+      </Button>
+    </Menu>
   );
 };
