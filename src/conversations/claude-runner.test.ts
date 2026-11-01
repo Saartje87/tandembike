@@ -63,6 +63,23 @@ describe('The Claude runner', () => {
     expect(options.permissionMode).toBe('default');
   });
 
+  it('pre-allows the Tandembike MCP server it injects, and nothing else', () => {
+    query.mockReturnValue(fakeQuery([]));
+
+    createClaudeRunner().start({
+      cwd: '/repo',
+      mcpUrl: 'http://localhost:4747/api/mcp',
+      systemPrompt: '',
+      prompt: 'Hi',
+      askPermission: async () => 'deny',
+      askQuestion: async () => ({}),
+      onEvent: () => {},
+    });
+
+    const { options } = query.mock.calls[0][0];
+    expect(options.allowedTools).toEqual(['mcp__tandembike']);
+  });
+
   it('feeds the first message and every later reply into the streaming input', async () => {
     query.mockReturnValue(fakeQuery([]));
     const run = createClaudeRunner().start({
