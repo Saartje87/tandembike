@@ -12,6 +12,8 @@ export type RunBrief = {
   conversationId: number;
   ticketNumber: number | null;
   ticketTitle: string | null;
+  /** The Ticket's type: an Epic changes what Start means, and it never goes stale. */
+  ticketType: TicketType | null;
   projectName: string;
   intent: ConversationIntent;
   parallelRuns: boolean;
@@ -52,14 +54,16 @@ const setupChecklist = (brief: RunBrief): string[] => {
 
 /**
  * What Tandembike tells a run (ADR 0019): only its situation. How to do the
- * work stays with the repository's own instructions.
+ * work stays with the repository's own instructions. It points to the Ticket
+ * by number, title and type, and never copies what the Agent reads live and
+ * may change meanwhile: its Status, labels, Epic, Cycle or description.
  */
 export function runBrief(brief: RunBrief): string {
   const lines = [
     `You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "${brief.projectName}".`,
     brief.ticketNumber === null
       ? 'This Conversation is about the Project; it has no Ticket yet.'
-      : `This Conversation is about Ticket T${brief.ticketNumber}, "${brief.ticketTitle}".`,
+      : `This Conversation is about Ticket T${brief.ticketNumber}, "${brief.ticketTitle}"${brief.ticketType === 'Epic' ? ', an Epic' : ''}.`,
     intentLines[brief.intent],
     'A human answers in the Tandembike UI, not in a terminal: when you need a decision, offer the choices with the AskUserQuestion tool, which shows the User a form; ask open questions in your messages.',
     `Your Agent-run ID: ${brief.conversationId}. Use it when you claim a Ticket with the Tandembike tools.`,

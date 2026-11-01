@@ -83,6 +83,79 @@ describe('Starting a Conversation', () => {
     expect(brief).not.toContain('worktree');
   });
 
+  it('names a normal Ticket by its number and title alone', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the footer',
+    });
+
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      `This Conversation is about Ticket T${ticket.number}, "Fix the footer".\n`,
+    );
+  });
+
+  it('says when the Ticket is an Epic', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Agents',
+      type: 'Epic',
+    });
+
+    await conversations.start({
+      ticketNumber: epic.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      `This Conversation is about Ticket T${epic.number}, "Agents", an Epic.\n`,
+    );
+  });
+
+  it('points to the Ticket without copying its Status, labels, Epic, Cycle or description, which change while it runs', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Grouping epic',
+      type: 'Epic',
+    });
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Spring goal',
+    });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the footer',
+      description: 'The footer overlaps the drawer.',
+      status: 'In progress',
+      labels: ['some-label'],
+      cycleId: cycle.id,
+      epicNumber: epic.number,
+    });
+
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).not.toContain('In progress');
+    expect(brief).not.toContain('some-label');
+    expect(brief).not.toContain('Grouping epic');
+    expect(brief).not.toMatch(new RegExp(`T${epic.number}\\b`));
+    expect(brief).not.toContain('Spring goal');
+    expect(brief).not.toContain('overlaps the drawer');
+  });
+
   it('asks for a git worktree of its own when the Project allows parallel runs', async () => {
     const { conversations, runner, tickets, project } = setup();
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
