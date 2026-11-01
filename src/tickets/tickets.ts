@@ -100,6 +100,13 @@ import {
   withExternalReferences,
 } from './external-references';
 import {
+  checkLaneCycle,
+  type LaneScope,
+  laneOf,
+  throwOutOfScope,
+  writeLaneOrder,
+} from './lanes';
+import {
   checkOrigin,
   type OriginLink,
   type SplitOffTicket,
@@ -437,16 +444,17 @@ export type UpdateTicketsResult = {
   failed: BatchFailure[];
 };
 
-export type ReorderTicketsInput = {
-  projectId: number;
-  status: Status;
+export type ReorderTicketsInput = LaneScope & {
+  /** Every Ticket in the scope, each once, in their new order. */
   ticketNumbers: number[];
+};
+
+export type SortLaneInput = LaneScope & {
   /**
-   * Reorder only the lane as a Cycle's tab shows it, or with `null`, as the
-   * Backlog shows it; see `ListTicketsFilter.cycleId`. Defaults to the whole
-   * Project's lane.
+   * The Tickets to put on top of the scope, each once, at most
+   * `maxBatchSize`, in the order given.
    */
-  cycleId?: number | null;
+  ticketNumbers: number[];
 };
 
 export type MoveTicketsInput = {
@@ -2343,7 +2351,7 @@ export function createTickets(
      * supplied so stale Board data cannot silently lose a Ticket.
      */
     reorderTickets(input: ReorderTicketsInput): void {
-      const { projectId, status, ticketNumbers, cycleId } = input;
+      const { projectId, status, ticketNumbers } = input;
       if (!isStatus(status)) {
         throw new ValidationError({ status: statusRule });
       }
@@ -2360,64 +2368,49 @@ export function createTickets(
 
       checkProjectWritable(db, projectId);
 
-      const lane = db
-        .select({
-          number: tickets.number,
-          archived: tickets.archived,
-          position: tickets.position,
-        })
-        .from(tickets)
-        .where(
-          and(eq(tickets.projectId, projectId), eq(tickets.status, status)),
-        )
-        .orderBy(
-          asc(tickets.position),
-          asc(tickets.createdAt),
-          asc(tickets.number),
-        )
-        .all();
-      const members =
-        cycleId === undefined
-          ? undefined
-          : new Set(
-              (cycleId === null ? outOfBacklog(db) : cycleMembers(db, cycleId))
-                .all()
-                .map(({ number }) => number),
-            );
-      const movable = ({ number, archived }: (typeof lane)[number]) =>
-        !archived &&
-        (members === undefined || members.has(number) === (cycleId !== null));
-      const activeNumbers = lane.filter(movable).map((ticket) => ticket.number);
+      const lane = laneOf(db, input);
       if (
-        activeNumbers.length !== ticketNumbers.length ||
-        activeNumbers.some((number) => !ticketNumbers.includes(number))
+        lane.scopeOrder.length !== ticketNumbers.length ||
+        lane.scopeOrder.some((number) => !ticketNumbers.includes(number))
       ) {
         throw new ValidationError({
           ticketNumbers: 'Refresh the Board and try reordering again.',
         });
       }
+      writeLaneOrder(db, changes, lane, ticketNumbers);
+    },
 
-      const reordered = [...ticketNumbers];
-      let activeIndex = 0;
-      const orderedLane = lane.map((ticket) =>
-        movable(ticket) ? reordered[activeIndex++] : ticket.number,
-      );
-      if (orderedLane.every((number, index) => number === lane[index].number)) {
-        return;
-      }
-
-      db.transaction((transaction) => {
-        orderedLane.forEach((number, position) => {
-          transaction
-            .update(tickets)
-            .set({ position })
-            .where(eq(tickets.number, number))
-            .run();
-        });
+    /**
+     * Sorts the active Tickets in a Project's Status lane, or in the part of
+     * it a Cycle or the Backlog shows: the listed Tickets take the top slots
+     * in the order given, and the others keep their order below them.
+     * Archived Tickets, and Tickets outside that part, keep their slots. All
+     * or nothing: a listed Ticket outside the part refuses the whole call.
+     * Returns the part's resulting order.
+     */
+    sortLane(input: SortLaneInput): number[] {
+      const { projectId, status, ticketNumbers, cycleId } = input;
+      throwFieldErrors({
+        ticketNumbers: checkBatchNumbers(ticketNumbers),
+        status: isStatus(status) ? undefined : statusRule,
       });
-      for (const number of orderedLane) {
-        changes.publish({ type: 'ticket', number });
+
+      checkProjectWritable(db, projectId);
+      const cycle =
+        cycleId === undefined || cycleId === null
+          ? undefined
+          : checkLaneCycle(db, projectId, cycleId);
+
+      const lane = laneOf(db, input);
+      for (const number of ticketNumbers) {
+        if (!lane.scopeOrder.includes(number)) {
+          throwOutOfScope(db, input, number, cycle?.title);
+        }
       }
+      return writeLaneOrder(db, changes, lane, [
+        ...ticketNumbers,
+        ...lane.scopeOrder.filter((number) => !ticketNumbers.includes(number)),
+      ]);
     },
 
     /**
