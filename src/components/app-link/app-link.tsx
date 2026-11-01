@@ -16,7 +16,7 @@ export type AppLinkProps = Omit<LinkProps, 'asChild' | 'href'> & {
 
 /**
  * A Blocks `Link` with Next.js client-side navigation. A Client Component on
- * purpose: see `docs/components/navigation.md` (T522).
+ * purpose: see `docs/components/navigation.md`.
  */
 export const AppLink: FC<AppLinkProps> = ({
   href,

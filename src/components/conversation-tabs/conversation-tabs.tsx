@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Button, Inline } from '@blockle/blocks';
-import { type FC, Fragment, type KeyboardEvent } from 'react';
+import { IconButton, Tab, TabList, TabPanel, Tabs } from '@blockle/blocks';
+import type { FC, ReactNode } from 'react';
 
 import { needsYou } from '../../conversations/conversation-activity';
 import type { ConversationState } from '../../conversations/conversation-state';
@@ -13,20 +13,9 @@ import * as styles from './conversation-tabs.css';
 /** A draft's tab: a Conversation the User has not started yet (T611). */
 export type DraftTab = { key: string; label: string };
 
-export type ConversationTabsProps = {
-  tabs: OpenConversation[];
-  /** The Conversation whose tab is shown; none while a draft is shown. */
-  selectedId: number | undefined;
-  onSelect: (conversationId: number) => void;
-  /** Called with the Conversation whose close button was pressed. */
-  onClose: (conversationId: number) => void;
-  /** Draft tabs, after the Conversations. */
-  drafts: TabDrafts;
-};
-
 /** The draft tabs, which one is shown, and what their buttons do. */
-export type TabDrafts = {
-  items: DraftTab[];
+export type TabDrafts<D extends DraftTab = DraftTab> = {
+  items: D[];
   /** The draft whose tab is shown. */
   selectedKey: string | undefined;
   onSelect: (key: string) => void;
@@ -34,28 +23,38 @@ export type TabDrafts = {
   onClose: (key: string) => void;
 };
 
+export type ConversationTabsProps<D extends DraftTab = DraftTab> = {
+  tabs: OpenConversation[];
+  /** The Conversation whose tab is shown; none while a draft is shown. */
+  selectedId: number | undefined;
+  onSelect: (conversationId: number) => void;
+  /** Called with the Conversation whose close button was pressed. */
+  onClose: (conversationId: number) => void;
+  /** Draft tabs, after the Conversations. */
+  drafts: TabDrafts<D>;
+  /** The content of a Conversation's panel; every panel stays mounted. */
+  renderConversation?: (open: OpenConversation) => ReactNode;
+  /** The content of a draft's panel, given the draft item; every panel stays mounted. */
+  renderDraft?: (draft: D) => ReactNode;
+  /** Shown between the tab row and the panels, such as an error. */
+  notice?: ReactNode;
+};
+
 /** A tab of either kind, in one list. */
 type TabItem = {
-  /** A Conversation's id, or a draft's key. */
-  id: number | string;
+  /** Identifies the tab to Blocks `Tabs`; only ever compared. */
+  value: string;
   /** Names the close button. */
   label: string;
   /** The tab's text. */
   text: string;
-  selected: boolean;
   /** Shows the state indicator of a Conversation; drafts have none. */
   state: ConversationState | null;
+  selected: boolean;
   select: () => void;
   close: () => void;
+  panel: ReactNode;
 };
-
-/** The DOM id of a Conversation's tab, for the panel that `aria-labelledby` names. */
-export const conversationTabId = (conversationId: number | string) =>
-  `conversation-tab-${conversationId}`;
-
-/** The DOM id of a Conversation's tab panel. */
-export const conversationPanelId = (conversationId: number | string) =>
-  `conversation-panel-${conversationId}`;
 
 /** `T42 · Triage`, or `<Project> · New Ticket` for a Conversation about a Project. */
 export const tabLabel = ({ conversation, projectName }: OpenConversation) =>
@@ -92,97 +91,87 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
 };
 
 /**
- * The row of tabs in the Conversation dialog, one per open Conversation in the
- * order opened, scrolling sideways when they overflow. Blocks has no Tabs
- * component, so this builds the tablist, tab and tabpanel pattern by hand
- * (T324): only the selected tab is in the Tab order, and the arrow keys, Home
- * and End move to another tab and select it.
+ * The Conversation dialog's tabs and panels on Blocks `Tabs`: one tab per open
+ * Conversation in the order opened, then the draft tabs. Blocks draws the
+ * moving indicator, scrolls an overflowing row and handles the arrow keys,
+ * Home and End. A tab's close button and state marker sit in its slots. Every
+ * panel stays mounted, so a draft reply and the scroll position survive a
+ * switch of tab.
  */
-export const ConversationTabs: FC<ConversationTabsProps> = ({
+export const ConversationTabs = <D extends DraftTab>({
   tabs,
   selectedId,
   onSelect,
   onClose,
   drafts,
-}) => {
+  renderConversation,
+  renderDraft,
+  notice,
+}: ConversationTabsProps<D>) => {
   const items: TabItem[] = [
-    ...tabs.map((item) => ({
-      id: item.conversation.id,
-      label: tabLabel(item),
-      text: endedStates[item.conversation.state]
-        ? `${tabLabel(item)} · ${endedStates[item.conversation.state]}`
-        : tabLabel(item),
-      state: item.conversation.state,
-      selected: item.conversation.id === selectedId,
-      select: () => onSelect(item.conversation.id),
-      close: () => onClose(item.conversation.id),
-    })),
-    ...drafts.items.map((draft) => ({
-      id: draft.key,
-      label: draft.label,
-      text: draft.label,
-      state: null,
-      selected: draft.key === drafts.selectedKey,
-      select: () => drafts.onSelect(draft.key),
-      close: () => drafts.onClose(draft.key),
-    })),
+    ...tabs.map((item): TabItem => {
+      const { id, state } = item.conversation;
+      const label = tabLabel(item);
+      return {
+        value: `conversation-${id}`,
+        label,
+        text: endedStates[state] ? `${label} · ${endedStates[state]}` : label,
+        state,
+        selected: id === selectedId,
+        select: () => onSelect(id),
+        close: () => onClose(id),
+        panel: renderConversation?.(item),
+      };
+    }),
+    ...drafts.items.map(
+      (draft): TabItem => ({
+        value: `draft-${draft.key}`,
+        label: draft.label,
+        text: draft.label,
+        state: null,
+        selected: selectedId === undefined && draft.key === drafts.selectedKey,
+        select: () => drafts.onSelect(draft.key),
+        close: () => drafts.onClose(draft.key),
+        panel: renderDraft?.(draft),
+      }),
+    ),
   ];
-
-  const move = (event: KeyboardEvent, index: number) => {
-    const last = items.length - 1;
-    const target = {
-      ArrowRight: index === last ? 0 : index + 1,
-      ArrowLeft: index === 0 ? last : index - 1,
-      Home: 0,
-      End: last,
-    }[event.key];
-    if (target === undefined) {
-      return;
-    }
-    event.preventDefault();
-    items[target].select();
-    document.getElementById(conversationTabId(items[target].id))?.focus();
-  };
+  const itemOf = new Map(items.map((item) => [item.value, item]));
 
   return (
-    <Box overflowInline="auto" flexShrink={0}>
-      <Inline
-        role="tablist"
-        aria-label="Conversations"
-        gap={1}
-        flexWrap="nowrap"
-      >
-        {items.map((item, index) => (
-          <Fragment key={item.id}>
-            <Button
-              id={conversationTabId(item.id)}
-              type="button"
-              role="tab"
-              size="small"
-              className={styles.tabButton}
-              variant={item.selected ? 'solid' : 'ghost'}
-              aria-selected={item.selected}
-              aria-controls={conversationPanelId(item.id)}
-              tabIndex={item.selected ? 0 : -1}
-              onClick={item.select}
-              onKeyDown={(event) => move(event, index)}
-            >
-              {item.text}
-              {item.state && <StateMarker state={item.state} />}
-            </Button>
-            <Button
-              type="button"
-              size="small"
-              variant="ghost"
-              className={styles.tabButton}
-              aria-label={`Close ${item.label}`}
-              onClick={item.close}
-            >
-              <Icon name="x-mark" size="small" />
-            </Button>
-          </Fragment>
+    <Tabs
+      value={items.find((item) => item.selected)?.value}
+      onValueChange={(value) => itemOf.get(value)?.select()}
+      className={styles.tabs}
+    >
+      <TabList aria-label="Conversations" className={styles.tabList}>
+        {items.map((item) => (
+          <Tab
+            key={item.value}
+            value={item.value}
+            endSlot={
+              <IconButton
+                type="button"
+                size="small"
+                variant="ghost"
+                label={`Close ${item.label}`}
+                onClick={item.close}
+              >
+                <Icon name="x-mark" size="small" />
+              </IconButton>
+            }
+          >
+            {item.text}
+            {item.state && <StateMarker state={item.state} />}
+          </Tab>
         ))}
-      </Inline>
-    </Box>
+      </TabList>
+      {notice}
+      {items.map((item) => (
+        <TabPanel key={item.value} value={item.value} className={styles.panel}>
+          {item.panel}
+        </TabPanel>
+      ))}
+    </Tabs>
   );
 };

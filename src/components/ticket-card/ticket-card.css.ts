@@ -1,4 +1,3 @@
-import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
 /**
@@ -54,11 +53,9 @@ export const epicLine = style({
 /**
  * The Epic link as a `Tag` in the Epic's colour, set by `tinted` since `Tag`'s
  * intents are not the Epic colours, never wider than its line, so its
- * truncated title gives way. As a `Tag` with `asChild` on a `Link`, it loses
- * its pill radius to the Link's own (T402), so it is set again here.
+ * truncated title gives way.
  */
 export const epicBadge = style({
   maxInlineSize: '100%',
-  borderRadius: vars.borderRadius.full,
   textDecoration: 'none',
 });

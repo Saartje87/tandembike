@@ -16,8 +16,8 @@ provider, and tests), see [Blockle Blocks setup](../blockle-blocks-setup.md).
 - [Forms](./forms.md): actions and form controls.
 - [Layout](./layout.md): composition primitives and spacing.
 - [Styling](./styling.md): atoms, breakpoints, and `vars` tokens.
-- [Navigation](./navigation.md): links and router integration.
-- [Overlays](./overlays.md): dialogs, drawers, popovers, portals, and tooltips.
+- [Navigation](./navigation.md): links, router integration, `Tabs` and `TabNav`.
+- [Overlays](./overlays.md): dialogs, drawers, menus, popovers, portals, and tooltips.
 - [Providers](./providers.md): theme context and reset styles.
 - [Typography](./typography.md): semantic headings and text.
 - [Hooks](./hooks.md): public hooks and when to use them.

@@ -1802,10 +1802,10 @@ describe('Planning a selection into a Cycle', () => {
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
 
-    const menu = screen.getByRole('dialog', { name: 'Move to Cycle' });
+    const menu = screen.getByRole('menu', { name: 'Move to Cycle' });
     expect(
       within(menu)
-        .getAllByRole('button')
+        .getAllByRole('menuitem')
         .map((button) => button.textContent),
     ).toEqual(['Launch', 'Beta']);
   });
@@ -1824,7 +1824,7 @@ describe('Planning a selection into a Cycle', () => {
     await selectTwo(user);
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
-    await user.click(screen.getByRole('button', { name: 'Beta' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Beta' }));
 
     expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
       projectId: project.id,
@@ -1855,7 +1855,7 @@ describe('Planning a selection into a Cycle', () => {
     await selectTwo(user);
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
-    await user.click(screen.getByRole('button', { name: 'Beta' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Beta' }));
 
     const refusals = await screen.findByRole('list', { name: 'Not moved' });
     expect(
@@ -1895,7 +1895,7 @@ describe('Planning a selection into a Cycle', () => {
     );
     await selectTwo(user);
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
-    await user.click(screen.getByRole('button', { name: 'Beta' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Beta' }));
 
     expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
 
@@ -1922,7 +1922,7 @@ describe('Planning a selection into a Cycle', () => {
     await selectTwo(user);
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
-    await user.click(screen.getByRole('button', { name: 'Beta' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Beta' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The Cycle "Beta" is Archived and can no longer change.',
@@ -1947,10 +1947,10 @@ describe('Planning a selection into a Cycle', () => {
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
 
-    const menu = screen.getByRole('dialog', { name: 'Move to Cycle' });
+    const menu = screen.getByRole('menu', { name: 'Move to Cycle' });
     expect(
       within(menu)
-        .getAllByRole('button')
+        .getAllByRole('menuitem')
         .map((button) => button.textContent),
     ).toEqual(['Launch', 'Backlog']);
   });
@@ -1969,7 +1969,7 @@ describe('Planning a selection into a Cycle', () => {
     await selectTwo(user);
 
     await user.click(screen.getByRole('button', { name: 'Move to Cycle' }));
-    await user.click(screen.getByRole('button', { name: 'Backlog' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Backlog' }));
 
     expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
       projectId: project.id,

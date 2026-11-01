@@ -2,21 +2,12 @@ import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
 /**
- * The dialog's width and height: the theme's `large` width, 800px up to 90%
- * of the window, and as high as the window allows, so the tab panel scrolls
- * and not the page. `size="large"` does not typecheck (T356), and the default
- * `small` sets the width to 400px. The theme's size styles are unlayered and
- * as specific as one class, so whichever stylesheet loads last would win; the
- * doubled class outranks them (T616).
+ * The dialog's height: as high as the window allows, so the tab panel scrolls
+ * and not the page. Its width comes from `size="large"`; the theme has no
+ * height size.
  */
 export const dialog = style({
-  selectors: {
-    '&&': {
-      inlineSize: '50rem',
-      maxInlineSize: '90%',
-      blockSize: 'min(48rem, 100%)',
-    },
-  },
+  blockSize: 'min(48rem, 100%)',
 });
 
 /**
@@ -29,10 +20,4 @@ export const content = style({
   gap: vars.space[3],
   blockSize: '100%',
   boxSizing: 'border-box',
-});
-
-/** The tab panel fills what is left; the chat in it scrolls its own messages. */
-export const panel = style({
-  flexGrow: 1,
-  minBlockSize: 0,
 });

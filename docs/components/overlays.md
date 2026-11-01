@@ -9,8 +9,10 @@ content for ordinary information.
 - **`Dialog`** is for focused, modal content that requires attention or a
   decision. Control it with `open` and `onRequestClose`.
 - **`Drawer`** is for a temporary panel-style surface. Control it with
-  `open` and `onRequestClose`; `placement` picks the side (default `left`).
-  See [Drawer caveats](#drawer-caveats).
+  `open` and `onRequestClose`; `placement` picks the side (default `left`) and
+  `size` (`small`, `medium`, `large`) its width. See [Drawer caveats](#drawer-caveats).
+- **`Menu`** is for a list of actions or one choice among a few, opened from a
+  button. See [Menu](#menu).
 - **`Popover`** is for contextual content anchored to a trigger or other
   element. It is controlled and requires `anchorElement`, `open`, and
   `onRequestClose`; it closes on Escape and outside click.
@@ -22,6 +24,10 @@ content for ordinary information.
   it does not by itself provide dialog or popover behavior.
 
 ## Dialog example
+
+`size` (`small` 400px, `medium` 600px, `large` 800px; each at most 90% of the
+window) sets a `Dialog`'s width; the theme has no height size, so set a height
+with a `className`.
 
 Give dialogs an accessible name and, when useful, a description. Connect
 visible title and body elements with `aria-labelledby` and `aria-describedby`.
@@ -69,9 +75,11 @@ request unhandled. `onRequestClose` gets the reason, `'escape'` or
 For a popover, attach a ref to the trigger and pass that ref as
 `anchorElement`. Set `placement` to choose its side and the edge to line up
 with (`bottom`, `bottom-start`, `top-end`, …; default `top`). It flips to the
-other side when there is no room and shifts to stay on screen. Use `sticky`
-when the popover should reposition as the window scrolls or resizes.
-`position` is deprecated, on `Popover` and on `Tooltip`: use `placement`.
+other side when there is no room and shifts to stay on screen. An open
+popover keeps its position as the window scrolls or resizes. `sticky` has no
+effect and `position` is deprecated, on `Popover` and on `Tooltip`: use
+`placement`. `limitHeight` caps its height to the room on its side, so a tall
+popover stops at the screen edge; give it `overflow: auto` to scroll.
 
 ```tsx
 'use client';
@@ -115,14 +123,12 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 3.1.0:
+Checked against `@blockle/blocks-react` 3.3.0:
 
 - The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
-  (`medium` 480px, `large` 640px) only accepts `undefined` in TypeScript
-  (T356), so set another width with a `className`, which adds to its own
-  classes and, being unlayered, beats the theme.
-- A server-rendered open drawer reports a hydration mismatch on `open`, then
-  opens as modal anyway; pass `suppressHydrationWarning` (T357).
+  (`medium` 480px, `large` 640px) sets another; no `className` is needed.
+- A server-rendered open drawer hydrates without a mismatch warning, so it
+  needs no `suppressHydrationWarning`.
 - In a route Next.js preserves in a hidden `<Activity>`, it closes while
   hidden and opens as modal again when shown. It hydrates a server-rendered
   open drawer without an error.
@@ -134,6 +140,56 @@ Checked against `@blockle/blocks-react` 3.1.0:
 - It handles Escape on the `<dialog>` itself, so only a key pressed inside it
   closes it. An in-place edit inside it that cancels on Escape calls
   `event.preventDefault()` in its `onKeyDown` to keep the drawer open (see
-  `claimEscape` in `claim-escape/claim-escape.ts`). A `Dialog` opened
-  from inside it pauses the drawer's Escape and outside-click handling until
-  it closes.
+  `claimEscape` in `claim-escape/claim-escape.ts`). Only the `Dialog` or
+  `Drawer` opened last handles Escape and outside clicks, so a sibling
+  `Dialog` shown over the drawer, such as `ConversationDialog`, needs no guard
+  in the drawer: a click inside it leaves the drawer open, and a click outside
+  both closes the topmost.
+
+## Menu
+
+Checked against `@blockle/blocks-react` 3.3.0. A `Menu` is a button that opens
+a list of items, built on `Popover`. It is a menu to assistive technology (role
+`menu`, with `menuitem` and `menuitemradio` items), with arrow keys, Home, End
+and typeahead, and it returns focus to the trigger. It keeps itself inside the
+screen and follows the trigger on scroll and resize.
+
+```tsx
+import { Button, Menu } from '@blockle/blocks';
+
+<Menu
+  items={[
+    { label: 'Rename', onSelect: rename },
+    { type: 'separator' },
+    {
+      type: 'radio-group',
+      value: mode,
+      onChange: setMode,
+      items: [
+        { value: 'light', label: 'Light' },
+        { value: 'dark', label: 'Dark' },
+      ],
+    },
+  ]}
+>
+  <Button>Options</Button>
+</Menu>;
+```
+
+- `children` is the trigger, one element, usually a `Button` or `IconButton`.
+  `Menu` clones it, so it takes the accessible name you give it.
+- `items` is a list of `MenuItem`: an action (`label`, `onSelect`, optional
+  `disabled`, `startSlot`, `endSlot`), a `{ type: 'separator' }`, or a
+  `{ type: 'radio-group', value, onChange, items }` whose items are
+  `{ value, label, disabled?, endSlot? }`.
+- Pass `textValue` for typeahead when `label` is not a plain string.
+- It is uncontrolled unless you pass `open` and `onOpenChange`. `placement`
+  defaults to `bottom-start`.
+- Its other props (`className`, `aria-*`) go to the popover element.
+- Caveat: a `Menu` inside a `Drawer` (or `Dialog`): Escape closes both, since
+  the menu closes on Escape but leaves the key unclaimed (Blocks T675). Claim
+  Escape before the drawer handles it: control the menu (`open`,
+  `onOpenChange`), wrap it in an element whose `onKeyDown` calls
+  `claimEscape` and closes it, and focus the trigger yourself. Tandembike has
+  no menu in the drawer today (`MoveToCycleMenu` sits on the Board), so none
+  does this yet.

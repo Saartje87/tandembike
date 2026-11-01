@@ -177,6 +177,16 @@ The Project and Epic palette (`src/components/palette/palette.css.ts`) keeps
 its own light and dark shades, since Blocks has no decorative palette
 (T317).
 
+## Cascade layers
+
+Blocks puts its CSS in cascade layers, lowest first: `blockle-reset`,
+`blockle-molecule` (component defaults), `blockle-theme` (the theme's
+component styles), `blockle-atom` (atom props), `blockle-organism`. Your own
+unlayered CSS, such as a `className` from a `.css.ts` file, beats all of them,
+so a single class overrides a component's theme without a doubled `&&`
+selector. An atom prop beats the theme too. In short: component defaults <
+theme < atom props < app CSS.
+
 ## Atoms versus custom styles
 
 Use atoms for token-based layout and simple visual styling. Atoms cannot

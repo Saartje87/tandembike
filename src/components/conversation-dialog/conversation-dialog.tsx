@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Box, Button, Dialog, Heading, Inline } from '@blockle/blocks';
+import { Alert, Button, Dialog, Heading, Inline } from '@blockle/blocks';
 import { type FC, useEffect, useId, useState } from 'react';
 
 import { loadConversation } from '../../app/conversations/actions';
@@ -15,11 +15,7 @@ import {
   draftLabel,
 } from '../conversation-draft/conversation-draft';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
-import {
-  ConversationTabs,
-  conversationPanelId,
-  conversationTabId,
-} from '../conversation-tabs/conversation-tabs';
+import { ConversationTabs } from '../conversation-tabs/conversation-tabs';
 import { Icon } from '../icon/icon';
 import { useConversationRevision } from '../live-updates/live-updates';
 import * as styles from './conversation-dialog.css';
@@ -130,9 +126,9 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
     <Dialog
       open={shownKey !== undefined}
       onRequestClose={onHide}
+      size="large"
       className={styles.dialog}
       aria-labelledby={titleId}
-      suppressHydrationWarning
     >
       {shownKey !== undefined && (
         <div className={styles.content}>
@@ -162,35 +158,28 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             onClose={onClose}
             drafts={{
               items: drafts.items.map((draft) => ({
-                key: draft.key,
+                ...draft,
                 label: draftLabel(draft),
               })),
               selectedKey: drafts.selectedKey,
               onSelect: drafts.onSelect,
               onClose: drafts.onClose,
             }}
-          />
-          {error && <Alert intent="danger">{error}</Alert>}
-          <Box
-            role="tabpanel"
-            id={conversationPanelId(shownKey)}
-            aria-labelledby={conversationTabId(shownKey)}
-            className={styles.panel}
-          >
-            {selected && <ConversationPanel key={selectedId} open={selected} />}
-            {selectedDraft && (
+            notice={error && <Alert intent="danger">{error}</Alert>}
+            renderConversation={(open) => (
+              <ConversationPanel key={open.conversation.id} open={open} />
+            )}
+            renderDraft={(draft) => (
               <ConversationDraft
-                key={selectedDraft.key}
-                draft={selectedDraft}
-                onTextChange={(text) =>
-                  drafts.onTextChange(selectedDraft.key, text)
-                }
+                key={draft.key}
+                draft={draft}
+                onTextChange={(text) => drafts.onTextChange(draft.key, text)}
                 onStarted={(conversation) =>
-                  drafts.onStarted(selectedDraft.key, conversation)
+                  drafts.onStarted(draft.key, conversation)
                 }
               />
             )}
-          </Box>
+          />
         </div>
       )}
     </Dialog>

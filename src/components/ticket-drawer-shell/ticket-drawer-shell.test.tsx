@@ -1,5 +1,5 @@
 import { Dialog } from '@blockle/blocks';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { Activity, type FC, use } from 'react';
@@ -53,11 +53,16 @@ describe('TicketDrawerShell', () => {
   });
 
   it('closes to its Board while loading, keeping its scroll', async () => {
-    renderWithTheme(
-      <TicketDrawerShell number={4} boardPath="/project/1/cycle/7">
-        <Loading />
-      </TicketDrawerShell>,
-    );
+    // Rendered inside an async act: a plain render does not flush the update
+    // that makes the drawer the top overlay while its body is suspended, so
+    // Escape would do nothing. A real browser is not affected (T674).
+    await act(async () => {
+      renderWithTheme(
+        <TicketDrawerShell number={4} boardPath="/project/1/cycle/7">
+          <Loading />
+        </TicketDrawerShell>,
+      );
+    });
 
     await userEvent.click(
       within(drawer()).getByRole('button', { name: 'Close' }),
