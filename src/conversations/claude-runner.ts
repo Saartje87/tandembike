@@ -165,6 +165,8 @@ export function createClaudeRunner(): AgentRunner {
           // Pinned, so a repository's or the user's defaultMode (such as
           // bypassPermissions) cannot skip the relay below.
           permissionMode: 'default',
+          // The server injected below is ours, so its tools never prompt (ADR 0021).
+          allowedTools: ['mcp__tandembike'],
           // What a terminal would ask the User comes to the Conversation.
           canUseTool: async (toolName, toolInput) => {
             if (toolName === askTool) {
