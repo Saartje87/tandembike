@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Popover, Stack } from '@blockle/blocks';
+import { Button, Menu, type MenuItem } from '@blockle/blocks';
 import { type FC, useRef, useState } from 'react';
 
 import type { Cycle } from '../../tickets/cycles';
@@ -35,11 +35,9 @@ function targetsOf(cycles: Cycle[], cycleId: number | null): Target[] {
 }
 
 /**
- * A "Move to Cycle" button that opens a list of the Cycles, and the Backlog,
+ * A "Move to Cycle" button that opens a menu of the Cycles, and the Backlog,
  * a Board's selection can move to, and closes on a pick. It is left out
- * when there is nowhere to move. Escape closes the list and not what holds
- * the button. It is built by hand until it
- * moves to Blocks `Menu` (T671).
+ * when there is nowhere to move.
  */
 export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   cycles,
@@ -47,7 +45,7 @@ export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   disabled,
   onPick,
 }) => {
-  const anchor = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const targets = targetsOf(cycles, cycleId);
 
@@ -56,51 +54,39 @@ export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   }
 
   return (
-    // Escape reaches this wrapper from the button or the popover.
-    // biome-ignore lint/a11y/noStaticElementInteractions: it only claims Escape for the popover inside.
+    // Blocks `Menu` closes on Escape but leaves it unclaimed, so a Drawer
+    // around it closes too (Blocks T675). Claiming it here, ahead of the
+    // Drawer, closes only the menu; `Menu` is controlled so it still closes.
+    // biome-ignore lint/a11y/noStaticElementInteractions: it only claims Escape for the menu inside.
     <div
       onKeyDown={(event) => {
         if (open && claimEscape(event)) {
           setOpen(false);
+          button.current?.focus();
         }
       }}
     >
-      <Button
-        ref={anchor}
-        type="button"
-        variant="ghost"
-        size="small"
-        disabled={disabled}
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        Move to Cycle
-      </Button>
-      <Popover
-        anchorElement={anchor}
-        open={open}
+      <Menu
         placement="top"
-        onRequestClose={() => setOpen(false)}
-        role="dialog"
-        aria-label="Move to Cycle"
+        open={open}
+        onOpenChange={setOpen}
+        items={targets.map(
+          (target): MenuItem => ({
+            label: target.title,
+            onSelect: () => onPick(target.cycleId),
+          }),
+        )}
       >
-        <Stack gap={1} padding={2}>
-          {targets.map((target) => (
-            <Button
-              key={target.cycleId ?? 'backlog'}
-              type="button"
-              variant="ghost"
-              size="small"
-              onClick={() => {
-                setOpen(false);
-                onPick(target.cycleId);
-              }}
-            >
-              {target.title}
-            </Button>
-          ))}
-        </Stack>
-      </Popover>
+        <Button
+          ref={button}
+          type="button"
+          variant="ghost"
+          size="small"
+          disabled={disabled}
+        >
+          Move to Cycle
+        </Button>
+      </Menu>
     </div>
   );
 };
