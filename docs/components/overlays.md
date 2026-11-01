@@ -123,7 +123,7 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 3.3.0:
+Checked against `@blockle/blocks-react` 3.3.1:
 
 - The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
   (`medium` 480px, `large` 640px) sets another; no `className` is needed.
@@ -148,7 +148,7 @@ Checked against `@blockle/blocks-react` 3.3.0:
 
 ## Menu
 
-Checked against `@blockle/blocks-react` 3.3.0. A `Menu` is a button that opens
+Checked against `@blockle/blocks-react` 3.3.1. A `Menu` is a button that opens
 a list of items, built on `Popover`. It is a menu to assistive technology (role
 `menu`, with `menuitem` and `menuitemradio` items), with arrow keys, Home, End
 and typeahead, and it returns focus to the trigger. It keeps itself inside the
