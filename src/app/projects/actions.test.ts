@@ -10,6 +10,7 @@ import {
   addReferenceTemplate,
   loadProjectSkills,
   removeReferenceTemplate,
+  setProjectAgentCommands,
   setProjectAgentSettings,
   setProjectSkills,
   styleProject,
@@ -147,6 +148,48 @@ describe('Skill actions', () => {
       ok: false,
       fieldErrors: {
         skills: '"/to spec" has a space. Enter one command per line.',
+      },
+    });
+  });
+
+  it("saves a Project's agent commands and returns them as stored", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentCommands({
+      projectId: project.id,
+      triageCommand: 'triage',
+      startCommand: '/implement',
+      startEpicCommand: '',
+    });
+
+    const commands = {
+      triageCommand: '/triage',
+      startCommand: '/implement',
+      startEpicCommand: null,
+    };
+    expect(result).toEqual({ ok: true, commands });
+    expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('returns a refusal naming the agent command field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentCommands({
+      projectId: project.id,
+      triageCommand: '',
+      startCommand: '/implement T1',
+      startEpicCommand: '',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        startCommand: '"/implement T1" has a space. Enter one command.',
       },
     });
   });

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import type { ProjectAgentCommands } from '../../tickets/agent-commands';
 import { appTickets } from '../../tickets/app-tickets';
 import type {
   SetProjectAgentSettingsInput,
@@ -179,6 +180,31 @@ export async function setProjectSkills(input: {
     );
     revalidatePath(boardRoute, 'layout');
     return { skills };
+  });
+}
+
+/**
+ * Replaces a Project's agent commands, the ones its Triage and Start buttons
+ * send, and refreshes its pages; returns them as saved. A refusal names the
+ * field at fault: `triageCommand`, `startCommand` or `startEpicCommand`.
+ */
+export async function setProjectAgentCommands(input: {
+  projectId: number;
+  triageCommand: string;
+  startCommand: string;
+  startEpicCommand: string;
+}): Promise<ActionResult<{ commands: ProjectAgentCommands }>> {
+  return actionResult(() => {
+    const commands = appTickets('user').setProjectAgentCommands(
+      Number(input?.projectId),
+      {
+        triageCommand: String(input?.triageCommand ?? ''),
+        startCommand: String(input?.startCommand ?? ''),
+        startEpicCommand: String(input?.startEpicCommand ?? ''),
+      },
+    );
+    revalidatePath(boardRoute, 'layout');
+    return { commands };
   });
 }
 

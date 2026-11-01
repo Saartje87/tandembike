@@ -57,6 +57,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
       }))}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
       conversations={conversations.list({ ticketNumber: ticket.number })}
+      agentCommands={tickets.getProjectAgentCommands(ticket.projectId)}
     />
   );
 };

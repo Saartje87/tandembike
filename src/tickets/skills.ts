@@ -8,7 +8,7 @@ export const defaultSkills = [
 ];
 
 const maxSkills = 20;
-const maxSkillLength = 100;
+export const maxSkillLength = 100;
 
 /**
  * `entries` as a Project's Skills: trimmed, blank ones dropped, each starting

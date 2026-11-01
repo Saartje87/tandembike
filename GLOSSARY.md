@@ -105,6 +105,10 @@ _Avoid_: First-time setup, onboarding, readiness check
 A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
 _Avoid_: Command chip, preset, slash command (for the setting)
 
+**Agent command**:
+A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
+_Avoid_: Triage skill, Start skill, preset
+
 **Activity**:
 A Ticket's record of the changes made to it, one **Activity entry** per action. Each entry lists every change the action made, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.
 _Avoid_: History, event, audit log, changelog

@@ -2,6 +2,7 @@ import { Heading, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
+import { AgentCommandsForm } from '../../../../components/agent-commands-form/agent-commands-form';
 import { AgentSettingsForm } from '../../../../components/agent-settings-form/agent-settings-form';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { ReferenceTemplateEditor } from '../../../../components/reference-template-editor/reference-template-editor';
@@ -61,6 +62,25 @@ async function settingsTab(params: ProjectPageProps['params']) {
           />
         </section>
       </Stack>
+      <Stack gap={3} aria-labelledby="agent-commands" asChild>
+        <section>
+          <Stack gap={1}>
+            <Heading level={2} id="agent-commands">
+              Agent commands
+            </Heading>
+            <Text tag="p" fontSize="small" color="muted">
+              The Claude Code commands a Ticket's Triage and Start buttons send
+              before its number, such as /mattpocock-skills:implement T42. Start
+              on an Epic uses the Epic command, or the Start command when that
+              is blank. Blank sends a plain "Triage T42" or "Start T42".
+            </Text>
+          </Stack>
+          <AgentCommandsForm
+            projectId={project.id}
+            commands={appTickets('user').getProjectAgentCommands(project.id)}
+          />
+        </section>
+      </Stack>
       <Stack gap={3} aria-labelledby="reference-templates" asChild>
         <section>
           <Stack gap={1}>
@@ -84,8 +104,8 @@ async function settingsTab(params: ProjectPageProps['params']) {
 }
 
 /**
- * A Project's Settings tab: its agent settings, Skills and Reference
- * templates, under the Project's layout. It streams in behind its own
+ * A Project's Settings tab: its agent settings, Skills, agent commands and
+ * Reference templates, under the Project's layout. It streams in behind its own
  * boundary, as the Backlog tab does.
  */
 const SettingsPage: FC<ProjectPageProps> = ({ params }) => (
