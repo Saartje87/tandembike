@@ -84,19 +84,20 @@ const ProjectTab: FC<ProjectTabProps> = ({
   <Tab
     asChild
     current={current}
-    endSlot={
-      openTickets !== undefined && (
-        <Tag>
-          <span aria-hidden>{openTickets}</span>
-          <VisuallyHidden>
-            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
-          </VisuallyHidden>
-        </Tag>
-      )
-    }
+    // The badge sits outside the link (a Tab's slots do), so it is only shown
+    // here; the count is read out as part of the link's name below.
+    endSlot={openTickets !== undefined && <Tag aria-hidden>{openTickets}</Tag>}
   >
     <AppLink href={href} intent="inherit">
       {children}
+      {openTickets !== undefined && (
+        <>
+          {' '}
+          <VisuallyHidden>
+            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
+          </VisuallyHidden>
+        </>
+      )}
     </AppLink>
   </Tab>
 );
