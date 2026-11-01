@@ -21,9 +21,3 @@ export const content = style({
   blockSize: '100%',
   boxSizing: 'border-box',
 });
-
-/** The tab panel fills what is left; the chat in it scrolls its own messages. */
-export const panel = style({
-  flexGrow: 1,
-  minBlockSize: 0,
-});
