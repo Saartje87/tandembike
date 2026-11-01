@@ -95,6 +95,7 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
             <ConversationPermissionPrompt
               entryId={entry.id}
               permission={entry.permission}
+              rules={entry.permissionRules}
             />
           )}
         </Stack>

@@ -81,6 +81,7 @@ const entry = (conversationId: number, text: string): TranscriptEntry => ({
   role: 'agent',
   text,
   permission: null,
+  permissionRules: null,
   question: null,
   createdAt: at,
 });

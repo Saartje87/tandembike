@@ -54,6 +54,7 @@ const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   role: 'agent',
   text: '',
   permission: null,
+  permissionRules: null,
   question: null,
   createdAt: at,
   ...values,
@@ -274,14 +275,14 @@ describe('ConversationChat', () => {
 
     expect(answerConversationPermission).toHaveBeenCalledWith({
       entryId: 9,
-      allow: true,
+      answer: 'allow',
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Deny' }));
 
     expect(answerConversationPermission).toHaveBeenLastCalledWith({
       entryId: 9,
-      allow: false,
+      answer: 'deny',
     });
   });
 
