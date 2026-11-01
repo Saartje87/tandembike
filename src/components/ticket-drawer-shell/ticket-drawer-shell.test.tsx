@@ -62,9 +62,23 @@ describe('TicketDrawerShell', () => {
     await userEvent.click(
       within(drawer()).getByRole('button', { name: 'Close' }),
     );
+
+    expect(router.replace).toHaveBeenCalledWith('/project/1/cycle/7', {
+      scroll: false,
+    });
+  });
+
+  // Not while loading: a body that stays suspended keeps Blocks' overlay stack
+  // from ever making the drawer the top overlay, so Escape does nothing (T674).
+  it('closes to its Board on Escape, keeping its scroll', async () => {
+    renderWithTheme(
+      <TicketDrawerShell number={4} boardPath="/project/1/cycle/7">
+        <Loaded title="Fix it" />
+      </TicketDrawerShell>,
+    );
+
     await userEvent.keyboard('{Escape}');
 
-    expect(router.replace).toHaveBeenCalledTimes(2);
     expect(router.replace).toHaveBeenCalledWith('/project/1/cycle/7', {
       scroll: false,
     });

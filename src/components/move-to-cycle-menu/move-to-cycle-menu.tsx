@@ -38,7 +38,8 @@ function targetsOf(cycles: Cycle[], cycleId: number | null): Target[] {
  * A "Move to Cycle" button that opens a list of the Cycles, and the Backlog,
  * a Board's selection can move to, and closes on a pick. It is left out
  * when there is nowhere to move. Escape closes the list and not what holds
- * the button. Blocks has no menu component (T323).
+ * the button. It is built by hand until it
+ * moves to Blocks `Menu` (T671).
  */
 export const MoveToCycleMenu: FC<MoveToCycleMenuProps> = ({
   cycles,

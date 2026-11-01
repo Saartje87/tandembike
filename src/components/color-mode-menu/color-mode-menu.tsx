@@ -24,8 +24,8 @@ const options: { setting: ColorModeSetting; label: string }[] = [
  * A button for the app header showing the resolved Color mode, a sun or a
  * moon, that opens a list of Light, Dark and System, the current one checked.
  * A pick applies at once, is stored for this browser and closes the list.
- * Escape closes the list and not what holds the button. Blocks has no menu
- * component (T323).
+ * Escape closes the list and not what holds the button. It is built by hand
+ * until it moves to Blocks `Menu` (T670).
  */
 export const ColorModeMenu: FC = () => {
   const anchor = useRef<HTMLButtonElement>(null);

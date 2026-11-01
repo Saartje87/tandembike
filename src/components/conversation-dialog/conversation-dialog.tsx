@@ -130,9 +130,9 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
     <Dialog
       open={shownKey !== undefined}
       onRequestClose={onHide}
+      size="large"
       className={styles.dialog}
       aria-labelledby={titleId}
-      suppressHydrationWarning
     >
       {shownKey !== undefined && (
         <div className={styles.content}>
