@@ -6,7 +6,11 @@ import { createTestTickets } from '../../../test/tickets';
 import { appTickets } from '../../../tickets/app-tickets';
 import ProjectLayout from './layout';
 
-vi.mock('next/navigation', () => ({ notFound: vi.fn() }));
+vi.mock('next/navigation', () => ({
+  notFound: vi.fn(),
+  usePathname: () => '/project/1',
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../components/project-tabs/project-tabs', () => ({

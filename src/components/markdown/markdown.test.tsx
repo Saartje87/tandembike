@@ -72,6 +72,47 @@ describe('Markdown', () => {
     );
   });
 
+  it('links the Tickets it names, outside code and other links', () => {
+    renderWithTheme(
+      <Markdown headingLevel={3}>
+        {'Split into T41 and **T42**, not `T43` or [T44](https://example.com).'}
+      </Markdown>,
+    );
+
+    expect(screen.getByRole('link', { name: 'T41' })).toHaveAttribute(
+      'href',
+      '/ticket/41',
+    );
+    expect(screen.getByRole('link', { name: 'T42' })).toHaveAttribute(
+      'href',
+      '/ticket/42',
+    );
+    expect(screen.getByText('T43').tagName).toBe('CODE');
+    expect(screen.getByRole('link', { name: 'T44' })).toHaveAttribute(
+      'href',
+      'https://example.com',
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(3);
+  });
+
+  it('joins lines of one paragraph by default', () => {
+    const { container } = renderWithTheme(
+      <Markdown headingLevel={3}>{'one\ntwo'}</Markdown>,
+    );
+
+    expect(container.querySelector('br')).toBeNull();
+  });
+
+  it('breaks the line at each newline with `breaks`', () => {
+    const { container } = renderWithTheme(
+      <Markdown headingLevel={3} breaks>
+        {'one\ntwo'}
+      </Markdown>,
+    );
+
+    expect(container.querySelectorAll('br')).toHaveLength(1);
+  });
+
   it('leaves raw HTML unrendered', () => {
     const { container } = renderWithTheme(
       <Markdown headingLevel={3}>{'<script>alert(1)</script> hi'}</Markdown>,

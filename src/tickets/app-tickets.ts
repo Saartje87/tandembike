@@ -12,6 +12,13 @@ type GlobalWithDatabase = typeof globalThis & {
   [globalKey]?: DatabaseConnection;
 };
 
+/** The app's database connection, opened and migrated on first use. */
+export function appDatabase(): DatabaseConnection {
+  const global = globalThis as GlobalWithDatabase;
+  global[globalKey] ??= openDatabase(appDatabasePath);
+  return global[globalKey];
+}
+
 /**
  * The Tickets module the app uses: the real database file (created and
  * migrated on first use) and the app-wide change channel. The connection is
@@ -20,7 +27,5 @@ type GlobalWithDatabase = typeof globalThis & {
  * MCP route `agent`.
  */
 export function appTickets(actor: Actor): Tickets {
-  const global = globalThis as GlobalWithDatabase;
-  global[globalKey] ??= openDatabase(appDatabasePath);
-  return createTickets(global[globalKey], actor, appChangeChannel());
+  return createTickets(appDatabase(), actor, appChangeChannel());
 }

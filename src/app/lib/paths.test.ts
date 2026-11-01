@@ -6,10 +6,12 @@ import {
   boardFilterOf,
   boardPathOf,
   boardRoute,
+  conversationOnPath,
   cyclePath,
   cycleRoute,
   cyclesPath,
   filteredBoardPath,
+  openConversationId,
   openTicketNumber,
   projectIdFromPath,
   projectPath,
@@ -135,5 +137,34 @@ describe('projectIdFromPath', () => {
     [['12', '13'], undefined],
   ])('reads ?ticket=%j as %j', (value, expected) => {
     expect(openTicketNumber(value)).toBe(expected);
+  });
+
+  it('opens a Conversation on any page with ?conversation=, keeping the rest of the URL', () => {
+    expect(conversationOnPath('/project/3', 9)).toBe(
+      '/project/3?conversation=9',
+    );
+    expect(conversationOnPath('/project/3?q=a+b&ticket=12', 9)).toBe(
+      '/project/3?q=a+b&ticket=12&conversation=9',
+    );
+    expect(conversationOnPath('/stats?conversation=4', 9)).toBe(
+      '/stats?conversation=9',
+    );
+  });
+
+  it('hides the Conversation dialog by removing ?conversation=', () => {
+    expect(conversationOnPath('/project/3?ticket=12&conversation=9')).toBe(
+      '/project/3?ticket=12',
+    );
+    expect(conversationOnPath('/stats?conversation=9')).toBe('/stats');
+  });
+
+  it.each([
+    ['9', 9],
+    ['0', undefined],
+    ['abc', undefined],
+    [undefined, undefined],
+    [['1', '2'], undefined],
+  ])('reads ?conversation=%j as %j', (value, expected) => {
+    expect(openConversationId(value)).toBe(expected);
   });
 });

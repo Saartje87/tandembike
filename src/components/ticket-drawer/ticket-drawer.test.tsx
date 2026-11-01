@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { Activity, type FC } from 'react';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { startConversation } from '../../app/conversations/actions';
 import {
   addTicketBlocker,
   addTicketLabel,
@@ -15,13 +16,25 @@ import {
   type UpdateTicketResult,
   updateTicket,
 } from '../../app/tickets/actions';
+import type { Conversation } from '../../conversations/conversations';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
-import type { EpicLink, Ticket } from '../../tickets/tickets';
+import type { EpicLink } from '../../tickets/epic-link';
+import type { Ticket } from '../../tickets/tickets';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketDrawer, type TicketDrawerProps } from './ticket-drawer';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
+}));
+vi.mock('../../app/conversations/actions', () => ({
+  answerConversationPermission: vi.fn(),
+  replyToConversation: vi.fn(),
+  startConversation: vi.fn(),
+  stopConversation: vi.fn(),
+}));
 vi.mock('../../app/cycles/actions', () => ({
   planTicket: vi.fn(),
   unplanTicket: vi.fn(),
@@ -143,6 +156,37 @@ const inDocumentOrder = (...elements: Element[]) =>
       ),
   );
 
+const dialog = {
+  conversations: [],
+  open: vi.fn(),
+  show: vi.fn(),
+  reopenAndOpen: vi.fn(),
+  openDraft: vi.fn(),
+  shown: false,
+};
+
+const at = new Date('2026-03-03T09:00:00Z');
+
+const aConversation = (
+  id: number,
+  values: Partial<Conversation> = {},
+): Conversation => ({
+  id,
+  projectId: 1,
+  ticketNumber: 4,
+  intent: 'start',
+  state: 'idle',
+  sdkSessionId: null,
+  costUsd: 0,
+  hidden: false,
+  defaultCycleId: null,
+  defaultEpicNumber: null,
+  defaultType: null,
+  createdAt: at,
+  updatedAt: at,
+  ...values,
+});
+
 describe('TicketDrawer', () => {
   let router: ReturnType<typeof mockRouter>;
 
@@ -154,6 +198,10 @@ describe('TicketDrawer', () => {
     vi.mocked(restoreTicket).mockReset();
     vi.mocked(addTicketLabel).mockReset();
     vi.mocked(clearTicketClaim).mockReset();
+    vi.mocked(useConversationDialog).mockReturnValue(dialog);
+    dialog.open.mockReset();
+    dialog.reopenAndOpen.mockReset().mockResolvedValue(undefined);
+    dialog.openDraft.mockReset();
   });
 
   it('is named after the Ticket and shows its number, with no form-wide Save', () => {
@@ -169,6 +217,105 @@ describe('TicketDrawer', () => {
     expect(
       inDrawer().queryByRole('button', { name: 'Save' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('lists the Ticket’s Conversations compactly above its comments, and opens one in the dialog', async () => {
+    renderWithTheme(
+      <InShell
+        ticket={ticket}
+        conversations={[
+          aConversation(2, { intent: 'ask', costUsd: 1.234 }),
+          aConversation(1, { state: 'stopped', hidden: true }),
+        ]}
+      />,
+    );
+
+    const rows = within(
+      inDrawer().getByRole('list', { name: 'Conversations' }),
+    ).getAllByRole('button');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Ask · waiting for you · $1.23',
+      'Start · closed · $0.00',
+    ]);
+    expect(
+      inDrawer().queryByRole('textbox', { name: 'Reply' }),
+    ).not.toBeInTheDocument();
+    expect(
+      inDocumentOrder(
+        inDrawer().getByRole('heading', { name: 'Conversations' }),
+        inDrawer().getByRole('heading', { name: 'Comments and Activity' }),
+      ),
+    ).toBe(true);
+
+    await userEvent.click(rows[1]);
+
+    expect(dialog.reopenAndOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, hidden: true }),
+    );
+  });
+
+  it('opens the dialog on the new Conversation when Start, Triage or Ask begins one', async () => {
+    vi.mocked(startConversation).mockResolvedValue({
+      ok: true,
+      conversation: aConversation(12),
+    });
+    renderDrawer(ticket);
+
+    await userEvent.click(button('Start'));
+
+    await waitFor(() => expect(dialog.open).toHaveBeenCalledWith(12));
+  });
+
+  it('opens an Ask draft for the Ticket, with no inline field', async () => {
+    renderDrawer(ticket);
+
+    await userEvent.click(button('Ask'));
+
+    expect(dialog.openDraft).toHaveBeenCalledExactlyOnceWith({
+      intent: 'ask',
+      ticketNumber: ticket.number,
+    });
+    expect(screen.queryByLabelText('Question')).toBeNull();
+  });
+
+  it('offers Start, Triage and Ask on the Ticket', () => {
+    renderDrawer(ticket);
+
+    expect(button('Start')).toBeInTheDocument();
+    expect(button('Triage')).toBeInTheDocument();
+    expect(button('Ask')).toBeInTheDocument();
+  });
+
+  it('links a Claim made with a Conversation’s id to that Conversation in the dialog', async () => {
+    renderWithTheme(
+      <InShell
+        ticket={{
+          ...ticket,
+          claim: { agentRunId: '7', agentName: 'Claude' },
+        }}
+        conversations={[
+          aConversation(8),
+          aConversation(7, { state: 'stopped', hidden: true }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(button('Conversation 7'));
+
+    expect(dialog.reopenAndOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7 }),
+    );
+  });
+
+  it('does not link a Claim whose run is no Conversation of the Ticket', () => {
+    renderDrawer({
+      ...ticket,
+      claim: { agentRunId: 'run-1', agentName: 'Frontend Agent' },
+    });
+
+    expect(
+      inDrawer().queryByRole('button', { name: /^Conversation / }),
+    ).toBeNull();
   });
 
   it('shows the number and Close, title, details, description, then the footer', () => {

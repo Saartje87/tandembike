@@ -15,6 +15,11 @@ vi.mock('../../app/projects/actions', () => ({
   styleProject: vi.fn(),
 }));
 
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/project/3',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 showOpenPopovers();
 
 const project: Project = {

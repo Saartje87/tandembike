@@ -155,6 +155,48 @@
       "when": 1793467443169,
       "tag": "0021_create_ticket_attachments",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1793480513207,
+      "tag": "0022_add_project_agent_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793480811039,
+      "tag": "0023_cool_lizard",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1793481217665,
+      "tag": "0024_dear_outlaw_kid",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1793481916778,
+      "tag": "0025_last_katie_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793486108144,
+      "tag": "0026_conversation_question",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1793490322426,
+      "tag": "0027_project_skills",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ import {
   detachTicketFromEpic,
 } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
-import type { EpicLink } from '../../tickets/tickets';
+import type { EpicLink } from '../../tickets/epic-link';
 import { TicketEpic } from './ticket-epic';
 
 vi.mock('../../app/tickets/actions', () => ({

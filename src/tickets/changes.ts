@@ -7,7 +7,8 @@ export type Change =
   | { type: 'project'; id: number }
   | { type: 'cycle'; id: number }
   | { type: 'ticket'; number: number }
-  | { type: 'tickets'; numbers: number[] };
+  | { type: 'tickets'; numbers: number[] }
+  | { type: 'conversation'; id: number };
 
 export type ChangeListener = (change: Change) => void;
 

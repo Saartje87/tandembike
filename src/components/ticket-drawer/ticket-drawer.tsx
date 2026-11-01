@@ -27,20 +27,21 @@ import {
   restoreTicket,
   updateTicket,
 } from '../../app/tickets/actions';
+import type { Conversation } from '../../conversations/conversations';
 import type { ActivityEntry } from '../../tickets/activity';
 import type { Cycle } from '../../tickets/cycles';
+import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
-import {
-  type Blockers,
-  type Comment,
-  type EpicLink,
-  epicLinkOf,
-  type Ticket,
-  type TicketClaim,
+import type {
+  Blockers,
+  Comment,
+  Ticket,
+  TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
 import {
@@ -56,8 +57,10 @@ import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
+import { TicketAgentActions } from '../ticket-agent-actions/ticket-agent-actions';
 import { TicketAttachments } from '../ticket-attachments/ticket-attachments';
 import { TicketComments } from '../ticket-comments/ticket-comments';
+import { TicketConversationList } from '../ticket-conversation-list/ticket-conversation-list';
 import { useTicketDrawer } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
@@ -92,6 +95,8 @@ export type TicketDrawerProps = {
    * External reference keys. Defaults to none.
    */
   referenceTemplates?: ReferenceTemplateLink[];
+  /** The Ticket's Conversations with Agents, newest first. Defaults to none. */
+  conversations?: Conversation[];
 };
 
 /** The fields the drawer saves one at a time. */
@@ -191,6 +196,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   epicClaim = null,
   epicChildren,
   referenceTemplates,
+  conversations = [],
 }) => {
   const { titleId, close } = useTicketDrawer();
   const statusId = useId();
@@ -205,6 +211,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const [archiveError, setArchiveError] = useState<string>();
   const [archivePending, startArchive] = useTransition();
   const [claim, showClaim] = useOptimistic(ticket.claim);
+  const dialog = useConversationDialog();
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
 
@@ -264,6 +271,11 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       }
     });
   };
+
+  // A Claim made with a Conversation's id (its Agent-run ID) links to it.
+  const claimConversation = conversations.find(
+    (item) => String(item.id) === claim?.agentRunId,
+  );
 
   const clearClaim = () => {
     setClaimError(undefined);
@@ -387,6 +399,19 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                   : `Agent run ${claim.agentRunId}`
                 : 'Unclaimed'}
             </Text>
+            {claimConversation !== undefined && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="small"
+                onClick={() => {
+                  setClaimError(undefined);
+                  dialog.reopenAndOpen(claimConversation).then(setClaimError);
+                }}
+              >
+                {`Conversation ${claimConversation.id}`}
+              </Button>
+            )}
             {claim && (
               <Button
                 type="button"
@@ -435,6 +460,14 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}
       />
+      <TicketAgentActions
+        ticketNumber={ticket.number}
+        onStarted={dialog.open}
+        onAsk={() =>
+          dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })
+        }
+      />
+      <TicketConversationList conversations={conversations} />
       <TicketComments
         ticketNumber={ticket.number}
         comments={comments}

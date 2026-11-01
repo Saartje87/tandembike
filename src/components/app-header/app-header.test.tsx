@@ -4,10 +4,18 @@ import { userEvent } from '@testing-library/user-event';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type {
+  Conversation,
+  OpenConversation,
+} from '../../conversations/conversations';
 import { renderWithTheme } from '../../test/render';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { AppHeader } from './app-header';
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
+}));
 
 // The link navigates on the client, as a Next.js `Link` does.
 const nav = (
@@ -23,6 +31,14 @@ const breadcrumbs = <nav aria-label="Breadcrumb">Projects</nav>;
 describe('AppHeader', () => {
   beforeEach(() => {
     vi.mocked(usePathname).mockReturnValue('/project/1');
+    vi.mocked(useConversationDialog).mockReturnValue({
+      conversations: [],
+      open: vi.fn(),
+      show: vi.fn(),
+      reopenAndOpen: vi.fn(),
+      openDraft: vi.fn(),
+      shown: false,
+    });
   });
 
   it('shows a menu button followed by the breadcrumbs, without an app name', () => {
@@ -136,5 +152,65 @@ describe('AppHeader', () => {
     expect(
       screen.getByRole('dialog', { name: 'Navigation' }),
     ).toBeInTheDocument();
+  });
+
+  describe('Conversations button', () => {
+    const open = (
+      state: Conversation['state'],
+      id: number,
+    ): OpenConversation => ({
+      conversation: { id, state } as Conversation,
+      ticketTitle: null,
+      projectName: 'Website',
+      firstMessage: 'Hi',
+    });
+    const withConversations = (conversations: OpenConversation[]) => {
+      const control = {
+        conversations,
+        open: vi.fn(),
+        show: vi.fn(),
+        reopenAndOpen: vi.fn(),
+        openDraft: vi.fn(),
+        shown: false,
+      };
+      vi.mocked(useConversationDialog).mockReturnValue(control);
+      return control;
+    };
+
+    it('is hidden when no Conversation is open', () => {
+      withConversations([]);
+      renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+      expect(
+        screen.queryByRole('button', { name: /Conversations/ }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows how many are open and how many need the User, and shows the dialog', async () => {
+      const control = withConversations([
+        open('running', 1),
+        open('waiting', 2),
+        open('idle', 3),
+        open('stopped', 4),
+      ]);
+      renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+      const button = screen.getByRole('button', {
+        name: /^Conversations · 4 open\s*2 need you$/,
+      });
+      await userEvent.click(button);
+
+      expect(control.show).toHaveBeenCalledOnce();
+    });
+
+    it('shows only the open count when none needs the User', () => {
+      withConversations([open('running', 1)]);
+      renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+      expect(
+        screen.getByRole('button', { name: 'Conversations · 1 open' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/need you|needs you/)).not.toBeInTheDocument();
+    });
   });
 });

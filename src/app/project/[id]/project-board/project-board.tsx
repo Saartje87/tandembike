@@ -3,6 +3,7 @@ import type { FC } from 'react';
 import { Board } from '../../../../components/board/board';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
+import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
@@ -38,6 +39,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   openTicket,
   filter = noBoardFilter,
 }) => {
+  const settings = appTickets('user').getProjectAgentSettings(project.id);
   // Closing the drawer keeps the Board filtered.
   const boardPath = filteredBoardPath(
     boardPathOf(project.id, tab === 'backlog' ? null : tab.id),
@@ -50,7 +52,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
       <BoardTicketDrawer projectId={project.id} number={openTicket} />
     </TicketDrawerShell>
   );
-  return (
+  const board = (
     <>
       <BoardTab
         project={project}
@@ -60,6 +62,14 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
       />
       {drawer}
     </>
+  );
+  // With a repository path the title fields may create through an Agent.
+  return settings.repositoryPath === null ? (
+    board
+  ) : (
+    <ProjectAgentProvider mode={settings.agentMode ? 'default' : 'optional'}>
+      {board}
+    </ProjectAgentProvider>
   );
 };
 

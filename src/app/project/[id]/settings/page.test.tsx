@@ -1,6 +1,7 @@
 import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../../conversations/app-conversations';
 import {
   renderPage,
   renderPageError,
@@ -18,6 +19,9 @@ const { notFound } = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
+vi.mock('../../../../conversations/app-conversations', () => ({
+  appConversations: vi.fn(),
+}));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock(
   '../../../../components/reference-template-editor/reference-template-editor',
@@ -34,9 +38,37 @@ vi.mock(
   }),
 );
 
+vi.mock(
+  '../../../../components/agent-settings-form/agent-settings-form',
+  () => ({
+    AgentSettingsForm: ({
+      settings,
+      latestSetup,
+    }: {
+      settings: { agentMode: boolean };
+      latestSetup: { id: number } | null;
+    }) => (
+      <p>{`Agent mode ${settings.agentMode ? 'on' : 'off'}, Setup ${latestSetup?.id ?? 'none'}`}</p>
+    ),
+  }),
+);
+
+vi.mock('../../../../components/skills-form/skills-form', () => ({
+  SkillsForm: ({
+    projectId,
+    skills,
+  }: {
+    projectId: number;
+    skills: string[];
+  }) => <p>{`Skills of ${projectId}: ${skills.join(' ')}`}</p>,
+}));
+
 describe('SettingsPage', () => {
   beforeEach(() => {
     notFound.mockClear();
+    vi.mocked(appConversations).mockReturnValue({
+      list: () => [],
+    } as unknown as ReturnType<typeof appConversations>);
   });
 
   it("shows the Project's Reference templates", async () => {
@@ -51,6 +83,7 @@ describe('SettingsPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
+    expect(screen.getByText('Agent mode off, Setup none')).toBeInTheDocument();
     // The Project's layout shows its header and tabs.
     expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
     expect(
@@ -62,6 +95,41 @@ describe('SettingsPage', () => {
     await expect(generateMetadata({ params })).resolves.toEqual({
       title: 'Settings · Website',
     });
+  });
+
+  it("shows the Project's Skills", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectSkills(project.id, ['/review', '/plan']);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Skills' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`Skills of ${project.id}: /review /plan`),
+    ).toBeInTheDocument();
+  });
+
+  it("gives the agent settings the Project's latest Setup", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    vi.mocked(appConversations).mockReturnValue({
+      list: () => [
+        { id: 9, intent: 'ask' },
+        { id: 7, intent: 'setup' },
+        { id: 2, intent: 'setup' },
+      ],
+    } as unknown as ReturnType<typeof appConversations>);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(screen.getByText('Agent mode off, Setup 7')).toBeInTheDocument();
   });
 
   it('shows the loading state until the Project loads', async () => {

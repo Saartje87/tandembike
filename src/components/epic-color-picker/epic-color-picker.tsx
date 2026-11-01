@@ -4,8 +4,8 @@ import { Alert, Button, Popover, Stack } from '@blockle/blocks';
 import { type FC, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { updateTicket } from '../../app/tickets/actions';
+import type { EpicLink } from '../../tickets/epic-link';
 import type { PaletteColor } from '../../tickets/palette';
-import type { EpicLink } from '../../tickets/tickets';
 import { claimEscape } from '../claim-escape/claim-escape';
 import {
   ColorSwatches,

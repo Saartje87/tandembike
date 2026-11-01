@@ -5,15 +5,24 @@ import {
   index,
   integer,
   primaryKey,
+  real,
   sqliteTable,
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
+import type { QuestionEntry } from '../conversations/conversation-state';
+import {
+  conversationIntents,
+  conversationStates,
+  permissionStatuses,
+  transcriptRoles,
+} from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
+import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 
@@ -28,6 +37,23 @@ export const projects = sqliteTable('projects', {
   icon: text('icon', { enum: projectIcons }),
   /** An archived Project and its Tickets are hidden and read-only. */
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  /** Where Agent runs start: an absolute directory, set only by the User. */
+  repositoryPath: text('repository_path'),
+  /** Whether Start runs of this Project may overlap, each in its own worktree. */
+  parallelRuns: integer('parallel_runs', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** The most Start runs of this Project running at once. */
+  maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
+  /** Whether the title fields create through a Conversation. */
+  agentMode: integer('agent_mode', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** The Skill commands its Conversations offer as chips, in order. */
+  skills: text('skills', { mode: 'json' })
+    .$type<string[]>()
+    .notNull()
+    .default(defaultSkills),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -288,4 +314,60 @@ export const ticketAttachments = sqliteTable(
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [index('ticket_attachments_ticket_number').on(table.ticketNumber)],
+);
+
+/**
+ * A Conversation (ADR 0019): an exchange between the User and an Agent run
+ * that Tandembike starts, about a Project and optionally one of its Tickets.
+ * `costUsd` adds up every run of it.
+ */
+export const conversations = sqliteTable(
+  'conversations',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    ticketNumber: integer('ticket_number').references(() => tickets.number),
+    intent: text('intent', { enum: conversationIntents }).notNull(),
+    state: text('state', { enum: conversationStates }).notNull(),
+    /** The Claude Agent SDK session a reply resumes; set by the first run. */
+    sdkSessionId: text('sdk_session_id'),
+    costUsd: real('cost_usd').notNull().default(0),
+    /** Closed by the User: stopped and left out of the Project's list. */
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /** New Ticket: the Cycle the title field was on, a default for the Agent. */
+    defaultCycleId: integer('default_cycle_id'),
+    /** New Ticket: the Epic the title field was under, a default. */
+    defaultEpicNumber: integer('default_epic_number'),
+    /** New Ticket: what the title field creates, a default. */
+    defaultType: text('default_type', { enum: ticketTypes }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('conversations_project_id').on(table.projectId),
+    index('conversations_ticket_number').on(table.ticketNumber),
+  ],
+);
+
+/** A Conversation's transcript, in the order written by `id`. */
+export const conversationEntries = sqliteTable(
+  'conversation_entries',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    role: text('role', { enum: transcriptRoles }).notNull(),
+    text: text('text').notNull(),
+    /** For a permission request: where it is; null for other entries. */
+    permission: text('permission', { enum: permissionStatuses }),
+    /** For a question of the Agent: what it asked and the answers; null for other entries. */
+    question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (table) => [
+    index('conversation_entries_conversation_id').on(table.conversationId),
+  ],
 );

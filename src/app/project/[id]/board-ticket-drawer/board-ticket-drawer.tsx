@@ -3,8 +3,9 @@ import { connection } from 'next/server';
 import type { FC } from 'react';
 
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
+import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
-import { epicLinkOf } from '../../../../tickets/tickets';
+import { epicLinkOf } from '../../../../tickets/epic-link';
 import { findBoardTicket } from '../project-data';
 
 export type BoardTicketDrawerProps = {
@@ -31,6 +32,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
     return <Text tag="p">{`Ticket T${number} not found`}</Text>;
   }
   const tickets = appTickets('user');
+  const conversations = appConversations();
   return (
     <TicketDrawer
       ticket={ticket}
@@ -54,6 +56,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         blocks: tickets.listBlockers(child.number).blocks,
       }))}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
+      conversations={conversations.list({ ticketNumber: ticket.number })}
     />
   );
 };

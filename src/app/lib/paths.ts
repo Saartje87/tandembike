@@ -120,6 +120,26 @@ export function openTicketNumber(
 }
 
 /**
+ * `href`, a path with its search parameters, with Conversation `id` open in
+ * the Conversation dialog as `?conversation=<id>`, or without any when `id`
+ * is left out (the dialog hidden). Every other parameter, such as `?ticket=`,
+ * stays. Open it with `scroll={false}`.
+ */
+export function conversationOnPath(href: string, id?: number): string {
+  const [path, search = ''] = href.split('?');
+  const params = new URLSearchParams(search);
+  params.delete('conversation');
+  if (id !== undefined) {
+    params.set('conversation', String(id));
+  }
+  const query = params.toString();
+  return query === '' ? path : `${path}?${query}`;
+}
+
+/** The Conversation `?conversation=` opens, if it is one id. */
+export const openConversationId = openTicketNumber;
+
+/**
  * Finds a Ticket by number alone and opens it on its own Board: its open
  * Cycle's, or the Backlog (ADR 0013). Every link to another Ticket uses it.
  */

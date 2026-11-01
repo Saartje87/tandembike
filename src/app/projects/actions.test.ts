@@ -8,7 +8,10 @@ import { appTickets } from '../../tickets/app-tickets';
 import { boardRoute } from '../lib/paths';
 import {
   addReferenceTemplate,
+  loadProjectSkills,
   removeReferenceTemplate,
+  setProjectAgentSettings,
+  setProjectSkills,
   styleProject,
   updateReferenceTemplate,
 } from './actions';
@@ -69,6 +72,102 @@ describe('Project actions', () => {
       fieldErrors: {
         color: expect.stringMatching(/^Choose one of these colours/),
       },
+    });
+  });
+});
+
+describe('setProjectAgentSettings', () => {
+  it("saves a Project's agent settings and refreshes its pages", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      repositoryPath: '/',
+      parallelRuns: true,
+      maxConcurrentRuns: 2,
+      agentMode: true,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toEqual({
+      repositoryPath: '/',
+      parallelRuns: true,
+      maxConcurrentRuns: 2,
+      agentMode: true,
+    });
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('returns a refusal with the field it names', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      repositoryPath: '/no/such/dir-xyz',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: { repositoryPath: 'There is no directory at this path.' },
+    });
+  });
+});
+
+describe('Skill actions', () => {
+  it("saves a Project's Skills from the textarea's lines and refreshes its pages", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectSkills({
+      projectId: project.id,
+      text: '/review\n\nplan\n',
+    });
+
+    expect(result).toEqual({ ok: true, skills: ['/review', '/plan'] });
+    expect(tickets.getProjectSkills(project.id)).toEqual(['/review', '/plan']);
+    expect(revalidatePath).toHaveBeenCalled();
+  });
+
+  it('returns a refusal naming the Skills field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectSkills({
+      projectId: project.id,
+      text: '/to spec',
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        skills: '"/to spec" has a space. Enter one command per line.',
+      },
+    });
+  });
+
+  it("loads the Skills of a Project, or of a Ticket's Project", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.setProjectSkills(project.id, ['/review']);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    expect(await loadProjectSkills({ projectId: project.id })).toEqual({
+      ok: true,
+      skills: ['/review'],
+    });
+    expect(await loadProjectSkills({ ticketNumber: ticket.number })).toEqual({
+      ok: true,
+      skills: ['/review'],
+    });
+    expect(await loadProjectSkills({ projectId: 999 })).toMatchObject({
+      ok: false,
     });
   });
 });

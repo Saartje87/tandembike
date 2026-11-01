@@ -5,6 +5,39 @@ import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { handleMcpRequest, maxInstructionsLength } from './mcp-server';
 
+describe('MCP server and Project agent settings', () => {
+  it('offers no tool for them and never shows the repository path', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    const client = await connectMcpClient(tickets);
+
+    const { tools } = await client.listTools();
+    const listed = resultText(
+      await client.callTool({ name: 'list_projects', arguments: {} }),
+    );
+
+    expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
+      /repository|agent_setting|parallel|agent_mode/,
+    );
+    expect(listed).not.toMatch(/repositoryPath|parallelRuns|agentMode|\/tmp/);
+    await client.close();
+  });
+});
+
+describe('MCP server and Conversations', () => {
+  it('offers no tool to start, reply to or stop an Agent run', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
+      /conversation|agent_run|reply|stop|send/,
+    );
+    await client.close();
+  });
+});
+
 describe('MCP server', () => {
   it('lists every tool with a description', async () => {
     const client = await connectMcpClient(createTestTickets());

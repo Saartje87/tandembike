@@ -5,6 +5,8 @@ import { type FC, type ReactNode, Suspense } from 'react';
 
 import { AppShell } from '../components/app-shell/app-shell';
 import { ColorModeProvider } from '../components/color-mode-provider/color-mode-provider';
+import { ConversationActivityProvider } from '../components/conversation-activity/conversation-activity';
+import { ConversationDialogProvider } from '../components/conversation-dialog-provider/conversation-dialog-provider';
 import { LiveUpdates } from '../components/live-updates/live-updates';
 import { ProjectNavLoader } from '../components/project-nav-loader/project-nav-loader';
 import { colorModeScript } from './lib/color-mode';
@@ -33,7 +35,8 @@ export type RootLayoutProps = {
 // The side navigation in the header's drawer reads the database at request
 // time, so it streams in behind a Suspense boundary (Cache Components).
 // Pages get theirs from `loading.tsx`. `LiveUpdates` keeps one change
-// listener per tab here, where it stays mounted across navigation.
+// listener per tab here, where it stays mounted across navigation, and the
+// `ConversationDialogProvider` holds the one Conversation dialog (T608).
 // The Color mode this browser stored is in `localStorage`, not a cookie, so
 // the layout stays static (ADR 0017): the `<head>` script puts it on
 // `<html>` before the first paint, which `suppressHydrationWarning` lets
@@ -54,16 +57,20 @@ const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
       <body>
         <ColorModeProvider>
           <LiveUpdates>
-            <AppShell
-              breadcrumbs={breadcrumbs}
-              nav={
-                <Suspense>
-                  <ProjectNavLoader />
-                </Suspense>
-              }
-            >
-              {children}
-            </AppShell>
+            <ConversationActivityProvider>
+              <ConversationDialogProvider>
+                <AppShell
+                  breadcrumbs={breadcrumbs}
+                  nav={
+                    <Suspense>
+                      <ProjectNavLoader />
+                    </Suspense>
+                  }
+                >
+                  {children}
+                </AppShell>
+              </ConversationDialogProvider>
+            </ConversationActivityProvider>
           </LiveUpdates>
         </ColorModeProvider>
       </body>

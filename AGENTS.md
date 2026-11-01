@@ -60,6 +60,7 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests on every PR and every push to `main`.
 
 - Do each Ticket on its own branch off `main`, named `ticket-<number>-<slug>` (e.g. `ticket-23-remove-blocker-missing`). An Epic is one unit: claim it once, work its children in Blocker order on one branch named after the Epic, and open one PR for it; see "Working an Epic" in `docs/agents/issue-tracker.md`.
+- Give each Agent run its own git worktree when another run may share the checkout: runs in one tree sweep each other's staged files into commits and fail each other's pre-commit typecheck. See "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`.
 - Push that branch and open a PR with `gh` freely; write the body with the `pr` skill.
 - Changes reach `main` through a merged PR. Ask the User before merging a PR or pushing to `main`.
 - Refer to a Ticket in commits and PRs as `T23` (ADR 0016).

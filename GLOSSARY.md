@@ -89,8 +89,21 @@ A unique identifier for one Agent run, used to claim Tickets independently of it
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
-An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage** or a free-form **Ask**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A Ticket can have several Conversations; only the User starts one.
-_Avoid_: Session, run, chat, thread
+An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; only the User starts one, by sending its first message.
+A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
+_Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
+
+**Draft**:
+A Conversation the User has begun but not yet sent: an intent, its Ticket or Project, and the text typed so far, with a New Ticket draft also holding its title field's defaults. Nothing runs until the User sends it, which starts the Conversation. A Draft lives only in the browser tab: a reload loses it, and closing it discards it.
+_Avoid_: Pending Conversation, unsent Conversation
+
+**Setup**:
+A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
+_Avoid_: First-time setup, onboarding, readiness check
+
+**Skill**:
+A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
+_Avoid_: Command chip, preset, slash command (for the setting)
 
 **Activity**:
 A Ticket's record of the changes made to it, one **Activity entry** per action. Each entry lists every change the action made, when, and whether the User or an Agent made it. Comments are not Activity entries; they appear beside them.

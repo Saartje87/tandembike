@@ -4,17 +4,20 @@ import {
   Button,
   Label,
   Stack,
+  Text,
   TextInput,
   VisuallyHidden,
 } from '@blockle/blocks';
 import type { FC } from 'react';
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createTicket } from '../../app/tickets/actions';
 import type { TicketType } from '../../tickets/ticket-type';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
+import { useProjectAgent } from '../project-agent/project-agent';
 
 export type NewTicketInlineProps = {
   /** The Project the new Ticket goes in. */
@@ -50,6 +53,12 @@ const copy = {
  * creating; both call `onDone`. With `type` Epic it creates an Epic instead.
  * The module validates, and its reason shows under the field. On success
  * the Server Action revalidates the Board, which shows the new Ticket.
+ *
+ * In a Project with an Agent (`ProjectAgentProvider`, T592) one of Enter and
+ * Ctrl/Cmd+Enter creates through a New Ticket Conversation instead: the title
+ * is the first message, the field's Cycle, Epic and type go as defaults, and
+ * a `Draft · New Ticket` tab opens in the Conversation dialog and Send there starts the Conversation. A hint under the focused field says
+ * which key does which.
  */
 export const NewTicketInline: FC<NewTicketInlineProps> = ({
   projectId,
@@ -62,6 +71,10 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
 }) => {
   const titleId = useId();
   const errorId = useId();
+  const hintId = useId();
+  const agent = useProjectAgent();
+  const dialog = useConversationDialog();
+  const [focused, setFocused] = useState(false);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -75,7 +88,19 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       type === 'Epic' ? 'epic' : epicNumber === undefined ? 'ticket' : 'child'
     ];
 
-  const submit = handleSubmit(async ({ title }) => {
+  const showRefusal = (result: {
+    error: string;
+    fieldErrors?: Record<string, string> | undefined;
+  }) => {
+    const titleReason = result.fieldErrors?.title;
+    if (titleReason) {
+      setError('title', { type: 'server', message: titleReason });
+    } else {
+      setError('root.server', { message: result.error });
+    }
+  };
+
+  const create = async (title: string) => {
     const result = await createTicket({
       projectId,
       title,
@@ -84,18 +109,42 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
       ...(type === 'Epic' ? { type } : {}),
     });
     if (!result.ok) {
-      const titleReason = result.fieldErrors?.title;
-      if (titleReason) {
-        setError('title', { type: 'server', message: titleReason });
-      } else {
-        setError('root.server', { message: result.error });
-      }
+      showRefusal(result);
       return;
     }
     reset();
     onCreated?.(result.number);
     onDone?.();
-  });
+  };
+
+  // The title opens a draft; nothing starts until the User sends it.
+  const createWithAgent = (title: string) => {
+    dialog.openDraft({
+      intent: 'new_ticket',
+      projectId,
+      text: title,
+      defaults: {
+        ...(cycleId === undefined ? {} : { cycleId }),
+        ...(epicNumber === undefined ? {} : { epicNumber }),
+        type,
+      },
+    });
+    reset();
+    onDone?.();
+  };
+
+  // With an Agent, the default mode decides what Enter does; Ctrl/Cmd+Enter
+  // does the other.
+  const enterAsksAgent = agent?.mode === 'default';
+  const submitWith = (withAgent: boolean) =>
+    handleSubmit(({ title }) =>
+      agent && withAgent ? createWithAgent(title) : create(title),
+    );
+  const submit = submitWith(enterAsksAgent);
+  const noun = type === 'Epic' ? 'Epic' : 'Ticket';
+  const hint = enterAsksAgent
+    ? `Enter asks an Agent to create it. Ctrl/Cmd+Enter creates the ${noun} yourself.`
+    : `Enter creates the ${noun}. Ctrl/Cmd+Enter asks an Agent to create it.`;
 
   // While a Ticket saves, the field is read-only and ignores Enter and
   // Escape, so a Ticket is created once and what was saved is what clears.
@@ -116,7 +165,16 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
         <TextInput
           {...register('title')}
           id={titleId}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              if (!isSubmitting) {
+                submitWith(!enterAsksAgent)(event);
+              }
+              return;
+            }
             if (event.key === 'Escape' && !isSubmitting) {
               event.preventDefault();
               reset();
@@ -140,9 +198,21 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
             </Button>
           }
           aria-invalid={errors.title ? true : undefined}
-          aria-describedby={reason ? errorId : undefined}
+          aria-describedby={
+            [
+              reason ? errorId : undefined,
+              agent && focused ? hintId : undefined,
+            ]
+              .filter(Boolean)
+              .join(' ') || undefined
+          }
         />
         <FieldError id={errorId} reason={reason} />
+        {agent && focused && (
+          <Text id={hintId} fontSize="small" color="muted">
+            {hint}
+          </Text>
+        )}
       </Stack>
     </form>
   );

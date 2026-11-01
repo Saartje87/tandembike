@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Button, Drawer, Inline } from '@blockle/blocks';
+import { Box, Button, Drawer, Inline, Tag } from '@blockle/blocks';
 import { usePathname } from 'next/navigation';
 import {
   type FC,
@@ -13,8 +13,10 @@ import {
 } from 'react';
 
 import { statsPath } from '../../app/lib/paths';
+import { needsYou as conversationNeedsYou } from '../../conversations/conversation-activity';
 import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { Icon } from '../icon/icon';
 
 export type AppHeaderProps = {
@@ -56,6 +58,10 @@ const CloseOnNavigation: FC<CloseOnNavigationProps> = ({ onNavigate }) => {
  */
 export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
   const [open, setOpen] = useState(false);
+  const { conversations, show } = useConversationDialog();
+  const needsYou = conversations.filter(({ conversation }) =>
+    conversationNeedsYou(conversation.state),
+  ).length;
 
   const close = useCallback(() => setOpen(false), []);
 
@@ -90,6 +96,25 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
               flexWrap="nowrap"
               marginInlineStart="auto"
             >
+              {conversations.length > 0 && (
+                <Button
+                  type="button"
+                  size="small"
+                  variant="ghost"
+                  intent="inherit"
+                  onClick={show}
+                >
+                  {`Conversations · ${conversations.length} open`}
+                  {needsYou > 0 && (
+                    <Tag
+                      intent="warning"
+                      startSlot={<Icon name="bell-alert" size="small" />}
+                    >
+                      {`${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`}
+                    </Tag>
+                  )}
+                </Button>
+              )}
               <AppLink href={statsPath()} intent="inherit">
                 Stats
               </AppLink>

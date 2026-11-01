@@ -1,12 +1,17 @@
 import { screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../../conversations/app-conversations';
+import { createTestConversations } from '../../../../test/conversations';
 import { renderWithTheme } from '../../../../test/render';
 import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { BoardTicketDrawer } from './board-ticket-drawer';
 
 vi.mock('next/server', () => ({ connection: vi.fn() }));
+vi.mock('../../../../conversations/app-conversations', () => ({
+  appConversations: vi.fn(),
+}));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
   TicketDrawer: ({
@@ -16,6 +21,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     epics,
     epicChildren,
     referenceTemplates,
+    conversations,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
@@ -23,6 +29,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     epics: unknown;
     epicChildren: unknown;
     referenceTemplates: { prefix: string }[];
+    conversations: unknown[];
   }) => (
     <div
       role="dialog"
@@ -31,6 +38,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
         .map(({ prefix }) => prefix)
         .join(' ')}
       data-epic-children={JSON.stringify(epicChildren)}
+      data-conversations={conversations.length}
     >
       {`Ticket drawer T${ticket.number} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
@@ -49,6 +57,9 @@ function setUp() {
   const elsewhere = tickets.createTicket({ projectId: app.id, title: 'Other' });
   tickets.addComment(ticket.number, { body: 'Started.', author: 'agent' });
   vi.mocked(appTickets).mockReturnValue(tickets);
+  vi.mocked(appConversations).mockReturnValue(
+    createTestConversations().conversations,
+  );
   return { tickets, website, ticket, elsewhere };
 }
 
@@ -69,6 +80,41 @@ describe('BoardTicketDrawer', () => {
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `Ticket drawer T${ticket.number} comments: Started. activity: created`,
+    );
+  });
+
+  it("passes the Ticket's Conversations to the drawer", async () => {
+    const world = createTestConversations();
+    const project = world.tickets.createProject({ name: 'Website' });
+    world.tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+    });
+    const ticket = world.tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    await world.conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    vi.mocked(appTickets).mockReturnValue(world.tickets);
+    vi.mocked(appConversations).mockReturnValue(world.conversations);
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: project.id,
+            number: ticket.number,
+          })
+        }
+      </div>,
+    );
+
+    expect(screen.getByRole('dialog')).toHaveAttribute(
+      'data-conversations',
+      '1',
     );
   });
 

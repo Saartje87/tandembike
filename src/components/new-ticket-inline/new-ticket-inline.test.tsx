@@ -2,11 +2,23 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
+import {
+  type ProjectAgentMode,
+  ProjectAgentProvider,
+} from '../project-agent/project-agent';
 import { NewTicketInline } from './new-ticket-inline';
 
 vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  startConversation: vi.fn(),
+}));
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
+}));
 
 const titleField = () =>
   screen.getByRole<HTMLInputElement>('textbox', { name: 'New Ticket title' });
@@ -202,5 +214,114 @@ describe('NewTicketInline', () => {
       title: 'Fix the header',
     });
     await waitFor(() => expect(titleField()).toHaveValue(''));
+  });
+
+  describe('with an Agent', () => {
+    const renderWithAgent = (
+      mode: ProjectAgentMode,
+      props: Partial<Parameters<typeof NewTicketInline>[0]> = {},
+    ) => {
+      const dialog = {
+        conversations: [],
+        open: vi.fn(),
+        show: vi.fn(),
+        reopenAndOpen: vi.fn(),
+        openDraft: vi.fn(),
+        shown: false,
+      };
+      vi.mocked(useConversationDialog).mockReturnValue(dialog);
+      vi.mocked(startConversation).mockResolvedValue({
+        ok: true,
+        conversation: { id: 9 } as never,
+      });
+      vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+      renderWithTheme(
+        <ProjectAgentProvider mode={mode}>
+          <NewTicketInline projectId={3} {...props} />
+        </ProjectAgentProvider>,
+      );
+      return dialog;
+    };
+
+    it('opens a New Ticket draft on Enter in agent mode, starting nothing', async () => {
+      const dialog = renderWithAgent('default', { cycleId: 7 });
+
+      await userEvent.type(titleField(), 'Add coupons{Enter}');
+
+      expect(dialog.openDraft).toHaveBeenCalledExactlyOnceWith({
+        intent: 'new_ticket',
+        projectId: 3,
+        text: 'Add coupons',
+        defaults: { cycleId: 7, type: 'Ticket' },
+      });
+      expect(startConversation).not.toHaveBeenCalled();
+      expect(createTicket).not.toHaveBeenCalled();
+      await waitFor(() => expect(titleField()).toHaveValue(''));
+    });
+
+    it('creates a plain Ticket on Mod+Enter in agent mode', async () => {
+      renderWithAgent('default');
+
+      await userEvent.type(titleField(), 'Fix it{Control>}{Enter}{/Control}');
+
+      expect(createTicket).toHaveBeenCalledOnce();
+      expect(startConversation).not.toHaveBeenCalled();
+    });
+
+    it('does the reverse with agent mode off', async () => {
+      const dialog = renderWithAgent('optional');
+
+      await userEvent.type(titleField(), 'Fix it{Enter}');
+      expect(createTicket).toHaveBeenCalledOnce();
+      expect(startConversation).not.toHaveBeenCalled();
+
+      await userEvent.type(titleField(), 'Plan it{Meta>}{Enter}{/Meta}');
+      expect(dialog.openDraft).toHaveBeenCalledOnce();
+    });
+
+    it('says which key does which', async () => {
+      renderWithAgent('default');
+      await userEvent.click(titleField());
+      expect(
+        screen.getByText(
+          'Enter asks an Agent to create it. Ctrl/Cmd+Enter creates the Ticket yourself.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('says which key does which with agent mode off', async () => {
+      renderWithAgent('optional');
+      await userEvent.click(titleField());
+      expect(
+        screen.getByText(
+          'Enter creates the Ticket. Ctrl/Cmd+Enter asks an Agent to create it.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps the Epic of the Epic drawer it was typed in as a default of the draft', async () => {
+      const dialog = renderWithAgent('default', { epicNumber: 8 });
+
+      await userEvent.type(
+        screen.getByRole('textbox', { name: 'New child Ticket title' }),
+        'Pay by card{Enter}',
+      );
+
+      expect(dialog.openDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaults: { epicNumber: 8, type: 'Ticket' },
+        }),
+      );
+    });
+  });
+
+  it('gives no hint and creates plainly on Mod+Enter without an Agent', async () => {
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderWithTheme(<NewTicketInline projectId={3} />);
+
+    await userEvent.type(titleField(), 'Fix it{Control>}{Enter}{/Control}');
+
+    expect(screen.queryByText(/Ctrl\/Cmd\+Enter/)).not.toBeInTheDocument();
+    expect(createTicket).toHaveBeenCalledOnce();
   });
 });
