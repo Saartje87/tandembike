@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  Box,
-  Button,
-  Drawer,
-  Inline,
-  type RequestCloseReason,
-  Spinner,
-  Stack,
-} from '@blockle/blocks';
+import { Box, Button, Drawer, Inline, Spinner, Stack } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
 import {
   createContext,
@@ -19,7 +11,6 @@ import {
   useId,
 } from 'react';
 
-import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { Icon } from '../icon/icon';
 
@@ -60,8 +51,7 @@ export type TicketDrawerShellProps = {
  * spinner. It stays put while its contents load and when another Ticket
  * opens in it, so it slides in once (T333). It is named "Ticket TN" until
  * the contents give it the Ticket's title. Closing (the Close button, Escape
- * or a click outside) goes to the Board, keeping its scroll. A click while
- * the Conversation dialog is shown over it is the dialog's, not the drawer's.
+ * or a click outside) goes to the Board, keeping its scroll.
  */
 export const TicketDrawerShell: FC<TicketDrawerShellProps> = ({
   number,
@@ -70,25 +60,16 @@ export const TicketDrawerShell: FC<TicketDrawerShellProps> = ({
 }) => {
   const router = useRouter();
   const titleId = useId();
-  const conversationDialog = useConversationDialog();
 
   // Closing replaces the URL (ADR 0013), so Back does not reopen the drawer,
   // and keeps the Board's scroll position, which Next resets by default.
   const close = () => {
     router.replace(boardPath, { scroll: false });
   };
-  // The Conversation dialog is a sibling modal, not nested in the drawer, so
-  // Blocks counts every click in it as outside the drawer (T615).
-  const requestClose = (reason: RequestCloseReason) => {
-    if (reason === 'outside-click' && conversationDialog.shown) {
-      return;
-    }
-    close();
-  };
   return (
     <Drawer
       open
-      onRequestClose={requestClose}
+      onRequestClose={close}
       placement="right"
       size="large"
       // The title heading names it once loaded; until then, its number.
