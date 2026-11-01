@@ -30,13 +30,13 @@ const current = cycle(4, 'Current', 'Active');
 const cycles = [old, launch, beta, current];
 
 const trigger = () => screen.getByRole('button', { name: 'Move to Cycle' });
-const menu = () => screen.queryByRole('dialog', { name: 'Move to Cycle' });
+const menu = () => screen.queryByRole('menu');
 
 /** The targets the open menu offers, in order. */
 const targets = () =>
-  within(screen.getByRole('dialog', { name: 'Move to Cycle' }))
-    .getAllByRole('button')
-    .map((button) => button.textContent);
+  within(screen.getByRole('menu'))
+    .getAllByRole('menuitem')
+    .map((item) => item.textContent);
 
 describe('MoveToCycleMenu', () => {
   it('on the Backlog offers the open Cycles, Active first, and no Backlog', async () => {
@@ -92,19 +92,34 @@ describe('MoveToCycleMenu', () => {
 
     expect(trigger()).toHaveAttribute('aria-expanded', 'true');
 
-    await user.click(screen.getByRole('button', { name: 'Beta' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Beta' }));
 
     expect(onPick).toHaveBeenLastCalledWith(beta.id);
     expect(trigger()).toHaveAttribute('aria-expanded', 'false');
     expect(menu()).not.toBeInTheDocument();
 
     await user.click(trigger());
-    await user.click(screen.getByRole('button', { name: 'Backlog' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Backlog' }));
 
     expect(onPick).toHaveBeenLastCalledWith(null);
   });
 
-  it('closes on Escape, claiming it from what holds it', async () => {
+  it('closes on Escape and returns focus to the button', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <MoveToCycleMenu cycles={[launch]} cycleId={null} onPick={vi.fn()} />,
+    );
+    await user.click(trigger());
+
+    expect(menu()).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(menu()).not.toBeInTheDocument();
+    expect(trigger()).toHaveFocus();
+  });
+
+  it('claims Escape from what holds it, such as a drawer, and closes', async () => {
     const claimed = vi.fn();
     const user = userEvent.setup();
     renderWithTheme(

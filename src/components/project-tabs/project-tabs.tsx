@@ -1,10 +1,11 @@
 'use client';
 
 import {
-  Box,
   Button,
   Inline,
   Label,
+  Tab,
+  TabNav,
   Tag,
   TextInput,
   VisuallyHidden,
@@ -18,7 +19,6 @@ import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createCycle } from '../../app/cycles/actions';
-import { modeColors } from '../../app/lib/mode-colors';
 import {
   boardFilterOf,
   cyclePath,
@@ -67,7 +67,7 @@ function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
   return cycle.state === 'Archived' ? 'history' : cycle.id;
 }
 
-type TabProps = {
+type ProjectTabProps = {
   href: string;
   current: boolean;
   children: string;
@@ -75,35 +75,30 @@ type TabProps = {
   openTickets?: number;
 };
 
-const Tab: FC<TabProps> = ({ href, current, children, openTickets }) => (
-  <Box
+const ProjectTab: FC<ProjectTabProps> = ({
+  href,
+  current,
+  children,
+  openTickets,
+}) => (
+  <Tab
     asChild
-    backgroundColor={current ? modeColors.primarySubtle : 'transparent'}
-    borderRadius={2}
-    paddingBlock={1}
-    paddingInline={3}
+    current={current}
+    endSlot={
+      openTickets !== undefined && (
+        <Tag>
+          <span aria-hidden>{openTickets}</span>
+          <VisuallyHidden>
+            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
+          </VisuallyHidden>
+        </Tag>
+      )
+    }
   >
-    <li>
-      <AppLink
-        href={href}
-        intent="inherit"
-        aria-current={current ? 'page' : undefined}
-      >
-        {children}
-        {openTickets !== undefined && (
-          <>
-            {' '}
-            <Tag>
-              <span aria-hidden>{openTickets}</span>
-              <VisuallyHidden>
-                {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
-              </VisuallyHidden>
-            </Tag>
-          </>
-        )}
-      </AppLink>
-    </li>
-  </Box>
+    <AppLink href={href} intent="inherit">
+      {children}
+    </AppLink>
+  </Tab>
 );
 
 type NewCycleFormProps = {
@@ -191,41 +186,40 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
 
   return (
     <Inline gap={3} alignY="center">
-      <nav aria-label="Project views">
-        <Inline gap={1} listStyle="none" role="list" asChild>
-          <ul>
-            <Tab
-              href={filteredBoardPath(projectPath(projectId), filter)}
-              current={current === 'backlog'}
-              openTickets={openTicketCounts.backlog}
-            >
-              Backlog
-            </Tab>
-            {[
-              ...cycles.filter((cycle) => cycle.state === 'Active'),
-              ...cycles.filter((cycle) => cycle.state === 'Prepared'),
-            ].map((cycle) => (
-              <Tab
-                key={cycle.id}
-                href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
-                current={current === cycle.id}
-                openTickets={openTicketCounts.cycles[cycle.id] ?? 0}
-              >
-                {cycle.title}
-              </Tab>
-            ))}
-            <Tab href={cyclesPath(projectId)} current={current === 'history'}>
-              History
-            </Tab>
-            <Tab
-              href={projectSettingsPath(projectId)}
-              current={current === 'settings'}
-            >
-              Settings
-            </Tab>
-          </ul>
-        </Inline>
-      </nav>
+      <TabNav aria-label="Project views">
+        <ProjectTab
+          href={filteredBoardPath(projectPath(projectId), filter)}
+          current={current === 'backlog'}
+          openTickets={openTicketCounts.backlog}
+        >
+          Backlog
+        </ProjectTab>
+        {[
+          ...cycles.filter((cycle) => cycle.state === 'Active'),
+          ...cycles.filter((cycle) => cycle.state === 'Prepared'),
+        ].map((cycle) => (
+          <ProjectTab
+            key={cycle.id}
+            href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
+            current={current === cycle.id}
+            openTickets={openTicketCounts.cycles[cycle.id] ?? 0}
+          >
+            {cycle.title}
+          </ProjectTab>
+        ))}
+        <ProjectTab
+          href={cyclesPath(projectId)}
+          current={current === 'history'}
+        >
+          History
+        </ProjectTab>
+        <ProjectTab
+          href={projectSettingsPath(projectId)}
+          current={current === 'settings'}
+        >
+          Settings
+        </ProjectTab>
+      </TabNav>
       {adding ? (
         <NewCycleForm projectId={projectId} onDone={() => setAdding(false)} />
       ) : (
