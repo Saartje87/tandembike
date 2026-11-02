@@ -32,6 +32,7 @@ export const ColorModeMenu: FC = () => {
     <Menu
       items={[
         menuRadioGroup({
+          // menuRadioGroup still requires `type` (T688).
           type: 'radio-group',
           value: colorMode,
           onChange: writeColorMode,

@@ -143,9 +143,9 @@ Checked against `@blockle/blocks-react` 3.4.0:
   `event.preventDefault()` in its `onKeyDown` to keep the drawer open (see
   `claimEscape` in `claim-escape/claim-escape.ts`). Only the top overlay, the
   `Dialog`, `Drawer`, `Popover` or `Menu` opened last, handles Escape and
-  outside clicks, so a sibling `Dialog` shown over the drawer, such as `ConversationDialog`, needs no guard
-  in the drawer: a click inside it leaves the drawer open, and a click outside
-  both closes the topmost.
+  outside clicks, so a sibling `Dialog` shown over the drawer, such as
+  `ConversationDialog`, needs no guard in the drawer: a click inside it leaves
+  the drawer open, and a click outside both closes the topmost.
 
 ## Menu
 
@@ -183,17 +183,18 @@ import { Button, Menu } from '@blockle/blocks';
   `disabled`, `startSlot`, `endSlot`), a `{ type: 'separator' }`, or a
   `{ type: 'radio-group', value, onChange, items }` whose items are
   `{ value, label, disabled?, endSlot? }`.
-- `menuRadioGroup({ type: 'radio-group', value, onChange, items })` builds the radio group typed over
-  a union of string values: `V` is inferred from `value` and `onChange`, and the
-  items' values are checked against it (`MenuRadioGroupItem<V>`,
-  `MenuRadioItem<V>`). It returns the group as is, so put it in `items`:
-  `menuRadioGroup({ type: 'radio-group', value: mode, onChange: setMode, items: modes })`, as
+- `menuRadioGroup({ type: 'radio-group', value, onChange, items })` builds the
+  radio group typed over a union of string values: `V` is inferred from `value`
+  and `onChange`, and the items' values are checked against it
+  (`MenuRadioGroupItem<V>`, `MenuRadioItem<V>`). `type: 'radio-group'` is still
+  required (Blocks T688). It returns the group as is, so put it in `items`, as
   `ColorModeMenu` does.
 - Pass `textValue` for typeahead when `label` is not a plain string.
 - It is uncontrolled unless you pass `open` and `onOpenChange`. `placement`
   defaults to `bottom-start`.
 - Its other props (`className`, `aria-*`) go to the popover element.
 - A `Menu` inside a `Drawer` or `Dialog` is a `Popover`, so it is the top
-  overlay while open: Escape and outside clicks close only the menu, and the
-  drawer stays open (Blocks T675; checked once in jsdom against 3.4.0, not
-  covered by a test).
+  overlay while open: Escape closes only the menu, and the drawer stays open
+  (Blocks T675; checked once in jsdom against 3.4.0, not covered by a test).
+  Outside clicks could not be checked in jsdom, which has no light dismiss:
+  neither the menu nor the drawer closed there.
