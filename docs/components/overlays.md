@@ -15,7 +15,8 @@ content for ordinary information.
   button. See [Menu](#menu).
 - **`Popover`** is for contextual content anchored to a trigger or other
   element. It is controlled and requires `anchorElement`, `open`, and
-  `onRequestClose`; it closes on Escape and outside click.
+  `onRequestClose`; it closes on Escape and outside click only while it is the
+  top overlay.
 - **`Tooltip`** is for a short description associated with a trigger. Pass
   `content` and wrap the trigger; do not use it as a standalone content
   container.
@@ -123,7 +124,7 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 3.3.1:
+Checked against `@blockle/blocks-react` 3.4.0:
 
 - The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
   (`medium` 480px, `large` 640px) sets another; no `className` is needed.
@@ -140,15 +141,15 @@ Checked against `@blockle/blocks-react` 3.3.1:
 - It handles Escape on the `<dialog>` itself, so only a key pressed inside it
   closes it. An in-place edit inside it that cancels on Escape calls
   `event.preventDefault()` in its `onKeyDown` to keep the drawer open (see
-  `claimEscape` in `claim-escape/claim-escape.ts`). Only the `Dialog` or
-  `Drawer` opened last handles Escape and outside clicks, so a sibling
-  `Dialog` shown over the drawer, such as `ConversationDialog`, needs no guard
-  in the drawer: a click inside it leaves the drawer open, and a click outside
-  both closes the topmost.
+  `claimEscape` in `claim-escape/claim-escape.ts`). Only the top overlay, the
+  `Dialog`, `Drawer`, `Popover` or `Menu` opened last, handles Escape and
+  outside clicks, so a sibling `Dialog` shown over the drawer, such as
+  `ConversationDialog`, needs no guard in the drawer: a click inside it leaves
+  the drawer open, and a click outside both closes the topmost.
 
 ## Menu
 
-Checked against `@blockle/blocks-react` 3.3.1. A `Menu` is a button that opens
+Checked against `@blockle/blocks-react` 3.4.0. A `Menu` is a button that opens
 a list of items, built on `Popover`. It is a menu to assistive technology (role
 `menu`, with `menuitem` and `menuitemradio` items), with arrow keys, Home, End
 and typeahead, and it returns focus to the trigger. It keeps itself inside the
@@ -182,14 +183,18 @@ import { Button, Menu } from '@blockle/blocks';
   `disabled`, `startSlot`, `endSlot`), a `{ type: 'separator' }`, or a
   `{ type: 'radio-group', value, onChange, items }` whose items are
   `{ value, label, disabled?, endSlot? }`.
+- `menuRadioGroup({ type: 'radio-group', value, onChange, items })` builds the
+  radio group typed over a union of string values: `V` is inferred from `value`
+  and `onChange`, and the items' values are checked against it
+  (`MenuRadioGroupItem<V>`, `MenuRadioItem<V>`). `type: 'radio-group'` is still
+  required (Blocks T688). It returns the group as is, so put it in `items`, as
+  `ColorModeMenu` does.
 - Pass `textValue` for typeahead when `label` is not a plain string.
 - It is uncontrolled unless you pass `open` and `onOpenChange`. `placement`
   defaults to `bottom-start`.
 - Its other props (`className`, `aria-*`) go to the popover element.
-- Caveat: a `Menu` inside a `Drawer` (or `Dialog`): Escape closes both, since
-  the menu closes on Escape but leaves the key unclaimed (Blocks T675). Claim
-  Escape before the drawer handles it: control the menu (`open`,
-  `onOpenChange`), wrap it in an element whose `onKeyDown` calls
-  `claimEscape` and closes it, and focus the trigger yourself. Tandembike has
-  no menu in the drawer today (`MoveToCycleMenu` sits on the Board), so none
-  does this yet.
+- A `Menu` inside a `Drawer` or `Dialog` is a `Popover`, so it is the top
+  overlay while open: Escape closes only the menu, and the drawer stays open
+  (Blocks T675; checked once in jsdom against 3.4.0, not covered by a test).
+  Outside clicks could not be checked in jsdom, which has no light dismiss:
+  neither the menu nor the drawer closed there.
