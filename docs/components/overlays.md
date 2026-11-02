@@ -194,7 +194,7 @@ import { Button, Menu } from '@blockle/blocks';
   defaults to `bottom-start`.
 - Its other props (`className`, `aria-*`) go to the popover element.
 - A `Menu` inside a `Drawer` or `Dialog` is a `Popover`, so it is the top
-  overlay while open: Escape closes only the menu, and the drawer stays open
-  (Blocks T675; checked once in jsdom against 3.4.0, not covered by a test).
-  Outside clicks could not be checked in jsdom, which has no light dismiss:
-  neither the menu nor the drawer closed there.
+  overlay while open: Escape, or a click outside the menu, closes only the
+  menu, and the drawer stays open, even when the click lands outside the
+  drawer too (Blocks T675; checked once in Chrome against 3.4.0, not covered
+  by a test). jsdom cannot show the outside click: it has no light dismiss.
