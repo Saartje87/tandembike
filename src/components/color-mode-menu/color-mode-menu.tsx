@@ -4,6 +4,7 @@ import {
   type ColorModeSetting,
   IconButton,
   Menu,
+  menuRadioGroup,
   useColorMode,
 } from '@blockle/blocks';
 import type { FC } from 'react';
@@ -30,18 +31,12 @@ export const ColorModeMenu: FC = () => {
   return (
     <Menu
       items={[
-        {
+        menuRadioGroup({
           type: 'radio-group',
           value: colorMode,
-          // Blocks types a radio value as `string` (T676), so find the option.
-          onChange: (value) => {
-            const option = options.find((item) => item.value === value);
-            if (option) {
-              writeColorMode(option.value);
-            }
-          },
+          onChange: writeColorMode,
           items: options,
-        },
+        }),
       ]}
       aria-label="Colour mode"
     >
