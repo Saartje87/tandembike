@@ -85,10 +85,11 @@ export function laneOf(
  */
 export function isStalled(
   ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
-  activity?: LaneActivity,
+  live?: LiveConversation,
 ): boolean {
   return (
-    laneOf(ticket, activity).section === 'Action needed' &&
+    laneOf(ticket, live).section === 'Action needed' &&
+    live === undefined &&
     !ticket.claim &&
     !ticket.externalReferences.some(isPullRequestReference)
   );

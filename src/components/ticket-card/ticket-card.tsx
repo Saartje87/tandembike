@@ -17,7 +17,10 @@ import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { isStalled } from '../board/board-lanes';
-import { useTicketActivity } from '../conversation-activity/conversation-activity';
+import {
+  useTicketActivity,
+  useTicketLiveConversation,
+} from '../conversation-activity/conversation-activity';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
@@ -182,6 +185,7 @@ export const TicketCard: FC<TicketCardProps> = ({
 }) => {
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
+  const live = useTicketLiveConversation(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
 
   // Runs before the link's own click, so it neither navigates nor opens a tab.
@@ -295,7 +299,7 @@ export const TicketCard: FC<TicketCardProps> = ({
               </Inline>
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
-            {onBackToTodo && isStalled(ticket, activity) && (
+            {onBackToTodo && isStalled(ticket, live) && (
               <Inline gap={0}>
                 <BackToTodoButton onClick={onBackToTodo} />
               </Inline>
