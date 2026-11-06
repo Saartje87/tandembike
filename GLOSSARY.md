@@ -33,12 +33,24 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in one Lane per Status. Epics are not in the Lanes; the Board lists them apart, with their progress.
+The view of one Project's Tickets, laid out in five Lanes: Intake, Todo, In progress, For human and Done. Epics are not in the Lanes; the Board lists them apart, with their progress. An In progress Epic shows a badge with its section (Action needed, Running or Review), derived from its own Claim, PR reference and live Conversation as for a Ticket, plus the status line while its Conversation is live; in Review it shows the Merged button, which completes every child and removes its state label.
 _Avoid_: Kanban, dashboard, list
 
 **Lane**:
-The part of a Board that holds the Tickets of one Status, in their order. Dropping a Ticket in a Lane gives it that Status.
+A Board section that holds the Tickets in one situation, in their order. A Lane is derived from a Ticket's Status, its triage state label and, for In progress, the run state of its Conversation, never stored. Dropping a Ticket in a Lane gives it a Status, never a label.
 _Avoid_: Column, drop area
+
+**Stalled**:
+An In progress Ticket with no Claim and no pull request among its External references, such as one whose Conversation the User closed. It shows in the Action needed section of the In progress Lane.
+_Avoid_: Stuck, orphaned
+
+**Status line**:
+The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going and what it has cost so far. It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
+_Avoid_: Progress line, activity line
+
+**For human**:
+The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now.
+_Avoid_: Needs you, waiting on me
 
 **Board filter**:
 A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.

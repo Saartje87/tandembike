@@ -1,13 +1,24 @@
 import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTicket } from '../../app/tickets/actions';
+import { liveConversation } from '../../test/conversation-activity';
 import { renderWithTheme } from '../../test/render';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
+import {
+  useLiveConversations,
+  useTicketCosts,
+} from '../conversation-activity/conversation-activity';
 import { EpicChips } from './epic-chips';
 
 vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
+vi.mock('../conversation-activity/conversation-activity', () => ({
+  useLiveConversations: vi.fn(() => ({})),
+  useTicketCosts: vi.fn(() => ({})),
+}));
+
+const pullRequest = 'https://github.com/owner/repo/pull/9';
 
 const child = (
   fields: Partial<EpicChild> & Pick<EpicChild, 'number'>,
@@ -55,6 +66,8 @@ const chips = () =>
 describe('EpicChips', () => {
   beforeEach(() => {
     vi.mocked(createTicket).mockReset();
+    vi.mocked(useLiveConversations).mockReturnValue({});
+    vi.mocked(useTicketCosts).mockReturnValue({});
   });
 
   it('lists each Epic in the given order with its number, title and progress', () => {
@@ -189,5 +202,196 @@ describe('EpicChips', () => {
     expect(
       screen.getByRole('link', { name: /Checkout/ }).closest('li'),
     ).toHaveAttribute('data-color', 'pink');
+  });
+
+  describe('state badge', () => {
+    const inProgress = (fields: Partial<Ticket> = {}) =>
+      epic({ number: 4, title: 'Checkout', status: 'In progress', ...fields });
+    const render = (epics: Ticket[], onMerged = vi.fn()) =>
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={epics}
+          onMerged={onMerged}
+        />,
+      );
+
+    it('says Action needed for an In progress Epic with no Claim and no PR', () => {
+      render([inProgress()]);
+
+      expect(screen.getByText('Action needed')).toBeInTheDocument();
+    });
+
+    it('says Running for an In progress Epic with a Claim', () => {
+      render([
+        inProgress({
+          claim: {
+            agentRunId: 'run-1',
+            agentName: null,
+            claimedAt: new Date(),
+          },
+        } as Partial<Ticket>),
+      ]);
+
+      expect(screen.getByText('Running')).toBeInTheDocument();
+    });
+
+    it('says Review for an In progress Epic with a PR reference', () => {
+      render([inProgress({ externalReferences: [pullRequest] })]);
+
+      expect(screen.getByText('Review')).toBeInTheDocument();
+    });
+
+    it('lets a live Conversation decide the section', () => {
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
+      render([inProgress({ externalReferences: [pullRequest] })]);
+
+      expect(screen.getByText('Running')).toBeInTheDocument();
+      expect(screen.queryByText('Review')).not.toBeInTheDocument();
+    });
+
+    it('shows no badge on a Todo or Done Epic', () => {
+      render([
+        epic({ number: 2, title: 'Search', externalReferences: [pullRequest] }),
+        epic({ number: 3, title: 'Cart', status: 'Done' }),
+      ]);
+      expect(screen.queryByText('Review')).not.toBeInTheDocument();
+      expect(screen.queryByText('Action needed')).not.toBeInTheDocument();
+    });
+
+    it('keeps the badge outside the link', () => {
+      render([inProgress()]);
+
+      expect(screen.getByRole('link')).not.toHaveTextContent('Action needed');
+    });
+  });
+
+  describe('status line', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date('2026-11-07T10:12:00Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows an Epic's live Conversation line and elapsed time", () => {
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[
+            epic({ number: 4, title: 'Checkout', status: 'In progress' }),
+          ]}
+        />,
+      );
+
+      expect(screen.getByText('Reading board.tsx')).toBeInTheDocument();
+      expect(screen.getByText('12m')).toBeInTheDocument();
+    });
+
+    it('shows none without a live Conversation', () => {
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[
+            epic({ number: 4, title: 'Checkout', status: 'In progress' }),
+          ]}
+        />,
+      );
+
+      expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('cost', () => {
+    const withChildren = epic({
+      number: 4,
+      title: 'Checkout',
+      status: 'In progress',
+      children: [child({ number: 5 }), child({ number: 6 })],
+    });
+
+    it("shows the Epic's own cost plus its children's", () => {
+      vi.mocked(useTicketCosts).mockReturnValue({
+        4: 0.5,
+        5: 1,
+        6: 0.25,
+        9: 7,
+      });
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[withChildren]}
+        />,
+      );
+
+      expect(screen.getByText('$1.75')).toBeInTheDocument();
+    });
+
+    it('is hidden at zero', () => {
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[withChildren]}
+        />,
+      );
+
+      expect(screen.queryByText(/^\$/)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Merged', () => {
+    const inReview = epic({
+      number: 4,
+      title: 'Checkout',
+      status: 'In progress',
+      externalReferences: [pullRequest],
+    });
+
+    it('is offered on an Epic in Review and reports that Epic', async () => {
+      const onMerged = vi.fn();
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[inReview]}
+          onMerged={onMerged}
+        />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Merged T4 Checkout' }),
+      );
+
+      expect(onMerged).toHaveBeenCalledWith(inReview);
+    });
+
+    it('is not offered outside Review', () => {
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[
+            epic({ number: 4, title: 'Checkout', status: 'In progress' }),
+            epic({ number: 2, title: 'Search' }),
+          ]}
+          onMerged={vi.fn()}
+        />,
+      );
+
+      expect(
+        screen.queryByRole('button', { name: /^Merged/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

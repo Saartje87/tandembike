@@ -6,6 +6,7 @@ import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { noBoardFilter } from '../../app/lib/paths';
 import {
   archiveTickets,
+  completeTicket,
   createTicket,
   moveTickets,
   moveTicketsToEpic,
@@ -20,9 +21,9 @@ import {
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
-import { type Status, statuses } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
+import { type BoardLane, boardLanes } from './board-lanes';
 
 vi.mock('../../app/cycles/actions', () => ({
   moveTicketsToCycle: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('../../app/projects/actions', () => ({
 }));
 vi.mock('../../app/tickets/actions', () => ({
   archiveTickets: vi.fn(),
+  completeTicket: vi.fn(),
   createTicket: vi.fn(),
   moveTickets: vi.fn(),
   moveTicketsToEpic: vi.fn(),
@@ -58,7 +60,8 @@ const ticket = (
   projectId: project.id,
   position: 0,
   archived: false,
-  labels: [],
+  // Ready for an Agent, so a Todo Ticket is in the Todo Lane unless a test says otherwise.
+  labels: ['ready-for-agent'],
   externalReferences: [],
   attachments: [],
   blockedBy: [],
@@ -127,7 +130,7 @@ const recordAnnouncements = () => {
   return heard;
 };
 
-/** The Status of the lane `section`, named by its heading. */
+/** The Lane `section`, named by its heading. */
 const laneStatus = (section: Element | null) =>
   document.getElementById(section?.getAttribute('aria-labelledby') ?? '')
     ?.textContent;
@@ -168,7 +171,8 @@ const mockLaneBounds = () => {
   const left = (section: Element) => {
     const status = laneStatus(section) ?? '';
     return (
-      (statuses.indexOf(status as Status) - (shifted.has(status) ? 1 : 0)) *
+      (boardLanes.indexOf(status as BoardLane) -
+        (shifted.has(status) ? 1 : 0)) *
       laneSpacing
     );
   };
@@ -193,7 +197,7 @@ const mockLaneBounds = () => {
       return new DOMRect(0, 0, 800, 700);
     });
   onTestFinished(() => bounds.mockRestore());
-  return (status: Status) => shifted.add(status);
+  return (lane: BoardLane) => shifted.add(lane);
 };
 
 /** The lanes a dragged card highlights as where it would drop. */
@@ -242,13 +246,26 @@ describe('Board', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows every Status column, even when empty', () => {
+  it('shows the five Lanes in their fixed order, even when empty', () => {
     renderWithTheme(<Board project={project} tickets={[]} />);
 
-    for (const column of ['Todo', 'In progress', 'Done']) {
-      const region = screen.getByRole('region', { name: column });
-      expect(within(region).getByText('No Tickets')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('region')
+        .map((region) => laneStatus(region))
+        .filter((name) => name !== 'Epics'),
+    ).toEqual(['Intake', 'Todo', 'In progress', 'For human', 'Done']);
+  });
+
+  it('collapses an empty Lane to its heading and count', () => {
+    renderWithTheme(<Board project={project} tickets={[]} />);
+
+    for (const lane of boardLanes) {
+      const region = screen.getByRole('region', { name: lane });
+      expect(within(region).getAllByText('0')[0]).toBeInTheDocument();
+      expect(within(region).queryByRole('list')).not.toBeInTheDocument();
     }
+    expect(screen.queryByText('No Tickets')).not.toBeInTheDocument();
   });
 
   it('shows each Ticket as a card with its number and title in its Status column, in the given order', () => {
@@ -282,9 +299,10 @@ describe('Board', () => {
     );
 
     const countIn = (status: string) =>
-      within(screen.getByRole('region', { name: status })).getByText(
+      // The first count is the Lane's own, before any section's.
+      within(screen.getByRole('region', { name: status })).getAllByText(
         (_, element) => /^\d+ Tickets?$/.test(element?.textContent ?? ''),
-      ).textContent;
+      )[0].textContent;
     expect(countIn('Todo')).toBe('2 Tickets');
     expect(countIn('In progress')).toBe('0 Tickets');
     expect(countIn('Done')).toBe('1 Ticket');
@@ -2002,19 +2020,19 @@ describe('Filtering the Board', () => {
   const header = ticket({
     number: 4,
     title: 'Fix the header',
-    labels: ['bug', 'ui'],
+    labels: ['bug', 'ui', 'ready-for-agent'],
     position: 0,
   });
   const copy = ticket({
     number: 7,
     title: 'Write the copy',
-    labels: ['docs'],
+    labels: ['docs', 'ready-for-agent'],
     position: 1,
   });
   const footer = ticket({
     number: 12,
     title: 'Fix the footer',
-    labels: ['bug'],
+    labels: ['bug', 'ready-for-agent'],
     position: 2,
   });
   const deploy = ticket({
@@ -2101,6 +2119,7 @@ describe('Filtering the Board', () => {
       'docs',
       'legacy',
       'payments',
+      'ready-for-agent',
       'ui',
     ]);
   });
@@ -2113,7 +2132,7 @@ describe('Filtering the Board', () => {
 
     expect(cardsIn('Todo')).toEqual(['Fix the header']);
     expect(chosenLabels()).toEqual(['ui', 'bug']);
-    expect(offeredLabels()).toEqual(['docs', 'legacy']);
+    expect(offeredLabels()).toEqual(['docs', 'legacy', 'ready-for-agent']);
   });
 
   it('keeps a chosen Label no Ticket has listed, so it can be removed', async () => {
@@ -2544,5 +2563,442 @@ describe('Filtering the Board', () => {
     );
 
     expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Derived Lanes', () => {
+  const tickets = [
+    ticket({ number: 1, title: 'Unlabelled', labels: [] }),
+    ticket({ number: 2, title: 'Needs triage', labels: ['needs-triage'] }),
+    ticket({ number: 3, title: 'Needs info', labels: ['needs-info'] }),
+    ticket({ number: 4, title: 'For an Agent', labels: ['ready-for-agent'] }),
+    ticket({ number: 5, title: 'For me', labels: ['ready-for-human'] }),
+    ticket({ number: 6, title: 'Running', status: 'In progress' }),
+    ticket({ number: 7, title: 'Finished', status: 'Done' }),
+  ];
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(moveTickets).mockReset();
+  });
+
+  it('places each Ticket in the Lane its Status and triage label give', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(cardsIn('Intake')).toEqual([
+      'Unlabelled',
+      'Needs triage',
+      'Needs info',
+    ]);
+    expect(cardsIn('Todo')).toEqual(['For an Agent']);
+    expect(cardsIn('In progress')).toEqual(['Running']);
+    expect(cardsIn('For human')).toEqual(['For me']);
+    expect(cardsIn('Done')).toEqual(['Finished']);
+  });
+
+  it('counts the Tickets in each Lane heading', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    const count = (lane: string) =>
+      within(screen.getByRole('region', { name: lane })).getByText(
+        (_, element) =>
+          element?.tagName === 'SPAN' &&
+          /^\d+ Tickets?$/.test(element.textContent ?? ''),
+      ).textContent;
+    expect(count('Intake')).toBe('3 Tickets');
+    expect(count('Todo')).toBe('1 Ticket');
+    expect(count('For human')).toBe('1 Ticket');
+  });
+
+  it('narrows every Lane by the filter', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ...tickets,
+          ticket({ number: 8, title: 'Needs a nap', status: 'Done' }),
+        ]}
+        filter={{ query: 'needs', labels: [] }}
+      />,
+    );
+
+    expect(cardsIn('Intake')).toEqual(['Needs triage', 'Needs info']);
+    expect(cardsIn('Todo')).toEqual([]);
+    expect(cardsIn('For human')).toEqual([]);
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(cardsIn('Done')).toEqual(['Needs a nap']);
+  });
+
+  it('offers the create field in the Todo Lane only', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(
+      within(screen.getByRole('region', { name: 'Todo' })).getByRole(
+        'textbox',
+        { name: 'New Ticket title' },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('textbox', { name: 'New Ticket title' }),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    ['In progress', 'Intake'],
+    ['In progress', 'Todo'],
+    ['In progress', 'For human'],
+    ['Done', 'Intake'],
+    ['Done', 'Todo'],
+    ['Done', 'For human'],
+  ] as const)(
+    'gives Status Todo to a Ticket dropped from %s into %s',
+    async (from, to) => {
+      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 1 });
+      const bounds = mockBoardBounds(to);
+      onTestFinished(() => bounds.mockRestore());
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={[
+            ticket({ number: 4, title: 'Fix the header', status: from }),
+          ]}
+        />,
+      );
+
+      await dragTicketTo(4, to);
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        status: 'Todo',
+      });
+    },
+  );
+
+  it.each([
+    ['Intake', 'Todo', []],
+    ['Intake', 'For human', []],
+    ['Todo', 'Intake', ['ready-for-agent']],
+    ['Todo', 'For human', ['ready-for-agent']],
+    ['For human', 'Todo', ['ready-for-human']],
+    ['For human', 'Intake', ['ready-for-human']],
+  ] as const)(
+    'refuses a drop from %s into %s, changing nothing',
+    async (from, to, labels) => {
+      const bounds = mockBoardBounds(to);
+      onTestFinished(() => bounds.mockRestore());
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={[
+            ticket({ number: 4, title: 'Fix the header', labels: [...labels] }),
+          ]}
+        />,
+      );
+      expect(cardsIn(from)).toEqual(['Fix the header']);
+
+      await dragTicketTo(4, to);
+
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(moveTickets).not.toHaveBeenCalled();
+      expect(reorderTickets).not.toHaveBeenCalled();
+      expect(cardsIn(from)).toEqual(['Fix the header']);
+      expect(cardsIn(to)).toEqual([]);
+    },
+  );
+});
+
+describe('In progress sections', () => {
+  const claim = { agentRunId: 'run-1', agentName: null };
+  const pullRequest = 'https://github.com/owner/repo/pull/87';
+  const tickets = [
+    ticket({ number: 1, title: 'Stalled one', status: 'In progress' }),
+    ticket({
+      number: 2,
+      title: 'In review',
+      status: 'In progress',
+      externalReferences: [pullRequest],
+    }),
+    ticket({ number: 3, title: 'Working', status: 'In progress', claim }),
+    ticket({ number: 4, title: 'Stalled two', status: 'In progress' }),
+  ];
+
+  const sectionsIn = (lane: string) =>
+    within(screen.getByRole('region', { name: lane }))
+      .getAllByRole('group')
+      .map((group) => ({
+        name: laneStatus(group),
+        text: group.textContent,
+        cards: within(group)
+          .queryAllByRole('listitem')
+          .filter((item) => isCard(item))
+          .map((card) =>
+            within(card).getAllByRole('link')[0].getAttribute('aria-label'),
+          ),
+      }));
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+    vi.mocked(completeTicket).mockReset();
+  });
+
+  it('shows Action needed, Running and Review in order with counts', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(sectionsIn('In progress')).toEqual([
+      expect.objectContaining({
+        name: 'Action needed',
+        text: expect.stringMatching(/^Action needed2/),
+        cards: ['Stalled one', 'Stalled two'],
+      }),
+      expect.objectContaining({
+        name: 'Running',
+        text: expect.stringMatching(/^Running1/),
+        cards: ['Working'],
+      }),
+      expect.objectContaining({
+        name: 'Review',
+        text: expect.stringMatching(/^Review1/),
+        cards: ['In review'],
+      }),
+    ]);
+  });
+
+  it('collapses an empty section to its heading and count', () => {
+    renderWithTheme(<Board project={project} tickets={[tickets[2]]} />);
+
+    const [actionNeeded, running, review] = sectionsIn('In progress');
+    expect(actionNeeded.cards).toEqual([]);
+    expect(actionNeeded.text).toMatch(/^Action needed0/);
+    expect(actionNeeded.text).not.toContain('No Tickets');
+    expect(running.cards).toEqual(['Working']);
+    expect(review.cards).toEqual([]);
+  });
+
+  it('shows a Review card with a link to its PR', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(screen.getByRole('link', { name: 'owner/repo#87' })).toHaveAttribute(
+      'href',
+      pullRequest,
+    );
+  });
+
+  it('shows a Merged button on Review cards only', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[...tickets, ticket({ number: 9, title: 'Todo one' })]}
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button', { name: /^Merged/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].closest('li')).toHaveTextContent('In review');
+  });
+
+  it('moves a Review card to Done and drops its state label while the Merged click saves', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(completeTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({
+            number: 2,
+            title: 'In review',
+            status: 'In progress',
+            labels: ['bug', 'ready-for-agent'],
+            externalReferences: [pullRequest],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^Merged/ }));
+
+    expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 2 });
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(cardsIn('Done')).toEqual(['In review']);
+    const card = within(screen.getByRole('region', { name: 'Done' }));
+    expect(card.getByText('bug')).toBeInTheDocument();
+    expect(card.queryByText('ready-for-agent')).toBeNull();
+  });
+
+  it('restores the card and explains when Merged is refused', async () => {
+    vi.mocked(completeTicket).mockResolvedValue({
+      ok: false,
+      error: 'Project Website is archived.',
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({
+            number: 2,
+            title: 'In review',
+            status: 'In progress',
+            labels: ['ready-for-agent'],
+            externalReferences: [pullRequest],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^Merged/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Project Website is archived.',
+    );
+    await waitFor(() => {
+      expect(cardsIn('In progress')).toEqual(['In review']);
+      expect(cardsIn('Done')).toEqual([]);
+    });
+  });
+
+  it('gives Status In progress to a Ticket dropped into the Lane', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(updateTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    const bounds = mockBoardBounds('In progress');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[...tickets, ticket({ number: 9, title: 'From Todo' })]}
+      />,
+    );
+
+    await dragTicketTo(9, 'In progress');
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 9,
+      status: 'In progress',
+    });
+    expect(cardsIn('In progress')).toContain('From Todo');
+  });
+
+  it('does not make the sections drop targets', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    const lane = screen.getByRole('region', { name: 'In progress' });
+    for (const section of within(lane).getAllByRole('group')) {
+      expect(section.closest('[data-drop-target]')).toBeNull();
+      expect(section.tagName).not.toBe('SECTION');
+    }
+    expect(
+      screen
+        .getAllByRole('region')
+        .map((region) => laneStatus(region))
+        .filter((name) => name !== 'Epics'),
+    ).toEqual(['Intake', 'Todo', 'In progress', 'For human', 'Done']);
+  });
+});
+
+describe('Back to Todo', () => {
+  const claim = { agentRunId: 'run-1', agentName: null };
+  const pullRequest = 'https://github.com/owner/repo/pull/87';
+  const inProgress = (
+    fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
+  ) => ticket({ status: 'In progress', ...fields });
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('offers it on a stalled card, not on Running or Review cards', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          inProgress({ number: 1, title: 'Stalled' }),
+          inProgress({ number: 2, title: 'Working', claim }),
+          inProgress({
+            number: 3,
+            title: 'In review',
+            externalReferences: [pullRequest],
+          }),
+          ticket({ number: 4, title: 'Waiting' }),
+        ]}
+      />,
+    );
+
+    expect(
+      within(cardOf(1)).getByRole('button', { name: 'Back to Todo' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: 'Back to Todo' }),
+    ).toHaveLength(1);
+  });
+
+  it('sets Status Todo and nothing else, moving the card by its label', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(updateTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          inProgress({
+            number: 1,
+            title: 'Stalled',
+            labels: ['ready-for-human'],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(
+      within(cardOf(1)).getByRole('button', { name: 'Back to Todo' }),
+    );
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 1,
+      status: 'Todo',
+    });
+    await waitFor(() => expect(cardsIn('For human')).toEqual(['Stalled']));
+    expect(cardsIn('In progress')).toEqual([]);
+  });
+
+  it('puts the card back and shows the refusal in place', async () => {
+    vi.mocked(updateTicket).mockResolvedValue({
+      ok: false,
+      error: 'There is no Ticket T1.',
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[inProgress({ number: 1, title: 'Stalled' })]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to Todo' }));
+
+    expect(await screen.findByText('There is no Ticket T1.')).toBeVisible();
+    await waitFor(() => {
+      expect(cardsIn('In progress')).toEqual(['Stalled']);
+      expect(
+        within(screen.getByRole('group', { name: 'Action needed' })).getByRole(
+          'button',
+          { name: 'Back to Todo' },
+        ),
+      ).toBeInTheDocument();
+    });
   });
 });

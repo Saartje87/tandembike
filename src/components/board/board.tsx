@@ -55,6 +55,7 @@ import {
 } from '../../app/lib/paths';
 import {
   archiveTickets,
+  completeTicket,
   moveTickets,
   moveTicketsToEpic,
   reorderTickets,
@@ -63,21 +64,35 @@ import {
 import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { BatchFailure } from '../../tickets/errors';
-import { isStatus, type Status, statuses } from '../../tickets/status';
+import type { Status } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
+import { useLiveConversations } from '../conversation-activity/conversation-activity';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
+import { completed } from './board-changes';
 import {
   filteredSelectionDrop,
   isFiltering,
   mergeLaneOrder,
   ticketMatches,
 } from './board-filter';
+import {
+  type BoardLane,
+  boardLanes,
+  type InProgressSection,
+  inProgressSections,
+  isBoardLane,
+  isInReview,
+  isTriageLane,
+  type LanePlacement,
+  laneOf,
+  laneStatus,
+} from './board-lanes';
 
 export type BoardProps = {
   project: Project;
@@ -146,14 +161,18 @@ const CycleRefusals: FC<CycleRefusalsProps> = ({ refusals }) => {
   );
 };
 
-type StatusColumnProps = {
+type LaneColumnProps = {
   projectId: number;
   cycleId?: number | null;
   /** The Board's own URL, which a card's drawer opens over. */
   boardPath: string;
   /** The Board filter, which a card's drawer keeps. */
   filter: BoardFilter;
-  status: Status;
+  lane: BoardLane;
+  /** Where a Ticket sits now, given its live Conversation. */
+  placementOf: (ticket: Ticket) => LanePlacement;
+  /** Whether the Ticket sits in Review now, given its live Conversation. */
+  inReview: (ticket: Ticket) => boolean;
   tickets: Ticket[];
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
@@ -161,6 +180,10 @@ type StatusColumnProps = {
   /** Whether a card dragged now is over the lane or one of its cards. */
   highlighted: boolean;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
+  /** Called with a Review Ticket the User says is merged. */
+  onMerged: (ticket: Ticket) => void;
+  /** Called with the number of a stalled Ticket sent Back to Todo. */
+  onBackToTodo: (number: number) => void;
   /** Called with the number of a Ticket created in the lane. */
   onCreated: (number: number) => void;
 };
@@ -175,24 +198,136 @@ const TicketCount: FC<TicketCountProps> = ({ count }) => (
   </Text>
 );
 
-/** A Status lane; the Todo lane ends with a field to create a Ticket. */
-const StatusColumn: FC<StatusColumnProps> = ({
+type TicketListProps = Pick<
+  LaneColumnProps,
+  | 'boardPath'
+  | 'filter'
+  | 'selected'
+  | 'carrier'
+  | 'onSelect'
+  | 'onMerged'
+  | 'onBackToTodo'
+  | 'lane'
+  | 'inReview'
+> & {
+  tickets: Ticket[];
+  /** The group the cards sort in, when it is not the Lane. */
+  group?: string;
+};
+
+/** The cards of a Lane, or of a section of it. */
+const TicketList: FC<TicketListProps> = ({
+  lane,
+  group = lane,
+  inReview,
+  tickets,
+  boardPath,
+  filter,
+  selected,
+  carrier,
+  onSelect,
+  onMerged,
+  onBackToTodo,
+}) =>
+  tickets.length > 0 && (
+    <Stack gap={2} listStyle="none" role="list" asChild>
+      <ul>
+        {tickets.map((ticket, index) => (
+          <SortableTicketCard
+            key={ticket.number}
+            ticket={ticket}
+            lane={lane}
+            group={group}
+            index={index}
+            boardPath={boardPath}
+            filter={filter}
+            selected={selected.has(ticket.number)}
+            selecting={selected.size > 0}
+            carries={
+              selected.size > 1 && selected.has(ticket.number)
+                ? selected.size
+                : 1
+            }
+            carrying={carrier === ticket.number}
+            carriedAlong={
+              carrier !== undefined &&
+              carrier !== ticket.number &&
+              selected.has(ticket.number)
+            }
+            onSelect={(mode) => onSelect(ticket, mode)}
+            onMerged={inReview(ticket) ? () => onMerged(ticket) : undefined}
+            onBackToTodo={() => onBackToTodo(ticket.number)}
+          />
+        ))}
+      </ul>
+    </Stack>
+  );
+
+type InProgressSectionGroupProps = Omit<TicketListProps, 'lane' | 'group'> & {
+  section: InProgressSection;
+};
+
+/**
+ * A section of the In progress Lane: a heading and count, then its cards.
+ * Empty, it is just those. It takes no drops; the Lane does.
+ */
+const InProgressSectionGroup: FC<InProgressSectionGroupProps> = ({
+  section,
+  tickets,
+  ...cardProps
+}) => {
+  const headingId = useId();
+
+  return (
+    <Stack gap={2} role="group" aria-labelledby={headingId}>
+      <Inline gap={2} alignY="center">
+        <Heading id={headingId} level={3} fontSize="small">
+          {section}
+        </Heading>
+        <TicketCount count={tickets.length} />
+      </Inline>
+      <TicketList
+        lane="In progress"
+        group={`In progress/${section}`}
+        tickets={tickets}
+        {...cardProps}
+      />
+    </Stack>
+  );
+};
+
+/** A Lane; the Todo Lane ends with a field to create a Ticket. */
+const LaneColumn: FC<LaneColumnProps> = ({
   projectId,
   cycleId,
   boardPath,
   filter,
-  status,
+  lane,
+  placementOf,
+  inReview,
   tickets,
   selected,
   carrier,
   highlighted,
   onSelect,
+  onMerged,
+  onBackToTodo,
   onCreated,
 }) => {
   // Takes a drop between or below its cards: a card under the pointer
   // outranks its lane.
-  const { ref } = useDroppable({ id: status, collisionPriority: 1 });
+  const { ref } = useDroppable({ id: lane, collisionPriority: 1 });
   const headingId = useId();
+  const cardProps = {
+    boardPath,
+    filter,
+    selected,
+    carrier,
+    inReview,
+    onSelect,
+    onMerged,
+    onBackToTodo,
+  };
 
   return (
     <Box
@@ -212,44 +347,27 @@ const StatusColumn: FC<StatusColumnProps> = ({
         <Stack gap={3}>
           <Inline gap={2} alignY="center">
             <Heading id={headingId} level={2} fontSize="medium">
-              {status}
+              {lane}
             </Heading>
             <TicketCount count={tickets.length} />
           </Inline>
-          {tickets.length === 0 ? (
-            <Text tag="p" color="muted" fontSize="small">
-              No Tickets
-            </Text>
-          ) : (
-            <Stack gap={2} listStyle="none" role="list" asChild>
-              <ul>
-                {tickets.map((ticket, index) => (
-                  <SortableTicketCard
-                    key={ticket.number}
-                    ticket={ticket}
-                    index={index}
-                    boardPath={boardPath}
-                    filter={filter}
-                    selected={selected.has(ticket.number)}
-                    selecting={selected.size > 0}
-                    carries={
-                      selected.size > 1 && selected.has(ticket.number)
-                        ? selected.size
-                        : 1
-                    }
-                    carrying={carrier === ticket.number}
-                    carriedAlong={
-                      carrier !== undefined &&
-                      carrier !== ticket.number &&
-                      selected.has(ticket.number)
-                    }
-                    onSelect={(mode) => onSelect(ticket, mode)}
-                  />
-                ))}
-              </ul>
+          {lane === 'In progress' ? (
+            <Stack gap={3}>
+              {inProgressSections.map((section) => (
+                <InProgressSectionGroup
+                  key={section}
+                  section={section}
+                  tickets={tickets.filter(
+                    (ticket) => placementOf(ticket).section === section,
+                  )}
+                  {...cardProps}
+                />
+              ))}
             </Stack>
+          ) : (
+            <TicketList lane={lane} tickets={tickets} {...cardProps} />
           )}
-          {status === 'Todo' && (
+          {lane === 'Todo' && (
             <NewTicketInline
               projectId={projectId}
               cycleId={cycleId ?? undefined}
@@ -290,15 +408,15 @@ const carriedName = (source: Draggable) =>
 
 /**
  * What card `source` is over at `target`, for a screen reader: an Epic's
- * chip, as `Epic T20`, or a Status.
+ * chip, as `Epic T20`, or a Lane.
  */
 const placeName = (source: Draggable, target: Droppable | null) => {
   const epicNumber = epicOfDropTarget(target?.id);
   if (epicNumber !== undefined) {
     return `Epic T${epicNumber}`;
   }
-  // A lane is a Status by id; a card, the dragged one included, has its own.
-  return isStatus(target?.id) ? target.id : (target ?? source).data.status;
+  // A lane is a Lane by id; a card, the dragged one included, has its own.
+  return isBoardLane(target?.id) ? target.id : (target ?? source).data.lane;
 };
 
 // dnd-kit does not export the type of its announcements.
@@ -308,7 +426,7 @@ type Announcements = NonNullable<
 
 /**
  * What a screen reader hears while a card is dragged, naming its Ticket, or
- * how many Tickets it carries (T243), and the Status or Epic it is over
+ * how many Tickets it carries (T243), and the Lane or Epic it is over
  * (T242).
  */
 const announcements: Announcements = {
@@ -329,7 +447,7 @@ const announcements: Announcements = {
       // A selection can come from several lanes.
       return source.data.carries > 1
         ? `Cancelled. The ${source.data.carries} Tickets stay where they were.`
-        : `Cancelled. T${source.id} stays in ${source.data.status}.`;
+        : `Cancelled. T${source.id} stays in ${source.data.lane}.`;
     }
     const onto = epicOfDropTarget(target?.id) === undefined ? 'in' : 'on';
     return `Dropped ${carriedName(source)} ${onto} ${placeName(source, target)}.`;
@@ -344,6 +462,9 @@ const plugins: DragDropManagerInput['plugins'] = (defaults) => [
 
 type SortableTicketCardProps = {
   ticket: Ticket;
+  lane: BoardLane;
+  /** What the card sorts among: its Lane, or its section of the Lane. */
+  group: string;
   index: number;
   boardPath: string;
   filter: BoardFilter;
@@ -355,10 +476,15 @@ type SortableTicketCardProps = {
   carrying: boolean;
   carriedAlong: boolean;
   onSelect: (mode: SelectMode) => void;
+  /** Set on a Review card only, which then shows the Merged button. */
+  onMerged?: () => void;
+  onBackToTodo: () => void;
 };
 
 const SortableTicketCard: FC<SortableTicketCardProps> = ({
   ticket,
+  lane,
+  group,
   index,
   boardPath,
   filter,
@@ -368,12 +494,14 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   carrying,
   carriedAlong,
   onSelect,
+  onMerged,
+  onBackToTodo,
 }) => {
   const { ref } = useSortable({
     id: ticket.number,
     index,
-    group: ticket.status,
-    data: { status: ticket.status, carries },
+    group,
+    data: { lane, carries },
     collisionPriority: 3,
   });
 
@@ -388,6 +516,8 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       carryCount={carrying ? carries : 1}
       carriedAlong={carriedAlong}
       onSelect={onSelect}
+      onMerged={onMerged}
+      onBackToTodo={onBackToTodo}
     />
   );
 };
@@ -450,7 +580,8 @@ type BoardChange =
   | { status: Status; ticketNumbers: number[] }
   | { status: Status; laneOrder: number[] }
   | { numbers: number[]; epic: EpicLink }
-  | { numbers: number[]; archived: true };
+  | { numbers: number[]; archived: true }
+  | { merged: number };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   if ('laneOrder' in change) {
@@ -464,6 +595,12 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
         ? ticket
         : { ...ticket, status: change.status, position };
     });
+  }
+  if ('merged' in change) {
+    // The completion rule: Done, and the triage state label gone.
+    return tickets.map((ticket) =>
+      ticket.number === change.merged ? completed(ticket) : ticket,
+    );
   }
   if ('archived' in change) {
     return tickets.map((ticket) =>
@@ -500,9 +637,27 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 };
 
 type EpicJoin = { joining: Ticket[]; epicNumber: number };
+type EpicChange = EpicJoin | { merged: number };
 
-/** `epics` with `joining` taken out of their Epics and into Epic `epicNumber`. */
-const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) => {
+/**
+ * `epics` with `joining` taken out of their Epics and into Epic `epicNumber`,
+ * or with Epic `merged` completed: it and its unarchived children are Done
+ * and lose their triage state label.
+ */
+const applyEpicChange = (epics: Ticket[], change: EpicChange) => {
+  if ('merged' in change) {
+    return epics.map((epic) =>
+      epic.number === change.merged
+        ? {
+            ...completed(epic),
+            children: epic.children.map((child) =>
+              child.archived ? child : { ...child, status: 'Done' as const },
+            ),
+          }
+        : epic,
+    );
+  }
+  const { joining, epicNumber } = change;
   const numbers = new Set(joining.map(({ number }) => number));
   return epics.map((epic) => {
     const children = epic.children.filter(
@@ -554,6 +709,12 @@ export const Board: FC<BoardProps> = ({
   filter: initialFilter = noBoardFilter,
 }) => {
   const boardPath = boardPathOf(project.id, cycleId ?? null);
+  // Read once for all cards: a live Conversation decides the section (T1065).
+  const liveConversations = useLiveConversations();
+  const placementOf = (ticket: Ticket) =>
+    laneOf(ticket, liveConversations[ticket.number]);
+  const inReview = (ticket: Ticket) =>
+    isInReview(ticket, liveConversations[ticket.number]);
   const [filter, setFilter] = useState(initialFilter);
   const filterUrlTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The URL's filter as last rendered, and as the Board last wrote it.
@@ -572,7 +733,7 @@ export const Board: FC<BoardProps> = ({
   }
   const [created, setCreated] = useState<number>();
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
-  const [shownEpics, showEpicJoin] = useOptimistic(epics, applyEpicJoin);
+  const [shownEpics, showEpicChange] = useOptimistic(epics, applyEpicChange);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();
   const [changingCycle, startCycleChange] = useTransition();
@@ -580,7 +741,7 @@ export const Board: FC<BoardProps> = ({
   const [showArchived, setShowArchived] = useState(() =>
     tickets.some((ticket) => ticket.number === openTicket && ticket.archived),
   );
-  const [overLane, setOverLane] = useState<Status>();
+  const [overLane, setOverLane] = useState<BoardLane>();
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
   const selectionAnchor = useRef<number | undefined>(undefined);
   const dragging = useRef(false);
@@ -615,18 +776,40 @@ export const Board: FC<BoardProps> = ({
   );
   const allArchived = shownTickets.filter((ticket) => ticket.archived);
   const archived = allArchived.filter(matches);
-  // Every lane in full, and as the filter shows it.
-  const fullLanes = statuses.map((status) =>
+  // Every lane in full, and as the filter shows it. A Lane holds its Status's
+  // order, filtered, so positions stay per Status.
+  const fullLanes = boardLanes.map((lane) =>
     active
-      .filter((ticket) => ticket.status === status)
+      .filter((ticket) => placementOf(ticket).lane === lane)
       .sort(
         (left, right) =>
           left.position - right.position || left.number - right.number,
       ),
   );
   const lanes = fullLanes.map((lane) => lane.filter(matches));
-  const laneOf = (status: Status) => lanes[statuses.indexOf(status)];
-  const fullLaneOf = (status: Status) => fullLanes[statuses.indexOf(status)];
+  const shownLane = (lane: BoardLane) => lanes[boardLanes.indexOf(lane)];
+  /** Status `status` in full, over all the Lanes that show it, in order. */
+  const statusLane = (status: Status) =>
+    active
+      .filter(
+        (ticket) => ticket.projectId === project.id && ticket.status === status,
+      )
+      .sort(
+        (left, right) =>
+          left.position - right.position || left.number - right.number,
+      )
+      .map(({ number }) => number);
+  /**
+   * Whether `tickets` may be dropped into `lane`: not from one of Intake,
+   * Todo and For human into another, which would need a label change.
+   */
+  const mayDrop = (tickets: Ticket[], lane: BoardLane) =>
+    !isTriageLane(lane) ||
+    tickets.every(
+      (ticket) =>
+        !isTriageLane(placementOf(ticket).lane) ||
+        placementOf(ticket).lane === lane,
+    );
   const filterLabels = [
     ...new Set([...tickets, ...epics, filter].flatMap(({ labels }) => labels)),
   ].sort();
@@ -739,7 +922,9 @@ export const Board: FC<BoardProps> = ({
 
   const select = (ticket: Ticket, mode: SelectMode) => {
     setCycleRefusals(undefined);
-    const lane = laneOf(ticket.status).map(({ number }) => number);
+    const lane = shownLane(placementOf(ticket).lane).map(
+      ({ number }) => number,
+    );
     const from =
       mode === 'range' && selectionAnchor.current !== undefined
         ? lane.indexOf(selectionAnchor.current)
@@ -793,6 +978,33 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
+  const markMerged = ({ number }: Ticket) => {
+    setError(undefined);
+    startTransition(async () => {
+      showChange({ merged: number });
+      const result = await completeTicket({ number });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
+  const markEpicMerged = (epic: Ticket) => {
+    setError(undefined);
+    startTransition(async () => {
+      showEpicChange({ merged: epic.number });
+      for (const child of epic.children) {
+        if (!child.archived) {
+          showChange({ merged: child.number });
+        }
+      }
+      const result = await completeTicket({ number: epic.number });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const changeOrder = (status: Status, ticketNumbers: number[]) => {
     setError(undefined);
     startTransition(async () => {
@@ -810,19 +1022,21 @@ export const Board: FC<BoardProps> = ({
   };
 
   /**
-   * Moves the selection, carried by card `sourceId`, into `status`'s lane
+   * Moves the selection, carried by card `sourceId`, into `target`'s Lane
    * where it was dropped on `targetId` (see `selectionDrop`).
    */
   const moveSelection = (
-    status: Status,
+    target: BoardLane,
     sourceId: number,
     targetId: string | number | undefined,
   ) => {
+    const status = laneStatus(target);
     const moving = selection.map(({ number }) => number);
-    const lane = fullLaneOf(status).map(({ number }) => number);
+    // The other Lanes of the Status count as hidden Tickets.
+    const lane = statusLane(status);
     const { before, laneOrder } = filteredSelectionDrop(
       lane,
-      laneOf(status).map(({ number }) => number),
+      shownLane(target).map(({ number }) => number),
       moving,
       sourceId,
       typeof targetId === 'number' ? targetId : undefined,
@@ -864,7 +1078,7 @@ export const Board: FC<BoardProps> = ({
     setError(undefined);
     startTransition(async () => {
       showChange({ numbers, epic: epicLinkOf(epic) });
-      showEpicJoin({ joining, epicNumber });
+      showEpicChange({ joining, epicNumber });
       const result = await moveTicketsToEpic({
         epic: epicNumber,
         children: numbers,
@@ -929,14 +1143,23 @@ export const Board: FC<BoardProps> = ({
     const targetId = event.operation.target?.id;
     // dnd-kit would move the card's element into the other lane's list,
     // which React then fails to remove from its own list on the drop.
-    const statusOf = (id: unknown) =>
-      shownTickets.find((ticket) => ticket.number === id)?.status;
-    const targetStatus = statusOf(targetId);
-    if (targetStatus !== undefined && targetStatus !== statusOf(sourceId)) {
+    const lanePlaced = (id: unknown) => {
+      const found = shownTickets.find((ticket) => ticket.number === id);
+      return found && placementOf(found).lane;
+    };
+    const targetLane = lanePlaced(targetId);
+    if (targetLane !== undefined && targetLane !== lanePlaced(sourceId)) {
       event.preventDefault();
     }
     // The lane under the pointer, whether over the lane or one of its cards.
-    setOverLane(isStatus(targetId) ? targetId : targetStatus);
+    const over = isBoardLane(targetId) ? targetId : targetLane;
+    const dragged = shownTickets.find((ticket) => ticket.number === sourceId);
+    // A drop that would be refused is not shown as a drop target.
+    setOverLane(
+      over !== undefined && dragged && !mayDrop([dragged], over)
+        ? undefined
+        : over,
+    );
   };
 
   const startDrag = (event: DragStartEvent) => {
@@ -975,7 +1198,10 @@ export const Board: FC<BoardProps> = ({
     const targetId =
       target?.id === sourceId
         ? isSortable(source) && source.index !== source.initialIndex
-          ? laneOf(ticket.status)[source.index]?.number
+          ? shownLane(placementOf(ticket).lane).filter(
+              (other) =>
+                placementOf(other).section === placementOf(ticket).section,
+            )[source.index]?.number
           : undefined
         : target?.id;
     const carriesSelection =
@@ -989,44 +1215,42 @@ export const Board: FC<BoardProps> = ({
       typeof targetId === 'number'
         ? shownTickets.find((candidate) => candidate.number === targetId)
         : undefined;
-    const status = isStatus(targetId) ? targetId : targetTicket?.status;
-    if (!status) {
+    const targetLane = isBoardLane(targetId)
+      ? targetId
+      : targetTicket && placementOf(targetTicket).lane;
+    if (!targetLane) {
       return;
     }
+    // Dropping between Intake, Todo and For human would change a label, which
+    // a drag does not do: the card snaps back.
+    if (!mayDrop(carriesSelection ? selection : [ticket], targetLane)) {
+      return;
+    }
+    const status = laneStatus(targetLane);
     if (carriesSelection) {
-      moveSelection(status, sourceId, targetId);
+      moveSelection(targetLane, sourceId, targetId);
       return;
     }
-    if (ticket.status !== status) {
+    if (placementOf(ticket).lane !== targetLane) {
       changeStatus(sourceId, status);
       return;
     }
-    const lane = shownTickets
-      .filter(
-        (candidate) =>
-          !candidate.archived &&
-          candidate.projectId === project.id &&
-          candidate.status === status,
-      )
-      .sort(
-        (left, right) =>
-          left.position - right.position || left.number - right.number,
-      )
-      .map((candidate) => candidate.number);
-    const shownLane = laneOf(status).map(({ number }) => number);
-    const sourceIndex = shownLane.indexOf(sourceId);
+    const lane = statusLane(status);
+    const laneShown = shownLane(targetLane).map(({ number }) => number);
+    const sourceIndex = laneShown.indexOf(sourceId);
     // Onto a card, it takes that card's place; onto the lane, the end.
     const targetIndex =
       typeof targetId === 'number'
-        ? shownLane.indexOf(targetId)
-        : shownLane.length - 1;
+        ? laneShown.indexOf(targetId)
+        : laneShown.length - 1;
     if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
       return;
     }
-    shownLane.splice(sourceIndex, 1);
-    shownLane.splice(targetIndex, 0, sourceId);
-    // Hidden Tickets keep their places around the shown ones.
-    changeOrder(status, mergeLaneOrder(lane, shownLane, [sourceId]));
+    laneShown.splice(sourceIndex, 1);
+    laneShown.splice(targetIndex, 0, sourceId);
+    // Hidden Tickets, and those of the Status's other Lanes, keep their
+    // places around the shown ones.
+    changeOrder(status, mergeLaneOrder(lane, laneShown, [sourceId]));
   };
 
   return (
@@ -1074,21 +1298,26 @@ export const Board: FC<BoardProps> = ({
           filter={filter}
           hideDone={typeof cycleId !== 'number'}
           onCreated={setCreated}
+          onMerged={markEpicMerged}
         />
         <Grid gap={3}>
-          {statuses.map((status) => (
-            <GridItem key={status} colSpan={[12, 4]}>
-              <StatusColumn
+          {boardLanes.map((lane) => (
+            <GridItem key={lane} colSpan={[12, 6, 4]}>
+              <LaneColumn
                 projectId={project.id}
                 cycleId={cycleId}
                 boardPath={boardPath}
                 filter={filter}
-                status={status}
-                tickets={laneOf(status)}
+                lane={lane}
+                placementOf={placementOf}
+                inReview={inReview}
+                tickets={shownLane(lane)}
                 selected={selectedOnBoard}
                 carrier={carrier}
-                highlighted={overLane === status}
+                highlighted={overLane === lane}
                 onSelect={select}
+                onMerged={markMerged}
+                onBackToTodo={(number) => changeStatus(number, 'Todo')}
                 onCreated={setCreated}
               />
             </GridItem>

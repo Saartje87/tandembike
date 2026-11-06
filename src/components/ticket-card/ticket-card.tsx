@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Checkbox, Inline, Stack, Tag, Text } from '@blockle/blocks';
+import { Box, Checkbox, Inline, Link, Stack, Tag, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
@@ -9,13 +9,26 @@ import {
   ticketByNumberPath,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
+import {
+  externalReferenceDisplay,
+  isPullRequestReference,
+} from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { useTicketActivity } from '../conversation-activity/conversation-activity';
+import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
+import { isStalled } from '../board/board-lanes';
+import {
+  useTicketActivity,
+  useTicketCost,
+  useTicketLiveConversation,
+} from '../conversation-activity/conversation-activity';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
+import { MergedButton } from '../merged-button/merged-button';
 import { tinted } from '../palette/palette.css';
+import { StatusLine } from '../status-line/status-line';
 import * as styles from './ticket-card.css';
 
 export type TicketCardProps = {
@@ -42,6 +55,13 @@ export type TicketCardProps = {
   carryCount?: number;
   /** Whether the card is selected and carried along by another one's drag. */
   carriedAlong?: boolean;
+  /**
+   * Shows a Merged button, which calls this. Leave it out for a card whose
+   * Ticket is not in review.
+   */
+  onMerged?: () => void;
+  /** Sends the Ticket Back to Todo; the button shows on a stalled card only. */
+  onBackToTodo?: () => void;
 };
 
 export type SelectMode = 'toggle' | 'range';
@@ -170,9 +190,13 @@ export const TicketCard: FC<TicketCardProps> = ({
   onSelect,
   carryCount = 1,
   carriedAlong = false,
+  onMerged,
+  onBackToTodo,
 }) => {
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
+  const live = useTicketLiveConversation(ticket.number);
+  const cost = useTicketCost(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
 
   // Runs before the link's own click, so it neither navigates nor opens a tab.
@@ -190,6 +214,14 @@ export const TicketCard: FC<TicketCardProps> = ({
   };
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
+  // The PR an In progress Ticket is in review through.
+  const pullRequestReference =
+    ticket.status === 'In progress'
+      ? ticket.externalReferences.find(isPullRequestReference)
+      : undefined;
+  const pullRequest = pullRequestReference
+    ? externalReferenceDisplay(pullRequestReference)
+    : undefined;
   const hasMarkers =
     showBlocked ||
     ticket.labels.length > 0 ||
@@ -242,6 +274,25 @@ export const TicketCard: FC<TicketCardProps> = ({
               </AppLink>
             </Text>
 
+            {live && ticket.status === 'In progress' && (
+              <StatusLine live={live} />
+            )}
+
+            {cost > 0 && (
+              <Text fontSize="xsmall" color="muted">
+                {formatCost(cost)}
+              </Text>
+            )}
+
+            {pullRequest && (
+              <Text fontSize="xsmall">
+                {/* A plain Link: the PR is outside the app, not a page to prefetch. */}
+                <Link href={pullRequest.href} intent="inherit">
+                  {pullRequest.text}
+                </Link>
+              </Text>
+            )}
+
             {ticket.epic && (
               <Text fontSize="xsmall" className={styles.epicLine}>
                 <Tag
@@ -269,6 +320,12 @@ export const TicketCard: FC<TicketCardProps> = ({
               </Inline>
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
+            {onMerged && <MergedButton ticket={ticket} onMerged={onMerged} />}
+            {onBackToTodo && isStalled(ticket, live) && (
+              <Inline gap={0}>
+                <BackToTodoButton onClick={onBackToTodo} />
+              </Inline>
+            )}
           </Stack>
           {selectable && (
             <Box paddingBlock={3}>

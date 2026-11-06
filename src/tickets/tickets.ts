@@ -135,6 +135,7 @@ import { normalizeSkills } from './skills';
 import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
+import { triageStateLabels } from './triage-labels';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
@@ -1977,6 +1978,46 @@ export function createTickets(
     },
 
     /**
+     * The completion rule (docs/agents/issue-tracker.md), the one place that
+     * applies it: Ticket `number` becomes Done, loses its triage state label
+     * (never `wontfix` or a category label), and its Claim is released, with
+     * one Activity entry. For an Epic, every unarchived child is completed
+     * the same way, all or nothing, and the Epic loses its own state label;
+     * its Status follows its children.
+     */
+    completeTicket(number: number): Ticket {
+      const stateLabels = { removeLabels: [...triageStateLabels] };
+      const done = checkTicketChanges({ status: 'Done', ...stateLabels });
+      const labelsOnly = checkTicketChanges(stateLabels);
+      const { type, children } = getTicket(number);
+      checkTicketWritable(db, number);
+
+      const related = db.transaction(() => {
+        if (type !== 'Epic') {
+          return [applyTicketChanges(number, done).changedEpic];
+        }
+        // Merged releases the Epic's own Claim, recorded with its label
+        // change. First, before its children's Status clears it silently.
+        applyTicketChanges(number, labelsOnly, { releaseClaim: true });
+        return children
+          .filter((child) => !child.archived)
+          .map((child) => applyTicketChanges(child.number, done).changedEpic);
+      });
+      if (type === 'Epic') {
+        changes.publish({
+          type: 'tickets',
+          numbers: [
+            number,
+            ...children.filter((child) => !child.archived).map((c) => c.number),
+          ],
+        });
+      } else {
+        publishWith(number, ...related);
+      }
+      return getTicket(number);
+    },
+
+    /**
      * Applies the same Status and label change to each Ticket in
      * `ticketNumbers`, by the rules of `updateTicket`. Each Ticket's change is
      * atomic, but the batch is not: a Ticket that cannot be changed is
@@ -2961,6 +3002,7 @@ export function createTickets(
       removeExternalReferences,
       acceptanceCriteria,
     }: TicketChanges,
+    { releaseClaim = false }: { releaseClaim?: boolean } = {},
   ): {
     leftCycles: number[];
     changedEpic: number | null;
@@ -3015,7 +3057,7 @@ export function createTickets(
       db.update(tickets)
         .set({
           ...values,
-          ...(values.status === 'Done'
+          ...(values.status === 'Done' || releaseClaim
             ? { claimAgentRunId: null, claimAgentName: null }
             : {}),
           ...(moved
@@ -3039,6 +3081,9 @@ export function createTickets(
       }
       recordActivity(db, number, actor, [
         ...rowChanges(db, existing, values),
+        ...(releaseClaim && values.status !== 'Done'
+          ? claimChanges('claimReleased', existing)
+          : []),
         ...labelChanges(labelsBefore, {
           added: addLabels,
           removed: removeLabels,

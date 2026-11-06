@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
 import { errorFrom } from '../test/tickets';
@@ -552,6 +552,77 @@ describe('Reading Conversations', () => {
     expect(errorFrom(() => conversations.get(999))).toEqual(
       new NotFoundError('There is no Conversation with id 999.'),
     );
+  });
+});
+
+describe('Activity rows', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('lists every Conversation newest first with its latest entry and run start', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    vi.setSystemTime(new Date('2026-11-07T10:05:00Z'));
+    const second = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Two',
+    });
+    runner.runs[0].emit({ type: 'exit', error: 'crashed' });
+    runner.runs[1].emit({ type: 'agent', text: 'Hi' });
+
+    expect(conversations.activityRows()).toEqual([
+      {
+        ticketNumber: null,
+        projectId: project.id,
+        state: second.state,
+        latest: { role: 'agent', text: 'Hi', permissionRules: null },
+        startedAt: '2026-11-07T10:05:00.000Z',
+        costUsd: 0,
+      },
+      {
+        ticketNumber: ticket.number,
+        projectId: project.id,
+        state: 'interrupted',
+        latest: { role: 'error', text: 'crashed', permissionRules: null },
+        startedAt: '2026-11-07T10:00:00.000Z',
+        costUsd: 0,
+      },
+    ]);
+  });
+
+  it("starts the run again at the User's latest message", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
+    const { id } = await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    vi.setSystemTime(new Date('2026-11-07T11:00:00Z'));
+    await conversations.reply(id, 'More');
+    runner.runs
+      .at(-1)
+      ?.emit({ type: 'tool', text: 'Read {"file_path":"a.ts"}' });
+
+    const [row] = conversations.activityRows();
+    expect(row.startedAt).toBe('2026-11-07T11:00:00.000Z');
+    expect(row.latest).toEqual({
+      role: 'tool',
+      text: 'Read {"file_path":"a.ts"}',
+      permissionRules: null,
+    });
   });
 });
 

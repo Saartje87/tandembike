@@ -21,6 +21,14 @@ export type ExternalReferenceDisplay = { text: string; href?: string };
 /** A GitHub issue or pull request path: owner, repository and number. */
 const githubIssuePath = /^\/([^/]+)\/([^/]+)\/(?:issues|pull)\/(\d+)(?:\/|$)/;
 
+/** Whether `reference` is a GitHub pull request URL. */
+export function isPullRequestReference(reference: string): boolean {
+  const url = httpUrl(reference);
+  const github =
+    url?.hostname === 'github.com' ? githubIssuePath.exec(url.pathname) : null;
+  return github !== null && url?.pathname.split('/')[3] === 'pull';
+}
+
 /** The prefix and URL of a Reference template, enough to link a key. */
 export type ReferenceTemplateLink = { prefix: string; url: string };
 

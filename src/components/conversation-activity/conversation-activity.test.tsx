@@ -3,6 +3,7 @@ import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import { activity } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { LiveUpdates } from '../live-updates/live-updates';
@@ -64,23 +65,17 @@ describe('ConversationActivityProvider', () => {
   });
 
   it('loads the activity, and loads it again when a Conversation changes', async () => {
-    vi.mocked(currentConversationActivity).mockResolvedValueOnce({
-      running: [4],
-      needsYou: [],
-      needsYouCount: 0,
-      needsYouByProject: {},
-    });
+    vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+      activity({ running: [4] }),
+    );
     show();
     expect(
       await screen.findByText('running=true needsYou=false'),
     ).toBeInTheDocument();
 
-    vi.mocked(currentConversationActivity).mockResolvedValueOnce({
-      running: [],
-      needsYou: [4],
-      needsYouCount: 2,
-      needsYouByProject: {},
-    });
+    vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+      activity({ needsYou: [4], needsYouCount: 2 }),
+    );
     act(() => {
       FakeEventSource.instances[0]?.onmessage?.(
         new MessageEvent('message', {

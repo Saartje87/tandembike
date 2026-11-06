@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, max } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -18,6 +18,7 @@ import type {
   QuestionAnswers,
   RunEvent,
 } from './agent-runner';
+import type { ActivityRow } from './conversation-activity';
 import {
   type ConversationIntent,
   type ConversationState,
@@ -441,6 +442,72 @@ export function createConversations({
           (filter.ticketNumber === undefined ||
             row.ticketNumber === filter.ticketNumber),
       );
+    },
+
+    /**
+     * Every Conversation, newest first, with the role of its latest
+     * transcript entry: what the Board needs to place Tickets (T1065). The
+     * latest entries come from one query.
+     */
+    activityRows(): ActivityRow[] {
+      const latestOf = (role?: TranscriptRole) =>
+        db
+          .select({ id: max(conversationEntries.id) })
+          .from(conversationEntries)
+          .where(role ? eq(conversationEntries.role, role) : undefined)
+          .groupBy(conversationEntries.conversationId);
+      const entriesOf = (ids: ReturnType<typeof latestOf>) =>
+        db
+          .select({
+            conversationId: conversationEntries.conversationId,
+            role: conversationEntries.role,
+            text: conversationEntries.text,
+            permissionRules: conversationEntries.permissionRules,
+            createdAt: conversationEntries.createdAt,
+          })
+          .from(conversationEntries)
+          .where(inArray(conversationEntries.id, ids))
+          .all();
+      const latest = new Map(
+        entriesOf(latestOf()).map((entry) => [entry.conversationId, entry]),
+      );
+      // Every run starts with the User's message, so the latest one is the
+      // run's start: no column of its own is needed.
+      const started = new Map(
+        entriesOf(latestOf('user')).map((entry) => [
+          entry.conversationId,
+          entry.createdAt,
+        ]),
+      );
+      return db
+        .select({
+          id: conversations.id,
+          ticketNumber: conversations.ticketNumber,
+          projectId: conversations.projectId,
+          state: conversations.state,
+          costUsd: conversations.costUsd,
+          createdAt: conversations.createdAt,
+        })
+        .from(conversations)
+        .orderBy(desc(conversations.id))
+        .all()
+        .map(({ id, ticketNumber, projectId, state, costUsd, createdAt }) => {
+          const entry = latest.get(id);
+          return {
+            ticketNumber,
+            projectId,
+            state,
+            costUsd: costUsd ?? 0,
+            latest: entry
+              ? {
+                  role: entry.role,
+                  text: entry.text,
+                  permissionRules: entry.permissionRules,
+                }
+              : null,
+            startedAt: (started.get(id) ?? createdAt).toISOString(),
+          };
+        });
     },
 
     /**

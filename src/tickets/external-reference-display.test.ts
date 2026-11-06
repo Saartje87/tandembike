@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { externalReferenceDisplay } from './external-reference-display';
+import {
+  externalReferenceDisplay,
+  isPullRequestReference,
+} from './external-reference-display';
 
 const templates = [
   { prefix: '#', url: 'https://github.com/acme/web/issues/{n}' },
@@ -58,5 +61,27 @@ describe('externalReferenceDisplay', () => {
         { prefix: 'https', url: 'https://example.com/{n}' },
       ]),
     ).toEqual({ text: 'example.com/a', href: 'https://example.com/a' });
+  });
+});
+
+describe('isPullRequestReference', () => {
+  it('is true for a GitHub pull request URL', () => {
+    expect(
+      isPullRequestReference('https://github.com/owner/repo/pull/87'),
+    ).toBe(true);
+    expect(
+      isPullRequestReference('https://github.com/owner/repo/pull/87/files'),
+    ).toBe(true);
+  });
+
+  it('is false for a GitHub issue, another host and a key', () => {
+    expect(
+      isPullRequestReference('https://github.com/owner/repo/issues/87'),
+    ).toBe(false);
+    expect(
+      isPullRequestReference('https://gitlab.com/owner/repo/pull/87'),
+    ).toBe(false);
+    expect(isPullRequestReference('ABC-33')).toBe(false);
+    expect(isPullRequestReference('#87')).toBe(false);
   });
 });

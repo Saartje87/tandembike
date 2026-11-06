@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../conversations/app-conversations';
+import { activity, liveConversation } from '../../test/conversation-activity';
 import { createTestConversations } from '../../test/conversations';
 import {
   answerConversationPermission,
@@ -252,11 +253,20 @@ describe('Conversation actions', () => {
     });
     runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
 
-    expect(await currentConversationActivity()).toEqual({
-      running: [running.number],
-      needsYou: [asking.number],
-      needsYouCount: 1,
-      needsYouByProject: { [project.id]: 1 },
-    });
+    expect(await currentConversationActivity()).toEqual(
+      activity({
+        live: {
+          [running.number]: liveConversation({
+            line: 'Starting',
+            since: expect.any(String),
+          }),
+        },
+        cost: { [asking.number]: 0.1 },
+        running: [running.number],
+        needsYou: [asking.number],
+        needsYouCount: 1,
+        needsYouByProject: { [project.id]: 1 },
+      }),
+    );
   });
 });
