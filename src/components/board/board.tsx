@@ -205,6 +205,7 @@ type TicketListProps = Pick<
   | 'onMerged'
   | 'onBackToTodo'
   | 'lane'
+  | 'placementOf'
 > & {
   tickets: Ticket[];
   /** The group the cards sort in, when it is not the Lane. */
@@ -215,6 +216,7 @@ type TicketListProps = Pick<
 const TicketList: FC<TicketListProps> = ({
   lane,
   group = lane,
+  placementOf,
   tickets,
   boardPath,
   filter,
@@ -251,7 +253,7 @@ const TicketList: FC<TicketListProps> = ({
             }
             onSelect={(mode) => onSelect(ticket, mode)}
             onMerged={
-              laneOf(ticket).section === 'Review'
+              placementOf(ticket).section === 'Review'
                 ? () => onMerged(ticket)
                 : undefined
             }
@@ -321,6 +323,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
     filter,
     selected,
     carrier,
+    placementOf,
     onSelect,
     onMerged,
     onBackToTodo,

@@ -179,4 +179,39 @@ describe('Board with live Conversations', () => {
     ).toBe(line);
     expect(screen.getAllByText('Reading board.tsx')).toHaveLength(1);
   });
+
+  it('offers Merged on a Review card only while no Conversation is live', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+      activity('running'),
+    );
+    renderWithTheme(
+      <LiveUpdates>
+        <ConversationActivityProvider>
+          <Board project={project} tickets={[inProgress]} />
+        </ConversationActivityProvider>
+      </LiveUpdates>,
+    );
+
+    await vi.waitFor(() =>
+      expect(cardsIn('Running')).toEqual(['Fix the header']),
+    );
+    expect(
+      screen.queryByRole('button', { name: /^Merged T7/ }),
+    ).not.toBeInTheDocument();
+
+    vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+      noConversationActivity,
+    );
+    act(() => {
+      FakeEventSource.instances[0]?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'conversation', id: 1 }),
+        }),
+      );
+    });
+
+    expect(
+      await screen.findByRole('button', { name: /^Merged T7/ }),
+    ).toBeInTheDocument();
+  });
 });
