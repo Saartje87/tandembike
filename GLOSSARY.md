@@ -33,12 +33,16 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in one Lane per Status. Epics are not in the Lanes; the Board lists them apart, with their progress.
+The view of one Project's Tickets, laid out in five Lanes: Intake, Todo, In progress, For human and Done. Epics are not in the Lanes; the Board lists them apart, with their progress.
 _Avoid_: Kanban, dashboard, list
 
 **Lane**:
-The part of a Board that holds the Tickets of one Status, in their order. Dropping a Ticket in a Lane gives it that Status.
+A Board section that holds the Tickets in one situation, in their order. A Lane is derived from a Ticket's Status, its triage state label and, for In progress, the run state of its Conversation, never stored. Dropping a Ticket in a Lane gives it a Status, never a label.
 _Avoid_: Column, drop area
+
+**For human**:
+The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now.
+_Avoid_: Needs you, waiting on me
 
 **Board filter**:
 A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.
