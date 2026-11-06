@@ -52,6 +52,8 @@ Epics stay listed apart from the Lanes, as today, with a state badge (Action nee
 
 Derived from the latest transcript entry of the Ticket's live Conversation (`running` or `waiting`, newest first) by a pure function: a tool entry reads "Reading src/x.tsx", "Editing …", "Running npm run check", "Searching …", "Updating T42"; an agent text entry gives its first sentence; `waiting` shows the question or the permission rule in a few words; `interrupted` and errors say why. Tool names are humanised by an explicit mapping (Read, Edit, Write, Bash with its description, Grep, Glob, Skill, Agent, the Tandembike tools by verb); an unmapped tool shows its bare name and first input value. Elapsed time ticks client-side. Shown on Ticket cards in the In progress Lane and on Epic cards, nowhere else. No partial-message streaming, no new SDK plumbing: the runner already stores every tool call and agent text as a transcript entry and the events route announces each.
 
+**Cost on cards** (added after the T1060 spike, which spent about $1.60 on a one-line docs change, mostly the `implement` skill's overhead of a fresh worktree, `npm ci` and a full check). Each Conversation already stores its cost, shown in the chat header. A Ticket card shows the total over its Conversations and the live run's running cost on the status line; an Epic card shows its own Conversations' cost plus its children's. No Cycle total yet. Part of the status line child (T1066) of the phase 1 Epic.
+
 ### The User merges; Done is one click
 
 The User stays the merge gate and merges on GitHub. The factory never merges, never runs `gh`, and makes no network calls. Agents already add their PR URL to the Ticket, or the Epic, as an External reference. A **Merged** button on Review cards and Epic cards applies the completion rule from `docs/agents/issue-tracker.md`: Status Done, triage state label removed, Claim released; for an Epic, every child in one call and the Epic's own label removed. It trusts the User and checks nothing. The Board shows the PR link, not CI status; the User sees that on GitHub. Rejected: auto-merge on CI green; polling PR state with `gh` from Tandembike; a merge button running `gh pr merge`; a scheduled "finish" Agent run that checks PRs. The existing fallback stays: a later Agent run that finds an In progress Ticket whose PR is merged may move it to Done.
@@ -72,7 +74,9 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 
 ### Agent run mode
 
-The permission relay (ADR 0021) idles a run until the User answers every unlisted call, so a factory is only as hands-off as the repository's allowlist. The User does not want to press Allow constantly. The installed Claude Agent SDK offers `permissionMode: 'auto'`, where a classifier allows safe calls and escalates the rest. Agent run mode becomes a per-Project setting, `default` (today's behaviour) or `auto`, applied to every run the Project starts, factory or by hand; existing Projects keep `default`, Setup suggests `auto` for a factory Project. ADR 0021 noted that whether auto-mode escalations reach the relay through `canUseTool` is unverified: phase 0 verifies it. If they do not, the fallback is `acceptEdits` plus the allowlist. `bypassPermissions` stays off the table: runs start in the main checkout before moving to a worktree. Rejected: a factory-only mode; a hard-coded switch to `auto`.
+The permission relay (ADR 0021) idles a run until the User answers every unlisted call, so a factory is only as hands-off as the repository's allowlist. The User does not want to press Allow constantly. The installed Claude Agent SDK offers `permissionMode: 'auto'`, where a classifier allows safe calls and escalates the rest. Agent run mode becomes a per-Project setting, `default` (today's behaviour) or `auto`, applied to every run the Project starts, factory or by hand; existing Projects keep `default`. The User turns `auto` on per Project on the settings page, with the trade-off written next to the switch; Setup reports the mode and does not suggest it (decided after the spike, replacing the earlier "Setup suggests `auto`"). ADR 0021 noted that whether auto-mode escalations reach the relay through `canUseTool` was unverified. Phase 0 (T1060, `docs/research/auto-permission-mode.md`) settled it: `auto` is the decision. The SDK prompts through `canUseTool` only when the classifier cannot decide; in the spike the classifier decided every one of 24 calls, all allowed, and the run completed a Ticket to an open PR without a prompt. A classifier denial comes back to the model as the tool's result with an instruction to stop and explain, so in a Conversation it shows as an `idle` run with an explanation, which the Board already marks as needing the User. The classifier is permissive: it allowed a hard reset, a file written and removed in the home directory, an outbound POST and a push with a PR; the ADR for the setting states this, and the mode stays per Project and `default` unless the User turns it on. `acceptEdits` plus the allowlist is dropped as a fallback: it would prompt for every push and PR and gain no safety for Bash. `bypassPermissions` stays off the table: runs start in the main checkout before moving to a worktree. Rejected: a factory-only mode; a hard-coded switch to `auto`; `permissionPrompts: 'none'` for Autopilot runs, which would deny the rare undecidable call instead of waiting for the User, kept as an option if waiting runs pile up; parsing a classifier denial into a dedicated state, since `idle` plus the run's explanation on the status line is enough.
+
+**Git guardrail (T1081).** The git side of the classifier's permissiveness is closed deterministically: a committed PreToolUse hook in this repository denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D`, `git stash drop` and `git stash clear`, for Agent runs in any mode and for terminal sessions alike, with a message naming the rule. `git checkout --` and `git restore` stay allowed. The hook is the repository's own (ADR 0014, 0019), not injected by Tandembike; Setup gains an advisory checklist item for it in phase 2. Bash outside the repository stays unbounded: that is the trade accepted for hands-off.
 
 ### Feedback as Tickets
 
@@ -98,6 +102,8 @@ Goal: know whether `auto` mode is usable before building on it.
 
 Deliverable: the findings file and the decision recorded in this roadmap.
 
+Done on 2026-11-06 (T1060): `docs/research/auto-permission-mode.md`. Decision: `auto`. See "Agent run mode" above.
+
 ### Phase 1: Board lanes
 
 Goal: a Board that shows the factory's state before any dispatcher exists. Useful today for runs the User starts by hand.
@@ -114,7 +120,7 @@ Decision records: ADR "Lanes are derived from Status, labels and run state"; Glo
 
 Goal: the first hands-off Cycle.
 
-- Agent run mode setting, per Project, with the runner honouring it.
+- Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
 - Autopilot switch, stored per Project, on the Board header and settings.
 - The dispatcher: eligibility query, lane-order selection, slot accounting against the existing cap, one serialised evaluate step, triggered by events and on startup.
 - Conversations record Started by; the header shows it.
@@ -151,8 +157,8 @@ Decision records: ADR "Review runs are separate Conversations"; Glossary: Review
 
 ## Risks and open questions
 
-- **Auto mode and the relay.** Unverified whether `auto` escalations reach `canUseTool`. Phase 0 answers it; the fallback is decided above.
-- **Auto mode's judgement.** The classifier decides what is safe; a run in `auto` may do things the User would have denied. Worktrees and the local allowlist limit the blast radius; the User's repositories are not all trusted equally, so the setting is per Project.
+- **Auto mode and the relay.** Settled by phase 0: the relay is used only when the classifier cannot decide, which the spike never hit. A run that waits for hours on such a prompt while the User is away is still possible; `permissionPrompts: 'none'` would turn that into a denial and is an option for Autopilot runs if it happens.
+- **Auto mode's judgement.** Confirmed permissive by phase 0: the classifier allowed a hard reset, writes and removals outside the repository, an outbound POST and a push with a PR without asking. Worktrees bound git, nothing bounds Bash. The User's repositories are not all trusted equally, so the setting is per Project and `default` unless turned on.
 - **Merge is on the critical path.** A Blocker only clears at Done, which needs the User's merge. A Cycle with a long Blocker chain runs at the User's merging pace. The Merged button makes it one click; a chained-branch mode (dependant branches off the open PR) is a possible later addition and is not planned.
 - **Stalled detection.** "No Claim and no PR" is a heuristic; a terminal session without a Claim looks stalled. The Back to Todo action is manual for this reason.
 - **Status line quality.** Tool-name mapping needs maintaining as skills and tools change; an unmapped tool degrades to its bare name, never to nothing.
