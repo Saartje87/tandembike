@@ -74,8 +74,8 @@ describe('conversationActivity', () => {
 
     it('reports a running and a waiting Conversation', () => {
       expect(liveOf(row(4, 'running'), row(5, 'waiting'))).toEqual({
-        4: { state: 'running', line: 'Working on it.', since: since },
-        5: { state: 'waiting', line: 'Working on it.', since: since },
+        4: { state: 'running', line: 'Working on it.', since, cost: 0 },
+        5: { state: 'waiting', line: 'Working on it.', since, cost: 0 },
       });
     });
 
