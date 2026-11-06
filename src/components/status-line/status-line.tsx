@@ -4,19 +4,21 @@ import { Inline, Text, Tooltip } from '@blockle/blocks';
 import type { FC } from 'react';
 
 import type { LiveConversation } from '../../conversations/conversation-activity';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { formatElapsed } from './format-elapsed';
 import * as styles from './status-line.css';
 import { useNow } from './use-now';
 
 export type StatusLineProps = {
   /** The live Conversation whose latest line and run start it shows. */
-  live: Pick<LiveConversation, 'line' | 'since'>;
+  live: Pick<LiveConversation, 'line' | 'since' | 'cost'>;
 };
 
 /**
  * One line saying what a live Conversation is doing now, cut to the width of
  * its card with the full text as a tooltip, and how long the run has been
- * going, which counts on once a minute.
+ * going, which counts on once a minute, and what it has cost once that is
+ * above zero.
  */
 export const StatusLine: FC<StatusLineProps> = ({ live }) => {
   const now = useNow();
@@ -30,7 +32,10 @@ export const StatusLine: FC<StatusLineProps> = ({ live }) => {
         </Text>
       </Tooltip>
       <Text fontSize="xsmall" color="muted" className={styles.elapsed}>
-        {formatElapsed(now - new Date(live.since).getTime())}
+        {[
+          formatElapsed(now - new Date(live.since).getTime()),
+          ...(live.cost > 0 ? [formatCost(live.cost)] : []),
+        ].join(' · ')}
       </Text>
     </Inline>
   );

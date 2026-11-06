@@ -13,11 +13,18 @@ export type LiveConversation = {
   line: string;
   /** When the current run started, as an ISO string. */
   since: string;
+  /** What this Conversation has cost so far in USD: the running cost. */
+  cost: number;
 };
 
 export type ConversationActivity = {
   /** Per Ticket number, its newest live Conversation; none for idle/stopped. */
   live: Record<number, LiveConversation>;
+  /**
+   * Per Ticket number, the USD cost summed over all its Conversations, closed
+   * ones included. Tickets that cost nothing are left out.
+   */
+  cost: Record<number, number>;
   /** Tickets with a Conversation whose Agent is working. */
   running: number[];
   /** Tickets with a Conversation that waits for a permission or a reply. */
@@ -30,6 +37,7 @@ export type ConversationActivity = {
 
 export const noConversationActivity: ConversationActivity = {
   live: {},
+  cost: {},
   running: [],
   needsYou: [],
   needsYouCount: 0,
@@ -44,6 +52,8 @@ export type ActivityRow = {
   latest: StatusEntry | null;
   /** When the current run started, as an ISO string. */
   startedAt: string;
+  /** What the Conversation has cost in USD, 0 if nothing yet. */
+  costUsd: number;
 };
 
 const liveStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
@@ -69,6 +79,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
         state,
         line: statusLine(row.latest),
         since: row.startedAt,
+        cost: row.costUsd,
       };
     }
   }
@@ -87,6 +98,16 @@ const ticketsOf = (rows: ActivityRow[]): number[] => [
   ),
 ];
 
+const costOf = (rows: ActivityRow[]): Record<number, number> => {
+  const cost: Record<number, number> = {};
+  for (const { ticketNumber, costUsd } of rows) {
+    if (ticketNumber !== null && costUsd > 0) {
+      cost[ticketNumber] = (cost[ticketNumber] ?? 0) + costUsd;
+    }
+  }
+  return cost;
+};
+
 const countBy = (ids: number[]): Record<number, number> => {
   const counts: Record<number, number> = {};
   for (const id of ids) {
@@ -102,6 +123,7 @@ export function conversationActivity(
   const waiting = conversations.filter(({ state }) => needsYou(state));
   return {
     live: liveOf(conversations),
+    cost: costOf(conversations),
     running: ticketsOf(
       conversations.filter(({ state }) => state === 'running'),
     ),

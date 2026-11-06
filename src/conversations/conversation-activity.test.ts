@@ -21,6 +21,7 @@ const row = (
   projectId,
   latest: { role, text, permissionRules: null },
   startedAt: '2026-11-07T10:00:00.000Z',
+  costUsd: 0,
 });
 
 describe('conversationActivity', () => {
@@ -73,8 +74,8 @@ describe('conversationActivity', () => {
 
     it('reports a running and a waiting Conversation', () => {
       expect(liveOf(row(4, 'running'), row(5, 'waiting'))).toEqual({
-        4: { state: 'running', line: 'Working on it.', since: since },
-        5: { state: 'waiting', line: 'Working on it.', since: since },
+        4: { state: 'running', line: 'Working on it.', since, cost: 0 },
+        5: { state: 'waiting', line: 'Working on it.', since, cost: 0 },
       });
     });
 
@@ -109,6 +110,7 @@ describe('conversationActivity', () => {
         state: 'running',
         line: 'Reading board.tsx',
         since: '2026-11-07T09:00:00.000Z',
+        cost: 0,
       });
       expect(live[5].line).toBe('Bash');
     });
@@ -116,6 +118,12 @@ describe('conversationActivity', () => {
     it('says Starting for a Conversation without entries', () => {
       expect(liveOf({ ...row(4, 'running'), latest: null })[4].line).toBe(
         'Starting',
+      );
+    });
+
+    it("carries the live Conversation's own cost as the running cost", () => {
+      expect(liveOf({ ...row(4, 'running'), costUsd: 0.42 })[4].cost).toBe(
+        0.42,
       );
     });
 
@@ -137,5 +145,27 @@ describe('conversationActivity', () => {
         ),
       ).toMatchObject({ 4: { state: 'waiting' }, 5: { state: 'running' } });
     });
+  });
+});
+
+describe('conversationActivity cost', () => {
+  it("sums the cost of all of a Ticket's Conversations, live or not", () => {
+    const { cost } = conversationActivity([
+      { ...row(4, 'running'), costUsd: 0.5 },
+      { ...row(4, 'stopped'), costUsd: 1.1 },
+      { ...row(5, 'idle'), costUsd: 0.25 },
+    ]);
+
+    expect(cost[4]).toBeCloseTo(1.6);
+    expect(cost[5]).toBe(0.25);
+  });
+
+  it('leaves out Tickets that cost nothing and Conversations without a Ticket', () => {
+    const { cost } = conversationActivity([
+      row(4, 'running'),
+      { ...row(null, 'running'), costUsd: 3 },
+    ]);
+
+    expect(cost).toEqual({});
   });
 });

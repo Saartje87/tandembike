@@ -19,8 +19,10 @@ import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { isStalled } from '../board/board-lanes';
 import {
   useTicketActivity,
+  useTicketCost,
   useTicketLiveConversation,
 } from '../conversation-activity/conversation-activity';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
@@ -194,6 +196,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
   const live = useTicketLiveConversation(ticket.number);
+  const cost = useTicketCost(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
 
   // Runs before the link's own click, so it neither navigates nor opens a tab.
@@ -273,6 +276,12 @@ export const TicketCard: FC<TicketCardProps> = ({
 
             {live && ticket.status === 'In progress' && (
               <StatusLine live={live} />
+            )}
+
+            {cost > 0 && (
+              <Text fontSize="xsmall" color="muted">
+                {formatCost(cost)}
+              </Text>
             )}
 
             {pullRequest && (

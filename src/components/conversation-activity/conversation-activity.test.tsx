@@ -66,6 +66,7 @@ describe('ConversationActivityProvider', () => {
   it('loads the activity, and loads it again when a Conversation changes', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce({
       live: {},
+      cost: {},
       running: [4],
       needsYou: [],
       needsYouCount: 0,
@@ -78,6 +79,7 @@ describe('ConversationActivityProvider', () => {
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce({
       live: {},
+      cost: {},
       running: [],
       needsYou: [4],
       needsYouCount: 2,
