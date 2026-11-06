@@ -350,6 +350,7 @@ describe('Selecting a TicketCard', () => {
       vi.mocked(currentConversationActivity).mockResolvedValue({
         ...activity,
         live: {},
+        cost: {},
         needsYouCount: activity.needsYou.length,
         needsYouByProject: {},
       });
@@ -392,8 +393,10 @@ describe('Selecting a TicketCard', () => {
           state: 'running' as const,
           line,
           since: '2026-11-07T10:00:00.000Z',
+          cost: 0.42,
         },
       },
+      cost: { 4: 1.6 },
       running: [4],
       needsYou: [],
       needsYouCount: 0,
@@ -421,7 +424,7 @@ describe('Selecting a TicketCard', () => {
       renderCard();
 
       expect(await screen.findByText('Reading board.tsx')).toBeInTheDocument();
-      expect(screen.getByText('3m')).toBeInTheDocument();
+      expect(screen.getByText('3m · $0.42')).toBeInTheDocument();
     });
 
     it('follows the Conversation as its latest entry changes', async () => {
@@ -457,6 +460,15 @@ describe('Selecting a TicketCard', () => {
       vi.unstubAllGlobals();
     });
 
+    it('shows the running cost on the status line', async () => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activityWith('Reading board.tsx'),
+      );
+      renderCard();
+
+      expect(await screen.findByText('3m · $0.42')).toBeInTheDocument();
+    });
+
     it('shows no line without a live Conversation', async () => {
       vi.mocked(currentConversationActivity).mockResolvedValue({
         ...activityWith('x'),
@@ -480,6 +492,42 @@ describe('Selecting a TicketCard', () => {
         expect(currentConversationActivity).toHaveBeenCalled(),
       );
       expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Cost', () => {
+    const renderWithCost = async (
+      cost: Record<number, number>,
+      status: 'In progress' | 'Done' = 'Done',
+    ) => {
+      vi.mocked(currentConversationActivity).mockResolvedValue({
+        live: {},
+        cost,
+        running: [],
+        needsYou: [],
+        needsYouCount: 0,
+        needsYouByProject: {},
+      });
+      renderWithTheme(
+        <ConversationActivityProvider>
+          <TicketCard ticket={{ ...ticket, status }} boardPath="/project/1" />
+        </ConversationActivityProvider>,
+      );
+      await waitFor(() =>
+        expect(currentConversationActivity).toHaveBeenCalled(),
+      );
+    };
+
+    it("shows the total over the Ticket's Conversations, also on a Done Ticket", async () => {
+      await renderWithCost({ 4: 1.6 });
+
+      expect(await screen.findByText('$1.60')).toBeInTheDocument();
+    });
+
+    it('shows nothing when the Ticket has cost nothing', async () => {
+      await renderWithCost({ 9: 3 });
+
+      expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
     });
   });
 

@@ -82,7 +82,12 @@ const inProgress: Ticket = {
 const activity = (state: 'running' | 'waiting'): ConversationActivity => ({
   ...noConversationActivity,
   live: {
-    7: { state, line: 'Reading board.tsx', since: '2026-11-07T10:00:00.000Z' },
+    7: {
+      state,
+      line: 'Reading board.tsx',
+      since: '2026-11-07T10:00:00.000Z',
+      cost: 0,
+    },
   },
 });
 

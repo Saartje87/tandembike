@@ -74,3 +74,11 @@ export const useTicketLiveConversation = (
 /** Every Ticket's live Conversation, for a view that places many Tickets. */
 export const useLiveConversations = (): ConversationActivity['live'] =>
   useContext(Activity).live;
+
+/** What Ticket `number`'s Conversations have cost in USD, 0 without any. */
+export const useTicketCost = (number: number): number =>
+  useContext(Activity).cost[number] ?? 0;
+
+/** Every Ticket's total cost, for a view that sums over many Tickets. */
+export const useTicketCosts = (): ConversationActivity['cost'] =>
+  useContext(Activity).cost;

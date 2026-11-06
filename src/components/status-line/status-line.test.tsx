@@ -18,6 +18,7 @@ describe('StatusLine', () => {
     state: 'running' as const,
     line: 'Reading board.tsx',
     since: '2026-11-07T10:00:00.000Z',
+    cost: 0,
   };
 
   it('shows what the run is doing and how long it has been going', () => {
@@ -25,6 +26,18 @@ describe('StatusLine', () => {
 
     expect(screen.getByText('Reading board.tsx')).toBeInTheDocument();
     expect(screen.getByText('12m')).toBeInTheDocument();
+  });
+
+  it('shows the running cost next to the elapsed time', () => {
+    renderWithTheme(<StatusLine live={{ ...live, cost: 0.42 }} />);
+
+    expect(screen.getByText('12m · $0.42')).toBeInTheDocument();
+  });
+
+  it('shows no cost before the run has cost anything', () => {
+    renderWithTheme(<StatusLine live={live} />);
+
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
   });
 
   it('counts on once a minute', () => {

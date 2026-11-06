@@ -115,8 +115,12 @@ describe('laneStatus', () => {
       state: LiveConversation['state'],
       rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
     ) =>
-      placed('In progress', [], rest, { state, line: 'Starting', since: '' })
-        .section;
+      placed('In progress', [], rest, {
+        state,
+        line: 'Starting',
+        since: '',
+        cost: 0,
+      }).section;
 
     it('puts a running Conversation in Running', () => {
       expect(inProgress('running')).toBe('Running');
@@ -148,7 +152,7 @@ describe('laneStatus', () => {
           'Todo',
           ['ready-for-agent'],
           {},
-          { state: 'running', line: 'Starting', since: '' },
+          { state: 'running', line: 'Starting', since: '', cost: 0 },
         ),
       ).toEqual({
         lane: 'Todo',

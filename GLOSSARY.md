@@ -45,7 +45,7 @@ An In progress Ticket with no Claim and no pull request among its External refer
 _Avoid_: Stuck, orphaned
 
 **Status line**:
-The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going. It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
+The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going and what it has cost so far. It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
 _Avoid_: Progress line, activity line
 
 **For human**:
