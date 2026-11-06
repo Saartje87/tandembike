@@ -114,6 +114,7 @@ const activity: ConversationActivity = {
       state: 'running',
       line: 'Editing checkout.tsx',
       since: '2026-11-07T10:00:00.000Z',
+      cost: 0,
     },
   },
 };
@@ -195,7 +196,9 @@ describe('Board Epic row with live state', () => {
     await userEvent.click(merged());
 
     expect(await screen.findByText('Could not complete T20')).toBeVisible();
-    expect(merged()).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Merged T20 Checkout' }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole('switch', { name: /Show done Epics/ }),
     ).not.toBeInTheDocument();

@@ -6,12 +6,16 @@ import { createTicket } from '../../app/tickets/actions';
 import type { LiveConversation } from '../../conversations/conversation-activity';
 import { renderWithTheme } from '../../test/render';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
-import { useLiveConversations } from '../conversation-activity/conversation-activity';
+import {
+  useLiveConversations,
+  useTicketCosts,
+} from '../conversation-activity/conversation-activity';
 import { EpicChips } from './epic-chips';
 
 vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
 vi.mock('../conversation-activity/conversation-activity', () => ({
   useLiveConversations: vi.fn(() => ({})),
+  useTicketCosts: vi.fn(() => ({})),
 }));
 
 const pullRequest = 'https://github.com/owner/repo/pull/9';
@@ -21,6 +25,7 @@ const liveConversation = (
   state,
   line: 'Reading board.tsx',
   since: '2026-11-07T10:00:00.000Z',
+  cost: 0,
 });
 
 const child = (
@@ -70,6 +75,7 @@ describe('EpicChips', () => {
   beforeEach(() => {
     vi.mocked(createTicket).mockReset();
     vi.mocked(useLiveConversations).mockReturnValue({});
+    vi.mocked(useTicketCosts).mockReturnValue({});
   });
 
   it('lists each Epic in the given order with its number, title and progress', () => {
@@ -310,6 +316,45 @@ describe('EpicChips', () => {
       );
 
       expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('cost', () => {
+    const withChildren = epic({
+      number: 4,
+      title: 'Checkout',
+      status: 'In progress',
+      children: [child({ number: 5 }), child({ number: 6 })],
+    });
+
+    it("shows the Epic's own cost plus its children's", () => {
+      vi.mocked(useTicketCosts).mockReturnValue({
+        4: 0.5,
+        5: 1,
+        6: 0.25,
+        9: 7,
+      });
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[withChildren]}
+        />,
+      );
+
+      expect(screen.getByText('$1.75')).toBeInTheDocument();
+    });
+
+    it('is hidden at zero', () => {
+      renderWithTheme(
+        <EpicChips
+          projectId={1}
+          boardPath="/project/1"
+          epics={[withChildren]}
+        />,
+      );
+
+      expect(screen.queryByText(/^\$/)).not.toBeInTheDocument();
     });
   });
 

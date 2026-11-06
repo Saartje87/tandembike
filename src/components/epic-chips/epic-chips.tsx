@@ -19,7 +19,12 @@ import { epicLinkOf } from '../../tickets/epic-link';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { laneOf } from '../board/board-lanes';
-import { useLiveConversations } from '../conversation-activity/conversation-activity';
+import {
+  useLiveConversations,
+  useTicketCosts,
+} from '../conversation-activity/conversation-activity';
+import { epicCost } from '../conversation-activity/epic-cost';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon } from '../icon/icon';
 import { MergedButton } from '../merged-button/merged-button';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
@@ -81,6 +86,7 @@ const badgeIntent = {
 const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter, onMerged }) => {
   const live = useLiveConversations()[epic.number];
   const { section } = laneOf(epic, live);
+  const cost = epicCost(epic, useTicketCosts());
   const { ref, isDropTarget } = useDroppable({
     id: epicDropTarget(epic.number),
     collisionPriority: 2,
@@ -117,6 +123,11 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter, onMerged }) => {
               </AppLink>
             </Text>
             {section && <Tag intent={badgeIntent[section]}>{section}</Tag>}
+            {cost > 0 && (
+              <Text fontSize="xsmall" color="muted">
+                {formatCost(cost)}
+              </Text>
+            )}
             {section === 'Review' && onMerged && (
               <MergedButton ticket={epic} onMerged={() => onMerged(epic)} />
             )}
