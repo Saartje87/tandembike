@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { LiveConversation } from '../../conversations/conversation-activity';
+import { liveConversation } from '../../test/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import {
@@ -120,13 +121,7 @@ describe('laneStatus', () => {
     const inProgress = (
       state: LiveConversation['state'],
       rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
-    ) =>
-      placed('In progress', [], rest, {
-        state,
-        line: 'Starting',
-        since: '',
-        cost: 0,
-      }).section;
+    ) => placed('In progress', [], rest, liveConversation({ state })).section;
 
     it('puts a running Conversation in Running', () => {
       expect(inProgress('running')).toBe('Running');
@@ -154,12 +149,7 @@ describe('laneStatus', () => {
 
     it('does not move a Ticket out of its Lane', () => {
       expect(
-        placed(
-          'Todo',
-          ['ready-for-agent'],
-          {},
-          { state: 'running', line: 'Starting', since: '', cost: 0 },
-        ),
+        placed('Todo', ['ready-for-agent'], {}, liveConversation()),
       ).toEqual({
         lane: 'Todo',
         section: null,
@@ -175,12 +165,7 @@ describe('isStalled and isInReview', () => {
     claim: null,
     externalReferences: [],
   };
-  const live = {
-    state: 'running' as const,
-    line: 'Starting',
-    since: '',
-    cost: 0,
-  };
+  const live = liveConversation();
 
   it('stalls an In progress Ticket with no Claim, PR or live Conversation', () => {
     expect(isStalled(base)).toBe(true);

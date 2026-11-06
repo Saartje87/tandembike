@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
@@ -346,14 +347,10 @@ describe('Selecting a TicketCard', () => {
   });
 
   describe('Conversation activity', () => {
-    const showWith = (activity: { running: number[]; needsYou: number[] }) => {
-      vi.mocked(currentConversationActivity).mockResolvedValue({
-        ...activity,
-        live: {},
-        cost: {},
-        needsYouCount: activity.needsYou.length,
-        needsYouByProject: {},
-      });
+    const showWith = (running: { running: number[]; needsYou: number[] }) => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activity({ ...running, needsYouCount: running.needsYou.length }),
+      );
       renderWithTheme(
         <ConversationActivityProvider>
           <TicketCard ticket={ticket} boardPath="/project/1" />
@@ -387,21 +384,12 @@ describe('Selecting a TicketCard', () => {
   });
 
   describe('Status line', () => {
-    const activityWith = (line: string) => ({
-      live: {
-        4: {
-          state: 'running' as const,
-          line,
-          since: '2026-11-07T10:00:00.000Z',
-          cost: 0.42,
-        },
-      },
-      cost: { 4: 1.6 },
-      running: [4],
-      needsYou: [],
-      needsYouCount: 0,
-      needsYouByProject: {},
-    });
+    const activityWith = (line: string) =>
+      activity({
+        live: { 4: liveConversation({ line, cost: 0.42 }) },
+        cost: { 4: 1.6 },
+        running: [4],
+      });
     const renderCard = (status: 'In progress' | 'Todo' = 'In progress') =>
       renderWithTheme(
         <ConversationActivityProvider>
@@ -500,14 +488,9 @@ describe('Selecting a TicketCard', () => {
       cost: Record<number, number>,
       status: 'In progress' | 'Done' = 'Done',
     ) => {
-      vi.mocked(currentConversationActivity).mockResolvedValue({
-        live: {},
-        cost,
-        running: [],
-        needsYou: [],
-        needsYouCount: 0,
-        needsYouByProject: {},
-      });
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activity({ cost }),
+      );
       renderWithTheme(
         <ConversationActivityProvider>
           <TicketCard ticket={{ ...ticket, status }} boardPath="/project/1" />

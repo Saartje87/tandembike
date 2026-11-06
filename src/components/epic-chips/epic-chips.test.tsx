@@ -3,7 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTicket } from '../../app/tickets/actions';
-import type { LiveConversation } from '../../conversations/conversation-activity';
+import { liveConversation } from '../../test/conversation-activity';
 import { renderWithTheme } from '../../test/render';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
 import {
@@ -19,14 +19,6 @@ vi.mock('../conversation-activity/conversation-activity', () => ({
 }));
 
 const pullRequest = 'https://github.com/owner/repo/pull/9';
-const liveConversation = (
-  state: LiveConversation['state'],
-): LiveConversation => ({
-  state,
-  line: 'Reading board.tsx',
-  since: '2026-11-07T10:00:00.000Z',
-  cost: 0,
-});
 
 const child = (
   fields: Partial<EpicChild> & Pick<EpicChild, 'number'>,
@@ -253,7 +245,7 @@ describe('EpicChips', () => {
 
     it('lets a live Conversation decide the section', () => {
       vi.mocked(useLiveConversations).mockReturnValue({
-        4: liveConversation('running'),
+        4: liveConversation({ state: 'running' }),
       });
       render([inProgress({ externalReferences: [pullRequest] })]);
 
@@ -288,7 +280,7 @@ describe('EpicChips', () => {
 
     it("shows an Epic's live Conversation line and elapsed time", () => {
       vi.mocked(useLiveConversations).mockReturnValue({
-        4: liveConversation('running'),
+        4: liveConversation({ state: 'running' }),
       });
       renderWithTheme(
         <EpicChips

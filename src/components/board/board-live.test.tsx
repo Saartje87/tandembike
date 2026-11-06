@@ -3,10 +3,8 @@ import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
-import {
-  type ConversationActivity,
-  noConversationActivity,
-} from '../../conversations/conversation-activity';
+import { noConversationActivity } from '../../conversations/conversation-activity';
+import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
@@ -79,17 +77,8 @@ const inProgress: Ticket = {
   updatedAt: new Date('2026-01-01'),
 };
 
-const activity = (state: 'running' | 'waiting'): ConversationActivity => ({
-  ...noConversationActivity,
-  live: {
-    7: {
-      state,
-      line: 'Reading board.tsx',
-      since: '2026-11-07T10:00:00.000Z',
-      cost: 0,
-    },
-  },
-});
+const activityIn = (state: 'running' | 'waiting') =>
+  activity({ live: { 7: liveConversation({ state }) } });
 
 const cardsIn = (section: string) =>
   within(screen.getByRole('group', { name: section }))
@@ -109,7 +98,7 @@ describe('Board with live Conversations', () => {
 
   it('moves a card between sections as its Conversation changes', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity('running'),
+      activityIn('running'),
     );
     renderWithTheme(
       <LiveUpdates>
@@ -125,7 +114,7 @@ describe('Board with live Conversations', () => {
     expect(cardsIn('Review')).toEqual([]);
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity('waiting'),
+      activityIn('waiting'),
     );
     act(() => {
       FakeEventSource.instances[0]?.onmessage?.(
@@ -158,7 +147,7 @@ describe('Board with live Conversations', () => {
 
   it('shows the status line on an In progress card with a live Conversation', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity('running'),
+      activityIn('running'),
     );
     renderWithTheme(
       <LiveUpdates>
@@ -182,7 +171,7 @@ describe('Board with live Conversations', () => {
 
   it('offers Merged on a Review card only while no Conversation is live', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity('running'),
+      activityIn('running'),
     );
     renderWithTheme(
       <LiveUpdates>

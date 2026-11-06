@@ -2,6 +2,7 @@ import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { liveConversation } from '../../test/conversation-activity';
 import { renderWithTheme } from '../../test/render';
 import { StatusLine } from './status-line';
 
@@ -14,12 +15,7 @@ describe('StatusLine', () => {
     vi.useRealTimers();
   });
 
-  const live = {
-    state: 'running' as const,
-    line: 'Reading board.tsx',
-    since: '2026-11-07T10:00:00.000Z',
-    cost: 0,
-  };
+  const live = liveConversation();
 
   it('shows what the run is doing and how long it has been going', () => {
     renderWithTheme(<StatusLine live={live} />);

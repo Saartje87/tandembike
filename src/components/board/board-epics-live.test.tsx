@@ -5,10 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
 import { completeTicket } from '../../app/tickets/actions';
-import {
-  type ConversationActivity,
-  noConversationActivity,
-} from '../../conversations/conversation-activity';
+import { noConversationActivity } from '../../conversations/conversation-activity';
+import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
@@ -107,17 +105,9 @@ const inReviewEpic = ticket({
   children: [childOf(21), childOf(22)],
 });
 
-const activity: ConversationActivity = {
-  ...noConversationActivity,
-  live: {
-    20: {
-      state: 'running',
-      line: 'Editing checkout.tsx',
-      since: '2026-11-07T10:00:00.000Z',
-      cost: 0,
-    },
-  },
-};
+const runningActivity = activity({
+  live: { 20: liveConversation({ line: 'Editing checkout.tsx' }) },
+});
 
 const renderBoard = () =>
   renderWithTheme(
@@ -149,7 +139,7 @@ describe('Board Epic row with live state', () => {
   });
 
   it("shows an Epic's live Conversation as its badge and status line", async () => {
-    vi.mocked(currentConversationActivity).mockResolvedValue(activity);
+    vi.mocked(currentConversationActivity).mockResolvedValue(runningActivity);
     renderBoard();
 
     expect(await screen.findByText('Editing checkout.tsx')).toBeInTheDocument();
