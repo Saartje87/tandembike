@@ -25,7 +25,7 @@ export const StatusLine: FC<StatusLineProps> = ({ live }) => {
 
   return (
     <Inline gap={2} alignY="center" flexWrap="nowrap">
-      {/* Tooltip ignores a className, so the shrinkable class is on the Text. */}
+      {/* Tooltip ignores a className (T1088), so the shrinkable class is on the Text. */}
       <Tooltip content={live.line}>
         <Text truncate fontSize="xsmall" color="muted" className={styles.line}>
           {live.line}
