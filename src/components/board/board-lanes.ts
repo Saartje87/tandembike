@@ -81,6 +81,22 @@ export function laneOf(
   return { lane: 'Intake', section: null };
 }
 
+/**
+ * Whether a Ticket is stalled: In progress with no Claim, no PR reference
+ * and, once the live state is given, nothing running or waiting. Only a
+ * stalled card offers Back to Todo.
+ */
+export function isStalled(
+  ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
+  activity?: LaneActivity,
+): boolean {
+  return (
+    laneOf(ticket, activity).section === 'Action needed' &&
+    !ticket.claim &&
+    !ticket.externalReferences.some(isPullRequestReference)
+  );
+}
+
 /** The Status a drop into `lane` gives. */
 export function laneStatus(lane: BoardLane): Status {
   switch (lane) {
