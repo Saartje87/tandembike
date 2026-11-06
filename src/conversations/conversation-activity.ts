@@ -56,31 +56,55 @@ export type ActivityRow = {
   costUsd: number;
 };
 
-const liveStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
-  if (row.state === 'running' || row.state === 'waiting') {
-    return row.state;
+const isLive = (row: ActivityRow) =>
+  row.state === 'running' || row.state === 'waiting';
+
+/** The state of a Conversation that needs the User though it is not live. */
+const stoppedStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
+  if (row.state !== 'idle' && row.state !== 'interrupted') {
+    return null;
   }
-  if (row.state === 'idle' || row.state === 'interrupted') {
-    if (row.latest?.role === 'error') {
-      return 'error';
-    }
-    return row.state === 'interrupted' ? 'interrupted' : null;
+  if (row.latest?.role === 'error') {
+    return 'error';
   }
-  return null;
+  return row.state === 'interrupted' ? 'interrupted' : null;
 };
 
 const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
   const live: Record<number, LiveConversation> = {};
-  // Rows are newest first: the first one with a state wins.
+  const show = (
+    row: ActivityRow,
+    ticketNumber: number,
+    state: LiveConversation['state'],
+  ) => {
+    live[ticketNumber] = {
+      state,
+      line: statusLine(row.latest),
+      since: row.startedAt,
+      cost: row.costUsd,
+    };
+  };
+  // Rows are newest first. A running or waiting Conversation anywhere is
+  // live, the newest winning; an interrupted or errored one counts only as
+  // the Ticket's newest Conversation, so a clean newer run clears it.
   for (const row of rows) {
-    const state = liveStateOf(row);
-    if (row.ticketNumber !== null && state && !(row.ticketNumber in live)) {
-      live[row.ticketNumber] = {
-        state,
-        line: statusLine(row.latest),
-        since: row.startedAt,
-        cost: row.costUsd,
-      };
+    if (
+      row.ticketNumber !== null &&
+      isLive(row) &&
+      !(row.ticketNumber in live)
+    ) {
+      show(row, row.ticketNumber, row.state as 'running' | 'waiting');
+    }
+  }
+  const seen = new Set<number>();
+  for (const row of rows) {
+    if (row.ticketNumber === null || seen.has(row.ticketNumber)) {
+      continue;
+    }
+    seen.add(row.ticketNumber);
+    const state = stoppedStateOf(row);
+    if (state && !(row.ticketNumber in live)) {
+      show(row, row.ticketNumber, state);
     }
   }
   return live;

@@ -131,6 +131,37 @@ describe('conversationActivity', () => {
       expect(liveOf(row(4, 'idle'), row(5, 'stopped'))).toEqual({});
     });
 
+    it('ignores an older interrupted or errored Conversation behind a newer idle one', () => {
+      expect(
+        liveOf(
+          row(4, 'idle'),
+          row(4, 'interrupted'),
+          row(5, 'idle'),
+          row(5, 'idle', 1, 'error'),
+        ),
+      ).toEqual({});
+    });
+
+    it('lets an older running Conversation beat a newer idle one', () => {
+      expect(liveOf(row(4, 'idle'), row(4, 'running'))).toMatchObject({
+        4: { state: 'running' },
+      });
+    });
+
+    it('reports a newest interrupted or errored Conversation', () => {
+      expect(
+        liveOf(
+          row(4, 'interrupted'),
+          row(4, 'stopped'),
+          row(5, 'idle', 1, 'error'),
+          row(5, 'running'),
+        ),
+      ).toMatchObject({ 4: { state: 'interrupted' }, 5: { state: 'running' } });
+      expect(liveOf(row(6, 'idle', 1, 'error'), row(6, 'idle'))).toMatchObject({
+        6: { state: 'error' },
+      });
+    });
+
     it('reports nothing for a Conversation on no Ticket', () => {
       expect(liveOf(row(null, 'running'))).toEqual({});
     });
