@@ -41,6 +41,7 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 - URLs: a single item gets a singular segment, a collection a plural one (`/projects`, `/project/3`, `/project/3/cycle/7`). A Ticket has no page of its own: it opens as a drawer through `?ticket=12` on the Board it is shown over (`/project/3?ticket=12`), and `/ticket/12` opens it over its own Board (ADR 0013). Build every path, and every `revalidatePath` pattern, with `src/app/lib/paths.ts`; never write one out by hand.
 - `src/tickets/`: the Tickets module, the only code that reads or writes Projects and Tickets, with its tests next to it.
 - `src/db/`: the Drizzle schema, migrations and database connection.
+- `docs/`: `docs/adr/` holds the decision records, `docs/agents/` the process docs for Agent runs, and `docs/roadmap/` the roadmaps later Epics are specced from.
 - `src/components/`: UI components.
 - Every component lives in its own folder, grouped by domain/feature: `components/<name>/{<name>.tsx, <name>.css.ts, <name>.test.tsx}`. Import the component file directly, without the file extension (e.g. `../app-link/app-link`).
 - No barrel files: never add `index.ts` files that re-export from other modules.
