@@ -72,7 +72,7 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 
 ### Agent run mode
 
-The permission relay (ADR 0021) idles a run until the User answers every unlisted call, so a factory is only as hands-off as the repository's allowlist. The User does not want to press Allow constantly. The installed Claude Agent SDK offers `permissionMode: 'auto'`, where a classifier allows safe calls and escalates the rest. Agent run mode becomes a per-Project setting, `default` (today's behaviour) or `auto`, applied to every run the Project starts, factory or by hand; existing Projects keep `default`, Setup suggests `auto` for a factory Project. ADR 0021 noted that whether auto-mode escalations reach the relay through `canUseTool` is unverified: phase 0 verifies it. If they do not, the fallback is `acceptEdits` plus the allowlist. `bypassPermissions` stays off the table: runs start in the main checkout before moving to a worktree. Rejected: a factory-only mode; a hard-coded switch to `auto`.
+The permission relay (ADR 0021) idles a run until the User answers every unlisted call, so a factory is only as hands-off as the repository's allowlist. The User does not want to press Allow constantly. The installed Claude Agent SDK offers `permissionMode: 'auto'`, where a classifier allows safe calls and escalates the rest. Agent run mode becomes a per-Project setting, `default` (today's behaviour) or `auto`, applied to every run the Project starts, factory or by hand; existing Projects keep `default`, Setup suggests `auto` for a factory Project. ADR 0021 noted that whether auto-mode escalations reach the relay through `canUseTool` was unverified. Phase 0 (T1060, `docs/research/auto-permission-mode.md`) settled it: `auto` is the decision. The SDK prompts through `canUseTool` only when the classifier cannot decide; in the spike the classifier decided every one of 24 calls, all allowed, and the run completed a Ticket to an open PR without a prompt. A classifier denial comes back to the model as the tool's result with an instruction to stop and explain, so in a Conversation it shows as an `idle` run with an explanation, which the Board already marks as needing the User. The classifier is permissive: it allowed a hard reset, a file written and removed in the home directory, an outbound POST and a push with a PR; the ADR for the setting states this, and the mode stays per Project and `default` unless the User turns it on. `acceptEdits` plus the allowlist is dropped as a fallback: it would prompt for every push and PR and gain no safety for Bash. `bypassPermissions` stays off the table: runs start in the main checkout before moving to a worktree. Rejected: a factory-only mode; a hard-coded switch to `auto`.
 
 ### Feedback as Tickets
 
@@ -97,6 +97,8 @@ Goal: know whether `auto` mode is usable before building on it.
 - Write the findings up in `docs/research/` (the `research` skill's home) and decide: `auto`, or `acceptEdits` plus allowlist.
 
 Deliverable: the findings file and the decision recorded in this roadmap.
+
+Done on 2026-11-06 (T1060): `docs/research/auto-permission-mode.md`. Decision: `auto`. See "Agent run mode" above.
 
 ### Phase 1: Board lanes
 
@@ -151,8 +153,8 @@ Decision records: ADR "Review runs are separate Conversations"; Glossary: Review
 
 ## Risks and open questions
 
-- **Auto mode and the relay.** Unverified whether `auto` escalations reach `canUseTool`. Phase 0 answers it; the fallback is decided above.
-- **Auto mode's judgement.** The classifier decides what is safe; a run in `auto` may do things the User would have denied. Worktrees and the local allowlist limit the blast radius; the User's repositories are not all trusted equally, so the setting is per Project.
+- **Auto mode and the relay.** Settled by phase 0: the relay is used only when the classifier cannot decide, which the spike never hit. A run that waits for hours on such a prompt while the User is away is still possible; `permissionPrompts: 'none'` would turn that into a denial and is an option for Autopilot runs if it happens.
+- **Auto mode's judgement.** Confirmed permissive by phase 0: the classifier allowed a hard reset, writes and removals outside the repository, an outbound POST and a push with a PR without asking. Worktrees bound git, nothing bounds Bash. The User's repositories are not all trusted equally, so the setting is per Project and `default` unless turned on.
 - **Merge is on the critical path.** A Blocker only clears at Done, which needs the User's merge. A Cycle with a long Blocker chain runs at the User's merging pace. The Merged button makes it one click; a chained-branch mode (dependant branches off the open PR) is a possible later addition and is not planned.
 - **Stalled detection.** "No Claim and no PR" is a heuristic; a terminal session without a Claim looks stalled. The Back to Todo action is manual for this reason.
 - **Status line quality.** Tool-name mapping needs maintaining as skills and tools change; an unmapped tool degrades to its bare name, never to nothing.
