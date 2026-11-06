@@ -67,6 +67,7 @@ import type { Status } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
+import { useLiveConversations } from '../conversation-activity/conversation-activity';
 import { EpicChips, epicOfDropTarget } from '../epic-chips/epic-chips';
 import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
@@ -85,6 +86,7 @@ import {
   inProgressSections,
   isBoardLane,
   isTriageLane,
+  type LanePlacement,
   laneOf,
   laneStatus,
 } from './board-lanes';
@@ -164,6 +166,8 @@ type LaneColumnProps = {
   /** The Board filter, which a card's drawer keeps. */
   filter: BoardFilter;
   lane: BoardLane;
+  /** Where a Ticket sits now, given its live Conversation. */
+  placementOf: (ticket: Ticket) => LanePlacement;
   tickets: Ticket[];
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
@@ -277,6 +281,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   boardPath,
   filter,
   lane,
+  placementOf,
   tickets,
   selected,
   carrier,
@@ -319,7 +324,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
                   key={section}
                   section={section}
                   tickets={tickets.filter(
-                    (ticket) => laneOf(ticket).section === section,
+                    (ticket) => placementOf(ticket).section === section,
                   )}
                   {...cardProps}
                 />
@@ -638,6 +643,10 @@ export const Board: FC<BoardProps> = ({
   filter: initialFilter = noBoardFilter,
 }) => {
   const boardPath = boardPathOf(project.id, cycleId ?? null);
+  // Read once for all cards: a live Conversation decides the section (T1065).
+  const liveConversations = useLiveConversations();
+  const placementOf = (ticket: Ticket) =>
+    laneOf(ticket, liveConversations[ticket.number]);
   const [filter, setFilter] = useState(initialFilter);
   const filterUrlTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The URL's filter as last rendered, and as the Board last wrote it.
@@ -703,7 +712,7 @@ export const Board: FC<BoardProps> = ({
   // order, filtered, so positions stay per Status.
   const fullLanes = boardLanes.map((lane) =>
     active
-      .filter((ticket) => laneOf(ticket).lane === lane)
+      .filter((ticket) => placementOf(ticket).lane === lane)
       .sort(
         (left, right) =>
           left.position - right.position || left.number - right.number,
@@ -730,7 +739,8 @@ export const Board: FC<BoardProps> = ({
     !isTriageLane(lane) ||
     tickets.every(
       (ticket) =>
-        !isTriageLane(laneOf(ticket).lane) || laneOf(ticket).lane === lane,
+        !isTriageLane(placementOf(ticket).lane) ||
+        placementOf(ticket).lane === lane,
     );
   const filterLabels = [
     ...new Set([...tickets, ...epics, filter].flatMap(({ labels }) => labels)),
@@ -844,7 +854,9 @@ export const Board: FC<BoardProps> = ({
 
   const select = (ticket: Ticket, mode: SelectMode) => {
     setCycleRefusals(undefined);
-    const lane = shownLane(laneOf(ticket).lane).map(({ number }) => number);
+    const lane = shownLane(placementOf(ticket).lane).map(
+      ({ number }) => number,
+    );
     const from =
       mode === 'range' && selectionAnchor.current !== undefined
         ? lane.indexOf(selectionAnchor.current)
@@ -1038,7 +1050,7 @@ export const Board: FC<BoardProps> = ({
     // which React then fails to remove from its own list on the drop.
     const lanePlaced = (id: unknown) => {
       const found = shownTickets.find((ticket) => ticket.number === id);
-      return found && laneOf(found).lane;
+      return found && placementOf(found).lane;
     };
     const targetLane = lanePlaced(targetId);
     if (targetLane !== undefined && targetLane !== lanePlaced(sourceId)) {
@@ -1091,8 +1103,9 @@ export const Board: FC<BoardProps> = ({
     const targetId =
       target?.id === sourceId
         ? isSortable(source) && source.index !== source.initialIndex
-          ? shownLane(laneOf(ticket).lane).filter(
-              (other) => laneOf(other).section === laneOf(ticket).section,
+          ? shownLane(placementOf(ticket).lane).filter(
+              (other) =>
+                placementOf(other).section === placementOf(ticket).section,
             )[source.index]?.number
           : undefined
         : target?.id;
@@ -1109,7 +1122,7 @@ export const Board: FC<BoardProps> = ({
         : undefined;
     const targetLane = isBoardLane(targetId)
       ? targetId
-      : targetTicket && laneOf(targetTicket).lane;
+      : targetTicket && placementOf(targetTicket).lane;
     if (!targetLane) {
       return;
     }
@@ -1123,7 +1136,7 @@ export const Board: FC<BoardProps> = ({
       moveSelection(targetLane, sourceId, targetId);
       return;
     }
-    if (laneOf(ticket).lane !== targetLane) {
+    if (placementOf(ticket).lane !== targetLane) {
       changeStatus(sourceId, status);
       return;
     }
@@ -1200,6 +1213,7 @@ export const Board: FC<BoardProps> = ({
                 boardPath={boardPath}
                 filter={filter}
                 lane={lane}
+                placementOf={placementOf}
                 tickets={shownLane(lane)}
                 selected={selectedOnBoard}
                 carrier={carrier}

@@ -2,7 +2,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { type ActivityRow, conversationActivity } from './conversation-activity';
+import {
+  type ActivityRow,
+  conversationActivity,
+} from './conversation-activity';
 
 const row = (
   ticketNumber: number | null,
@@ -74,10 +77,7 @@ describe('conversationActivity', () => {
 
     it('reports an idle or interrupted Conversation that ended in an error', () => {
       expect(
-        liveOf(
-          row(4, 'idle', 1, 'error'),
-          row(5, 'interrupted', 1, 'error'),
-        ),
+        liveOf(row(4, 'idle', 1, 'error'), row(5, 'interrupted', 1, 'error')),
       ).toEqual({ 4: { state: 'error' }, 5: { state: 'error' } });
     });
 

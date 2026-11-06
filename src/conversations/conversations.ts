@@ -18,6 +18,7 @@ import type {
   QuestionAnswers,
   RunEvent,
 } from './agent-runner';
+import type { ActivityRow } from './conversation-activity';
 import {
   type ConversationIntent,
   type ConversationState,
@@ -28,7 +29,6 @@ import {
   type QuestionEntry,
   type TranscriptRole,
 } from './conversation-state';
-import type { ActivityRow } from './conversation-activity';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 
 export type Conversation = {
