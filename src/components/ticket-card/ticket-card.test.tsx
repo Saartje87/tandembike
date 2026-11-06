@@ -334,6 +334,7 @@ describe('Selecting a TicketCard', () => {
     const showWith = (activity: { running: number[]; needsYou: number[] }) => {
       vi.mocked(currentConversationActivity).mockResolvedValue({
         ...activity,
+        live: {},
         needsYouCount: activity.needsYou.length,
         needsYouByProject: {},
       });

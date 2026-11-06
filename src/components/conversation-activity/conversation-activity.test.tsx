@@ -65,6 +65,7 @@ describe('ConversationActivityProvider', () => {
 
   it('loads the activity, and loads it again when a Conversation changes', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce({
+      live: {},
       running: [4],
       needsYou: [],
       needsYouCount: 0,
@@ -76,6 +77,7 @@ describe('ConversationActivityProvider', () => {
     ).toBeInTheDocument();
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce({
+      live: {},
       running: [],
       needsYou: [4],
       needsYouCount: 2,

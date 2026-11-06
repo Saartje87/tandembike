@@ -12,6 +12,7 @@ import {
 import { currentConversationActivity } from '../../app/conversations/actions';
 import {
   type ConversationActivity,
+  type LiveConversation,
   noConversationActivity,
 } from '../../conversations/conversation-activity';
 import { useConversationRevision } from '../live-updates/live-updates';
@@ -64,3 +65,12 @@ export const useTicketActivity = (
     needsYou: activity.needsYou.includes(number),
   };
 };
+
+/** Ticket `number`'s live Conversation, or undefined without one. */
+export const useTicketLiveConversation = (
+  number: number,
+): LiveConversation | undefined => useContext(Activity).live[number];
+
+/** Every Ticket's live Conversation, for a view that places many Tickets. */
+export const useLiveConversations = (): ConversationActivity['live'] =>
+  useContext(Activity).live;

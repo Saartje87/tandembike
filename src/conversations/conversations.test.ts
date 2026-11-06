@@ -555,6 +555,41 @@ describe('Reading Conversations', () => {
   });
 });
 
+describe('Activity rows', () => {
+  it('lists every Conversation newest first with the role of its latest entry', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const first = await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    const second = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Two',
+    });
+    runner.runs[0].emit({ type: 'exit', error: 'crashed' });
+    runner.runs[1].emit({ type: 'agent', text: 'Hi' });
+
+    expect(conversations.activityRows()).toEqual([
+      {
+        ticketNumber: null,
+        projectId: project.id,
+        state: second.state,
+        latestRole: 'agent',
+      },
+      {
+        ticketNumber: ticket.number,
+        projectId: project.id,
+        state: 'interrupted',
+        latestRole: 'error',
+      },
+    ]);
+    expect(first.id).toBeLessThan(second.id);
+  });
+});
+
 describe('Live updates', () => {
   it('announce every change to a Conversation and its transcript', async () => {
     const changes = createChangeChannel();

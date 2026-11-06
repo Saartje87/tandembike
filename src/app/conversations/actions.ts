@@ -183,5 +183,5 @@ export async function loadConversation(input: {
  * cards and the header. It only reads, and starts nothing.
  */
 export async function currentConversationActivity(): Promise<ConversationActivity> {
-  return conversationActivity(appConversations().list());
+  return conversationActivity(appConversations().activityRows());
 }

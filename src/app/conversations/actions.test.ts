@@ -253,6 +253,9 @@ describe('Conversation actions', () => {
     runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
 
     expect(await currentConversationActivity()).toEqual({
+      live: {
+        [running.number]: { state: 'running' },
+      },
       running: [running.number],
       needsYou: [asking.number],
       needsYouCount: 1,

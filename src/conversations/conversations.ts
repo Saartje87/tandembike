@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from 'drizzle-orm';
+import { desc, eq, inArray, max } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -28,6 +28,7 @@ import {
   type QuestionEntry,
   type TranscriptRole,
 } from './conversation-state';
+import type { ActivityRow } from './conversation-activity';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 
 export type Conversation = {
@@ -441,6 +442,49 @@ export function createConversations({
           (filter.ticketNumber === undefined ||
             row.ticketNumber === filter.ticketNumber),
       );
+    },
+
+    /**
+     * Every Conversation, newest first, with the role of its latest
+     * transcript entry: what the Board needs to place Tickets (T1065). The
+     * latest entries come from one query.
+     */
+    activityRows(): ActivityRow[] {
+      const latestRoles = new Map(
+        db
+          .select({
+            conversationId: conversationEntries.conversationId,
+            role: conversationEntries.role,
+          })
+          .from(conversationEntries)
+          .where(
+            inArray(
+              conversationEntries.id,
+              db
+                .select({ id: max(conversationEntries.id) })
+                .from(conversationEntries)
+                .groupBy(conversationEntries.conversationId),
+            ),
+          )
+          .all()
+          .map(({ conversationId, role }) => [conversationId, role]),
+      );
+      return db
+        .select({
+          id: conversations.id,
+          ticketNumber: conversations.ticketNumber,
+          projectId: conversations.projectId,
+          state: conversations.state,
+        })
+        .from(conversations)
+        .orderBy(desc(conversations.id))
+        .all()
+        .map(({ id, ticketNumber, projectId, state }) => ({
+          ticketNumber,
+          projectId,
+          state,
+          latestRole: latestRoles.get(id) ?? null,
+        }));
     },
 
     /**
