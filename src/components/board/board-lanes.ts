@@ -1,3 +1,4 @@
+import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { readyForAgent, readyForHuman } from '../../tickets/triage-labels';
@@ -36,17 +37,37 @@ export type LanePlacement = {
   section: InProgressSection | null;
 };
 
+/** The sections in the order the In progress Lane shows them. */
+export const inProgressSections: readonly InProgressSection[] = [
+  'Action needed',
+  'Running',
+  'Review',
+];
+
+/**
+ * The section of an In progress Ticket from its data alone: Review with a PR
+ * reference, Running with a Claim, else it is stalled and needs action.
+ */
+function sectionOf(
+  ticket: Pick<Ticket, 'claim' | 'externalReferences'>,
+): InProgressSection {
+  if (ticket.externalReferences.some(isPullRequestReference)) {
+    return 'Review';
+  }
+  return ticket.claim ? 'Running' : 'Action needed';
+}
+
 /**
  * The Lane a Ticket sits in, derived from its Status and triage state label:
  * a Todo Ticket is in Intake (needs-triage, needs-info, or no state label),
  * Todo (ready-for-agent) or For human (ready-for-human).
  */
 export function laneOf(
-  ticket: Pick<Ticket, 'status' | 'labels'>,
+  ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
   _activity?: LaneActivity,
 ): LanePlacement {
   if (ticket.status === 'In progress') {
-    return { lane: 'In progress', section: null };
+    return { lane: 'In progress', section: sectionOf(ticket) };
   }
   if (ticket.status === 'Done') {
     return { lane: 'Done', section: null };
