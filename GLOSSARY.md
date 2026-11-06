@@ -33,7 +33,7 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in five Lanes: Intake, Todo, In progress, For human and Done. Epics are not in the Lanes; the Board lists them apart, with their progress.
+The view of one Project's Tickets, laid out in five Lanes: Intake, Todo, In progress, For human and Done. Epics are not in the Lanes; the Board lists them apart, with their progress. An In progress Epic shows a badge with its section (Action needed, Running or Review), derived from its own Claim, PR reference and live Conversation as for a Ticket, plus the status line while its Conversation is live; in Review it shows the Merged button, which completes every child and removes its state label.
 _Avoid_: Kanban, dashboard, list
 
 **Lane**:

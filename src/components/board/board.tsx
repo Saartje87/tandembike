@@ -640,9 +640,29 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
 };
 
 type EpicJoin = { joining: Ticket[]; epicNumber: number };
+type EpicChange = EpicJoin | { merged: number };
 
-/** `epics` with `joining` taken out of their Epics and into Epic `epicNumber`. */
-const applyEpicJoin = (epics: Ticket[], { joining, epicNumber }: EpicJoin) => {
+/**
+ * `epics` with `joining` taken out of their Epics and into Epic `epicNumber`,
+ * or with Epic `merged` completed: it and its unarchived children are Done
+ * and lose their triage state label.
+ */
+const applyEpicChange = (epics: Ticket[], change: EpicChange) => {
+  if ('merged' in change) {
+    return epics.map((epic) =>
+      epic.number === change.merged
+        ? {
+            ...epic,
+            status: 'Done' as const,
+            labels: epic.labels.filter((label) => !isTriageStateLabel(label)),
+            children: epic.children.map((child) =>
+              child.archived ? child : { ...child, status: 'Done' as const },
+            ),
+          }
+        : epic,
+    );
+  }
+  const { joining, epicNumber } = change;
   const numbers = new Set(joining.map(({ number }) => number));
   return epics.map((epic) => {
     const children = epic.children.filter(
@@ -716,7 +736,7 @@ export const Board: FC<BoardProps> = ({
   }
   const [created, setCreated] = useState<number>();
   const [shownTickets, showChange] = useOptimistic(tickets, applyBoardChange);
-  const [shownEpics, showEpicJoin] = useOptimistic(epics, applyEpicJoin);
+  const [shownEpics, showEpicChange] = useOptimistic(epics, applyEpicChange);
   const [error, setError] = useState<string>();
   const [, startTransition] = useTransition();
   const [changingCycle, startCycleChange] = useTransition();
@@ -972,6 +992,22 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
+  const markEpicMerged = (epic: Ticket) => {
+    setError(undefined);
+    startTransition(async () => {
+      showEpicChange({ merged: epic.number });
+      for (const child of epic.children) {
+        if (!child.archived) {
+          showChange({ merged: child.number });
+        }
+      }
+      const result = await completeTicket({ number: epic.number });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const changeOrder = (status: Status, ticketNumbers: number[]) => {
     setError(undefined);
     startTransition(async () => {
@@ -1045,7 +1081,7 @@ export const Board: FC<BoardProps> = ({
     setError(undefined);
     startTransition(async () => {
       showChange({ numbers, epic: epicLinkOf(epic) });
-      showEpicJoin({ joining, epicNumber });
+      showEpicChange({ joining, epicNumber });
       const result = await moveTicketsToEpic({
         epic: epicNumber,
         children: numbers,
@@ -1265,6 +1301,7 @@ export const Board: FC<BoardProps> = ({
           filter={filter}
           hideDone={typeof cycleId !== 'number'}
           onCreated={setCreated}
+          onMerged={markEpicMerged}
         />
         <Grid gap={3}>
           {boardLanes.map((lane) => (
