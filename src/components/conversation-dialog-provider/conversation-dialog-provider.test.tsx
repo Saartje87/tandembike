@@ -82,6 +82,8 @@ const entry = (conversationId: number, text: string): TranscriptEntry => ({
   text,
   permission: null,
   permissionRules: null,
+  toolName: null,
+  toolInput: null,
   question: null,
   createdAt: at,
 });

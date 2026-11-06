@@ -60,6 +60,8 @@ export function eventsOf(
             0,
             maxToolTextLength,
           ),
+          name: block.name,
+          input: block.input as Record<string, unknown>,
         });
       }
     }

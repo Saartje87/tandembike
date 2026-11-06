@@ -5,9 +5,12 @@ export type StatusEntry = {
   role: TranscriptRole;
   text: string;
   permissionRules: string[] | null;
+  /** The tool's name and input; null for older entries, and no input when over the cap. */
+  toolName?: string | null;
+  toolInput?: Record<string, unknown> | null;
 };
 
-type ToolInput = Record<string, string | number>;
+type ToolInput = Record<string, unknown>;
 
 const tandembikePrefix = 'mcp__tandembike__';
 
@@ -181,13 +184,18 @@ export function statusLine(entry: StatusEntry | null): string {
   }
   switch (entry.role) {
     case 'tool': {
+      if (entry.toolName && entry.toolInput) {
+        return toolLine(entry.toolName, entry.toolInput);
+      }
       const [name, input] = splitTool(entry.text);
-      return toolLine(name, parseInput(input));
+      return toolLine(entry.toolName ?? name, parseInput(input));
     }
     case 'agent':
       return firstSentence(entry.text);
     case 'permission':
-      return entry.permissionRules?.[0] ?? splitTool(entry.text)[0];
+      return (
+        entry.permissionRules?.[0] ?? entry.toolName ?? splitTool(entry.text)[0]
+      );
     case 'question':
     case 'error':
     case 'created':

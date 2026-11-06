@@ -48,6 +48,9 @@ export type Conversation = {
   updatedAt: Date;
 };
 
+/** The longest tool input, as JSON, that is stored whole; a longer one is not stored. */
+export const maxToolInputLength = 4096;
+
 export type TranscriptEntry = {
   id: number;
   conversationId: number;
@@ -57,6 +60,10 @@ export type TranscriptEntry = {
   permission: PermissionStatus | null;
   /** For a permission request, the allow rules its run proposed; null for none. */
   permissionRules: string[] | null;
+  /** For a tool or permission entry, the tool's name; null for others and older entries. */
+  toolName: string | null;
+  /** For a tool or permission entry, its input; null for others, older entries and an input over the cap. */
+  toolInput: Record<string, unknown> | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
   createdAt: Date;
@@ -164,6 +171,12 @@ export function createConversations({
       .run();
   };
 
+  /** The input if its JSON fits the cap; the reader falls back to the entry's text otherwise. */
+  const cappedInput = (input?: Record<string, unknown>) =>
+    input !== undefined && JSON.stringify(input).length <= maxToolInputLength
+      ? input
+      : null;
+
   const append = (
     id: number,
     role: TranscriptRole,
@@ -172,6 +185,7 @@ export function createConversations({
       permission?: PermissionStatus;
       question?: QuestionEntry;
       permissionRules?: string[] | null;
+      tool?: { name: string; input?: Record<string, unknown> };
     } = {},
   ): number =>
     db
@@ -182,6 +196,8 @@ export function createConversations({
         text,
         permission: extra.permission ?? null,
         permissionRules: extra.permissionRules ?? null,
+        toolName: extra.tool?.name ?? null,
+        toolInput: cappedInput(extra.tool?.input),
         question: extra.question ?? null,
         createdAt: new Date(),
       })
@@ -266,6 +282,7 @@ export function createConversations({
       {
         permission: 'pending',
         permissionRules: request.rules.length === 0 ? null : request.rules,
+        tool: { name: request.toolName, input: request.input },
       },
     );
     update(id, { state: 'waiting' });
@@ -293,7 +310,14 @@ export function createConversations({
         append(id, 'agent', event.text);
         break;
       case 'tool':
-        append(id, 'tool', event.text);
+        append(
+          id,
+          'tool',
+          event.text,
+          event.name === undefined
+            ? {}
+            : { tool: { name: event.name, input: event.input } },
+        );
         break;
       case 'created':
         append(
@@ -463,6 +487,8 @@ export function createConversations({
             role: conversationEntries.role,
             text: conversationEntries.text,
             permissionRules: conversationEntries.permissionRules,
+            toolName: conversationEntries.toolName,
+            toolInput: conversationEntries.toolInput,
             createdAt: conversationEntries.createdAt,
           })
           .from(conversationEntries)
@@ -503,6 +529,8 @@ export function createConversations({
                   role: entry.role,
                   text: entry.text,
                   permissionRules: entry.permissionRules,
+                  toolName: entry.toolName,
+                  toolInput: entry.toolInput,
                 }
               : null,
             startedAt: (started.get(id) ?? createdAt).toISOString(),
