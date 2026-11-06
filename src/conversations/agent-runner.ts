@@ -11,8 +11,16 @@ export type RunEvent =
   | { type: 'session'; sessionId: string }
   /** Something the Agent said. */
   | { type: 'agent'; text: string }
-  /** A tool the Agent used, in one line. */
-  | { type: 'tool'; text: string }
+  /**
+   * A tool the Agent used: `text` is one line for the transcript, `name` and
+   * `input` are the tool's name and raw input for the status line (T1066).
+   */
+  | {
+      type: 'tool';
+      text: string;
+      name?: string;
+      input?: Record<string, unknown>;
+    }
   /**
    * A turn ended. `costUsd` is what this run has cost in total so far, not
    * counting earlier runs of the Conversation.

@@ -380,6 +380,12 @@ export const conversationEntries = sqliteTable(
     permissionRules: text('permission_rules', { mode: 'json' }).$type<
       string[]
     >(),
+    /** For a tool or permission entry: the tool's name; null for other entries and older rows. */
+    toolName: text('tool_name'),
+    /** For a tool or permission entry: the tool's input as JSON, null when over the cap. */
+    toolInput: text('tool_input', { mode: 'json' }).$type<
+      Record<string, unknown>
+    >(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

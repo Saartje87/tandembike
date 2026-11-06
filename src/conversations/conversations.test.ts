@@ -10,6 +10,7 @@ import {
   NotFoundError,
   ValidationError,
 } from '../tickets/errors';
+import { maxToolInputLength } from './conversations';
 
 function setup() {
   const world = createTestConversations();
@@ -584,7 +585,13 @@ describe('Activity rows', () => {
         ticketNumber: null,
         projectId: project.id,
         state: second.state,
-        latest: { role: 'agent', text: 'Hi', permissionRules: null },
+        latest: {
+          role: 'agent',
+          text: 'Hi',
+          permissionRules: null,
+          toolName: null,
+          toolInput: null,
+        },
         startedAt: '2026-11-07T10:05:00.000Z',
         costUsd: 0,
       },
@@ -592,7 +599,13 @@ describe('Activity rows', () => {
         ticketNumber: ticket.number,
         projectId: project.id,
         state: 'interrupted',
-        latest: { role: 'error', text: 'crashed', permissionRules: null },
+        latest: {
+          role: 'error',
+          text: 'crashed',
+          permissionRules: null,
+          toolName: null,
+          toolInput: null,
+        },
         startedAt: '2026-11-07T10:00:00.000Z',
         costUsd: 0,
       },
@@ -622,6 +635,80 @@ describe('Activity rows', () => {
       role: 'tool',
       text: 'Read {"file_path":"a.ts"}',
       permissionRules: null,
+      toolName: null,
+      toolInput: null,
+    });
+  });
+
+  it('carries the name and input of a tool entry', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const { id } = await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    runner.runs[0].emit({
+      type: 'tool',
+      text: 'Read {"file_path":"/a.ts"}',
+      name: 'Read',
+      input: { file_path: '/a.ts' },
+    });
+
+    const [row] = conversations.activityRows();
+    expect(row.latest).toMatchObject({
+      role: 'tool',
+      toolName: 'Read',
+      toolInput: { file_path: '/a.ts' },
+    });
+    const entry = conversations.transcript(id).at(-1);
+    expect(entry).toMatchObject({
+      toolName: 'Read',
+      toolInput: { file_path: '/a.ts' },
+    });
+  });
+
+  it('keeps the name but no input when the input is over the cap', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    runner.runs[0].emit({
+      type: 'tool',
+      text: 'Write cut',
+      name: 'Write',
+      input: { file_path: '/a.ts', content: 'x'.repeat(maxToolInputLength) },
+    });
+
+    const [row] = conversations.activityRows();
+    expect(row.latest).toMatchObject({
+      toolName: 'Write',
+      toolInput: null,
+    });
+  });
+
+  it('carries the name and input of a permission request', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    void runner.runs[0].options.askPermission({
+      toolName: 'Bash',
+      input: { command: 'ls' },
+      rules: [],
+    });
+
+    const [row] = conversations.activityRows();
+    expect(row.latest).toMatchObject({
+      role: 'permission',
+      toolName: 'Bash',
+      toolInput: { command: 'ls' },
     });
   });
 });

@@ -11,6 +11,44 @@ const tool = (name: string, input: unknown) => ({
 });
 
 describe('statusLine', () => {
+  describe('tool entries with columns', () => {
+    it('reads the name and input rather than the text', () => {
+      expect(
+        statusLine({
+          role: 'tool',
+          text: 'unrelated',
+          permissionRules: null,
+          toolName: 'Read',
+          toolInput: { file_path: '/repo/src/board.tsx' },
+        }),
+      ).toBe('Reading board.tsx');
+    });
+
+    it('reads a long input in full', () => {
+      expect(
+        statusLine({
+          role: 'tool',
+          text: 'Bash {"command":"x"',
+          permissionRules: null,
+          toolName: 'mcp__tandembike__get_ticket',
+          toolInput: { number: 1066, pad: 'y'.repeat(2000) },
+        }),
+      ).toBe('Reading T1066');
+    });
+
+    it('falls back to the text when the input was over the cap', () => {
+      expect(
+        statusLine({
+          role: 'tool',
+          text: 'Write {"file_path":"/repo/c.ts","content":"xxx',
+          permissionRules: null,
+          toolName: 'Write',
+          toolInput: null,
+        }),
+      ).toBe('Writing c.ts');
+    });
+  });
+
   describe('tool entries', () => {
     it.each([
       ['Read', { file_path: '/repo/src/board.tsx' }, 'Reading board.tsx'],

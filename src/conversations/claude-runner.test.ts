@@ -146,7 +146,12 @@ describe('The Claude runner', () => {
     expect(events).toEqual([
       { type: 'session', sessionId: 'sess-9' },
       { type: 'agent', text: 'Looking.' },
-      { type: 'tool', text: 'Read {"file_path":"a.md"}' },
+      {
+        type: 'tool',
+        text: 'Read {"file_path":"a.md"}',
+        name: 'Read',
+        input: { file_path: 'a.md' },
+      },
       { type: 'turn', costUsd: 0.42 },
       { type: 'turn', costUsd: 0.5, error: 'error_max_turns' },
       { type: 'exit' },
