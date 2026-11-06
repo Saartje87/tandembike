@@ -7,12 +7,21 @@ import {
   conversationActivity,
 } from './conversation-activity';
 
+const since = '2026-11-07T10:00:00.000Z';
+
 const row = (
   ticketNumber: number | null,
   state: ActivityRow['state'],
   projectId = 1,
-  latestRole: ActivityRow['latestRole'] = 'agent',
-) => ({ ticketNumber, state, projectId, latestRole });
+  role: NonNullable<ActivityRow['latest']>['role'] = 'agent',
+  text = 'Working on it.',
+): ActivityRow => ({
+  ticketNumber,
+  state,
+  projectId,
+  latest: { role, text, permissionRules: null },
+  startedAt: '2026-11-07T10:00:00.000Z',
+});
 
 describe('conversationActivity', () => {
   it('lists the Tickets with a running Conversation', () => {
@@ -64,13 +73,13 @@ describe('conversationActivity', () => {
 
     it('reports a running and a waiting Conversation', () => {
       expect(liveOf(row(4, 'running'), row(5, 'waiting'))).toEqual({
-        4: { state: 'running' },
-        5: { state: 'waiting' },
+        4: { state: 'running', line: 'Working on it.', since: since },
+        5: { state: 'waiting', line: 'Working on it.', since: since },
       });
     });
 
     it('reports an interrupted Conversation as needing the User', () => {
-      expect(liveOf(row(4, 'interrupted'))).toEqual({
+      expect(liveOf(row(4, 'interrupted'))).toMatchObject({
         4: { state: 'interrupted' },
       });
     });
@@ -78,7 +87,36 @@ describe('conversationActivity', () => {
     it('reports an idle or interrupted Conversation that ended in an error', () => {
       expect(
         liveOf(row(4, 'idle', 1, 'error'), row(5, 'interrupted', 1, 'error')),
-      ).toEqual({ 4: { state: 'error' }, 5: { state: 'error' } });
+      ).toMatchObject({ 4: { state: 'error' }, 5: { state: 'error' } });
+    });
+
+    it('carries the status line of the latest entry and the run start', () => {
+      const live = liveOf(
+        {
+          ...row(
+            4,
+            'running',
+            1,
+            'tool',
+            'Read {"file_path":"/repo/board.tsx"}',
+          ),
+          startedAt: '2026-11-07T09:00:00.000Z',
+        },
+        row(5, 'waiting', 1, 'permission', 'Bash {"command":"ls"}'),
+      );
+
+      expect(live[4]).toEqual({
+        state: 'running',
+        line: 'Reading board.tsx',
+        since: '2026-11-07T09:00:00.000Z',
+      });
+      expect(live[5].line).toBe('Bash');
+    });
+
+    it('says Starting for a Conversation without entries', () => {
+      expect(liveOf({ ...row(4, 'running'), latest: null })[4].line).toBe(
+        'Starting',
+      );
     });
 
     it('reports nothing for an idle or stopped Conversation', () => {
@@ -97,7 +135,7 @@ describe('conversationActivity', () => {
           row(5, 'stopped'),
           row(5, 'running'),
         ),
-      ).toEqual({ 4: { state: 'waiting' }, 5: { state: 'running' } });
+      ).toMatchObject({ 4: { state: 'waiting' }, 5: { state: 'running' } });
     });
   });
 });

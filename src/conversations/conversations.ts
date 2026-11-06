@@ -450,24 +450,34 @@ export function createConversations({
      * latest entries come from one query.
      */
     activityRows(): ActivityRow[] {
-      const latestRoles = new Map(
+      const latestOf = (role?: TranscriptRole) =>
+        db
+          .select({ id: max(conversationEntries.id) })
+          .from(conversationEntries)
+          .where(role ? eq(conversationEntries.role, role) : undefined)
+          .groupBy(conversationEntries.conversationId);
+      const entriesOf = (ids: ReturnType<typeof latestOf>) =>
         db
           .select({
             conversationId: conversationEntries.conversationId,
             role: conversationEntries.role,
+            text: conversationEntries.text,
+            permissionRules: conversationEntries.permissionRules,
+            createdAt: conversationEntries.createdAt,
           })
           .from(conversationEntries)
-          .where(
-            inArray(
-              conversationEntries.id,
-              db
-                .select({ id: max(conversationEntries.id) })
-                .from(conversationEntries)
-                .groupBy(conversationEntries.conversationId),
-            ),
-          )
-          .all()
-          .map(({ conversationId, role }) => [conversationId, role]),
+          .where(inArray(conversationEntries.id, ids))
+          .all();
+      const latest = new Map(
+        entriesOf(latestOf()).map((entry) => [entry.conversationId, entry]),
+      );
+      // Every run starts with the User's message, so the latest one is the
+      // run's start: no column of its own is needed.
+      const started = new Map(
+        entriesOf(latestOf('user')).map((entry) => [
+          entry.conversationId,
+          entry.createdAt,
+        ]),
       );
       return db
         .select({
@@ -475,16 +485,27 @@ export function createConversations({
           ticketNumber: conversations.ticketNumber,
           projectId: conversations.projectId,
           state: conversations.state,
+          createdAt: conversations.createdAt,
         })
         .from(conversations)
         .orderBy(desc(conversations.id))
         .all()
-        .map(({ id, ticketNumber, projectId, state }) => ({
-          ticketNumber,
-          projectId,
-          state,
-          latestRole: latestRoles.get(id) ?? null,
-        }));
+        .map(({ id, ticketNumber, projectId, state, createdAt }) => {
+          const entry = latest.get(id);
+          return {
+            ticketNumber,
+            projectId,
+            state,
+            latest: entry
+              ? {
+                  role: entry.role,
+                  text: entry.text,
+                  permissionRules: entry.permissionRules,
+                }
+              : null,
+            startedAt: (started.get(id) ?? createdAt).toISOString(),
+          };
+        });
     },
 
     /**

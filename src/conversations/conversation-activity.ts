@@ -1,13 +1,18 @@
-import type { ConversationState, TranscriptRole } from './conversation-state';
+import type { ConversationState } from './conversation-state';
+import { type StatusEntry, statusLine } from './status-line';
 
 /**
- * What a Ticket's live Conversation is doing, for the Board's lanes. Later
- * fields (`line`, `since`, T1066) extend this object.
+ * What a Ticket's live Conversation is doing, for the Board's lanes and the
+ * status line on its card.
  * `running` and `waiting` are live; `interrupted` and `error` (an idle or
  * interrupted Conversation whose latest entry is an error) need the User.
  */
 export type LiveConversation = {
   state: 'running' | 'waiting' | 'interrupted' | 'error';
+  /** The status line: what the Conversation is doing now (T1066). */
+  line: string;
+  /** When the current run started, as an ISO string. */
+  since: string;
 };
 
 export type ConversationActivity = {
@@ -35,8 +40,10 @@ export type ActivityRow = {
   ticketNumber: number | null;
   projectId: number;
   state: ConversationState;
-  /** Role of the Conversation's latest transcript entry, null if none. */
-  latestRole: TranscriptRole | null;
+  /** The Conversation's latest transcript entry, null if none. */
+  latest: StatusEntry | null;
+  /** When the current run started, as an ISO string. */
+  startedAt: string;
 };
 
 const liveStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
@@ -44,7 +51,7 @@ const liveStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
     return row.state;
   }
   if (row.state === 'idle' || row.state === 'interrupted') {
-    if (row.latestRole === 'error') {
+    if (row.latest?.role === 'error') {
       return 'error';
     }
     return row.state === 'interrupted' ? 'interrupted' : null;
@@ -58,7 +65,11 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
   for (const row of rows) {
     const state = liveStateOf(row);
     if (row.ticketNumber !== null && state && !(row.ticketNumber in live)) {
-      live[row.ticketNumber] = { state };
+      live[row.ticketNumber] = {
+        state,
+        line: statusLine(row.latest),
+        since: row.startedAt,
+      };
     }
   }
   return live;

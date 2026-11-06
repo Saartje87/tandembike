@@ -114,7 +114,9 @@ describe('laneStatus', () => {
     const inProgress = (
       state: LiveConversation['state'],
       rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
-    ) => placed('In progress', [], rest, { state }).section;
+    ) =>
+      placed('In progress', [], rest, { state, line: 'Starting', since: '' })
+        .section;
 
     it('puts a running Conversation in Running', () => {
       expect(inProgress('running')).toBe('Running');
@@ -142,7 +144,12 @@ describe('laneStatus', () => {
 
     it('does not move a Ticket out of its Lane', () => {
       expect(
-        placed('Todo', ['ready-for-agent'], {}, { state: 'running' }),
+        placed(
+          'Todo',
+          ['ready-for-agent'],
+          {},
+          { state: 'running', line: 'Starting', since: '' },
+        ),
       ).toEqual({
         lane: 'Todo',
         section: null,

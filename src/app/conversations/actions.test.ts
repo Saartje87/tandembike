@@ -254,7 +254,11 @@ describe('Conversation actions', () => {
 
     expect(await currentConversationActivity()).toEqual({
       live: {
-        [running.number]: { state: 'running' },
+        [running.number]: {
+          state: 'running',
+          line: 'Starting',
+          since: expect.any(String),
+        },
       },
       running: [running.number],
       needsYou: [asking.number],
