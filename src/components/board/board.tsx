@@ -87,6 +87,7 @@ import {
   type InProgressSection,
   inProgressSections,
   isBoardLane,
+  isInReview,
   isTriageLane,
   type LanePlacement,
   laneOf,
@@ -170,6 +171,8 @@ type LaneColumnProps = {
   lane: BoardLane;
   /** Where a Ticket sits now, given its live Conversation. */
   placementOf: (ticket: Ticket) => LanePlacement;
+  /** Whether the Ticket sits in Review now, given its live Conversation. */
+  inReview: (ticket: Ticket) => boolean;
   tickets: Ticket[];
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
@@ -205,7 +208,7 @@ type TicketListProps = Pick<
   | 'onMerged'
   | 'onBackToTodo'
   | 'lane'
-  | 'placementOf'
+  | 'inReview'
 > & {
   tickets: Ticket[];
   /** The group the cards sort in, when it is not the Lane. */
@@ -216,7 +219,7 @@ type TicketListProps = Pick<
 const TicketList: FC<TicketListProps> = ({
   lane,
   group = lane,
-  placementOf,
+  inReview,
   tickets,
   boardPath,
   filter,
@@ -252,11 +255,7 @@ const TicketList: FC<TicketListProps> = ({
               selected.has(ticket.number)
             }
             onSelect={(mode) => onSelect(ticket, mode)}
-            onMerged={
-              placementOf(ticket).section === 'Review'
-                ? () => onMerged(ticket)
-                : undefined
-            }
+            onMerged={inReview(ticket) ? () => onMerged(ticket) : undefined}
             onBackToTodo={() => onBackToTodo(ticket.number)}
           />
         ))}
@@ -305,6 +304,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   filter,
   lane,
   placementOf,
+  inReview,
   tickets,
   selected,
   carrier,
@@ -323,7 +323,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
     filter,
     selected,
     carrier,
-    placementOf,
+    inReview,
     onSelect,
     onMerged,
     onBackToTodo,
@@ -721,6 +721,8 @@ export const Board: FC<BoardProps> = ({
   const liveConversations = useLiveConversations();
   const placementOf = (ticket: Ticket) =>
     laneOf(ticket, liveConversations[ticket.number]);
+  const inReview = (ticket: Ticket) =>
+    isInReview(ticket, liveConversations[ticket.number]);
   const [filter, setFilter] = useState(initialFilter);
   const filterUrlTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // The URL's filter as last rendered, and as the Board last wrote it.
@@ -1316,6 +1318,7 @@ export const Board: FC<BoardProps> = ({
                 filter={filter}
                 lane={lane}
                 placementOf={placementOf}
+                inReview={inReview}
                 tickets={shownLane(lane)}
                 selected={selectedOnBoard}
                 carrier={carrier}

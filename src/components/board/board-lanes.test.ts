@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { LiveConversation } from '../../conversations/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
-import { boardLanes, laneOf, laneStatus } from './board-lanes';
+import {
+  boardLanes,
+  isInReview,
+  isStalled,
+  laneOf,
+  laneStatus,
+} from './board-lanes';
 
 const placed = (
   status: Status,
@@ -159,5 +165,38 @@ describe('laneStatus', () => {
         section: null,
       });
     });
+  });
+});
+
+describe('isStalled and isInReview', () => {
+  const base = {
+    status: 'In progress' as const,
+    labels: [],
+    claim: null,
+    externalReferences: [],
+  };
+  const live = {
+    state: 'running' as const,
+    line: 'Starting',
+    since: '',
+    cost: 0,
+  };
+
+  it('stalls an In progress Ticket with no Claim, PR or live Conversation', () => {
+    expect(isStalled(base)).toBe(true);
+    expect(isStalled({ ...base, claim })).toBe(false);
+    expect(isStalled({ ...base, externalReferences: [pullRequest] })).toBe(
+      false,
+    );
+    expect(isStalled(base, live)).toBe(false);
+    expect(isStalled({ ...base, status: 'Todo' })).toBe(false);
+  });
+
+  it('puts a Ticket in Review for a PR reference without a live Conversation', () => {
+    const withPullRequest = { ...base, externalReferences: [pullRequest] };
+    expect(isInReview(withPullRequest)).toBe(true);
+    expect(isInReview(withPullRequest, live)).toBe(false);
+    expect(isInReview(base)).toBe(false);
+    expect(isInReview({ ...withPullRequest, status: 'Done' })).toBe(false);
   });
 });

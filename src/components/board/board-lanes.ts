@@ -20,6 +20,12 @@ export function isBoardLane(value: unknown): value is BoardLane {
   return (boardLanes as readonly unknown[]).includes(value);
 }
 
+/** What the Lane of a Ticket is derived from. */
+export type LaneInput = Pick<
+  Ticket,
+  'status' | 'labels' | 'claim' | 'externalReferences'
+>;
+
 /** The sections of the In progress Lane (added with the run state, T1064). */
 export type InProgressSection = 'Action needed' | 'Running' | 'Review';
 
@@ -60,7 +66,7 @@ function sectionOf(
  * Todo (ready-for-agent) or For human (ready-for-human).
  */
 export function laneOf(
-  ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
+  ticket: LaneInput,
   live?: LiveConversation,
 ): LanePlacement {
   if (ticket.status === 'In progress') {
@@ -79,20 +85,23 @@ export function laneOf(
 }
 
 /**
- * Whether a Ticket is stalled: In progress with no Claim, no PR reference
- * and, once the live state is given, nothing running or waiting. Only a
- * stalled card offers Back to Todo.
+ * Whether a Ticket is stalled: it needs action with no live Conversation, so
+ * it has no Claim and no PR reference either. Only a stalled card offers
+ * Back to Todo.
  */
-export function isStalled(
-  ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
+export function isStalled(ticket: LaneInput, live?: LiveConversation): boolean {
+  return live === undefined && laneOf(ticket).section === 'Action needed';
+}
+
+/**
+ * Whether a Ticket sits in the Review section: In progress with a PR
+ * reference and no live Conversation. Only a Review card offers Merged.
+ */
+export function isInReview(
+  ticket: LaneInput,
   live?: LiveConversation,
 ): boolean {
-  return (
-    laneOf(ticket, live).section === 'Action needed' &&
-    live === undefined &&
-    !ticket.claim &&
-    !ticket.externalReferences.some(isPullRequestReference)
-  );
+  return laneOf(ticket, live).section === 'Review';
 }
 
 /** The Status a drop into `lane` gives. */
