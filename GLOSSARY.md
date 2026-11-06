@@ -40,6 +40,10 @@ _Avoid_: Kanban, dashboard, list
 A Board section that holds the Tickets in one situation, in their order. A Lane is derived from a Ticket's Status, its triage state label and, for In progress, the run state of its Conversation, never stored. Dropping a Ticket in a Lane gives it a Status, never a label.
 _Avoid_: Column, drop area
 
+**Stalled**:
+An In progress Ticket with no Claim and no pull request among its External references, such as one whose Conversation the User closed. It shows in the Action needed section of the In progress Lane.
+_Avoid_: Stuck, orphaned
+
 **For human**:
 The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now.
 _Avoid_: Needs you, waiting on me
