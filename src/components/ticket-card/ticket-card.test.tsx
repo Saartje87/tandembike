@@ -1,15 +1,30 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { useRouter } from 'next/navigation';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
+import { LiveUpdates } from '../live-updates/live-updates';
 import { TicketCard } from './ticket-card';
 
+vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../../app/conversations/actions', () => ({
   currentConversationActivity: vi.fn(),
 }));
+
+class FakeEventSource {
+  static instances: FakeEventSource[] = [];
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  close = vi.fn();
+  constructor() {
+    FakeEventSource.instances.push(this);
+  }
+}
 
 const ticket = {
   number: 4,
@@ -367,6 +382,104 @@ describe('Selecting a TicketCard', () => {
       );
       expect(screen.queryByText('Agent running')).not.toBeInTheDocument();
       expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Status line', () => {
+    const activityWith = (line: string) => ({
+      live: {
+        4: {
+          state: 'running' as const,
+          line,
+          since: '2026-11-07T10:00:00.000Z',
+        },
+      },
+      running: [4],
+      needsYou: [],
+      needsYouCount: 0,
+      needsYouByProject: {},
+    });
+    const renderCard = (status: 'In progress' | 'Todo' = 'In progress') =>
+      renderWithTheme(
+        <ConversationActivityProvider>
+          <TicketCard ticket={{ ...ticket, status }} boardPath="/project/1" />
+        </ConversationActivityProvider>,
+      );
+
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date('2026-11-07T10:03:30Z'));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('shows what the live Conversation is doing, with how long it has run', async () => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activityWith('Reading board.tsx'),
+      );
+      renderCard();
+
+      expect(await screen.findByText('Reading board.tsx')).toBeInTheDocument();
+      expect(screen.getByText('3m')).toBeInTheDocument();
+    });
+
+    it('follows the Conversation as its latest entry changes', async () => {
+      vi.stubGlobal('EventSource', FakeEventSource);
+      vi.mocked(useRouter).mockReturnValue(mockRouter());
+      vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+        activityWith('Reading board.tsx'),
+      );
+      renderWithTheme(
+        <LiveUpdates>
+          <ConversationActivityProvider>
+            <TicketCard ticket={ticket} boardPath="/project/1" />
+          </ConversationActivityProvider>
+        </LiveUpdates>,
+      );
+      expect(await screen.findByText('Reading board.tsx')).toBeInTheDocument();
+
+      vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+        activityWith('Running npm run check'),
+      );
+      act(() => {
+        FakeEventSource.instances[0]?.onmessage?.(
+          new MessageEvent('message', {
+            data: JSON.stringify({ type: 'conversation', id: 1 }),
+          }),
+        );
+      });
+
+      expect(
+        await screen.findByText('Running npm run check'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
+      vi.unstubAllGlobals();
+    });
+
+    it('shows no line without a live Conversation', async () => {
+      vi.mocked(currentConversationActivity).mockResolvedValue({
+        ...activityWith('x'),
+        live: {},
+      });
+      renderCard();
+
+      await waitFor(() =>
+        expect(currentConversationActivity).toHaveBeenCalled(),
+      );
+      expect(screen.queryByText('3m')).not.toBeInTheDocument();
+    });
+
+    it('shows no line on a card outside In progress', async () => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activityWith('Reading board.tsx'),
+      );
+      renderCard('Todo');
+
+      await waitFor(() =>
+        expect(currentConversationActivity).toHaveBeenCalled(),
+      );
+      expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
     });
   });
 });

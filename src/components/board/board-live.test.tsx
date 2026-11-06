@@ -150,4 +150,28 @@ describe('Board with live Conversations', () => {
       expect(cardsIn('Review')).toEqual(['Fix the header']),
     );
   });
+
+  it('shows the status line on an In progress card with a live Conversation', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValueOnce(
+      activity('running'),
+    );
+    renderWithTheme(
+      <LiveUpdates>
+        <ConversationActivityProvider>
+          <Board
+            project={project}
+            tickets={[inProgress, { ...inProgress, number: 8, title: 'Idle' }]}
+          />
+        </ConversationActivityProvider>
+      </LiveUpdates>,
+    );
+
+    const line = await screen.findByText('Reading board.tsx');
+    expect(
+      within(screen.getByRole('group', { name: 'Running' })).getByText(
+        'Reading board.tsx',
+      ),
+    ).toBe(line);
+    expect(screen.getAllByText('Reading board.tsx')).toHaveLength(1);
+  });
 });

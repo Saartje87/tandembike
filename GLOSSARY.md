@@ -44,6 +44,10 @@ _Avoid_: Column, drop area
 An In progress Ticket with no Claim and no pull request among its External references, such as one whose Conversation the User closed. It shows in the Action needed section of the In progress Lane.
 _Avoid_: Stuck, orphaned
 
+**Status line**:
+The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going. It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
+_Avoid_: Progress line, activity line
+
 **For human**:
 The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now.
 _Avoid_: Needs you, waiting on me

@@ -25,6 +25,7 @@ import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
 import { tinted } from '../palette/palette.css';
+import { StatusLine } from '../status-line/status-line';
 import * as styles from './ticket-card.css';
 
 export type TicketCardProps = {
@@ -262,6 +263,10 @@ export const TicketCard: FC<TicketCardProps> = ({
                 {ticket.title}
               </AppLink>
             </Text>
+
+            {live && ticket.status === 'In progress' && (
+              <StatusLine live={live} />
+            )}
 
             {pullRequest && (
               <Text fontSize="xsmall">
