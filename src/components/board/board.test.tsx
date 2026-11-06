@@ -2856,8 +2856,10 @@ describe('In progress sections', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Project Website is archived.',
     );
-    await waitFor(() => expect(cardsIn('In progress')).toEqual(['In review']));
-    expect(cardsIn('Done')).toEqual([]);
+    await waitFor(() => {
+      expect(cardsIn('In progress')).toEqual(['In review']);
+      expect(cardsIn('Done')).toEqual([]);
+    });
   });
 
   it('gives Status In progress to a Ticket dropped into the Lane', async () => {
@@ -2991,12 +2993,12 @@ describe('Back to Todo', () => {
     expect(await screen.findByText('There is no Ticket T1.')).toBeVisible();
     await waitFor(() => {
       expect(cardsIn('In progress')).toEqual(['Stalled']);
+      expect(
+        within(screen.getByRole('group', { name: 'Action needed' })).getByRole(
+          'button',
+          { name: 'Back to Todo' },
+        ),
+      ).toBeInTheDocument();
     });
-    expect(
-      within(screen.getByRole('group', { name: 'Action needed' })).getByRole(
-        'button',
-        { name: 'Back to Todo' },
-      ),
-    ).toBeInTheDocument();
   });
 });

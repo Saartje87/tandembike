@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -186,11 +186,13 @@ describe('Board Epic row with live state', () => {
     await userEvent.click(merged());
 
     expect(await screen.findByText('Could not complete T20')).toBeVisible();
-    expect(
-      await screen.findByRole('button', { name: 'Merged T20 Checkout' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('switch', { name: /Show done Epics/ }),
-    ).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Merged T20 Checkout' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('switch', { name: /Show done Epics/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
