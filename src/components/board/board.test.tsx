@@ -6,6 +6,7 @@ import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { noBoardFilter } from '../../app/lib/paths';
 import {
   archiveTickets,
+  completeTicket,
   createTicket,
   moveTickets,
   moveTicketsToEpic,
@@ -33,6 +34,7 @@ vi.mock('../../app/projects/actions', () => ({
 }));
 vi.mock('../../app/tickets/actions', () => ({
   archiveTickets: vi.fn(),
+  completeTicket: vi.fn(),
   createTicket: vi.fn(),
   moveTickets: vi.fn(),
   moveTicketsToEpic: vi.fn(),
@@ -2737,6 +2739,7 @@ describe('In progress sections', () => {
 
   beforeEach(() => {
     vi.mocked(updateTicket).mockReset();
+    vi.mocked(completeTicket).mockReset();
   });
 
   it('shows Action needed, Running and Review in order with counts', () => {
@@ -2779,6 +2782,82 @@ describe('In progress sections', () => {
       'href',
       pullRequest,
     );
+  });
+
+  it('shows a Merged button on Review cards only', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[...tickets, ticket({ number: 9, title: 'Todo one' })]}
+      />,
+    );
+
+    const buttons = screen.getAllByRole('button', { name: /^Merged/ });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].closest('li')).toHaveTextContent('In review');
+  });
+
+  it('moves a Review card to Done and drops its state label while the Merged click saves', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(completeTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({
+            number: 2,
+            title: 'In review',
+            status: 'In progress',
+            labels: ['bug', 'ready-for-agent'],
+            externalReferences: [pullRequest],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^Merged/ }));
+
+    expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 2 });
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(cardsIn('Done')).toEqual(['In review']);
+    const card = within(screen.getByRole('region', { name: 'Done' }));
+    expect(card.getByText('bug')).toBeInTheDocument();
+    expect(card.queryByText('ready-for-agent')).toBeNull();
+  });
+
+  it('restores the card and explains when Merged is refused', async () => {
+    vi.mocked(completeTicket).mockResolvedValue({
+      ok: false,
+      error: 'Project Website is archived.',
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ticket({
+            number: 2,
+            title: 'In review',
+            status: 'In progress',
+            labels: ['ready-for-agent'],
+            externalReferences: [pullRequest],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /^Merged/ }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Project Website is archived.',
+    );
+    await waitFor(() => expect(cardsIn('In progress')).toEqual(['In review']));
+    expect(cardsIn('Done')).toEqual([]);
   });
 
   it('gives Status In progress to a Ticket dropped into the Lane', async () => {
