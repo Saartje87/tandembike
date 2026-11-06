@@ -1996,11 +1996,12 @@ export function createTickets(
         if (type !== 'Epic') {
           return [applyTicketChanges(number, done).changedEpic];
         }
-        const epicChanges = children
+        // Merged releases the Epic's own Claim, recorded with its label
+        // change. First, before its children's Status clears it silently.
+        applyTicketChanges(number, labelsOnly, { releaseClaim: true });
+        return children
           .filter((child) => !child.archived)
           .map((child) => applyTicketChanges(child.number, done).changedEpic);
-        applyTicketChanges(number, labelsOnly);
-        return epicChanges;
       });
       if (type === 'Epic') {
         changes.publish({
@@ -3001,6 +3002,7 @@ export function createTickets(
       removeExternalReferences,
       acceptanceCriteria,
     }: TicketChanges,
+    { releaseClaim = false }: { releaseClaim?: boolean } = {},
   ): {
     leftCycles: number[];
     changedEpic: number | null;
@@ -3055,7 +3057,7 @@ export function createTickets(
       db.update(tickets)
         .set({
           ...values,
-          ...(values.status === 'Done'
+          ...(values.status === 'Done' || releaseClaim
             ? { claimAgentRunId: null, claimAgentName: null }
             : {}),
           ...(moved
@@ -3079,6 +3081,9 @@ export function createTickets(
       }
       recordActivity(db, number, actor, [
         ...rowChanges(db, existing, values),
+        ...(releaseClaim && values.status !== 'Done'
+          ? claimChanges('claimReleased', existing)
+          : []),
         ...labelChanges(labelsBefore, {
           added: addLabels,
           removed: removeLabels,

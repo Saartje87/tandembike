@@ -79,6 +79,28 @@ describe('completing an Epic', () => {
     expect(tickets.getTicket(c.number).labels).toEqual(['needs-info']);
   });
 
+  it("releases the Epic's own Claim and records one Activity entry on each Ticket", () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', ['ready-for-agent'], { type: 'Epic' });
+    const a = create('A', ['ready-for-agent'], { epicNumber: epic.number });
+    tickets.claimTicket(epic.number, {
+      agentRunId: 'run-1',
+      agentName: 'Agent',
+    });
+    const before = [epic, a].map(
+      ({ number }) => tickets.listActivity(number).length,
+    );
+
+    const done = tickets.completeTicket(epic.number);
+
+    expect(done.claim).toBeNull();
+    const epicAdded = tickets.listActivity(epic.number).slice(before[0]);
+    expect(epicAdded).toHaveLength(1);
+    expect(JSON.stringify(epicAdded[0].changes)).toContain('claimReleased');
+    expect(JSON.stringify(epicAdded[0].changes)).toContain('labelRemoved');
+    expect(tickets.listActivity(a.number).slice(before[1])).toHaveLength(1);
+  });
+
   it('refuses an Epic in an archived Project', () => {
     const { tickets, project, create } = setup();
     const epic = create('Login', [], { type: 'Epic' });
