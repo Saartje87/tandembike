@@ -55,6 +55,7 @@ import {
 } from '../../app/lib/paths';
 import {
   archiveTickets,
+  completeTicket,
   moveTickets,
   moveTicketsToEpic,
   reorderTickets,
@@ -65,6 +66,7 @@ import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { BatchFailure } from '../../tickets/errors';
 import type { Status } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
+import { isTriageStateLabel } from '../../tickets/triage-labels';
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import { useLiveConversations } from '../conversation-activity/conversation-activity';
@@ -175,6 +177,8 @@ type LaneColumnProps = {
   /** Whether a card dragged now is over the lane or one of its cards. */
   highlighted: boolean;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
+  /** Called with a Review Ticket the User says is merged. */
+  onMerged: (ticket: Ticket) => void;
   /** Called with the number of a stalled Ticket sent Back to Todo. */
   onBackToTodo: (number: number) => void;
   /** Called with the number of a Ticket created in the lane. */
@@ -198,6 +202,7 @@ type TicketListProps = Pick<
   | 'selected'
   | 'carrier'
   | 'onSelect'
+  | 'onMerged'
   | 'onBackToTodo'
   | 'lane'
 > & {
@@ -216,6 +221,7 @@ const TicketList: FC<TicketListProps> = ({
   selected,
   carrier,
   onSelect,
+  onMerged,
   onBackToTodo,
 }) =>
   tickets.length > 0 && (
@@ -244,6 +250,11 @@ const TicketList: FC<TicketListProps> = ({
               selected.has(ticket.number)
             }
             onSelect={(mode) => onSelect(ticket, mode)}
+            onMerged={
+              laneOf(ticket).section === 'Review'
+                ? () => onMerged(ticket)
+                : undefined
+            }
             onBackToTodo={() => onBackToTodo(ticket.number)}
           />
         ))}
@@ -297,6 +308,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   carrier,
   highlighted,
   onSelect,
+  onMerged,
   onBackToTodo,
   onCreated,
 }) => {
@@ -310,6 +322,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
     selected,
     carrier,
     onSelect,
+    onMerged,
     onBackToTodo,
   };
 
@@ -460,6 +473,8 @@ type SortableTicketCardProps = {
   carrying: boolean;
   carriedAlong: boolean;
   onSelect: (mode: SelectMode) => void;
+  /** Set on a Review card only, which then shows the Merged button. */
+  onMerged?: () => void;
   onBackToTodo: () => void;
 };
 
@@ -476,6 +491,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   carrying,
   carriedAlong,
   onSelect,
+  onMerged,
   onBackToTodo,
 }) => {
   const { ref } = useSortable({
@@ -497,6 +513,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       carryCount={carrying ? carries : 1}
       carriedAlong={carriedAlong}
       onSelect={onSelect}
+      onMerged={onMerged}
       onBackToTodo={onBackToTodo}
     />
   );
@@ -560,7 +577,8 @@ type BoardChange =
   | { status: Status; ticketNumbers: number[] }
   | { status: Status; laneOrder: number[] }
   | { numbers: number[]; epic: EpicLink }
-  | { numbers: number[]; archived: true };
+  | { numbers: number[]; archived: true }
+  | { merged: number };
 
 const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   if ('laneOrder' in change) {
@@ -574,6 +592,18 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
         ? ticket
         : { ...ticket, status: change.status, position };
     });
+  }
+  if ('merged' in change) {
+    // The completion rule: Done, and the triage state label gone.
+    return tickets.map((ticket) =>
+      ticket.number === change.merged
+        ? {
+            ...ticket,
+            status: 'Done' as const,
+            labels: ticket.labels.filter((label) => !isTriageStateLabel(label)),
+          }
+        : ticket,
+    );
   }
   if ('archived' in change) {
     return tickets.map((ticket) =>
@@ -931,6 +961,17 @@ export const Board: FC<BoardProps> = ({
     });
   };
 
+  const markMerged = ({ number }: Ticket) => {
+    setError(undefined);
+    startTransition(async () => {
+      showChange({ merged: number });
+      const result = await completeTicket({ number });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const changeOrder = (status: Status, ticketNumbers: number[]) => {
     setError(undefined);
     startTransition(async () => {
@@ -1240,6 +1281,7 @@ export const Board: FC<BoardProps> = ({
                 carrier={carrier}
                 highlighted={overLane === lane}
                 onSelect={select}
+                onMerged={markMerged}
                 onBackToTodo={(number) => changeStatus(number, 'Todo')}
                 onCreated={setCreated}
               />

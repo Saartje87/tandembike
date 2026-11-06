@@ -24,6 +24,7 @@ import {
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
+import { MergedButton } from '../merged-button/merged-button';
 import { tinted } from '../palette/palette.css';
 import { StatusLine } from '../status-line/status-line';
 import * as styles from './ticket-card.css';
@@ -52,6 +53,11 @@ export type TicketCardProps = {
   carryCount?: number;
   /** Whether the card is selected and carried along by another one's drag. */
   carriedAlong?: boolean;
+  /**
+   * Shows a Merged button, which calls this. Leave it out for a card whose
+   * Ticket is not in review.
+   */
+  onMerged?: () => void;
   /** Sends the Ticket Back to Todo; the button shows on a stalled card only. */
   onBackToTodo?: () => void;
 };
@@ -182,6 +188,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   onSelect,
   carryCount = 1,
   carriedAlong = false,
+  onMerged,
   onBackToTodo,
 }) => {
   const changed = useTicketChanged(ticket.number);
@@ -304,6 +311,7 @@ export const TicketCard: FC<TicketCardProps> = ({
               </Inline>
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
+            {onMerged && <MergedButton ticket={ticket} onMerged={onMerged} />}
             {onBackToTodo && isStalled(ticket, live) && (
               <Inline gap={0}>
                 <BackToTodoButton onClick={onBackToTodo} />

@@ -482,4 +482,26 @@ describe('Selecting a TicketCard', () => {
       expect(screen.queryByText('Reading board.tsx')).not.toBeInTheDocument();
     });
   });
+
+  describe('Merged button', () => {
+    it('is shown only for a card given onMerged, and calls it', async () => {
+      const onMerged = vi.fn();
+      const { unmount } = renderWithTheme(
+        <TicketCard ticket={ticket} boardPath="/project/1/cycle/7" />,
+      );
+      expect(screen.queryByRole('button', { name: /^Merged/ })).toBeNull();
+      unmount();
+
+      renderWithTheme(
+        <TicketCard
+          ticket={ticket}
+          boardPath="/project/1/cycle/7"
+          onMerged={onMerged}
+        />,
+      );
+      await userEvent.click(screen.getByRole('button', { name: /^Merged/ }));
+
+      expect(onMerged).toHaveBeenCalledOnce();
+    });
+  });
 });

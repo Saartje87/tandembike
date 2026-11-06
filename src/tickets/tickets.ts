@@ -135,6 +135,7 @@ import { normalizeSkills } from './skills';
 import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
+import { triageStateLabels } from './triage-labels';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
@@ -1972,6 +1973,45 @@ export function createTickets(
       publishWith(number, changedEpic, ...changedOrigins);
       for (const id of leftCycles) {
         changes.publish({ type: 'cycle', id });
+      }
+      return getTicket(number);
+    },
+
+    /**
+     * The completion rule (docs/agents/issue-tracker.md), the one place that
+     * applies it: Ticket `number` becomes Done, loses its triage state label
+     * (never `wontfix` or a category label), and its Claim is released, with
+     * one Activity entry. For an Epic, every unarchived child is completed
+     * the same way, all or nothing, and the Epic loses its own state label;
+     * its Status follows its children.
+     */
+    completeTicket(number: number): Ticket {
+      const stateLabels = { removeLabels: [...triageStateLabels] };
+      const done = checkTicketChanges({ status: 'Done', ...stateLabels });
+      const labelsOnly = checkTicketChanges(stateLabels);
+      const { type, children } = getTicket(number);
+      checkTicketWritable(db, number);
+
+      const related = db.transaction(() => {
+        if (type !== 'Epic') {
+          return [applyTicketChanges(number, done).changedEpic];
+        }
+        const epicChanges = children
+          .filter((child) => !child.archived)
+          .map((child) => applyTicketChanges(child.number, done).changedEpic);
+        applyTicketChanges(number, labelsOnly);
+        return epicChanges;
+      });
+      if (type === 'Epic') {
+        changes.publish({
+          type: 'tickets',
+          numbers: [
+            number,
+            ...children.filter((child) => !child.archived).map((c) => c.number),
+          ],
+        });
+      } else {
+        publishWith(number, ...related);
       }
       return getTicket(number);
     },

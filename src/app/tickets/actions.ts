@@ -94,6 +94,23 @@ export async function updateTicket(
 }
 
 /**
+ * Applies the completion rule to a Ticket, or to an Epic and its unarchived
+ * children, as the User ("Merged" on the Board). There is no MCP tool for it
+ * (ADR 0019) and it checks nothing outside the app, such as GitHub.
+ */
+export async function completeTicket(input: {
+  number: number;
+}): Promise<ActionResult<{ projectId: number }>> {
+  return actionResult(() => {
+    const ticket = appTickets('user').completeTicket(Number(input?.number));
+    revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    return { projectId: ticket.projectId };
+  });
+}
+
+/**
  * Saves a complete Status-lane order and refreshes the Board. A stale lane
  * order is refused by the Tickets module so concurrent changes are not lost.
  */

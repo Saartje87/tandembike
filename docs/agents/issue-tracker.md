@@ -14,7 +14,7 @@ A Claim covers the work of one Agent run, not the wait for a merge:
 
 - Right after adding the PR's External reference, release the Claim with `release_ticket_claim`. The Ticket stays `In progress`; that and the PR reference show it is taken.
 - A later Agent run that works on the open PR, for example to fix review findings, claims the Ticket for that work and releases it again when done.
-- After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose PR, in its External references, is merged with CI green does; failing both, the User does.
+- After the merge, the Agent run that merged the PR at the User's request moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose PR, in its External references, is merged with CI green does; failing both, the User does, with the **Merged** button on the Ticket's Review card on the Board: it applies the completion rule in one click through a Server Action (the Tickets module's `completeTicket`) and checks nothing on GitHub. There is no MCP tool for it.
 
 ## Worktrees for parallel runs
 
@@ -34,7 +34,7 @@ An Epic is handed off, worked and delivered as one unit:
 2. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`T42`).
 4. Open one PR for the whole Epic, named after it, and add its URL to the Epic as an External reference with `update_ticket` `addExternalReferences`, not to its children. Then release the Epic's Claim with `release_ticket_claim`, by the Claim rule in "Development work in this repository"; a later run working on the PR claims the Epic again.
-5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`.
+5. Once the PR is merged with CI green, whoever that rule names moves every child to `Done` in one `update_tickets` call; the Epic reaches `Done` with them. Then remove the Epic's triage state label with its own `update_ticket` call: `removeLabels` naming the label and no Status, since an Epic's Status cannot be set. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`. The User's way to do all of this at once is the **Merged** button, which completes every unarchived child and removes the Epic's label in one transaction.
 
 ## Triage and Blockers
 
