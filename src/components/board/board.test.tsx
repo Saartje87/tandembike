@@ -20,9 +20,9 @@ import {
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
-import { type Status, statuses } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { Board } from './board';
+import { type BoardLane, boardLanes } from './board-lanes';
 
 vi.mock('../../app/cycles/actions', () => ({
   moveTicketsToCycle: vi.fn(),
@@ -58,7 +58,8 @@ const ticket = (
   projectId: project.id,
   position: 0,
   archived: false,
-  labels: [],
+  // Ready for an Agent, so a Todo Ticket is in the Todo Lane unless a test says otherwise.
+  labels: ['ready-for-agent'],
   externalReferences: [],
   attachments: [],
   blockedBy: [],
@@ -127,7 +128,7 @@ const recordAnnouncements = () => {
   return heard;
 };
 
-/** The Status of the lane `section`, named by its heading. */
+/** The Lane `section`, named by its heading. */
 const laneStatus = (section: Element | null) =>
   document.getElementById(section?.getAttribute('aria-labelledby') ?? '')
     ?.textContent;
@@ -168,7 +169,8 @@ const mockLaneBounds = () => {
   const left = (section: Element) => {
     const status = laneStatus(section) ?? '';
     return (
-      (statuses.indexOf(status as Status) - (shifted.has(status) ? 1 : 0)) *
+      (boardLanes.indexOf(status as BoardLane) -
+        (shifted.has(status) ? 1 : 0)) *
       laneSpacing
     );
   };
@@ -193,7 +195,7 @@ const mockLaneBounds = () => {
       return new DOMRect(0, 0, 800, 700);
     });
   onTestFinished(() => bounds.mockRestore());
-  return (status: Status) => shifted.add(status);
+  return (lane: BoardLane) => shifted.add(lane);
 };
 
 /** The lanes a dragged card highlights as where it would drop. */
@@ -242,13 +244,26 @@ describe('Board', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows every Status column, even when empty', () => {
+  it('shows the five Lanes in their fixed order, even when empty', () => {
     renderWithTheme(<Board project={project} tickets={[]} />);
 
-    for (const column of ['Todo', 'In progress', 'Done']) {
-      const region = screen.getByRole('region', { name: column });
-      expect(within(region).getByText('No Tickets')).toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('region')
+        .map((region) => laneStatus(region))
+        .filter((name) => name !== 'Epics'),
+    ).toEqual(['Intake', 'Todo', 'In progress', 'For human', 'Done']);
+  });
+
+  it('collapses an empty Lane to its heading and count', () => {
+    renderWithTheme(<Board project={project} tickets={[]} />);
+
+    for (const lane of boardLanes) {
+      const region = screen.getByRole('region', { name: lane });
+      expect(within(region).getByText('0')).toBeInTheDocument();
+      expect(within(region).queryByRole('list')).not.toBeInTheDocument();
     }
+    expect(screen.queryByText('No Tickets')).not.toBeInTheDocument();
   });
 
   it('shows each Ticket as a card with its number and title in its Status column, in the given order', () => {
@@ -2002,19 +2017,19 @@ describe('Filtering the Board', () => {
   const header = ticket({
     number: 4,
     title: 'Fix the header',
-    labels: ['bug', 'ui'],
+    labels: ['bug', 'ui', 'ready-for-agent'],
     position: 0,
   });
   const copy = ticket({
     number: 7,
     title: 'Write the copy',
-    labels: ['docs'],
+    labels: ['docs', 'ready-for-agent'],
     position: 1,
   });
   const footer = ticket({
     number: 12,
     title: 'Fix the footer',
-    labels: ['bug'],
+    labels: ['bug', 'ready-for-agent'],
     position: 2,
   });
   const deploy = ticket({
@@ -2101,6 +2116,7 @@ describe('Filtering the Board', () => {
       'docs',
       'legacy',
       'payments',
+      'ready-for-agent',
       'ui',
     ]);
   });
@@ -2113,7 +2129,7 @@ describe('Filtering the Board', () => {
 
     expect(cardsIn('Todo')).toEqual(['Fix the header']);
     expect(chosenLabels()).toEqual(['ui', 'bug']);
-    expect(offeredLabels()).toEqual(['docs', 'legacy']);
+    expect(offeredLabels()).toEqual(['docs', 'legacy', 'ready-for-agent']);
   });
 
   it('keeps a chosen Label no Ticket has listed, so it can be removed', async () => {
@@ -2545,4 +2561,146 @@ describe('Filtering the Board', () => {
 
     expect(screen.queryByText(/hidden by the filter/)).not.toBeInTheDocument();
   });
+});
+
+describe('Derived Lanes', () => {
+  const tickets = [
+    ticket({ number: 1, title: 'Unlabelled', labels: [] }),
+    ticket({ number: 2, title: 'Needs triage', labels: ['needs-triage'] }),
+    ticket({ number: 3, title: 'Needs info', labels: ['needs-info'] }),
+    ticket({ number: 4, title: 'For an Agent', labels: ['ready-for-agent'] }),
+    ticket({ number: 5, title: 'For me', labels: ['ready-for-human'] }),
+    ticket({ number: 6, title: 'Running', status: 'In progress' }),
+    ticket({ number: 7, title: 'Finished', status: 'Done' }),
+  ];
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(moveTickets).mockReset();
+  });
+
+  it('places each Ticket in the Lane its Status and triage label give', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(cardsIn('Intake')).toEqual([
+      'Unlabelled',
+      'Needs triage',
+      'Needs info',
+    ]);
+    expect(cardsIn('Todo')).toEqual(['For an Agent']);
+    expect(cardsIn('In progress')).toEqual(['Running']);
+    expect(cardsIn('For human')).toEqual(['For me']);
+    expect(cardsIn('Done')).toEqual(['Finished']);
+  });
+
+  it('counts the Tickets in each Lane heading', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    const count = (lane: string) =>
+      within(screen.getByRole('region', { name: lane })).getByText(
+        (_, element) =>
+          element?.tagName === 'SPAN' &&
+          /^\d+ Tickets?$/.test(element.textContent ?? ''),
+      ).textContent;
+    expect(count('Intake')).toBe('3 Tickets');
+    expect(count('Todo')).toBe('1 Ticket');
+    expect(count('For human')).toBe('1 Ticket');
+  });
+
+  it('narrows every Lane by the filter', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          ...tickets,
+          ticket({ number: 8, title: 'Needs a nap', status: 'Done' }),
+        ]}
+        filter={{ query: 'needs', labels: [] }}
+      />,
+    );
+
+    expect(cardsIn('Intake')).toEqual(['Needs triage', 'Needs info']);
+    expect(cardsIn('Todo')).toEqual([]);
+    expect(cardsIn('For human')).toEqual([]);
+    expect(cardsIn('In progress')).toEqual([]);
+    expect(cardsIn('Done')).toEqual(['Needs a nap']);
+  });
+
+  it('offers the create field in the Todo Lane only', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(
+      within(screen.getByRole('region', { name: 'Todo' })).getByRole(
+        'textbox',
+        { name: 'New Ticket title' },
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('textbox', { name: 'New Ticket title' }),
+    ).toHaveLength(1);
+  });
+
+  it.each([
+    ['In progress', 'Intake'],
+    ['In progress', 'Todo'],
+    ['In progress', 'For human'],
+    ['Done', 'Intake'],
+    ['Done', 'Todo'],
+    ['Done', 'For human'],
+  ] as const)(
+    'gives Status Todo to a Ticket dropped from %s into %s',
+    async (from, to) => {
+      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 1 });
+      const bounds = mockBoardBounds(to);
+      onTestFinished(() => bounds.mockRestore());
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={[
+            ticket({ number: 4, title: 'Fix the header', status: from }),
+          ]}
+        />,
+      );
+
+      await dragTicketTo(4, to);
+
+      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+        number: 4,
+        status: 'Todo',
+      });
+    },
+  );
+
+  it.each([
+    ['Intake', 'Todo', []],
+    ['Intake', 'For human', []],
+    ['Todo', 'Intake', ['ready-for-agent']],
+    ['Todo', 'For human', ['ready-for-agent']],
+    ['For human', 'Todo', ['ready-for-human']],
+    ['For human', 'Intake', ['ready-for-human']],
+  ] as const)(
+    'refuses a drop from %s into %s, changing nothing',
+    async (from, to, labels) => {
+      const bounds = mockBoardBounds(to);
+      onTestFinished(() => bounds.mockRestore());
+      renderWithTheme(
+        <Board
+          project={project}
+          tickets={[
+            ticket({ number: 4, title: 'Fix the header', labels: [...labels] }),
+          ]}
+        />,
+      );
+      expect(cardsIn(from)).toEqual(['Fix the header']);
+
+      await dragTicketTo(4, to);
+
+      expect(updateTicket).not.toHaveBeenCalled();
+      expect(moveTickets).not.toHaveBeenCalled();
+      expect(reorderTickets).not.toHaveBeenCalled();
+      expect(cardsIn(from)).toEqual(['Fix the header']);
+      expect(cardsIn(to)).toEqual([]);
+    },
+  );
 });
