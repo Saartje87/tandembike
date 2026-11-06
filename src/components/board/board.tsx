@@ -175,6 +175,8 @@ type LaneColumnProps = {
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
   /** Called with a Review Ticket the User says is merged. */
   onMerged: (ticket: Ticket) => void;
+  /** Called with the number of a stalled Ticket sent Back to Todo. */
+  onBackToTodo: (number: number) => void;
   /** Called with the number of a Ticket created in the lane. */
   onCreated: (number: number) => void;
 };
@@ -197,6 +199,7 @@ type TicketListProps = Pick<
   | 'carrier'
   | 'onSelect'
   | 'onMerged'
+  | 'onBackToTodo'
   | 'lane'
 > & {
   tickets: Ticket[];
@@ -215,6 +218,7 @@ const TicketList: FC<TicketListProps> = ({
   carrier,
   onSelect,
   onMerged,
+  onBackToTodo,
 }) =>
   tickets.length > 0 && (
     <Stack gap={2} listStyle="none" role="list" asChild>
@@ -247,6 +251,7 @@ const TicketList: FC<TicketListProps> = ({
                 ? () => onMerged(ticket)
                 : undefined
             }
+            onBackToTodo={() => onBackToTodo(ticket.number)}
           />
         ))}
       </ul>
@@ -299,6 +304,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   highlighted,
   onSelect,
   onMerged,
+  onBackToTodo,
   onCreated,
 }) => {
   // Takes a drop between or below its cards: a card under the pointer
@@ -312,6 +318,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
     carrier,
     onSelect,
     onMerged,
+    onBackToTodo,
   };
 
   return (
@@ -463,6 +470,7 @@ type SortableTicketCardProps = {
   onSelect: (mode: SelectMode) => void;
   /** Set on a Review card only, which then shows the Merged button. */
   onMerged?: () => void;
+  onBackToTodo: () => void;
 };
 
 const SortableTicketCard: FC<SortableTicketCardProps> = ({
@@ -479,6 +487,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   carriedAlong,
   onSelect,
   onMerged,
+  onBackToTodo,
 }) => {
   const { ref } = useSortable({
     id: ticket.number,
@@ -500,6 +509,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       carriedAlong={carriedAlong}
       onSelect={onSelect}
       onMerged={onMerged}
+      onBackToTodo={onBackToTodo}
     />
   );
 };
@@ -1258,6 +1268,7 @@ export const Board: FC<BoardProps> = ({
                 highlighted={overLane === lane}
                 onSelect={select}
                 onMerged={markMerged}
+                onBackToTodo={(number) => changeStatus(number, 'Todo')}
                 onCreated={setCreated}
               />
             </GridItem>

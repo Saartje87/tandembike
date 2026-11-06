@@ -15,6 +15,8 @@ import {
 } from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
+import { isStalled } from '../board/board-lanes';
 import { useTicketActivity } from '../conversation-activity/conversation-activity';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
@@ -52,6 +54,8 @@ export type TicketCardProps = {
    * Ticket is not in review.
    */
   onMerged?: () => void;
+  /** Sends the Ticket Back to Todo; the button shows on a stalled card only. */
+  onBackToTodo?: () => void;
 };
 
 export type SelectMode = 'toggle' | 'range';
@@ -181,6 +185,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   carryCount = 1,
   carriedAlong = false,
   onMerged,
+  onBackToTodo,
 }) => {
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
@@ -298,6 +303,11 @@ export const TicketCard: FC<TicketCardProps> = ({
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
             {onMerged && <MergedButton ticket={ticket} onMerged={onMerged} />}
+            {onBackToTodo && isStalled(ticket, activity) && (
+              <Inline gap={0}>
+                <BackToTodoButton onClick={onBackToTodo} />
+              </Inline>
+            )}
           </Stack>
           {selectable && (
             <Box paddingBlock={3}>
