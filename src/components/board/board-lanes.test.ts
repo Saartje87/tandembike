@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import type { LiveConversation } from '../../conversations/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { boardLanes, laneOf, laneStatus } from './board-lanes';
@@ -8,7 +9,12 @@ const placed = (
   status: Status,
   labels: string[] = [],
   rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
-) => laneOf({ status, labels, claim: null, externalReferences: [], ...rest });
+  live?: LiveConversation,
+) =>
+  laneOf(
+    { status, labels, claim: null, externalReferences: [], ...rest },
+    live,
+  );
 
 const claim = { agentRunId: 'run-1', agentName: null };
 const pullRequest = 'https://github.com/owner/repo/pull/87';
@@ -102,5 +108,45 @@ describe('laneStatus', () => {
       'Todo',
       'Done',
     ]);
+  });
+
+  describe('with a live Conversation', () => {
+    const inProgress = (
+      state: LiveConversation['state'],
+      rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
+    ) => placed('In progress', [], rest, { state }).section;
+
+    it('puts a running Conversation in Running', () => {
+      expect(inProgress('running')).toBe('Running');
+    });
+
+    it('puts a waiting, interrupted or errored Conversation in Action needed', () => {
+      expect(inProgress('waiting', { claim })).toBe('Action needed');
+      expect(inProgress('interrupted', { claim })).toBe('Action needed');
+      expect(inProgress('error', { claim })).toBe('Action needed');
+    });
+
+    it('decides ahead of a PR reference and a Claim', () => {
+      const references = { externalReferences: [pullRequest] };
+      expect(inProgress('running', references)).toBe('Running');
+      expect(inProgress('waiting', { claim, ...references })).toBe(
+        'Action needed',
+      );
+    });
+
+    it('leaves Claim and PR reference to decide without one', () => {
+      expect(placed('In progress', [], { claim }, undefined).section).toBe(
+        'Running',
+      );
+    });
+
+    it('does not move a Ticket out of its Lane', () => {
+      expect(
+        placed('Todo', ['ready-for-agent'], {}, { state: 'running' }),
+      ).toEqual({
+        lane: 'Todo',
+        section: null,
+      });
+    });
   });
 });

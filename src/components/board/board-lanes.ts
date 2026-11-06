@@ -1,3 +1,4 @@
+import type { LiveConversation } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
@@ -22,15 +23,6 @@ export function isBoardLane(value: unknown): value is BoardLane {
 /** The sections of the In progress Lane (added with the run state, T1064). */
 export type InProgressSection = 'Action needed' | 'Running' | 'Review';
 
-/**
- * Live Conversation state of a Ticket, which a later Ticket (T1065) feeds to
- * `laneOf` to place an In progress Ticket in a section.
- */
-export type LaneActivity = {
-  running?: boolean;
-  needsYou?: boolean;
-};
-
 /** Where a Ticket sits: its Lane and, in In progress, its section. */
 export type LanePlacement = {
   lane: BoardLane;
@@ -45,12 +37,17 @@ export const inProgressSections: readonly InProgressSection[] = [
 ];
 
 /**
- * The section of an In progress Ticket from its data alone: Review with a PR
- * reference, Running with a Claim, else it is stalled and needs action.
+ * The section of an In progress Ticket. A live Conversation decides first:
+ * running is Running, anything else needs the User. Without one, Review with
+ * a PR reference, Running with a Claim, else it is stalled and needs action.
  */
 function sectionOf(
   ticket: Pick<Ticket, 'claim' | 'externalReferences'>,
+  live: LiveConversation | undefined,
 ): InProgressSection {
+  if (live) {
+    return live.state === 'running' ? 'Running' : 'Action needed';
+  }
   if (ticket.externalReferences.some(isPullRequestReference)) {
     return 'Review';
   }
@@ -64,10 +61,10 @@ function sectionOf(
  */
 export function laneOf(
   ticket: Pick<Ticket, 'status' | 'labels' | 'claim' | 'externalReferences'>,
-  _activity?: LaneActivity,
+  live?: LiveConversation,
 ): LanePlacement {
   if (ticket.status === 'In progress') {
-    return { lane: 'In progress', section: sectionOf(ticket) };
+    return { lane: 'In progress', section: sectionOf(ticket, live) };
   }
   if (ticket.status === 'Done') {
     return { lane: 'Done', section: null };
