@@ -175,6 +175,8 @@ type LaneColumnProps = {
   /** Whether a card dragged now is over the lane or one of its cards. */
   highlighted: boolean;
   onSelect: (ticket: Ticket, mode: SelectMode) => void;
+  /** Called with the number of a stalled Ticket sent Back to Todo. */
+  onBackToTodo: (number: number) => void;
   /** Called with the number of a Ticket created in the lane. */
   onCreated: (number: number) => void;
 };
@@ -191,7 +193,13 @@ const TicketCount: FC<TicketCountProps> = ({ count }) => (
 
 type TicketListProps = Pick<
   LaneColumnProps,
-  'boardPath' | 'filter' | 'selected' | 'carrier' | 'onSelect' | 'lane'
+  | 'boardPath'
+  | 'filter'
+  | 'selected'
+  | 'carrier'
+  | 'onSelect'
+  | 'onBackToTodo'
+  | 'lane'
 > & {
   tickets: Ticket[];
   /** The group the cards sort in, when it is not the Lane. */
@@ -208,6 +216,7 @@ const TicketList: FC<TicketListProps> = ({
   selected,
   carrier,
   onSelect,
+  onBackToTodo,
 }) =>
   tickets.length > 0 && (
     <Stack gap={2} listStyle="none" role="list" asChild>
@@ -235,6 +244,7 @@ const TicketList: FC<TicketListProps> = ({
               selected.has(ticket.number)
             }
             onSelect={(mode) => onSelect(ticket, mode)}
+            onBackToTodo={() => onBackToTodo(ticket.number)}
           />
         ))}
       </ul>
@@ -287,13 +297,21 @@ const LaneColumn: FC<LaneColumnProps> = ({
   carrier,
   highlighted,
   onSelect,
+  onBackToTodo,
   onCreated,
 }) => {
   // Takes a drop between or below its cards: a card under the pointer
   // outranks its lane.
   const { ref } = useDroppable({ id: lane, collisionPriority: 1 });
   const headingId = useId();
-  const cardProps = { boardPath, filter, selected, carrier, onSelect };
+  const cardProps = {
+    boardPath,
+    filter,
+    selected,
+    carrier,
+    onSelect,
+    onBackToTodo,
+  };
 
   return (
     <Box
@@ -442,6 +460,7 @@ type SortableTicketCardProps = {
   carrying: boolean;
   carriedAlong: boolean;
   onSelect: (mode: SelectMode) => void;
+  onBackToTodo: () => void;
 };
 
 const SortableTicketCard: FC<SortableTicketCardProps> = ({
@@ -457,6 +476,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   carrying,
   carriedAlong,
   onSelect,
+  onBackToTodo,
 }) => {
   const { ref } = useSortable({
     id: ticket.number,
@@ -477,6 +497,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       carryCount={carrying ? carries : 1}
       carriedAlong={carriedAlong}
       onSelect={onSelect}
+      onBackToTodo={onBackToTodo}
     />
   );
 };
@@ -1219,6 +1240,7 @@ export const Board: FC<BoardProps> = ({
                 carrier={carrier}
                 highlighted={overLane === lane}
                 onSelect={select}
+                onBackToTodo={(number) => changeStatus(number, 'Todo')}
                 onCreated={setCreated}
               />
             </GridItem>

@@ -15,6 +15,8 @@ import {
 } from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
+import { isStalled } from '../board/board-lanes';
 import { useTicketActivity } from '../conversation-activity/conversation-activity';
 import { Icon } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
@@ -46,6 +48,8 @@ export type TicketCardProps = {
   carryCount?: number;
   /** Whether the card is selected and carried along by another one's drag. */
   carriedAlong?: boolean;
+  /** Sends the Ticket Back to Todo; the button shows on a stalled card only. */
+  onBackToTodo?: () => void;
 };
 
 export type SelectMode = 'toggle' | 'range';
@@ -174,6 +178,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   onSelect,
   carryCount = 1,
   carriedAlong = false,
+  onBackToTodo,
 }) => {
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
@@ -290,6 +295,11 @@ export const TicketCard: FC<TicketCardProps> = ({
               </Inline>
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
+            {onBackToTodo && isStalled(ticket, activity) && (
+              <Inline gap={0}>
+                <BackToTodoButton onClick={onBackToTodo} />
+              </Inline>
+            )}
           </Stack>
           {selectable && (
             <Box paddingBlock={3}>

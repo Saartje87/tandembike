@@ -2824,3 +2824,100 @@ describe('In progress sections', () => {
     ).toEqual(['Intake', 'Todo', 'In progress', 'For human', 'Done']);
   });
 });
+
+describe('Back to Todo', () => {
+  const claim = { agentRunId: 'run-1', agentName: null };
+  const pullRequest = 'https://github.com/owner/repo/pull/87';
+  const inProgress = (
+    fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
+  ) => ticket({ status: 'In progress', ...fields });
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('offers it on a stalled card, not on Running or Review cards', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          inProgress({ number: 1, title: 'Stalled' }),
+          inProgress({ number: 2, title: 'Working', claim }),
+          inProgress({
+            number: 3,
+            title: 'In review',
+            externalReferences: [pullRequest],
+          }),
+          ticket({ number: 4, title: 'Waiting' }),
+        ]}
+      />,
+    );
+
+    expect(
+      within(cardOf(1)).getByRole('button', { name: 'Back to Todo' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { name: 'Back to Todo' }),
+    ).toHaveLength(1);
+  });
+
+  it('sets Status Todo and nothing else, moving the card by its label', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(updateTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[
+          inProgress({
+            number: 1,
+            title: 'Stalled',
+            labels: ['ready-for-human'],
+          }),
+        ]}
+      />,
+    );
+
+    await userEvent.click(
+      within(cardOf(1)).getByRole('button', { name: 'Back to Todo' }),
+    );
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 1,
+      status: 'Todo',
+    });
+    await waitFor(() => expect(cardsIn('For human')).toEqual(['Stalled']));
+    expect(cardsIn('In progress')).toEqual([]);
+  });
+
+  it('puts the card back and shows the refusal in place', async () => {
+    vi.mocked(updateTicket).mockResolvedValue({
+      ok: false,
+      error: 'There is no Ticket T1.',
+    });
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[inProgress({ number: 1, title: 'Stalled' })]}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Back to Todo' }));
+
+    expect(await screen.findByText('There is no Ticket T1.')).toBeVisible();
+    await waitFor(() => {
+      expect(cardsIn('In progress')).toEqual(['Stalled']);
+    });
+    expect(
+      within(screen.getByRole('group', { name: 'Action needed' })).getByRole(
+        'button',
+        { name: 'Back to Todo' },
+      ),
+    ).toBeInTheDocument();
+  });
+});
