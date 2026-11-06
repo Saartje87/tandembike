@@ -15,6 +15,7 @@ import {
   attachTicketToEpic,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
+  completeTicket,
   createTicket,
   deleteTicket,
   editTicketComment,
@@ -416,6 +417,43 @@ describe('Ticket actions', () => {
     });
 
     expect(result).toEqual({ ok: true, projectId: app.id });
+  });
+
+  it('completes a Ticket as the User and refreshes its Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      labels: ['ready-for-agent'],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await completeTicket({ number: ticket.number });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(ticket.number)).toMatchObject({
+      status: 'Done',
+      labels: [],
+    });
+    expect(appTickets).toHaveBeenCalledWith('user');
+    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith(
+      '/project/[id]/cycle/[cycleId]',
+      'page',
+    );
+  });
+
+  it('refuses to complete a Ticket in an archived Project', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.archiveProject(project.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await completeTicket({ number: ticket.number });
+
+    expect(result).toMatchObject({ ok: false });
   });
 
   it("adds and removes a label and refreshes the Ticket's Board and drawer", async () => {
