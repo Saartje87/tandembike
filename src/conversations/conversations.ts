@@ -485,17 +485,19 @@ export function createConversations({
           ticketNumber: conversations.ticketNumber,
           projectId: conversations.projectId,
           state: conversations.state,
+          costUsd: conversations.costUsd,
           createdAt: conversations.createdAt,
         })
         .from(conversations)
         .orderBy(desc(conversations.id))
         .all()
-        .map(({ id, ticketNumber, projectId, state, createdAt }) => {
+        .map(({ id, ticketNumber, projectId, state, costUsd, createdAt }) => {
           const entry = latest.get(id);
           return {
             ticketNumber,
             projectId,
             state,
+            costUsd: costUsd ?? 0,
             latest: entry
               ? {
                   role: entry.role,

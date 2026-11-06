@@ -586,6 +586,7 @@ describe('Activity rows', () => {
         state: second.state,
         latest: { role: 'agent', text: 'Hi', permissionRules: null },
         startedAt: '2026-11-07T10:05:00.000Z',
+        costUsd: 0,
       },
       {
         ticketNumber: ticket.number,
@@ -593,6 +594,7 @@ describe('Activity rows', () => {
         state: 'interrupted',
         latest: { role: 'error', text: 'crashed', permissionRules: null },
         startedAt: '2026-11-07T10:00:00.000Z',
+        costUsd: 0,
       },
     ]);
   });
