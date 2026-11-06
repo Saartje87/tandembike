@@ -66,7 +66,6 @@ import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { BatchFailure } from '../../tickets/errors';
 import type { Status } from '../../tickets/status';
 import type { Project, Ticket } from '../../tickets/tickets';
-import { isTriageStateLabel } from '../../tickets/triage-labels';
 import { AppLink } from '../app-link/app-link';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import { useLiveConversations } from '../conversation-activity/conversation-activity';
@@ -75,6 +74,7 @@ import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { type SelectMode, TicketCard } from '../ticket-card/ticket-card';
+import { completed } from './board-changes';
 import {
   filteredSelectionDrop,
   isFiltering,
@@ -599,13 +599,7 @@ const applyBoardChange = (tickets: Ticket[], change: BoardChange) => {
   if ('merged' in change) {
     // The completion rule: Done, and the triage state label gone.
     return tickets.map((ticket) =>
-      ticket.number === change.merged
-        ? {
-            ...ticket,
-            status: 'Done' as const,
-            labels: ticket.labels.filter((label) => !isTriageStateLabel(label)),
-          }
-        : ticket,
+      ticket.number === change.merged ? completed(ticket) : ticket,
     );
   }
   if ('archived' in change) {
@@ -655,9 +649,7 @@ const applyEpicChange = (epics: Ticket[], change: EpicChange) => {
     return epics.map((epic) =>
       epic.number === change.merged
         ? {
-            ...epic,
-            status: 'Done' as const,
-            labels: epic.labels.filter((label) => !isTriageStateLabel(label)),
+            ...completed(epic),
             children: epic.children.map((child) =>
               child.archived ? child : { ...child, status: 'Done' as const },
             ),
