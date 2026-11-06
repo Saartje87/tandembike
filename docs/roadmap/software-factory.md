@@ -1,6 +1,6 @@
 # Roadmap: Tandembike as a local software factory
 
-Status: agreed on 2026-11-06 in a grilling session (T1058). Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
+Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below. Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
 
 ## Goal
 
@@ -13,12 +13,13 @@ Working title: software factory. In the Glossary and UI the feature is **Autopil
 Existing terms keep their meaning: Ticket, Epic, Cycle, Board, Lane, Status, Label, Conversation, Claim, External reference, Agent command. New terms this roadmap introduces, to be added to `GLOSSARY.md` by the phase that builds them:
 
 - **Autopilot**: a Project switch. While it is on and the Project has an Active Cycle, Tandembike starts Start Conversations for the Cycle's eligible work.
-- **Eligible**: a Ticket or Epic in the Active Cycle, Status Todo, labelled `ready-for-agent`, with no unresolved Blocker, unclaimed and not archived. An Epic is eligible by its own label and is dispatched as one unit; a child is never dispatched on its own.
+- **Eligible**: a Ticket or Epic in the Active Cycle, Status Todo, labelled `ready-for-agent`, with no unresolved Blocker, unclaimed and not archived. An Epic is eligible by its own label, once it has at least one child (2026-11-07: an Epic with no children is Todo, and the spec flow creates the Epic before its children), and is dispatched as one unit; a child is never dispatched on its own.
 - **Agent run mode**: a Project setting, `default` or `auto`, that every run the Project starts is pinned to.
 - **Started by**: who started a Conversation, the User or Autopilot. Recorded on the Conversation and shown in its header.
+- **Spend ceiling** (2026-11-07): a Project setting in dollars that bounds what Autopilot spends in one Cycle. Autopilot cannot be turned on without one.
 - **Lane** (revised): a Board section that holds the Tickets in one situation, in their order. Lanes are derived from Status, triage labels and run state; Status stays the fixed set Todo, In progress, Done.
 - **Status line**: one line on an In progress card saying what its live Conversation is doing now.
-- **Stalled**: an In progress Ticket with no Claim and no PR in its External references, such as one whose Conversation the User closed.
+- **Stalled**: an In progress Ticket with no Claim and no PR in its External references, such as one whose Conversation the User closed. An Epic is stalled the same way: no live Conversation, no PR and a released Claim.
 
 ## Decisions
 
@@ -32,13 +33,13 @@ Inside Tandembike, as a dispatcher that starts ordinary Start Conversations. Run
 
 Five Lanes over the three Statuses:
 
-| Lane        | Holds                                                                                                                                                                                                                                                               |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Intake      | Todo with `needs-triage`, `needs-info`, or no triage state label                                                                                                                                                                                                    |
-| Todo        | Todo with `ready-for-agent`: the Autopilot queue, in lane order                                                                                                                                                                                                     |
-| In progress | In progress, in three sections: **Action needed** (its live Conversation waits on a permission or a question, failed, or was interrupted; or the Ticket is stalled), **Running** (claimed, no PR yet), **Review** (a PR in its External references, Claim released) |
-| For human   | Todo with `ready-for-human`: work the User implements                                                                                                                                                                                                               |
-| Done        | Done                                                                                                                                                                                                                                                                |
+| Lane        | Holds                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Intake      | Todo with `needs-triage`, `needs-info`, or no triage state label                                                                                                                                                                                                                                                               |
+| Todo        | Todo with `ready-for-agent`, in lane order: on the Cycle Board the Autopilot queue; on the Project Board also the Backlog's ready work, which is not eligible until planned                                                                                                                                                    |
+| In progress | In progress, in three sections: **Action needed** (its live Conversation waits on a permission or a question, failed, was interrupted, or is idle while the Ticket has no PR or still holds a Claim; or the Ticket is stalled), **Running** (claimed, no PR yet), **Review** (a PR in its External references, Claim released) |
+| For human   | Todo with `ready-for-human`: work the User implements                                                                                                                                                                                                                                                                          |
+| Done        | Done                                                                                                                                                                                                                                                                                                                           |
 
 Rejected: new Statuses. They would change the MCP enum, every Agent's `status: "Todo"` filter, Stats, Cycle rollover and the ready-work rule, and a Ticket dropped into Review with no PR would mean nothing.
 
@@ -46,19 +47,25 @@ Drag changes Status only, as today. Lanes that share a Status (Intake, Todo, For
 
 Epics stay listed apart from the Lanes, as today, with a state badge (Action needed, Review) and the Merged button on the Epic card. The Project Board and the Cycle Board use the same Lanes; an empty Lane collapses.
 
+Children of a Todo Epic that carry `ready-for-agent` stay in the Todo lane, marked with the Epic's colour as today, and are dispatched only with their Epic: the queue is Epics plus Tickets outside any Epic (2026-11-07). The lane still answers what is planned; no UI change.
+
+**Idle runs need the User** (2026-11-07). An `idle` Conversation is one whose Agent ended its turn: after opening the PR, or because it stopped to explain something, such as a call the auto-mode classifier refused (phase 0). The header already counts `idle` as needing the User (T593), and the Lanes do the same: `idle` puts the card in Action needed unless the Ticket has a PR reference and no Claim, which is Review. Without this rule such a card fell through to Claim and no PR, which is Running, and looked like it was working indefinitely. Built in T1065.
+
 "For human" means `ready-for-human`, work the User does; it is not "needs the User now", which is the Action needed section.
 
 ### Status line on In progress cards
 
-Derived from the latest transcript entry of the Ticket's live Conversation (`running` or `waiting`, newest first) by a pure function: a tool entry reads "Reading src/x.tsx", "Editing …", "Running npm run check", "Searching …", "Updating T42"; an agent text entry gives its first sentence; `waiting` shows the question or the permission rule in a few words; `interrupted` and errors say why. Tool names are humanised by an explicit mapping (Read, Edit, Write, Bash with its description, Grep, Glob, Skill, Agent, the Tandembike tools by verb); an unmapped tool shows its bare name and first input value. Elapsed time ticks client-side. Shown on Ticket cards in the In progress Lane and on Epic cards, nowhere else. No partial-message streaming, no new SDK plumbing: the runner already stores every tool call and agent text as a transcript entry and the events route announces each.
+Derived from the latest transcript entry of the Ticket's live Conversation (`running` or `waiting`, newest first) by a pure function: a tool entry reads "Reading src/x.tsx", "Editing …", "Running npm run check", "Searching …", "Updating T42"; an agent text entry gives its first sentence; `waiting` shows the question or the permission rule in a few words; `interrupted` and errors say why. Tool names are humanised by an explicit mapping (Read, Edit, Write, Bash with its description, Grep, Glob, Skill, Agent, the Tandembike tools by verb); an unmapped tool shows its bare name and first input value. Elapsed time ticks client-side. Shown on Ticket cards in the In progress Lane and on Epic cards, nowhere else. No partial-message streaming, no new SDK plumbing: the runner already stores every tool call and agent text as a transcript entry and the events route announces each. One schema change (2026-11-07): a tool entry today stores the tool name and its input as one text, cut at a fixed length, so the status line would parse truncated JSON. The entry gains two columns, the tool name and the raw input as JSON capped at a few kilobytes; the status line is derived at read time, so the humanising mapping can change without a migration. Part of T1066.
 
 **Cost on cards** (added after the T1060 spike, which spent about $1.60 on a one-line docs change, mostly the `implement` skill's overhead of a fresh worktree, `npm ci` and a full check). Each Conversation already stores its cost, shown in the chat header. A Ticket card shows the total over its Conversations and the live run's running cost on the status line; an Epic card shows its own Conversations' cost plus its children's. No Cycle total yet. Part of the status line child (T1066) of the phase 1 Epic.
 
 ### The User merges; Done is one click
 
-The User stays the merge gate and merges on GitHub. The factory never merges, never runs `gh`, and makes no network calls. Agents already add their PR URL to the Ticket, or the Epic, as an External reference. A **Merged** button on Review cards and Epic cards applies the completion rule from `docs/agents/issue-tracker.md`: Status Done, triage state label removed, Claim released; for an Epic, every child in one call and the Epic's own label removed. It trusts the User and checks nothing. The Board shows the PR link, not CI status; the User sees that on GitHub. Rejected: auto-merge on CI green; polling PR state with `gh` from Tandembike; a merge button running `gh pr merge`; a scheduled "finish" Agent run that checks PRs. The existing fallback stays: a later Agent run that finds an In progress Ticket whose PR is merged may move it to Done.
+The User stays the merge gate and merges on GitHub. The factory never merges, never runs `gh`, and makes no network calls. Agents already add their PR URL to the Ticket, or the Epic, as an External reference. A **Merged** button on Review cards and Epic cards applies the completion rule from `docs/agents/issue-tracker.md`: Status Done, triage state label removed, Claim released; for an Epic, every non-archived child in one call, Todo children included, since the one PR covers the whole Epic (2026-11-07: a child deliberately left out is unplanned or archived first), and the Epic's own label removed. It trusts the User and checks nothing. The Board shows the PR link, not CI status; the User sees that on GitHub. Rejected: auto-merge on CI green; polling PR state with `gh` from Tandembike; a merge button running `gh pr merge`; a scheduled "finish" Agent run that checks PRs. The existing fallback stays: a later Agent run that finds an In progress Ticket whose PR is merged may move it to Done.
 
 A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilot never treats a stalled Ticket as eligible: an In progress Ticket without a Claim may be one the User works on in a terminal.
+
+**Back to Todo on every parked card** (2026-11-07). Back to Todo appears on every In progress card without a live Conversation, Review cards included, so a PR closed without merge has a way out: references are history, so the closed PR's URL stays and the card would otherwise sit in Review with only a Merged button. It sets Todo and clears any Claim, including one held by something that is not live, such as a terminal session; the Running section shows the Claim before the User clicks. It is also the retry path: the `ready-for-agent` label stays, so Autopilot picks the Ticket up again at once. On a stalled Epic it sets every In progress child back to Todo in one call and clears the Epic's Claim; Done children stay Done, and the Epic's derived Status follows. Phase 1's T1068 was specced for stalled cards only; the extension to Review and Epic cards is a follow-up Epic on T1059.
 
 ### Autopilot dispatch
 
@@ -68,15 +75,19 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 - Starts the same Start Conversation the Start button does, with the Project's Start command or Start command for Epics, and the same brief. The Conversation records Started by Autopilot; the Glossary's "only the User starts a Conversation" and ADR 0019 are revised for the second starter. Rejected: a new intent with its own brief.
 - Event-driven inside the one server process (ADR 0002): re-evaluates on Ticket changes, Cycle start, run end, the switch flip and server startup, through one serialised evaluate step so double dispatch is impossible. Rejected: cron, a separate daemon.
 - When a Cycle is archived or rolled over, dispatch stops because nothing is eligible; running runs finish their PRs; dispatch resumes when the next Cycle starts.
-- No automatic retries. A failed, interrupted or questioning run leaves its Ticket where it is and shows in Action needed; the User resumes or closes the Conversation. Closing releases the Claim; the Ticket is then stalled until the User sends it Back to Todo.
-- Autopilot leaves `needs-triage` alone, including the Tickets Agents file. The only path into the factory is the User labelling `ready-for-agent` and planning into the Cycle. Auto-triage can be a later switch.
+- No automatic retries. A failed or questioning run leaves its Ticket where it is and shows in Action needed; the User resumes or closes the Conversation. Closing releases the Claim; the Ticket is then stalled until the User sends it Back to Todo.
+- Resume after a restart (2026-11-07). A server restart marks runs interrupted (ADR 0019), which is not a failure, and working on Tandembike from Tandembike restarts it often. On startup Autopilot resumes its own interrupted Conversations, within the cap and under the ceiling, before dispatching new work, by sending the fixed reply "The server restarted. Continue T42 from where you left off", recorded in the transcript as sent by Autopilot. Conversations the User started stay interrupted until the User replies, as today. No limit on resumes per Conversation: the ceiling bounds a crash loop.
+- Autopilot leaves `needs-triage` alone, including the Tickets Agents file. The path into the factory is a `ready-for-agent` label on a Ticket planned into the Active Cycle. Auto-triage can be a later switch.
+- Agents may feed the factory (2026-11-07). An Agent run can make work eligible over MCP: `/to-tickets` creates Epics and children already labelled `ready-for-agent`, a New Ticket Conversation defaults to the Cycle it was started from, and any run can plan or label. So with Autopilot on, a spec run ends in build runs, which is the point. This revises ADR 0019's rule that no Agent can start a run: the Autopilot switch is the User's standing consent, flipped only through a Server Action, and the run cap and the spend ceiling bound what that consent buys. Rejected: counting only labels the User set, read from Activity, which would make every `/to-tickets` result need a manual re-label.
 - Per Project only; no global cap across Projects in version one.
+
+**Spend ceiling** (2026-11-07, replacing "no budget cap in version one"). The spike spent about $1.60 on a one-line change, the classifier is permissive, and the factory runs while the User is away, so one number per Project is the kill switch. The ceiling is a Project setting in dollars, next to the Autopilot switch, with no default; Autopilot cannot be turned on while the Project has none. It is measured against the total cost of Autopilot-started Conversations on the Active Cycle's Tickets, resumes included, so it resets with each Cycle and hand-started runs do not count. When crossed, dispatch pauses, the switch stays on, the Board header shows "paused: over ceiling" with the amount, and raising the ceiling or starting the next Cycle resumes it; running runs finish. The Cycle Board header shows the Cycle's Autopilot spend against the ceiling. Rejected: flipping the switch off, which loses the User's intent; a rolling per-Project total that never resets; counting every Conversation in the Cycle.
 
 ### Agent run mode
 
 The permission relay (ADR 0021) idles a run until the User answers every unlisted call, so a factory is only as hands-off as the repository's allowlist. The User does not want to press Allow constantly. The installed Claude Agent SDK offers `permissionMode: 'auto'`, where a classifier allows safe calls and escalates the rest. Agent run mode becomes a per-Project setting, `default` (today's behaviour) or `auto`, applied to every run the Project starts, factory or by hand; existing Projects keep `default`. The User turns `auto` on per Project on the settings page, with the trade-off written next to the switch; Setup reports the mode and does not suggest it (decided after the spike, replacing the earlier "Setup suggests `auto`"). ADR 0021 noted that whether auto-mode escalations reach the relay through `canUseTool` was unverified. Phase 0 (T1060, `docs/research/auto-permission-mode.md`) settled it: `auto` is the decision. The SDK prompts through `canUseTool` only when the classifier cannot decide; in the spike the classifier decided every one of 24 calls, all allowed, and the run completed a Ticket to an open PR without a prompt. A classifier denial comes back to the model as the tool's result with an instruction to stop and explain, so in a Conversation it shows as an `idle` run with an explanation, which the Board already marks as needing the User. The classifier is permissive: it allowed a hard reset, a file written and removed in the home directory, an outbound POST and a push with a PR; the ADR for the setting states this, and the mode stays per Project and `default` unless the User turns it on. `acceptEdits` plus the allowlist is dropped as a fallback: it would prompt for every push and PR and gain no safety for Bash. `bypassPermissions` stays off the table: runs start in the main checkout before moving to a worktree. Rejected: a factory-only mode; a hard-coded switch to `auto`; `permissionPrompts: 'none'` for Autopilot runs, which would deny the rare undecidable call instead of waiting for the User, kept as an option if waiting runs pile up; parsing a classifier denial into a dedicated state, since `idle` plus the run's explanation on the status line is enough.
 
-**Git guardrail (T1081).** The git side of the classifier's permissiveness is closed deterministically: a committed PreToolUse hook in this repository denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D`, `git stash drop` and `git stash clear`, for Agent runs in any mode and for terminal sessions alike, with a message naming the rule. `git checkout --` and `git restore` stay allowed. The hook is the repository's own (ADR 0014, 0019), not injected by Tandembike; Setup gains an advisory checklist item for it in phase 2. Bash outside the repository stays unbounded: that is the trade accepted for hands-off.
+**Git guardrail (T1081).** The git side of the classifier's permissiveness is closed deterministically: a committed PreToolUse hook in this repository denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D`, `git stash drop` and `git stash clear`, for Agent runs in any mode and for terminal sessions alike, with a message naming the rule. `git checkout --` and `git restore` stay allowed. The hook is the repository's own (ADR 0014, 0019), not injected by Tandembike, so it protects this repository only: another Project's repository needs its own before Autopilot is turned on there. Setup gains an advisory checklist item for it in the Autopilot phase. Bash outside the repository stays unbounded: that is the trade accepted for hands-off.
 
 ### Feedback as Tickets
 
@@ -116,26 +127,28 @@ Goal: a Board that shows the factory's state before any dispatcher exists. Usefu
 
 Decision records: ADR "Lanes are derived from Status, labels and run state"; Glossary: Lane revised, Status line, Stalled, For human.
 
-### Phase 2: Autopilot
+Specced as Epic T1059 on 2026-11-06. The 2026-11-07 amendments that reached it: the idle rule went into T1065 and the tool entry columns into T1066 before they were built; Back to Todo on Review and Epic cards, and Merged on an Epic covering Todo children, came after T1068 and T1069 were specced and are a follow-up Epic with T1059 as its Origin, by "Publishing a spec" in `docs/agents/issue-tracker.md`.
 
-Goal: the first hands-off Cycle.
+### Phase 2: feedback as Tickets
 
-- Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
-- Autopilot switch, stored per Project, on the Board header and settings.
-- The dispatcher: eligibility query, lane-order selection, slot accounting against the existing cap, one serialised evaluate step, triggered by events and on startup.
-- Conversations record Started by; the header shows it.
-- Action needed badge count on the Board header.
-
-Decision records: ADR "Autopilot dispatches the Active Cycle's ready work"; ADR "Agent run mode is a Project setting" superseding ADR 0021's pinned `default`; ADR 0019 amended for the second starter; Glossary: Autopilot, Eligible, Agent run mode, Started by.
-
-### Phase 3: feedback as Tickets
-
-Goal: nothing a run learns is lost in a reply.
+Goal: nothing a run learns is lost in a reply. (Was phase 3; see phase 3.)
 
 - New section in `docs/agents/issue-tracker.md`; `AGENTS.md` feedback rules shortened to point at it; `implement` skill's hand-off step calls it.
 - Labels `from:agent-run` introduced; `from:tandembike` kept for Blocks.
 
 Docs and skills only, no app change.
+
+### Phase 3: Autopilot
+
+Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
+
+- Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
+- Autopilot switch, stored per Project, on the Board header and settings, with the spend ceiling beside it and required to turn the switch on.
+- The dispatcher: eligibility query (an Epic needs a child), lane-order selection, slot accounting against the existing cap, the ceiling check, one serialised evaluate step, triggered by events and on startup; on startup it resumes Autopilot's interrupted Conversations first.
+- Conversations record Started by; the header shows it. Autopilot's resume reply is recorded as sent by Autopilot.
+- Action needed badge count, the paused-over-ceiling notice and the Cycle's spend against the ceiling on the Board header.
+
+Decision records: ADR "Autopilot dispatches the Active Cycle's ready work", recording that Agents may feed it and the ceiling; ADR "Agent run mode is a Project setting" superseding ADR 0021's pinned `default`; ADR 0019 amended for the second starter and for Agent-fed work; Glossary: Autopilot, Eligible, Agent run mode, Started by, Spend ceiling.
 
 ### Phase 4: Cycle end
 
@@ -162,6 +175,7 @@ Decision records: ADR "Review runs are separate Conversations"; Glossary: Review
 - **Merge is on the critical path.** A Blocker only clears at Done, which needs the User's merge. A Cycle with a long Blocker chain runs at the User's merging pace. The Merged button makes it one click; a chained-branch mode (dependant branches off the open PR) is a possible later addition and is not planned.
 - **Stalled detection.** "No Claim and no PR" is a heuristic; a terminal session without a Claim looks stalled. The Back to Todo action is manual for this reason.
 - **Status line quality.** Tool-name mapping needs maintaining as skills and tools change; an unmapped tool degrades to its bare name, never to nothing.
-- **Dispatcher correctness.** Double dispatch, dispatch after the switch is off, and dispatch across a server restart are the cases the tests must cover, through the public Conversations and Tickets modules.
-- **Token cost.** No budget cap in version one. The run cap bounds concurrency, not spend; a per-Cycle budget is a one-line addition if needed.
+- **Dispatcher correctness.** Double dispatch, dispatch after the switch is off, dispatch over the ceiling, dispatch of an Epic without children, and resume and dispatch across a server restart are the cases the tests must cover, through the public Conversations and Tickets modules.
+- **Token cost.** The run cap bounds concurrency; the spend ceiling bounds spend per Cycle (2026-11-07). Per-run setup overhead, a fresh worktree with `npm ci` and a full check, was most of the spike's $1.60 and is multiplied by every Ticket; measuring and cutting it is a `needs-triage` Ticket outside the phases.
+- **Agent-fed work** (2026-11-07). A run that files or labels work can cause runs. The switch, the cap and the ceiling bound it; watch the first Cycles for a spec run whose children were not worth building, and consider counting only User-set labels if it happens.
 - **Brief staleness.** ADR 0019 revisits the brief after about 20 Start runs. Autopilot will hit that quickly; watch transcripts for an Agent deciding badly for lack of Epic or Cycle context.
