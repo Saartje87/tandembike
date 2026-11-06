@@ -305,6 +305,31 @@ describe('Selecting a TicketCard', () => {
     expect(onSelect.mock.calls).toEqual([['toggle'], ['range']]);
   });
 
+  describe('PR link', () => {
+    const pullRequest = 'https://github.com/owner/repo/pull/87';
+    const withReferences = (externalReferences: string[]) =>
+      renderWithTheme(
+        <TicketCard
+          ticket={{ ...ticket, externalReferences }}
+          boardPath="/project/1"
+        />,
+      );
+
+    it('links an In progress Ticket to its PR', () => {
+      withReferences(['ABC-33', pullRequest]);
+
+      expect(
+        screen.getByRole('link', { name: 'owner/repo#87' }),
+      ).toHaveAttribute('href', pullRequest);
+    });
+
+    it('shows no link for a non-PR External reference', () => {
+      withReferences(['https://github.com/owner/repo/issues/87', 'ABC-33']);
+
+      expect(screen.queryByText('owner/repo#87')).not.toBeInTheDocument();
+    });
+  });
+
   describe('Conversation activity', () => {
     const showWith = (activity: { running: number[]; needsYou: number[] }) => {
       vi.mocked(currentConversationActivity).mockResolvedValue({

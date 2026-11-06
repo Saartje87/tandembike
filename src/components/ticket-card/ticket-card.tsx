@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Checkbox, Inline, Stack, Tag, Text } from '@blockle/blocks';
+import { Box, Checkbox, Inline, Link, Stack, Tag, Text } from '@blockle/blocks';
 import type { FC, MouseEvent } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
@@ -9,6 +9,10 @@ import {
   ticketByNumberPath,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
+import {
+  externalReferenceDisplay,
+  isPullRequestReference,
+} from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { useTicketActivity } from '../conversation-activity/conversation-activity';
@@ -190,6 +194,14 @@ export const TicketCard: FC<TicketCardProps> = ({
   };
   // A Done Ticket's work is finished, so an open Blocker no longer matters here.
   const showBlocked = ticket.blocked && ticket.status !== 'Done';
+  // The PR an In progress Ticket is in review through.
+  const pullRequestReference =
+    ticket.status === 'In progress'
+      ? ticket.externalReferences.find(isPullRequestReference)
+      : undefined;
+  const pullRequest = pullRequestReference
+    ? externalReferenceDisplay(pullRequestReference)
+    : undefined;
   const hasMarkers =
     showBlocked ||
     ticket.labels.length > 0 ||
@@ -241,6 +253,15 @@ export const TicketCard: FC<TicketCardProps> = ({
                 {ticket.title}
               </AppLink>
             </Text>
+
+            {pullRequest && (
+              <Text fontSize="xsmall">
+                {/* A plain Link: the PR is outside the app, not a page to prefetch. */}
+                <Link href={pullRequest.href} intent="inherit">
+                  {pullRequest.text}
+                </Link>
+              </Text>
+            )}
 
             {ticket.epic && (
               <Text fontSize="xsmall" className={styles.epicLine}>

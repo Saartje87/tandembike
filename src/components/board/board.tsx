@@ -81,6 +81,8 @@ import {
 import {
   type BoardLane,
   boardLanes,
+  type InProgressSection,
+  inProgressSections,
   isBoardLane,
   isTriageLane,
   laneOf,
@@ -183,6 +185,91 @@ const TicketCount: FC<TicketCountProps> = ({ count }) => (
   </Text>
 );
 
+type TicketListProps = Pick<
+  LaneColumnProps,
+  'boardPath' | 'filter' | 'selected' | 'carrier' | 'onSelect' | 'lane'
+> & {
+  tickets: Ticket[];
+  /** The group the cards sort in, when it is not the Lane. */
+  group?: string;
+};
+
+/** The cards of a Lane, or of a section of it. */
+const TicketList: FC<TicketListProps> = ({
+  lane,
+  group = lane,
+  tickets,
+  boardPath,
+  filter,
+  selected,
+  carrier,
+  onSelect,
+}) =>
+  tickets.length > 0 && (
+    <Stack gap={2} listStyle="none" role="list" asChild>
+      <ul>
+        {tickets.map((ticket, index) => (
+          <SortableTicketCard
+            key={ticket.number}
+            ticket={ticket}
+            lane={lane}
+            group={group}
+            index={index}
+            boardPath={boardPath}
+            filter={filter}
+            selected={selected.has(ticket.number)}
+            selecting={selected.size > 0}
+            carries={
+              selected.size > 1 && selected.has(ticket.number)
+                ? selected.size
+                : 1
+            }
+            carrying={carrier === ticket.number}
+            carriedAlong={
+              carrier !== undefined &&
+              carrier !== ticket.number &&
+              selected.has(ticket.number)
+            }
+            onSelect={(mode) => onSelect(ticket, mode)}
+          />
+        ))}
+      </ul>
+    </Stack>
+  );
+
+type InProgressSectionGroupProps = Omit<TicketListProps, 'lane' | 'group'> & {
+  section: InProgressSection;
+};
+
+/**
+ * A section of the In progress Lane: a heading and count, then its cards.
+ * Empty, it is just those. It takes no drops; the Lane does.
+ */
+const InProgressSectionGroup: FC<InProgressSectionGroupProps> = ({
+  section,
+  tickets,
+  ...cardProps
+}) => {
+  const headingId = useId();
+
+  return (
+    <Stack gap={2} role="group" aria-labelledby={headingId}>
+      <Inline gap={2} alignY="center">
+        <Heading id={headingId} level={3} fontSize="small">
+          {section}
+        </Heading>
+        <TicketCount count={tickets.length} />
+      </Inline>
+      <TicketList
+        lane="In progress"
+        group={`In progress/${section}`}
+        tickets={tickets}
+        {...cardProps}
+      />
+    </Stack>
+  );
+};
+
 /** A Lane; the Todo Lane ends with a field to create a Ticket. */
 const LaneColumn: FC<LaneColumnProps> = ({
   projectId,
@@ -201,6 +288,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   // outranks its lane.
   const { ref } = useDroppable({ id: lane, collisionPriority: 1 });
   const headingId = useId();
+  const cardProps = { boardPath, filter, selected, carrier, onSelect };
 
   return (
     <Box
@@ -224,35 +312,21 @@ const LaneColumn: FC<LaneColumnProps> = ({
             </Heading>
             <TicketCount count={tickets.length} />
           </Inline>
-          {tickets.length > 0 && (
-            <Stack gap={2} listStyle="none" role="list" asChild>
-              <ul>
-                {tickets.map((ticket, index) => (
-                  <SortableTicketCard
-                    key={ticket.number}
-                    ticket={ticket}
-                    lane={lane}
-                    index={index}
-                    boardPath={boardPath}
-                    filter={filter}
-                    selected={selected.has(ticket.number)}
-                    selecting={selected.size > 0}
-                    carries={
-                      selected.size > 1 && selected.has(ticket.number)
-                        ? selected.size
-                        : 1
-                    }
-                    carrying={carrier === ticket.number}
-                    carriedAlong={
-                      carrier !== undefined &&
-                      carrier !== ticket.number &&
-                      selected.has(ticket.number)
-                    }
-                    onSelect={(mode) => onSelect(ticket, mode)}
-                  />
-                ))}
-              </ul>
+          {lane === 'In progress' ? (
+            <Stack gap={3}>
+              {inProgressSections.map((section) => (
+                <InProgressSectionGroup
+                  key={section}
+                  section={section}
+                  tickets={tickets.filter(
+                    (ticket) => laneOf(ticket).section === section,
+                  )}
+                  {...cardProps}
+                />
+              ))}
             </Stack>
+          ) : (
+            <TicketList lane={lane} tickets={tickets} {...cardProps} />
           )}
           {lane === 'Todo' && (
             <NewTicketInline
@@ -350,6 +424,8 @@ const plugins: DragDropManagerInput['plugins'] = (defaults) => [
 type SortableTicketCardProps = {
   ticket: Ticket;
   lane: BoardLane;
+  /** What the card sorts among: its Lane, or its section of the Lane. */
+  group: string;
   index: number;
   boardPath: string;
   filter: BoardFilter;
@@ -366,6 +442,7 @@ type SortableTicketCardProps = {
 const SortableTicketCard: FC<SortableTicketCardProps> = ({
   ticket,
   lane,
+  group,
   index,
   boardPath,
   filter,
@@ -379,7 +456,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   const { ref } = useSortable({
     id: ticket.number,
     index,
-    group: lane,
+    group,
     data: { lane, carries },
     collisionPriority: 3,
   });
@@ -1014,7 +1091,9 @@ export const Board: FC<BoardProps> = ({
     const targetId =
       target?.id === sourceId
         ? isSortable(source) && source.index !== source.initialIndex
-          ? shownLane(laneOf(ticket).lane)[source.index]?.number
+          ? shownLane(laneOf(ticket).lane).filter(
+              (other) => laneOf(other).section === laneOf(ticket).section,
+            )[source.index]?.number
           : undefined
         : target?.id;
     const carriesSelection =

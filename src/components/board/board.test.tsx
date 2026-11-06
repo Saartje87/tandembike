@@ -260,7 +260,7 @@ describe('Board', () => {
 
     for (const lane of boardLanes) {
       const region = screen.getByRole('region', { name: lane });
-      expect(within(region).getByText('0')).toBeInTheDocument();
+      expect(within(region).getAllByText('0')[0]).toBeInTheDocument();
       expect(within(region).queryByRole('list')).not.toBeInTheDocument();
     }
     expect(screen.queryByText('No Tickets')).not.toBeInTheDocument();
@@ -297,9 +297,10 @@ describe('Board', () => {
     );
 
     const countIn = (status: string) =>
-      within(screen.getByRole('region', { name: status })).getByText(
+      // The first count is the Lane's own, before any section's.
+      within(screen.getByRole('region', { name: status })).getAllByText(
         (_, element) => /^\d+ Tickets?$/.test(element?.textContent ?? ''),
-      ).textContent;
+      )[0].textContent;
     expect(countIn('Todo')).toBe('2 Tickets');
     expect(countIn('In progress')).toBe('0 Tickets');
     expect(countIn('Done')).toBe('1 Ticket');
@@ -2703,4 +2704,123 @@ describe('Derived Lanes', () => {
       expect(cardsIn(to)).toEqual([]);
     },
   );
+});
+
+describe('In progress sections', () => {
+  const claim = { agentRunId: 'run-1', agentName: null };
+  const pullRequest = 'https://github.com/owner/repo/pull/87';
+  const tickets = [
+    ticket({ number: 1, title: 'Stalled one', status: 'In progress' }),
+    ticket({
+      number: 2,
+      title: 'In review',
+      status: 'In progress',
+      externalReferences: [pullRequest],
+    }),
+    ticket({ number: 3, title: 'Working', status: 'In progress', claim }),
+    ticket({ number: 4, title: 'Stalled two', status: 'In progress' }),
+  ];
+
+  const sectionsIn = (lane: string) =>
+    within(screen.getByRole('region', { name: lane }))
+      .getAllByRole('group')
+      .map((group) => ({
+        name: laneStatus(group),
+        text: group.textContent,
+        cards: within(group)
+          .queryAllByRole('listitem')
+          .filter((item) => isCard(item))
+          .map((card) =>
+            within(card).getAllByRole('link')[0].getAttribute('aria-label'),
+          ),
+      }));
+
+  beforeEach(() => {
+    vi.mocked(updateTicket).mockReset();
+  });
+
+  it('shows Action needed, Running and Review in order with counts', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(sectionsIn('In progress')).toEqual([
+      expect.objectContaining({
+        name: 'Action needed',
+        text: expect.stringMatching(/^Action needed2/),
+        cards: ['Stalled one', 'Stalled two'],
+      }),
+      expect.objectContaining({
+        name: 'Running',
+        text: expect.stringMatching(/^Running1/),
+        cards: ['Working'],
+      }),
+      expect.objectContaining({
+        name: 'Review',
+        text: expect.stringMatching(/^Review1/),
+        cards: ['In review'],
+      }),
+    ]);
+  });
+
+  it('collapses an empty section to its heading and count', () => {
+    renderWithTheme(<Board project={project} tickets={[tickets[2]]} />);
+
+    const [actionNeeded, running, review] = sectionsIn('In progress');
+    expect(actionNeeded.cards).toEqual([]);
+    expect(actionNeeded.text).toMatch(/^Action needed0/);
+    expect(actionNeeded.text).not.toContain('No Tickets');
+    expect(running.cards).toEqual(['Working']);
+    expect(review.cards).toEqual([]);
+  });
+
+  it('shows a Review card with a link to its PR', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    expect(screen.getByRole('link', { name: 'owner/repo#87' })).toHaveAttribute(
+      'href',
+      pullRequest,
+    );
+  });
+
+  it('gives Status In progress to a Ticket dropped into the Lane', async () => {
+    const { promise, resolve } = Promise.withResolvers<{
+      ok: true;
+      projectId: number;
+    }>();
+    vi.mocked(updateTicket).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true, projectId: project.id }));
+    });
+    const bounds = mockBoardBounds('In progress');
+    onTestFinished(() => bounds.mockRestore());
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[...tickets, ticket({ number: 9, title: 'From Todo' })]}
+      />,
+    );
+
+    await dragTicketTo(9, 'In progress');
+
+    expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
+      number: 9,
+      status: 'In progress',
+    });
+    expect(cardsIn('In progress')).toContain('From Todo');
+  });
+
+  it('does not make the sections drop targets', () => {
+    renderWithTheme(<Board project={project} tickets={tickets} />);
+
+    const lane = screen.getByRole('region', { name: 'In progress' });
+    for (const section of within(lane).getAllByRole('group')) {
+      expect(section.closest('[data-drop-target]')).toBeNull();
+      expect(section.tagName).not.toBe('SECTION');
+    }
+    expect(
+      screen
+        .getAllByRole('region')
+        .map((region) => laneStatus(region))
+        .filter((name) => name !== 'Epics'),
+    ).toEqual(['Intake', 'Todo', 'In progress', 'For human', 'Done']);
+  });
 });
