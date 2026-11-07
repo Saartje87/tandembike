@@ -14,7 +14,7 @@ import {
 import { type FC, type ReactNode, useEffect } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
-import { cockpitPath, ticketOnBoardPath } from '../../app/lib/paths';
+import { cyclePath, ticketOnBoardPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
@@ -44,7 +44,7 @@ import {
 export type CockpitProps = {
   projectId: number;
   /** The Cycle shown, the Project's Active one. */
-  cycle: Pick<Cycle, 'title'>;
+  cycle: Pick<Cycle, 'id' | 'title'>;
   /** The Cycle's Tickets, as its Board gets them. */
   tickets: Ticket[];
   /**
@@ -422,7 +422,7 @@ export const Cockpit: FC<CockpitProps> = ({
   const now = useNow();
   const cockpit = cockpitOf(tickets, { live, cost }, backlog);
   const hrefOf = (number: number) =>
-    ticketOnBoardPath(cockpitPath(projectId), number);
+    ticketOnBoardPath(cyclePath(projectId, cycle.id), number);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
   const { needsYou } = cockpit;
@@ -457,12 +457,9 @@ export const Cockpit: FC<CockpitProps> = ({
     <Stack gap={6}>
       <Stack gap={2}>
         <Inline gap={3} alignY="center" alignX="between">
-          <Inline gap={2} alignY="center">
-            <Heading level={2}>Cockpit</Heading>
-            <Text color="muted">
-              {cycle.title} · {done}/{total} done
-            </Text>
-          </Inline>
+          <Text color="muted">
+            {done}/{total} done
+          </Text>
           <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
             Runs {runSlots.used}/{runSlots.cap}
           </Tag>

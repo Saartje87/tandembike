@@ -91,7 +91,7 @@ const renderCockpit = (shown: Ticket[] = tickets) =>
     <ConversationActivityProvider>
       <Cockpit
         projectId={3}
-        cycle={{ title: 'Factory Board' }}
+        cycle={{ id: 9, title: 'Factory Board' }}
         tickets={shown}
         runSlots={{ used: 1, cap: 3 }}
       />
@@ -118,8 +118,7 @@ describe('Cockpit', () => {
     );
     renderCockpit();
 
-    expect(screen.getByRole('heading', { name: 'Cockpit' })).toBeVisible();
-    expect(screen.getByText('Factory Board · 1/5 done')).toBeVisible();
+    expect(screen.getByText('1/5 done')).toBeVisible();
     expect(
       screen.getByRole('progressbar', { name: 'Cycle progress' }),
     ).toHaveAttribute('aria-valuenow', '20');
@@ -260,7 +259,7 @@ describe('Cockpit', () => {
       <ConversationActivityProvider>
         <Cockpit
           projectId={3}
-          cycle={{ title: 'Factory Board' }}
+          cycle={{ id: 9, title: 'Factory Board' }}
           tickets={[
             ...tickets,
             ticket({
@@ -292,7 +291,7 @@ describe('Cockpit', () => {
     const [filed, planned] = within(intake).getAllByRole('listitem');
     expect(
       within(filed).getByRole('link', { name: 'Tag size missing' }),
-    ).toHaveAttribute('href', '/project/3/cockpit?ticket=20');
+    ).toHaveAttribute('href', '/project/3/cycle/9?ticket=20');
     expect(filed).toHaveTextContent(/Intake · to triage · /);
     expect(within(filed).getByText('needs-triage')).toBeVisible();
     expect(within(planned).getByText('no triage label')).toBeVisible();
@@ -409,7 +408,7 @@ describe('Cockpit', () => {
     const review = section('Review');
     expect(
       within(review).getByRole('link', { name: 'Cockpit' }),
-    ).toHaveAttribute('href', '/project/3/cockpit?ticket=50');
+    ).toHaveAttribute('href', '/project/3/cycle/9?ticket=50');
     expect(within(review).getByRole('link', { name: 'PR #130' })).toBeVisible();
     expect(within(review).queryAllByRole('button')).toEqual([]);
   });
@@ -424,7 +423,7 @@ describe('Cockpit', () => {
     expect(within(needsYou).queryAllByRole('button')).toEqual([]);
     expect(
       within(needsYou).getByRole('link', { name: 'Merge button' }),
-    ).toHaveAttribute('href', '/project/3/cockpit?ticket=8');
+    ).toHaveAttribute('href', '/project/3/cycle/9?ticket=8');
   });
 
   it('closes a Needs you group on its heading', async () => {
@@ -485,7 +484,7 @@ describe('Cockpit', () => {
       <ConversationActivityProvider>
         <Cockpit
           projectId={3}
-          cycle={{ title: 'Factory Board' }}
+          cycle={{ id: 9, title: 'Factory Board' }}
           tickets={[]}
           runSlots={{ used: 1, cap: 3 }}
         />
@@ -505,7 +504,7 @@ describe('Cockpit', () => {
 
     expect(
       within(section('In flight')).getByRole('link', { name: 'Status line' }),
-    ).toHaveAttribute('href', '/project/3/cockpit?ticket=7');
+    ).toHaveAttribute('href', '/project/3/cycle/9?ticket=7');
   });
 
   it('keeps Your work, Queued and Done closed with their counts, and opens them on click', async () => {
@@ -541,7 +540,7 @@ describe('Cockpit', () => {
         <ConversationActivityProvider>
           <Cockpit
             projectId={3}
-            cycle={{ title: 'Factory Board' }}
+            cycle={{ id: 9, title: 'Factory Board' }}
             tickets={tickets}
             runSlots={{ used: 1, cap: 3 }}
           />

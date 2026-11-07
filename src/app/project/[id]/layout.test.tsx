@@ -18,18 +18,24 @@ vi.mock('../../../components/project-tabs/project-tabs', () => ({
     projectId,
     cycles,
     openTicketCounts,
+    needsYou,
   }: {
     projectId: number;
     cycles: { id: number; title: string }[];
     openTicketCounts: { backlog: number; cycles: Record<number, number> };
+    needsYou: number;
   }) => (
     <nav>{`Tabs of ${projectId}: Backlog ${openTicketCounts.backlog}, ${cycles
       .map(({ id, title }) => `${title} ${openTicketCounts.cycles[id]}`)
-      .join(', ')}`}</nav>
+      .join(', ')}; needs you ${needsYou}`}</nav>
   ),
 }));
 
 const tab = <p>The tab</p>;
+
+vi.mock('../../../conversations/app-conversations', () => ({
+  appConversations: () => ({ activityRows: () => [] }),
+}));
 
 describe('ProjectLayout', () => {
   it("shows the Project's header and tabs, with their open Tickets, above the tab", async () => {
@@ -57,9 +63,45 @@ describe('ProjectLayout', () => {
       screen.getByRole('heading', { level: 1, name: 'Website' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('navigation')).toHaveTextContent(
-      `Tabs of ${project.id}: Backlog 2, Beta 1`,
+      `Tabs of ${project.id}: Backlog 2, Beta 1; needs you 0`,
     );
     expect(screen.getByText('The tab')).toBeInTheDocument();
+  });
+
+  it("counts the Active Cycle's Needs you for its tab, with the Backlog's Intake", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Now' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Planned intake',
+      cycleId: cycle.id,
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Filed by a run',
+      labels: ['needs-triage'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Ready later',
+      labels: ['ready-for-agent'],
+    });
+    tickets.startCycle(cycle.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(
+      <main>
+        {
+          await ProjectLayout({
+            params: Promise.resolve({ id: String(project.id) }),
+            children: tab,
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByRole('navigation')).toHaveTextContent('needs you 2');
   });
 
   it('shows the loading state until the Project loads', async () => {

@@ -34,11 +34,6 @@ export function boardPathOf(projectId: number, cycleId: number | null): string {
     : cyclePath(projectId, cycleId);
 }
 
-/** A Project's Cockpit: its Active Cycle by what needs the User. */
-export function cockpitPath(projectId: number): string {
-  return `${projectPath(projectId)}/cockpit`;
-}
-
 /** A Project's History: its archived Cycles. */
 export function cyclesPath(projectId: number): string {
   return `${projectPath(projectId)}/cycles`;

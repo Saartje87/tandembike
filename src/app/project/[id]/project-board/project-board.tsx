@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 
 import { Board } from '../../../../components/board/board';
+import { Cockpit } from '../../../../components/cockpit/cockpit';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
@@ -15,6 +16,7 @@ import {
   noBoardFilter,
 } from '../../../lib/paths';
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
+import { cycleTicketsWithEpics, runSlotsOf } from '../project-data';
 
 export type ProjectBoardProps = {
   project: Project;
@@ -94,6 +96,24 @@ const BoardTab: FC<ProjectBoardProps> = ({
             cycleId: tab.id,
             includeArchived: true,
           })}
+        />
+      </>
+    );
+  }
+  if (tab !== 'backlog' && tab.state === 'Active') {
+    // The Active Cycle's Board is one column, by what needs the User.
+    return (
+      <>
+        <CycleHeader key={tab.id} cycle={tab} />
+        <Cockpit
+          projectId={project.id}
+          cycle={tab}
+          tickets={cycleTicketsWithEpics(project.id, tab.id)}
+          backlog={tickets.listTickets({
+            projectId: project.id,
+            cycleId: null,
+          })}
+          runSlots={runSlotsOf(project.id)}
         />
       </>
     );

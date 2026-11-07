@@ -1,7 +1,9 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../../../conversations/app-conversations';
+import type { Conversation } from '../../../../../conversations/conversations';
 import {
   renderPage,
   renderPageError,
@@ -21,6 +23,12 @@ vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../../tickets/app-tickets', () => ({
   appTickets: vi.fn(),
+}));
+vi.mock('../../../../../conversations/app-conversations', () => ({
+  appConversations: vi.fn(),
+}));
+vi.mock('../../../../conversations/actions', () => ({
+  currentConversationActivity: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock('../../../../../components/board/board', () => ({
   Board: ({
@@ -79,9 +87,222 @@ vi.mock(
 
 const noSearch = Promise.resolve({});
 
+const conversation = (
+  fields: Pick<Conversation, 'intent' | 'state'>,
+): Conversation => fields as Conversation;
+
+const stubConversations = (list: Conversation[]) =>
+  vi.mocked(appConversations).mockReturnValue({
+    list: () => list,
+  } as unknown as ReturnType<typeof appConversations>);
+
 describe('CyclePage', () => {
   beforeEach(() => {
     notFound.mockClear();
+    stubConversations([]);
+  });
+
+  describe('an Active Cycle', () => {
+    it("shows its Tickets in one column, with the Cycle's progress and run slots, instead of the five Lanes", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      tickets.setProjectAgentSettings(project.id, {
+        parallelRuns: true,
+        maxConcurrentRuns: 3,
+      });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Factory Board',
+      });
+      const planned = tickets.createTicket({
+        projectId: project.id,
+        title: 'Show the status line',
+        cycleId: cycle.id,
+      });
+      tickets.updateTicket(planned.number, { status: 'In progress' });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'In the Backlog',
+        labels: ['ready-for-agent'],
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      stubConversations([
+        conversation({ intent: 'start', state: 'running' }),
+        conversation({ intent: 'start', state: 'waiting' }),
+        conversation({ intent: 'start', state: 'idle' }),
+        conversation({ intent: 'triage', state: 'running' }),
+      ]);
+      const params = Promise.resolve({
+        id: String(project.id),
+        cycleId: String(cycle.id),
+      });
+
+      await renderPage(
+        <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+      );
+
+      expect(screen.getByText('0/1 done')).toBeVisible();
+      expect(screen.getByText('Runs 2/3')).toBeVisible();
+      expect(
+        within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
+          'link',
+          {
+            name: 'Show the status line',
+          },
+        ),
+      ).toBeVisible();
+      expect(screen.queryByText('In the Backlog')).not.toBeInTheDocument();
+      expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
+    });
+
+    it("shows the Backlog's Intake in Needs you, not its other Tickets", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      tickets.startCycle(cycle.id);
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Filed by a run',
+        labels: ['needs-triage'],
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Ready, not planned',
+        labels: ['ready-for-agent'],
+      });
+      vi.mocked(appTickets).mockReturnValue(tickets);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      expect(
+        within(screen.getByRole('region', { name: 'Intake' })).getByRole(
+          'link',
+          { name: 'Filed by a run' },
+        ),
+      ).toBeVisible();
+      expect(screen.queryByText('Ready, not planned')).toBe(null);
+    });
+
+    it('shows an Epic In flight when its children are planned, though it is not', async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      const epic = tickets.createTicket({
+        projectId: project.id,
+        title: 'Big idea',
+        type: 'Epic',
+      });
+      const child = tickets.createTicket({
+        projectId: project.id,
+        title: 'Epic rows',
+        epicNumber: epic.number,
+        cycleId: cycle.id,
+      });
+      tickets.updateTicket(child.number, { status: 'In progress' });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      expect(
+        within(screen.getByRole('region', { name: 'In flight' })).getByRole(
+          'link',
+          { name: 'Big idea' },
+        ),
+      ).toBeVisible();
+    });
+
+    it('allows one Start run at a time without parallel runs', async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      expect(screen.getByText('Runs 0/1')).toBeVisible();
+    });
+
+    it("opens ?ticket= in a drawer over it, and its rows link to the Cycle's path", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      const ticket = tickets.createTicket({
+        projectId: project.id,
+        title: 'Ship it',
+        cycleId: cycle.id,
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      const params = Promise.resolve({
+        id: String(project.id),
+        cycleId: String(cycle.id),
+      });
+      const searchParams = Promise.resolve({ ticket: String(ticket.number) });
+
+      await renderPage(
+        <main>{await CyclePage({ params, searchParams })}</main>,
+      );
+
+      const path = `/project/${project.id}/cycle/${cycle.id}`;
+      expect(screen.getByRole('dialog')).toHaveTextContent(
+        `Drawer T${ticket.number} over ${path}:`,
+      );
+      expect(screen.getByRole('link', { name: 'Ship it' })).toHaveAttribute(
+        'href',
+        `${path}?ticket=${ticket.number}`,
+      );
+    });
   });
 
   it("shows the Cycle's header above its Board, under the layout's tabs", async () => {

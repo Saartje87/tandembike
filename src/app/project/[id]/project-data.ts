@@ -1,6 +1,10 @@
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
+import { cockpitOf } from '../../../components/cockpit/cockpit-of';
+import { appConversations } from '../../../conversations/app-conversations';
+import { conversationActivity } from '../../../conversations/conversation-activity';
+import { startRunLimit } from '../../../conversations/conversations';
 import { appTickets } from '../../../tickets/app-tickets';
 import { NotFoundError } from '../../../tickets/errors';
 import { openTicketNumber } from '../../lib/paths';
@@ -109,4 +113,53 @@ export async function loadProjectCycle(params: CyclePageProps['params']) {
     notFound();
   }
   return { project, cycle };
+}
+
+/** The Project's Start runs working now, and how many it allows at once. */
+export function runSlotsOf(projectId: number) {
+  const used = appConversations()
+    .list({ projectId })
+    .filter(
+      ({ intent, state }) =>
+        intent === 'start' && (state === 'running' || state === 'waiting'),
+    ).length;
+  const cap = startRunLimit(
+    appTickets('user').getProjectAgentSettings(projectId),
+  );
+  return { used, cap };
+}
+
+/**
+ * Cycle `cycleId`'s Tickets, with the Project's Epics that are not planned
+ * themselves, so an Epic shows while its children are on the Cycle.
+ */
+export function cycleTicketsWithEpics(projectId: number, cycleId: number) {
+  const tickets = appTickets('user');
+  const planned = tickets.listTickets({ projectId, cycleId });
+  const plannedNumbers = new Set(planned.map(({ number }) => number));
+  return [
+    ...planned,
+    ...tickets
+      .listTickets({ projectId, type: 'Epic' })
+      .filter(({ number }) => !plannedNumbers.has(number)),
+  ];
+}
+
+/**
+ * How many Tickets need the User on Project `projectId`'s Active Cycle's
+ * Board, unfiltered; 0 without an Active Cycle.
+ */
+export function needsYouCountOf(projectId: number): number {
+  const tickets = appTickets('user');
+  const active = tickets
+    .listCycles(projectId)
+    .find(({ state }) => state === 'Active');
+  if (!active) {
+    return 0;
+  }
+  return cockpitOf(
+    cycleTicketsWithEpics(projectId, active.id),
+    conversationActivity(appConversations().activityRows()),
+    tickets.listTickets({ projectId, cycleId: null }),
+  ).needsYou.count;
 }

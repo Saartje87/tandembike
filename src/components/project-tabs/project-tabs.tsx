@@ -21,7 +21,6 @@ import { useForm } from 'react-hook-form';
 import { createCycle } from '../../app/cycles/actions';
 import {
   boardFilterOf,
-  cockpitPath,
   cyclePath,
   cyclesPath,
   filteredBoardPath,
@@ -39,13 +38,18 @@ export type ProjectTabsProps = {
   cycles: Cycle[];
   /** The open Tickets of the Backlog and of each Cycle, unfiltered. */
   openTicketCounts: OpenTicketCounts;
+  /**
+   * What needs the User on the Active Cycle's Board: its tab shows it in
+   * place of its open Tickets. Defaults to 0.
+   */
+  needsYou?: number;
 };
 
 /**
- * A tab of the Project: the Backlog, the Cockpit, a Cycle by id, the History
+ * A tab of the Project: the Backlog, a Cycle by id, the History
  * or Settings.
  */
-type CurrentTab = 'backlog' | 'cockpit' | 'history' | 'settings' | number;
+type CurrentTab = 'backlog' | 'history' | 'settings' | number;
 
 /**
  * The tab on screen, from the URL's `segments` below the Project: an
@@ -55,9 +59,6 @@ function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
   const [segment, cycleId] = segments;
   if (segment === undefined) {
     return 'backlog';
-  }
-  if (segment === 'cockpit') {
-    return 'cockpit';
   }
   if (segment === 'cycles') {
     return 'history';
@@ -81,6 +82,8 @@ type ProjectTabProps = {
   children: string;
   /** The open Tickets on the tab's Board, shown in a badge when given. */
   openTickets?: number;
+  /** What needs the User on the tab's Board, shown in a badge when above 0. */
+  needsYou?: number;
 };
 
 const ProjectTab: FC<ProjectTabProps> = ({
@@ -88,27 +91,50 @@ const ProjectTab: FC<ProjectTabProps> = ({
   current,
   children,
   openTickets,
-}) => (
-  <Tab
-    asChild
-    current={current}
-    // The badge sits outside the link (a Tab's slots do), so it is only shown
-    // here; the count is read out as part of the link's name below.
-    endSlot={openTickets !== undefined && <Tag aria-hidden>{openTickets}</Tag>}
-  >
-    <AppLink href={href} intent="inherit">
-      {children}
-      {openTickets !== undefined && (
-        <>
-          {' '}
-          <VisuallyHidden>
-            {`${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`}
-          </VisuallyHidden>
-        </>
-      )}
-    </AppLink>
-  </Tab>
-);
+  needsYou,
+}) => {
+  const badge =
+    needsYou === undefined
+      ? openTickets === undefined
+        ? undefined
+        : {
+            count: openTickets,
+            name: `${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`,
+            intent: undefined,
+          }
+      : needsYou > 0
+        ? {
+            count: needsYou,
+            name: `${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`,
+            intent: 'warning' as const,
+          }
+        : undefined;
+  return (
+    <Tab
+      asChild
+      current={current}
+      // The badge sits outside the link (a Tab's slots do), so it is only shown
+      // here; the count is read out as part of the link's name below.
+      endSlot={
+        badge && (
+          <Tag aria-hidden intent={badge.intent}>
+            {badge.count}
+          </Tag>
+        )
+      }
+    >
+      <AppLink href={href} intent="inherit">
+        {children}
+        {badge && (
+          <>
+            {' '}
+            <VisuallyHidden>{badge.name}</VisuallyHidden>
+          </>
+        )}
+      </AppLink>
+    </Tab>
+  );
+};
 
 type NewCycleFormProps = {
   projectId: number;
@@ -173,7 +199,7 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 };
 
 /**
- * A Project's views as tabs: its Backlog, its Cockpit, its Active Cycle,
+ * A Project's views as tabs: its Backlog, its Active Cycle,
  * each Prepared one, the History of archived ones and its Settings, with a
  * New Cycle button that adds one. The Backlog's and each Cycle's tab shows its open
  * Tickets in a badge, whatever the Board filter. It marks the tab on screen
@@ -184,6 +210,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
   projectId,
   cycles,
   openTicketCounts,
+  needsYou = 0,
 }) => {
   const [adding, setAdding] = useState(false);
   const current = currentTab(useSelectedLayoutSegments(), cycles);
@@ -203,18 +230,17 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
         >
           Backlog
         </ProjectTab>
-        <ProjectTab
-          href={cockpitPath(projectId)}
-          current={current === 'cockpit'}
-        >
-          Cockpit
-        </ProjectTab>
         {openCyclesInOrder(cycles).map((cycle) => (
           <ProjectTab
             key={cycle.id}
             href={filteredBoardPath(cyclePath(projectId, cycle.id), filter)}
             current={current === cycle.id}
-            openTickets={openTicketCounts.cycles[cycle.id] ?? 0}
+            openTickets={
+              cycle.state === 'Active'
+                ? undefined
+                : (openTicketCounts.cycles[cycle.id] ?? 0)
+            }
+            needsYou={cycle.state === 'Active' ? needsYou : undefined}
           >
             {cycle.title}
           </ProjectTab>
