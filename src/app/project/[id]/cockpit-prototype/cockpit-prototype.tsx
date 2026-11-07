@@ -22,6 +22,7 @@ import {
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FC, type ReactNode, useEffect } from 'react';
 
+import { AppLink } from '../../../../components/app-link/app-link';
 import { Icon, type IconName } from '../../../../components/icon/icon';
 import {
   strongColor,
@@ -29,6 +30,7 @@ import {
 } from '../../../../components/palette/palette.css';
 import type { PaletteColor } from '../../../../tickets/palette';
 import { modeColors } from '../../../lib/mode-colors';
+import { ticketByNumberPath } from '../../../lib/paths';
 import * as styles from './cockpit-prototype.css';
 import {
   type EpicRef,
@@ -97,6 +99,11 @@ const EpicTag: FC<{ item: { epic?: NeedItem['epic'] } }> = ({ item }) =>
     </Tag>
   ) : null;
 
+/**
+ * What a Needs you row offers in the list: only Allow and Deny on a
+ * permission. Everything else opens the Ticket (or its Conversation), where
+ * the User sets its state; a row shows its PR or label as information.
+ */
 const NeedActions: FC<{ item: NeedItem }> = ({ item }) => {
   switch (item.kind) {
     case 'permission':
@@ -110,49 +117,12 @@ const NeedActions: FC<{ item: NeedItem }> = ({ item }) => {
           </Button>
         </Inline>
       );
-    case 'stalled':
-      return (
-        <Button
-          size="small"
-          variant="outline"
-          startSlot={<Icon name="arrow-uturn-left" size="small" />}
-          onClick={noop}
-        >
-          Back to Todo
-        </Button>
-      );
     case 'review':
-      return (
-        <Inline gap={2} flexWrap="nowrap" alignItems="center">
-          <Text fontSize="small" color="muted">
-            PR {item.pr}
-          </Text>
-          <Button size="small" variant="outline" onClick={noop}>
-            Merged
-          </Button>
-        </Inline>
-      );
+      return <Text fontSize="small">PR {item.pr}</Text>;
     case 'intake':
-      // A Blocks Select overflowed the row here; T1107 picks the control.
-      return (
-        <Inline gap={2} flexWrap="nowrap" alignItems="center">
-          <Tag>{item.label}</Tag>
-          <Button
-            size="small"
-            variant="outline"
-            endSlot={<Icon name="chevron-down" size="small" />}
-            onClick={noop}
-          >
-            Triage
-          </Button>
-        </Inline>
-      );
+      return <Tag>{item.label}</Tag>;
     default:
-      return (
-        <Button size="small" variant="outline" onClick={noop}>
-          Open
-        </Button>
-      );
+      return null;
   }
 };
 
@@ -298,7 +268,9 @@ const TicketRow: FC<TicketRowProps> = ({
                 fontWeight={muted ? 'normal' : 'medium'}
                 color={muted ? 'muted' : undefined}
               >
-                {title}
+                <AppLink href={ticketByNumberPath(number)} intent="inherit">
+                  {title}
+                </AppLink>
               </Text>
               {epic && muted && <EpicTag item={{ epic }} />}
             </Inline>
