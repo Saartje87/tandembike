@@ -1,11 +1,12 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
-import { CyclePlanner } from './cycle-planner';
+import type { EpicChild } from '../../tickets/tickets';
+import { CyclePlanner, type CyclePlannerProps } from './cycle-planner';
 
 vi.mock('../../app/cycles/actions', () => ({
   planTicket: vi.fn(),
@@ -23,7 +24,33 @@ const cycle = (
   ...fields,
 });
 
-const open = { number: 12, status: 'Todo', archived: false } as const;
+const open: CyclePlannerProps['ticket'] = {
+  number: 12,
+  title: 'Checkout',
+  status: 'Todo',
+  archived: false,
+  type: 'Ticket',
+  children: [],
+};
+
+const epicChild = (
+  number: number,
+  fields: Partial<EpicChild> = {},
+): EpicChild => ({
+  number,
+  title: `Pay ${number}`,
+  status: 'Todo',
+  archived: false,
+  blockedBy: [],
+  blocked: false,
+  ...fields,
+});
+
+const epic = (children: EpicChild[]): CyclePlannerProps['ticket'] => ({
+  ...open,
+  type: 'Epic',
+  children,
+});
 
 describe('CyclePlanner', () => {
   beforeEach(() => {
@@ -159,5 +186,113 @@ describe('CyclePlanner', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Ticket T12 is archived. Restore it before planning it into a Cycle.',
     );
+  });
+
+  describe('planning an Epic', () => {
+    const pick = async (
+      ticket: Parameters<typeof CyclePlanner>[0]['ticket'],
+      cycles: Cycle[],
+    ) => {
+      renderWithTheme(<CyclePlanner ticket={ticket} cycles={cycles} />);
+      await userEvent.selectOptions(
+        screen.getByRole('combobox', { name: 'Plan into a Cycle' }),
+        'Launch',
+      );
+    };
+    const cycles = [
+      cycle({ id: 7, title: 'Beta', ticketNumbers: [14] }),
+      cycle({ id: 8, title: 'Launch', ticketNumbers: [15] }),
+    ];
+
+    it('asks first, listing the children not in the Cycle and where they would leave', async () => {
+      await pick(
+        epic([
+          epicChild(13),
+          epicChild(14, { status: 'Done' }),
+          epicChild(15),
+          epicChild(16, { archived: true }),
+        ]),
+        cycles,
+      );
+
+      const dialog = screen.getByRole('dialog', {
+        name: 'Plan T12 into Launch?',
+      });
+      expect(
+        within(dialog)
+          .getAllByRole('listitem')
+          .map((item) => item.textContent),
+      ).toEqual(['T13 Pay 13 · Todo', 'T14 Pay 14 · Done · leaves "Beta"']);
+      expect(planTicket).not.toHaveBeenCalled();
+    });
+
+    it('plans the Epic with its children', async () => {
+      vi.mocked(planTicket).mockResolvedValue({ ok: true });
+      await pick(epic([epicChild(13)]), cycles);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Epic and 1 child' }),
+      );
+
+      expect(planTicket).toHaveBeenCalledExactlyOnceWith({
+        cycleId: 8,
+        number: 12,
+        withChildren: true,
+      });
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('plans only the Epic', async () => {
+      vi.mocked(planTicket).mockResolvedValue({ ok: true });
+      await pick(epic([epicChild(13)]), cycles);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Only the Epic' }),
+      );
+
+      expect(planTicket).toHaveBeenCalledExactlyOnceWith({
+        cycleId: 8,
+        number: 12,
+      });
+    });
+
+    it('changes nothing on Cancel', async () => {
+      await pick(epic([epicChild(13)]), cycles);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(planTicket).not.toHaveBeenCalled();
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(
+        screen.getByRole<HTMLSelectElement>('combobox', {
+          name: 'Plan into a Cycle',
+        }).value,
+      ).toBe('');
+    });
+
+    it('plans at once when no child qualifies', async () => {
+      vi.mocked(planTicket).mockResolvedValue({ ok: true });
+      await pick(
+        epic([epicChild(15), epicChild(16, { archived: true })]),
+        cycles,
+      );
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(planTicket).toHaveBeenCalledExactlyOnceWith({
+        cycleId: 8,
+        number: 12,
+      });
+    });
+
+    it('never prompts for a Ticket that is not an Epic', async () => {
+      vi.mocked(planTicket).mockResolvedValue({ ok: true });
+      await pick({ ...open, children: [epicChild(13)] }, cycles);
+
+      expect(screen.queryByRole('dialog')).toBeNull();
+      expect(planTicket).toHaveBeenCalledExactlyOnceWith({
+        cycleId: 8,
+        number: 12,
+      });
+    });
   });
 });

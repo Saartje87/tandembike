@@ -25,7 +25,7 @@ A Project's Tickets that are in no Prepared or Active Cycle, the work not yet pl
 _Avoid_: Inbox, unplanned list
 
 **Epic**:
-A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children: it is Done once it has at least one child and every child is Done or archived. Claiming it covers its children. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out.
+A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children: it is Done once it has at least one child and every child is Done or archived. Claiming it covers its children. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out. Planning an Epic into a Cycle by hand offers to take its non-archived children along, all or nothing (ADR 0010).
 _Avoid_: Feature, parent Ticket, story
 
 **Origin**:

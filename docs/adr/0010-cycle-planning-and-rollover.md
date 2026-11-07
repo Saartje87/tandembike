@@ -5,3 +5,7 @@ Cycles are goal-led plans within one Project: multiple may be Prepared, but only
 ## Reversed: archiving a Cycle no longer archives Epics (T595)
 
 T162 made archiving a Cycle also archive each finished Epic it touched, with its children, so Done Epics would not build up unseen on the Board. T595 reverses that: a Cycle's end is a planning event, and archiving Tickets the User did not ask to archive, including Done children of the same Epic outside the Cycle, took them out of view without the User's say. Epics and their children are now left as they are; an Epic is Done once every child is Done or archived, and the User archives it by hand. The Project Board already hides Done Epics behind its "Show done Epics" switch, which covers the build-up T162 worried about. Epics archived by Cycles before T595 stay archived.
+
+## Planning an Epic by hand offers to take its children along (T1062)
+
+Planning an Epic into a Cycle from the Ticket drawer offers to plan its live children with it: a dialog lists the children that are not archived and not in that Cycle yet, whatever their Status, and the User chooses the Epic and its children, all or nothing, or the Epic alone. A child in another open Cycle moves out of it; an archived child is never touched. Agents plan children explicitly through the MCP tools, so those tools take no such option, and the offer follows the rule that Tandembike never changes Tickets the User did not ask about.

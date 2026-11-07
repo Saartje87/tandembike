@@ -17,9 +17,16 @@ import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import {
+  type PlanEpicChild,
+  PlanEpicDialog,
+} from '../plan-epic-dialog/plan-epic-dialog';
 
 export type CyclePlannerProps = {
-  ticket: Pick<Ticket, 'number' | 'status' | 'archived'>;
+  ticket: Pick<
+    Ticket,
+    'number' | 'title' | 'status' | 'archived' | 'type' | 'children'
+  >;
   /** The Cycles of the Ticket's Project; Archived ones are left out. */
   cycles: Cycle[];
 };
@@ -34,6 +41,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const selectId = useId();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [asking, setAsking] = useState<Cycle>();
   const plannable = cycles.filter((cycle) => cycle.state !== 'Archived');
   const current = plannable.find((cycle) =>
     cycle.ticketNumbers.includes(ticket.number),
@@ -47,6 +55,32 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
         setError(result.error);
       }
     });
+  };
+
+  // An Epic's children that planning it into `cycle` could take along.
+  const askedChildren = (cycle: Cycle): PlanEpicChild[] =>
+    ticket.type === 'Epic'
+      ? ticket.children
+          .filter(
+            ({ archived, number }) =>
+              !archived && !cycle.ticketNumbers.includes(number),
+          )
+          .map(({ number, title, status }) => ({
+            number,
+            title,
+            status,
+            leaves:
+              plannable.find((other) => other.ticketNumbers.includes(number))
+                ?.title ?? null,
+          }))
+      : [];
+
+  const choose = (cycle: Cycle) => {
+    if (askedChildren(cycle).length > 0) {
+      setAsking(cycle);
+    } else {
+      change(planTicket, cycle.id);
+    }
   };
 
   let control: ReactNode;
@@ -86,9 +120,11 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           value=""
           disabled={pending}
           onChange={(event) => {
-            const cycleId = Number(event.currentTarget.value);
-            if (cycleId > 0) {
-              change(planTicket, cycleId);
+            const picked = plannable.find(
+              ({ id }) => id === Number(event.currentTarget.value),
+            );
+            if (picked) {
+              choose(picked);
             }
           }}
         >
@@ -107,6 +143,14 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     <Stack gap={1}>
       {control}
       {error && <Alert intent="danger">{error}</Alert>}
+      {asking && (
+        <PlanEpicDialog
+          epic={{ number: ticket.number, title: ticket.title }}
+          cycle={asking}
+          epicChildren={askedChildren(asking)}
+          onClose={() => setAsking(undefined)}
+        />
+      )}
     </Stack>
   );
 };
