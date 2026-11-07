@@ -17,12 +17,22 @@ import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import {
+  type EpicCycleChild,
+  EpicCycleDialog,
+} from '../epic-cycle-dialog/epic-cycle-dialog';
 
 export type CyclePlannerProps = {
-  ticket: Pick<Ticket, 'number' | 'status' | 'archived'>;
+  ticket: Pick<
+    Ticket,
+    'number' | 'title' | 'status' | 'archived' | 'type' | 'children'
+  >;
   /** The Cycles of the Ticket's Project; Archived ones are left out. */
   cycles: Cycle[];
 };
+
+/** The Epic dialog to show: which direction, and for which Cycle. */
+type Asking = { mode: 'plan' | 'unplan'; cycle: Cycle };
 
 /**
  * Which Cycle a Ticket is planned into, in the Ticket drawer: a link to it
@@ -34,6 +44,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const selectId = useId();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [asking, setAsking] = useState<Asking>();
   const plannable = cycles.filter((cycle) => cycle.state !== 'Archived');
   const current = plannable.find((cycle) =>
     cycle.ticketNumbers.includes(ticket.number),
@@ -49,6 +60,46 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     });
   };
 
+  // An Epic's non-archived children whose membership of `cycle` is `member`,
+  // as the dialog lists them: the ones planning would take along, or the ones
+  // removing would.
+  const dialogChildren = (cycle: Cycle, member: boolean): EpicCycleChild[] =>
+    ticket.type === 'Epic'
+      ? ticket.children
+          .filter(
+            ({ archived, number }) =>
+              !archived && cycle.ticketNumbers.includes(number) === member,
+          )
+          .map(({ number, title, status }) => ({
+            number,
+            title,
+            status,
+            leaves: member
+              ? undefined
+              : (plannable.find((other) => other.ticketNumbers.includes(number))
+                  ?.title ?? null),
+          }))
+      : [];
+
+  const childrenOf = ({ mode, cycle }: Asking) =>
+    dialogChildren(cycle, mode === 'unplan');
+
+  const choose = (cycle: Cycle) => {
+    if (dialogChildren(cycle, false).length > 0) {
+      setAsking({ mode: 'plan', cycle });
+    } else {
+      change(planTicket, cycle.id);
+    }
+  };
+
+  const remove = (cycle: Cycle) => {
+    if (dialogChildren(cycle, true).length > 0) {
+      setAsking({ mode: 'unplan', cycle });
+    } else {
+      change(unplanTicket, cycle.id);
+    }
+  };
+
   let control: ReactNode;
   if (current) {
     control = (
@@ -62,7 +113,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           intent="neutral"
           size="small"
           disabled={pending}
-          onClick={() => change(unplanTicket, current.id)}
+          onClick={() => remove(current)}
         >
           Remove from Cycle
         </Button>
@@ -86,9 +137,11 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           value=""
           disabled={pending}
           onChange={(event) => {
-            const cycleId = Number(event.currentTarget.value);
-            if (cycleId > 0) {
-              change(planTicket, cycleId);
+            const picked = plannable.find(
+              ({ id }) => id === Number(event.currentTarget.value),
+            );
+            if (picked) {
+              choose(picked);
             }
           }}
         >
@@ -107,6 +160,15 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     <Stack gap={1}>
       {control}
       {error && <Alert intent="danger">{error}</Alert>}
+      {asking && (
+        <EpicCycleDialog
+          mode={asking.mode}
+          epic={{ number: ticket.number, title: ticket.title }}
+          cycle={asking.cycle}
+          epicChildren={childrenOf(asking)}
+          onClose={() => setAsking(undefined)}
+        />
+      )}
     </Stack>
   );
 };

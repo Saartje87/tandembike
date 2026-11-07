@@ -50,7 +50,16 @@ export type StartCycleInput = {
 };
 
 /** A Ticket to plan into, or out of, a Cycle. */
-export type CycleTicketInput = { cycleId: number; number: number };
+export type CycleTicketInput = {
+  cycleId: number;
+  number: number;
+  /**
+   * Plan the Epic together with its live (non-archived) children, all or
+   * nothing. Refused on a Ticket that is not an Epic. Only the User does
+   * this: no MCP tool passes it.
+   */
+  withChildren?: boolean;
+};
 
 /** Tickets to plan into, or out of, one Cycle. */
 export type CycleTicketsInput = {
@@ -488,6 +497,49 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     });
   }
 
+  /** Refuses `number` unless it is an existing Epic, which has children to take along. */
+  function checkEpicForChildren(number: number) {
+    const epic = db
+      .select({ type: tickets.type })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (!epic) {
+      throw new NotFoundError(`There is no Ticket T${number}.`);
+    }
+    if (epic.type !== 'Epic') {
+      throw new NotAllowedError(
+        `Ticket T${number} is not an Epic. Only an Epic has children to take along.`,
+      );
+    }
+  }
+
+  /**
+   * Plans Epic `number` into changeable `cycle` with every non-archived child
+   * not in it yet, moving children out of their other open Cycles, in one
+   * transaction. Returns the ids of the Cycles it changed.
+   */
+  function planEpicWithChildren(cycle: CycleRow, number: number): number[] {
+    return db.transaction(() => {
+      checkEpicForChildren(number);
+      const touched = new Set<number>();
+      const children = db
+        .select({ number: tickets.number })
+        .from(tickets)
+        .where(and(eq(tickets.epicNumber, number), eq(tickets.archived, false)))
+        .orderBy(tickets.number)
+        .all();
+      for (const child of children) {
+        for (const id of moveInto(cycle, child.number, undefined)) {
+          touched.add(id);
+        }
+      }
+      planInto(cycle, number);
+      touched.add(cycle.id);
+      return [...touched];
+    });
+  }
+
   /** Takes Ticket `number` out of changeable `cycle`, which must hold it. */
   function unplanFrom(cycle: CycleRow, number: number) {
     const removed = db
@@ -512,6 +564,35 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
           )
         : new NotFoundError(`There is no Ticket T${number}.`);
     }
+  }
+
+  /**
+   * Takes Epic `number` and its non-archived children in changeable `cycle`
+   * out of it in one transaction; the Epic is unplanned last, so a refusal
+   * rolls the children back. Returns the ids of the Cycles it changed.
+   */
+  function unplanEpicWithChildren(cycle: CycleRow, number: number): number[] {
+    return db.transaction(() => {
+      checkEpicForChildren(number);
+      const children = db
+        .select({ number: tickets.number })
+        .from(cycleTickets)
+        .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
+        .where(
+          and(
+            eq(cycleTickets.cycleId, cycle.id),
+            eq(tickets.epicNumber, number),
+            eq(tickets.archived, false),
+          ),
+        )
+        .orderBy(tickets.number)
+        .all();
+      for (const child of children) {
+        unplanFrom(cycle, child.number);
+      }
+      unplanFrom(cycle, number);
+      return [cycle.id];
+    });
   }
 
   /**
@@ -829,16 +910,36 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      * that is not Archived. A Done Ticket can be planned to record finished
      * work; rollover leaves it in its Cycle.
      */
-    planTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      planInto(changeableCycle(cycleId), number);
-      changes.publish({ type: 'cycle', id: cycleId });
+    planTicket({ cycleId, number, withChildren }: CycleTicketInput): Cycle {
+      const cycle = changeableCycle(cycleId);
+      let touched = [cycleId];
+      if (withChildren) {
+        touched = planEpicWithChildren(cycle, number);
+      } else {
+        planInto(cycle, number);
+      }
+      for (const id of touched) {
+        changes.publish({ type: 'cycle', id });
+      }
       return getCycle(cycleId);
     },
 
-    /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
-    unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      unplanFrom(changeableCycle(cycleId), number);
-      changes.publish({ type: 'cycle', id: cycleId });
+    /**
+     * Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. With
+     * `withChildren`, an Epic leaves together with its non-archived children
+     * in that Cycle, all or nothing.
+     */
+    unplanTicket({ cycleId, number, withChildren }: CycleTicketInput): Cycle {
+      const cycle = changeableCycle(cycleId);
+      let touched = [cycleId];
+      if (withChildren) {
+        touched = unplanEpicWithChildren(cycle, number);
+      } else {
+        unplanFrom(cycle, number);
+      }
+      for (const id of touched) {
+        changes.publish({ type: 'cycle', id });
+      }
       return getCycle(cycleId);
     },
 

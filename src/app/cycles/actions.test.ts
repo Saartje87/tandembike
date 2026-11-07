@@ -82,6 +82,34 @@ describe('Cycle actions', () => {
     expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
   });
 
+  it('plans an Epic with its children only when asked to', async () => {
+    const { tickets, project } = appWithTicket();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay',
+      epicNumber: epic.number,
+    });
+
+    await planTicket({ cycleId: cycle.id, number: epic.number });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([epic.number]);
+
+    await planTicket({
+      cycleId: cycle.id,
+      number: epic.number,
+      withChildren: true,
+    });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([
+      epic.number,
+      child.number,
+    ]);
+  });
+
   it('plans several Tickets into a Cycle, reporting the ones it refuses', async () => {
     const { tickets, project, ticket } = appWithTicket();
     const other = tickets.createTicket({
