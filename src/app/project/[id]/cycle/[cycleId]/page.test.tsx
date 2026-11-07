@@ -234,6 +234,63 @@ describe('CyclePage', () => {
       expect(screen.getByText('Nothing in flight.')).toBeVisible();
     });
 
+    it("leaves out Epics with no Tickets on it, but lists the Backlog's Intake Epic once", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const earlier = tickets.createCycle({
+        projectId: project.id,
+        title: 'Earlier',
+      });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Rough idea',
+        type: 'Epic',
+        labels: ['needs-triage'],
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Ready, not planned',
+        type: 'Epic',
+        labels: ['ready-for-agent'],
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Planned elsewhere',
+        type: 'Epic',
+        labels: ['ready-for-agent'],
+        cycleId: earlier.id,
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      expect(
+        within(screen.getByRole('region', { name: 'Intake' })).getAllByRole(
+          'link',
+          { name: 'Rough idea' },
+        ),
+      ).toHaveLength(1);
+      expect(screen.queryByText('Ready, not planned')).toBe(null);
+      expect(screen.queryByText('Planned elsewhere')).toBe(null);
+    });
+
     it('allows one Start run at a time without parallel runs', async () => {
       const tickets = createTestTickets();
       const project = tickets.createProject({ name: 'Website' });

@@ -236,7 +236,7 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
  * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog. It
  * places each Ticket by the Board's own Lane derivation, so the two views
  * never disagree, and reads run state and cost from `activity`. Of
- * `intakeElsewhere`, another Board's Tickets, only the Intake joins Needs you:
+ * `elsewhere`, another Board's Tickets, only the Intake joins Needs you:
  * on a Cycle's Cockpit, the Backlog's, where runs file their feedback.
  *
  * The Board `filter` narrows every section: a row stays when its Ticket
@@ -248,9 +248,15 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
 export function cockpitOf(
   tickets: Ticket[],
   activity: Pick<ConversationActivity, 'live' | 'cost'>,
-  intakeElsewhere: Ticket[] = [],
+  elsewhere: Ticket[] = [],
   filter: BoardFilter = noBoardFilter,
 ): Cockpit {
+  // A Ticket on this Board, such as a Backlog Epic holding a child here, is
+  // placed with it, not again as the other Board's Intake.
+  const onBoard = new Set(tickets.map(({ number }) => number));
+  const intakeElsewhere = elsewhere.filter(
+    ({ number }) => !onBoard.has(number),
+  );
   const shown = tickets.filter(isShown);
   // Every Epic is placed by its lane, like a Ticket.
   const allEpics = tickets
