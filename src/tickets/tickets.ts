@@ -2283,21 +2283,13 @@ export function createTickets(
       return getTicket(blocked);
     },
 
-    /**
-     * Makes normal Ticket `child` a child of Epic `epic` in the same Project
-     * (ADR 0011), and bumps both updated times. Attaching it again changes
-     * nothing; a Ticket in another Epic must be detached first. Returns the
-     * child.
-     */
-    attachToEpic({ epic, child }: EpicChildInput): Ticket {
-      return attachTicketsToEpic({ epic, children: [child] })[0];
-    },
-
     attachTicketsToEpic,
 
     /**
-     * `attachToEpic`, but a Ticket in another Epic leaves it for `epic`, and
-     * that Epic's Status follows too. Returns the child.
+     * Makes normal Ticket `child` a child of Epic `epic` in the same Project
+     * (ADR 0011), by the rules of `attachTicketsToEpic`, but a Ticket in
+     * another Epic leaves it for `epic`, and that Epic's Status follows too.
+     * Returns the child.
      */
     moveToEpic(input: EpicChildInput): Ticket {
       return joinEpic(input, { move: true });
@@ -2906,8 +2898,9 @@ export function createTickets(
   }
 
   /**
-   * `attachToEpic` for each of `children`, all or nothing: if any cannot
-   * join `epic`, none does, and the refusal names every one that cannot and
+   * Makes each of normal Tickets `children` a child of Epic `epic` in the
+   * same Project (ADR 0011), and bumps both updated times, all or nothing:
+   * if any cannot join `epic`, none does, and the refusal names every one that cannot and
    * why. A Ticket in another Epic is refused, not moved. Returns the
    * children in the order given. The change is announced once, or not at
    * all when every Ticket was in `epic` already.
@@ -2980,7 +2973,7 @@ export function createTickets(
   }
 
   /**
-   * Makes `child` a child of `epic`, by the rules of `attachToEpic`; with
+   * Makes `child` a child of `epic`, by the rules of `attachTicketsToEpic`; with
    * `move`, a child of another Epic leaves that one first.
    */
   function joinEpic(

@@ -165,9 +165,9 @@ describe('Attaching and detaching', () => {
       title: 'Pay by card',
     });
 
-    const attached = tickets.attachToEpic({
+    const [attached] = tickets.attachTicketsToEpic({
       epic: epic.number,
-      child: ticket.number,
+      children: [ticket.number],
     });
 
     expect(attached.epic).toEqual({
@@ -202,7 +202,10 @@ describe('Attaching refusals', () => {
 
     expect(
       errorFrom(() =>
-        tickets.attachToEpic({ epic: epic.number, child: child.number }),
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [child.number],
+        }),
       ),
     ).toEqual(
       new NotAllowedError(
@@ -221,7 +224,10 @@ describe('Attaching refusals', () => {
 
     expect(
       errorFrom(() =>
-        tickets.attachToEpic({ epic: epic.number, child: other.number }),
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [other.number],
+        }),
       ),
     ).toEqual(
       new NotAllowedError(
@@ -843,7 +849,10 @@ describe("An Epic's derived Status", () => {
       status: 'In progress',
     });
 
-    tickets.attachToEpic({ epic: epic.number, child: started.number });
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [started.number],
+    });
     expect(statusOf()).toBe('In progress');
 
     tickets.detachFromEpic(started.number);
@@ -1058,7 +1067,10 @@ describe('Blockers and Epics', () => {
 
     expect(
       errorFrom(() =>
-        tickets.attachToEpic({ epic: epic.number, child: ticket.number }),
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [ticket.number],
+        }),
       ),
     ).toEqual(
       new NotAllowedError(
