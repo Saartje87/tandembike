@@ -280,6 +280,13 @@ const childStateLabel: Record<EpicChildState, string> = {
   queued: 'queued',
 };
 
+type PipProps = { state: EpicChildState; title?: string };
+
+/** One child's mark in an Epic's children bar, coloured by its state. */
+const Pip: FC<PipProps> = ({ state, title }) => (
+  <span title={title} className={`${styles.pip} ${styles.pipState[state]}`} />
+);
+
 type ChildrenBarProps = { row: EpicRow };
 
 /** An Epic's children as one mark each, coloured by where it stands. */
@@ -294,10 +301,10 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
       aria-label={`${done} of ${row.children.length} children done`}
     >
       {row.children.map((child) => (
-        <span
+        <Pip
           key={child.number}
+          state={child.state}
           title={`T${child.number} ${child.title}: ${childStateLabel[child.state]}`}
-          className={`${styles.pip} ${styles.pipState[child.state]}`}
         />
       ))}
       <Text fontSize="xsmall" color="muted">
@@ -323,7 +330,7 @@ const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
       {row.children.map((child) => (
         <li key={child.number}>
           <Inline gap={2} alignY="center">
-            <span className={`${styles.pip} ${styles.pipState[child.state]}`} />
+            <Pip state={child.state} />
             <Text fontSize="small" fontFamily="mono" color="muted">
               T{child.number}
             </Text>
