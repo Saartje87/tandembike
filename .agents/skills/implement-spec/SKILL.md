@@ -29,10 +29,11 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
    - creates its worktree off the integration branch by "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`, which has the command that is safe to run in parallel and how to recover a failed one;
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
+   - is told which sibling tickets run alongside it on the same files, and keeps its changes to those files additive, making a structural edit there (see `to-tickets`) only when its ticket cannot work without one, and naming it in its report;
    - calls the Skill tool with `tdd` to build the ticket;
    - merges the integration branch tip into its own branch before reporting done
 
-5. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**.
+5. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**. The merger tries `git merge -X ignore-space-change` first, since parallel edits to one file mostly conflict on re-indentation, then runs the repository's checks on the result, because the formatter may re-indent what the merge kept.
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
