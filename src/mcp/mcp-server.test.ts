@@ -891,6 +891,11 @@ describe('Ticket tools', () => {
       description: 'It overlaps the logo.',
       epicNumber: epic.number,
     });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Footer',
+      description: 'It is too tall.',
+    });
     const client = await connectMcpClient(tickets);
     type Row = { description?: string; epicNumber: number | null };
     const list = async (args: Record<string, unknown>) =>
@@ -904,17 +909,22 @@ describe('Ticket tools', () => {
     const summary = await list({ description: false });
 
     expect(explicit).toEqual(full);
+    expect(full.tickets.map(({ description }) => description)).toEqual([
+      'The whole launch.',
+      'It overlaps the logo.',
+      'It is too tall.',
+    ]);
     expect(lean).toEqual({
       ...full,
-      tickets: full.tickets.map(({ description: _description, ...rest }) => {
-        expect(_description).toEqual(expect.any(String));
-        return rest;
-      }),
+      tickets: full.tickets.map(
+        ({ description: _description, ...rest }) => rest,
+      ),
     });
     expect(summary).toEqual(await list({}));
     expect(summary.tickets.map(({ epicNumber }) => epicNumber)).toEqual([
       null,
       epic.number,
+      null,
     ]);
     await client.close();
   });
