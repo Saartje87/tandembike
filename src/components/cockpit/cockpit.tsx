@@ -70,25 +70,35 @@ const PullRequestLink: FC<PullRequestLinkProps> = ({ url }) => (
   </Text>
 );
 
-type ConversationBellProps = { number: number; onOpen: () => void };
+type ConversationBellProps = {
+  /** The Ticket whose run waits, for the button's name. */
+  number: number;
+  conversationId: number;
+};
 
 /**
  * Opens the Conversation of a run that waits on the User, so the User reads
  * what it did and asks before answering. Nothing is answered from the list.
  */
-const ConversationBell: FC<ConversationBellProps> = ({ number, onOpen }) => (
-  // Primary, not warning: IconButton has no warning intent (T1109).
-  <IconButton
-    variant="outline"
-    intent="primary"
-    shape="circle"
-    size="small"
-    label={`Open the Conversation of T${number}`}
-    onClick={onOpen}
-  >
-    <Icon name="bell-alert" size="small" />
-  </IconButton>
-);
+const ConversationBell: FC<ConversationBellProps> = ({
+  number,
+  conversationId,
+}) => {
+  const dialog = useConversationDialog();
+  return (
+    // Primary, not warning: IconButton has no warning intent (T1109).
+    <IconButton
+      variant="outline"
+      intent="primary"
+      shape="circle"
+      size="small"
+      label={`Open the Conversation of T${number}`}
+      onClick={() => dialog.open(conversationId)}
+    >
+      <Icon name="bell-alert" size="small" />
+    </IconButton>
+  );
+};
 
 const needIcon: Record<NeedKind, IconName> = {
   waiting: 'chat-bubble-left-ellipsis',
@@ -305,32 +315,28 @@ export const Cockpit: FC<CockpitProps> = ({
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
   const { needsYou } = cockpit;
-  const dialog = useConversationDialog();
   useCountInTitle(needsYou.count);
   const needRows = (rows: NeedRow[]) =>
-    rows.map((row) => {
-      const { live } = row;
-      return (
-        <TicketRow
-          key={row.number}
-          ticket={row}
-          href={hrefOf(row.number)}
-          icon={needIcon[row.kind]}
-          line={needLine(row, age(row.since))}
-          end={
-            <Inline gap={2} alignY="center" flexWrap="nowrap">
-              {row.pullRequest && <PullRequestLink url={row.pullRequest} />}
-              {live && (
-                <ConversationBell
-                  number={row.number}
-                  onOpen={() => dialog.open(live.conversationId)}
-                />
-              )}
-            </Inline>
-          }
-        />
-      );
-    });
+    rows.map((row) => (
+      <TicketRow
+        key={row.number}
+        ticket={row}
+        href={hrefOf(row.number)}
+        icon={needIcon[row.kind]}
+        line={needLine(row, age(row.since))}
+        end={
+          <Inline gap={2} alignY="center" flexWrap="nowrap">
+            {row.pullRequest && <PullRequestLink url={row.pullRequest} />}
+            {row.live && (
+              <ConversationBell
+                number={row.number}
+                conversationId={row.live.conversationId}
+              />
+            )}
+          </Inline>
+        }
+      />
+    ));
 
   return (
     <Stack gap={6}>
