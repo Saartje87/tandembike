@@ -21,6 +21,12 @@ export type CockpitTicket = Pick<
 > & {
   /** An Epic's own colour; `null` for a normal Ticket. */
   color: PaletteColor | null;
+  /**
+   * For an Epic outside In flight (Queued, Your work, Done), its children and
+   * whether one needs the User; absent for a normal Ticket.
+   */
+  children?: EpicChildRow[];
+  childNeedsYou?: boolean;
 };
 
 /** An In progress Ticket: where it stands and what its run is doing. */
@@ -57,6 +63,9 @@ export type EpicRow = InFlightRow & {
   /** Whether one of its children is in Needs you. */
   childNeedsYou: boolean;
 };
+
+/** A Todo or Done Epic's children, for its row in Queued, Your work or Done. */
+type EpicChildren = Required<Pick<CockpitTicket, 'children' | 'childNeedsYou'>>;
 
 /** A ready-for-agent Todo Ticket, in the queue's order. */
 export type QueuedRow = CockpitTicket & {
@@ -111,8 +120,8 @@ export type Cockpit = {
     count: number;
   };
   /**
-   * The In progress Epics with a child on this Board, in Board order, in
-   * whatever section they are.
+   * The In progress Epics, in Board order, in whatever section they are.
+   * Epics in Todo or Done are rows of Queued, Your work or Done instead.
    */
   epics: EpicRow[];
   /** The Running Tickets outside those Epics, in Board order. */
@@ -210,19 +219,18 @@ export function cockpitOf(
   intakeElsewhere: Ticket[] = [],
 ): Cockpit {
   const shown = tickets.filter(isShown);
-  const onBoard = new Set(shown.map(({ number }) => number));
-  const epics = tickets
-    .filter(
-      (ticket) =>
-        ticket.type === 'Epic' &&
-        !ticket.archived &&
-        ticket.status === 'In progress' &&
-        ticket.children.some((child) => onBoard.has(child.number)),
-    )
+  // Every Epic is placed by its lane; an Epic in Intake is not shown (yet).
+  const allEpics = tickets
+    .filter((ticket) => ticket.type === 'Epic' && !ticket.archived)
     .map((epic) => ({ epic, live: activity.live[epic.number] }))
     .map((entry) => ({ ...entry, ...laneOf(entry.epic, entry.live) }))
+    .filter((entry) => entry.lane !== 'Intake')
     .sort((left, right) => byPosition(left.epic, right.epic));
-  const shownEpics = new Set(epics.map(({ epic }) => epic.number));
+  const epics = allEpics.filter((entry) => entry.lane === 'In progress');
+  const shownEpics = new Set(allEpics.map(({ epic }) => epic.number));
+  // A child of a shown Epic is in its row, not a row of its own (Needs you aside).
+  const isNested = (ticket: Ticket) =>
+    ticket.epic !== null && shownEpics.has(ticket.epic.number);
   const resolved = new Set(
     tickets
       .filter((ticket) => ticket.archived || ticket.status === 'Done')
@@ -237,6 +245,19 @@ export function cockpitOf(
     .sort((left, right) => byPosition(left.ticket, right.ticket));
   const inLane = (lane: BoardLane) =>
     placed.filter((entry) => entry.lane === lane);
+  /** The lane's Tickets that get a row of their own, with its Epics among them. */
+  const rowsIn = (lane: BoardLane) =>
+    [
+      ...inLane(lane).filter(({ ticket }) => !isNested(ticket)),
+      ...allEpics
+        .filter((entry) => entry.lane === lane)
+        .map(({ epic, live, lane, section }) => ({
+          ticket: epic,
+          live,
+          lane,
+          section,
+        })),
+    ].sort((left, right) => byPosition(left.ticket, right.ticket));
   const cost = (ticket: Ticket) => activity.cost[ticket.number] ?? 0;
   const inSection = (section: InProgressSection) =>
     inLane('In progress').filter((entry) => entry.section === section);
@@ -280,20 +301,9 @@ export function cockpitOf(
     }
     return entry.lane === 'Done' ? 'done' : 'queued';
   };
-  const epicRowOf = ({
-    epic,
-    live,
-    section,
-  }: (typeof epics)[number]): EpicRow => {
+  const childrenOf = (epic: Ticket): EpicChildren => {
     const children = epic.children.filter(({ archived }) => !archived);
     return {
-      ...rowOf(epic),
-      color: epicColorOf(epic),
-      section: section ?? 'Running',
-      live,
-      // As the Board counts it, archived children's runs included (T1066).
-      cost: epicCost(epic, activity.cost),
-      pullRequest: latestPullRequest(epic),
       children: children.map((child) => ({
         number: child.number,
         title: child.title,
@@ -302,6 +312,25 @@ export function cockpitOf(
       childNeedsYou: children.some(({ number }) => needsYouNumbers.has(number)),
     };
   };
+  /** A Todo or Done row of `ticket`: an Epic's carries its children. */
+  const withChildren = (ticket: Ticket) =>
+    ticket.type === 'Epic' ? childrenOf(ticket) : {};
+  const epicRowOf = ({
+    epic,
+    live,
+    section,
+  }: (typeof epics)[number]): EpicRow => ({
+    ...rowOf(epic),
+    ...childrenOf(epic),
+    color: epicColorOf(epic),
+    section: section ?? 'Running',
+    live,
+    // As the Board counts it, archived children's runs included (T1066).
+    cost: epicCost(epic, activity.cost),
+    pullRequest: latestPullRequest(epic),
+  });
+  const costOf = (ticket: Ticket) =>
+    ticket.type === 'Epic' ? epicCost(ticket, activity.cost) : cost(ticket);
 
   return {
     needsYou: {
@@ -312,9 +341,7 @@ export function cockpitOf(
     },
     epics: epics.map(epicRowOf),
     inFlight: inSection('Running')
-      .filter(
-        ({ ticket }) => !(ticket.epic && shownEpics.has(ticket.epic.number)),
-      )
+      .filter(({ ticket }) => !isNested(ticket))
       .map(({ ticket, live, section }) => ({
         ...rowOf(ticket),
         section: section ?? 'Running',
@@ -322,18 +349,23 @@ export function cockpitOf(
         cost: cost(ticket),
         pullRequest: latestPullRequest(ticket),
       })),
-    yourWork: inLane('For human').map(({ ticket }) => rowOf(ticket)),
-    queued: inLane('Todo').map(({ ticket }) => ({
+    yourWork: rowsIn('For human').map(({ ticket }) => ({
       ...rowOf(ticket),
+      ...withChildren(ticket),
+    })),
+    queued: rowsIn('Todo').map(({ ticket }) => ({
+      ...rowOf(ticket),
+      ...withChildren(ticket),
       blocked: ticket.blocked,
       blockers: ticket.blocked
         ? ticket.blockedBy.filter((number) => !resolved.has(number))
         : [],
     })),
-    done: inLane('Done')
+    done: rowsIn('Done')
       .map(({ ticket }) => ({
         ...rowOf(ticket),
-        cost: cost(ticket),
+        ...withChildren(ticket),
+        cost: costOf(ticket),
         pullRequest: latestPullRequest(ticket),
       }))
       .sort(

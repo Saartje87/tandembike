@@ -522,18 +522,109 @@ describe('cockpitOf', () => {
       expect(cockpit.needsYou.count).toBe(1);
     });
 
-    it('shows no Epic without a child on this Board, nor one that is not In progress', () => {
+    it('places a Todo Epic by its label, at its Board position among the Tickets', () => {
       const cockpit = cockpitOf(
         [
-          epic({ number: 51, children: [child(9, 'In progress')] }),
-          epic({ number: 52, status: 'Todo', children: [child(3, 'Todo')] }),
-          children[2],
+          ticket({ number: 4, labels: ['ready-for-agent'], position: 1 }),
+          epic({
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-agent'],
+            position: 2,
+            children: [child(3, 'Todo')],
+          }),
+          ticket({ number: 5, labels: ['ready-for-agent'], position: 3 }),
+          ticket({ number: 6, labels: ['ready-for-human'], position: 4 }),
+          epic({
+            number: 51,
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-human'],
+            position: 5,
+            children: [],
+          }),
         ],
         activity(),
       );
 
+      expect(numbers(cockpit.queued)).toEqual([4, 50, 5]);
+      expect(cockpit.queued[1]).toMatchObject({
+        color: 'teal',
+        children: [{ number: 3, state: 'queued' }],
+      });
+      expect(numbers(cockpit.yourWork)).toEqual([6, 51]);
       expect(cockpit.epics).toEqual([]);
-      expect(cockpit.needsYou.count).toBe(0);
+    });
+
+    it('places a Done Epic in Done with its cost and children', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({ status: 'Done', claim: null, children: [child(1, 'Done')] }),
+          ticket({ number: 1, status: 'Done', epic: link }),
+        ],
+        activity({ cost: { 50: 1, 1: 0.5 } }),
+      );
+
+      expect(cockpit.done).toMatchObject([
+        { number: 50, cost: 1.5, children: [{ number: 1, state: 'done' }] },
+      ]);
+    });
+
+    it("lists an Epic's children only in its row, in every section", () => {
+      const cockpit = cockpitOf(
+        [
+          epic({
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-agent'],
+            children: [child(1, 'Done'), child(2, 'Todo'), child(3, 'Todo')],
+          }),
+          ticket({ number: 1, status: 'Done', epic: link }),
+          ticket({ number: 2, labels: ['ready-for-agent'], epic: link }),
+          ticket({ number: 3, labels: ['ready-for-human'], epic: link }),
+          ticket({ number: 9, status: 'In progress', claim, epic: link }),
+        ],
+        activity(),
+      );
+
+      expect(numbers(cockpit.queued)).toEqual([50]);
+      expect(cockpit.yourWork).toEqual([]);
+      expect(cockpit.done).toEqual([]);
+      expect(cockpit.inFlight).toEqual([]);
+    });
+
+    it("still lists a child in Needs you, in its Epic's colour", () => {
+      const cockpit = cockpitOf(
+        [
+          epic({
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-agent'],
+            children: [child(5, 'In progress')],
+          }),
+          ticket({ number: 5, status: 'In progress', epic: link }),
+        ],
+        activity(),
+      );
+
+      expect(cockpit.needsYou.actionNeeded).toMatchObject([
+        { number: 5, epic: { color: 'teal' } },
+      ]);
+      expect(cockpit.queued).toMatchObject([
+        { number: 50, childNeedsYou: true },
+      ]);
+    });
+
+    it('shows an In progress Epic even when its children are on another Board, but not an archived one', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({ number: 51, children: [child(9, 'In progress')] }),
+          epic({ number: 52, archived: true }),
+        ],
+        activity(),
+      );
+
+      expect(numbers(cockpit.epics)).toEqual([51]);
     });
   });
 });
