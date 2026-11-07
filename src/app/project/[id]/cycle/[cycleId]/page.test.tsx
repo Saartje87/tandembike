@@ -37,12 +37,13 @@ vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
     cycle,
     activeCycle,
   }: {
-    cycle: { title: string };
+    cycle: { title: string; state: string };
     activeCycle?: { title: string };
   }) => (
     <header>
       <h2>{cycle.title}</h2>
       {`Active: ${activeCycle?.title ?? 'none'}`}
+      {cycle.state === 'Prepared' && <button type="button">Start Cycle</button>}
     </header>
   ),
 }));
@@ -187,7 +188,7 @@ describe('CyclePage', () => {
       expect(screen.queryByText('Ready, not planned')).toBe(null);
     });
 
-    it('shows an Epic In flight when its children are planned, though it is not', async () => {
+    it('shows an Epic when its children are planned, though it is not, in Needs you while its run is not going', async () => {
       const tickets = createTestTickets();
       const project = tickets.createProject({ name: 'Website' });
       const cycle = tickets.createCycle({
@@ -223,12 +224,14 @@ describe('CyclePage', () => {
         </main>,
       );
 
+      // With no Claim or live run it is Action needed, and so not In flight.
       expect(
-        within(screen.getByRole('region', { name: 'In flight' })).getByRole(
+        within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
           'link',
           { name: 'Big idea' },
         ),
       ).toBeVisible();
+      expect(screen.getByText('Nothing in flight.')).toBeVisible();
     });
 
     it('allows one Start run at a time without parallel runs', async () => {
@@ -324,7 +327,11 @@ describe('CyclePage', () => {
     // A Prepared Cycle's Board: its Tickets in one column, with progress but
     // no run slots, and the header's Start Cycle choice of Active Cycle.
     expect(screen.getByText('Active: none')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start Cycle' })).toBeVisible();
     expect(screen.getByText('0/1 done')).toBeVisible();
+    expect(
+      screen.getByRole('progressbar', { name: 'Cycle progress' }),
+    ).toBeVisible();
     expect(screen.queryByText(/^Runs /)).not.toBeInTheDocument();
     expect(
       within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
@@ -365,6 +372,11 @@ describe('CyclePage', () => {
     });
     tickets.archiveTicket(archived.number);
     tickets.createTicket({ projectId: project.id, title: 'Not an Epic' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Pick me',
+      cycleId: cycle.id,
+    });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({
@@ -376,7 +388,7 @@ describe('CyclePage', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('checkbox', { name: /Select T\d+ Pay by card/ }),
+      screen.getByRole('checkbox', { name: /Select T\d+ Pick me/ }),
     );
     await userEvent.click(screen.getByRole('button', { name: /Add to Epic/ }));
     expect(

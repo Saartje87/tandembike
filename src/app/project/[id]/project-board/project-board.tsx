@@ -98,18 +98,22 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     .listTickets({ projectId: project.id, cycleId, includeArchived: true })
     .filter((ticket) => ticket.archived);
   const epics = tickets.listTickets({ projectId: project.id, type: 'Epic' });
+  // What every Board gets alike.
+  const shared = {
+    projectId: project.id,
+    archived,
+    cycles,
+    epics,
+    filter,
+  };
   if (tab === 'backlog') {
     // The Backlog is the whole scope of its Board: no progress, no runs.
     return (
       <Cockpit
-        projectId={project.id}
+        {...shared}
         cycle={null}
         tickets={tickets.listTickets({ projectId: project.id, cycleId: null })}
-        archived={archived}
         planning
-        cycles={cycles}
-        epics={epics}
-        filter={filter}
       />
     );
   }
@@ -119,18 +123,14 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
       <>
         <CycleHeader key={tab.id} cycle={tab} />
         <Cockpit
-          projectId={project.id}
+          {...shared}
           cycle={tab}
           tickets={cycleTicketsWithEpics(project.id, tab.id)}
-          archived={archived}
           backlog={tickets.listTickets({
             projectId: project.id,
             cycleId: null,
           })}
           runSlots={runSlotsOf(project.id)}
-          cycles={cycles}
-          epics={epics}
-          filter={filter}
         />
       </>
     );
@@ -144,14 +144,10 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         activeCycle={cycles.find(({ state }) => state === 'Active')}
       />
       <Cockpit
-        projectId={project.id}
+        {...shared}
         cycle={tab}
         tickets={cycleTicketsWithEpics(project.id, tab.id)}
-        archived={archived}
         planning
-        cycles={cycles}
-        epics={epics}
-        filter={filter}
       />
     </>
   );

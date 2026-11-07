@@ -32,27 +32,18 @@ import {
   type ReactNode,
   type Ref,
   startTransition,
-  useCallback,
   useEffect,
   useId,
   useOptimistic,
-  useRef,
-  useState,
-  useTransition,
 } from 'react';
 
-import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
   boardPathOf,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
-import {
-  archiveTickets,
-  moveTicketsToEpic,
-  reorderTickets,
-} from '../../app/tickets/actions';
+import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { BatchFailure } from '../../tickets/errors';
 import type { Ticket } from '../../tickets/tickets';
@@ -96,6 +87,7 @@ import {
   type QueuedRow,
 } from './cockpit-of';
 import { useBoardFilter } from './use-board-filter';
+import { type SelectionList, useSelection } from './use-selection';
 
 export type CockpitProps = {
   projectId: number;
@@ -653,34 +645,13 @@ export const Cockpit: FC<CockpitProps> = ({
   const cycleId = cycle?.id ?? null;
   const boardPath = boardPathOf(projectId, cycleId);
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
-  const everything = cockpitOf(shownTickets, { live, cost }, backlog);
-  // The Board filter narrows every section; only the tab keeps the full count.
-  const shown = new Set(
-    [...shownTickets, ...backlog, ...archived]
-      .filter((ticket) => ticketMatches(ticket, filter))
-      .map(({ number }) => number),
-  );
-  const keep = <Row extends { number: number }>(rows: Row[]) =>
-    isFiltering(filter) ? rows.filter(({ number }) => shown.has(number)) : rows;
+  // The Board filter narrows every section and its counts; only the tab and
+  // the browser title keep the full Needs you count.
   const cockpit = {
-    ...everything,
-    epics: keep(everything.epics),
-    inFlight: keep(everything.inFlight),
-    yourWork: keep(everything.yourWork),
-    queued: keep(everything.queued),
-    done: keep(everything.done),
-    archived: keep(archived),
-    needsYou: (() => {
-      const actionNeeded = keep(everything.needsYou.actionNeeded);
-      const review = keep(everything.needsYou.review);
-      const intake = keep(everything.needsYou.intake);
-      return {
-        actionNeeded,
-        review,
-        intake,
-        count: actionNeeded.length + review.length + intake.length,
-      };
-    })(),
+    ...cockpitOf(shownTickets, { live, cost }, backlog, filter),
+    archived: isFiltering(filter)
+      ? archived.filter((ticket) => ticketMatches(ticket, filter))
+      : archived,
   };
   const filterLabels = [
     ...new Set(
@@ -695,7 +666,7 @@ export const Cockpit: FC<CockpitProps> = ({
   const hideEmpty = (count: number) => planning && count === 0;
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
-  useCountInTitle(everything.needsYou.count);
+  useCountInTitle(needsYou.total);
 
   /** The Todo Tickets this Cycle orders, over all three sections, in order. */
   const todoLane = shownTickets
@@ -826,155 +797,32 @@ export const Cockpit: FC<CockpitProps> = ({
     saveOrder(mergeLaneOrder(todoLane, moved, [sourceNumber]));
   };
 
-  // The rows that can be selected, by list, in the order shown.
-  const lists: Record<string, number[]> = {
-    actionNeeded: needsYou.actionNeeded.map(({ number }) => number),
-    review: needsYou.review.map(({ number }) => number),
-    intake: needsYou.intake.map(({ number }) => number),
-    inFlight: cockpit.inFlight.map(({ number }) => number),
-    yourWork: cockpit.yourWork
-      .filter(({ children }) => !children)
-      .map(({ number }) => number),
-    queued: cockpit.queued
-      .filter(({ children }) => !children)
-      .map(({ number }) => number),
-    done: cockpit.done
-      .filter(({ children }) => !children)
-      .map(({ number }) => number),
+  // The rows that can be selected, by list, in the order shown. An Epic's row
+  // cannot be selected.
+  const numbersOf = (rows: CockpitTicket[]) =>
+    rows.filter(({ children }) => !children).map(({ number }) => number);
+  const lists: Record<SelectionList, number[]> = {
+    actionNeeded: numbersOf(needsYou.actionNeeded),
+    review: numbersOf(needsYou.review),
+    intake: numbersOf(needsYou.intake),
+    inFlight: numbersOf(cockpit.inFlight),
+    yourWork: numbersOf(cockpit.yourWork),
+    queued: numbersOf(cockpit.queued),
+    done: numbersOf(cockpit.done),
   };
-  const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
-  const anchor = useRef<{ number: number; list: string } | undefined>(
-    undefined,
-  );
-  const [refusals, setRefusals] = useState<BatchFailure[]>();
-  const [error, setError] = useState<string>();
-  const [changing, startChange] = useTransition();
-  // Tickets that left the lists drop out of the selection.
-  const selection = Object.values(lists)
-    .flat()
-    .filter((number) => picked.has(number));
-  const shownRefusals = refusals?.filter(({ number }) =>
-    selection.includes(number),
-  );
-  const clearSelection = useCallback(() => {
-    setPicked(new Set());
-    setRefusals(undefined);
-    setError(undefined);
-    anchor.current = undefined;
-  }, []);
-  const hasSelection = picked.size > 0;
-  useEffect(() => {
-    if (!hasSelection) {
-      return;
-    }
-    const clearOnEscape = (event: KeyboardEvent) => {
-      if (
-        event.key === 'Escape' &&
-        !event.defaultPrevented &&
-        !(
-          event.target instanceof Element &&
-          event.target.closest(
-            'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]',
-          )
-        )
-      ) {
-        clearSelection();
-      }
-    };
-    document.addEventListener('keydown', clearOnEscape);
-    return () => document.removeEventListener('keydown', clearOnEscape);
-  }, [hasSelection, clearSelection]);
-  const select = (number: number, list: string, mode: SelectMode) => {
-    setRefusals(undefined);
-    setError(undefined);
-    const numbers = lists[list] ?? [];
-    const from =
-      mode === 'range' && anchor.current?.list === list
-        ? numbers.indexOf(anchor.current.number)
-        : -1;
-    if (from >= 0) {
-      const to = numbers.indexOf(number);
-      const range = numbers.slice(Math.min(from, to), Math.max(from, to) + 1);
-      setPicked((current) => new Set([...current, ...range]));
-      return;
-    }
-    anchor.current = { number, list };
-    setPicked((current) => {
-      const next = new Set(current);
-      if (mode === 'toggle' && next.has(number)) {
-        next.delete(number);
-      } else {
-        next.add(number);
-      }
-      return next;
-    });
-  };
-  const selectable = (number: number, list: string) => ({
-    selected: picked.has(number),
-    onSelect: (mode: SelectMode) => select(number, list, mode),
-  });
-  const moveSelectionToCycle = (cycleId: number | null) => {
-    const numbers = selection;
-    setError(undefined);
-    setRefusals(undefined);
-    startChange(async () => {
-      const result = await moveTicketsToCycle({
-        projectId,
-        cycleId,
-        ticketNumbers: numbers,
-      });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      const refused = new Set(result.failed.map(({ number }) => number));
-      // Only the moved Tickets leave: rows picked meanwhile stay selected.
-      setPicked(
-        (current) =>
-          new Set(
-            [...current].filter(
-              (number) => !numbers.includes(number) || refused.has(number),
-            ),
-          ),
-      );
-      if (result.failed.length > 0) {
-        setRefusals(result.failed);
-      }
-    });
-  };
-  const addSelectionToEpic = (epic: number) => {
-    const numbers = selection;
-    setError(undefined);
-    setRefusals(undefined);
-    startChange(async () => {
-      const result = await moveTicketsToEpic({ epic, children: numbers });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setPicked(
-        (current) =>
-          new Set([...current].filter((number) => !numbers.includes(number))),
-      );
-    });
-  };
-  const archiveSelection = () => {
-    const numbers = selection;
-    setError(undefined);
-    setRefusals(undefined);
-    startChange(async () => {
-      const result = await archiveTickets({ ticketNumbers: numbers });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setPicked(
-        (current) =>
-          new Set([...current].filter((number) => !numbers.includes(number))),
-      );
-    });
-  };
-  const needRows = (rows: NeedRow[], list: string) =>
+  const {
+    selection,
+    refusals,
+    error,
+    setError,
+    changing,
+    clear: clearSelection,
+    selectable,
+    moveToCycle: moveSelectionToCycle,
+    addToEpic: addSelectionToEpic,
+    archive: archiveSelection,
+  } = useSelection(lists, projectId);
+  const needRows = (rows: NeedRow[], list: SelectionList) =>
     rows.map((row) => (
       <DraggableTicketRow
         key={row.number}
@@ -983,7 +831,8 @@ export const Cockpit: FC<CockpitProps> = ({
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
-        selection={selectable(row.number, list)}
+        {...epicParts(row)}
+        selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
             {row.kind === 'intake' && (
@@ -1249,8 +1098,8 @@ export const Cockpit: FC<CockpitProps> = ({
             count={selection.length}
             onClear={clearSelection}
             notice={
-              shownRefusals &&
-              shownRefusals.length > 0 && <NotMoved refusals={shownRefusals} />
+              refusals &&
+              refusals.length > 0 && <NotMoved refusals={refusals} />
             }
           >
             <MoveToCycleMenu

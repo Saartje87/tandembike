@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
-import CockpitPage from './page';
+import RetiredCockpitAddress from './page';
 
 const { notFound, redirect } = vi.hoisted(() => ({
   notFound: vi.fn((): never => {
@@ -21,7 +21,7 @@ const pageProps = (id: number) => ({
   params: Promise.resolve({ id: String(id) }),
 });
 
-describe('CockpitPage', () => {
+describe('the retired /cockpit address', () => {
   beforeEach(() => {
     redirect.mockClear();
     notFound.mockClear();
@@ -38,7 +38,7 @@ describe('CockpitPage', () => {
     tickets.startCycle(active.id);
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    await expect(CockpitPage(pageProps(project.id))).rejects.toThrow(
+    await expect(RetiredCockpitAddress(pageProps(project.id))).rejects.toThrow(
       'NEXT_REDIRECT',
     );
 
@@ -54,7 +54,7 @@ describe('CockpitPage', () => {
     tickets.createCycle({ projectId: project.id, title: 'Next' });
     vi.mocked(appTickets).mockReturnValue(tickets);
 
-    await expect(CockpitPage(pageProps(project.id))).rejects.toThrow(
+    await expect(RetiredCockpitAddress(pageProps(project.id))).rejects.toThrow(
       'NEXT_REDIRECT',
     );
 
@@ -64,7 +64,9 @@ describe('CockpitPage', () => {
   it('shows not-found for a missing Project', async () => {
     vi.mocked(appTickets).mockReturnValue(createTestTickets());
 
-    await expect(CockpitPage(pageProps(999))).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(RetiredCockpitAddress(pageProps(999))).rejects.toThrow(
+      'NEXT_NOT_FOUND',
+    );
 
     expect(redirect).not.toHaveBeenCalled();
   });

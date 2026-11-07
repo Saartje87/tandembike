@@ -1,3 +1,4 @@
+import { type BoardFilter, noBoardFilter } from '../../app/lib/paths';
 import type {
   ConversationActivity,
   LiveConversation,
@@ -7,6 +8,7 @@ import type { PaletteColor } from '../../tickets/palette';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { isTriageStateLabel } from '../../tickets/triage-labels';
+import { isFiltering, ticketMatches } from '../board/board-filter';
 import {
   type BoardLane,
   type InProgressSection,
@@ -22,8 +24,8 @@ export type CockpitTicket = Pick<
   /** An Epic's own colour; `null` for a normal Ticket. */
   color: PaletteColor | null;
   /**
-   * For an Epic outside In flight (Queued, Your work, Done), its children and
-   * whether one needs the User; absent for a normal Ticket.
+   * For an Epic row outside In flight (Needs you, Queued, Your work, Done),
+   * its children and whether one needs the User; absent for a normal Ticket.
    */
   children?: EpicChildRow[];
   childNeedsYou?: boolean;
@@ -64,7 +66,7 @@ export type EpicRow = InFlightRow & {
   childNeedsYou: boolean;
 };
 
-/** A Todo or Done Epic's children, for its row in Queued, Your work or Done. */
+/** An Epic's children, for its row outside In flight. */
 type EpicChildren = Required<Pick<CockpitTicket, 'children' | 'childNeedsYou'>>;
 
 /** A ready-for-agent Todo Ticket, in the queue's order. */
@@ -116,12 +118,15 @@ export type Cockpit = {
     review: NeedRow[];
     /** Todo Tickets still to triage, from this Board and the other given. */
     intake: NeedRow[];
-    /** How many Tickets wait on the User in all. */
+    /** How many Tickets wait on the User, under the Board filter. */
     count: number;
+    /** How many wait on the User in all, whatever the Board filter. */
+    total: number;
   };
   /**
-   * The In progress Epics, in Board order, in whatever section they are.
-   * Epics in Todo or Done are rows of Queued, Your work or Done instead.
+   * The Running Epics (In progress, their run going), in Board order. An Epic
+   * in Review or Action needed is a row of Needs you instead, as is one in
+   * Intake; Epics in Todo or Done are rows of Queued, Your work or Done.
    */
   epics: EpicRow[];
   /** The Running Tickets outside those Epics, in Board order. */
@@ -203,6 +208,27 @@ const intakeRowOf = (ticket: Ticket): NeedRow => ({
 
 const isShown = (ticket: Ticket) => !ticket.archived && ticket.type !== 'Epic';
 
+/**
+ * Whether the Board filter keeps `ticket`: it matches, or it is an Epic and
+ * one of its children does. `known` finds a child's Ticket on this Board; one
+ * on another Board has no labels to go by.
+ */
+function keeps(
+  ticket: Ticket,
+  filter: BoardFilter,
+  known: Map<number, Ticket>,
+): boolean {
+  return (
+    ticketMatches(ticket, filter) ||
+    ticket.children.some((child) =>
+      ticketMatches(
+        known.get(child.number) ?? { ...child, labels: [] },
+        filter,
+      ),
+    )
+  );
+}
+
 const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
   left.since.getTime() - right.since.getTime() || left.number - right.number;
 
@@ -212,21 +238,29 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
  * never disagree, and reads run state and cost from `activity`. Of
  * `intakeElsewhere`, another Board's Tickets, only the Intake joins Needs you:
  * on a Cycle's Cockpit, the Backlog's, where runs file their feedback.
+ *
+ * The Board `filter` narrows every section: a row stays when its Ticket
+ * matches, and an Epic's row also when one of its children does, then listing
+ * only the matching children (all of them when the Epic matches itself).
+ * `needsYou.count` and the lists follow the filter; `needsYou.total`, and the
+ * `progress`, do not.
  */
 export function cockpitOf(
   tickets: Ticket[],
   activity: Pick<ConversationActivity, 'live' | 'cost'>,
   intakeElsewhere: Ticket[] = [],
+  filter: BoardFilter = noBoardFilter,
 ): Cockpit {
   const shown = tickets.filter(isShown);
-  // Every Epic is placed by its lane; an Epic in Intake is not shown (yet).
+  // Every Epic is placed by its lane, like a Ticket.
   const allEpics = tickets
     .filter((ticket) => ticket.type === 'Epic' && !ticket.archived)
     .map((epic) => ({ epic, live: activity.live[epic.number] }))
     .map((entry) => ({ ...entry, ...laneOf(entry.epic, entry.live) }))
-    .filter((entry) => entry.lane !== 'Intake')
     .sort((left, right) => byPosition(left.epic, right.epic));
-  const epics = allEpics.filter((entry) => entry.lane === 'In progress');
+  const epics = allEpics.filter(
+    (entry) => entry.lane === 'In progress' && entry.section === 'Running',
+  );
   const shownEpics = new Set(allEpics.map(({ epic }) => epic.number));
   // A child of a shown Epic is in its row, not a row of its own (Needs you aside).
   const isNested = (ticket: Ticket) =>
@@ -262,7 +296,7 @@ export function cockpitOf(
   const inSection = (section: InProgressSection) =>
     inLane('In progress').filter((entry) => entry.section === section);
   const epicsIn = (section: InProgressSection) =>
-    epics
+    allEpics
       .filter((entry) => entry.section === section)
       .map(({ epic, live }) => ({ ticket: epic, live }));
   const actionNeeded = [
@@ -280,15 +314,6 @@ export function cockpitOf(
   const review = [...inSection('Review'), ...epicsIn('Review')]
     .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
     .sort(longestWaitingFirst);
-  // This Board's Intake in its Board order, which a drag sets; the other
-  // Board's after it, longest waiting first.
-  const intake = [
-    ...inLane('Intake').map(({ ticket }) => intakeRowOf(ticket)),
-    ...intakeElsewhere
-      .filter((ticket) => isShown(ticket) && laneOf(ticket).lane === 'Intake')
-      .map(intakeRowOf)
-      .sort(longestWaitingFirst),
-  ];
   const needsYouNumbers = new Set(
     [...actionNeeded, ...review].map(({ number }) => number),
   );
@@ -313,7 +338,7 @@ export function cockpitOf(
       childNeedsYou: children.some(({ number }) => needsYouNumbers.has(number)),
     };
   };
-  /** A Todo or Done row of `ticket`: an Epic's carries its children. */
+  /** A row of `ticket` outside In flight: an Epic's carries its children. */
   const withChildren = (ticket: Ticket) =>
     ticket.type === 'Epic' ? childrenOf(ticket) : {};
   const epicRowOf = ({
@@ -333,12 +358,57 @@ export function cockpitOf(
   const costOf = (ticket: Ticket) =>
     ticket.type === 'Epic' ? epicCost(ticket, activity.cost) : cost(ticket);
 
-  return {
+  // Intake: this Board's in its Board order, which a drag sets, Epics among
+  // them, their children in their rows; the other Board's after it, longest
+  // waiting first.
+  const intakeEpics = new Set(
+    [
+      ...allEpics.map(({ epic, lane }) => ({ epic, lane })),
+      ...intakeElsewhere
+        .filter((ticket) => ticket.type === 'Epic' && !ticket.archived)
+        .map((epic) => ({ epic, lane: laneOf(epic).lane })),
+    ]
+      .filter(({ lane }) => lane === 'Intake')
+      .map(({ epic }) => epic.number),
+  );
+  const inIntakeEpic = (ticket: Ticket) =>
+    ticket.epic !== null && intakeEpics.has(ticket.epic.number);
+  const intakeRow = (ticket: Ticket) => ({
+    ...intakeRowOf(ticket),
+    ...withChildren(ticket),
+  });
+  const intake = [
+    ...[
+      ...inLane('Intake').map(({ ticket }) => ticket),
+      ...allEpics
+        .filter((entry) => entry.lane === 'Intake')
+        .map(({ epic }) => epic),
+    ]
+      .filter((ticket) => !inIntakeEpic(ticket))
+      .sort(byPosition)
+      .map(intakeRow),
+    ...intakeElsewhere
+      .filter(
+        (ticket) =>
+          !ticket.archived &&
+          laneOf(ticket).lane === 'Intake' &&
+          !inIntakeEpic(ticket),
+      )
+      .map(intakeRow)
+      .sort(longestWaitingFirst),
+  ];
+  const needsYouRow = (row: NeedRow): NeedRow => {
+    const epic = allEpics.find(({ epic }) => epic.number === row.number);
+    return epic ? { ...row, ...childrenOf(epic.epic) } : row;
+  };
+
+  const unfiltered: Cockpit = {
     needsYou: {
-      actionNeeded,
-      review,
+      actionNeeded: actionNeeded.map(needsYouRow),
+      review: review.map(needsYouRow),
       intake,
       count: actionNeeded.length + review.length + intake.length,
+      total: actionNeeded.length + review.length + intake.length,
     },
     epics: epics.map(epicRowOf),
     inFlight: inSection('Running')
@@ -376,5 +446,59 @@ export function cockpitOf(
       done: shown.filter(({ status }) => status === 'Done').length,
       total: shown.length,
     },
+  };
+  if (!isFiltering(filter)) {
+    return unfiltered;
+  }
+
+  // Narrow every section by the Board filter.
+  const known = new Map(
+    [...tickets, ...intakeElsewhere].map((ticket) => [ticket.number, ticket]),
+  );
+  const matchesSelf = (number: number) => {
+    const ticket = known.get(number);
+    return ticket !== undefined && ticketMatches(ticket, filter);
+  };
+  const keep = <Row extends CockpitTicket>(rows: Row[]): Row[] =>
+    rows
+      .filter(({ number }) => {
+        const ticket = known.get(number);
+        return ticket !== undefined && keeps(ticket, filter, known);
+      })
+      .map((row) => {
+        const { children } = row;
+        if (!children || matchesSelf(row.number)) {
+          return row;
+        }
+        return {
+          ...row,
+          children: children.filter((child) =>
+            ticketMatches(
+              known.get(child.number) ?? { ...child, labels: [] },
+              filter,
+            ),
+          ),
+        };
+      });
+  const narrowed = {
+    actionNeeded: keep(unfiltered.needsYou.actionNeeded),
+    review: keep(unfiltered.needsYou.review),
+    intake: keep(unfiltered.needsYou.intake),
+  };
+  return {
+    ...unfiltered,
+    needsYou: {
+      ...narrowed,
+      count:
+        narrowed.actionNeeded.length +
+        narrowed.review.length +
+        narrowed.intake.length,
+      total: unfiltered.needsYou.total,
+    },
+    epics: keep(unfiltered.epics),
+    inFlight: keep(unfiltered.inFlight),
+    yourWork: keep(unfiltered.yourWork),
+    queued: keep(unfiltered.queued),
+    done: keep(unfiltered.done),
   };
 }

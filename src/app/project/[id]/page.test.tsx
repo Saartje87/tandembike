@@ -82,6 +82,7 @@ describe('ProjectPage', () => {
     expect(screen.getByRole('link', { name: 'Fix the header' })).toBeVisible();
     expect(screen.queryByText('Planned')).not.toBeInTheDocument();
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText(/ done$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Runs /)).not.toBeInTheDocument();
     expect(ticket.number).toBeGreaterThan(0);
     expect(screen.queryByRole('dialog')).toBeNull();

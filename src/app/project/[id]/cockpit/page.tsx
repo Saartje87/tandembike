@@ -6,11 +6,12 @@ import { cyclePath, projectPath } from '../../../lib/paths';
 import { loadProject, type ProjectPageProps } from '../project-data';
 
 /**
- * The Cockpit tab's old address: the Active Cycle's Board is the Cockpit
- * now, so it redirects there, or to the Backlog when there is no Active
+ * The retired address of the Project's one-column view, which was once a tab
+ * of its own (see _Avoid_ under Board in `GLOSSARY.md`). Old links still land
+ * on the Active Cycle's Board, or on the Backlog's when there is no Active
  * Cycle.
  */
-const CockpitPage: FC<ProjectPageProps> = async ({ params }) => {
+const RetiredCockpitAddress: FC<ProjectPageProps> = async ({ params }) => {
   const project = await loadProject(params);
   const active = appTickets('user')
     .listCycles(project.id)
@@ -18,4 +19,4 @@ const CockpitPage: FC<ProjectPageProps> = async ({ params }) => {
   redirect(active ? cyclePath(project.id, active.id) : projectPath(project.id));
 };
 
-export default CockpitPage;
+export default RetiredCockpitAddress;

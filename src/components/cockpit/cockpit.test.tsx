@@ -443,6 +443,48 @@ describe('Cockpit', () => {
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=50');
     expect(within(review).getByRole('link', { name: 'PR #130' })).toBeVisible();
     expect(within(review).queryAllByRole('button')).toEqual([]);
+    // Listed once: In flight holds Running work only.
+    expect(screen.getAllByRole('link', { name: 'Cockpit' })).toHaveLength(1);
+    expect(screen.getByText('Nothing in flight.')).toBeVisible();
+  });
+
+  it('shows an Epic in Intake as an expandable row of Needs you > Intake, its children nested and counted once', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const link = { number: 50, title: 'Big idea', color: 'teal' as const };
+    renderCockpit([
+      ticket({
+        number: 50,
+        title: 'Big idea',
+        type: 'Epic',
+        color: 'teal',
+        children: [
+          {
+            number: 30,
+            title: 'Child 30',
+            status: 'Todo',
+            archived: false,
+            blockedBy: [],
+            blocked: false,
+          },
+        ],
+      }),
+      ticket({ number: 30, title: 'Child 30', epic: link }),
+    ]);
+
+    const intake = section('Intake');
+    const row = within(intake)
+      .getByRole('link', { name: 'Big idea' })
+      .closest('li') as HTMLElement;
+    expect(within(intake).getAllByRole('link')).toHaveLength(1);
+    expect(within(row).queryAllByRole('checkbox')).toHaveLength(0);
+    await userEvent.click(
+      within(row).getByRole('img', { name: '0 of 1 children done' }),
+    );
+    expect(row.querySelector('details')).toHaveAttribute('open');
+    expect(within(row).getByText('Child 30')).toBeVisible();
+    expect(within(section('Needs you')).getAllByText('1')[0]).toBeVisible();
   });
 
   it('offers no actions in Needs you, only links to the Tickets', async () => {
@@ -986,7 +1028,7 @@ describe('Cockpit drag', () => {
     ['Your work', 5, '{ArrowUp}', [5, 1, 2, 3, 4, 6, 7]],
     ['Intake', 6, '{ArrowDown}', [1, 2, 3, 4, 5, 7, 6]],
   ])(
-    'reorders a row dragged within %s by keyboard, saving the Todo lane',
+    'reorders a row dragged within %s by keyboard, saving the order of the Todo Tickets',
     async (_name, number, keys, ticketNumbers) => {
       const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
       vi.mocked(reorderTickets).mockReturnValue(promise);
@@ -1007,6 +1049,51 @@ describe('Cockpit drag', () => {
       );
     },
   );
+
+  it('leaves an Epic of another Cycle out of the order it saves', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    mockRowBounds();
+    renderCockpit([
+      planned({
+        number: 1,
+        title: 'First queued',
+        labels: ['ready-for-agent'],
+      }),
+      ticket({
+        number: 50,
+        title: 'Foreign epic',
+        type: 'Epic',
+        color: 'teal',
+        position: 1,
+        labels: ['ready-for-agent'],
+        cycle: { id: 10, title: 'Elsewhere', state: 'Prepared' },
+      }),
+      planned({
+        number: 2,
+        title: 'Second queued',
+        position: 2,
+        labels: ['ready-for-agent'],
+      }),
+    ]);
+
+    await keyboardDrag(rowOf(1), '{ArrowDown}');
+
+    await vi.waitFor(() =>
+      expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        status: 'Todo',
+        cycleId: 9,
+        ticketNumbers: [2, 1],
+      }),
+    );
+  });
 
   it('shows a reordered row in its new place at once', async () => {
     const { promise, resolve } = Promise.withResolvers<{ ok: true }>();

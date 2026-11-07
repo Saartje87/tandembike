@@ -227,10 +227,15 @@ describe('cockpitOf', () => {
     expect(cockpit.needsYou.count).toBe(3);
   });
 
-  it("leaves another Board's Epics and archived Intake out", () => {
+  it("leaves another Board's archived Intake out", () => {
     const cockpit = cockpitOf([], activity(), [
-      ticket({ number: 1, type: 'Epic', labels: ['needs-triage'] }),
       ticket({ number: 2, labels: ['needs-triage'], archived: true }),
+      ticket({
+        number: 3,
+        type: 'Epic',
+        labels: ['needs-triage'],
+        archived: true,
+      }),
     ]);
 
     expect(cockpit.needsYou.intake).toEqual([]);
@@ -281,7 +286,7 @@ describe('cockpitOf', () => {
     expect(numbers(cockpit.yourWork)).toEqual([2, 1]);
   });
 
-  it('queues ready-for-agent Todo Tickets in the Todo Lane order', () => {
+  it('queues ready-for-agent Todo Tickets in the Queued order', () => {
     const cockpit = cockpitOf(
       [
         ticket({ number: 1, labels: ['ready-for-agent'], position: 3 }),
@@ -518,8 +523,109 @@ describe('cockpitOf', () => {
       expect(cockpit.needsYou.review).toMatchObject([
         { number: 50, color: 'teal', pullRequest: pullRequest(70) },
       ]);
-      expect(cockpit.epics).toMatchObject([{ number: 50, section: 'Review' }]);
       expect(cockpit.needsYou.count).toBe(1);
+    });
+
+    it('lists an Epic in Review or Action needed in Needs you only, not In flight', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({
+            number: 50,
+            claim: null,
+            externalReferences: [pullRequest(70)],
+          }),
+          epic({ number: 51, claim: null }),
+          epic({ number: 52 }),
+        ],
+        activity(),
+      );
+
+      expect(numbers(cockpit.needsYou.review)).toEqual([50]);
+      expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([51]);
+      expect(numbers(cockpit.epics)).toEqual([52]);
+      expect(cockpit.needsYou.count).toBe(2);
+    });
+
+    it('gives an Epic in Needs you its children', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({ claim: null, externalReferences: [pullRequest(70)] }),
+          ...children,
+        ],
+        activity(),
+      );
+
+      expect(
+        cockpit.needsYou.review[0]?.children?.map(({ number }) => number),
+      ).toEqual([1, 2, 3]);
+    });
+
+    describe('in Intake', () => {
+      const intakeEpic = (fields: Partial<Ticket> = {}) =>
+        epic({
+          status: 'Todo',
+          claim: null,
+          labels: ['needs-triage'],
+          createdAt: new Date('2026-11-01'),
+          ...fields,
+        });
+
+      it('is an Epic row of Needs you > Intake, with its children, and counts', () => {
+        const cockpit = cockpitOf(
+          [
+            intakeEpic({
+              children: [child(1, 'Todo'), child(2, 'Todo')],
+            }),
+            ticket({ number: 1, epic: link }),
+            ticket({ number: 2, epic: link, labels: ['needs-info'] }),
+            ticket({ number: 8, position: 1 }),
+          ],
+          activity(),
+        );
+
+        expect(cockpit.needsYou.intake).toMatchObject([
+          {
+            number: 50,
+            kind: 'intake',
+            color: 'teal',
+            triageLabel: 'needs-triage',
+            children: [{ number: 1 }, { number: 2 }],
+          },
+          { number: 8 },
+        ]);
+        expect(cockpit.needsYou.count).toBe(2);
+      });
+
+      it("takes its Board position among the Board's Intake", () => {
+        const cockpit = cockpitOf(
+          [
+            ticket({ number: 8, position: 1 }),
+            intakeEpic({ position: 2, children: [] }),
+            ticket({ number: 9, position: 3 }),
+          ],
+          activity(),
+        );
+
+        expect(numbers(cockpit.needsYou.intake)).toEqual([8, 50, 9]);
+      });
+
+      it("shows a Backlog's Intake Epic on a Cycle's Board, children nested", () => {
+        const cockpit = cockpitOf([], activity(), [
+          intakeEpic({ children: [child(1, 'Todo')] }),
+          ticket({ number: 1, epic: link }),
+          epic({
+            number: 60,
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-agent'],
+          }),
+        ]);
+
+        expect(cockpit.needsYou.intake).toMatchObject([
+          { number: 50, children: [{ number: 1 }] },
+        ]);
+        expect(cockpit.needsYou.count).toBe(1);
+      });
     });
 
     it('places a Todo Epic by its label, at its Board position among the Tickets', () => {
@@ -625,6 +731,212 @@ describe('cockpitOf', () => {
       );
 
       expect(numbers(cockpit.epics)).toEqual([51]);
+    });
+  });
+
+  describe('with a Board filter', () => {
+    const filter = (query: string, labels: string[] = []) => ({
+      query,
+      labels,
+    });
+    const link = { number: 50, title: 'Epic', color: 'teal' as const };
+    const child = (number: number, title: string) => ({
+      number,
+      title,
+      status: 'Todo' as const,
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+
+    it('narrows every section to the Tickets that match', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({
+            number: 1,
+            title: 'Fix login',
+            status: 'In progress',
+            claim,
+          }),
+          ticket({ number: 2, title: 'Other', status: 'In progress', claim }),
+          ticket({ number: 3, title: 'Fix cart', labels: ['ready-for-agent'] }),
+          ticket({ number: 4, title: 'Other', labels: ['ready-for-agent'] }),
+          ticket({ number: 5, title: 'Fix it', labels: ['ready-for-human'] }),
+          ticket({ number: 6, title: 'Other', labels: ['ready-for-human'] }),
+          ticket({ number: 7, title: 'Fix more', status: 'Done' }),
+          ticket({ number: 8, title: 'Other', status: 'Done' }),
+          ticket({
+            number: 9,
+            title: 'Fix review',
+            status: 'In progress',
+            externalReferences: [pullRequest(1)],
+          }),
+          ticket({
+            number: 10,
+            title: 'Other',
+            status: 'In progress',
+            externalReferences: [pullRequest(2)],
+          }),
+          ticket({ number: 11, title: 'Fix new' }),
+          ticket({ number: 12, title: 'Other' }),
+        ],
+        activity(),
+        [
+          ticket({ number: 13, title: 'Fix away' }),
+          ticket({ number: 14, title: 'Other away' }),
+        ],
+        filter('fix'),
+      );
+
+      expect(numbers(cockpit.inFlight)).toEqual([1]);
+      expect(numbers(cockpit.queued)).toEqual([3]);
+      expect(numbers(cockpit.yourWork)).toEqual([5]);
+      expect(numbers(cockpit.done)).toEqual([7]);
+      expect(numbers(cockpit.needsYou.review)).toEqual([9]);
+      expect(numbers(cockpit.needsYou.intake)).toEqual([11, 13]);
+    });
+
+    it('narrows by label', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({ number: 1, labels: ['ready-for-agent', 'bug'] }),
+          ticket({ number: 2, labels: ['ready-for-agent'] }),
+        ],
+        activity(),
+        [],
+        filter('', ['bug']),
+      );
+
+      expect(numbers(cockpit.queued)).toEqual([1]);
+    });
+
+    it('counts the filtered sections, but keeps the whole Needs you count apart', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({ number: 1, title: 'Fix' }),
+          ticket({ number: 2, title: 'Other' }),
+        ],
+        activity(),
+        [],
+        filter('fix'),
+      );
+
+      expect(cockpit.needsYou.count).toBe(1);
+      expect(cockpit.needsYou.total).toBe(2);
+    });
+
+    it('leaves the progress unfiltered', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({ number: 1, title: 'Fix', status: 'Done' }),
+          ticket({ number: 2, title: 'Other' }),
+        ],
+        activity(),
+        [],
+        filter('fix'),
+      );
+
+      expect(cockpit.progress).toEqual({ done: 1, total: 2 });
+    });
+
+    it('keeps an Epic row when a child matches, narrowing its children to the matches', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({
+            number: 50,
+            title: 'Epic',
+            type: 'Epic',
+            color: 'teal',
+            status: 'Todo',
+            labels: ['ready-for-agent'],
+            children: [child(1, 'Fix login'), child(2, 'Other')],
+          }),
+          ticket({
+            number: 1,
+            title: 'Fix login',
+            epic: link,
+            labels: ['ready-for-agent'],
+          }),
+          ticket({
+            number: 2,
+            title: 'Other',
+            epic: link,
+            labels: ['ready-for-agent'],
+          }),
+        ],
+        activity(),
+        [],
+        filter('login'),
+      );
+
+      expect(cockpit.queued).toMatchObject([
+        { number: 50, children: [{ number: 1 }] },
+      ]);
+    });
+
+    it('keeps all the children of an Epic that matches itself', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({
+            number: 50,
+            title: 'Epic',
+            type: 'Epic',
+            color: 'teal',
+            status: 'Todo',
+            labels: ['ready-for-agent'],
+            children: [child(1, 'A'), child(2, 'B')],
+          }),
+        ],
+        activity(),
+        [],
+        filter('epic'),
+      );
+
+      expect(cockpit.queued[0]?.children).toHaveLength(2);
+    });
+
+    it('drops an Epic row when neither it nor a child matches', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({
+            number: 50,
+            title: 'Epic',
+            type: 'Epic',
+            color: 'teal',
+            status: 'Todo',
+            labels: ['ready-for-agent'],
+            children: [child(1, 'A')],
+          }),
+        ],
+        activity(),
+        [],
+        filter('zzz'),
+      );
+
+      expect(cockpit.queued).toEqual([]);
+    });
+
+    it('narrows the Intake Epic row and an In progress Epic the same way', () => {
+      const cockpit = cockpitOf(
+        [
+          ticket({
+            number: 50,
+            title: 'Epic',
+            type: 'Epic',
+            color: 'teal',
+            status: 'In progress',
+            claim,
+            children: [child(1, 'Fix'), child(2, 'Other')],
+          }),
+        ],
+        activity(),
+        [],
+        filter('fix'),
+      );
+
+      expect(cockpit.epics).toMatchObject([
+        { number: 50, children: [{ number: 1 }] },
+      ]);
     });
   });
 });
