@@ -16,12 +16,15 @@ import type { Cycle } from '../../tickets/cycles';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
 
 /** A child the Epic would take along, and the Cycle it would leave. */
-export type PlanEpicChild = Pick<EpicChild, 'number' | 'title' | 'status'> & {
-  /** The title of the other open Cycle it is in now, or `null`. */
-  leaves: string | null;
+export type EpicCycleChild = Pick<EpicChild, 'number' | 'title' | 'status'> & {
+  /**
+   * When planning, the title of the other open Cycle it is in now, or
+   * `null`. Left out when removing.
+   */
+  leaves?: string | null;
 };
 
-export type PlanEpicDialogProps = {
+export type EpicCycleDialogProps = {
   /**
    * Whether the Epic is being planned into `cycle` (the default) or removed
    * from it. Removal lists the children in `cycle` and shows no `leaves`.
@@ -34,18 +37,33 @@ export type PlanEpicDialogProps = {
    * The Epic's children that are not archived: those not in `cycle` yet when
    * planning, those in it when removing.
    */
-  epicChildren: PlanEpicChild[];
+  epicChildren: EpicCycleChild[];
   /** Called when the dialog is cancelled or the Epic has been planned or removed. */
   onClose: () => void;
+};
+
+const copy = {
+  plan: {
+    heading: (epic: number, cycle: string) => `Plan T${epic} into ${cycle}?`,
+    description: (epic: number, title: string, cycle: string) =>
+      `Plan T${epic} "${title}" into the Cycle "${cycle}"`,
+    action: planTicket,
+  },
+  unplan: {
+    heading: (epic: number, cycle: string) => `Remove T${epic} from ${cycle}?`,
+    description: (epic: number, title: string, cycle: string) =>
+      `Remove T${epic} "${title}" from the Cycle "${cycle}"`,
+    action: unplanTicket,
+  },
 };
 
 /**
  * Asks, before an Epic is planned into or removed from a Cycle in the Ticket
  * drawer, whether to take its live children along, all or nothing, or to
- * change only the Epic. Rendered open; the parent unmounts it on `onClose`. A refusal is
- * shown in the dialog, which stays open.
+ * change only the Epic. Rendered open; the parent unmounts it on `onClose`.
+ * A refusal is shown in the dialog, which stays open.
  */
-export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
+export const EpicCycleDialog: FC<EpicCycleDialogProps> = ({
   mode = 'plan',
   epic,
   cycle,
@@ -53,19 +71,18 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
   onClose,
 }) => {
   const [error, setError] = useState<string>();
-  const [pending, startPlan] = useTransition();
+  const [pending, startConfirm] = useTransition();
   const headingId = useId();
   const descriptionId = useId();
   const count = epicChildren.length;
 
-  const plan = (withChildren: boolean) => {
+  const confirm = (withChildren: boolean) => {
     setError(undefined);
-    startPlan(async () => {
-      const action = mode === 'plan' ? planTicket : unplanTicket;
-      const result = await action({
+    startConfirm(async () => {
+      const result = await copy[mode].action({
         cycleId: cycle.id,
         number: epic.number,
-        ...(withChildren ? { withChildren } : {}),
+        withChildren,
       });
       if (result.ok) {
         onClose();
@@ -84,13 +101,11 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
     >
       <Stack gap={4}>
         <Heading id={headingId} level={2}>
-          {mode === 'plan' ? 'Plan' : 'Remove'} T{epic.number}{' '}
-          {mode === 'plan' ? 'into' : 'from'} {cycle.title}?
+          {copy[mode].heading(epic.number, cycle.title)}
         </Heading>
         <Text id={descriptionId} tag="p">
-          {mode === 'plan' ? 'Plan' : 'Remove'} T{epic.number} "{epic.title}"{' '}
-          {mode === 'plan' ? 'into' : 'from'} the Cycle "{cycle.title}" with its{' '}
-          {count} {count === 1 ? 'child' : 'children'}, or on its own?
+          {copy[mode].description(epic.number, epic.title, cycle.title)} with
+          its {count} {count === 1 ? 'child' : 'children'}, or on its own?
         </Text>
         <Stack
           gap={1}
@@ -110,7 +125,7 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
                   >
                     {status}
                   </Text>
-                  {leaves !== null && <> · leaves "{leaves}"</>}
+                  {leaves != null && <> · leaves "{leaves}"</>}
                 </li>
               </Text>
             ))}
@@ -118,7 +133,11 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
         </Stack>
         {error && <Alert intent="danger">{error}</Alert>}
         <Inline gap={2}>
-          <Button type="button" disabled={pending} onClick={() => plan(true)}>
+          <Button
+            type="button"
+            disabled={pending}
+            onClick={() => confirm(true)}
+          >
             Epic and {count} {count === 1 ? 'child' : 'children'}
           </Button>
           <Button
@@ -126,7 +145,7 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
             variant="outline"
             intent="neutral"
             disabled={pending}
-            onClick={() => plan(false)}
+            onClick={() => confirm(false)}
           >
             Only the Epic
           </Button>

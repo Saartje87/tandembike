@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import { renderWithTheme } from '../../test/render';
-import { PlanEpicDialog } from './plan-epic-dialog';
+import { EpicCycleDialog } from './epic-cycle-dialog';
 
 vi.mock('../../app/cycles/actions', () => ({
   planTicket: vi.fn(),
@@ -20,7 +20,7 @@ const children = [
 
 const renderDialog = (onClose = vi.fn()) => {
   renderWithTheme(
-    <PlanEpicDialog
+    <EpicCycleDialog
       epic={epic}
       cycle={cycle}
       epicChildren={children}
@@ -35,9 +35,10 @@ const renderDialog = (onClose = vi.fn()) => {
   };
 };
 
-describe('PlanEpicDialog', () => {
+describe('EpicCycleDialog', () => {
   beforeEach(() => {
     vi.mocked(planTicket).mockReset();
+    vi.mocked(unplanTicket).mockReset();
   });
 
   it('lists each child with its Status and the Cycle it would leave', () => {
@@ -80,6 +81,7 @@ describe('PlanEpicDialog', () => {
     expect(planTicket).toHaveBeenCalledExactlyOnceWith({
       cycleId: 8,
       number: 5,
+      withChildren: false,
     });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
@@ -111,7 +113,7 @@ describe('PlanEpicDialog', () => {
   });
 });
 
-describe('PlanEpicDialog removing', () => {
+describe('EpicCycleDialog removing', () => {
   beforeEach(() => {
     vi.mocked(planTicket).mockReset();
     vi.mocked(unplanTicket).mockReset();
@@ -119,11 +121,11 @@ describe('PlanEpicDialog removing', () => {
 
   const renderRemoval = (onClose = vi.fn()) => {
     renderWithTheme(
-      <PlanEpicDialog
+      <EpicCycleDialog
         mode="unplan"
         epic={epic}
         cycle={cycle}
-        epicChildren={children.map((child) => ({ ...child, leaves: null }))}
+        epicChildren={children.map(({ leaves: _, ...child }) => child)}
         onClose={onClose}
       />,
     );
@@ -174,6 +176,7 @@ describe('PlanEpicDialog removing', () => {
     expect(unplanTicket).toHaveBeenCalledExactlyOnceWith({
       cycleId: 8,
       number: 5,
+      withChildren: false,
     });
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });

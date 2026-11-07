@@ -253,6 +253,7 @@ describe('CyclePlanner', () => {
       expect(planTicket).toHaveBeenCalledExactlyOnceWith({
         cycleId: 8,
         number: 12,
+        withChildren: false,
       });
     });
 
@@ -359,6 +360,7 @@ describe('CyclePlanner', () => {
       expect(unplanTicket).toHaveBeenCalledExactlyOnceWith({
         cycleId: 8,
         number: 12,
+        withChildren: false,
       });
     });
 

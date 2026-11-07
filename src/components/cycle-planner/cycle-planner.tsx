@@ -18,9 +18,9 @@ import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import {
-  type PlanEpicChild,
-  PlanEpicDialog,
-} from '../plan-epic-dialog/plan-epic-dialog';
+  type EpicCycleChild,
+  EpicCycleDialog,
+} from '../epic-cycle-dialog/epic-cycle-dialog';
 
 export type CyclePlannerProps = {
   ticket: Pick<
@@ -59,7 +59,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   };
 
   // An Epic's children that planning it into `cycle` could take along.
-  const askedChildren = (cycle: Cycle): PlanEpicChild[] =>
+  const askedChildren = (cycle: Cycle): EpicCycleChild[] =>
     ticket.type === 'Epic'
       ? ticket.children
           .filter(
@@ -85,7 +85,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   };
 
   // An Epic's children in `cycle` that removing it could take along.
-  const removedChildren = (cycle: Cycle): PlanEpicChild[] =>
+  const removedChildren = (cycle: Cycle): EpicCycleChild[] =>
     ticket.type === 'Epic'
       ? ticket.children
           .filter(
@@ -169,7 +169,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
       {control}
       {error && <Alert intent="danger">{error}</Alert>}
       {asking && (
-        <PlanEpicDialog
+        <EpicCycleDialog
           epic={{ number: ticket.number, title: ticket.title }}
           cycle={asking}
           epicChildren={askedChildren(asking)}
@@ -177,7 +177,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
         />
       )}
       {removing && (
-        <PlanEpicDialog
+        <EpicCycleDialog
           mode="unplan"
           epic={{ number: ticket.number, title: ticket.title }}
           cycle={removing}
