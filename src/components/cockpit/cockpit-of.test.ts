@@ -76,7 +76,7 @@ describe('cockpitOf', () => {
     });
   });
 
-  it('places In flight rows by the Board Lane derivation', () => {
+  it('keeps only Running Tickets In flight; Action needed and Review need you', () => {
     const cockpit = cockpitOf(
       [
         ticket({ number: 1, status: 'In progress', claim }),
@@ -91,12 +91,110 @@ describe('cockpitOf', () => {
       activity({ live: { 4: liveConversation({ state: 'waiting' }) } }),
     );
 
-    expect(cockpit.inFlight.map(({ section }) => section)).toEqual([
-      'Running',
-      'Review',
-      'Action needed',
-      'Action needed',
+    expect(numbers(cockpit.inFlight)).toEqual([1]);
+    expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([3, 4]);
+    expect(numbers(cockpit.needsYou.review)).toEqual([2]);
+  });
+
+  it('says what each Action needed Ticket waits on', () => {
+    const { actionNeeded } = cockpitOf(
+      [
+        ticket({ number: 1, status: 'In progress', claim }),
+        ticket({ number: 2, status: 'In progress', claim }),
+        ticket({ number: 3, status: 'In progress', claim }),
+        ticket({ number: 4, status: 'In progress' }),
+      ],
+      activity({
+        live: {
+          1: liveConversation({
+            state: 'waiting',
+            since: '2026-11-07T10:01:00Z',
+          }),
+          2: liveConversation({
+            state: 'error',
+            since: '2026-11-07T10:02:00Z',
+          }),
+          3: liveConversation({
+            state: 'interrupted',
+            since: '2026-11-07T10:03:00Z',
+          }),
+        },
+      }),
+    ).needsYou;
+
+    expect(actionNeeded.map(({ number, kind }) => [number, kind])).toEqual([
+      [4, 'stalled'],
+      [1, 'waiting'],
+      [2, 'failed'],
+      [3, 'interrupted'],
     ]);
+  });
+
+  it('puts the longest waiting first within a group', () => {
+    const { actionNeeded, review } = cockpitOf(
+      [
+        ticket({
+          number: 1,
+          status: 'In progress',
+          claim,
+          position: 0,
+        }),
+        ticket({
+          number: 2,
+          status: 'In progress',
+          position: 1,
+          updatedAt: new Date('2026-11-07T09:00:00Z'),
+        }),
+        ticket({
+          number: 3,
+          status: 'In progress',
+          externalReferences: [pullRequest(30)],
+          updatedAt: new Date('2026-11-07T12:00:00Z'),
+        }),
+        ticket({
+          number: 4,
+          status: 'In progress',
+          externalReferences: [pullRequest(40)],
+          updatedAt: new Date('2026-11-07T08:00:00Z'),
+        }),
+      ],
+      activity({
+        live: {
+          1: liveConversation({
+            state: 'waiting',
+            since: '2026-11-07T11:00:00Z',
+          }),
+        },
+      }),
+    ).needsYou;
+
+    expect(actionNeeded.map(({ number, since }) => [number, since])).toEqual([
+      [2, new Date('2026-11-07T09:00:00Z')],
+      [1, new Date('2026-11-07T11:00:00Z')],
+    ]);
+    expect(
+      review.map(({ number, pullRequest }) => [number, pullRequest]),
+    ).toEqual([
+      [4, 'https://github.com/owner/repo/pull/40'],
+      [3, 'https://github.com/owner/repo/pull/30'],
+    ]);
+  });
+
+  it('counts every Ticket that needs you', () => {
+    const cockpit = cockpitOf(
+      [
+        ticket({ number: 1, status: 'In progress' }),
+        ticket({
+          number: 2,
+          status: 'In progress',
+          externalReferences: [pullRequest(10)],
+        }),
+        ticket({ number: 3, status: 'In progress', claim }),
+      ],
+      activity(),
+    );
+
+    expect(cockpit.needsYou.count).toBe(2);
   });
 
   it("shows the Ticket's latest pull request", () => {
@@ -109,7 +207,7 @@ describe('cockpitOf', () => {
         }),
       ],
       activity(),
-    ).inFlight;
+    ).needsYou.review;
 
     expect(row.pullRequest).toBe(pullRequest(12));
   });

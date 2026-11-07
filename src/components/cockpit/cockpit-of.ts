@@ -33,6 +33,27 @@ export type QueuedRow = CockpitTicket & {
   blockers: number[];
 };
 
+/** What an Action needed or Review Ticket waits on. */
+export type NeedKind =
+  | 'waiting'
+  | 'failed'
+  | 'interrupted'
+  | 'stalled'
+  | 'review';
+
+/** A Ticket that needs the User, and since when. */
+export type NeedRow = CockpitTicket & {
+  kind: NeedKind;
+  /** Its live Conversation, or `undefined` without one. */
+  live: LiveConversation | undefined;
+  /**
+   * Since when it waits: its live Conversation's run start, else its latest
+   * change.
+   */
+  since: Date;
+  pullRequest: string | null;
+};
+
 /** A Done Ticket, with what it cost and the pull request it ended in. */
 export type DoneRow = CockpitTicket & {
   cost: number;
@@ -40,10 +61,18 @@ export type DoneRow = CockpitTicket & {
 };
 
 /**
- * A Board's Tickets as the Cockpit shows them. Needs you (T1105, T1107) and
- * Epic rows (T1108) are still to come.
+ * A Board's Tickets as the Cockpit shows them. Intake in Needs you (T1107)
+ * and Epic rows (T1108) are still to come.
  */
 export type Cockpit = {
+  /** What waits on the User, each group longest waiting first. */
+  needsYou: {
+    actionNeeded: NeedRow[];
+    review: NeedRow[];
+    /** How many Tickets wait on the User in all. */
+    count: number;
+  };
+  /** The Running Tickets, in Board order. */
   inFlight: InFlightRow[];
   yourWork: CockpitTicket[];
   queued: QueuedRow[];
@@ -64,6 +93,28 @@ const rowOf = ({ number, title, epic, updatedAt }: Ticket): CockpitTicket => ({
 
 const latestPullRequest = (ticket: Ticket): string | null =>
   ticket.externalReferences.findLast(isPullRequestReference) ?? null;
+
+const liveKind: Record<LiveConversation['state'], NeedKind> = {
+  running: 'waiting',
+  waiting: 'waiting',
+  error: 'failed',
+  interrupted: 'interrupted',
+};
+
+const needRowOf = (
+  ticket: Ticket,
+  live: LiveConversation | undefined,
+  kind: NeedKind,
+): NeedRow => ({
+  ...rowOf(ticket),
+  kind,
+  live,
+  since: live ? new Date(live.since) : ticket.updatedAt,
+  pullRequest: latestPullRequest(ticket),
+});
+
+const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
+  left.since.getTime() - right.since.getTime() || left.number - right.number;
 
 /**
  * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog. It
@@ -92,9 +143,24 @@ export function cockpitOf(
   const inLane = (lane: string) =>
     placed.filter((entry) => entry.lane === lane);
   const cost = (ticket: Ticket) => activity.cost[ticket.number] ?? 0;
+  const inSection = (section: InProgressSection) =>
+    inLane('In progress').filter((entry) => entry.section === section);
+  const actionNeeded = inSection('Action needed')
+    .map(({ ticket, live }) =>
+      needRowOf(ticket, live, live ? liveKind[live.state] : 'stalled'),
+    )
+    .sort(longestWaitingFirst);
+  const review = inSection('Review')
+    .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
+    .sort(longestWaitingFirst);
 
   return {
-    inFlight: inLane('In progress').map(({ ticket, live, section }) => ({
+    needsYou: {
+      actionNeeded,
+      review,
+      count: actionNeeded.length + review.length,
+    },
+    inFlight: inSection('Running').map(({ ticket, live, section }) => ({
       ...rowOf(ticket),
       section: section ?? 'Running',
       live,

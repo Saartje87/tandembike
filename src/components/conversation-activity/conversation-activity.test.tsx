@@ -30,7 +30,7 @@ class FakeEventSource {
 
 const Probe = () => {
   const activity = useTicketActivity(4);
-  return <p>{`running=${activity.running} needsYou=${activity.needsYou}`}</p>;
+  return <p>{`running=${activity.running} waiting=${activity.waiting}`}</p>;
 };
 
 const show = () =>
@@ -59,9 +59,7 @@ describe('ConversationActivityProvider', () => {
     );
     show();
 
-    expect(
-      screen.getByText('running=false needsYou=false'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('running=false waiting=false')).toBeInTheDocument();
   });
 
   it('loads the activity, and loads it again when a Conversation changes', async () => {
@@ -70,11 +68,11 @@ describe('ConversationActivityProvider', () => {
     );
     show();
     expect(
-      await screen.findByText('running=true needsYou=false'),
+      await screen.findByText('running=true waiting=false'),
     ).toBeInTheDocument();
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity({ needsYou: [4], needsYouCount: 2 }),
+      activity({ waiting: [4], waitingCount: 2 }),
     );
     act(() => {
       FakeEventSource.instances[0]?.onmessage?.(
@@ -86,7 +84,7 @@ describe('ConversationActivityProvider', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText('running=false needsYou=true'),
+        screen.getByText('running=false waiting=true'),
       ).toBeInTheDocument(),
     );
   });

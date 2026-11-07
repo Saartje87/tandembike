@@ -28,20 +28,20 @@ export type ConversationActivity = {
   /** Tickets with a Conversation whose Agent is working. */
   running: number[];
   /** Tickets with a Conversation that waits for a permission or a reply. */
-  needsYou: number[];
+  waiting: number[];
   /** How many Conversations wait for the User, on Tickets or Projects. */
-  needsYouCount: number;
+  waitingCount: number;
   /** The same count per Project id. */
-  needsYouByProject: Record<number, number>;
+  waitingByProject: Record<number, number>;
 };
 
 export const noConversationActivity: ConversationActivity = {
   live: {},
   cost: {},
   running: [],
-  needsYou: [],
-  needsYouCount: 0,
-  needsYouByProject: {},
+  waiting: [],
+  waitingCount: 0,
+  waitingByProject: {},
 };
 
 export type ActivityRow = {
@@ -111,7 +111,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
 };
 
 /** Whether a Conversation in this state waits for the User (T593). */
-export const needsYou = (state: ConversationState) =>
+export const waitsOnUser = (state: ConversationState) =>
   state === 'waiting' || state === 'idle';
 
 const ticketsOf = (rows: ActivityRow[]): number[] => [
@@ -144,15 +144,15 @@ const countBy = (ids: number[]): Record<number, number> => {
 export function conversationActivity(
   conversations: ActivityRow[],
 ): ConversationActivity {
-  const waiting = conversations.filter(({ state }) => needsYou(state));
+  const waiting = conversations.filter(({ state }) => waitsOnUser(state));
   return {
     live: liveOf(conversations),
     cost: costOf(conversations),
     running: ticketsOf(
       conversations.filter(({ state }) => state === 'running'),
     ),
-    needsYou: ticketsOf(waiting),
-    needsYouCount: waiting.length,
-    needsYouByProject: countBy(waiting.map(({ projectId }) => projectId)),
+    waiting: ticketsOf(waiting),
+    waitingCount: waiting.length,
+    waitingByProject: countBy(waiting.map(({ projectId }) => projectId)),
   };
 }

@@ -13,7 +13,7 @@ import {
 } from 'react';
 
 import { statsPath } from '../../app/lib/paths';
-import { needsYou as conversationNeedsYou } from '../../conversations/conversation-activity';
+import { waitsOnUser as conversationNeedsYou } from '../../conversations/conversation-activity';
 import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';

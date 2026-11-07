@@ -263,9 +263,9 @@ describe('Conversation actions', () => {
         },
         cost: { [asking.number]: 0.1 },
         running: [running.number],
-        needsYou: [asking.number],
-        needsYouCount: 1,
-        needsYouByProject: { [project.id]: 1 },
+        waiting: [asking.number],
+        waitingCount: 1,
+        waitingByProject: { [project.id]: 1 },
       }),
     );
   });

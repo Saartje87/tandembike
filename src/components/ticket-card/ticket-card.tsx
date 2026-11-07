@@ -93,7 +93,7 @@ const BlockedMarker: FC = () => (
   </Tag>
 );
 
-type ConversationMarkersProps = { running: boolean; needsYou: boolean };
+type ConversationMarkersProps = { running: boolean; waiting: boolean };
 
 /**
  * A pill while one of the Ticket's Conversations runs, and an amber one
@@ -101,7 +101,7 @@ type ConversationMarkersProps = { running: boolean; needsYou: boolean };
  */
 const ConversationMarkers: FC<ConversationMarkersProps> = ({
   running,
-  needsYou,
+  waiting,
 }) => (
   <>
     {running && (
@@ -114,7 +114,7 @@ const ConversationMarkers: FC<ConversationMarkersProps> = ({
         Agent running
       </Tag>
     )}
-    {needsYou && (
+    {waiting && (
       <Tag
         intent="warning"
         startSlot={<Icon name="bell-alert" size="small" />}
@@ -233,7 +233,7 @@ export const TicketCard: FC<TicketCardProps> = ({
     showBlocked ||
     ticket.labels.length > 0 ||
     activity.running ||
-    activity.needsYou;
+    activity.waiting;
 
   return (
     <Box

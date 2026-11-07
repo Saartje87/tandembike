@@ -42,7 +42,7 @@ describe('conversationActivity', () => {
       row(7, 'interrupted'),
     ]);
 
-    expect(activity.needsYou).toEqual([4, 5]);
+    expect(activity.waiting).toEqual([4, 5]);
   });
 
   it('counts every waiting Conversation, including those on no Ticket', () => {
@@ -53,8 +53,8 @@ describe('conversationActivity', () => {
       row(9, 'running'),
     ]);
 
-    expect(activity.needsYouCount).toBe(3);
-    expect(activity.needsYou).toEqual([4]);
+    expect(activity.waitingCount).toBe(3);
+    expect(activity.waiting).toEqual([4]);
   });
 
   it('counts the Conversations that wait for the User per Project', () => {
@@ -65,7 +65,7 @@ describe('conversationActivity', () => {
       row(6, 'running', 2),
     ]);
 
-    expect(activity.needsYouByProject).toEqual({ 1: 2, 2: 1 });
+    expect(activity.waitingByProject).toEqual({ 1: 2, 2: 1 });
   });
 
   describe('live', () => {

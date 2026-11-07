@@ -116,7 +116,7 @@ describe('Cockpit', () => {
     expect(screen.getByText('Runs 1/3')).toBeVisible();
   });
 
-  it('shows each In flight Ticket with its section, live line and cost', async () => {
+  it('shows each Running Ticket In flight with its live line and cost', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({
         live: { 7: liveConversation({ line: 'Editing board.tsx' }) },
@@ -131,14 +131,107 @@ describe('Cockpit', () => {
         within(inFlight).getByText(/^Editing board\.tsx · .+ · \$1\.50$/),
       ).toBeVisible(),
     );
-    const [running, review] = within(inFlight).getAllByRole('listitem');
+    const [running] = within(inFlight).getAllByRole('listitem');
     expect(running).toHaveTextContent('T7');
     expect(within(running).getByText('Running')).toBeVisible();
-    expect(running).toHaveTextContent('$1.50');
-    expect(within(review).getByText('Review')).toBeVisible();
+  });
+
+  it('shows Action needed and Review under Needs you, open, saying what each waits on', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({
+        live: {
+          7: liveConversation({
+            state: 'waiting',
+            line: 'Allow Bash: git push?',
+          }),
+        },
+      }),
+    );
+    renderCockpit([
+      ...tickets,
+      ticket({ number: 12, title: 'Rename lanes', status: 'In progress' }),
+    ]);
+
+    const needsYou = section('Needs you');
+    const actionNeeded = section('Action needed');
+    await vi.waitFor(() =>
+      expect(within(actionNeeded).getAllByRole('listitem')).toHaveLength(2),
+    );
+    expect(within(needsYou).getAllByText('3')[0]).toBeVisible();
+    expect(actionNeeded.querySelector('details')).toHaveAttribute('open');
+    const [stalled, waiting] = within(actionNeeded).getAllByRole('listitem');
+    expect(stalled).toHaveTextContent('Rename lanes');
+    expect(stalled).toHaveTextContent(/Stalled · no Claim and no PR · /);
+    expect(waiting).toHaveTextContent(/Waiting · Allow Bash: git push\? · /);
+    const [review] = within(section('Review')).getAllByRole('listitem');
+    expect(review).toHaveTextContent('Merge button');
     expect(
       within(review).getByRole('link', { name: 'PR #87' }),
     ).toHaveAttribute('href', 'https://github.com/owner/repo/pull/87');
+    expect(within(section('In flight')).queryAllByRole('listitem')).toEqual([]);
+  });
+
+  it('offers no actions in Needs you, only links to the Tickets', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit();
+
+    const needsYou = section('Needs you');
+    expect(within(needsYou).queryAllByRole('button')).toEqual([]);
+    expect(
+      within(needsYou).getByRole('link', { name: 'Merge button' }),
+    ).toHaveAttribute('href', '/project/3/cockpit?ticket=8');
+  });
+
+  it('closes a Needs you group on its heading', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit();
+
+    const review = section('Review');
+    await userEvent.click(within(review).getByText('Review'));
+
+    expect(review.querySelector('details')).not.toHaveAttribute('open');
+  });
+
+  it('says when nothing needs you', () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([]);
+
+    expect(
+      within(section('Needs you')).getByText('Nothing needs you.'),
+    ).toBeVisible();
+  });
+
+  it('puts the Needs you count in the tab title, and drops it at zero', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    document.title = 'Cockpit · Website | Tandembike';
+    const { rerender } = renderCockpit();
+
+    await vi.waitFor(() =>
+      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+    );
+
+    rerender(
+      <ConversationActivityProvider>
+        <Cockpit
+          projectId={3}
+          cycle={{ title: 'Factory Board' }}
+          tickets={[]}
+          runSlots={{ used: 1, cap: 3 }}
+        />
+      </ConversationActivityProvider>,
+    );
+
+    await vi.waitFor(() =>
+      expect(document.title).toBe('Cockpit · Website | Tandembike'),
+    );
   });
 
   it("opens a row's Ticket in a drawer over the Cockpit", async () => {

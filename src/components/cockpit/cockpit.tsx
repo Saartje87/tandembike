@@ -10,7 +10,7 @@ import {
   Tag,
   Text,
 } from '@blockle/blocks';
-import type { FC, ReactNode } from 'react';
+import { type FC, type ReactNode, useEffect } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
 import { cockpitPath, ticketOnBoardPath } from '../../app/lib/paths';
@@ -28,7 +28,13 @@ import { tinted } from '../palette/palette.css';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
 import * as styles from './cockpit.css';
-import { type CockpitTicket, cockpitOf, type InFlightRow } from './cockpit-of';
+import {
+  type CockpitTicket,
+  cockpitOf,
+  type InFlightRow,
+  type NeedKind,
+  type NeedRow,
+} from './cockpit-of';
 
 export type CockpitProps = {
   projectId: number;
@@ -46,16 +52,53 @@ const sectionIntent = {
   Review: 'info',
 } as const satisfies Record<InProgressSection, string>;
 
-/** What an In progress Ticket without a live Conversation is waiting on. */
-const parkedLine: Record<InProgressSection, string> = {
-  Running: 'Claimed, no live run',
-  Review: 'PR open',
-  'Action needed': 'Stalled: no Claim and no PR',
-};
-
 /** A pull request's number from its GitHub URL, such as `#87`. */
 const pullRequestLabel = (url: string) =>
   `PR #${new URL(url).pathname.split('/')[4]}`;
+
+/** A pull request as a link to it, in small text. */
+const PullRequestLink: FC<{ url: string }> = ({ url }) => (
+  <Text fontSize="small">
+    <Link href={url} target="_blank" rel="noreferrer">
+      {pullRequestLabel(url)}
+    </Link>
+  </Text>
+);
+
+const needIcon: Record<NeedKind, IconName> = {
+  waiting: 'chat-bubble-left-ellipsis',
+  failed: 'exclamation-circle',
+  interrupted: 'pause-circle',
+  stalled: 'exclamation-triangle',
+  review: 'check-circle',
+};
+
+const needLabel: Record<NeedKind, string> = {
+  waiting: 'Waiting',
+  failed: 'Failed',
+  interrupted: 'Interrupted',
+  stalled: 'Stalled',
+  review: 'Review',
+};
+
+/** A Needs you row's second line: what it waits on, and for how long. */
+function needLine(row: NeedRow, waited: string): string {
+  const detail =
+    row.live?.line ??
+    (row.kind === 'review' ? 'PR open' : 'no Claim and no PR');
+  return [needLabel[row.kind], detail, waited].join(' · ');
+}
+
+/**
+ * Puts `count` in front of the browser tab's title, as `(3) …`, and takes
+ * it off at zero, so a background tab shows what waits on the User.
+ */
+const useCountInTitle = (count: number) => {
+  useEffect(() => {
+    const title = document.title.replace(/^\(\d+\) /, '');
+    document.title = count > 0 ? `(${count}) ${title}` : title;
+  }, [count]);
+};
 
 type TicketRowProps = {
   ticket: CockpitTicket;
@@ -125,13 +168,24 @@ const TicketRow: FC<TicketRowProps> = ({
   </Box>
 );
 
-type ListProps = { title: string; count: number; children: ReactNode };
+type RowListProps = {
+  title: string;
+  count: number;
+  /** Open at first; the User opens and closes it on its heading. */
+  open?: boolean;
+  children: ReactNode;
+};
 
-/** A list of work that does not need the User now: closed until opened. */
-const ClosedList: FC<ListProps> = ({ title, count, children }) => (
+/** A titled list of rows that opens and closes on its heading. */
+const RowList: FC<RowListProps> = ({
+  title,
+  count,
+  open = false,
+  children,
+}) => (
   <Box asChild>
     <section aria-label={title}>
-      <details>
+      <details open={open}>
         <Box asChild className={styles.summary} paddingBlockEnd={1}>
           <summary>
             <Inline gap={2} alignY="center">
@@ -153,11 +207,14 @@ const ClosedList: FC<ListProps> = ({ title, count, children }) => (
   </Box>
 );
 
-/** An In flight row's second line: its live line and run time, or why it waits. */
+/**
+ * An In flight row's second line: its live line and run time, or, for a
+ * claimed Ticket with no live run (such as one worked in a terminal), that.
+ */
 function inFlightLine(row: InFlightRow, now: number): string {
   const parts = row.live
     ? [row.live.line, formatElapsed(now - new Date(row.live.since).getTime())]
-    : [parkedLine[row.section]];
+    : ['Claimed, no live run'];
   return [...parts, ...(row.cost > 0 ? [formatCost(row.cost)] : [])].join(
     ' · ',
   );
@@ -166,10 +223,12 @@ function inFlightLine(row: InFlightRow, now: number): string {
 /**
  * A Project's Cockpit: its Active Cycle in one column, by what needs the
  * User first. The header shows the Cycle's progress and the Start runs
- * working; In flight shows each In progress Ticket with what its run is
- * doing; Your work, Queued and Done stay closed until opened. Every row's
- * title opens its Ticket in a drawer over the Cockpit. It follows live
- * Conversations as the Board does.
+ * working; Needs you shows what waits on the User, in groups that start
+ * open, longest waiting first; In flight shows each Running Ticket with what
+ * its run is doing; Your work, Queued and Done stay closed until opened.
+ * Its lists offer no actions: every row's title opens its Ticket in a
+ * drawer over the Cockpit. The browser tab's title carries the Needs you
+ * count. It follows live Conversations as the Board does.
  */
 export const Cockpit: FC<CockpitProps> = ({
   projectId,
@@ -185,6 +244,19 @@ export const Cockpit: FC<CockpitProps> = ({
     ticketOnBoardPath(cockpitPath(projectId), number);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
+  const { needsYou } = cockpit;
+  useCountInTitle(needsYou.count);
+  const needRows = (rows: NeedRow[]) =>
+    rows.map((row) => (
+      <TicketRow
+        key={row.number}
+        ticket={row}
+        href={hrefOf(row.number)}
+        icon={needIcon[row.kind]}
+        line={needLine(row, age(row.since))}
+        end={row.pullRequest && <PullRequestLink url={row.pullRequest} />}
+      />
+    ));
 
   return (
     <Stack gap={6}>
@@ -204,6 +276,34 @@ export const Cockpit: FC<CockpitProps> = ({
           value={total === 0 ? 0 : Math.round((done / total) * 100)}
           aria-label="Cycle progress"
         />
+      </Stack>
+      <Stack gap={2} asChild>
+        <section aria-label="Needs you">
+          <Inline gap={2} alignY="center">
+            <Heading level={3}>Needs you</Heading>
+            <Tag>{needsYou.count}</Tag>
+          </Inline>
+          {needsYou.count === 0 ? (
+            <Text color="muted">Nothing needs you.</Text>
+          ) : (
+            <Stack gap={3}>
+              {needsYou.actionNeeded.length > 0 && (
+                <RowList
+                  title="Action needed"
+                  count={needsYou.actionNeeded.length}
+                  open
+                >
+                  {needRows(needsYou.actionNeeded)}
+                </RowList>
+              )}
+              {needsYou.review.length > 0 && (
+                <RowList title="Review" count={needsYou.review.length} open>
+                  {needRows(needsYou.review)}
+                </RowList>
+              )}
+            </Stack>
+          )}
+        </section>
       </Stack>
       <Stack gap={2} asChild>
         <section aria-label="In flight">
@@ -226,15 +326,7 @@ export const Cockpit: FC<CockpitProps> = ({
                     end={
                       <Inline gap={2} alignY="center" flexWrap="nowrap">
                         {row.pullRequest && (
-                          <Text fontSize="small">
-                            <Link
-                              href={row.pullRequest}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {pullRequestLabel(row.pullRequest)}
-                            </Link>
-                          </Text>
+                          <PullRequestLink url={row.pullRequest} />
                         )}
                         <Tag intent={sectionIntent[row.section]}>
                           {row.section}
@@ -249,7 +341,7 @@ export const Cockpit: FC<CockpitProps> = ({
         </section>
       </Stack>
       <Stack gap={2}>
-        <ClosedList title="Your work" count={cockpit.yourWork.length}>
+        <RowList title="Your work" count={cockpit.yourWork.length}>
           {cockpit.yourWork.map((row) => (
             <TicketRow
               key={row.number}
@@ -261,8 +353,8 @@ export const Cockpit: FC<CockpitProps> = ({
               end={<Tag>For human</Tag>}
             />
           ))}
-        </ClosedList>
-        <ClosedList title="Queued" count={cockpit.queued.length}>
+        </RowList>
+        <RowList title="Queued" count={cockpit.queued.length}>
           {cockpit.queued.map((row, index) => (
             <TicketRow
               key={row.number}
@@ -291,8 +383,8 @@ export const Cockpit: FC<CockpitProps> = ({
               }
             />
           ))}
-        </ClosedList>
-        <ClosedList title="Done" count={cockpit.done.length}>
+        </RowList>
+        <RowList title="Done" count={cockpit.done.length}>
           {cockpit.done.map((row) => (
             <TicketRow
               key={row.number}
@@ -308,7 +400,7 @@ export const Cockpit: FC<CockpitProps> = ({
               end={<Tag intent="success">Done</Tag>}
             />
           ))}
-        </ClosedList>
+        </RowList>
       </Stack>
     </Stack>
   );

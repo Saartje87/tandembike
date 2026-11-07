@@ -53,7 +53,7 @@ The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It doe
 _Avoid_: Waiting on me
 
 **Cockpit**:
-A Project's view of its Active Cycle in one column, by what needs the User first: Needs you, then In flight (each In progress Ticket with what its run is doing), then Your work (`ready-for-human`), Queued (`ready-for-agent`, in the Todo Lane's order) and Done, closed until opened. Its header shows the Cycle's progress and the Start runs working. It places each Ticket as the Board does, and offers no actions in its lists: a row's title opens the Ticket, and a run waiting on the User shows a bell that opens its Conversation. Without an Active Cycle it points to the Prepared Cycles to start.
+A Project's view of its Active Cycle in one column, by what needs the User first: Needs you, then In flight (each Running Ticket with what its run is doing), then Your work (`ready-for-human`), Queued (`ready-for-agent`, in the Todo Lane's order) and Done, closed until opened. Its header shows the Cycle's progress and the Start runs working. It places each Ticket as the Board does, and offers no actions in its lists: a row's title opens the Ticket, and a run waiting on the User shows a bell that opens its Conversation. Without an Active Cycle it points to the Prepared Cycles to start.
 _Avoid_: Dashboard, inbox, factory view
 
 **Needs you**:

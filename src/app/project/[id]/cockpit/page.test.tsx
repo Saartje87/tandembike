@@ -75,7 +75,7 @@ describe('CockpitPage', () => {
     expect(screen.getByText('Factory Board · 0/1 done')).toBeVisible();
     expect(screen.getByText('Runs 2/3')).toBeVisible();
     expect(
-      within(screen.getByRole('region', { name: 'In flight' })).getByRole(
+      within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
         'link',
         { name: 'Show the status line' },
       ),
