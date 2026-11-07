@@ -97,12 +97,12 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 - [ ] Criterion 1
 - [ ] Criterion 2
 
+A ticket that changes a rule or piece of guidance gets a criterion that every place stating the rule says the same afterwards, found by searching for the old wording: see "A changed rule agrees everywhere it is stated" in the triage skill's `AGENT-BRIEF.md`, which holds the rule.
+
 ## Blocked by
 
 - A reference to each blocking ticket, or "None (can start immediately)". Omit this section when blockers were set as native edges.
 
 </issue-template>
-
-When a ticket changes a rule or piece of guidance (process, tracker or behaviour wording), its acceptance criteria include one that every place stating the rule says the same afterwards, such as "Every place that states <the rule> says <the new rule>". The implementer finds those places by searching for the old wording and close paraphrases of it, not from a list of files; an ADR that states the rule is superseded by a new ADR or amended with a note of what changed, never rewritten. This is the same rule as "A changed rule agrees everywhere it is stated" in the triage skill's `AGENT-BRIEF.md`: change the two together.
 
 In either form, avoid specific file paths or code snippets: they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
