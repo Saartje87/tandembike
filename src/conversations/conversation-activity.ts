@@ -8,6 +8,8 @@ import { type StatusEntry, statusLine } from './status-line';
  * interrupted Conversation whose latest entry is an error) need the User.
  */
 export type LiveConversation = {
+  /** The Conversation's id, to open it in the Conversation dialog. */
+  conversationId: number;
   state: 'running' | 'waiting' | 'interrupted' | 'error';
   /** The status line: what the Conversation is doing now (T1066). */
   line: string;
@@ -45,6 +47,8 @@ export const noConversationActivity: ConversationActivity = {
 };
 
 export type ActivityRow = {
+  /** The Conversation's id. */
+  id: number;
   ticketNumber: number | null;
   projectId: number;
   state: ConversationState;
@@ -78,6 +82,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
     state: LiveConversation['state'],
   ) => {
     live[ticketNumber] = {
+      conversationId: row.id,
       state,
       line: statusLine(row.latest),
       since: row.startedAt,

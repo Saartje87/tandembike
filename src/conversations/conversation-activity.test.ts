@@ -16,6 +16,7 @@ const row = (
   role: NonNullable<ActivityRow['latest']>['role'] = 'agent',
   text = 'Working on it.',
 ): ActivityRow => ({
+  id: 100 + (ticketNumber ?? 0),
   ticketNumber,
   state,
   projectId,
@@ -74,8 +75,20 @@ describe('conversationActivity', () => {
 
     it('reports a running and a waiting Conversation', () => {
       expect(liveOf(row(4, 'running'), row(5, 'waiting'))).toEqual({
-        4: { state: 'running', line: 'Working on it.', since, cost: 0 },
-        5: { state: 'waiting', line: 'Working on it.', since, cost: 0 },
+        4: {
+          conversationId: 104,
+          state: 'running',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
+        5: {
+          conversationId: 105,
+          state: 'waiting',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
       });
     });
 
@@ -107,12 +120,22 @@ describe('conversationActivity', () => {
       );
 
       expect(live[4]).toEqual({
+        conversationId: 104,
         state: 'running',
         line: 'Reading board.tsx',
         since: '2026-11-07T09:00:00.000Z',
         cost: 0,
       });
       expect(live[5].line).toBe('Bash');
+    });
+
+    it("carries the Conversation's id, so the User can open it", () => {
+      expect(
+        liveOf(
+          { ...row(4, 'waiting'), id: 31 },
+          { ...row(5, 'interrupted', 1, 'error'), id: 32 },
+        ),
+      ).toMatchObject({ 4: { conversationId: 31 }, 5: { conversationId: 32 } });
     });
 
     it('says Starting for a Conversation without entries', () => {

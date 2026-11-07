@@ -10,10 +10,14 @@ import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { LiveUpdates } from '../live-updates/live-updates';
 import { Cockpit } from './cockpit';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
+}));
 vi.mock('../../app/conversations/actions', () => ({
   currentConversationActivity: vi.fn(),
 }));
@@ -96,8 +100,14 @@ const renderCockpit = (shown: Ticket[] = tickets) =>
 
 const section = (name: string) => screen.getByRole('region', { name });
 
+const dialog = { open: vi.fn() };
+vi.mocked(useConversationDialog).mockReturnValue(
+  dialog as unknown as ReturnType<typeof useConversationDialog>,
+);
+
 describe('Cockpit', () => {
   afterEach(() => {
+    dialog.open.mockReset();
     vi.unstubAllGlobals();
     vi.mocked(currentConversationActivity).mockReset();
   });
@@ -169,6 +179,58 @@ describe('Cockpit', () => {
       within(review).getByRole('link', { name: 'PR #87' }),
     ).toHaveAttribute('href', 'https://github.com/owner/repo/pull/87');
     expect(within(section('In flight')).queryAllByRole('listitem')).toEqual([]);
+  });
+
+  it("opens a waiting run's Conversation from its bell", async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({
+        live: {
+          7: liveConversation({
+            conversationId: 41,
+            state: 'waiting',
+            line: 'Allow Bash: git push?',
+          }),
+        },
+      }),
+    );
+    renderCockpit();
+
+    const bell = await screen.findByRole('button', {
+      name: 'Open the Conversation of T7',
+    });
+    await userEvent.click(bell);
+
+    expect(dialog.open).toHaveBeenCalledExactlyOnceWith(41);
+    expect(screen.queryByRole('button', { name: /^(Allow|Deny)/ })).toBe(null);
+  });
+
+  it('shows a bell on failed and interrupted runs too, not on a stalled Ticket', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({
+        live: {
+          7: liveConversation({ conversationId: 41, state: 'error' }),
+          13: liveConversation({ conversationId: 42, state: 'interrupted' }),
+        },
+      }),
+    );
+    renderCockpit([
+      ...tickets,
+      ticket({ number: 12, title: 'Rename lanes', status: 'In progress' }),
+      ticket({
+        number: 13,
+        title: 'Split events',
+        status: 'In progress',
+        claim,
+      }),
+    ]);
+
+    await screen.findByRole('button', { name: 'Open the Conversation of T7' });
+    expect(
+      screen.getByRole('button', { name: 'Open the Conversation of T13' }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: 'Open the Conversation of T12' }),
+    ).toBe(null);
   });
 
   it('offers no actions in Needs you, only links to the Tickets', async () => {

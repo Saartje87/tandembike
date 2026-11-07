@@ -520,6 +520,7 @@ export function createConversations({
         .map(({ id, ticketNumber, projectId, state, costUsd, createdAt }) => {
           const entry = latest.get(id);
           return {
+            id,
             ticketNumber,
             projectId,
             state,

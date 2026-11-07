@@ -13,6 +13,7 @@ export const activity = (
 export const liveConversation = (
   overrides: Partial<LiveConversation> = {},
 ): LiveConversation => ({
+  conversationId: 1,
   state: 'running',
   line: 'Reading board.tsx',
   since: '2026-11-07T10:00:00.000Z',
