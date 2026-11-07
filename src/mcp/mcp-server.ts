@@ -53,14 +53,14 @@ export const maxInstructionsLength = 3500;
 
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
-- Move a Ticket to In progress when you start it and to Done when you finish it, so the User can follow your progress.
+- Move a Ticket to In progress when you start it and finish it with complete_ticket, so the User can follow your progress.
 - When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
 - Only the User archives and restores Projects. An archived Project is read-only until restored: its Tickets can be read, but changes to them or its Cycles are refused.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
-- Share progress, findings and triage notes as comments (add_comment) rather than rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
-- Attach files to a Ticket with add_attachment, not comments; get_attachment reads one.
-- Record that one Ticket must be finished before another can start with add_blocker, not in the description. Use list_tickets with status: "Todo", blocked: false and claimed: false to find ready, unclaimed work.
-- Rank work in a Board lane with sort_lane, never with Blockers.
+- Share progress, findings and triage notes as comments (add_comment), not by rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
+- Attach files to a Ticket with add_attachment, not comments; get_attachment reads it.
+- Record that one Ticket must be finished before another can start with add_blocker, not in the description. Find ready, unclaimed work with list_tickets: status: "Todo", labels: ["ready-for-agent"], blocked: false, claimed: false.
+- Rank work in a Status's Board order with sort_lane, never Blockers; a Board Lane, such as Todo, shows that order filtered by labels.
 - To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
 - When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
 - A Ticket may have an ordered checklist of acceptanceCriteria. Store criteria there, never as a checklist in the description or a comment, and check each off with set_acceptance_criteria_checked as you verify it.
@@ -68,9 +68,9 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a T, like T42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, the next being an unfinished child with blocked: false, moving each to In progress and Done as you go.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, next an unfinished child with blocked: false, moving each to In progress and Done.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets, and move them to another Cycle or the Backlog in one step with move_tickets.
-- Your client keeps these tools, their descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then what you loaded may be out of date, and a tool missing from your list may still exist.
+- Your client keeps these tools, their descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;
 
 const projectId = z
@@ -596,7 +596,7 @@ export function createMcpServer(
           .enum(ticketSorts)
           .optional()
           .describe(
-            'The order to list Tickets in. "created", the default: oldest-created first. "position": Board order, the order the User ranks Tickets in, with the lanes Todo, In progress, Done in turn, each top to bottom; it needs projectId or projectName. Paging in Board order can skip or repeat a Ticket that moves on the Board between calls.',
+            `The order to list Tickets in. "created", the default: oldest-created first. "position": Board order, the order the User ranks Tickets in: a Status's Board order for Todo, In progress and Done in turn, each top to bottom (a Board Lane, such as Todo, shows that order filtered by labels); it needs projectId or projectName. Paging in Board order can skip or repeat a Ticket that moves on the Board between calls.`,
           ),
         originNumber: originNumber
           .optional()
@@ -675,7 +675,7 @@ export function createMcpServer(
     'release_ticket_claim',
     {
       title: 'Release Ticket claim',
-      description: `Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim. ${returnsSummary({ extra: 'its claim, now null' })}`,
+      description: `Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim. Releasing an In progress Ticket with no PR reference in its External references leaves it stalled in Action needed on the Board, so when abandoning the work, also move it back to Todo or say why in a comment. ${returnsSummary({ extra: 'its claim, now null' })}`,
       inputSchema: {
         number: ticketNumber,
         agentRunId: z
@@ -691,6 +691,18 @@ export function createMcpServer(
         () => tickets.releaseTicketClaim(number, { agentRunId }),
         ({ claim }) => ({ claim }),
       ),
+  );
+
+  registerTool(
+    'complete_ticket',
+    {
+      title: 'Complete Ticket',
+      description: `Finish a Ticket or an Epic by the completion rule, as the User's Merged button on the Board does: its Status becomes Done, its triage state label is removed (never wontfix or a category label) and its Claim is released. For an Epic, every child that is not archived is completed the same way, all or nothing, and the Epic loses its own triage state label; its Status follows its children. Before calling it, check that the work's PR is merged with CI green and that its acceptance criteria are checked: the tool checks none of this, and completes a Ticket whatever its Status. ${returnsSummary()}`,
+      inputSchema: { number: ticketNumber, detail },
+      annotations: { idempotentHint: true },
+    },
+    ({ number, detail }) =>
+      respondTicket(detail, () => tickets.completeTicket(number)),
   );
 
   registerTool(
@@ -839,7 +851,7 @@ export function createMcpServer(
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. When moving it to "Done", remove its triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay. The same rules apply as for create_ticket. ${returnsSummary()}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use complete_ticket, which applies the whole completion rule; setting Done here leaves the labels as they are. The same rules apply as for create_ticket. ${returnsSummary()}`,
       inputSchema: {
         number: ticketNumber,
         title: z
@@ -920,7 +932,7 @@ export function createMcpServer(
     'update_tickets',
     {
       title: 'Update Tickets',
-      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. When moving them to "Done", remove their triage state labels other than wontfix, listing each one any of them has in removeLabels in the same call; their other labels stay. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (${summaryFields}), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
+      description: `Apply the same Status, Epic color and/or label change to each of an explicit list of Ticket numbers, at most ${maxBatchSize} per call, by the rules of update_ticket. To finish Tickets or an Epic once their work is merged, use complete_ticket for each, which applies the whole completion rule; setting Done here leaves the labels as they are. Each Ticket's change is atomic; the batch is not. Returns { updated, failed }: a summary of each changed Ticket (${summaryFields}), or with detail: "full" the whole Ticket, and the number and error of each Ticket left unchanged. If any Ticket failed the result is an error, but the Tickets in updated were still changed. A bad change or list of numbers is refused and changes nothing.`,
       inputSchema: {
         ticketNumbers: batchTicketNumbers,
         status: status.optional().describe('The new Status.'),
@@ -1494,33 +1506,33 @@ export function createMcpServer(
   registerTool(
     'sort_lane',
     {
-      title: 'Sort Status lane',
-      description: `Set the Board order of a Project's Status lane, given by projectId or projectName, as the User does by dragging: the listed Tickets, at most ${maxBatchSize}, take the top slots in the order given, and the lane's other Tickets keep their order below them. List every Ticket for a full sort, or a few to rank them first. With cycleId it sorts only that Cycle's Board, or with null only the Backlog's; Tickets outside it keep their slots. Epics sort like any Ticket. It changes only the order, never a Status, Claim or Cycle: change a Status with update_ticket and a Cycle with move_tickets. Use it to rank work, never Blockers. All or nothing: a listed Ticket that is missing, archived, in another Project, not in the Status, or not on that Board refuses the whole call, naming it. Returns { ticketNumbers }: the sorted Board's order of the lane, top first, as list_tickets with sort: "position" now lists it.`,
+      title: "Sort a Status's Board order",
+      description: `Set a Status's Board order in a Project, given by projectId or projectName, as the User does by dragging: the listed Tickets, at most ${maxBatchSize}, take the top slots in the order given, and the Status's other Tickets keep their order below them. List every Ticket for a full sort, or a few to rank them first. With cycleId it sorts only that Cycle's Board, or with null only the Backlog's; Tickets outside it keep their slots. Epics sort like any Ticket. It changes only the order, never a Status, Claim or Cycle: change a Status with update_ticket and a Cycle with move_tickets. Use it to rank work, never Blockers. A Board Lane, such as Todo, shows this order filtered by labels. All or nothing: a listed Ticket that is missing, archived, in another Project, not in the Status, or not on that Board refuses the whole call, naming it. Returns { ticketNumbers }: the Status's new order on the sorted Board, top first, as list_tickets with sort: "position" now lists it.`,
       inputSchema: {
         projectId: projectId
           .optional()
           .describe(
-            'The Project whose lane to sort (id from list_projects). Give this or projectName.',
+            "The Project whose Status's Board order to set (id from list_projects). Give this or projectName.",
           ),
         projectName: z
           .string()
           .optional()
           .describe(
-            'The name of the Project whose lane to sort, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.',
+            "The name of the Project whose Status's Board order to set, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.",
           ),
         status: status.describe(
-          'The Status lane to sort: "Todo", "In progress" or "Done".',
+          'The Status whose Board order to set: "Todo", "In progress" or "Done".',
         ),
         cycleId: cycleId
           .nullable()
           .optional()
           .describe(
-            "Sort only this Cycle's Board (id from list_cycles), or with null only the Backlog. Left out, the Project's whole lane is sorted.",
+            "Sort only this Cycle's Board (id from list_cycles), or with null only the Backlog. Left out, the Status's order across the whole Project is set.",
           ),
         ticketNumbers: z
           .array(ticketNumber)
           .describe(
-            `The Tickets to put on top of the lane, in order, each once, from 1 to ${maxBatchSize} of them.`,
+            `The Tickets to put on top of the Status's Board order, in order, each once, from 1 to ${maxBatchSize} of them.`,
           ),
       },
       annotations: { idempotentHint: true },
