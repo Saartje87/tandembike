@@ -5,7 +5,7 @@ import { style } from '@vanilla-extract/css';
  * A chip never grows past the row, so a long title wraps inside it. It is not
  * a `Tag`: a `Tag` stays on one line, and its intents are not the Epic colours.
  * The chip of the Epic open in the drawer is ringed like an open card; the
- * `outline` atom takes only `none` (T379).
+ * `outline` atom takes only `none` (T1099).
  */
 export const chip = style({
   maxInlineSize: '100%',

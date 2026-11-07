@@ -6,7 +6,7 @@ import { style } from '@vanilla-extract/css';
  * carried along by another one's drag is faded, which the `opacity` atom,
  * with only `0` and `1`, cannot express (T320). The card of the Ticket open
  * in the drawer is ringed, apart from the background a selected or changed
- * card gets; the `outline` atom takes only `none` (T379).
+ * card gets; the `outline` atom takes only `none` (T1099).
  */
 export const card = style({
   selectors: {
