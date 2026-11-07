@@ -19,7 +19,7 @@ The Ticket Application allows users to manage and track tickets for various proj
 
 1. Navigate to the Ticket Application.
 2. Select a project to view its tickets.
-3. Create a new ticket by typing its title in the Todo lane and pressing Enter; add a description afterwards by editing it.
+3. Create a new ticket by typing its title in the New Ticket field at the top of the Board and pressing Enter; it lands in Intake; add a description afterwards by editing it.
 4. Update the status or information of existing tickets as needed.
 5. Monitor the progress of tasks and manage project workflows efficiently.
 

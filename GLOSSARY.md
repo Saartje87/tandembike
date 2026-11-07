@@ -33,11 +33,11 @@ The Ticket another Ticket was split from, such as the spec a build Ticket came o
 _Avoid_: Parent, source, spec link
 
 **Board**:
-The view of one Project's Tickets, laid out in five Lanes: Intake, Todo, In progress, For human and Done. Epics are not in the Lanes; the Board lists them apart, with their progress. An In progress Epic shows a badge with its section (Action needed, Running or Review), derived from its own Claim, PR reference and live Conversation as for a Ticket, plus the status line while its Conversation is live; in Review it shows the Merged button, which completes every child and removes its state label.
-_Avoid_: Kanban, dashboard, list
+The view of one Project's Tickets in one column, for the Active Cycle, each Prepared Cycle and the Backlog. It groups the Lanes by what the User needs to do first: Needs you, then In flight, then Your work, Queued and Done (closed until opened), with the Archived Tickets at the bottom. It has a header with the Cycle's progress and a New Ticket field, which creates a Ticket in Intake. Its rows offer no actions: a row's title opens the Ticket, and a run waiting on the User shows a bell that opens its Conversation. A drag only reorders rows within a section; it never changes a Status or a label (ADR 0024). Every Epic is placed by its Lane and shows its children nested in its row, except a child in Needs you, which also appears there. An In progress Epic shows a badge with its section (Action needed, Running or Review), derived from its own Claim, PR reference and live Conversation as for a Ticket, plus the status line while its Conversation is live; in Review it shows the Merged button, which completes every child and removes its state label. Without an Active Cycle, its place points to the Prepared Cycles to start.
+_Avoid_: Cockpit, Kanban, dashboard, inbox, list
 
 **Lane**:
-A Board section that holds the Tickets in one situation, in their order. A Lane is derived from a Ticket's Status, its triage state label and, for In progress, the run state of its Conversation, never stored. Dropping a Ticket in a Lane gives it a Status, never a label.
+A situation a Ticket or Epic is in, derived from its Status, its triage state label and, for In progress, the run state of its Conversation, never stored. The Lanes are Intake, Queued, In progress, Your work and Done. The Board shows them as its sections; a drag reorders rows within one and never moves a Ticket to another Lane. A Ticket changes Lane when its Status or labels change, through the Ticket drawer.
 _Avoid_: Column, drop area
 
 **Stalled**:
@@ -48,20 +48,24 @@ _Avoid_: Stuck, orphaned
 The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going and what it has cost so far. It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
 _Avoid_: Progress line, activity line
 
-**For human**:
-The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now; that is Needs you.
-_Avoid_: Waiting on me
+**Queued**:
+The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent can take. Its order is the Autopilot priority, set by dragging or by `sort_lane`. Formerly called Todo.
+_Avoid_: Todo Lane, Ready
 
-**Cockpit**:
-A Project's view of its Active Cycle in one column, by what needs the User first: Needs you, then In flight (each Running Ticket with what its run is doing), then Your work (`ready-for-human`), Queued (`ready-for-agent`, in the Todo Lane's order) and Done, closed until opened. Its header shows the Cycle's progress and the Start runs working. It places each Ticket as the Board does, and offers no actions in its lists: a row's title opens the Ticket, and a run waiting on the User shows a bell that opens its Conversation. Without an Active Cycle it points to the Prepared Cycles to start.
-_Avoid_: Dashboard, inbox, factory view
+**Your work**:
+The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now; that is Needs you. Formerly called For human.
+_Avoid_: For human, Waiting on me
 
 **Needs you**:
-The Tickets and Epics waiting on the User: those in the Action needed section of the In progress Lane, those in Review, and Intake. Action needed and Review count in the Active Cycle; Intake counts in the Cycle and the Backlog, since runs file their feedback outside any Cycle. `ready-for-human` work is not Needs you: it is the User's own work, not a request.
+The Board's first grouping: the Tickets and Epics waiting on the User, which are those in the Action needed section of the In progress Lane, those in Review, and Intake. Action needed and Review count in the Active Cycle; Intake counts in the Cycle and the Backlog, since runs file their feedback outside any Cycle. `ready-for-human` work is not Needs you: it is the User's own work, not a request. Its count shows on the Active Cycle's tab and in the browser tab title, and ignores the Board filter.
 _Avoid_: Action items, attention list
 
+**In flight**:
+The Board's second grouping: the Running section of the In progress Lane, one row per Epic or per Ticket outside one, with what its run is doing, how long it has run and what it has cost.
+_Avoid_: Active, running list
+
 **Board filter**:
-A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.
+A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It sits at the top of the Board and narrows every section, and the section counts show the filtered numbers. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place. The Needs you count in the tab and the browser title ignores it.
 _Avoid_: Search, view, saved filter
 
 **Stats**:

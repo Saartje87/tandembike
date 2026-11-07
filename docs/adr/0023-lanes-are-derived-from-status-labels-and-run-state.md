@@ -1,5 +1,7 @@
 # Lanes are derived from Status, labels and run state
 
+Superseded in part by [ADR 0024](0024-the-board-is-one-column-and-a-drag-only-reorders.md): the drag paragraph no longer holds, and the Board is one column. The Lane derivation stands; Todo is now called Queued and For human is called Your work.
+
 The Board used to show one Lane per Status. The software factory (`docs/roadmap/software-factory.md`) needs more situations on the Board than three Statuses: a Todo Ticket still to be triaged, one ready for an Agent, one the User works on; later, an In progress Ticket that needs the User, is running, or waits for review. So a Lane is no longer a Status. The Board has five Lanes in a fixed order, Intake, Todo, In progress, For human and Done, and a pure function (`laneOf` in `src/components/board/board-lanes.ts`) derives the Lane of each Ticket from its Status, its triage state label and, in later Tickets, the run state of its Conversation:
 
 - Todo with `needs-triage`, `needs-info` or no state label is in Intake.

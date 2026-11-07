@@ -350,11 +350,11 @@ export function cockpitOf(
         cost: cost(ticket),
         pullRequest: latestPullRequest(ticket),
       })),
-    yourWork: rowsIn('For human').map(({ ticket }) => ({
+    yourWork: rowsIn('Your work').map(({ ticket }) => ({
       ...rowOf(ticket),
       ...withChildren(ticket),
     })),
-    queued: rowsIn('Todo').map(({ ticket }) => ({
+    queued: rowsIn('Queued').map(({ ticket }) => ({
       ...rowOf(ticket),
       ...withChildren(ticket),
       blocked: ticket.blocked,

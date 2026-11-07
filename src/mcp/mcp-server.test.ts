@@ -3183,7 +3183,7 @@ describe('Cycle tools', () => {
     await client.close();
   });
 
-  it("sorts a Cycle's Todo lane with sort_lane, named by projectName, and returns its order", async () => {
+  it("sorts a Cycle's Queued Lane with sort_lane, named by projectName, and returns its order", async () => {
     const { tickets, project, client } = await cycleSetup();
     const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 3] });

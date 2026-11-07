@@ -364,7 +364,6 @@ const TicketRow: FC<TicketRowProps> = ({
         ref={rowRef}
         // dnd-kit makes a row it drags a button unless it has a role; it
         // stays a list item, with the drag in its role description.
-        // biome-ignore lint/a11y/noRedundantRoles: see above
         role={rowRef ? 'listitem' : undefined}
         // Focusable from the first render when it can be dragged, so Space
         // picks it up; dnd-kit would add this only on a later frame.
@@ -1164,7 +1163,7 @@ export const Cockpit: FC<CockpitProps> = ({
                       : selectable(row.number, 'yourWork')
                   }
                   line={`ready-for-human · for ${age(row.updatedAt)}`}
-                  end={<Tag>For human</Tag>}
+                  end={<Tag>Your work</Tag>}
                 />
               ))}
             </RowList>

@@ -4,13 +4,7 @@ import type { LiveConversation } from '../../conversations/conversation-activity
 import { liveConversation } from '../../test/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
-import {
-  boardLanes,
-  isInReview,
-  isStalled,
-  laneOf,
-  laneStatus,
-} from './board-lanes';
+import { isInReview, isStalled, laneOf } from './board-lanes';
 
 const placed = (
   status: Status,
@@ -40,12 +34,12 @@ describe('laneOf', () => {
     expect(placed('Todo', ['bug', 'wontfix']).lane).toBe('Intake');
   });
 
-  it('puts a Todo Ticket with ready-for-agent in Todo', () => {
-    expect(placed('Todo', ['bug', 'ready-for-agent']).lane).toBe('Todo');
+  it('puts a Todo Ticket with ready-for-agent in Queued', () => {
+    expect(placed('Todo', ['bug', 'ready-for-agent']).lane).toBe('Queued');
   });
 
-  it('puts a Todo Ticket with ready-for-human in For human', () => {
-    expect(placed('Todo', ['ready-for-human']).lane).toBe('For human');
+  it('puts a Todo Ticket with ready-for-human in Your work', () => {
+    expect(placed('Todo', ['ready-for-human']).lane).toBe('Your work');
   });
 
   it('puts an In progress Ticket in In progress whatever its labels', () => {
@@ -94,29 +88,7 @@ describe('laneOf', () => {
   });
 });
 
-describe('boardLanes', () => {
-  it('lists the Lanes in Board order', () => {
-    expect(boardLanes).toEqual([
-      'Intake',
-      'Todo',
-      'In progress',
-      'For human',
-      'Done',
-    ]);
-  });
-});
-
-describe('laneStatus', () => {
-  it('gives the Status a drop into the Lane gives', () => {
-    expect(boardLanes.map(laneStatus)).toEqual([
-      'Todo',
-      'Todo',
-      'In progress',
-      'Todo',
-      'Done',
-    ]);
-  });
-
+describe('placing a Ticket', () => {
   describe('with a live Conversation', () => {
     const inProgress = (
       state: LiveConversation['state'],
@@ -165,7 +137,7 @@ describe('laneStatus', () => {
       expect(
         placed('Todo', ['ready-for-agent'], {}, liveConversation()),
       ).toEqual({
-        lane: 'Todo',
+        lane: 'Queued',
         section: null,
       });
     });
