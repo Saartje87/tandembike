@@ -100,29 +100,33 @@ const EpicTag: FC<{ item: { epic?: NeedItem['epic'] } }> = ({ item }) =>
   ) : null;
 
 /**
- * What a Needs you row offers in the list: only Allow and Deny on a
- * permission. Everything else opens the Ticket (or its Conversation), where
- * the User sets its state; a row shows its PR or label as information.
+ * What a Needs you row offers in the list. A run that waits on the User
+ * (permission, question, failure, interruption, idle) shows a bell that
+ * opens its Conversation, so the User decides with the run's context in
+ * view; nothing is approved from the list. Review and Intake rows show
+ * their PR or label as information; the Ticket is where its state is set.
  */
 const NeedActions: FC<{ item: NeedItem }> = ({ item }) => {
   switch (item.kind) {
-    case 'permission':
-      return (
-        <Inline gap={2} flexWrap="nowrap">
-          <Button size="small" variant="solid" onClick={noop}>
-            Allow
-          </Button>
-          <Button size="small" variant="outline" onClick={noop}>
-            Deny
-          </Button>
-        </Inline>
-      );
     case 'review':
       return <Text fontSize="small">PR {item.pr}</Text>;
     case 'intake':
       return <Tag>{item.label}</Tag>;
-    default:
+    case 'stalled':
       return null;
+    default:
+      return (
+        <IconButton
+          variant="ghost"
+          intent="primary"
+          shape="circle"
+          size="small"
+          label={`Open the Conversation of T${item.number}`}
+          onClick={noop}
+        >
+          <Icon name="bell-alert" size="small" />
+        </IconButton>
+      );
   }
 };
 
