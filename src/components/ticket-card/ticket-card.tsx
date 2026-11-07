@@ -72,11 +72,11 @@ export type TicketCardProps = {
 export type SelectMode = 'toggle' | 'range';
 
 /** Whether a click asks to select rather than open the drawer. */
-const isSelectClick = (event: MouseEvent) =>
+export const isSelectClick = (event: MouseEvent) =>
   event.metaKey || event.ctrlKey || event.shiftKey;
 
 /** A Shift-click selects a range; any other select click toggles. */
-const selectModeOf = (event: Event | MouseEvent): SelectMode =>
+export const selectModeOf = (event: Event | MouseEvent): SelectMode =>
   'shiftKey' in event && event.shiftKey ? 'range' : 'toggle';
 
 type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;

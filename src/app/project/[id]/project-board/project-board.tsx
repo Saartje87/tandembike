@@ -114,6 +114,8 @@ const BoardTab: FC<ProjectBoardProps> = ({
             cycleId: null,
           })}
           runSlots={runSlotsOf(project.id)}
+          cycles={cycles}
+          epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
         />
       </>
     );
