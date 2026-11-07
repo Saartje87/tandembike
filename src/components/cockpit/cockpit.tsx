@@ -3,6 +3,8 @@
 import {
   Alert,
   Box,
+  Button,
+  Checkbox,
   Heading,
   IconButton,
   Inline,
@@ -25,23 +27,35 @@ import {
 import { isSortable, useSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
+  type MouseEvent,
   type ReactNode,
   type Ref,
   startTransition,
+  useCallback,
   useEffect,
+  useId,
   useOptimistic,
+  useRef,
   useState,
+  useTransition,
 } from 'react';
 
+import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
   cyclePath,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
-import { reorderTickets } from '../../app/tickets/actions';
+import {
+  archiveTickets,
+  moveTicketsToEpic,
+  reorderTickets,
+} from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
+import type { BatchFailure } from '../../tickets/errors';
 import type { Ticket } from '../../tickets/tickets';
+import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
 import {
   isFiltering,
@@ -57,10 +71,17 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
+import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
+import { SelectionBar } from '../selection-bar/selection-bar';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
+import {
+  isSelectClick,
+  type SelectMode,
+  selectModeOf,
+} from '../ticket-card/ticket-card';
 import * as styles from './cockpit.css';
 import {
   type CockpitTicket,
@@ -87,6 +108,10 @@ export type CockpitProps = {
   backlog?: Ticket[];
   /** The Project's Start runs working now, and how many it allows at once. */
   runSlots: { used: number; cap: number };
+  /** The Project's Cycles, for the selection bar's Move to Cycle. Defaults to none. */
+  cycles?: Cycle[];
+  /** The Project's live Epics, for the selection bar's Add to Epic. Defaults to none. */
+  epics?: Pick<Ticket, 'number' | 'title'>[];
   /** The Board filter in the URL as the Board loads. */
   filter?: BoardFilter;
 };
@@ -228,6 +253,8 @@ type TicketRowProps = {
   details?: ReactNode;
   /** Set on a row that can be dragged, which then takes focus for the keyboard. */
   rowRef?: Ref<HTMLLIElement>;
+  /** Makes the row selectable: whether it is, and how a select gesture lands. */
+  selection?: { selected: boolean; onSelect: (mode: SelectMode) => void };
 };
 
 /**
@@ -245,11 +272,36 @@ const TicketRow: FC<TicketRowProps> = ({
   end,
   details,
   rowRef,
+  selection,
 }) => {
   const color = ticket.epic?.color ?? ticket.color;
+  // Runs before the title link's own click, so it neither navigates nor opens a tab.
+  const selectByClick = (event: MouseEvent<HTMLLIElement>) => {
+    if (
+      !selection ||
+      !isSelectClick(event) ||
+      (event.target instanceof HTMLInputElement &&
+        event.target.type === 'checkbox')
+    ) {
+      return;
+    }
+    event.preventDefault();
+    selection.onSelect(selectModeOf(event));
+  };
   const content = (
     <Inline gap={3} alignY="center" alignX="between">
       <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
+        {selection && (
+          <Checkbox
+            name={`select-${ticket.number}`}
+            aria-label={`Select T${ticket.number} ${ticket.title}`}
+            checked={selection.selected}
+            onChange={(event) =>
+              // A checkbox's change comes from its click, with its keys.
+              selection.onSelect(selectModeOf(event.nativeEvent))
+            }
+          />
+        )}
         <Icon
           name={icon}
           size="small"
@@ -294,6 +346,8 @@ const TicketRow: FC<TicketRowProps> = ({
       boxShadow={muted ? undefined : 1}
       className={color ? styles.epicEdge[color] : styles.edge}
     >
+      {/* Keyboard users select with the checkbox. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: a modifier-click shortcut */}
       <li
         ref={rowRef}
         // dnd-kit makes a row it drags a button unless it has a role; it
@@ -303,6 +357,7 @@ const TicketRow: FC<TicketRowProps> = ({
         // Focusable from the first render when it can be dragged, so Space
         // picks it up; dnd-kit would add this only on a later frame.
         tabIndex={rowRef ? 0 : undefined}
+        onClick={selectByClick}
       >
         {details ? (
           <details>
@@ -501,6 +556,33 @@ const RowList: FC<RowListProps> = ({
   </Box>
 );
 
+type NotMovedProps = { refusals: BatchFailure[] };
+
+/** Why each Ticket a move to a Cycle left out was refused. */
+const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
+  const headingId = useId();
+  return (
+    <Alert intent="warning">
+      <Stack gap={1}>
+        <Text id={headingId}>Not moved</Text>
+        <Stack
+          gap={1}
+          aria-labelledby={headingId}
+          listStyle="none"
+          role="list"
+          asChild
+        >
+          <ul>
+            {refusals.map(({ number, error }) => (
+              <li key={number}>{error}</li>
+            ))}
+          </ul>
+        </Stack>
+      </Stack>
+    </Alert>
+  );
+};
+
 /**
  * An In flight row's second line: its live line and run time, or, for a
  * claimed Ticket with no live run (such as one worked in a terminal), that.
@@ -526,6 +608,12 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Cockpit. The browser tab's title carries the Needs you
  * count. It follows live Conversations as the Board does.
+ *
+ * Rows can be selected with their checkbox, Cmd-click or Ctrl-click, or a
+ * Shift-click range within one list; a bar then moves the selection to
+ * another Cycle or the Backlog, adds it to an Epic, or archives it. The
+ * Tickets an action refuses stay selected, with the reason. Epic rows
+ * cannot be selected.
  */
 export const Cockpit: FC<CockpitProps> = ({
   projectId,
@@ -533,6 +621,8 @@ export const Cockpit: FC<CockpitProps> = ({
   tickets,
   backlog = [],
   runSlots,
+  cycles = [],
+  epics = [],
   filter: initialFilter,
 }) => {
   const live = useLiveConversations();
@@ -547,7 +637,6 @@ export const Cockpit: FC<CockpitProps> = ({
           : ticket,
       ),
   );
-  const [error, setError] = useState<string>();
   const boardPath = cyclePath(projectId, cycle.id);
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
   const everything = cockpitOf(shownTickets, { live, cost }, backlog);
@@ -678,7 +767,155 @@ export const Cockpit: FC<CockpitProps> = ({
     });
   };
 
-  const needRows = (rows: NeedRow[]) =>
+  // The rows that can be selected, by list, in the order shown.
+  const lists: Record<string, number[]> = {
+    actionNeeded: needsYou.actionNeeded.map(({ number }) => number),
+    review: needsYou.review.map(({ number }) => number),
+    intake: needsYou.intake.map(({ number }) => number),
+    inFlight: cockpit.inFlight.map(({ number }) => number),
+    yourWork: cockpit.yourWork
+      .filter(({ children }) => !children)
+      .map(({ number }) => number),
+    queued: cockpit.queued
+      .filter(({ children }) => !children)
+      .map(({ number }) => number),
+    done: cockpit.done
+      .filter(({ children }) => !children)
+      .map(({ number }) => number),
+  };
+  const [picked, setPicked] = useState<ReadonlySet<number>>(new Set());
+  const anchor = useRef<{ number: number; list: string } | undefined>(
+    undefined,
+  );
+  const [refusals, setRefusals] = useState<BatchFailure[]>();
+  const [error, setError] = useState<string>();
+  const [changing, startChange] = useTransition();
+  // Tickets that left the lists drop out of the selection.
+  const selection = Object.values(lists)
+    .flat()
+    .filter((number) => picked.has(number));
+  const shownRefusals = refusals?.filter(({ number }) =>
+    selection.includes(number),
+  );
+  const clearSelection = useCallback(() => {
+    setPicked(new Set());
+    setRefusals(undefined);
+    setError(undefined);
+    anchor.current = undefined;
+  }, []);
+  const hasSelection = picked.size > 0;
+  useEffect(() => {
+    if (!hasSelection) {
+      return;
+    }
+    const clearOnEscape = (event: KeyboardEvent) => {
+      if (
+        event.key === 'Escape' &&
+        !event.defaultPrevented &&
+        !(
+          event.target instanceof Element &&
+          event.target.closest(
+            'input:not([type="checkbox"]), textarea, select, dialog, [role="dialog"]',
+          )
+        )
+      ) {
+        clearSelection();
+      }
+    };
+    document.addEventListener('keydown', clearOnEscape);
+    return () => document.removeEventListener('keydown', clearOnEscape);
+  }, [hasSelection, clearSelection]);
+  const select = (number: number, list: string, mode: SelectMode) => {
+    setRefusals(undefined);
+    setError(undefined);
+    const numbers = lists[list] ?? [];
+    const from =
+      mode === 'range' && anchor.current?.list === list
+        ? numbers.indexOf(anchor.current.number)
+        : -1;
+    if (from >= 0) {
+      const to = numbers.indexOf(number);
+      const range = numbers.slice(Math.min(from, to), Math.max(from, to) + 1);
+      setPicked((current) => new Set([...current, ...range]));
+      return;
+    }
+    anchor.current = { number, list };
+    setPicked((current) => {
+      const next = new Set(current);
+      if (mode === 'toggle' && next.has(number)) {
+        next.delete(number);
+      } else {
+        next.add(number);
+      }
+      return next;
+    });
+  };
+  const selectable = (number: number, list: string) => ({
+    selected: picked.has(number),
+    onSelect: (mode: SelectMode) => select(number, list, mode),
+  });
+  const moveSelectionToCycle = (cycleId: number | null) => {
+    const numbers = selection;
+    setError(undefined);
+    setRefusals(undefined);
+    startChange(async () => {
+      const result = await moveTicketsToCycle({
+        projectId,
+        cycleId,
+        ticketNumbers: numbers,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      const refused = new Set(result.failed.map(({ number }) => number));
+      // Only the moved Tickets leave: rows picked meanwhile stay selected.
+      setPicked(
+        (current) =>
+          new Set(
+            [...current].filter(
+              (number) => !numbers.includes(number) || refused.has(number),
+            ),
+          ),
+      );
+      if (result.failed.length > 0) {
+        setRefusals(result.failed);
+      }
+    });
+  };
+  const addSelectionToEpic = (epic: number) => {
+    const numbers = selection;
+    setError(undefined);
+    setRefusals(undefined);
+    startChange(async () => {
+      const result = await moveTicketsToEpic({ epic, children: numbers });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setPicked(
+        (current) =>
+          new Set([...current].filter((number) => !numbers.includes(number))),
+      );
+    });
+  };
+  const archiveSelection = () => {
+    const numbers = selection;
+    setError(undefined);
+    setRefusals(undefined);
+    startChange(async () => {
+      const result = await archiveTickets({ ticketNumbers: numbers });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setPicked(
+        (current) =>
+          new Set([...current].filter((number) => !numbers.includes(number))),
+      );
+    });
+  };
+  const needRows = (rows: NeedRow[], list: string) =>
     rows.map((row) => (
       <DraggableTicketRow
         key={row.number}
@@ -687,6 +924,7 @@ export const Cockpit: FC<CockpitProps> = ({
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
+        selection={selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
             {row.kind === 'intake' && (
@@ -748,17 +986,17 @@ export const Cockpit: FC<CockpitProps> = ({
                     count={needsYou.actionNeeded.length}
                     open
                   >
-                    {needRows(needsYou.actionNeeded)}
+                    {needRows(needsYou.actionNeeded, 'actionNeeded')}
                   </RowList>
                 )}
                 {needsYou.review.length > 0 && (
                   <RowList title="Review" count={needsYou.review.length} open>
-                    {needRows(needsYou.review)}
+                    {needRows(needsYou.review, 'review')}
                   </RowList>
                 )}
                 {needsYou.intake.length > 0 && (
                   <RowList title="Intake" count={needsYou.intake.length} open>
-                    {needRows(needsYou.intake)}
+                    {needRows(needsYou.intake, 'intake')}
                   </RowList>
                 )}
               </Stack>
@@ -811,6 +1049,7 @@ export const Cockpit: FC<CockpitProps> = ({
                       ticket={row}
                       href={hrefOf(row.number)}
                       icon="play"
+                      selection={selectable(row.number, 'inFlight')}
                       line={inFlightLine(row, now)}
                       end={
                         <Inline gap={2} alignY="center" flexWrap="nowrap">
@@ -840,6 +1079,9 @@ export const Cockpit: FC<CockpitProps> = ({
                 href={hrefOf(row.number)}
                 icon={row.children ? 'queue-list' : 'user'}
                 {...epicParts(row)}
+                selection={
+                  row.children ? undefined : selectable(row.number, 'yourWork')
+                }
                 line={`ready-for-human · for ${age(row.updatedAt)}`}
                 end={<Tag>For human</Tag>}
               />
@@ -855,6 +1097,9 @@ export const Cockpit: FC<CockpitProps> = ({
                 href={hrefOf(row.number)}
                 icon={row.children ? 'queue-list' : 'clock'}
                 {...epicParts(row)}
+                selection={
+                  row.children ? undefined : selectable(row.number, 'queued')
+                }
                 line={queuedLine(row, index)}
                 end={
                   row.blocked ? (
@@ -877,6 +1122,9 @@ export const Cockpit: FC<CockpitProps> = ({
                 href={hrefOf(row.number)}
                 icon="check-circle"
                 {...epicParts(row)}
+                selection={
+                  row.children ? undefined : selectable(row.number, 'done')
+                }
                 line={lineOf(
                   `Done ${age(row.updatedAt)} ago`,
                   row.pullRequest && pullRequestLabel(row.pullRequest),
@@ -887,6 +1135,37 @@ export const Cockpit: FC<CockpitProps> = ({
             ))}
           </RowList>
         </Stack>
+        {selection.length > 0 && (
+          <SelectionBar
+            count={selection.length}
+            onClear={clearSelection}
+            notice={
+              shownRefusals &&
+              shownRefusals.length > 0 && <NotMoved refusals={shownRefusals} />
+            }
+          >
+            <MoveToCycleMenu
+              cycles={cycles}
+              cycleId={cycle.id}
+              disabled={changing}
+              onPick={moveSelectionToCycle}
+            />
+            <AddToEpicMenu
+              epics={epics}
+              disabled={changing}
+              onPick={addSelectionToEpic}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              disabled={changing}
+              onClick={archiveSelection}
+            >
+              Archive
+            </Button>
+          </SelectionBar>
+        )}
       </Stack>
     </DndProvider>
   );
