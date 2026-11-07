@@ -354,6 +354,14 @@ function respond(call: () => unknown): CallToolResult {
   }
 }
 
+/** `ticket` without its description, for reads given `description: false`. */
+function withoutDescription({
+  description: _description,
+  ...rest
+}: Ticket): Omit<Ticket, 'description'> {
+  return rest;
+}
+
 /**
  * Runs a Tickets module call that changes a Ticket and answers with it as
  * `detail` asks: whole when "full", otherwise its summary plus `changed`, the
@@ -508,7 +516,7 @@ export function createMcpServer(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels and blocked (whether any Blocker is unresolved), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels, blocked (whether any Blocker is unresolved) and epicNumber (the Epic it is a child of, the same number the epicNumber filter takes, or null), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it. Add description: false to leave each description out and keep everything else, which is much shorter when you need a Project's structure, labels or criteria.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -590,7 +598,13 @@ export function createMcpServer(
           .enum(ticketDetails)
           .optional()
           .describe(
-            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels and blocked, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels, blocked and epicNumber, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+          ),
+        description: z
+          .boolean()
+          .optional()
+          .describe(
+            'With detail: "full", whether to include each Markdown description. Defaults to true; false leaves it out and returns everything else unchanged. A summary has no description, so it ignores this.',
           ),
         sort: z
           .enum(ticketSorts)
@@ -612,7 +626,16 @@ export function createMcpServer(
       },
       annotations: { readOnlyHint: true },
     },
-    (input) => respond(() => tickets.findTickets(input)),
+    ({ description, ...input }) =>
+      respond(() => {
+        const page = tickets.findTickets(input);
+        return input.detail === 'full' && description === false
+          ? {
+              ...page,
+              tickets: (page.tickets as Ticket[]).map(withoutDescription),
+            }
+          : page;
+      }),
   );
 
   registerTool(
@@ -635,11 +658,7 @@ export function createMcpServer(
     ({ number, description }) =>
       respond(() => {
         const ticket = tickets.getTicket(number);
-        if (description !== false) {
-          return ticket;
-        }
-        const { description: _description, ...rest } = ticket;
-        return rest;
+        return description === false ? withoutDescription(ticket) : ticket;
       }),
   );
 

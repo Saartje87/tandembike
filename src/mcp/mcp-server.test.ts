@@ -704,6 +704,7 @@ describe('Ticket tools', () => {
           labels: [],
           blocked: false,
           type: 'Ticket',
+          epicNumber: null,
         },
       ],
       nextCursor: null,
@@ -848,6 +849,7 @@ describe('Ticket tools', () => {
           labels: [],
           blocked: false,
           type: 'Ticket',
+          epicNumber: null,
           projectId: project.id,
         },
       ],
@@ -871,6 +873,80 @@ describe('Ticket tools', () => {
     expect(listTickets?.inputSchema.properties).not.toHaveProperty(
       'includeDescription',
     );
+    await client.close();
+  });
+
+  it('lists whole Tickets without their descriptions when description is false', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+      description: 'The whole launch.',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      description: 'It overlaps the logo.',
+      epicNumber: epic.number,
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Footer',
+      description: 'It is too tall.',
+    });
+    const client = await connectMcpClient(tickets);
+    type Row = { description?: string; epicNumber: number | null };
+    const list = async (args: Record<string, unknown>) =>
+      resultJson(
+        await client.callTool({ name: 'list_tickets', arguments: args }),
+      ) as { tickets: Row[] };
+
+    const full = await list({ detail: 'full' });
+    const explicit = await list({ detail: 'full', description: true });
+    const lean = await list({ detail: 'full', description: false });
+    const summary = await list({ description: false });
+
+    expect(explicit).toEqual(full);
+    expect(full.tickets.map(({ description }) => description)).toEqual([
+      'The whole launch.',
+      'It overlaps the logo.',
+      'It is too tall.',
+    ]);
+    expect(lean).toEqual({
+      ...full,
+      tickets: full.tickets.map(
+        ({ description: _description, ...rest }) => rest,
+      ),
+    });
+    expect(summary).toEqual(await list({}));
+    expect(summary.tickets.map(({ epicNumber }) => epicNumber)).toEqual([
+      null,
+      epic.number,
+      null,
+    ]);
+    await client.close();
+  });
+
+  it("leaves epicNumber out of the write tools' summaries", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: ticket.number, status: 'In progress' },
+    });
+
+    expect(Object.keys(resultJson(result) as object).sort()).toEqual([
+      'blocked',
+      'labels',
+      'number',
+      'status',
+      'title',
+    ]);
     await client.close();
   });
 

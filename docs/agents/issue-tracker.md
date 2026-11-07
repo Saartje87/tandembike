@@ -19,6 +19,8 @@ A Claim covers the work of one Agent run, not the wait for a merge:
 
 Board Lanes (Intake, Todo, In progress, For human, Done) and the In progress sections (Action needed, Running, Review) are derived in the UI and stay out of the MCP tools (ADR 0023): no tool returns or filters by a Lane. `sort_lane` sets a Status's Board order, which a Lane shows filtered by labels.
 
+To see a Project's structure, start from the `list_tickets` summaries: each row has `epicNumber`, the Epic the Ticket is a child of, or `null`. When you need more than a summary, such as each Ticket's criteria or Claim, pass `detail: "full"` with `description: false`. A full list with descriptions can grow too big for the client to return.
+
 ## Worktrees for parallel runs
 
 When Tandembike starts a run with Parallel runs on, it tells the run to work in a git worktree of its own, by this section. Follow it for any Agent run that shares the checkout with another.

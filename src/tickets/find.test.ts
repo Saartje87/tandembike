@@ -25,6 +25,7 @@ describe('Finding Tickets', () => {
           status: 'Todo',
           labels: ['bug'],
           type: 'Ticket',
+          epicNumber: null,
           blocked: false,
           projectId: project.id,
         },
@@ -117,6 +118,38 @@ describe('Finding Tickets', () => {
     expect(open.total).toBe(1);
   });
 
+  it("shows each summary's Epic as epicNumber, or null", () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      epicNumber: epic.number,
+    });
+    const loose = tickets.createTicket({
+      projectId: project.id,
+      title: 'Footer',
+    });
+
+    expect(
+      tickets
+        .findTickets({ projectId: project.id })
+        .tickets.map((row) => [
+          row.number,
+          'epicNumber' in row ? row.epicNumber : undefined,
+        ]),
+    ).toEqual([
+      [epic.number, null],
+      [child.number, epic.number],
+      [loose.number, null],
+    ]);
+  });
+
   it('leaves the Project out of summaries filtered to one Project', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -127,8 +160,8 @@ describe('Finding Tickets', () => {
     const byName = tickets.findTickets({ projectName: 'Website' }).tickets;
 
     expect(byId.map((row) => Object.keys(row))).toEqual([
-      ['number', 'title', 'status', 'labels', 'blocked', 'type'],
-      ['number', 'title', 'status', 'labels', 'blocked', 'type'],
+      ['number', 'title', 'status', 'labels', 'blocked', 'type', 'epicNumber'],
+      ['number', 'title', 'status', 'labels', 'blocked', 'type', 'epicNumber'],
     ]);
     expect(byName).toEqual(byId);
   });
