@@ -121,6 +121,7 @@ describe('Planning an Epic with its children', () => {
   it('refuses an Archived Cycle', () => {
     const { tickets, beta, epic, child } = setup();
     const a = child();
+    tickets.startCycle(beta.id);
     tickets.archiveCycle(beta.id);
 
     const error = errorFrom(() =>
@@ -137,7 +138,10 @@ describe('Planning an Epic with its children', () => {
 
   it('refuses withChildren on a Ticket that is not an Epic', () => {
     const { tickets, project, beta } = setup();
-    const plain = tickets.createTicket({ projectId: project.id, title: 'Plain' });
+    const plain = tickets.createTicket({
+      projectId: project.id,
+      title: 'Plain',
+    });
 
     const error = errorFrom(() =>
       tickets.planTicket({

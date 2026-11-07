@@ -61,11 +61,14 @@ export async function discardCycle(input: {
 export async function planTicket(input: {
   cycleId: number;
   number: number;
+  /** Plan the Epic together with its live children, all or nothing. */
+  withChildren?: boolean;
 }): Promise<ActionResult> {
   return actionResult(() => {
     appTickets('user').planTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
+      withChildren: input?.withChildren === true,
     });
     revalidateProjects();
     return {};
