@@ -53,12 +53,12 @@ export const maxInstructionsLength = 3500;
 
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
-- Move a Ticket to In progress when you start it and to Done when you finish it, so the User can follow your progress.
+- Move a Ticket to In progress when you start it and finish it with complete_ticket, so the User can follow your progress.
 - When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
 - Only the User archives and restores Projects. An archived Project is read-only until restored: its Tickets can be read, but changes to them or its Cycles are refused.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
 - Share progress, findings and triage notes as comments (add_comment), not by rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
-- Attach files to a Ticket with add_attachment, not comments; get_attachment reads one.
+- Attach files to a Ticket with add_attachment, not comments; get_attachment reads it.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Find ready, unclaimed work with list_tickets: status: "Todo", labels: ["ready-for-agent"], blocked: false, claimed: false.
 - Rank work in a Status's Board order with sort_lane, never Blockers; a Board Lane, such as Todo, shows that order filtered by labels.
 - To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
@@ -68,7 +68,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a T, like T42, the same way the User does.
 - Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, so they are handed off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, next an unfinished child with blocked: false, moving each to In progress and Done.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, next an unfinished child with blocked: false, moving each to In progress and Done.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets, and move them to another Cycle or the Backlog in one step with move_tickets.
 - Your client keeps these tools, their descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;

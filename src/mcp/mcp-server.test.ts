@@ -223,6 +223,7 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/attach_to_epic/);
     expect(instructions).toMatch(/claim_ticket/);
     expect(instructions).toMatch(/release_ticket_claim/);
+    expect(instructions).toMatch(/finish it with complete_ticket/);
     expect(instructions).toMatch(/set_acceptance_criteria_checked/);
     expect(instructions).toMatch(/list_cycles/);
     expect(instructions).toMatch(/plan_tickets/);
