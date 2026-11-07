@@ -114,6 +114,7 @@ const BoardTab: FC<ProjectBoardProps> = ({
             cycleId: null,
           })}
           runSlots={runSlotsOf(project.id)}
+          filter={filter}
         />
       </>
     );
