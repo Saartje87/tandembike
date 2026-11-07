@@ -11,7 +11,7 @@ import {
 } from '@blockle/blocks';
 import { type FC, useId, useState, useTransition } from 'react';
 
-import { planTicket } from '../../app/cycles/actions';
+import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
 
@@ -22,22 +22,31 @@ export type PlanEpicChild = Pick<EpicChild, 'number' | 'title' | 'status'> & {
 };
 
 export type PlanEpicDialogProps = {
+  /**
+   * Whether the Epic is being planned into `cycle` (the default) or removed
+   * from it. Removal lists the children in `cycle` and shows no `leaves`.
+   */
+  mode?: 'plan' | 'unplan';
   epic: Pick<Ticket, 'number' | 'title'>;
   /** The Cycle the User picked. */
   cycle: Pick<Cycle, 'id' | 'title'>;
-  /** The Epic's children that are not archived and not in `cycle` yet. */
+  /**
+   * The Epic's children that are not archived: those not in `cycle` yet when
+   * planning, those in it when removing.
+   */
   epicChildren: PlanEpicChild[];
-  /** Called when the dialog is cancelled or the Epic has been planned. */
+  /** Called when the dialog is cancelled or the Epic has been planned or removed. */
   onClose: () => void;
 };
 
 /**
- * Asks, before an Epic is planned into a Cycle from the Ticket drawer,
- * whether to take its live children along, all or nothing, or to plan only
- * the Epic. Rendered open; the parent unmounts it on `onClose`. A refusal is
+ * Asks, before an Epic is planned into or removed from a Cycle in the Ticket
+ * drawer, whether to take its live children along, all or nothing, or to
+ * change only the Epic. Rendered open; the parent unmounts it on `onClose`. A refusal is
  * shown in the dialog, which stays open.
  */
 export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
+  mode = 'plan',
   epic,
   cycle,
   epicChildren,
@@ -52,7 +61,8 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
   const plan = (withChildren: boolean) => {
     setError(undefined);
     startPlan(async () => {
-      const result = await planTicket({
+      const action = mode === 'plan' ? planTicket : unplanTicket;
+      const result = await action({
         cycleId: cycle.id,
         number: epic.number,
         ...(withChildren ? { withChildren } : {}),
@@ -74,11 +84,13 @@ export const PlanEpicDialog: FC<PlanEpicDialogProps> = ({
     >
       <Stack gap={4}>
         <Heading id={headingId} level={2}>
-          Plan T{epic.number} into {cycle.title}?
+          {mode === 'plan' ? 'Plan' : 'Remove'} T{epic.number}{' '}
+          {mode === 'plan' ? 'into' : 'from'} {cycle.title}?
         </Heading>
         <Text id={descriptionId} tag="p">
-          Plan T{epic.number} "{epic.title}" into the Cycle "{cycle.title}" with
-          its {count} {count === 1 ? 'child' : 'children'}, or on its own?
+          {mode === 'plan' ? 'Plan' : 'Remove'} T{epic.number} "{epic.title}"{' '}
+          {mode === 'plan' ? 'into' : 'from'} the Cycle "{cycle.title}" with its{' '}
+          {count} {count === 1 ? 'child' : 'children'}, or on its own?
         </Text>
         <Stack
           gap={1}

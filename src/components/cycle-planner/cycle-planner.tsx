@@ -42,6 +42,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const [asking, setAsking] = useState<Cycle>();
+  const [removing, setRemoving] = useState<Cycle>();
   const plannable = cycles.filter((cycle) => cycle.state !== 'Archived');
   const current = plannable.find((cycle) =>
     cycle.ticketNumbers.includes(ticket.number),
@@ -83,6 +84,30 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     }
   };
 
+  // An Epic's children in `cycle` that removing it could take along.
+  const removedChildren = (cycle: Cycle): PlanEpicChild[] =>
+    ticket.type === 'Epic'
+      ? ticket.children
+          .filter(
+            ({ archived, number }) =>
+              !archived && cycle.ticketNumbers.includes(number),
+          )
+          .map(({ number, title, status }) => ({
+            number,
+            title,
+            status,
+            leaves: null,
+          }))
+      : [];
+
+  const remove = (cycle: Cycle) => {
+    if (removedChildren(cycle).length > 0) {
+      setRemoving(cycle);
+    } else {
+      change(unplanTicket, cycle.id);
+    }
+  };
+
   let control: ReactNode;
   if (current) {
     control = (
@@ -96,7 +121,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           intent="neutral"
           size="small"
           disabled={pending}
-          onClick={() => change(unplanTicket, current.id)}
+          onClick={() => remove(current)}
         >
           Remove from Cycle
         </Button>
@@ -149,6 +174,15 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
           cycle={asking}
           epicChildren={askedChildren(asking)}
           onClose={() => setAsking(undefined)}
+        />
+      )}
+      {removing && (
+        <PlanEpicDialog
+          mode="unplan"
+          epic={{ number: ticket.number, title: ticket.title }}
+          cycle={removing}
+          epicChildren={removedChildren(removing)}
+          onClose={() => setRemoving(undefined)}
         />
       )}
     </Stack>

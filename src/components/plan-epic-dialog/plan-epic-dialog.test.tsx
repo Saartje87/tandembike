@@ -2,11 +2,14 @@ import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { planTicket } from '../../app/cycles/actions';
+import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import { renderWithTheme } from '../../test/render';
 import { PlanEpicDialog } from './plan-epic-dialog';
 
-vi.mock('../../app/cycles/actions', () => ({ planTicket: vi.fn() }));
+vi.mock('../../app/cycles/actions', () => ({
+  planTicket: vi.fn(),
+  unplanTicket: vi.fn(),
+}));
 
 const epic = { number: 5, title: 'Checkout' };
 const cycle = { id: 8, title: 'Launch' };
@@ -105,5 +108,98 @@ describe('PlanEpicDialog', () => {
     );
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
+  });
+});
+
+describe('PlanEpicDialog removing', () => {
+  beforeEach(() => {
+    vi.mocked(planTicket).mockReset();
+    vi.mocked(unplanTicket).mockReset();
+  });
+
+  const renderRemoval = (onClose = vi.fn()) => {
+    renderWithTheme(
+      <PlanEpicDialog
+        mode="unplan"
+        epic={epic}
+        cycle={cycle}
+        epicChildren={children.map((child) => ({ ...child, leaves: null }))}
+        onClose={onClose}
+      />,
+    );
+    return {
+      onClose,
+      dialog: screen.getByRole('dialog', { name: 'Remove T5 from Launch?' }),
+    };
+  };
+
+  it('lists each child with its Status', () => {
+    const { dialog } = renderRemoval();
+
+    expect(dialog).toHaveAccessibleDescription(
+      'Remove T5 "Checkout" from the Cycle "Launch" with its 2 children, or on its own?',
+    );
+    expect(
+      within(within(dialog).getByRole('list', { name: 'Children' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['T6 Pay · Todo', 'T7 Ship · Done']);
+  });
+
+  it('removes the Epic and its children', async () => {
+    vi.mocked(unplanTicket).mockResolvedValue({ ok: true });
+    const { dialog, onClose } = renderRemoval();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+    );
+
+    expect(unplanTicket).toHaveBeenCalledExactlyOnceWith({
+      cycleId: 8,
+      number: 5,
+      withChildren: true,
+    });
+    expect(planTicket).not.toHaveBeenCalled();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('removes only the Epic', async () => {
+    vi.mocked(unplanTicket).mockResolvedValue({ ok: true });
+    const { dialog, onClose } = renderRemoval();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Only the Epic' }),
+    );
+
+    expect(unplanTicket).toHaveBeenCalledExactlyOnceWith({
+      cycleId: 8,
+      number: 5,
+    });
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('changes nothing on Cancel', async () => {
+    const { dialog, onClose } = renderRemoval();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Cancel' }),
+    );
+
+    expect(unplanTicket).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows a refusal in the dialog and stays open', async () => {
+    vi.mocked(unplanTicket).mockResolvedValue({ ok: false, error: 'No way.' });
+    const { dialog, onClose } = renderRemoval();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+    );
+
+    await waitFor(() =>
+      expect(within(dialog).getByRole('alert').textContent).toBe('No way.'),
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
