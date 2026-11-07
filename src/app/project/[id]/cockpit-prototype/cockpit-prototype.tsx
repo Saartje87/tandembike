@@ -31,6 +31,7 @@ import type { PaletteColor } from '../../../../tickets/palette';
 import { modeColors } from '../../../lib/mode-colors';
 import * as styles from './cockpit-prototype.css';
 import {
+  type EpicRef,
   type FlightRow,
   type NeedItem,
   type NeedKind,
@@ -54,7 +55,11 @@ const variantKeys = Object.keys(variants) as VariantKey[];
 const noop = () => {};
 
 const ago = (minutes: number) =>
-  minutes < 60 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
+  minutes < 60
+    ? `${minutes}m`
+    : minutes < 1440
+      ? `${Math.round(minutes / 60)}h`
+      : `${Math.round(minutes / 1440)}d`;
 
 const usd = (amount: number) => `$${amount.toFixed(2)}`;
 
@@ -128,20 +133,19 @@ const NeedActions: FC<{ item: NeedItem }> = ({ item }) => {
         </Inline>
       );
     case 'intake':
+      // A Blocks Select overflowed the row here; T1107 picks the control.
       return (
-        <Select
-          size="small"
-          aria-label={`Triage T${item.number}`}
-          defaultValue=""
-        >
-          <option value="" disabled>
-            {item.label}
-          </option>
-          <option value="ready-for-agent">ready-for-agent</option>
-          <option value="ready-for-human">ready-for-human</option>
-          <option value="needs-info">needs-info</option>
-          <option value="wontfix">wontfix</option>
-        </Select>
+        <Inline gap={2} flexWrap="nowrap" alignItems="center">
+          <Tag>{item.label}</Tag>
+          <Button
+            size="small"
+            variant="outline"
+            endSlot={<Icon name="chevron-down" size="small" />}
+            onClick={noop}
+          >
+            Triage
+          </Button>
+        </Inline>
       );
     default:
       return (
@@ -246,39 +250,159 @@ const NoCycle: FC = () => (
   </Box>
 );
 
-/** A collapsed list, open on click. */
-const Collapsed: FC<{ title: string; tickets: PlainTicket[] }> = ({
+type TicketRowProps = {
+  icon: IconName;
+  number: number;
+  title: string;
+  line: string;
+  epic?: EpicRef;
+  /** Greyed out, for work that does not need the User now. */
+  muted?: boolean;
+  end?: ReactNode;
+};
+
+/** One Ticket as a row: the same shape in every section of the Cockpit. */
+const TicketRow: FC<TicketRowProps> = ({
+  icon,
+  number,
   title,
-  tickets,
+  line,
+  epic,
+  muted = false,
+  end,
 }) => (
-  <Box asChild borderRadius={2} backgroundColor={modeColors.sunken} padding={3}>
-    <details>
-      <Box asChild className={styles.summary}>
-        <summary>
-          <Inline gap={2} alignY="center">
-            <Icon name="chevron-right" size="small" />
-            <Text fontWeight="strong">{title}</Text>
-            <Tag>{tickets.length}</Tag>
-          </Inline>
-        </summary>
-      </Box>
-      <Stack gap={1} paddingBlockStart={2} listStyle="none" role="list" asChild>
-        <ul>
-          {tickets.map((t) => (
-            <li key={t.number}>
-              <Inline gap={2} alignY="center">
-                <Text fontSize="small" color="muted" fontFamily="mono">
-                  T{t.number}
-                </Text>
-                <Text fontSize="small">{t.title}</Text>
-                <EpicTag item={t} />
-              </Inline>
-            </li>
-          ))}
-        </ul>
-      </Stack>
-    </details>
+  <Box
+    asChild
+    paddingBlock={2}
+    paddingInline={3}
+    borderRadius={2}
+    backgroundColor={muted ? modeColors.sunken : modeColors.raised}
+    boxShadow={muted ? undefined : 1}
+    className={epic ? styles.epicEdge[epic.color] : styles.row}
+  >
+    <li>
+      <Inline gap={3} alignY="center" alignX="between">
+        <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
+          <Icon
+            name={icon}
+            size="small"
+            color={muted ? modeColors.textMuted : undefined}
+          />
+          <Text fontFamily="mono" fontSize="small" color="muted">
+            T{number}
+          </Text>
+          <Stack gap={0} minInlineSize={0} flex={1}>
+            <Inline gap={2} alignY="center">
+              <Text
+                truncate
+                fontWeight={muted ? 'normal' : 'medium'}
+                color={muted ? 'muted' : undefined}
+              >
+                {title}
+              </Text>
+              {epic && muted && <EpicTag item={{ epic }} />}
+            </Inline>
+            <Text truncate fontSize="small" color="muted">
+              {line}
+            </Text>
+          </Stack>
+        </Inline>
+        {end}
+      </Inline>
+    </li>
   </Box>
+);
+
+/** A titled group of rows that opens and closes on its heading. */
+const Disclosure: FC<{
+  title: string;
+  count: number;
+  open?: boolean;
+  children: ReactNode;
+}> = ({ title, count, open = false, children }) => (
+  <details open={open}>
+    <Box asChild className={styles.summary} paddingBlockEnd={1}>
+      <summary>
+        <Inline gap={2} alignY="center">
+          <span className={styles.chevron}>
+            <Icon name="chevron-right" size="small" />
+          </span>
+          <Text fontSize="small" fontWeight="strong" color="muted">
+            {title}
+          </Text>
+          <Tag>{count}</Tag>
+        </Inline>
+      </summary>
+    </Box>
+    <Stack gap={1} listStyle="none" role="list" asChild>
+      <ul>{children}</ul>
+    </Stack>
+  </details>
+);
+
+type ListKind = 'your-work' | 'queued' | 'done';
+
+const plainRow = (kind: ListKind, t: PlainTicket, index: number) => {
+  switch (kind) {
+    case 'your-work':
+      return (
+        <TicketRow
+          key={t.number}
+          muted
+          icon="user"
+          number={t.number}
+          title={t.title}
+          epic={t.epic}
+          line={`ready-for-human · for ${ago(t.age ?? 0)}`}
+          end={<Tag>For human</Tag>}
+        />
+      );
+    case 'queued':
+      return (
+        <TicketRow
+          key={t.number}
+          muted
+          icon="clock"
+          number={t.number}
+          title={t.title}
+          epic={t.epic}
+          line={`Queued #${index + 1} · ready-for-agent${t.blockedBy ? ` · blocked by T${t.blockedBy}` : ''}`}
+          end={
+            t.blockedBy ? (
+              <Tag intent="warning">Blocked</Tag>
+            ) : index === 0 ? (
+              <Tag intent="primary">Next</Tag>
+            ) : (
+              <Tag>Queued</Tag>
+            )
+          }
+        />
+      );
+    case 'done':
+      return (
+        <TicketRow
+          key={t.number}
+          muted
+          icon="check-circle"
+          number={t.number}
+          title={t.title}
+          epic={t.epic}
+          line={`Done ${ago(t.age ?? 0)} ago · PR ${t.pr ?? '–'} · ${usd(t.cost ?? 0)}`}
+          end={<Tag intent="success">Done</Tag>}
+        />
+      );
+  }
+};
+
+/** A list of work that does not need the User now, closed by default. */
+const Collapsed: FC<{
+  title: string;
+  kind: ListKind;
+  tickets: PlainTicket[];
+}> = ({ title, kind, tickets }) => (
+  <Disclosure title={title} count={tickets.length}>
+    {tickets.map((t, i) => plainRow(kind, t, i))}
+  </Disclosure>
 );
 
 const Section: FC<{ title: string; count?: number; children: ReactNode }> = ({
@@ -300,55 +424,28 @@ const Section: FC<{ title: string; count?: number; children: ReactNode }> = ({
 // ── Variant A: one column, stacked by urgency ─────────────────────────
 
 const NeedRowA: FC<{ item: NeedItem }> = ({ item }) => (
-  <Box
-    asChild
-    paddingBlock={2}
-    paddingInline={3}
-    borderRadius={2}
-    backgroundColor={modeColors.raised}
-    boxShadow={1}
-    className={item.epic ? styles.epicEdge[item.epic.color] : styles.row}
-  >
-    <li>
-      <Inline gap={3} alignY="center" alignX="between">
-        <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
-          <Icon name={kindIcon[item.kind]} size="small" />
-          <Text fontFamily="mono" fontSize="small" color="muted">
-            T{item.number}
-          </Text>
-          <Stack gap={0} minInlineSize={0} flex={1}>
-            <Text truncate fontWeight="medium">
-              {item.title}
-            </Text>
-            <Text truncate fontSize="small" color="muted">
-              {kindLabel[item.kind]} · {item.line} · {ago(item.waiting)}
-            </Text>
-          </Stack>
-        </Inline>
-        <NeedActions item={item} />
-      </Inline>
-    </li>
-  </Box>
+  <TicketRow
+    icon={kindIcon[item.kind]}
+    number={item.number}
+    title={item.title}
+    epic={item.epic}
+    line={`${kindLabel[item.kind]} · ${item.line} · ${ago(item.waiting)}`}
+    end={<NeedActions item={item} />}
+  />
 );
 
+/** A Needs you group, open by default and closable on its heading. */
 const NeedGroup: FC<{
   title: string;
   items: NeedItem[];
   Row: FC<{ item: NeedItem }>;
 }> = ({ title, items, Row }) =>
   items.length === 0 ? null : (
-    <Stack gap={1}>
-      <Text fontSize="small" fontWeight="strong" color="muted">
-        {title} · {items.length}
-      </Text>
-      <Stack gap={1} listStyle="none" role="list" asChild>
-        <ul>
-          {items.map((item) => (
-            <Row key={item.number} item={item} />
-          ))}
-        </ul>
-      </Stack>
-    </Stack>
+    <Disclosure title={title} count={items.length} open>
+      {items.map((item) => (
+        <Row key={item.number} item={item} />
+      ))}
+    </Disclosure>
   );
 
 const FlightRowView: FC<{ row: FlightRow; needsYouChild: boolean }> = ({
@@ -494,9 +591,9 @@ const VariantA: FC<{ s: Scenario }> = ({ s }) => (
       <InFlight s={s} />
     </Section>
     <Stack gap={2}>
-      <Collapsed title="Your work" tickets={s.yourWork} />
-      <Collapsed title="Queued" tickets={s.queued} />
-      <Collapsed title="Done" tickets={s.done} />
+      <Collapsed title="Your work" kind="your-work" tickets={s.yourWork} />
+      <Collapsed title="Queued" kind="queued" tickets={s.queued} />
+      <Collapsed title="Done" kind="done" tickets={s.done} />
     </Stack>
   </Stack>
 );
@@ -550,9 +647,9 @@ const VariantB: FC<{ s: Scenario }> = ({ s }) => (
         <Section title="In flight" count={s.inFlight.length}>
           <InFlight s={s} />
         </Section>
-        <Collapsed title="Queued" tickets={s.queued} />
-        <Collapsed title="Your work" tickets={s.yourWork} />
-        <Collapsed title="Done" tickets={s.done} />
+        <Collapsed title="Queued" kind="queued" tickets={s.queued} />
+        <Collapsed title="Your work" kind="your-work" tickets={s.yourWork} />
+        <Collapsed title="Done" kind="done" tickets={s.done} />
       </Stack>
     </GridItem>
   </Grid>
@@ -658,8 +755,8 @@ const VariantC: FC<{ s: Scenario }> = ({ s }) => (
       </Stack>
     </Box>
     <Inline gap={2}>
-      <Collapsed title="Your work" tickets={s.yourWork} />
-      <Collapsed title="Done" tickets={s.done} />
+      <Collapsed title="Your work" kind="your-work" tickets={s.yourWork} />
+      <Collapsed title="Done" kind="done" tickets={s.done} />
     </Inline>
   </Stack>
 );

@@ -54,3 +54,10 @@ export const summary = style({
   listStyle: 'none',
   selectors: { '&::-webkit-details-marker': { display: 'none' } },
 });
+
+/** A disclosure's chevron, turned down while its group is open. */
+export const chevron = style({
+  display: 'inline-flex',
+  transition: `transform ${vars.transition.fast}`,
+  selectors: { 'details[open] > summary &': { transform: 'rotate(90deg)' } },
+});

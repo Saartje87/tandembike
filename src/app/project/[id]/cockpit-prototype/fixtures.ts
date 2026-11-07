@@ -48,7 +48,16 @@ export type FlightRow = {
   pr?: string;
 };
 
-export type PlainTicket = { number: number; title: string; epic?: EpicRef };
+export type PlainTicket = {
+  number: number;
+  title: string;
+  epic?: EpicRef;
+  /** Minutes since it reached this place (planned, labelled or Done). */
+  age?: number;
+  cost?: number;
+  pr?: string;
+  blockedBy?: number;
+};
 
 export type Scenario = {
   label: string;
@@ -81,7 +90,11 @@ const queued: PlainTicket[] = [
     epic: cockpit,
   },
   { number: 1108, title: 'Epic rows and Epics in Needs you', epic: cockpit },
-  { number: 1112, title: 'Explain the spend ceiling on the settings page' },
+  {
+    number: 1112,
+    title: 'Explain the spend ceiling on the settings page',
+    blockedBy: 1094,
+  },
   { number: 1113, title: 'Remove the old drop-zone styles' },
 ];
 
@@ -95,11 +108,18 @@ const done: PlainTicket[] = Array.from({ length: 12 }, (_, i) => ({
     'Idle runs need the User',
     'Cost on cards',
   ][i % 6],
+  age: 30 + i * 70,
+  cost: 0.6 + ((i * 37) % 30) / 10,
+  pr: `#${110 + i}`,
 }));
 
 const yourWork: PlainTicket[] = [
-  { number: 1090, title: 'Decide the Autopilot default ceiling' },
-  { number: 1091, title: 'Set up the git guardrail hook in the blocks repo' },
+  { number: 1090, title: 'Decide the Autopilot default ceiling', age: 2880 },
+  {
+    number: 1091,
+    title: 'Set up the git guardrail hook in the blocks repo',
+    age: 600,
+  },
 ];
 
 const busy: Scenario = {
