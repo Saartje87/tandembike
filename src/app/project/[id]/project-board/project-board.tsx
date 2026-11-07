@@ -116,6 +116,7 @@ const BoardTab: FC<ProjectBoardProps> = ({
           runSlots={runSlotsOf(project.id)}
           cycles={cycles}
           epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
+          filter={filter}
         />
       </>
     );

@@ -28,14 +28,20 @@ import {
 
 import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { modeColors } from '../../app/lib/mode-colors';
-import { cyclePath, ticketOnBoardPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  cyclePath,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
 import { archiveTickets, moveTicketsToEpic } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { BatchFailure } from '../../tickets/errors';
 import type { Ticket } from '../../tickets/tickets';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
+import { isFiltering, ticketMatches } from '../board/board-filter';
 import type { InProgressSection } from '../board/board-lanes';
+import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
   useTicketCosts,
@@ -44,6 +50,7 @@ import { useConversationDialog } from '../conversation-dialog-provider/conversat
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
 import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
+import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { formatElapsed } from '../status-line/format-elapsed';
@@ -64,6 +71,7 @@ import {
   type NeedRow,
   type QueuedRow,
 } from './cockpit-of';
+import { useBoardFilter } from './use-board-filter';
 
 export type CockpitProps = {
   projectId: number;
@@ -82,6 +90,8 @@ export type CockpitProps = {
   cycles?: Cycle[];
   /** The Project's live Epics, for the selection bar's Add to Epic. Defaults to none. */
   epics?: Pick<Ticket, 'number' | 'title'>[];
+  /** The Board filter in the URL as the Board loads. */
+  filter?: BoardFilter;
 };
 
 const sectionIntent = {
@@ -508,18 +518,53 @@ export const Cockpit: FC<CockpitProps> = ({
   runSlots,
   cycles = [],
   epics = [],
+  filter: initialFilter,
 }) => {
   const live = useLiveConversations();
   const cost = useTicketCosts();
   const now = useNow();
-  const cockpit = cockpitOf(tickets, { live, cost }, backlog);
+  const boardPath = cyclePath(projectId, cycle.id);
+  const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
+  const everything = cockpitOf(tickets, { live, cost }, backlog);
+  // The Board filter narrows every section; only the tab keeps the full count.
+  const shown = new Set(
+    [...tickets, ...backlog]
+      .filter((ticket) => ticketMatches(ticket, filter))
+      .map(({ number }) => number),
+  );
+  const keep = <Row extends { number: number }>(rows: Row[]) =>
+    isFiltering(filter) ? rows.filter(({ number }) => shown.has(number)) : rows;
+  const cockpit = {
+    ...everything,
+    epics: keep(everything.epics),
+    inFlight: keep(everything.inFlight),
+    yourWork: keep(everything.yourWork),
+    queued: keep(everything.queued),
+    done: keep(everything.done),
+    needsYou: (() => {
+      const actionNeeded = keep(everything.needsYou.actionNeeded);
+      const review = keep(everything.needsYou.review);
+      const intake = keep(everything.needsYou.intake);
+      return {
+        actionNeeded,
+        review,
+        intake,
+        count: actionNeeded.length + review.length + intake.length,
+      };
+    })(),
+  };
+  const filterLabels = [
+    ...new Set(
+      [...tickets, ...backlog, filter].flatMap(({ labels }) => labels),
+    ),
+  ].sort();
   const hrefOf = (number: number) =>
-    ticketOnBoardPath(cyclePath(projectId, cycle.id), number);
+    ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
-  useCountInTitle(needsYou.count);
+  useCountInTitle(everything.needsYou.count);
 
   // The rows that can be selected, by list, in the order shown.
   const lists: Record<string, number[]> = {
@@ -692,6 +737,12 @@ export const Cockpit: FC<CockpitProps> = ({
   return (
     <Stack gap={6}>
       {error && <Alert intent="danger">{error}</Alert>}
+      <NewTicketInline projectId={projectId} cycleId={cycle.id} />
+      <BoardFilterBar
+        filter={filter}
+        labels={filterLabels}
+        onChange={changeFilter}
+      />
       <Stack gap={2}>
         <Inline gap={3} alignY="center" alignX="between">
           <Text color="muted">
