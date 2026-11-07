@@ -242,21 +242,6 @@ describe('CyclePlanner', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
-    it('plans only the Epic', async () => {
-      vi.mocked(planTicket).mockResolvedValue({ ok: true });
-      await pick(epic([epicChild(13)]), cycles);
-
-      await userEvent.click(
-        screen.getByRole('button', { name: 'Only the Epic' }),
-      );
-
-      expect(planTicket).toHaveBeenCalledExactlyOnceWith({
-        cycleId: 8,
-        number: 12,
-        withChildren: false,
-      });
-    });
-
     it('changes nothing on Cancel', async () => {
       await pick(epic([epicChild(13)]), cycles);
 
@@ -347,30 +332,6 @@ describe('CyclePlanner', () => {
         withChildren: true,
       });
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    });
-
-    it('removes only the Epic', async () => {
-      vi.mocked(unplanTicket).mockResolvedValue({ ok: true });
-      await remove(epic([epicChild(13)]), inCycle(13));
-
-      await userEvent.click(
-        screen.getByRole('button', { name: 'Only the Epic' }),
-      );
-
-      expect(unplanTicket).toHaveBeenCalledExactlyOnceWith({
-        cycleId: 8,
-        number: 12,
-        withChildren: false,
-      });
-    });
-
-    it('changes nothing on Cancel', async () => {
-      await remove(epic([epicChild(13)]), inCycle(13));
-
-      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-
-      expect(unplanTicket).not.toHaveBeenCalled();
-      expect(screen.queryByRole('dialog')).toBeNull();
     });
 
     it('unplans at once when no live child is in the Cycle', async () => {

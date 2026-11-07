@@ -31,6 +31,9 @@ export type CyclePlannerProps = {
   cycles: Cycle[];
 };
 
+/** The Epic dialog to show: which direction, and for which Cycle. */
+type Asking = { mode: 'plan' | 'unplan'; cycle: Cycle };
+
 /**
  * Which Cycle a Ticket is planned into, in the Ticket drawer: a link to it
  * with Remove from Cycle, or, for a non-archived Ticket in none, whatever
@@ -41,8 +44,7 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const selectId = useId();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
-  const [asking, setAsking] = useState<Cycle>();
-  const [removing, setRemoving] = useState<Cycle>();
+  const [asking, setAsking] = useState<Asking>();
   const plannable = cycles.filter((cycle) => cycle.state !== 'Archived');
   const current = plannable.find((cycle) =>
     cycle.ticketNumbers.includes(ticket.number),
@@ -58,51 +60,41 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     });
   };
 
-  // An Epic's children that planning it into `cycle` could take along.
-  const askedChildren = (cycle: Cycle): EpicCycleChild[] =>
+  // An Epic's non-archived children whose membership of `cycle` is `member`,
+  // as the dialog lists them: the ones planning would take along, or the ones
+  // removing would.
+  const dialogChildren = (cycle: Cycle, member: boolean): EpicCycleChild[] =>
     ticket.type === 'Epic'
       ? ticket.children
           .filter(
             ({ archived, number }) =>
-              !archived && !cycle.ticketNumbers.includes(number),
+              !archived && cycle.ticketNumbers.includes(number) === member,
           )
           .map(({ number, title, status }) => ({
             number,
             title,
             status,
-            leaves:
-              plannable.find((other) => other.ticketNumbers.includes(number))
-                ?.title ?? null,
+            leaves: member
+              ? undefined
+              : (plannable.find((other) => other.ticketNumbers.includes(number))
+                  ?.title ?? null),
           }))
       : [];
 
+  const childrenOf = ({ mode, cycle }: Asking) =>
+    dialogChildren(cycle, mode === 'unplan');
+
   const choose = (cycle: Cycle) => {
-    if (askedChildren(cycle).length > 0) {
-      setAsking(cycle);
+    if (dialogChildren(cycle, false).length > 0) {
+      setAsking({ mode: 'plan', cycle });
     } else {
       change(planTicket, cycle.id);
     }
   };
 
-  // An Epic's children in `cycle` that removing it could take along.
-  const removedChildren = (cycle: Cycle): EpicCycleChild[] =>
-    ticket.type === 'Epic'
-      ? ticket.children
-          .filter(
-            ({ archived, number }) =>
-              !archived && cycle.ticketNumbers.includes(number),
-          )
-          .map(({ number, title, status }) => ({
-            number,
-            title,
-            status,
-            leaves: null,
-          }))
-      : [];
-
   const remove = (cycle: Cycle) => {
-    if (removedChildren(cycle).length > 0) {
-      setRemoving(cycle);
+    if (dialogChildren(cycle, true).length > 0) {
+      setAsking({ mode: 'unplan', cycle });
     } else {
       change(unplanTicket, cycle.id);
     }
@@ -170,19 +162,11 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
       {error && <Alert intent="danger">{error}</Alert>}
       {asking && (
         <EpicCycleDialog
+          mode={asking.mode}
           epic={{ number: ticket.number, title: ticket.title }}
-          cycle={asking}
-          epicChildren={askedChildren(asking)}
+          cycle={asking.cycle}
+          epicChildren={childrenOf(asking)}
           onClose={() => setAsking(undefined)}
-        />
-      )}
-      {removing && (
-        <EpicCycleDialog
-          mode="unplan"
-          epic={{ number: ticket.number, title: ticket.title }}
-          cycle={removing}
-          epicChildren={removedChildren(removing)}
-          onClose={() => setRemoving(undefined)}
         />
       )}
     </Stack>
