@@ -116,8 +116,9 @@ const NeedActions: FC<{ item: NeedItem }> = ({ item }) => {
       return null;
     default:
       return (
+        // Primary, not warning: IconButton has no warning intent (T1109).
         <IconButton
-          variant="ghost"
+          variant="outline"
           intent="primary"
           shape="circle"
           size="small"
