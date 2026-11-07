@@ -562,6 +562,46 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   }
 
   /**
+   * Takes Epic `number` and its non-archived children in changeable `cycle`
+   * out of it in one transaction; the Epic is unplanned last, so a refusal
+   * rolls the children back.
+   */
+  function unplanEpicWithChildren(cycle: CycleRow, number: number) {
+    db.transaction(() => {
+      const epic = db
+        .select({ type: tickets.type })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      if (!epic) {
+        throw new NotFoundError(`There is no Ticket T${number}.`);
+      }
+      if (epic.type !== 'Epic') {
+        throw new NotAllowedError(
+          `Ticket T${number} is not an Epic. Only an Epic has children to take along.`,
+        );
+      }
+      const children = db
+        .select({ number: tickets.number })
+        .from(cycleTickets)
+        .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
+        .where(
+          and(
+            eq(cycleTickets.cycleId, cycle.id),
+            eq(tickets.epicNumber, number),
+            eq(tickets.archived, false),
+          ),
+        )
+        .orderBy(tickets.number)
+        .all();
+      for (const child of children) {
+        unplanFrom(cycle, child.number);
+      }
+      unplanFrom(cycle, number);
+    });
+  }
+
+  /**
    * Moves Ticket `number` out of its open Cycle, if any, into `target`, or
    * to the Backlog when it is `null`, in one transaction. Returns the ids of
    * the Cycles it changed: none when it is where it should be already.
@@ -889,9 +929,18 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       return getCycle(cycleId);
     },
 
-    /** Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. */
-    unplanTicket({ cycleId, number }: CycleTicketInput): Cycle {
-      unplanFrom(changeableCycle(cycleId), number);
+    /**
+     * Takes Ticket `number` out of Cycle `cycleId`, back to the Backlog. With
+     * `withChildren`, an Epic leaves together with its non-archived children
+     * in that Cycle, all or nothing.
+     */
+    unplanTicket({ cycleId, number, withChildren }: CycleTicketInput): Cycle {
+      const cycle = changeableCycle(cycleId);
+      if (withChildren) {
+        unplanEpicWithChildren(cycle, number);
+      } else {
+        unplanFrom(cycle, number);
+      }
       changes.publish({ type: 'cycle', id: cycleId });
       return getCycle(cycleId);
     },

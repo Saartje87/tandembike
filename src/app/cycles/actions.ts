@@ -79,11 +79,14 @@ export async function planTicket(input: {
 export async function unplanTicket(input: {
   cycleId: number;
   number: number;
+  /** Take the Epic out together with its live children in the Cycle. */
+  withChildren?: boolean;
 }): Promise<ActionResult> {
   return actionResult(() => {
     appTickets('user').unplanTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
+      withChildren: input?.withChildren === true,
     });
     revalidateProjects();
     return {};

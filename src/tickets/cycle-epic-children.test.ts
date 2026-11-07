@@ -188,3 +188,112 @@ describe('Planning an Epic with its children', () => {
     expect(changes).toContainEqual({ type: 'cycle', id: gamma.id });
   });
 });
+
+describe('Removing an Epic from a Cycle with its children', () => {
+  const planned = () => {
+    const s = setup();
+    s.tickets.planTicket({ cycleId: s.beta.id, number: s.epic.number });
+    return s;
+  };
+
+  it('unplans the Epic and every live child in the Cycle, Done ones included', () => {
+    const { tickets, beta, epic, child } = planned();
+    const a = child('Todo', beta.id);
+    const b = child('Done', beta.id);
+
+    tickets.unplanTicket({
+      cycleId: beta.id,
+      number: epic.number,
+      withChildren: true,
+    });
+
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+    expect(tickets.getTicket(a.number).cycle).toBeNull();
+    expect(tickets.getTicket(b.number).cycle).toBeNull();
+  });
+
+  it('leaves an archived child in the Cycle and a child elsewhere alone', () => {
+    const { tickets, beta, gamma, epic, child } = planned();
+    const archived = child('Todo', beta.id);
+    const live = child('Todo', beta.id);
+    const elsewhere = child('Todo', gamma.id);
+    tickets.archiveTicket(archived.number);
+
+    tickets.unplanTicket({
+      cycleId: beta.id,
+      number: epic.number,
+      withChildren: true,
+    });
+
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([archived.number]);
+    expect(tickets.getTicket(live.number).cycle).toBeNull();
+    expect(tickets.getCycle(gamma.id).ticketNumbers).toEqual([
+      elsewhere.number,
+    ]);
+  });
+
+  it('changes nothing when the Epic cannot be unplanned', () => {
+    const { tickets, beta, epic, child } = setup();
+    const a = child('Todo', beta.id);
+
+    const error = errorFrom(() =>
+      tickets.unplanTicket({
+        cycleId: beta.id,
+        number: epic.number,
+        withChildren: true,
+      }),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([a.number]);
+  });
+
+  it('refuses withChildren on a Ticket that is not an Epic', () => {
+    const { tickets, project, beta } = setup();
+    const plain = tickets.createTicket({
+      projectId: project.id,
+      title: 'Plain',
+      cycleId: beta.id,
+    });
+
+    const error = errorFrom(() =>
+      tickets.unplanTicket({
+        cycleId: beta.id,
+        number: plain.number,
+        withChildren: true,
+      }),
+    );
+
+    expect(error).toEqual(
+      new NotAllowedError(
+        `Ticket T${plain.number} is not an Epic. Only an Epic has children to take along.`,
+      ),
+    );
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([plain.number]);
+  });
+
+  it('unplans only the Epic without the option', () => {
+    const { tickets, beta, epic, child } = planned();
+    const a = child('Todo', beta.id);
+
+    tickets.unplanTicket({ cycleId: beta.id, number: epic.number });
+
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([a.number]);
+  });
+
+  it('announces the Cycle once', () => {
+    const { tickets, beta, epic, child } = planned();
+    child('Todo', beta.id);
+    child('Todo', beta.id);
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.unplanTicket({
+      cycleId: beta.id,
+      number: epic.number,
+      withChildren: true,
+    });
+
+    expect(changes).toEqual([{ type: 'cycle', id: beta.id }]);
+  });
+});
