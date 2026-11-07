@@ -105,41 +105,35 @@ const ConversationBell: FC<ConversationBellProps> = ({
   );
 };
 
-const needIcon: Record<NeedKind, IconName> = {
-  waiting: 'chat-bubble-left-ellipsis',
-  idle: 'hand-raised',
-  failed: 'exclamation-circle',
-  interrupted: 'pause-circle',
-  stalled: 'exclamation-triangle',
-  review: 'check-circle',
-  intake: 'inbox',
-};
-
-const needLabel: Record<NeedKind, string> = {
-  waiting: 'Waiting',
-  idle: 'Idle',
-  failed: 'Failed',
-  interrupted: 'Interrupted',
-  stalled: 'Stalled',
-  review: 'Review',
-  intake: 'Intake',
+/**
+ * How a Needs you row shows its kind: its icon, its label, and what it waits
+ * on when it has no live Conversation whose line says so.
+ */
+const needDisplay: Record<
+  NeedKind,
+  { icon: IconName; label: string; parked?: string }
+> = {
+  waiting: { icon: 'chat-bubble-left-ellipsis', label: 'Waiting' },
+  idle: { icon: 'hand-raised', label: 'Idle' },
+  failed: { icon: 'exclamation-circle', label: 'Failed' },
+  interrupted: { icon: 'pause-circle', label: 'Interrupted' },
+  stalled: {
+    icon: 'exclamation-triangle',
+    label: 'Stalled',
+    parked: 'no Claim and no PR',
+  },
+  review: { icon: 'check-circle', label: 'Review', parked: 'PR open' },
+  intake: { icon: 'inbox', label: 'Intake', parked: 'to triage' },
 };
 
 /** A row's second line: its parts that are there, joined by a dot. */
 const lineOf = (...parts: (string | false | null | undefined)[]) =>
   parts.filter(Boolean).join(' · ');
 
-/** What a Needs you row without a live Conversation waits on. */
-const parkedDetail: Partial<Record<NeedKind, string>> = {
-  review: 'PR open',
-  intake: 'to triage',
-  stalled: 'no Claim and no PR',
-};
-
 /** A Needs you row's second line: what it waits on, and for how long. */
 function needLine(row: NeedRow, waited: string): string {
-  const detail = row.live?.line ?? parkedDetail[row.kind];
-  return lineOf(needLabel[row.kind], detail, waited);
+  const { label, parked } = needDisplay[row.kind];
+  return lineOf(label, row.live?.line ?? parked, waited);
 }
 
 /** A queued row's second line: its place, and what blocks it. */
@@ -338,7 +332,7 @@ export const Cockpit: FC<CockpitProps> = ({
         key={row.number}
         ticket={row}
         href={hrefOf(row.number)}
-        icon={needIcon[row.kind]}
+        icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">

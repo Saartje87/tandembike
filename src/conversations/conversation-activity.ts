@@ -20,7 +20,11 @@ export type LiveConversation = {
 };
 
 export type ConversationActivity = {
-  /** Per Ticket number, its live Conversation, or its newest that needs the User. */
+  /**
+   * Per Ticket number, its running or waiting Conversation, else its newest
+   * Conversation when that one is idle or interrupted (an error when it ended
+   * in one); none otherwise.
+   */
   live: Record<number, LiveConversation>;
   /**
    * Per Ticket number, the USD cost summed over all its Conversations, closed

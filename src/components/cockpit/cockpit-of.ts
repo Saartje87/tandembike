@@ -108,7 +108,7 @@ const latestPullRequest = (ticket: Ticket): string | null =>
  */
 const liveKind: Record<
   Exclude<LiveConversation['state'], 'running'>,
-  NeedKind
+  Exclude<NeedKind, 'intake'>
 > = {
   waiting: 'waiting',
   idle: 'idle',
@@ -119,7 +119,7 @@ const liveKind: Record<
 const needRowOf = (
   ticket: Ticket,
   live: LiveConversation | undefined,
-  kind: NeedKind,
+  kind: Exclude<NeedKind, 'intake'>,
 ): NeedRow => ({
   ...rowOf(ticket),
   kind,
@@ -131,8 +131,11 @@ const needRowOf = (
 
 /** An Intake Ticket as a Needs you row: waiting since it was filed. */
 const intakeRowOf = (ticket: Ticket): NeedRow => ({
-  ...needRowOf(ticket, undefined, 'intake'),
+  ...rowOf(ticket),
+  kind: 'intake',
+  live: undefined,
   since: ticket.createdAt,
+  pullRequest: null,
   triageLabel: ticket.labels.find(isTriageStateLabel) ?? null,
 });
 
