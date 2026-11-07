@@ -39,6 +39,11 @@ export type TicketCardProps = {
   filter?: BoardFilter;
   /** Makes the whole card the drag source on the Board. */
   cardRef?: (element: Element | null) => void;
+  /**
+   * Whether the Ticket is open in the drawer over the Board, which rings the
+   * card. Defaults to false.
+   */
+  open?: boolean;
   /** Whether the card is selected. Leave it out for a card that cannot be. */
   selected?: boolean;
   /** Whether any card on the Board is selected, which shows every checkbox. */
@@ -176,7 +181,8 @@ const CriteriaProgress: FC<CriteriaProgressProps> = ({
  * A normal Ticket on the Board: its number, title, a badge in its Epic's
  * colour linking to it, whether it is blocked (unless it is Done), labels and
  * acceptance-criteria progress. Through `cardRef` the whole card is dragged.
- * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`).
+ * It is highlighted for a moment after the Ticket changes (see `LiveUpdates`),
+ * and ringed while it is open in the drawer (T379).
  * While it carries a selection in a drag it shows how many Tickets that is,
  * and the other selected cards are dimmed in place (T243).
  */
@@ -185,6 +191,7 @@ export const TicketCard: FC<TicketCardProps> = ({
   boardPath,
   filter,
   cardRef,
+  open = false,
   selected,
   selecting = false,
   onSelect,
@@ -251,6 +258,7 @@ export const TicketCard: FC<TicketCardProps> = ({
         // Focusable from the first render when it can be dragged, so Space
         // picks it up; dnd-kit would add this only on a later frame.
         tabIndex={cardRef ? 0 : undefined}
+        aria-current={open ? 'true' : undefined}
         data-changed={changed ? '' : undefined}
         data-selecting={selecting ? '' : undefined}
         data-carried-along={carriedAlong ? '' : undefined}

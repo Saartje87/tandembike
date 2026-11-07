@@ -1018,6 +1018,113 @@ describe('Board with archived Tickets', () => {
   });
 });
 
+describe('The open Ticket (T379)', () => {
+  const header = ticket({
+    number: 4,
+    title: 'Fix the header',
+    labels: ['bug', 'ready-for-agent'],
+  });
+  const footer = ticket({
+    number: 7,
+    title: 'Fix the footer',
+    status: 'In progress',
+  });
+  const checkout = ticket({
+    number: 20,
+    title: 'Checkout',
+    type: 'Epic',
+    color: 'teal',
+  });
+
+  /** The Board's Ticket cards and Epic chips marked as the open Ticket. */
+  const marked = () =>
+    [...document.querySelectorAll('[aria-current="true"]')].map(
+      (element) => element.textContent?.match(/T\d+/)?.[0],
+    );
+
+  it("marks the open Ticket's card and no other", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[header, footer]}
+        epics={[checkout]}
+        openTicket={7}
+      />,
+    );
+
+    expect(cardOf(7)).toHaveAttribute('aria-current', 'true');
+    expect(marked()).toEqual(['T7']);
+  });
+
+  it('marks no card without an open Ticket', () => {
+    renderWithTheme(
+      <Board project={project} tickets={[header, footer]} epics={[checkout]} />,
+    );
+
+    expect(marked()).toEqual([]);
+  });
+
+  it('moves the mark with the open Ticket and drops it when the drawer closes', () => {
+    const { rerender } = renderWithTheme(
+      <Board project={project} tickets={[header, footer]} openTicket={4} />,
+    );
+
+    rerender(
+      <Board project={project} tickets={[header, footer]} openTicket={7} />,
+    );
+    expect(marked()).toEqual(['T7']);
+
+    rerender(<Board project={project} tickets={[header, footer]} />);
+    expect(marked()).toEqual([]);
+  });
+
+  it("marks an open Epic's chip", () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[header, footer]}
+        epics={[checkout]}
+        openTicket={20}
+      />,
+    );
+
+    const chip = within(screen.getByRole('list', { name: 'Epics' })).getByRole(
+      'listitem',
+    );
+    expect(chip).toHaveAttribute('aria-current', 'true');
+    expect(marked()).toEqual(['T20']);
+  });
+
+  it('keeps the mark on a Board filter', () => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[header, footer]}
+        openTicket={4}
+        filter={{ ...noBoardFilter, labels: ['bug'] }}
+      />,
+    );
+
+    expect(marked()).toEqual(['T4']);
+  });
+
+  it.each([
+    ['the Backlog', null],
+    ["a Cycle's Board", 3],
+  ])("marks the open Ticket's card on %s", (_, cycleId) => {
+    renderWithTheme(
+      <Board
+        project={project}
+        tickets={[header, footer]}
+        cycleId={cycleId}
+        openTicket={4}
+      />,
+    );
+
+    expect(marked()).toEqual(['T4']);
+  });
+});
+
 describe('Dropping a card on an Epic', () => {
   const child = (number: number, title: string) => ({
     number,

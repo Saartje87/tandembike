@@ -109,6 +109,43 @@ describe('EpicChips', () => {
     );
   });
 
+  it('marks the chip of the Epic open in the drawer (T379)', () => {
+    renderWithTheme(
+      <EpicChips
+        projectId={1}
+        boardPath="/project/1"
+        openTicket={2}
+        epics={[
+          epic({ number: 4, title: 'Checkout' }),
+          epic({ number: 2, title: 'Search' }),
+        ]}
+      />,
+    );
+
+    const items = within(
+      screen.getByRole('list', { name: 'Epics' }),
+    ).getAllByRole('listitem');
+    expect(items.map((item) => item.getAttribute('aria-current'))).toEqual([
+      null,
+      'true',
+    ]);
+  });
+
+  it('marks no chip when no Epic is open', () => {
+    renderWithTheme(
+      <EpicChips
+        projectId={1}
+        boardPath="/project/1"
+        openTicket={9}
+        epics={[epic({ number: 4, title: 'Checkout' })]}
+      />,
+    );
+
+    expect(
+      within(screen.getByRole('list', { name: 'Epics' })).getByRole('listitem'),
+    ).not.toHaveAttribute('aria-current');
+  });
+
   it('hides done Epics until the User asks for them', async () => {
     renderWithTheme(
       <EpicChips

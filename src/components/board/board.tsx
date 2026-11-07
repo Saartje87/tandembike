@@ -109,8 +109,9 @@ export type BoardProps = {
    */
   epics?: Ticket[];
   /**
-   * The number of the Ticket open in the drawer over the Board, if any. When
-   * it is archived, the Board starts with the archived Tickets shown.
+   * The number of the Ticket open in the drawer over the Board, if any. Its
+   * card or Epic chip is ringed (T379). When it is archived, the Board starts
+   * with the archived Tickets shown.
    */
   openTicket?: number;
   /**
@@ -174,6 +175,8 @@ type LaneColumnProps = {
   /** Whether the Ticket sits in Review now, given its live Conversation. */
   inReview: (ticket: Ticket) => boolean;
   tickets: Ticket[];
+  /** The number of the Ticket open in the drawer, whose card is ringed. */
+  openTicket?: number;
   selected: ReadonlySet<number>;
   /** The card carrying the selection in a drag under way, if any. */
   carrier?: number;
@@ -202,6 +205,7 @@ type TicketListProps = Pick<
   LaneColumnProps,
   | 'boardPath'
   | 'filter'
+  | 'openTicket'
   | 'selected'
   | 'carrier'
   | 'onSelect'
@@ -223,6 +227,7 @@ const TicketList: FC<TicketListProps> = ({
   tickets,
   boardPath,
   filter,
+  openTicket,
   selected,
   carrier,
   onSelect,
@@ -241,6 +246,7 @@ const TicketList: FC<TicketListProps> = ({
             index={index}
             boardPath={boardPath}
             filter={filter}
+            open={ticket.number === openTicket}
             selected={selected.has(ticket.number)}
             selecting={selected.size > 0}
             carries={
@@ -306,6 +312,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   placementOf,
   inReview,
   tickets,
+  openTicket,
   selected,
   carrier,
   highlighted,
@@ -321,6 +328,7 @@ const LaneColumn: FC<LaneColumnProps> = ({
   const cardProps = {
     boardPath,
     filter,
+    openTicket,
     selected,
     carrier,
     inReview,
@@ -468,6 +476,7 @@ type SortableTicketCardProps = {
   index: number;
   boardPath: string;
   filter: BoardFilter;
+  open: boolean;
   selected: boolean;
   selecting: boolean;
   /** How many Tickets a drag of the card carries: the selection, if it is in one. */
@@ -488,6 +497,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
   index,
   boardPath,
   filter,
+  open,
   selected,
   selecting,
   carries,
@@ -511,6 +521,7 @@ const SortableTicketCard: FC<SortableTicketCardProps> = ({
       boardPath={boardPath}
       filter={filter}
       cardRef={ref}
+      open={open}
       selected={selected}
       selecting={selecting}
       carryCount={carrying ? carries : 1}
@@ -1296,6 +1307,7 @@ export const Board: FC<BoardProps> = ({
           cycleId={cycleId ?? undefined}
           boardPath={boardPath}
           filter={filter}
+          openTicket={openTicket}
           hideDone={typeof cycleId !== 'number'}
           onCreated={setCreated}
           onMerged={markEpicMerged}
@@ -1312,6 +1324,7 @@ export const Board: FC<BoardProps> = ({
                 placementOf={placementOf}
                 inReview={inReview}
                 tickets={shownLane(lane)}
+                openTicket={openTicket}
                 selected={selectedOnBoard}
                 carrier={carrier}
                 highlighted={overLane === lane}
