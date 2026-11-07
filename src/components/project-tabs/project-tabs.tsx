@@ -21,6 +21,7 @@ import { useForm } from 'react-hook-form';
 import { createCycle } from '../../app/cycles/actions';
 import {
   boardFilterOf,
+  cockpitPath,
   cyclePath,
   cyclesPath,
   filteredBoardPath,
@@ -40,8 +41,11 @@ export type ProjectTabsProps = {
   openTicketCounts: OpenTicketCounts;
 };
 
-/** A tab of the Project: the Backlog, a Cycle by id, the History or Settings. */
-type CurrentTab = 'backlog' | 'history' | 'settings' | number;
+/**
+ * A tab of the Project: the Backlog, the Cockpit, a Cycle by id, the History
+ * or Settings.
+ */
+type CurrentTab = 'backlog' | 'cockpit' | 'history' | 'settings' | number;
 
 /**
  * The tab on screen, from the URL's `segments` below the Project: an
@@ -51,6 +55,9 @@ function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
   const [segment, cycleId] = segments;
   if (segment === undefined) {
     return 'backlog';
+  }
+  if (segment === 'cockpit') {
+    return 'cockpit';
   }
   if (segment === 'cycles') {
     return 'history';
@@ -166,9 +173,9 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 };
 
 /**
- * A Project's views as tabs: its Backlog, its Active Cycle, each Prepared
- * one, the History of archived ones and its Settings, with a New Cycle
- * button that adds one. The Backlog's and each Cycle's tab shows its open
+ * A Project's views as tabs: its Backlog, its Cockpit, its Active Cycle,
+ * each Prepared one, the History of archived ones and its Settings, with a
+ * New Cycle button that adds one. The Backlog's and each Cycle's tab shows its open
  * Tickets in a badge, whatever the Board filter. It marks the tab on screen
  * from the URL, so the Project's layout can keep it mounted across its tabs,
  * and carries the Board filter in the URL from one Board's tab to another's.
@@ -195,6 +202,12 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           openTickets={openTicketCounts.backlog}
         >
           Backlog
+        </ProjectTab>
+        <ProjectTab
+          href={cockpitPath(projectId)}
+          current={current === 'cockpit'}
+        >
+          Cockpit
         </ProjectTab>
         {openCyclesInOrder(cycles).map((cycle) => (
           <ProjectTab

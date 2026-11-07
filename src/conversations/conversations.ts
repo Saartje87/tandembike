@@ -125,7 +125,7 @@ const noRepositoryPath = {
 };
 
 /** How many Start runs a Project allows at once (T588 settings). */
-const startRunLimit = (settings: {
+export const startRunLimit = (settings: {
   parallelRuns: boolean;
   maxConcurrentRuns: number;
 }) => (settings.parallelRuns ? settings.maxConcurrentRuns : 1);

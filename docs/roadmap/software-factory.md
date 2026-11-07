@@ -1,6 +1,6 @@
 # Roadmap: Tandembike as a local software factory
 
-Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below. Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
+Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the Cockpit (Epic T1102), grilled and prototyped (T1103). Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
 
 ## Goal
 
@@ -53,6 +53,18 @@ Children of a Todo Epic that carry `ready-for-agent` stay in the Todo lane, mark
 
 "For human" means `ready-for-human`, work the User does; it is not "needs the User now", which is the Action needed section.
 
+### The Cockpit (2026-11-07)
+
+Five Lanes over three Statuses, with three sections in In progress, made the Board hard to read: what needs the User was spread over Action needed, Review, Intake and Epic badges, and the Cycle's progress over seven groups. A grilling session and a prototype (T1103) settled a separate view, the **Cockpit** (Epic T1102), a Project tab beside the Board:
+
+- It shows the Active Cycle in one column, ordered by what needs the User: **Needs you** (Action needed, then Review, then Intake, each group closable, oldest first), **In flight** (one row per Epic, or per Ticket outside one, with its status line, elapsed time and cost), then **Your work** (`ready-for-human`), **Queued** and **Done**, closed until opened and shown as greyed rows of the same shape.
+- Intake in Needs you also covers the Backlog, since runs file their feedback Tickets outside any Cycle (see "Feedback as Tickets").
+- It offers no actions in its lists. A run waiting on the User shows a bell that opens its Conversation, so the User decides with the run's context in view; a row's title opens the Ticket, where its state is set. Rejected: Allow and Deny in the list, which would approve on a one-line rule; Merged, Back to Todo and triage controls in the list, which the Ticket drawer already offers.
+- It derives every place from the Board's Lane derivation, through one pure function over any Board's Tickets, so the two never disagree and the Board can reuse it.
+- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend and paused notice go there in phase 3, not on the Board header. The browser tab's title carries the Needs you count.
+
+The User expects the Cockpit's layout to replace the Board. That is a follow-up Epic (T1111), decided after the Cockpit has been used on a real Cycle: the Board also orders by drag (the Autopilot queue's priority), creates Tickets inline, filters, groups Epics and selects many Tickets.
+
 ### Status line on In progress cards
 
 Derived from the latest transcript entry of the Ticket's live Conversation (`running` or `waiting`, newest first) by a pure function: a tool entry reads "Reading src/x.tsx", "Editing …", "Running npm run check", "Searching …", "Updating T42"; an agent text entry gives its first sentence; `waiting` shows the question or the permission rule in a few words; `interrupted` and errors say why. Tool names are humanised by an explicit mapping (Read, Edit, Write, Bash with its description, Grep, Glob, Skill, Agent, the Tandembike tools by verb); an unmapped tool shows its bare name and first input value. Elapsed time counts from the run's start (the User's latest message in the Conversation) and ticks client-side once a minute. Shown on Ticket cards in the In progress Lane and on Epic cards, nowhere else. No partial-message streaming, no new SDK plumbing: the runner already stores every tool call and agent text as a transcript entry and the events route announces each. One schema change (2026-11-07): a tool entry today stores the tool name and its input as one text, cut at a fixed length, so the status line would parse truncated JSON. The entry gains two columns, the tool name and the raw input as JSON capped at a few kilobytes; the status line is derived at read time, so the humanising mapping can change without a migration. Part of T1066.
@@ -69,7 +81,7 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 
 ### Autopilot dispatch
 
-- A per-Project switch, off by default, on the Board header and in the Project settings. It persists, so it survives a server restart. Starting a Cycle does not flip it on. Turning it off pauses new dispatches and does not stop running runs.
+- A per-Project switch, off by default, on the Cockpit header (2026-11-07, was the Board header) and in the Project settings. It persists, so it survives a server restart. Starting a Cycle does not flip it on. Turning it off pauses new dispatches and does not stop running runs.
 - Continuous while on: immediately on `start_cycle`, and again whenever something becomes eligible (a Ticket planned in mid-Cycle, a Blocker reaching Done, a run slot freeing up). Rejected: one-shot dispatch at Cycle start, which strands Blockers; a manual "run once" button.
 - Fills the free slots under the existing parallel runs cap (`parallelRuns` and `maxConcurrentRuns`), in the Cycle Board's Todo lane order, so `sort_lane` is the priority mechanism. No extra budget or per-Cycle cap in version one. Parallel runs off gives a serial factory.
 - Starts the same Start Conversation the Start button does, with the Project's Start command or Start command for Epics, and the same brief. The Conversation records Started by Autopilot; the Glossary's "only the User starts a Conversation" and ADR 0019 are revised for the second starter. Rejected: a new intent with its own brief.
@@ -81,7 +93,7 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 - Agents may feed the factory (2026-11-07). An Agent run can make work eligible over MCP: `/to-tickets` creates Epics and children already labelled `ready-for-agent`, a New Ticket Conversation defaults to the Cycle it was started from, and any run can plan or label. So with Autopilot on, a spec run ends in build runs, which is the point. This revises ADR 0019's rule that no Agent can start a run: the Autopilot switch is the User's standing consent, flipped only through a Server Action, and the run cap and the spend ceiling bound what that consent buys. Rejected: counting only labels the User set, read from Activity, which would make every `/to-tickets` result need a manual re-label.
 - Per Project only; no global cap across Projects in version one.
 
-**Spend ceiling** (2026-11-07, replacing "no budget cap in version one"). The spike spent about $1.60 on a one-line change, the classifier is permissive, and the factory runs while the User is away, so one number per Project is the kill switch. The ceiling is a Project setting in dollars, next to the Autopilot switch, with no default; Autopilot cannot be turned on while the Project has none. It is measured against the total cost of Autopilot-started Conversations on the Active Cycle's Tickets, resumes included, so it resets with each Cycle and hand-started runs do not count. When crossed, dispatch pauses, the switch stays on, the Board header shows "paused: over ceiling" with the amount, and raising the ceiling or starting the next Cycle resumes it; running runs finish. The Cycle Board header shows the Cycle's Autopilot spend against the ceiling. Rejected: flipping the switch off, which loses the User's intent; a rolling per-Project total that never resets; counting every Conversation in the Cycle.
+**Spend ceiling** (2026-11-07, replacing "no budget cap in version one"). The spike spent about $1.60 on a one-line change, the classifier is permissive, and the factory runs while the User is away, so one number per Project is the kill switch. The ceiling is a Project setting in dollars, next to the Autopilot switch, with no default; Autopilot cannot be turned on while the Project has none. It is measured against the total cost of Autopilot-started Conversations on the Active Cycle's Tickets, resumes included, so it resets with each Cycle and hand-started runs do not count. When crossed, dispatch pauses, the switch stays on, the Cockpit header shows "paused: over ceiling" with the amount, and raising the ceiling or starting the next Cycle resumes it; running runs finish. The Cockpit header shows the Cycle's Autopilot spend against the ceiling (2026-11-07, both were on the Board header). Rejected: flipping the switch off, which loses the User's intent; a rolling per-Project total that never resets; counting every Conversation in the Cycle.
 
 ### Agent run mode
 
@@ -143,10 +155,10 @@ Docs and skills only, no app change.
 Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
 
 - Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
-- Autopilot switch, stored per Project, on the Board header and settings, with the spend ceiling beside it and required to turn the switch on.
+- Autopilot switch, stored per Project, on the Cockpit header and settings, with the spend ceiling beside it and required to turn the switch on.
 - The dispatcher: eligibility query (an Epic needs a child), lane-order selection, slot accounting against the existing cap, the ceiling check, one serialised evaluate step, triggered by events and on startup; on startup it resumes Autopilot's interrupted Conversations first.
 - Conversations record Started by; the header shows it. Autopilot's resume reply is recorded as sent by Autopilot.
-- Action needed badge count, the paused-over-ceiling notice and the Cycle's spend against the ceiling on the Board header.
+- The paused-over-ceiling notice and the Cycle's spend against the ceiling on the Cockpit header; the Needs you count is already in the Cockpit's tab title.
 
 Decision records: ADR "Autopilot dispatches the Active Cycle's ready work", recording that Agents may feed it and the ceiling; ADR "Agent run mode is a Project setting" superseding ADR 0021's pinned `default`; ADR 0019 amended for the second starter and for Agent-fed work; Glossary: Autopilot, Eligible, Agent run mode, Started by, Spend ceiling.
 
