@@ -497,6 +497,23 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     });
   }
 
+  /** Refuses `number` unless it is an existing Epic, which has children to take along. */
+  function checkEpicForChildren(number: number) {
+    const epic = db
+      .select({ type: tickets.type })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (!epic) {
+      throw new NotFoundError(`There is no Ticket T${number}.`);
+    }
+    if (epic.type !== 'Epic') {
+      throw new NotAllowedError(
+        `Ticket T${number} is not an Epic. Only an Epic has children to take along.`,
+      );
+    }
+  }
+
   /**
    * Plans Epic `number` into changeable `cycle` with every non-archived child
    * not in it yet, moving children out of their other open Cycles, in one
@@ -504,19 +521,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
    */
   function planEpicWithChildren(cycle: CycleRow, number: number): number[] {
     return db.transaction(() => {
-      const epic = db
-        .select({ type: tickets.type })
-        .from(tickets)
-        .where(eq(tickets.number, number))
-        .get();
-      if (!epic) {
-        throw new NotFoundError(`There is no Ticket T${number}.`);
-      }
-      if (epic.type !== 'Epic') {
-        throw new NotAllowedError(
-          `Ticket T${number} is not an Epic. Only an Epic has children to take along.`,
-        );
-      }
+      checkEpicForChildren(number);
       const touched = new Set<number>();
       const children = db
         .select({ number: tickets.number })
@@ -564,23 +569,11 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   /**
    * Takes Epic `number` and its non-archived children in changeable `cycle`
    * out of it in one transaction; the Epic is unplanned last, so a refusal
-   * rolls the children back.
+   * rolls the children back. Returns the ids of the Cycles it changed.
    */
-  function unplanEpicWithChildren(cycle: CycleRow, number: number) {
-    db.transaction(() => {
-      const epic = db
-        .select({ type: tickets.type })
-        .from(tickets)
-        .where(eq(tickets.number, number))
-        .get();
-      if (!epic) {
-        throw new NotFoundError(`There is no Ticket T${number}.`);
-      }
-      if (epic.type !== 'Epic') {
-        throw new NotAllowedError(
-          `Ticket T${number} is not an Epic. Only an Epic has children to take along.`,
-        );
-      }
+  function unplanEpicWithChildren(cycle: CycleRow, number: number): number[] {
+    return db.transaction(() => {
+      checkEpicForChildren(number);
       const children = db
         .select({ number: tickets.number })
         .from(cycleTickets)
@@ -598,6 +591,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         unplanFrom(cycle, child.number);
       }
       unplanFrom(cycle, number);
+      return [cycle.id];
     });
   }
 
@@ -918,14 +912,15 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     planTicket({ cycleId, number, withChildren }: CycleTicketInput): Cycle {
       const cycle = changeableCycle(cycleId);
+      let touched = [cycleId];
       if (withChildren) {
-        for (const id of planEpicWithChildren(cycle, number)) {
-          changes.publish({ type: 'cycle', id });
-        }
-        return getCycle(cycleId);
+        touched = planEpicWithChildren(cycle, number);
+      } else {
+        planInto(cycle, number);
       }
-      planInto(cycle, number);
-      changes.publish({ type: 'cycle', id: cycleId });
+      for (const id of touched) {
+        changes.publish({ type: 'cycle', id });
+      }
       return getCycle(cycleId);
     },
 
@@ -936,12 +931,15 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      */
     unplanTicket({ cycleId, number, withChildren }: CycleTicketInput): Cycle {
       const cycle = changeableCycle(cycleId);
+      let touched = [cycleId];
       if (withChildren) {
-        unplanEpicWithChildren(cycle, number);
+        touched = unplanEpicWithChildren(cycle, number);
       } else {
         unplanFrom(cycle, number);
       }
-      changes.publish({ type: 'cycle', id: cycleId });
+      for (const id of touched) {
+        changes.publish({ type: 'cycle', id });
+      }
       return getCycle(cycleId);
     },
 

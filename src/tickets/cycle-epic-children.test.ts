@@ -232,6 +232,22 @@ describe('Removing an Epic from a Cycle with its children', () => {
     ]);
   });
 
+  it('announces the Cycle once, not each child', () => {
+    const { tickets, beta, epic, child } = planned();
+    child('Todo', beta.id);
+    child('Todo', beta.id);
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.unplanTicket({
+      cycleId: beta.id,
+      number: epic.number,
+      withChildren: true,
+    });
+
+    expect(changes).toEqual([{ type: 'cycle', id: beta.id }]);
+  });
+
   it('changes nothing when the Epic cannot be unplanned', () => {
     const { tickets, beta, epic, child } = setup();
     const a = child('Todo', beta.id);
