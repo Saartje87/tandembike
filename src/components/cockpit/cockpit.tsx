@@ -33,6 +33,8 @@ import * as styles from './cockpit.css';
 import {
   type CockpitTicket,
   cockpitOf,
+  type EpicChildState,
+  type EpicRow,
   type InFlightRow,
   type NeedKind,
   type NeedRow,
@@ -184,64 +186,156 @@ type TicketRowProps = {
   line: string;
   /** Greyed out, for work that does not need the User now. */
   muted?: boolean;
+  /** Shown beside the title, such as an Epic's children bar. */
+  beside?: ReactNode;
   end?: ReactNode;
+  /** Under the row, opened from it: an Epic's children. */
+  details?: ReactNode;
 };
 
-/** One Ticket as a row: the same shape in every list of the Cockpit. */
+/**
+ * One Ticket as a row: the same shape in every list of the Cockpit, edged in
+ * its Epic's colour, or its own for an Epic. With `details`, the row opens
+ * and closes on itself to show them.
+ */
 const TicketRow: FC<TicketRowProps> = ({
   ticket,
   href,
   icon,
   line,
   muted = false,
+  beside,
   end,
-}) => (
-  <Box
-    asChild
-    paddingBlock={2}
-    paddingInline={3}
-    borderRadius={2}
-    backgroundColor={muted ? modeColors.sunken : modeColors.raised}
-    boxShadow={muted ? undefined : 1}
-    className={ticket.epic ? styles.epicEdge[ticket.epic.color] : styles.edge}
-  >
-    <li>
-      <Inline gap={3} alignY="center" alignX="between">
-        <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
-          <Icon
-            name={icon}
-            size="small"
-            color={muted ? modeColors.textMuted : undefined}
-          />
-          <Text fontFamily="mono" fontSize="small" color="muted">
-            T{ticket.number}
-          </Text>
-          <Stack gap={0} minInlineSize={0} flex={1}>
-            <Inline gap={2} alignY="center">
-              <Text
-                truncate
-                fontWeight={muted ? 'normal' : 'medium'}
-                color={muted ? 'muted' : undefined}
-              >
-                <AppLink href={href} intent="inherit">
-                  {ticket.title}
-                </AppLink>
-              </Text>
-              {ticket.epic && (
-                <Tag className={tinted[ticket.epic.color]}>
-                  T{ticket.epic.number} {ticket.epic.title}
-                </Tag>
-              )}
-            </Inline>
-            <Text truncate fontSize="small" color="muted">
-              {line}
+  details,
+}) => {
+  const color = ticket.epic?.color ?? ticket.color;
+  const content = (
+    <Inline gap={3} alignY="center" alignX="between">
+      <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
+        <Icon
+          name={icon}
+          size="small"
+          color={muted ? modeColors.textMuted : undefined}
+        />
+        <Text fontFamily="mono" fontSize="small" color="muted">
+          T{ticket.number}
+        </Text>
+        <Stack gap={0} minInlineSize={0} flex={1}>
+          <Inline gap={2} alignY="center">
+            <Text
+              truncate
+              fontWeight={muted ? 'normal' : 'medium'}
+              color={muted ? 'muted' : undefined}
+            >
+              <AppLink href={href} intent="inherit">
+                {ticket.title}
+              </AppLink>
             </Text>
-          </Stack>
-        </Inline>
-        {end}
+            {ticket.epic && (
+              <Tag className={tinted[ticket.epic.color]}>
+                T{ticket.epic.number} {ticket.epic.title}
+              </Tag>
+            )}
+            {beside}
+          </Inline>
+          <Text truncate fontSize="small" color="muted">
+            {line}
+          </Text>
+        </Stack>
       </Inline>
-    </li>
-  </Box>
+      {end}
+    </Inline>
+  );
+  return (
+    <Box
+      asChild
+      paddingBlock={2}
+      paddingInline={3}
+      borderRadius={2}
+      backgroundColor={muted ? modeColors.sunken : modeColors.raised}
+      boxShadow={muted ? undefined : 1}
+      className={color ? styles.epicEdge[color] : styles.edge}
+    >
+      <li>
+        {details ? (
+          <details>
+            <Box asChild className={styles.summary}>
+              <summary>{content}</summary>
+            </Box>
+            {details}
+          </details>
+        ) : (
+          content
+        )}
+      </li>
+    </Box>
+  );
+};
+
+const childStateLabel: Record<EpicChildState, string> = {
+  done: 'done',
+  running: 'running',
+  'needs-you': 'needs you',
+  review: 'in review',
+  queued: 'queued',
+};
+
+type ChildrenBarProps = { row: EpicRow };
+
+/** An Epic's children as one mark each, coloured by where it stands. */
+const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
+  const done = row.children.filter(({ state }) => state === 'done').length;
+  return (
+    <Inline
+      gap={1}
+      alignY="center"
+      flexWrap="nowrap"
+      role="img"
+      aria-label={`${done} of ${row.children.length} children done`}
+    >
+      {row.children.map((child) => (
+        <span
+          key={child.number}
+          title={`T${child.number} ${child.title}: ${childStateLabel[child.state]}`}
+          className={`${styles.pip} ${styles.pipState[child.state]}`}
+        />
+      ))}
+      <Text fontSize="xsmall" color="muted">
+        {done}/{row.children.length}
+      </Text>
+    </Inline>
+  );
+};
+
+type EpicChildListProps = { row: EpicRow };
+
+/** An opened Epic row: each child with where it stands. */
+const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
+  <Stack
+    gap={1}
+    paddingBlockStart={2}
+    paddingInlineStart={6}
+    listStyle="none"
+    role="list"
+    asChild
+  >
+    <ul>
+      {row.children.map((child) => (
+        <li key={child.number}>
+          <Inline gap={2} alignY="center">
+            <span className={`${styles.pip} ${styles.pipState[child.state]}`} />
+            <Text fontSize="small" fontFamily="mono" color="muted">
+              T{child.number}
+            </Text>
+            <Text fontSize="small">{child.title}</Text>
+            <Text fontSize="small" color="muted">
+              {childStateLabel[child.state]}
+            </Text>
+          </Inline>
+        </li>
+      ))}
+    </ul>
+  </Stack>
 );
 
 type RowListProps = {
@@ -325,6 +419,7 @@ export const Cockpit: FC<CockpitProps> = ({
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
   const { needsYou } = cockpit;
+  const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
   useCountInTitle(needsYou.count);
   const needRows = (rows: NeedRow[]) =>
     rows.map((row) => (
@@ -407,13 +502,42 @@ export const Cockpit: FC<CockpitProps> = ({
         <section aria-label="In flight">
           <Inline gap={2} alignY="center">
             <Heading level={3}>In flight</Heading>
-            <Tag>{cockpit.inFlight.length}</Tag>
+            <Tag>{inFlightCount}</Tag>
           </Inline>
-          {cockpit.inFlight.length === 0 ? (
+          {inFlightCount === 0 ? (
             <Text color="muted">Nothing in flight.</Text>
           ) : (
             <Stack gap={1} listStyle="none" role="list" asChild>
               <ul>
+                {cockpit.epics.map((row) => (
+                  <TicketRow
+                    key={row.number}
+                    ticket={row}
+                    href={hrefOf(row.number)}
+                    icon="queue-list"
+                    line={inFlightLine(row, now)}
+                    beside={<ChildrenBar row={row} />}
+                    end={
+                      <Inline gap={2} alignY="center" flexWrap="nowrap">
+                        {row.childNeedsYou && (
+                          <Tag
+                            intent="warning"
+                            startSlot={<Icon name="arrow-up" size="small" />}
+                          >
+                            needs you
+                          </Tag>
+                        )}
+                        {row.pullRequest && (
+                          <PullRequestLink url={row.pullRequest} />
+                        )}
+                        <Tag intent={sectionIntent[row.section]}>
+                          {row.section}
+                        </Tag>
+                      </Inline>
+                    }
+                    details={<EpicChildList row={row} />}
+                  />
+                ))}
                 {cockpit.inFlight.map((row) => (
                   <TicketRow
                     key={row.number}

@@ -117,6 +117,35 @@ describe('CockpitPage', () => {
     expect(screen.queryByText('Ready, not planned')).toBe(null);
   });
 
+  it('shows an Epic In flight when its children are planned, though it is not', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Now' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Cockpit',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Epic rows',
+      epicNumber: epic.number,
+      cycleId: cycle.id,
+    });
+    tickets.updateTicket(child.number, { status: 'In progress' });
+    tickets.startCycle(cycle.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(<main>{await CockpitPage(pageProps(project.id))}</main>);
+
+    expect(
+      within(screen.getByRole('region', { name: 'In flight' })).getByRole(
+        'link',
+        { name: 'Cockpit' },
+      ),
+    ).toBeVisible();
+  });
+
   it('allows one Start run at a time without parallel runs', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

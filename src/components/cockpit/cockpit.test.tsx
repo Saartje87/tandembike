@@ -300,6 +300,120 @@ describe('Cockpit', () => {
     expect(within(section('Needs you')).getAllByText('3')[0]).toBeVisible();
   });
 
+  it("shows an In progress Epic In flight with its children's progress, opening to list them", async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({ cost: { 50: 1, 31: 0.5 } }),
+    );
+    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const childOf = (number: number, status: Ticket['status']) => ({
+      number,
+      title: `Child ${number}`,
+      status,
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+    renderCockpit([
+      ticket({
+        number: 50,
+        title: 'Cockpit',
+        type: 'Epic',
+        color: 'teal',
+        status: 'In progress',
+        claim,
+        children: [
+          childOf(30, 'Done'),
+          childOf(31, 'In progress'),
+          childOf(32, 'In progress'),
+        ],
+      }),
+      ticket({ number: 30, title: 'Child 30', status: 'Done', epic: link }),
+      ticket({
+        number: 31,
+        title: 'Child 31',
+        status: 'In progress',
+        claim,
+        epic: link,
+      }),
+      ticket({
+        number: 32,
+        title: 'Child 32',
+        status: 'In progress',
+        epic: link,
+      }),
+    ]);
+
+    const inFlight = section('In flight');
+    await vi.waitFor(() =>
+      expect(within(inFlight).getByText(/\$1\.50/)).toBeVisible(),
+    );
+    const epicRow = within(inFlight)
+      .getByRole('link', { name: 'Cockpit' })
+      .closest('li') as HTMLElement;
+    expect(
+      within(epicRow).getByRole('img', { name: '1 of 3 children done' }),
+    ).toBeVisible();
+    const summary = epicRow.querySelector('summary') as HTMLElement;
+    expect(within(summary).getByText('needs you')).toBeVisible();
+    expect(within(summary).getByText('Running')).toBeVisible();
+    expect(within(inFlight).queryByRole('link', { name: 'Child 31' })).toBe(
+      null,
+    );
+
+    await userEvent.click(
+      within(epicRow).getByRole('img', { name: '1 of 3 children done' }),
+    );
+
+    expect(epicRow.querySelector('details')).toHaveAttribute('open');
+    expect(
+      within(epicRow)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'T30Child 30done',
+      'T31Child 31running',
+      'T32Child 32needs you',
+    ]);
+    expect(
+      within(section('Action needed')).getByRole('link', { name: 'Child 32' }),
+    ).toBeVisible();
+  });
+
+  it('puts an Epic in Review in Needs you, opening the Epic, with no Merged button', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    renderCockpit([
+      ticket({
+        number: 50,
+        title: 'Cockpit',
+        type: 'Epic',
+        color: 'teal',
+        status: 'In progress',
+        externalReferences: ['https://github.com/owner/repo/pull/130'],
+        children: [
+          {
+            number: 30,
+            title: 'Child 30',
+            status: 'Done',
+            archived: false,
+            blockedBy: [],
+            blocked: false,
+          },
+        ],
+      }),
+      ticket({ number: 30, title: 'Child 30', status: 'Done', epic: link }),
+    ]);
+
+    const review = section('Review');
+    expect(
+      within(review).getByRole('link', { name: 'Cockpit' }),
+    ).toHaveAttribute('href', '/project/3/cockpit?ticket=50');
+    expect(within(review).getByRole('link', { name: 'PR #130' })).toBeVisible();
+    expect(within(review).queryAllByRole('button')).toEqual([]);
+  });
+
   it('offers no actions in Needs you, only links to the Tickets', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,

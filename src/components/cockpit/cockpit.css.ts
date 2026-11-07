@@ -28,3 +28,22 @@ export const chevron = style({
   transition: `transform ${vars.transition.fast}`,
   selectors: { 'details[open] > summary &': { transform: 'rotate(90deg)' } },
 });
+
+/** One child of an Epic in its row's children bar. */
+export const pip = style({
+  display: 'inline-block',
+  inlineSize: vars.space[3],
+  blockSize: vars.space[2],
+  borderRadius: vars.borderRadius[1],
+});
+
+export const pipState = styleVariants({
+  done: { backgroundColor: vars.colorRole.success.solid },
+  review: { backgroundColor: vars.colorRole.info.solid },
+  running: { backgroundColor: vars.colorRole.primary.solid },
+  'needs-you': { backgroundColor: vars.colorRole.warning.solid },
+  queued: {
+    backgroundColor: vars.colorRole.surface.sunken,
+    boxShadow: `inset 0 0 0 ${vars.borderWidth.thin} ${vars.colorRole.border.strong}`,
+  },
+});

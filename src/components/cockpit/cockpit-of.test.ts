@@ -385,4 +385,155 @@ describe('cockpitOf', () => {
 
     expect(cockpit.progress).toEqual({ done: 2, total: 4 });
   });
+
+  describe('Epics', () => {
+    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const child = (
+      number: number,
+      status: Ticket['status'],
+      title = `Child ${number}`,
+    ) => ({
+      number,
+      title,
+      status,
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+    const epic = (fields: Partial<Ticket> = {}) =>
+      ticket({
+        number: 50,
+        title: 'Cockpit',
+        type: 'Epic',
+        color: 'teal',
+        status: 'In progress',
+        claim,
+        children: [child(1, 'Done'), child(2, 'In progress'), child(3, 'Todo')],
+        ...fields,
+      });
+    const children = [
+      ticket({ number: 1, status: 'Done', epic: link }),
+      ticket({ number: 2, status: 'In progress', claim, epic: link }),
+      ticket({ number: 3, labels: ['ready-for-agent'], epic: link }),
+    ];
+
+    it('gives an In progress Epic an In flight row with its children, and its children none of their own', () => {
+      const cockpit = cockpitOf(
+        [
+          epic(),
+          ...children,
+          ticket({ number: 4, status: 'In progress', claim }),
+        ],
+        activity(),
+      );
+
+      expect(cockpit.epics).toMatchObject([
+        {
+          number: 50,
+          title: 'Cockpit',
+          color: 'teal',
+          section: 'Running',
+          childNeedsYou: false,
+          children: [
+            { number: 1, title: 'Child 1', state: 'done' },
+            { number: 2, title: 'Child 2', state: 'running' },
+            { number: 3, title: 'Child 3', state: 'queued' },
+          ],
+        },
+      ]);
+      expect(numbers(cockpit.inFlight)).toEqual([4]);
+    });
+
+    it('marks a child that needs you or is in review, and one on another Board by its Status', () => {
+      const [row] = cockpitOf(
+        [
+          epic({
+            children: [
+              child(2, 'In progress'),
+              child(5, 'In progress'),
+              child(6, 'In progress'),
+              child(7, 'In progress'),
+            ],
+          }),
+          ticket({ number: 2, status: 'In progress', claim, epic: link }),
+          ticket({ number: 5, status: 'In progress', epic: link }),
+          ticket({
+            number: 6,
+            status: 'In progress',
+            externalReferences: [pullRequest(60)],
+            epic: link,
+          }),
+        ],
+        activity(),
+      ).epics;
+
+      expect(row.children.map(({ number, state }) => [number, state])).toEqual([
+        [2, 'running'],
+        [5, 'needs-you'],
+        [6, 'review'],
+        [7, 'running'],
+      ]);
+      expect(row.childNeedsYou).toBe(true);
+    });
+
+    it('leaves out archived children', () => {
+      const [row] = cockpitOf(
+        [
+          epic({
+            children: [
+              child(2, 'In progress'),
+              { ...child(8, 'Todo'), archived: true },
+            ],
+          }),
+          children[1],
+        ],
+        activity(),
+      ).epics;
+
+      expect(numbers(row.children)).toEqual([2]);
+    });
+
+    it("sums the Epic's own cost and its children's, and carries its live Conversation", () => {
+      const live = liveConversation({ line: 'Editing cockpit.tsx' });
+      const [row] = cockpitOf(
+        [epic(), ...children],
+        activity({
+          live: { 50: live },
+          cost: { 50: 1, 1: 0.5, 2: 0.25, 9: 4 },
+        }),
+      ).epics;
+
+      expect(row).toMatchObject({ live, cost: 1.75 });
+    });
+
+    it('puts an Epic in Review or Action needed in Needs you too, in its colour', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({ claim: null, externalReferences: [pullRequest(70)] }),
+          ...children,
+        ],
+        activity(),
+      );
+
+      expect(cockpit.needsYou.review).toMatchObject([
+        { number: 50, color: 'teal', pullRequest: pullRequest(70) },
+      ]);
+      expect(cockpit.epics).toMatchObject([{ number: 50, section: 'Review' }]);
+      expect(cockpit.needsYou.count).toBe(1);
+    });
+
+    it('shows no Epic without a child on this Board, nor one that is not In progress', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({ number: 51, children: [child(9, 'In progress')] }),
+          epic({ number: 52, status: 'Todo', children: [child(3, 'Todo')] }),
+          children[2],
+        ],
+        activity(),
+      );
+
+      expect(cockpit.epics).toEqual([]);
+      expect(cockpit.needsYou.count).toBe(0);
+    });
+  });
 });

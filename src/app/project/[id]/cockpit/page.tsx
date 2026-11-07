@@ -42,6 +42,22 @@ function runSlotsOf(projectId: number) {
   return { used, cap };
 }
 
+/**
+ * Cycle `cycleId`'s Tickets, with the Project's Epics that are not planned
+ * themselves, so an Epic shows while its children are on the Cycle.
+ */
+function cycleTicketsWithEpics(projectId: number, cycleId: number) {
+  const tickets = appTickets('user');
+  const planned = tickets.listTickets({ projectId, cycleId });
+  const plannedNumbers = new Set(planned.map(({ number }) => number));
+  return [
+    ...planned,
+    ...tickets
+      .listTickets({ projectId, type: 'Epic' })
+      .filter(({ number }) => !plannedNumbers.has(number)),
+  ];
+}
+
 type NoActiveCycleProps = { projectId: number; prepared: Cycle[] };
 
 /** Why the Cockpit is empty, and where to start a Cycle. */
@@ -99,10 +115,7 @@ async function cockpitTab(
       <Cockpit
         projectId={project.id}
         cycle={active}
-        tickets={tickets.listTickets({
-          projectId: project.id,
-          cycleId: active.id,
-        })}
+        tickets={cycleTicketsWithEpics(project.id, active.id)}
         backlog={tickets.listTickets({ projectId: project.id, cycleId: null })}
         runSlots={runSlotsOf(project.id)}
       />

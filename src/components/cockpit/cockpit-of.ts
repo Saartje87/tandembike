@@ -3,6 +3,7 @@ import type {
   LiveConversation,
 } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
+import type { PaletteColor } from '../../tickets/palette';
 import type { Ticket } from '../../tickets/tickets';
 import { isTriageStateLabel } from '../../tickets/triage-labels';
 import {
@@ -15,7 +16,10 @@ import {
 export type CockpitTicket = Pick<
   Ticket,
   'number' | 'title' | 'epic' | 'updatedAt'
->;
+> & {
+  /** An Epic's own colour; `null` for a normal Ticket. */
+  color: PaletteColor | null;
+};
 
 /** An In progress Ticket: where it stands and what its run is doing. */
 export type InFlightRow = CockpitTicket & {
@@ -26,6 +30,23 @@ export type InFlightRow = CockpitTicket & {
   cost: number;
   /** Its latest pull request reference, or `null`. */
   pullRequest: string | null;
+};
+
+/** Where a child of an Epic stands, for its Epic's row. */
+export type EpicChildState =
+  | 'done'
+  | 'running'
+  | 'needs-you'
+  | 'review'
+  | 'queued';
+
+/** An In progress Epic: its own run, and how far its children are. */
+export type EpicRow = InFlightRow & {
+  color: PaletteColor;
+  /** Its unarchived children, in the Epic's order, each with its state. */
+  children: { number: number; title: string; state: EpicChildState }[];
+  /** Whether one of its children is in Needs you. */
+  childNeedsYou: boolean;
 };
 
 /** A ready-for-agent Todo Ticket, in the queue's order. */
@@ -69,7 +90,7 @@ export type DoneRow = CockpitTicket & {
   pullRequest: string | null;
 };
 
-/** A Board's Tickets as the Cockpit shows them. Epic rows (T1108) are to come. */
+/** A Board's Tickets as the Cockpit shows them. */
 export type Cockpit = {
   /** What waits on the User, each group longest waiting first. */
   needsYou: {
@@ -80,7 +101,12 @@ export type Cockpit = {
     /** How many Tickets wait on the User in all. */
     count: number;
   };
-  /** The Running Tickets, in Board order. */
+  /**
+   * The In progress Epics with a child on this Board, in Board order, in
+   * whatever section they are.
+   */
+  epics: EpicRow[];
+  /** The Running Tickets outside those Epics, in Board order. */
   inFlight: InFlightRow[];
   yourWork: CockpitTicket[];
   queued: QueuedRow[];
@@ -92,11 +118,20 @@ export type Cockpit = {
 const byPosition = (left: Ticket, right: Ticket) =>
   left.position - right.position || left.number - right.number;
 
-const rowOf = ({ number, title, epic, updatedAt }: Ticket): CockpitTicket => ({
+const rowOf = ({
   number,
   title,
   epic,
   updatedAt,
+  type,
+  color,
+}: Ticket): CockpitTicket => ({
+  number,
+  title,
+  epic,
+  updatedAt,
+  // Every Epic has a colour; grey only stands in should one lack it.
+  color: type === 'Epic' ? (color ?? 'grey') : null,
 });
 
 const latestPullRequest = (ticket: Ticket): string | null =>
@@ -157,6 +192,19 @@ export function cockpitOf(
   intakeElsewhere: Ticket[] = [],
 ): Cockpit {
   const shown = tickets.filter(isShown);
+  const onBoard = new Set(shown.map(({ number }) => number));
+  const epics = tickets
+    .filter(
+      (ticket) =>
+        ticket.type === 'Epic' &&
+        !ticket.archived &&
+        ticket.status === 'In progress' &&
+        ticket.children.some((child) => onBoard.has(child.number)),
+    )
+    .map((epic) => ({ epic, live: activity.live[epic.number] }))
+    .map((entry) => ({ ...entry, ...laneOf(entry.epic, entry.live) }))
+    .sort((left, right) => byPosition(left.epic, right.epic));
+  const shownEpics = new Set(epics.map(({ epic }) => epic.number));
   const resolved = new Set(
     tickets
       .filter((ticket) => ticket.archived || ticket.status === 'Done')
@@ -174,7 +222,14 @@ export function cockpitOf(
   const cost = (ticket: Ticket) => activity.cost[ticket.number] ?? 0;
   const inSection = (section: InProgressSection) =>
     inLane('In progress').filter((entry) => entry.section === section);
-  const actionNeeded = inSection('Action needed')
+  const epicsIn = (section: InProgressSection) =>
+    epics
+      .filter((entry) => entry.section === section)
+      .map(({ epic, live }) => ({ ticket: epic, live }));
+  const actionNeeded = [
+    ...inSection('Action needed'),
+    ...epicsIn('Action needed'),
+  ]
     .map(({ ticket, live }) =>
       needRowOf(
         ticket,
@@ -183,7 +238,7 @@ export function cockpitOf(
       ),
     )
     .sort(longestWaitingFirst);
-  const review = inSection('Review')
+  const review = [...inSection('Review'), ...epicsIn('Review')]
     .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
     .sort(longestWaitingFirst);
   const intake = [
@@ -194,6 +249,31 @@ export function cockpitOf(
   ]
     .map(intakeRowOf)
     .sort(longestWaitingFirst);
+  const needsYouNumbers = new Set(
+    [...actionNeeded, ...review].map(({ number }) => number),
+  );
+  const childStateOf = (child: Ticket['children'][number]): EpicChildState => {
+    const entry = placed.find(({ ticket }) => ticket.number === child.number);
+    if (!entry) {
+      // On another Board: its Status is all this Board knows.
+      return child.status === 'Done'
+        ? 'done'
+        : child.status === 'In progress'
+          ? 'running'
+          : 'queued';
+    }
+    if (entry.lane === 'Done') {
+      return 'done';
+    }
+    if (entry.lane !== 'In progress') {
+      return 'queued';
+    }
+    return entry.section === 'Running'
+      ? 'running'
+      : entry.section === 'Review'
+        ? 'review'
+        : 'needs-you';
+  };
 
   return {
     needsYou: {
@@ -202,13 +282,39 @@ export function cockpitOf(
       intake,
       count: actionNeeded.length + review.length + intake.length,
     },
-    inFlight: inSection('Running').map(({ ticket, live, section }) => ({
-      ...rowOf(ticket),
-      section: section ?? 'Running',
-      live,
-      cost: cost(ticket),
-      pullRequest: latestPullRequest(ticket),
-    })),
+    epics: epics.map(({ epic, live, section }) => {
+      const children = epic.children.filter(({ archived }) => !archived);
+      return {
+        ...rowOf(epic),
+        color: epic.color ?? 'grey',
+        section: section ?? 'Running',
+        live,
+        cost: [epic, ...children].reduce(
+          (total, { number }) => total + (activity.cost[number] ?? 0),
+          0,
+        ),
+        pullRequest: latestPullRequest(epic),
+        children: children.map((child) => ({
+          number: child.number,
+          title: child.title,
+          state: childStateOf(child),
+        })),
+        childNeedsYou: children.some(({ number }) =>
+          needsYouNumbers.has(number),
+        ),
+      };
+    }),
+    inFlight: inSection('Running')
+      .filter(
+        ({ ticket }) => !(ticket.epic && shownEpics.has(ticket.epic.number)),
+      )
+      .map(({ ticket, live, section }) => ({
+        ...rowOf(ticket),
+        section: section ?? 'Running',
+        live,
+        cost: cost(ticket),
+        pullRequest: latestPullRequest(ticket),
+      })),
     yourWork: inLane('For human').map(({ ticket }) => rowOf(ticket)),
     queued: inLane('Todo').map(({ ticket }) => ({
       ...rowOf(ticket),
