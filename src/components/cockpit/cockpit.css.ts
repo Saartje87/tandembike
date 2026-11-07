@@ -12,7 +12,10 @@ export const epicEdge = styleVariants(palette, ({ strong }) => ({
   borderInlineStart: `${vars.borderWidth.thick} solid ${strong}`,
 }));
 
-/** A list's heading, which opens and closes it, without the native marker. */
+/**
+ * A list's heading, which opens and closes it, without the native marker.
+ * Blocks has no Disclosure, so the lists are native `<details>` (T1112).
+ */
 export const summary = style({
   cursor: 'pointer',
   listStyle: 'none',
