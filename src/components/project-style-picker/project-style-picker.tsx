@@ -1,6 +1,14 @@
 'use client';
 
-import { Alert, Box, Button, Popover, Stack, Text } from '@blockle/blocks';
+import {
+  Alert,
+  Box,
+  Button,
+  Grid,
+  Popover,
+  Stack,
+  Text,
+} from '@blockle/blocks';
 import { type FC, useRef, useState } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
@@ -74,7 +82,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
               <Text asChild fontSize="small" fontWeight="strong">
                 <legend>Icon</legend>
               </Text>
-              <Box marginBlockStart={2} className={styles.icons}>
+              <Grid minColumnWidth={6} gap={1} marginBlockStart={2}>
                 <Button
                   type="button"
                   variant="ghost"
@@ -102,7 +110,7 @@ export const ProjectStylePicker: FC<ProjectStylePickerProps> = ({
                     <Icon name={icon} size="medium" />
                   </Button>
                 ))}
-              </Box>
+              </Grid>
             </fieldset>
           </Box>
           {error && <Alert intent="danger">{error}</Alert>}

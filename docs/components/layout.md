@@ -97,5 +97,21 @@ import { Grid, GridItem } from '@blockle/blocks';
 </Grid>;
 ```
 
-For layouts the 12-column grid cannot express (custom column templates, for
-example `1.5fr repeat(3, 1fr)`), write a `style()` with `display: grid`.
+For a row of equal items that wraps, such as a palette of icon buttons, set
+`minColumnWidth` (a `space` step, 1-8) instead. It replaces the 12-column
+template with `repeat(auto-fill, minmax(<space step>, 1fr))`: as many columns as
+fit, each at least that wide. It takes one value, not a responsive array.
+Children need no `GridItem`; a `GridItem` `colSpan` spans the auto-fill tracks.
+
+```tsx
+<Grid minColumnWidth={6} gap={1}>
+  {icons.map((icon) => (
+    <IconButton key={icon} label={icon}>
+      <Icon name={icon} />
+    </IconButton>
+  ))}
+</Grid>;
+```
+
+For layouts neither can express (custom column templates, for example
+`1.5fr repeat(3, 1fr)`), write a `style()` with `display: grid`.

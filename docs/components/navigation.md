@@ -44,7 +44,7 @@ the destination understandable in context.
 
 ## `Tabs`
 
-Checked against `@blockle/blocks-react` 3.4.0. `Tabs` shows one panel of
+Checked against `@blockle/blocks-react` 3.5.0. `Tabs` shows one panel of
 several. A `TabList` holds the `Tab`s and draws a moving indicator under the
 selected one; each `Tab` has a `TabPanel` with the same `value`.
 
