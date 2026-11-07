@@ -6,7 +6,11 @@ import { PageLoading } from '../../../components/page-loading/page-loading';
 import { ProjectHeader } from '../../../components/project-header/project-header';
 import { ProjectTabs } from '../../../components/project-tabs/project-tabs';
 import { appTickets } from '../../../tickets/app-tickets';
-import { findProject, type ProjectPageProps } from './project-data';
+import {
+  findProject,
+  needsYouCountOf,
+  type ProjectPageProps,
+} from './project-data';
 
 type ProjectLayoutProps = ProjectPageProps & {
   children: ReactNode;
@@ -33,6 +37,7 @@ async function projectShell(
           projectId={project.id}
           cycles={tickets.listCycles(project.id)}
           openTicketCounts={tickets.openTicketCounts(project.id)}
+          needsYou={needsYouCountOf(project.id)}
         />
       </ProjectHeader>
       {children}

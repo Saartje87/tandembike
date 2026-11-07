@@ -1,6 +1,6 @@
 # Roadmap: Tandembike as a local software factory
 
-Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the Cockpit (Epic T1102), grilled and prototyped (T1103). Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
+Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the one-column Board (Epic T1102), grilled and prototyped (T1103). Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
 
 ## Goal
 
@@ -36,34 +36,33 @@ Five Lanes over the three Statuses:
 | Lane        | Holds                                                                                                                                                                                                                                                                                                                          |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Intake      | Todo with `needs-triage`, `needs-info`, or no triage state label                                                                                                                                                                                                                                                               |
-| Todo        | Todo with `ready-for-agent`, in lane order: on the Cycle Board the Autopilot queue; on the Project Board also the Backlog's ready work, which is not eligible until planned                                                                                                                                                    |
+| Queued      | Todo with `ready-for-agent`, in lane order: on the Cycle Board the Autopilot queue; on the Project Board also the Backlog's ready work, which is not eligible until planned                                                                                                                                                    |
 | In progress | In progress, in three sections: **Action needed** (its live Conversation waits on a permission or a question, failed, was interrupted, or is idle while the Ticket has no PR or still holds a Claim; or the Ticket is stalled), **Running** (claimed, no PR yet), **Review** (a PR in its External references, Claim released) |
-| For human   | Todo with `ready-for-human`: work the User implements                                                                                                                                                                                                                                                                          |
+| Your work   | Todo with `ready-for-human`: work the User implements                                                                                                                                                                                                                                                                          |
 | Done        | Done                                                                                                                                                                                                                                                                                                                           |
 
 Rejected: new Statuses. They would change the MCP enum, every Agent's `status: "Todo"` filter, Stats, Cycle rollover and the ready-work rule, and a Ticket dropped into Review with no PR would mean nothing.
 
-Drag changes Status only, as today. Lanes that share a Status (Intake, Todo, For human) are not drop targets for each other, and the In progress sections accept no drops. Rejected: triage by drag (a drop swapping labels).
+(Superseded by ADR 0024: a drag now only reorders.) Drag changes Status only, as today. Lanes that share a Status (Intake, Queued, Your work) are not drop targets for each other, and the In progress sections accept no drops. Rejected: triage by drag (a drop swapping labels).
 
 Epics stay listed apart from the Lanes, as today, with a state badge (Action needed, Review) and the Merged button on the Epic card. The Project Board and the Cycle Board use the same Lanes; an empty Lane collapses.
 
-Children of a Todo Epic that carry `ready-for-agent` stay in the Todo lane, marked with the Epic's colour as today, and are dispatched only with their Epic: the queue is Epics plus Tickets outside any Epic (2026-11-07). The lane still answers what is planned; no UI change.
+Children of a Todo Epic that carry `ready-for-agent` stay in the Queued lane, marked with the Epic's colour as today, and are dispatched only with their Epic: the queue is Epics plus Tickets outside any Epic (2026-11-07). The lane still answers what is planned; no UI change.
 
 **Idle runs need the User** (2026-11-07). An `idle` Conversation is one whose Agent ended its turn: after opening the PR, or because it stopped to explain something, such as a call the auto-mode classifier refused (phase 0). The header already counts `idle` as needing the User (T593), and the Lanes do the same: `idle` puts the card in Action needed unless the Ticket has a PR reference and no Claim, which is Review. Without this rule such a card fell through to Claim and no PR, which is Running, and looked like it was working indefinitely. Built in T1065.
 
-"For human" means `ready-for-human`, work the User does; it is not "needs the User now", which is the Action needed section.
+"Your work" (formerly "For human") means `ready-for-human`, work the User does; it is not "needs the User now", which is the Action needed section.
 
-### The Cockpit (2026-11-07)
+### The Board is one column (2026-11-07)
 
-Five Lanes over three Statuses, with three sections in In progress, made the Board hard to read: what needs the User was spread over Action needed, Review, Intake and Epic badges, and the Cycle's progress over seven groups. A grilling session and a prototype (T1103) settled a separate view, the **Cockpit** (Epic T1102), a Project tab beside the Board:
+Five Lanes over three Statuses, with three sections in In progress, made the Board hard to read: what needs the User was spread over Action needed, Review, Intake and Epic badges, and the Cycle's progress over seven groups. A grilling session and a prototype (T1103) settled a one-column layout, first as a **Cockpit** tab beside the Board (Epic T1102). The User approved it, and Epic T1111 made it the Board itself: every Board (the Active Cycle's, each Prepared Cycle's, the Backlog's) is one column, the Cockpit tab is gone and "Cockpit" is on the _Avoid_ list (ADR 0024). Todo is renamed Queued and For human Your work.
 
-- It shows the Active Cycle in one column, ordered by what needs the User: **Needs you** (Action needed, then Review, then Intake, each group closable, oldest first), **In flight** (one row per Epic, or per Ticket outside one, with its status line, elapsed time and cost), then **Your work** (`ready-for-human`), **Queued** and **Done**, closed until opened and shown as greyed rows of the same shape.
+- It is ordered by what needs the User: **Needs you** (Action needed, then Review, then Intake, each group closable, oldest first), **In flight** (one row per Epic, or per Ticket outside one, with its status line, elapsed time and cost), then **Your work** (`ready-for-human`), **Queued** (`ready-for-agent`, the Autopilot priority) and **Done**, closed until opened on the Active Cycle.
 - Intake in Needs you also covers the Backlog, since runs file their feedback Tickets outside any Cycle (see "Feedback as Tickets").
 - It offers no actions in its lists. A run waiting on the User shows a bell that opens its Conversation, so the User decides with the run's context in view; a row's title opens the Ticket, where its state is set. Rejected: Allow and Deny in the list, which would approve on a one-line rule; Merged, Back to Todo and triage controls in the list, which the Ticket drawer already offers.
-- It derives every place from the Board's Lane derivation, through one pure function over any Board's Tickets, so the two never disagree and the Board can reuse it.
-- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend and paused notice go there in phase 3, not on the Board header. The browser tab's title carries the Needs you count.
-
-The User expects the Cockpit's layout to replace the Board. That is a follow-up Epic (T1111), decided after the Cockpit has been used on a real Cycle: the Board also orders by drag (the Autopilot queue's priority), creates Tickets inline, filters, groups Epics and selects many Tickets.
+- It derives every place from the Lane derivation, through one pure function over any Board's Tickets.
+- A drag only reorders rows within a section; it never changes a Status. The Board also creates Tickets inline, filters, nests an Epic's children in its row and selects many Tickets (Move to Cycle, Add to Epic, Archive).
+- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend and paused notice go there in phase 3. The browser tab's title and the Active Cycle's tab carry the Needs you count.
 
 ### Status line on In progress cards
 
@@ -81,9 +80,9 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 
 ### Autopilot dispatch
 
-- A per-Project switch, off by default, on the Cockpit header (2026-11-07, was the Board header) and in the Project settings. It persists, so it survives a server restart. Starting a Cycle does not flip it on. Turning it off pauses new dispatches and does not stop running runs.
+- A per-Project switch, off by default, on the Board header and in the Project settings. It persists, so it survives a server restart. Starting a Cycle does not flip it on. Turning it off pauses new dispatches and does not stop running runs.
 - Continuous while on: immediately on `start_cycle`, and again whenever something becomes eligible (a Ticket planned in mid-Cycle, a Blocker reaching Done, a run slot freeing up). Rejected: one-shot dispatch at Cycle start, which strands Blockers; a manual "run once" button.
-- Fills the free slots under the existing parallel runs cap (`parallelRuns` and `maxConcurrentRuns`), in the Cycle Board's Todo lane order, so `sort_lane` is the priority mechanism. No extra budget or per-Cycle cap in version one. Parallel runs off gives a serial factory.
+- Fills the free slots under the existing parallel runs cap (`parallelRuns` and `maxConcurrentRuns`), in the Cycle Board's Queued lane order, so `sort_lane` is the priority mechanism. No extra budget or per-Cycle cap in version one. Parallel runs off gives a serial factory.
 - Starts the same Start Conversation the Start button does, with the Project's Start command or Start command for Epics, and the same brief. The Conversation records Started by Autopilot; the Glossary's "only the User starts a Conversation" and ADR 0019 are revised for the second starter. Rejected: a new intent with its own brief.
 - Event-driven inside the one server process (ADR 0002): re-evaluates on Ticket changes, Cycle start, run end, the switch flip and server startup, through one serialised evaluate step so double dispatch is impossible. Rejected: cron, a separate daemon.
 - When a Cycle is archived or rolled over, dispatch stops because nothing is eligible; running runs finish their PRs; dispatch resumes when the next Cycle starts.
@@ -93,7 +92,7 @@ A stalled Ticket shows in Action needed with a **Back to Todo** action. Autopilo
 - Agents may feed the factory (2026-11-07). An Agent run can make work eligible over MCP: `/to-tickets` creates Epics and children already labelled `ready-for-agent`, a New Ticket Conversation defaults to the Cycle it was started from, and any run can plan or label. So with Autopilot on, a spec run ends in build runs, which is the point. This revises ADR 0019's rule that no Agent can start a run: the Autopilot switch is the User's standing consent, flipped only through a Server Action, and the run cap and the spend ceiling bound what that consent buys. Rejected: counting only labels the User set, read from Activity, which would make every `/to-tickets` result need a manual re-label.
 - Per Project only; no global cap across Projects in version one.
 
-**Spend ceiling** (2026-11-07, replacing "no budget cap in version one"). The spike spent about $1.60 on a one-line change, the classifier is permissive, and the factory runs while the User is away, so one number per Project is the kill switch. The ceiling is a Project setting in dollars, next to the Autopilot switch, with no default; Autopilot cannot be turned on while the Project has none. It is measured against the total cost of Autopilot-started Conversations on the Active Cycle's Tickets, resumes included, so it resets with each Cycle and hand-started runs do not count. When crossed, dispatch pauses, the switch stays on, the Cockpit header shows "paused: over ceiling" with the amount, and raising the ceiling or starting the next Cycle resumes it; running runs finish. The Cockpit header shows the Cycle's Autopilot spend against the ceiling (2026-11-07, both were on the Board header). Rejected: flipping the switch off, which loses the User's intent; a rolling per-Project total that never resets; counting every Conversation in the Cycle.
+**Spend ceiling** (2026-11-07, replacing "no budget cap in version one"). The spike spent about $1.60 on a one-line change, the classifier is permissive, and the factory runs while the User is away, so one number per Project is the kill switch. The ceiling is a Project setting in dollars, next to the Autopilot switch, with no default; Autopilot cannot be turned on while the Project has none. It is measured against the total cost of Autopilot-started Conversations on the Active Cycle's Tickets, resumes included, so it resets with each Cycle and hand-started runs do not count. When crossed, dispatch pauses, the switch stays on, the Board header shows "paused: over ceiling" with the amount, and raising the ceiling or starting the next Cycle resumes it; running runs finish. The Board header shows the Cycle's Autopilot spend against the ceiling (2026-11-07, both were on the Board header). Rejected: flipping the switch off, which loses the User's intent; a rolling per-Project total that never resets; counting every Conversation in the Cycle.
 
 ### Agent run mode
 
@@ -137,7 +136,7 @@ Goal: a Board that shows the factory's state before any dispatcher exists. Usefu
 - Merged button on Review cards and Epic cards; Back to Todo on stalled cards.
 - The Board loads each Ticket's live Conversation state and latest transcript entry, and updates them over the events route.
 
-Decision records: ADR "Lanes are derived from Status, labels and run state"; Glossary: Lane revised, Status line, Stalled, For human.
+Decision records: ADR "Lanes are derived from Status, labels and run state"; Glossary: Lane revised, Status line, Stalled, Your work.
 
 Specced as Epic T1059 on 2026-11-06. The 2026-11-07 amendments that reached it: the idle rule went into T1065 and the tool entry columns into T1066 before they were built; Back to Todo on Review and Epic cards, and Merged on an Epic covering Todo children, came after T1068 and T1069 were specced and are a follow-up Epic with T1059 as its Origin, by "Publishing a spec" in `docs/agents/issue-tracker.md`.
 
@@ -155,10 +154,10 @@ Docs and skills only, no app change.
 Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
 
 - Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
-- Autopilot switch, stored per Project, on the Cockpit header and settings, with the spend ceiling beside it and required to turn the switch on.
+- Autopilot switch, stored per Project, on the Board header and settings, with the spend ceiling beside it and required to turn the switch on.
 - The dispatcher: eligibility query (an Epic needs a child), lane-order selection, slot accounting against the existing cap, the ceiling check, one serialised evaluate step, triggered by events and on startup; on startup it resumes Autopilot's interrupted Conversations first.
 - Conversations record Started by; the header shows it. Autopilot's resume reply is recorded as sent by Autopilot.
-- The paused-over-ceiling notice and the Cycle's spend against the ceiling on the Cockpit header; the Needs you count is already in the Cockpit's tab title.
+- The paused-over-ceiling notice and the Cycle's spend against the ceiling on the Board header; the Needs you count is already in the browser tab's title.
 
 Decision records: ADR "Autopilot dispatches the Active Cycle's ready work", recording that Agents may feed it and the ceiling; ADR "Agent run mode is a Project setting" superseding ADR 0021's pinned `default`; ADR 0019 amended for the second starter and for Agent-fed work; Glossary: Autopilot, Eligible, Agent run mode, Started by, Spend ceiling.
 

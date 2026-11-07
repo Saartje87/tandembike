@@ -20,21 +20,11 @@ const { notFound } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
-vi.mock('../../../components/board/board', () => ({
-  Board: ({
-    project,
-    tickets,
-    filter,
-  }: {
-    project: { name: string };
-    tickets: { number: number }[];
-    filter?: { query: string; labels: string[] };
-  }) => (
-    <section aria-label={project.name}>
-      {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
-      <p>{`Filter: ${JSON.stringify(filter)}`}</p>
-    </section>
-  ),
+vi.mock('../../../conversations/app-conversations', () => ({
+  appConversations: vi.fn(() => ({ list: () => [] })),
+}));
+vi.mock('../../conversations/actions', () => ({
+  currentConversationActivity: vi.fn(() => new Promise(() => {})),
 }));
 
 vi.mock('./board-ticket-drawer/board-ticket-drawer', () => ({
@@ -88,13 +78,43 @@ describe('ProjectPage', () => {
 
     // The Project's layout shows its header and tabs.
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
-      `Tickets: T${ticket.number}`,
-    );
+    // The Backlog is one column of sections, with no progress or run slots.
+    expect(screen.getByRole('link', { name: 'Fix the header' })).toBeVisible();
+    expect(screen.queryByText('Planned')).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.queryByText(/ done$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Runs /)).not.toBeInTheDocument();
+    expect(ticket.number).toBeGreaterThan(0);
     expect(screen.queryByRole('dialog')).toBeNull();
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
     ).resolves.toEqual({ title: 'Website' });
+  });
+
+  it("lists the Backlog's archived Tickets last, closed", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const dropped = tickets.createTicket({
+      projectId: project.id,
+      title: 'Dropped idea',
+    });
+    tickets.archiveTicket(dropped.number);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(
+      <main>
+        {
+          await ProjectPage({
+            params: Promise.resolve({ id: String(project.id) }),
+            searchParams: noSearch,
+          })
+        }
+      </main>,
+    );
+
+    const archived = screen.getByRole('region', { name: 'Archived' });
+    expect(archived).toHaveTextContent('Dropped idea');
+    expect(archived.querySelector('details')).not.toHaveAttribute('open');
   });
 
   it('shows the loading state until the Project loads', async () => {
@@ -174,9 +194,7 @@ describe('ProjectPage', () => {
       <main>{await ProjectPage({ params, searchParams })}</main>,
     );
 
-    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
-      'Filter: {"query":"fix","labels":["bug","ui"]}',
-    );
+    expect(screen.getByLabelText('Search Tickets')).toHaveValue('fix');
     expect(screen.getByRole('dialog')).toHaveTextContent(
       `Drawer T${ticket.number} over /project/${project.id}?q=fix&label=bug&label=ui`,
     );

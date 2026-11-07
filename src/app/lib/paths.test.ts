@@ -6,7 +6,6 @@ import {
   boardFilterOf,
   boardPathOf,
   boardRoute,
-  cockpitPath,
   conversationOnPath,
   cyclePath,
   cycleRoute,
@@ -46,10 +45,6 @@ describe('paths', () => {
 
   it("puts a Project's archived Cycles under a plural segment", () => {
     expect(cyclesPath(3)).toBe('/project/3/cycles');
-  });
-
-  it("puts a Project's Cockpit under its own segment", () => {
-    expect(cockpitPath(3)).toBe('/project/3/cockpit');
   });
 
   it("puts a Project's settings under its own segment", () => {

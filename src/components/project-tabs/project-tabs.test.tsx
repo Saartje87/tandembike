@@ -40,13 +40,19 @@ const renderTabs = (
   segments: string[] = [],
   search = '',
   counts: OpenTicketCounts = { backlog: 0, cycles: {} },
+  needsYou = 0,
 ) => {
   vi.mocked(useSelectedLayoutSegments).mockReturnValue(segments);
   vi.mocked(useSearchParams).mockReturnValue(
     new URLSearchParams(search) as ReturnType<typeof useSearchParams>,
   );
   return renderWithTheme(
-    <ProjectTabs projectId={3} cycles={cycles} openTicketCounts={counts} />,
+    <ProjectTabs
+      projectId={3}
+      cycles={cycles}
+      openTicketCounts={counts}
+      needsYou={needsYou}
+    />,
   );
 };
 
@@ -80,7 +86,6 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: null },
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
@@ -88,7 +93,7 @@ describe('ProjectTabs', () => {
     ]);
   });
 
-  it("carries a Board filter to the Backlog's and Cycles' tabs, not to the Cockpit, History or Settings", () => {
+  it("carries a Board filter to the Backlog's and Cycles' tabs, not to the History or Settings", () => {
     renderTabs(
       [cycle({ id: 7, title: 'Beta' })],
       [],
@@ -97,7 +102,6 @@ describe('ProjectTabs', () => {
 
     expect(tabs().map(({ href }) => href)).toEqual([
       '/project/3?q=fix+it&label=bug&label=ui',
-      '/project/3/cockpit',
       '/project/3/cycle/7?q=fix+it&label=bug&label=ui',
       '/project/3/cycles',
       '/project/3/settings',
@@ -113,7 +117,6 @@ describe('ProjectTabs', () => {
 
     expect(tabs().map(({ name }) => name)).toEqual([
       'Backlog',
-      'Cockpit',
       'Launch',
       'Beta',
       'History',
@@ -126,7 +129,6 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
@@ -143,7 +145,6 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: null },
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
       { name: 'Settings', href: '/project/3/settings', current: null },
@@ -155,20 +156,8 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: null },
       { name: 'History', href: '/project/3/cycles', current: null },
       { name: 'Settings', href: '/project/3/settings', current: 'page' },
-    ]);
-  });
-
-  it('marks the Cockpit tab current on the Cockpit', () => {
-    renderTabs([], ['cockpit']);
-
-    expect(tabs()).toEqual([
-      { name: 'Backlog', href: '/project/3', current: null },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: 'page' },
-      { name: 'History', href: '/project/3/cycles', current: null },
-      { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
 
@@ -177,13 +166,12 @@ describe('ProjectTabs', () => {
 
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
-      { name: 'Cockpit', href: '/project/3/cockpit', current: null },
       { name: 'History', href: '/project/3/cycles', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
 
-  it('shows the open Tickets of the Backlog and each Cycle in a badge, not on the Cockpit, History or Settings', () => {
+  it('shows the open Tickets of the Backlog and each Prepared Cycle in a badge, not on the Active Cycle, History or Settings', () => {
     renderTabs(
       [
         cycle({ id: 6, title: 'Old', state: 'Archived' }),
@@ -203,8 +191,7 @@ describe('ProjectTabs', () => {
       })),
     ).toEqual([
       { name: 'Backlog', badge: '4 open Tickets' },
-      { name: 'Cockpit', badge: null },
-      { name: 'Launch', badge: '1 open Ticket' },
+      { name: 'Launch', badge: null },
       { name: 'Beta', badge: '0 open Tickets' },
       { name: 'History', badge: null },
       { name: 'Settings', badge: null },
@@ -212,6 +199,38 @@ describe('ProjectTabs', () => {
     expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
       /^Backlog 4/,
     );
+  });
+
+  it("shows what needs the User on the Active Cycle's tab, in place of its open Tickets", () => {
+    renderTabs(
+      [
+        cycle({ id: 7, title: 'Beta' }),
+        cycle({ id: 8, title: 'Launch', state: 'Active' }),
+      ],
+      [],
+      '',
+      { backlog: 0, cycles: { 7: 2, 8: 5 } },
+      4,
+    );
+
+    expect(screen.getByRole('link', { name: /^Launch/ })).toHaveTextContent(
+      'Launch 4 need you',
+    );
+    expect(screen.getByRole('link', { name: /^Beta/ })).toHaveTextContent(
+      'Beta 2 open Tickets',
+    );
+  });
+
+  it("shows no badge on the Active Cycle's tab when nothing needs the User", () => {
+    renderTabs(
+      [cycle({ id: 8, title: 'Launch', state: 'Active' })],
+      [],
+      '',
+      { backlog: 0, cycles: { 8: 5 } },
+      0,
+    );
+
+    expect(screen.getByRole('link', { name: 'Launch' })).toBeInTheDocument();
   });
 
   it('shows a badge reading 0 for a Cycle missing from the counts', () => {

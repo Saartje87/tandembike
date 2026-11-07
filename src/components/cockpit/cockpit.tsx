@@ -1,7 +1,10 @@
 'use client';
 
 import {
+  Alert,
   Box,
+  Button,
+  Checkbox,
   Heading,
   IconButton,
   Inline,
@@ -11,14 +14,49 @@ import {
   Tag,
   Text,
 } from '@blockle/blocks';
-import { type FC, type ReactNode, useEffect } from 'react';
+import {
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from '@dnd-kit/dom';
+import {
+  type BeforeDragStartEvent,
+  DragDropProvider as DndProvider,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/react';
+import { isSortable, useSortable } from '@dnd-kit/react/sortable';
+import {
+  type FC,
+  type MouseEvent,
+  type ReactNode,
+  type Ref,
+  startTransition,
+  useEffect,
+  useId,
+  useOptimistic,
+} from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
-import { cockpitPath, ticketOnBoardPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  boardPathOf,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
+import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
+import type { BatchFailure } from '../../tickets/errors';
 import type { Ticket } from '../../tickets/tickets';
+import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
+import {
+  filteredSelectionDrop,
+  isFiltering,
+  mergeLaneOrder,
+  ticketMatches,
+} from '../board/board-filter';
 import type { InProgressSection } from '../board/board-lanes';
+import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
   useTicketCosts,
@@ -26,9 +64,17 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
+import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
+import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
+import { SelectionBar } from '../selection-bar/selection-bar';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
+import {
+  isSelectClick,
+  type SelectMode,
+  selectModeOf,
+} from '../ticket-card/ticket-card';
 import * as styles from './cockpit.css';
 import {
   type CockpitTicket,
@@ -40,11 +86,13 @@ import {
   type NeedRow,
   type QueuedRow,
 } from './cockpit-of';
+import { useBoardFilter } from './use-board-filter';
+import { type SelectionList, useSelection } from './use-selection';
 
 export type CockpitProps = {
   projectId: number;
-  /** The Cycle shown, the Project's Active one. */
-  cycle: Pick<Cycle, 'title'>;
+  /** The Cycle shown, or `null` for the Backlog. */
+  cycle: Pick<Cycle, 'id' | 'title'> | null;
   /** The Cycle's Tickets, as its Board gets them. */
   tickets: Ticket[];
   /**
@@ -52,8 +100,24 @@ export type CockpitProps = {
    * their feedback outside any Cycle. Defaults to none.
    */
   backlog?: Ticket[];
-  /** The Project's Start runs working now, and how many it allows at once. */
-  runSlots: { used: number; cap: number };
+  /**
+   * The Project's Start runs working now, and how many it allows at once;
+   * given on the Active Cycle's Board only.
+   */
+  runSlots?: { used: number; cap: number };
+  /**
+   * Whether this is a planning Board, a Prepared Cycle's or the Backlog's:
+   * Queued and Your work start open, and an empty section is hidden.
+   */
+  planning?: boolean;
+  /** The Board's archived Tickets, listed last. Defaults to none. */
+  archived?: Ticket[];
+  /** The Project's Cycles, for the selection bar's Move to Cycle. Defaults to none. */
+  cycles?: Cycle[];
+  /** The Project's live Epics, for the selection bar's Add to Epic. Defaults to none. */
+  epics?: Pick<Ticket, 'number' | 'title'>[];
+  /** The Board filter in the URL as the Board loads. */
+  filter?: BoardFilter;
 };
 
 const sectionIntent = {
@@ -191,6 +255,10 @@ type TicketRowProps = {
   end?: ReactNode;
   /** Under the row, opened from it: an Epic's children. */
   details?: ReactNode;
+  /** Set on a row that can be dragged, which then takes focus for the keyboard. */
+  rowRef?: Ref<HTMLLIElement>;
+  /** Makes the row selectable: whether it is, and how a select gesture lands. */
+  selection?: { selected: boolean; onSelect: (mode: SelectMode) => void };
 };
 
 /**
@@ -207,11 +275,37 @@ const TicketRow: FC<TicketRowProps> = ({
   beside,
   end,
   details,
+  rowRef,
+  selection,
 }) => {
   const color = ticket.epic?.color ?? ticket.color;
+  // Runs before the title link's own click, so it neither navigates nor opens a tab.
+  const selectByClick = (event: MouseEvent<HTMLLIElement>) => {
+    if (
+      !selection ||
+      !isSelectClick(event) ||
+      (event.target instanceof HTMLInputElement &&
+        event.target.type === 'checkbox')
+    ) {
+      return;
+    }
+    event.preventDefault();
+    selection.onSelect(selectModeOf(event));
+  };
   const content = (
     <Inline gap={3} alignY="center" alignX="between">
       <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
+        {selection && (
+          <Checkbox
+            name={`select-${ticket.number}`}
+            aria-label={`Select T${ticket.number} ${ticket.title}`}
+            checked={selection.selected}
+            onChange={(event) =>
+              // A checkbox's change comes from its click, with its keys.
+              selection.onSelect(selectModeOf(event.nativeEvent))
+            }
+          />
+        )}
         <Icon
           name={icon}
           size="small"
@@ -256,7 +350,18 @@ const TicketRow: FC<TicketRowProps> = ({
       boxShadow={muted ? undefined : 1}
       className={color ? styles.epicEdge[color] : styles.edge}
     >
-      <li>
+      {/* Keyboard users select with the checkbox. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: a modifier-click shortcut */}
+      <li
+        ref={rowRef}
+        // dnd-kit makes a row it drags a button unless it has a role; it
+        // stays a list item, with the drag in its role description.
+        role={rowRef ? 'listitem' : undefined}
+        // Focusable from the first render when it can be dragged, so Space
+        // picks it up; dnd-kit would add this only on a later frame.
+        tabIndex={rowRef ? 0 : undefined}
+        onClick={selectByClick}
+      >
         {details ? (
           <details>
             <Box asChild className={styles.summary}>
@@ -271,6 +376,64 @@ const TicketRow: FC<TicketRowProps> = ({
     </Box>
   );
 };
+
+/** The sections whose rows a drag orders, each among its own rows. */
+type ReorderSection = 'Queued' | 'Your work' | 'Intake';
+
+type Sortable = { section: ReorderSection; index: number };
+
+const SortableTicketRow: FC<TicketRowProps & Sortable> = ({
+  section,
+  index,
+  ...row
+}) => {
+  const { ref } = useSortable({
+    id: row.ticket.number,
+    index,
+    group: section,
+    data: { section },
+    collisionPriority: 3,
+  });
+  return <TicketRow {...row} rowRef={ref} />;
+};
+
+type DraggableTicketRowProps = TicketRowProps & {
+  /** Where a drag moves the row; left out, the row cannot be dragged. */
+  sortable?: Sortable;
+};
+
+/** A row that a drag moves within its section, by pointer or keyboard, if it may. */
+const DraggableTicketRow: FC<DraggableTicketRowProps> = ({
+  sortable,
+  ...row
+}) =>
+  sortable ? (
+    <SortableTicketRow {...row} {...sortable} />
+  ) : (
+    <TicketRow {...row} />
+  );
+
+/**
+ * A row is dragged from anywhere on it. A mouse drag starts once the pointer
+ * moves 5px, so a click still opens it; a touch drag after a 250ms press, so
+ * a swipe still scrolls. Space picks up the focused row by keyboard.
+ */
+const sensors = [
+  PointerSensor.configure({
+    activationConstraints: (event) =>
+      event.pointerType === 'touch'
+        ? [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })]
+        : [new PointerActivationConstraints.Distance({ value: 5 })],
+    preventActivation: (event) =>
+      event.target instanceof Element &&
+      event.target.closest('input, button, select, textarea') !== null,
+  }),
+  KeyboardSensor,
+];
+
+const sectionOf = (
+  item: { data: Record<string, unknown> } | null | undefined,
+) => item?.data.section;
 
 const childStateLabel: Record<EpicChildState, string> = {
   done: 'done',
@@ -287,7 +450,7 @@ const Pip: FC<PipProps> = ({ state, title }) => (
   <span title={title} className={`${styles.pip} ${styles.pipState[state]}`} />
 );
 
-type ChildrenBarProps = { row: EpicRow };
+type ChildrenBarProps = { row: Pick<EpicRow, 'children'> };
 
 /** An Epic's children as one mark each, coloured by where it stands. */
 const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
@@ -314,7 +477,7 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   );
 };
 
-type EpicChildListProps = { row: EpicRow };
+type EpicChildListProps = { row: Pick<EpicRow, 'children'> };
 
 /** An opened Epic row: each child with where it stands. */
 const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
@@ -344,6 +507,18 @@ const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
     </ul>
   </Stack>
 );
+
+/**
+ * What an Epic's row adds to a Ticket's row: its children bar beside the
+ * title, and its children listed when opened. Nothing for a normal Ticket.
+ */
+const epicParts = (row: CockpitTicket) =>
+  row.children
+    ? {
+        beside: <ChildrenBar row={{ children: row.children }} />,
+        details: <EpicChildList row={{ children: row.children }} />,
+      }
+    : {};
 
 type RowListProps = {
   title: string;
@@ -384,6 +559,33 @@ const RowList: FC<RowListProps> = ({
   </Box>
 );
 
+type NotMovedProps = { refusals: BatchFailure[] };
+
+/** Why each Ticket a move to a Cycle left out was refused. */
+const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
+  const headingId = useId();
+  return (
+    <Alert intent="warning">
+      <Stack gap={1}>
+        <Text id={headingId}>Not moved</Text>
+        <Stack
+          gap={1}
+          aria-labelledby={headingId}
+          listStyle="none"
+          role="list"
+          asChild
+        >
+          <ul>
+            {refusals.map(({ number, error }) => (
+              <li key={number}>{error}</li>
+            ))}
+          </ul>
+        </Stack>
+      </Stack>
+    </Alert>
+  );
+};
+
 /**
  * An In flight row's second line: its live line and run time, or, for a
  * claimed Ticket with no live run (such as one worked in a terminal), that.
@@ -409,6 +611,12 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Cockpit. The browser tab's title carries the Needs you
  * count. It follows live Conversations as the Board does.
+ *
+ * Rows can be selected with their checkbox, Cmd-click or Ctrl-click, or a
+ * Shift-click range within one list; a bar then moves the selection to
+ * another Cycle or the Backlog, adds it to an Epic, or archives it. The
+ * Tickets an action refuses stay selected, with the reason. Epic rows
+ * cannot be selected.
  */
 export const Cockpit: FC<CockpitProps> = ({
   projectId,
@@ -416,26 +624,215 @@ export const Cockpit: FC<CockpitProps> = ({
   tickets,
   backlog = [],
   runSlots,
+  planning = false,
+  archived = [],
+  cycles = [],
+  epics = [],
+  filter: initialFilter,
 }) => {
   const live = useLiveConversations();
   const cost = useTicketCosts();
   const now = useNow();
-  const cockpit = cockpitOf(tickets, { live, cost }, backlog);
+  const [shownTickets, showOrder] = useOptimistic(
+    tickets,
+    (current, order: number[]) =>
+      current.map((ticket) =>
+        order.includes(ticket.number)
+          ? { ...ticket, position: order.indexOf(ticket.number) }
+          : ticket,
+      ),
+  );
+  const cycleId = cycle?.id ?? null;
+  const boardPath = boardPathOf(projectId, cycleId);
+  const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
+  // The Board filter narrows every section and its counts; only the tab and
+  // the browser title keep the full Needs you count.
+  const cockpit = {
+    ...cockpitOf(shownTickets, { live, cost }, backlog, filter),
+    archived: isFiltering(filter)
+      ? archived.filter((ticket) => ticketMatches(ticket, filter))
+      : archived,
+  };
+  const filterLabels = [
+    ...new Set(
+      [...tickets, ...backlog, filter].flatMap(({ labels }) => labels),
+    ),
+  ].sort();
+  const backlogNumbers = new Set(backlog.map(({ number }) => number));
   const hrefOf = (number: number) =>
-    ticketOnBoardPath(cockpitPath(projectId), number);
+    ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
+  const hideEmpty = (count: number) => planning && count === 0;
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
-  useCountInTitle(needsYou.count);
-  const needRows = (rows: NeedRow[]) =>
+  useCountInTitle(needsYou.total);
+
+  /** The Todo Tickets this Cycle orders, over all three sections, in order. */
+  const todoLane = shownTickets
+    .filter(
+      (ticket) =>
+        ticket.status === 'Todo' &&
+        !ticket.archived &&
+        (ticket.type !== 'Epic' || (ticket.cycle?.id ?? null) === cycleId),
+    )
+    .sort(
+      (left, right) =>
+        left.position - right.position || left.number - right.number,
+    )
+    .map(({ number }) => number);
+  /** The rows of a section that a drag orders, in the order shown. */
+  const sectionNumbers: Record<ReorderSection, number[]> = {
+    Queued: cockpit.queued.map(({ number }) => number),
+    'Your work': cockpit.yourWork.map(({ number }) => number),
+    Intake: needsYou.intake
+      .filter(({ number }) => !backlogNumbers.has(number))
+      .map(({ number }) => number),
+  };
+  // An Epic of another Cycle shown here is not ordered by this Cycle.
+  for (const section of Object.keys(sectionNumbers) as ReorderSection[]) {
+    sectionNumbers[section] = sectionNumbers[section].filter((number) =>
+      todoLane.includes(number),
+    );
+  }
+
+  const sortableIn = (
+    section: ReorderSection,
+    number: number,
+  ): Sortable | undefined => {
+    const index = sectionNumbers[section].indexOf(number);
+    return index < 0 ? undefined : { section, index };
+  };
+
+  /**
+   * What a drag of row `source` in `section` carries: the selection it is
+   * part of, in the order shown, else itself. Nothing when that selection
+   * spans sections, or holds a row a drag cannot order.
+   */
+  const carriedBy = (source: number, section: ReorderSection) => {
+    if (selection.length < 2 || !selection.includes(source)) {
+      return [source];
+    }
+    const numbers = sectionNumbers[section];
+    return selection.every((number) => numbers.includes(number))
+      ? numbers.filter((number) => selection.includes(number))
+      : undefined;
+  };
+
+  const startDrag = (event: BeforeDragStartEvent) => {
+    const { source } = event.operation;
+    if (
+      isSortable(source) &&
+      !carriedBy(Number(source.id), sectionOf(source) as ReorderSection)
+    ) {
+      event.preventDefault();
+    }
+  };
+
+  const followDrag = (event: DragOverEvent) => {
+    const { source, target } = event.operation;
+    // dnd-kit would move the row's element into the other section's list,
+    // which React then fails to remove from its own list on the drop.
+    if (target && sectionOf(target) !== sectionOf(source)) {
+      event.preventDefault();
+    }
+  };
+
+  const saveOrder = (ticketNumbers: number[]) => {
+    setError(undefined);
+    startTransition(async () => {
+      showOrder(ticketNumbers);
+      const result = await reorderTickets({
+        projectId,
+        status: 'Todo',
+        cycleId,
+        ticketNumbers,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
+  const finishDrag = (event: DragEndEvent) => {
+    const { source, target } = event.operation;
+    if (event.canceled || !isSortable(source)) {
+      return;
+    }
+    const section = sectionOf(source) as ReorderSection;
+    // A drop in another section changes nothing.
+    if (sectionOf(target) !== section) {
+      return;
+    }
+    const numbers = sectionNumbers[section];
+    const sourceNumber = Number(source.id);
+    const carried = carriedBy(sourceNumber, section);
+    const from = numbers.indexOf(sourceNumber);
+    // Over its own slot, the row is where dnd-kit's sorting moved it; over
+    // another row, it takes that row's place.
+    const to =
+      target?.id === source.id
+        ? source.index
+        : numbers.indexOf(Number(target?.id));
+    if (!carried || from < 0 || to < 0 || from === to) {
+      return;
+    }
+    if (carried.length > 1) {
+      const { laneOrder } = filteredSelectionDrop(
+        todoLane,
+        numbers,
+        carried,
+        sourceNumber,
+        numbers[to],
+      );
+      if (laneOrder.some((number, index) => number !== todoLane[index])) {
+        saveOrder(laneOrder);
+      }
+      return;
+    }
+    const moved = [...numbers];
+    moved.splice(from, 1);
+    moved.splice(to, 0, sourceNumber);
+    // The Todo Tickets of the other sections keep their places around it.
+    saveOrder(mergeLaneOrder(todoLane, moved, [sourceNumber]));
+  };
+
+  // The rows that can be selected, by list, in the order shown. An Epic's row
+  // cannot be selected.
+  const numbersOf = (rows: CockpitTicket[]) =>
+    rows.filter(({ children }) => !children).map(({ number }) => number);
+  const lists: Record<SelectionList, number[]> = {
+    actionNeeded: numbersOf(needsYou.actionNeeded),
+    review: numbersOf(needsYou.review),
+    intake: numbersOf(needsYou.intake),
+    inFlight: numbersOf(cockpit.inFlight),
+    yourWork: numbersOf(cockpit.yourWork),
+    queued: numbersOf(cockpit.queued),
+    done: numbersOf(cockpit.done),
+  };
+  const {
+    selection,
+    refusals,
+    error,
+    setError,
+    changing,
+    clear: clearSelection,
+    selectable,
+    moveToCycle: moveSelectionToCycle,
+    addToEpic: addSelectionToEpic,
+    archive: archiveSelection,
+  } = useSelection(lists, projectId);
+  const needRows = (rows: NeedRow[], list: SelectionList) =>
     rows.map((row) => (
-      <TicketRow
+      <DraggableTicketRow
         key={row.number}
+        sortable={sortableIn('Intake', row.number)}
         ticket={row}
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
+        {...epicParts(row)}
+        selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
             {row.kind === 'intake' && (
@@ -454,174 +851,280 @@ export const Cockpit: FC<CockpitProps> = ({
     ));
 
   return (
-    <Stack gap={6}>
-      <Stack gap={2}>
-        <Inline gap={3} alignY="center" alignX="between">
-          <Inline gap={2} alignY="center">
-            <Heading level={2}>Cockpit</Heading>
-            <Text color="muted">
-              {cycle.title} · {done}/{total} done
-            </Text>
-          </Inline>
-          <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
-            Runs {runSlots.used}/{runSlots.cap}
-          </Tag>
-        </Inline>
-        <Progress
-          value={total === 0 ? 0 : Math.round((done / total) * 100)}
-          aria-label="Cycle progress"
+    <DndProvider
+      sensors={sensors}
+      onBeforeDragStart={startDrag}
+      onDragOver={followDrag}
+      onDragEnd={finishDrag}
+    >
+      <Stack gap={6}>
+        {error && <Alert intent="danger">{error}</Alert>}
+        <NewTicketInline
+          projectId={projectId}
+          {...(cycleId === null ? {} : { cycleId })}
         />
-      </Stack>
-      <Stack gap={2} asChild>
-        <section aria-label="Needs you">
-          <Inline gap={2} alignY="center">
-            <Heading level={3}>Needs you</Heading>
-            <Tag>{needsYou.count}</Tag>
-          </Inline>
-          {needsYou.count === 0 ? (
-            <Text color="muted">Nothing needs you.</Text>
-          ) : (
-            <Stack gap={3}>
-              {needsYou.actionNeeded.length > 0 && (
-                <RowList
-                  title="Action needed"
-                  count={needsYou.actionNeeded.length}
-                  open
-                >
-                  {needRows(needsYou.actionNeeded)}
-                </RowList>
+        <BoardFilterBar
+          filter={filter}
+          labels={filterLabels}
+          onChange={changeFilter}
+        />
+        {cycle && (
+          <Stack gap={2}>
+            <Inline gap={3} alignY="center" alignX="between">
+              <Text color="muted">
+                {done}/{total} done
+              </Text>
+              {runSlots && (
+                <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
+                  Runs {runSlots.used}/{runSlots.cap}
+                </Tag>
               )}
-              {needsYou.review.length > 0 && (
-                <RowList title="Review" count={needsYou.review.length} open>
-                  {needRows(needsYou.review)}
-                </RowList>
+            </Inline>
+            <Progress
+              value={total === 0 ? 0 : Math.round((done / total) * 100)}
+              aria-label="Cycle progress"
+            />
+          </Stack>
+        )}
+        {!hideEmpty(needsYou.count) && (
+          <Stack gap={2} asChild>
+            <section aria-label="Needs you">
+              <Inline gap={2} alignY="center">
+                <Heading level={3}>Needs you</Heading>
+                <Tag>{needsYou.count}</Tag>
+              </Inline>
+              {needsYou.count === 0 ? (
+                <Text color="muted">Nothing needs you.</Text>
+              ) : (
+                <Stack gap={3}>
+                  {needsYou.actionNeeded.length > 0 && (
+                    <RowList
+                      title="Action needed"
+                      count={needsYou.actionNeeded.length}
+                      open
+                    >
+                      {needRows(needsYou.actionNeeded, 'actionNeeded')}
+                    </RowList>
+                  )}
+                  {needsYou.review.length > 0 && (
+                    <RowList title="Review" count={needsYou.review.length} open>
+                      {needRows(needsYou.review, 'review')}
+                    </RowList>
+                  )}
+                  {needsYou.intake.length > 0 && (
+                    <RowList title="Intake" count={needsYou.intake.length} open>
+                      {needRows(needsYou.intake, 'intake')}
+                    </RowList>
+                  )}
+                </Stack>
               )}
-              {needsYou.intake.length > 0 && (
-                <RowList title="Intake" count={needsYou.intake.length} open>
-                  {needRows(needsYou.intake)}
-                </RowList>
+            </section>
+          </Stack>
+        )}
+        {!hideEmpty(inFlightCount) && (
+          <Stack gap={2} asChild>
+            <section aria-label="In flight">
+              <Inline gap={2} alignY="center">
+                <Heading level={3}>In flight</Heading>
+                <Tag>{inFlightCount}</Tag>
+              </Inline>
+              {inFlightCount === 0 ? (
+                <Text color="muted">Nothing in flight.</Text>
+              ) : (
+                <Stack gap={1} listStyle="none" role="list" asChild>
+                  <ul>
+                    {cockpit.epics.map((row) => (
+                      <TicketRow
+                        key={row.number}
+                        ticket={row}
+                        href={hrefOf(row.number)}
+                        icon="queue-list"
+                        line={inFlightLine(row, now)}
+                        beside={<ChildrenBar row={row} />}
+                        end={
+                          <Inline gap={2} alignY="center" flexWrap="nowrap">
+                            {row.childNeedsYou && (
+                              <Tag
+                                intent="warning"
+                                startSlot={
+                                  <Icon name="arrow-up" size="small" />
+                                }
+                              >
+                                needs you
+                              </Tag>
+                            )}
+                            {row.pullRequest && (
+                              <PullRequestLink url={row.pullRequest} />
+                            )}
+                            <Tag intent={sectionIntent[row.section]}>
+                              {row.section}
+                            </Tag>
+                          </Inline>
+                        }
+                        details={<EpicChildList row={row} />}
+                      />
+                    ))}
+                    {cockpit.inFlight.map((row) => (
+                      <TicketRow
+                        key={row.number}
+                        ticket={row}
+                        href={hrefOf(row.number)}
+                        icon="play"
+                        selection={selectable(row.number, 'inFlight')}
+                        line={inFlightLine(row, now)}
+                        end={
+                          <Inline gap={2} alignY="center" flexWrap="nowrap">
+                            {row.pullRequest && (
+                              <PullRequestLink url={row.pullRequest} />
+                            )}
+                            <Tag intent={sectionIntent[row.section]}>
+                              {row.section}
+                            </Tag>
+                          </Inline>
+                        }
+                      />
+                    ))}
+                  </ul>
+                </Stack>
               )}
-            </Stack>
+            </section>
+          </Stack>
+        )}
+        <Stack gap={2}>
+          {!hideEmpty(cockpit.yourWork.length) && (
+            <RowList
+              title="Your work"
+              count={cockpit.yourWork.length}
+              open={planning}
+            >
+              {cockpit.yourWork.map((row) => (
+                <DraggableTicketRow
+                  key={row.number}
+                  sortable={sortableIn('Your work', row.number)}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon={row.children ? 'queue-list' : 'user'}
+                  {...epicParts(row)}
+                  selection={
+                    row.children
+                      ? undefined
+                      : selectable(row.number, 'yourWork')
+                  }
+                  line={`ready-for-human · for ${age(row.updatedAt)}`}
+                  end={<Tag>Your work</Tag>}
+                />
+              ))}
+            </RowList>
           )}
-        </section>
-      </Stack>
-      <Stack gap={2} asChild>
-        <section aria-label="In flight">
-          <Inline gap={2} alignY="center">
-            <Heading level={3}>In flight</Heading>
-            <Tag>{inFlightCount}</Tag>
-          </Inline>
-          {inFlightCount === 0 ? (
-            <Text color="muted">Nothing in flight.</Text>
-          ) : (
-            <Stack gap={1} listStyle="none" role="list" asChild>
-              <ul>
-                {cockpit.epics.map((row) => (
-                  <TicketRow
-                    key={row.number}
-                    ticket={row}
-                    href={hrefOf(row.number)}
-                    icon="queue-list"
-                    line={inFlightLine(row, now)}
-                    beside={<ChildrenBar row={row} />}
-                    end={
-                      <Inline gap={2} alignY="center" flexWrap="nowrap">
-                        {row.childNeedsYou && (
-                          <Tag
-                            intent="warning"
-                            startSlot={<Icon name="arrow-up" size="small" />}
-                          >
-                            needs you
-                          </Tag>
-                        )}
-                        {row.pullRequest && (
-                          <PullRequestLink url={row.pullRequest} />
-                        )}
-                        <Tag intent={sectionIntent[row.section]}>
-                          {row.section}
-                        </Tag>
-                      </Inline>
-                    }
-                    details={<EpicChildList row={row} />}
-                  />
-                ))}
-                {cockpit.inFlight.map((row) => (
-                  <TicketRow
-                    key={row.number}
-                    ticket={row}
-                    href={hrefOf(row.number)}
-                    icon="play"
-                    line={inFlightLine(row, now)}
-                    end={
-                      <Inline gap={2} alignY="center" flexWrap="nowrap">
-                        {row.pullRequest && (
-                          <PullRequestLink url={row.pullRequest} />
-                        )}
-                        <Tag intent={sectionIntent[row.section]}>
-                          {row.section}
-                        </Tag>
-                      </Inline>
-                    }
-                  />
-                ))}
-              </ul>
-            </Stack>
+          {!hideEmpty(cockpit.queued.length) && (
+            <RowList
+              title="Queued"
+              count={cockpit.queued.length}
+              open={planning}
+            >
+              {cockpit.queued.map((row, index) => (
+                <DraggableTicketRow
+                  key={row.number}
+                  sortable={sortableIn('Queued', row.number)}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon={row.children ? 'queue-list' : 'clock'}
+                  {...epicParts(row)}
+                  selection={
+                    row.children ? undefined : selectable(row.number, 'queued')
+                  }
+                  line={queuedLine(row, index)}
+                  end={
+                    row.blocked ? (
+                      <Tag intent="warning">Blocked</Tag>
+                    ) : index === 0 ? (
+                      <Tag intent="primary">Next</Tag>
+                    ) : (
+                      <Tag>Queued</Tag>
+                    )
+                  }
+                />
+              ))}
+            </RowList>
           )}
-        </section>
+          {!hideEmpty(cockpit.done.length) && (
+            <RowList title="Done" count={cockpit.done.length}>
+              {cockpit.done.map((row) => (
+                <TicketRow
+                  key={row.number}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon="check-circle"
+                  {...epicParts(row)}
+                  selection={
+                    row.children ? undefined : selectable(row.number, 'done')
+                  }
+                  line={lineOf(
+                    `Done ${age(row.updatedAt)} ago`,
+                    row.pullRequest && pullRequestLabel(row.pullRequest),
+                    row.cost > 0 && formatCost(row.cost),
+                  )}
+                  end={<Tag intent="success">Done</Tag>}
+                />
+              ))}
+            </RowList>
+          )}
+          {!hideEmpty(cockpit.archived.length) && (
+            <RowList title="Archived" count={cockpit.archived.length}>
+              {cockpit.archived.map((ticket) => (
+                <TicketRow
+                  key={ticket.number}
+                  muted
+                  ticket={{
+                    number: ticket.number,
+                    title: ticket.title,
+                    epic: ticket.epic,
+                    updatedAt: ticket.updatedAt,
+                    color: ticket.color,
+                  }}
+                  href={hrefOf(ticket.number)}
+                  icon="archive-box"
+                  line={`Archived · ${ticket.type === 'Epic' ? 'Epic' : 'Ticket'} · ${age(ticket.updatedAt)} ago`}
+                />
+              ))}
+            </RowList>
+          )}
+        </Stack>
+        {selection.length > 0 && (
+          <SelectionBar
+            count={selection.length}
+            onClear={clearSelection}
+            notice={
+              refusals &&
+              refusals.length > 0 && <NotMoved refusals={refusals} />
+            }
+          >
+            <MoveToCycleMenu
+              cycles={cycles}
+              cycleId={cycleId}
+              disabled={changing}
+              onPick={moveSelectionToCycle}
+            />
+            <AddToEpicMenu
+              epics={epics}
+              disabled={changing}
+              onPick={addSelectionToEpic}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              disabled={changing}
+              onClick={archiveSelection}
+            >
+              Archive
+            </Button>
+          </SelectionBar>
+        )}
       </Stack>
-      <Stack gap={2}>
-        <RowList title="Your work" count={cockpit.yourWork.length}>
-          {cockpit.yourWork.map((row) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="user"
-              line={`ready-for-human · for ${age(row.updatedAt)}`}
-              end={<Tag>For human</Tag>}
-            />
-          ))}
-        </RowList>
-        <RowList title="Queued" count={cockpit.queued.length}>
-          {cockpit.queued.map((row, index) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="clock"
-              line={queuedLine(row, index)}
-              end={
-                row.blocked ? (
-                  <Tag intent="warning">Blocked</Tag>
-                ) : index === 0 ? (
-                  <Tag intent="primary">Next</Tag>
-                ) : (
-                  <Tag>Queued</Tag>
-                )
-              }
-            />
-          ))}
-        </RowList>
-        <RowList title="Done" count={cockpit.done.length}>
-          {cockpit.done.map((row) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="check-circle"
-              line={lineOf(
-                `Done ${age(row.updatedAt)} ago`,
-                row.pullRequest && pullRequestLabel(row.pullRequest),
-                row.cost > 0 && formatCost(row.cost),
-              )}
-              end={<Tag intent="success">Done</Tag>}
-            />
-          ))}
-        </RowList>
-      </Stack>
-    </Stack>
+    </DndProvider>
   );
 };
