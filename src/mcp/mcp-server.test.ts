@@ -78,6 +78,7 @@ describe('MCP server', () => {
       'archive_ticket',
       'attach_to_epic',
       'claim_ticket',
+      'complete_ticket',
       'create_cycle',
       'create_project',
       'create_ticket',
@@ -344,29 +345,66 @@ describe('MCP server', () => {
     await client.close();
   });
 
-  it('tells Agents to remove the triage state label when moving to Done', async () => {
+  it('points Agents to complete_ticket for finishing work, not by hand with removeLabels', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
 
-    const rules: [tool: string, rule: RegExp][] = [
-      [
-        'update_ticket',
-        /triage state label, if it has one and it is not wontfix, with removeLabels in the same call; its other labels stay/,
-      ],
-      [
-        'update_tickets',
-        /triage state labels other than wontfix, listing each one any of them has in removeLabels in the same call; their other labels stay/,
-      ],
-    ];
-    for (const [name, rule] of rules) {
+    for (const name of ['update_ticket', 'update_tickets']) {
       const description =
         tools.find((tool) => tool.name === name)?.description ?? '';
-      expect(description, name).toMatch(rule);
+      expect(description, name).toMatch(/complete_ticket/);
+      expect(description, name).not.toMatch(/in the same call/);
       expect(description, name).not.toMatch(
         /needs-triage|needs-info|ready-for-agent|ready-for-human/,
       );
     }
+    await client.close();
+  });
+
+  it("calls a Status's order its Board order, never a lane, and keeps the name sort_lane", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const instructions = client.getInstructions() ?? '';
+    const { tools } = await client.listTools();
+    const sortLane = tools.find((tool) => tool.name === 'sort_lane');
+    const sort = JSON.stringify(
+      tools.find((tool) => tool.name === 'list_tickets')?.inputSchema.properties
+        ?.sort,
+    );
+
+    for (const [where, text] of [
+      ['instructions', instructions],
+      ['sort_lane', JSON.stringify(sortLane)],
+      ['sort', sort],
+    ] as const) {
+      expect(text, where).toMatch(/a Status's Board order/);
+      expect(text, where).toMatch(/Board Lane.*filtered by labels/);
+      expect(text.replaceAll('sort_lane', ''), where).not.toMatch(/\blanes?\b/);
+    }
+    expect(sortLane?.title).toBe("Sort a Status's Board order");
+    await client.close();
+  });
+
+  it('defines ready work as unblocked, unclaimed, ready-for-agent Todo Tickets', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    expect(client.getInstructions()).toMatch(
+      /status: "Todo", labels: \["ready-for-agent"\], blocked: false, claimed: false/,
+    );
+    await client.close();
+  });
+
+  it('warns that releasing an In progress Ticket with no PR leaves it stalled', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(
+      tools.find((tool) => tool.name === 'release_ticket_claim')?.description,
+    ).toMatch(
+      /In progress Ticket with no PR reference.*stalled in Action needed.*back to Todo or say why in a comment/,
+    );
     await client.close();
   });
 
@@ -967,6 +1005,106 @@ describe('Ticket tools', () => {
       number: ticket.number,
       claim: null,
     });
+    await client.close();
+  });
+
+  it('completes a Ticket as the Agent: Done, triage state label gone, Claim released', async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      labels: ['ready-for-agent', 'bug'],
+      status: 'In progress',
+    });
+    tickets.claimTicket(ticket.number, { agentRunId: 'run-1' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'complete_ticket',
+      arguments: { number: ticket.number },
+    });
+
+    expect(resultJson(result)).toEqual({
+      number: ticket.number,
+      title: 'Fix the header',
+      status: 'Done',
+      labels: ['bug'],
+      blocked: false,
+    });
+    expect(tickets.getTicket(ticket.number).claim).toBeNull();
+    expect(tickets.listActivity(ticket.number).at(-1)?.actor).toBe('agent');
+    await client.close();
+  });
+
+  it("completes an Epic's unarchived children and removes the Epic's own label", async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const create = (title: string, labels: string[], extra = {}) =>
+      tickets.createTicket({ projectId: project.id, title, labels, ...extra });
+    const epic = create('Login', ['ready-for-agent', 'enhancement'], {
+      type: 'Epic',
+    });
+    const a = create('A', ['ready-for-agent'], { epicNumber: epic.number });
+    const b = create('B', ['wontfix'], { epicNumber: epic.number });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'complete_ticket',
+      arguments: { number: epic.number, detail: 'full' },
+    });
+
+    expect(resultJson(result)).toMatchObject({
+      number: epic.number,
+      type: 'Epic',
+      status: 'Done',
+      labels: ['enhancement'],
+      children: [
+        { number: a.number, status: 'Done' },
+        { number: b.number, status: 'Done' },
+      ],
+    });
+    expect(tickets.getTicket(a.number).labels).toEqual([]);
+    expect(tickets.getTicket(b.number).labels).toEqual(['wontfix']);
+    await client.close();
+  });
+
+  it('completes a Ticket whatever its Status, and says when it does not exist', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+    });
+    const client = await connectMcpClient(tickets);
+
+    const done = await client.callTool({
+      name: 'complete_ticket',
+      arguments: { number: ticket.number },
+    });
+    const missing = await client.callTool({
+      name: 'complete_ticket',
+      arguments: { number: 99 },
+    });
+
+    expect(resultJson(done)).toMatchObject({ status: 'Done' });
+    expect(missing.isError).toBe(true);
+    expect(resultText(missing)).toBe('There is no Ticket T99.');
+    await client.close();
+  });
+
+  it('tells Agents that complete_ticket checks no merge, CI or acceptance criteria', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const description =
+      tools.find((tool) => tool.name === 'complete_ticket')?.description ?? '';
+
+    expect(description).toMatch(/merged/);
+    expect(description).toMatch(/CI/);
+    expect(description).toMatch(/acceptance criteria/);
+    expect(description).toMatch(/checks none of this/);
+    expect(description).toMatch(/never wontfix/);
     await client.close();
   });
 
