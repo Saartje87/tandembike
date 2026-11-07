@@ -405,7 +405,10 @@ describe('An archived Project is read-only', () => {
 
     expect(
       errorFrom(() =>
-        tickets.attachToEpic({ epic: epic.number, child: loose.number }),
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [loose.number],
+        }),
       ),
     ).toEqual(archivedTicket(loose.number));
     expect(

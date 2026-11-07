@@ -1,4 +1,9 @@
-import { type FieldErrors, ValidationError } from './errors';
+import {
+  type FieldErrors,
+  NotAllowedError,
+  TicketsError,
+  ValidationError,
+} from './errors';
 
 export const maxTitleLength = 200;
 
@@ -50,4 +55,37 @@ export function checkBatchNumbers(ticketNumbers: readonly number[]) {
     return `Choose each Ticket once: T${duplicate} is given twice.`;
   }
   return undefined;
+}
+
+/**
+ * `step` for each of `ticketNumbers`, in order, all or nothing: it goes on
+ * past a Ticket `step` refuses, so that one error names every refused
+ * Ticket and why. Run it in the transaction that makes the change, which
+ * the error then rolls back. Returns what `step` returned for each.
+ */
+export function eachOrNone<Result>(
+  ticketNumbers: readonly number[],
+  step: (number: number) => Result,
+): Result[] {
+  const results: Result[] = [];
+  const refusals: TicketsError[] = [];
+  for (const number of ticketNumbers) {
+    try {
+      results.push(step(number));
+    } catch (error) {
+      if (!(error instanceof TicketsError)) {
+        throw error;
+      }
+      refusals.push(error);
+    }
+  }
+  if (refusals.length === 1) {
+    throw refusals[0];
+  }
+  if (refusals.length > 1) {
+    throw new NotAllowedError(
+      refusals.map((refusal) => refusal.message).join(' '),
+    );
+  }
+  return results;
 }

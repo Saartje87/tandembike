@@ -96,8 +96,14 @@ const tandembike: Record<string, [line: string, without: string]> = {
   create_tickets: ['Creating Tickets', 'Creating Tickets'],
   update_ticket: ['Updating {T}', 'Updating a Ticket'],
   update_tickets: ['Updating Tickets', 'Updating Tickets'],
-  attach_to_epic: ['Attaching {T} to an Epic', 'Attaching to an Epic'],
-  detach_from_epic: ['Detaching {T} from its Epic', 'Detaching from an Epic'],
+  attach_to_epic: [
+    'Attaching Tickets to an Epic',
+    'Attaching Tickets to an Epic',
+  ],
+  detach_from_epic: [
+    'Detaching Tickets from Epics',
+    'Detaching Tickets from Epics',
+  ],
   set_acceptance_criteria_checked: [
     'Checking criteria on {T}',
     'Checking criteria',

@@ -30,15 +30,10 @@ function nameOf(number: number | undefined) {
 }
 
 /**
- * Throws unless `child` may join Epic `epicNumber`: one level only, within
- * one Project, at most one Epic per Ticket, and not into an archived Epic.
- * Run it in the transaction that makes the change.
+ * Throws unless Ticket `epicNumber` is an Epic that is not archived, so
+ * Tickets may join it. Returns its Project.
  */
-export function checkEpicChild(
-  db: DatabaseConnection,
-  epicNumber: number,
-  child: ChildCandidate,
-) {
+export function checkEpic(db: DatabaseConnection, epicNumber: number) {
   const epic = db
     .select({
       type: tickets.type,
@@ -56,6 +51,25 @@ export function checkEpicChild(
       `Ticket T${epicNumber} is not an Epic. Only an Epic can have child Tickets.`,
     );
   }
+  if (epic.archived) {
+    throw new NotAllowedError(
+      `Epic T${epicNumber} is archived. Restore it before adding Tickets to it.`,
+    );
+  }
+  return { projectId: epic.projectId };
+}
+
+/**
+ * Throws unless `child` may join Epic `epicNumber`: one level only, within
+ * one Project, at most one Epic per Ticket, and not into an archived Epic.
+ * Run it in the transaction that makes the change.
+ */
+export function checkEpicChild(
+  db: DatabaseConnection,
+  epicNumber: number,
+  child: ChildCandidate,
+) {
+  const epic = checkEpic(db, epicNumber);
   if (child.type === 'Epic') {
     throw new NotAllowedError(
       `${child.number === undefined ? 'An Epic' : `Ticket T${child.number} is an Epic, and an Epic`} cannot be a child of another Epic.`,
@@ -68,12 +82,9 @@ export function checkEpicChild(
   }
   if (epic.projectId !== child.projectId) {
     throw new NotAllowedError(
-      `Epic T${epicNumber} is in another Project. An Epic holds only its own Project's Tickets.`,
-    );
-  }
-  if (epic.archived) {
-    throw new NotAllowedError(
-      `Epic T${epicNumber} is archived. Restore it before adding Tickets to it.`,
+      child.number === undefined
+        ? `Epic T${epicNumber} is in another Project. An Epic holds only its own Project's Tickets.`
+        : `Ticket T${child.number} is in another Project than Epic T${epicNumber}. An Epic holds only its own Project's Tickets.`,
     );
   }
 }

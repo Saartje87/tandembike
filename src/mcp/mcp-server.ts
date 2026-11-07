@@ -54,24 +54,25 @@ export const maxInstructionsLength = 3500;
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
 - Move a Ticket to In progress when you start it and finish it with complete_ticket, so the User can follow your progress.
-- When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise call list_projects before creating a Project and reuse an existing one when it fits.
-- Only the User archives and restores Projects. An archived Project is read-only until restored: its Tickets can be read, but changes to them or its Cycles are refused.
-- Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Moving a Ticket to Done releases its Claim; use release_ticket_claim when abandoning work. Claims are cooperative coordination, not authentication.
-- Share progress, findings and triage notes as comments (add_comment), not by rewriting the description. list_activity shows what changed on a Ticket, when, and whether the User or an Agent did it.
+- When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise reuse a fitting Project from list_projects before creating one.
+- Only the User archives and restores Projects; an archived Project, its Tickets and Cycles are read-only until restored.
+- Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Done releases a Claim; release_ticket_claim abandons one. Claims coordinate; they do not authenticate.
+- Share progress, findings and triage notes as comments (add_comment), not by editing the description. list_activity shows what changed on a Ticket, when, and by whom.
 - Attach files to a Ticket with add_attachment, not comments; get_attachment reads it.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Find ready, unclaimed work with list_tickets: status: "Todo", labels: ["ready-for-agent"], blocked: false, claimed: false.
-- Rank work in a Status's Board order with sort_lane, never Blockers; a Board Lane, such as Todo, shows that order filtered by labels.
-- To create several related Tickets at once, use create_tickets, with the Blockers between them given by position.
+- Rank a Status's Board order with sort_lane, never Blockers; a Board Lane shows it filtered by labels.
+- Create related Tickets in one create_tickets call, the Blockers between them given by position; it creates an Epic and its children in the same call (type: "Epic" plus epicPosition).
 - When you split a Ticket into others, such as a spec into build Tickets, pass it as their originNumber.
-- A Ticket may have an ordered checklist of acceptanceCriteria. Store criteria there, never as a checklist in the description or a comment, and check each off with set_acceptance_criteria_checked as you verify it.
+- Store a Ticket's ordered checklist in acceptanceCriteria, never as a checklist in the description or a comment, and check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access.
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
-- Refer to Tickets by number with a T, like T42, the same way the User does.
-- Classify and triage Tickets with labels. Call list_labels and reuse an existing label when one fits.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Add children with epicNumber or attach_to_epic. To work an Epic, claim the Epic once with claim_ticket: that covers its children. Then work the children in Blocker order, next an unfinished child with blocked: false, moving each to In progress and Done.
-- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. list_cycles shows them; plan Tickets in with plan_ticket or plan_tickets, and move them to another Cycle or the Backlog in one step with move_tickets.
-- Your client keeps these tools, their descriptions and these instructions from when it connected. When the app's MCP tools change, ask the User to start a new session: reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
-- Your repository's own instructions set its process, such as when a Ticket counts as finished; follow them where they say more than these.`;
+- Refer to Tickets by number with a T, like T42, as the User does.
+- Classify and triage Tickets with labels, reusing existing ones from list_labels.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Create a new Epic with its children in one create_tickets call; attach existing Tickets with attach_to_epic. To work it, claim the Epic once with claim_ticket, which covers its children, then work them in Blocker order, next an unfinished one with blocked: false, moving each to In progress and Done.
+- A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. Plan Tickets in with plan_tickets and move them to another Cycle or the Backlog with move_tickets.
+- Load the tools a flow uses at once, e.g. planning a Cycle: list_cycles, create_cycle, create_tickets, plan_tickets, start_cycle; turning a spec into an Epic: create_tickets, attach_to_epic, add_blocker.
+- Your client keeps the tools and these instructions from when it connected: when the app's MCP tools change, ask the User to start a new session, as reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
+- Your repository's own instructions set its process, such as when a Ticket is finished; follow them where they say more.`;
 
 const projectId = z
   .number()
@@ -391,6 +392,37 @@ function respondBatch(call: () => { failed: BatchFailure[] }): CallToolResult {
   } catch (error) {
     return errorResult(error);
   }
+}
+
+/**
+ * How attach_to_epic and detach_from_epic describe their answer, the Epic
+ * each Ticket is in afterwards being `epic`.
+ */
+function returnsEpicMembers(epic: string) {
+  return `Returns { tickets }: each Ticket given, in order, as its summary (${summaryFields}) plus epicNumber, now ${epic}. detail: "full" returns whole Tickets instead, as get_ticket does.`;
+}
+
+/**
+ * Runs a Tickets module call that changes which Epic Tickets are in and
+ * answers with `{ tickets }`: whole when `detail` is "full", otherwise each
+ * one's summary plus its `epicNumber`.
+ */
+function respondEpicMembers(
+  detail: TicketDetail | undefined,
+  call: () => Ticket[],
+): CallToolResult {
+  return respond(() => {
+    const changed = call();
+    return {
+      tickets:
+        detail === 'full'
+          ? changed
+          : changed.map((ticket) => ({
+              ...ticketSummary(ticket),
+              epicNumber: ticket.epic?.number ?? null,
+            })),
+    };
+  });
 }
 
 /**
@@ -977,38 +1009,34 @@ export function createMcpServer(
   registerTool(
     'attach_to_epic',
     {
-      title: 'Attach Ticket to Epic',
-      description: `Make an existing normal Ticket a child of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. Attaching it again changes nothing. ${returnsSummary({ subject: 'the child', extra: 'its epic' })}`,
+      title: 'Attach Tickets to Epic',
+      description: `Make existing normal Tickets children of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. A Ticket in the Epic already stays as it is. All or nothing: if any Ticket cannot join, none does, and the error names every one that cannot and why. To create a new Epic with its children, use create_tickets instead. ${returnsEpicMembers('the Epic')}`,
       inputSchema: {
         epic: ticketNumber.describe('The Epic, e.g. 41 for T41.'),
-        ticket: ticketNumber.describe(
-          'The Ticket to make its child, e.g. 42 for T42.',
+        ticketNumbers: batchTicketNumbers.describe(
+          `The Tickets to make its children, each once, from 1 to ${maxBatchSize} of them.`,
         ),
         detail,
       },
       annotations: { idempotentHint: true },
     },
-    ({ epic, ticket, detail }) =>
-      respondTicket(
-        detail,
-        () => tickets.attachToEpic({ epic, child: ticket }),
-        ({ epic }) => ({ epic }),
+    ({ epic, ticketNumbers, detail }) =>
+      respondEpicMembers(detail, () =>
+        tickets.attachTicketsToEpic({ epic, children: ticketNumbers }),
       ),
   );
 
   registerTool(
     'detach_from_epic',
     {
-      title: 'Detach Ticket from Epic',
-      description: `Take a Ticket out of its Epic. A Ticket in no Epic stays as it is. ${returnsSummary({ extra: 'its epic, now null' })}`,
-      inputSchema: { number: ticketNumber, detail },
+      title: 'Detach Tickets from Epic',
+      description: `Take Tickets out of their Epics; they may be in different Epics, and each Epic's Status follows. A Ticket in no Epic stays as it is. All or nothing: if any Ticket cannot leave, none does, and the error names every one. ${returnsEpicMembers('null')}`,
+      inputSchema: { ticketNumbers: batchTicketNumbers, detail },
       annotations: { idempotentHint: true },
     },
-    ({ number, detail }) =>
-      respondTicket(
-        detail,
-        () => tickets.detachFromEpic(number),
-        ({ epic }) => ({ epic }),
+    ({ ticketNumbers, detail }) =>
+      respondEpicMembers(detail, () =>
+        tickets.detachTicketsFromEpic(ticketNumbers),
       ),
   );
 
