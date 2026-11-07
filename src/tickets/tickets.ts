@@ -65,6 +65,7 @@ import {
 import { type EpicLink, epicLinkOf } from './epic-link';
 import {
   checkChildrenArchived,
+  checkEpic,
   checkEpicChild,
   checkEpicClaimable,
   checkEpicNotArchived,
@@ -128,6 +129,7 @@ import { createReferenceTemplates } from './reference-templates';
 import {
   checkBatchNumbers,
   checkTitle,
+  eachOrNone,
   maxBatchSize,
   throwFieldErrors,
 } from './rules';
@@ -2287,9 +2289,11 @@ export function createTickets(
      * nothing; a Ticket in another Epic must be detached first. Returns the
      * child.
      */
-    attachToEpic(input: EpicChildInput): Ticket {
-      return joinEpic(input, { move: false });
+    attachToEpic({ epic, child }: EpicChildInput): Ticket {
+      return attachTicketsToEpic({ epic, children: [child] })[0];
     },
+
+    attachTicketsToEpic,
 
     /**
      * `attachToEpic`, but a Ticket in another Epic leaves it for `epic`, and
@@ -2334,36 +2338,10 @@ export function createTickets(
      * updated times. Returns the Ticket.
      */
     detachFromEpic(number: number): Ticket {
-      const epic = db.transaction(() => {
-        checkTicketWritable(db, number);
-        const ticket = db
-          .select({ epicNumber: tickets.epicNumber })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        if (!ticket) {
-          throw new NotFoundError(`There is no Ticket T${number}.`);
-        }
-        if (ticket.epicNumber === null) {
-          return null;
-        }
-        db.update(tickets)
-          .set({
-            epicNumber: null,
-            archivedWithEpic: false,
-            updatedAt: new Date(),
-          })
-          .where(eq(tickets.number, number))
-          .run();
-        touchTicket(db, ticket.epicNumber);
-        syncEpicStatus(db, ticket.epicNumber);
-        return ticket.epicNumber;
-      });
-      if (epic !== null) {
-        changes.publish({ type: 'tickets', numbers: [epic, number] });
-      }
-      return getTicket(number);
+      return detachTicketsFromEpic([number])[0];
     },
+
+    detachTicketsFromEpic,
 
     /**
      * The Tickets that block Ticket `number` and the Tickets it blocks, each
@@ -2925,6 +2903,80 @@ export function createTickets(
       syncEpicStatus(db, previous);
     }
     return { previous };
+  }
+
+  /**
+   * `attachToEpic` for each of `children`, all or nothing: if any cannot
+   * join `epic`, none does, and the refusal names every one that cannot and
+   * why. A Ticket in another Epic is refused, not moved. Returns the
+   * children in the order given. The change is announced once, or not at
+   * all when every Ticket was in `epic` already.
+   */
+  function attachTicketsToEpic({ epic, children }: EpicChildrenInput) {
+    throwFieldErrors({ children: checkBatchNumbers(children) });
+
+    const joined = db.transaction(() => {
+      checkEpic(db, epic);
+      return eachOrNone(children, (child) =>
+        joinEpicStep({ epic, child }, { move: false }),
+      );
+    });
+    const changed = children.filter((_, index) => joined[index] !== null);
+    if (changed.length > 0) {
+      changes.publish({ type: 'tickets', numbers: [epic, ...changed] });
+    }
+    return children.map((child) => getTicket(child));
+  }
+
+  /**
+   * `detachFromEpic` for each of `ticketNumbers`, all or nothing: if any
+   * cannot leave its Epic, none does, and the refusal names every one. They
+   * may come from different Epics, and each one's Status follows. A Ticket
+   * in no Epic stays as it is. Returns the Tickets in the order given. The
+   * change is announced once, or not at all when none was in an Epic.
+   */
+  function detachTicketsFromEpic(ticketNumbers: number[]): Ticket[] {
+    throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
+
+    const left = db.transaction(() => eachOrNone(ticketNumbers, leaveEpicStep));
+    const epics = left.filter((epic) => epic !== null);
+    if (epics.length > 0) {
+      changes.publish({
+        type: 'tickets',
+        numbers: [
+          ...new Set(epics),
+          ...ticketNumbers.filter((_, index) => left[index] !== null),
+        ],
+      });
+    }
+    return ticketNumbers.map((number) => getTicket(number));
+  }
+
+  /**
+   * Takes Ticket `number` out of its Epic, without a transaction or an
+   * announcement, and bumps both updated times. Returns the Epic it left,
+   * or `null` when it was in none.
+   */
+  function leaveEpicStep(number: number): number | null {
+    checkTicketWritable(db, number);
+    const ticket = db
+      .select({ epicNumber: tickets.epicNumber })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (!ticket) {
+      throw new NotFoundError(`There is no Ticket T${number}.`);
+    }
+    if (ticket.epicNumber === null) {
+      return null;
+    }
+    db.update(tickets)
+      .set({ epicNumber: null, archivedWithEpic: false, updatedAt: new Date() })
+      .where(eq(tickets.number, number))
+      .run();
+    touchTicket(db, ticket.epicNumber);
+    syncEpicStatus(db, ticket.epicNumber);
+    return ticket.epicNumber;
   }
 
   /**

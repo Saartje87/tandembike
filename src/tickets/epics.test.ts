@@ -485,6 +485,263 @@ describe('Moving several Tickets to an Epic', () => {
   });
 });
 
+describe('Attaching several Tickets to an Epic', () => {
+  it('attaches every Ticket, returns them in order and announces once', () => {
+    const { tickets, project, epic } = setUp();
+    const first = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+    const second = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by bank',
+      status: 'In progress',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    const attached = tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [second.number, first.number],
+    });
+
+    expect(
+      attached.map((ticket) => [ticket.number, ticket.epic?.number]),
+    ).toEqual([
+      [second.number, epic.number],
+      [first.number, epic.number],
+    ]);
+    expect(tickets.getTicket(epic.number)).toMatchObject({
+      status: 'In progress',
+      children: [{ number: first.number }, { number: second.number }],
+    });
+    expect(changes).toEqual([
+      {
+        type: 'tickets',
+        numbers: [epic.number, second.number, first.number],
+      },
+    ]);
+  });
+
+  it('attaches none and names every Ticket that cannot join, and why', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const free = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay later',
+    });
+    const grouped = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: other.number,
+    });
+    const blocker = tickets.createTicket({
+      projectId: project.id,
+      title: 'Design',
+    });
+    tickets.addBlocker({ blocker: blocker.number, blocked: epic.number });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    expect(
+      errorFrom(() =>
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [free.number, grouped.number, blocker.number],
+        }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket T${grouped.number} is already in Epic T${other.number}. Detach it from that Epic first. T${blocker.number} blocks T${epic.number}. An Epic and its own children cannot block each other; remove that Blocker first.`,
+      ),
+    );
+    expect(tickets.getTicket(free.number).epic).toBeNull();
+    expect(tickets.getTicket(grouped.number).epic?.number).toBe(other.number);
+    expect(tickets.getTicket(epic.number).children).toEqual([]);
+    expect(changes).toEqual([]);
+  });
+
+  it('refuses once for an Epic no Ticket can join', () => {
+    const { tickets, project } = setUp();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const another = tickets.createTicket({ projectId: project.id, title: 'B' });
+
+    expect(
+      errorFrom(() =>
+        tickets.attachTicketsToEpic({
+          epic: ticket.number,
+          children: [another.number, 99],
+        }),
+      ),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket T${ticket.number} is not an Epic. Only an Epic can have child Tickets.`,
+      ),
+    );
+  });
+
+  it('keeps a Ticket already in the Epic, and announces nothing when nothing changed', () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    const free = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay later',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [child.number],
+    });
+    expect(changes).toEqual([]);
+
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [child.number, free.number],
+    });
+    expect(changes).toEqual([
+      { type: 'tickets', numbers: [epic.number, free.number] },
+    ]);
+  });
+
+  it('refuses an empty or repeated list', () => {
+    const { tickets, project, epic } = setUp();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+    });
+
+    expect(
+      errorFrom(() =>
+        tickets.attachTicketsToEpic({ epic: epic.number, children: [] }),
+      ),
+    ).toEqual(new ValidationError({ children: 'Choose at least one Ticket.' }));
+    expect(
+      errorFrom(() =>
+        tickets.attachTicketsToEpic({
+          epic: epic.number,
+          children: [ticket.number, ticket.number],
+        }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        children: `Choose each Ticket once: T${ticket.number} is given twice.`,
+      }),
+    );
+  });
+});
+
+describe('Detaching several Tickets', () => {
+  it('detaches Tickets from different Epics, each Epic following, and announces once', () => {
+    const { tickets, project, epic } = setUp();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Payments',
+      type: 'Epic',
+    });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      status: 'Done',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by bank',
+      epicNumber: epic.number,
+    });
+    const started = tickets.createTicket({
+      projectId: project.id,
+      title: 'Refund',
+      epicNumber: other.number,
+      status: 'In progress',
+    });
+    const free = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay later',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    const detached = tickets.detachTicketsFromEpic([
+      started.number,
+      free.number,
+      done.number,
+    ]);
+
+    expect(detached.map(({ number, epic }) => [number, epic])).toEqual([
+      [started.number, null],
+      [free.number, null],
+      [done.number, null],
+    ]);
+    expect(tickets.getTicket(epic.number).status).toBe('Todo');
+    expect(tickets.getTicket(other.number)).toMatchObject({
+      status: 'Todo',
+      children: [],
+    });
+    expect(changes).toEqual([
+      {
+        type: 'tickets',
+        numbers: [other.number, epic.number, started.number, done.number],
+      },
+    ]);
+  });
+
+  it('detaches none and names every Ticket that cannot leave', () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    expect(
+      errorFrom(() => tickets.detachTicketsFromEpic([98, child.number, 99])),
+    ).toEqual(
+      new NotAllowedError('There is no Ticket T98. There is no Ticket T99.'),
+    );
+    expect(tickets.getTicket(child.number).epic?.number).toBe(epic.number);
+    expect(changes).toEqual([]);
+  });
+
+  it('announces nothing when no Ticket was in an Epic', () => {
+    const { tickets, project } = setUp();
+    const free = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay later',
+    });
+    const changes: Change[] = [];
+    tickets.subscribe((change) => changes.push(change));
+
+    expect(tickets.detachTicketsFromEpic([free.number])[0].epic).toBeNull();
+    expect(changes).toEqual([]);
+  });
+
+  it('refuses an empty or repeated list', () => {
+    const { tickets } = setUp();
+
+    expect(errorFrom(() => tickets.detachTicketsFromEpic([]))).toEqual(
+      new ValidationError({ ticketNumbers: 'Choose at least one Ticket.' }),
+    );
+    expect(errorFrom(() => tickets.detachTicketsFromEpic([1, 1]))).toEqual(
+      new ValidationError({
+        ticketNumbers: 'Choose each Ticket once: T1 is given twice.',
+      }),
+    );
+  });
+});
+
 describe('Moving a grouped Ticket to another Project', () => {
   it('refuses to move a child', () => {
     const { tickets, project, epic } = setUp();
