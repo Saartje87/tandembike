@@ -4,9 +4,17 @@ import { style } from '@vanilla-extract/css';
 /**
  * A chip never grows past the row, so a long title wraps inside it. It is not
  * a `Tag`: a `Tag` stays on one line, and its intents are not the Epic colours.
+ * The chip of the Epic open in the drawer is ringed like an open card; the
+ * `outline` atom takes only `none` (T379).
  */
 export const chip = style({
   maxInlineSize: '100%',
+  selectors: {
+    '&[aria-current="true"]': {
+      outline: `${vars.borderWidth.thick} solid ${vars.colorRole.primary.solid}`,
+      outlineOffset: vars.borderWidth.thick,
+    },
+  },
 });
 
 /** The New Epic field is as wide as a Status column's Ticket field. */

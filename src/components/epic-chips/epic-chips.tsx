@@ -44,6 +44,11 @@ export type EpicChipsProps = {
   /** The Board filter, which an Epic's drawer keeps. Defaults to none. */
   filter?: BoardFilter;
   /**
+   * The number of the Ticket open in the drawer over the Board, if any: an
+   * Epic's chip is ringed while it is open.
+   */
+  openTicket?: number;
+  /**
    * Hide done Epics behind a "Show done Epics" switch, as the Project Board
    * does; a Cycle's Board shows them all. Defaults to true.
    */
@@ -69,6 +74,8 @@ type EpicChipProps = {
   epic: Ticket;
   boardPath: string;
   filter?: BoardFilter;
+  /** Whether the Epic is open in the drawer over the Board. */
+  open: boolean;
   onMerged?: (epic: Ticket) => void;
 };
 
@@ -81,9 +88,16 @@ const badgeIntent = {
 /**
  * One Epic in its colour: its number, title and how many of its children
  * that are not archived are Done, as a link that opens its drawer. A card
- * dropped on it joins the Epic, and it is outlined while one is over it.
+ * dropped on it joins the Epic, and it is outlined while one is over it. It
+ * is ringed while it is open in the drawer (T379).
  */
-const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter, onMerged }) => {
+const EpicChip: FC<EpicChipProps> = ({
+  epic,
+  boardPath,
+  filter,
+  open,
+  onMerged,
+}) => {
   const live = useLiveConversations()[epic.number];
   const { section } = laneOf(epic, live);
   const inReview = isInReview(epic, live);
@@ -108,6 +122,7 @@ const EpicChip: FC<EpicChipProps> = ({ epic, boardPath, filter, onMerged }) => {
         ref={ref}
         data-color={color}
         data-drop-target={isDropTarget ? '' : undefined}
+        aria-current={open ? 'true' : undefined}
       >
         <Stack gap={1}>
           <Inline gap={2} alignY="center" flexWrap="wrap">
@@ -152,6 +167,7 @@ export const EpicChips: FC<EpicChipsProps> = ({
   cycleId,
   boardPath,
   filter,
+  openTicket,
   hideDone = true,
   onCreated,
   onMerged,
@@ -197,6 +213,7 @@ export const EpicChips: FC<EpicChipsProps> = ({
                   epic={epic}
                   boardPath={boardPath}
                   filter={filter}
+                  open={epic.number === openTicket}
                   onMerged={onMerged}
                 />
               ))}

@@ -1,12 +1,19 @@
+import { vars } from '@blockle/blocks';
 import { style } from '@vanilla-extract/css';
 
 /**
  * A card, whose checkbox shows when it is hovered or focused. A selected card
  * carried along by another one's drag is faded, which the `opacity` atom,
- * with only `0` and `1`, cannot express (T320).
+ * with only `0` and `1`, cannot express (T320). The card of the Ticket open
+ * in the drawer is ringed, apart from the background a selected or changed
+ * card gets; the `outline` atom takes only `none` (T379).
  */
 export const card = style({
   selectors: {
+    '&[aria-current="true"]': {
+      outline: `${vars.borderWidth.thick} solid ${vars.colorRole.primary.solid}`,
+      outlineOffset: vars.borderWidth.thick,
+    },
     '&[data-carried-along]': {
       opacity: 0.4,
     },

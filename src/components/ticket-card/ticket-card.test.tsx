@@ -64,6 +64,41 @@ describe('TicketCard', () => {
     expect(screen.getByText('T4').parentElement).toContainElement(title);
   });
 
+  it('is marked as the open Ticket when its drawer is open (T379)', () => {
+    renderWithTheme(<TicketCard ticket={ticket} boardPath="/project/1" open />);
+
+    expect(screen.getByRole('listitem')).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+  });
+
+  it('is not marked as open by default', () => {
+    renderWithTheme(<TicketCard ticket={ticket} boardPath="/project/1" />);
+
+    expect(screen.getByRole('listitem')).not.toHaveAttribute('aria-current');
+  });
+
+  it('stays marked as open while it is selected (T379)', () => {
+    renderWithTheme(
+      <TicketCard
+        ticket={ticket}
+        boardPath="/project/1"
+        open
+        selected
+        onSelect={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('listitem')).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(
+      screen.getByRole('checkbox', { name: 'Select T4 Fix the header' }),
+    ).toBeChecked();
+  });
+
   it('has no drag handle: the whole card is dragged (T242)', () => {
     renderWithTheme(
       <TicketCard ticket={ticket} boardPath="/project/1/cycle/7" />,
