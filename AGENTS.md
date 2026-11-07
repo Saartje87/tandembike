@@ -42,6 +42,7 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 - `src/tickets/`: the Tickets module, the only code that reads or writes Projects and Tickets, with its tests next to it.
 - `src/db/`: the Drizzle schema, migrations and database connection.
 - `src/components/`: UI components.
+- `.agents/skills/`: the agent skills, tracked in git. `.claude/skills` is a symlink to it, so read, edit and run `git` on skills through `.agents/skills/`.
 - Every component lives in its own folder, grouped by domain/feature: `components/<name>/{<name>.tsx, <name>.css.ts, <name>.test.tsx}`. Import the component file directly, without the file extension (e.g. `../app-link/app-link`).
 - No barrel files: never add `index.ts` files that re-export from other modules.
 - Always use relative imports without file extensions (`../../lib/format-path`), including across feature folders. The `@/` alias is not used.
