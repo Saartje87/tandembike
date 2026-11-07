@@ -16,6 +16,7 @@ const row = (
   role: NonNullable<ActivityRow['latest']>['role'] = 'agent',
   text = 'Working on it.',
 ): ActivityRow => ({
+  id: 100 + (ticketNumber ?? 0),
   ticketNumber,
   state,
   projectId,
@@ -42,7 +43,7 @@ describe('conversationActivity', () => {
       row(7, 'interrupted'),
     ]);
 
-    expect(activity.needsYou).toEqual([4, 5]);
+    expect(activity.waiting).toEqual([4, 5]);
   });
 
   it('counts every waiting Conversation, including those on no Ticket', () => {
@@ -53,8 +54,8 @@ describe('conversationActivity', () => {
       row(9, 'running'),
     ]);
 
-    expect(activity.needsYouCount).toBe(3);
-    expect(activity.needsYou).toEqual([4]);
+    expect(activity.waitingCount).toBe(3);
+    expect(activity.waiting).toEqual([4]);
   });
 
   it('counts the Conversations that wait for the User per Project', () => {
@@ -65,7 +66,7 @@ describe('conversationActivity', () => {
       row(6, 'running', 2),
     ]);
 
-    expect(activity.needsYouByProject).toEqual({ 1: 2, 2: 1 });
+    expect(activity.waitingByProject).toEqual({ 1: 2, 2: 1 });
   });
 
   describe('live', () => {
@@ -74,8 +75,20 @@ describe('conversationActivity', () => {
 
     it('reports a running and a waiting Conversation', () => {
       expect(liveOf(row(4, 'running'), row(5, 'waiting'))).toEqual({
-        4: { state: 'running', line: 'Working on it.', since, cost: 0 },
-        5: { state: 'waiting', line: 'Working on it.', since, cost: 0 },
+        4: {
+          conversationId: 104,
+          state: 'running',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
+        5: {
+          conversationId: 105,
+          state: 'waiting',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
       });
     });
 
@@ -107,12 +120,22 @@ describe('conversationActivity', () => {
       );
 
       expect(live[4]).toEqual({
+        conversationId: 104,
         state: 'running',
         line: 'Reading board.tsx',
         since: '2026-11-07T09:00:00.000Z',
         cost: 0,
       });
       expect(live[5].line).toBe('Bash');
+    });
+
+    it("carries the Conversation's id, so the User can open it", () => {
+      expect(
+        liveOf(
+          { ...row(4, 'waiting'), id: 31 },
+          { ...row(5, 'interrupted', 1, 'error'), id: 32 },
+        ),
+      ).toMatchObject({ 4: { conversationId: 31 }, 5: { conversationId: 32 } });
     });
 
     it('says Starting for a Conversation without entries', () => {
@@ -127,11 +150,19 @@ describe('conversationActivity', () => {
       );
     });
 
-    it('reports nothing for an idle or stopped Conversation', () => {
-      expect(liveOf(row(4, 'idle'), row(5, 'stopped'))).toEqual({});
+    it('reports a newest idle Conversation as idle, and nothing for a stopped one', () => {
+      expect(liveOf(row(4, 'idle'), row(5, 'stopped'))).toEqual({
+        4: {
+          conversationId: 104,
+          state: 'idle',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
+      });
     });
 
-    it('ignores an older interrupted or errored Conversation behind a newer idle one', () => {
+    it('reports a newer idle Conversation ahead of an older interrupted or errored one', () => {
       expect(
         liveOf(
           row(4, 'idle'),
@@ -139,7 +170,7 @@ describe('conversationActivity', () => {
           row(5, 'idle'),
           row(5, 'idle', 1, 'error'),
         ),
-      ).toEqual({});
+      ).toMatchObject({ 4: { state: 'idle' }, 5: { state: 'idle' } });
     });
 
     it('lets an older running Conversation beat a newer idle one', () => {

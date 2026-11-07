@@ -49,8 +49,16 @@ The one line on an In progress card saying what its live Conversation is doing n
 _Avoid_: Progress line, activity line
 
 **For human**:
-The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now.
-_Avoid_: Needs you, waiting on me
+The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now; that is Needs you.
+_Avoid_: Waiting on me
+
+**Cockpit**:
+A Project's view of its Active Cycle in one column, by what needs the User first: Needs you, then In flight (each Running Ticket with what its run is doing), then Your work (`ready-for-human`), Queued (`ready-for-agent`, in the Todo Lane's order) and Done, closed until opened. Its header shows the Cycle's progress and the Start runs working. It places each Ticket as the Board does, and offers no actions in its lists: a row's title opens the Ticket, and a run waiting on the User shows a bell that opens its Conversation. Without an Active Cycle it points to the Prepared Cycles to start.
+_Avoid_: Dashboard, inbox, factory view
+
+**Needs you**:
+The Tickets and Epics waiting on the User: those in the Action needed section of the In progress Lane, those in Review, and Intake. Action needed and Review count in the Active Cycle; Intake counts in the Cycle and the Backlog, since runs file their feedback outside any Cycle. `ready-for-human` work is not Needs you: it is the User's own work, not a request.
+_Avoid_: Action items, attention list
 
 **Board filter**:
 A narrowing of a Board to the Tickets whose title or Ticket number contains a search text and that have every chosen Label. It only hides Tickets from view: it changes no Ticket, and a hidden Ticket keeps its Status and place.

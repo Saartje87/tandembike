@@ -382,9 +382,9 @@ describe('Selecting a TicketCard', () => {
   });
 
   describe('Conversation activity', () => {
-    const showWith = (running: { running: number[]; needsYou: number[] }) => {
+    const showWith = (running: { running: number[]; waiting: number[] }) => {
       vi.mocked(currentConversationActivity).mockResolvedValue(
-        activity({ ...running, needsYouCount: running.needsYou.length }),
+        activity({ ...running, waitingCount: running.waiting.length }),
       );
       renderWithTheme(
         <ConversationActivityProvider>
@@ -394,21 +394,21 @@ describe('Selecting a TicketCard', () => {
     };
 
     it('shows a running indicator while one of its Conversations runs', async () => {
-      showWith({ running: [4], needsYou: [] });
+      showWith({ running: [4], waiting: [] });
 
       expect(await screen.findByText('Agent running')).toBeInTheDocument();
       expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
     });
 
     it('shows a needs-you mark while one of its Conversations waits for the User', async () => {
-      showWith({ running: [], needsYou: [4] });
+      showWith({ running: [], waiting: [4] });
 
       expect(await screen.findByText('Needs you')).toBeInTheDocument();
       expect(screen.queryByText('Agent running')).not.toBeInTheDocument();
     });
 
     it('shows neither for another Ticket', async () => {
-      showWith({ running: [5], needsYou: [6] });
+      showWith({ running: [5], waiting: [6] });
 
       await waitFor(() =>
         expect(currentConversationActivity).toHaveBeenCalled(),

@@ -3,7 +3,7 @@
 import { Alert } from '@blockle/blocks';
 import { type FC, useRef } from 'react';
 
-import { needsYou } from '../../conversations/conversation-activity';
+import { waitsOnUser } from '../../conversations/conversation-activity';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import {
   type ReplyQuestion,
@@ -47,7 +47,10 @@ export const ConversationChat: FC<ConversationChatProps> = ({
   title,
 }) => {
   const reply = useRef<ReplyControl>(null);
-  const questions = optionsToAnswer(needsYou(conversation.state), transcript);
+  const questions = optionsToAnswer(
+    waitsOnUser(conversation.state),
+    transcript,
+  );
 
   return (
     <div className={styles.chat}>

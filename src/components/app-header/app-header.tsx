@@ -13,7 +13,7 @@ import {
 } from 'react';
 
 import { statsPath } from '../../app/lib/paths';
-import { needsYou as conversationNeedsYou } from '../../conversations/conversation-activity';
+import { waitsOnUser } from '../../conversations/conversation-activity';
 import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -60,7 +60,7 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
   const [open, setOpen] = useState(false);
   const { conversations, show } = useConversationDialog();
   const needsYou = conversations.filter(({ conversation }) =>
-    conversationNeedsYou(conversation.state),
+    waitsOnUser(conversation.state),
   ).length;
 
   const close = useCallback(() => setOpen(false), []);

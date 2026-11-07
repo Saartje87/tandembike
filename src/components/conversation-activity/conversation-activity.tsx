@@ -58,11 +58,11 @@ export const ConversationActivityProvider: FC<
 /** Whether Ticket `number` has a running Conversation, or one that needs the User. */
 export const useTicketActivity = (
   number: number,
-): { running: boolean; needsYou: boolean } => {
+): { running: boolean; waiting: boolean } => {
   const activity = useContext(Activity);
   return {
     running: activity.running.includes(number),
-    needsYou: activity.needsYou.includes(number),
+    waiting: activity.waiting.includes(number),
   };
 };
 

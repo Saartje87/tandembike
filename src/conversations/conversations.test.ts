@@ -566,7 +566,7 @@ describe('Activity rows', () => {
     const { conversations, tickets, runner, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
-    await conversations.start({
+    const first = await conversations.start({
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
@@ -582,6 +582,7 @@ describe('Activity rows', () => {
 
     expect(conversations.activityRows()).toEqual([
       {
+        id: second.id,
         ticketNumber: null,
         projectId: project.id,
         state: second.state,
@@ -596,6 +597,7 @@ describe('Activity rows', () => {
         costUsd: 0,
       },
       {
+        id: first.id,
         ticketNumber: ticket.number,
         projectId: project.id,
         state: 'interrupted',

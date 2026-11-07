@@ -133,6 +133,20 @@ describe('laneStatus', () => {
       expect(inProgress('error', { claim })).toBe('Action needed');
     });
 
+    it('puts an idle Conversation in Review with a PR reference and no Claim', () => {
+      expect(inProgress('idle', { externalReferences: [pullRequest] })).toBe(
+        'Review',
+      );
+    });
+
+    it('puts an idle Conversation in Action needed while it holds a Claim or has no PR', () => {
+      expect(
+        inProgress('idle', { claim, externalReferences: [pullRequest] }),
+      ).toBe('Action needed');
+      expect(inProgress('idle', { claim })).toBe('Action needed');
+      expect(inProgress('idle')).toBe('Action needed');
+    });
+
     it('decides ahead of a PR reference and a Claim', () => {
       const references = { externalReferences: [pullRequest] };
       expect(inProgress('running', references)).toBe('Running');
@@ -166,6 +180,19 @@ describe('isStalled and isInReview', () => {
     externalReferences: [],
   };
   const live = liveConversation();
+
+  it('does not stall a Ticket whose Conversation is idle: it still has one to answer', () => {
+    expect(isStalled(base, liveConversation({ state: 'idle' }))).toBe(false);
+  });
+
+  it('puts an idle Ticket with a PR and no Claim in Review', () => {
+    expect(
+      isInReview(
+        { ...base, externalReferences: [pullRequest] },
+        liveConversation({ state: 'idle' }),
+      ),
+    ).toBe(true);
+  });
 
   it('stalls an In progress Ticket with no Claim, PR or live Conversation', () => {
     expect(isStalled(base)).toBe(true);

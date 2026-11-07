@@ -8,7 +8,9 @@ import { type StatusEntry, statusLine } from './status-line';
  * interrupted Conversation whose latest entry is an error) need the User.
  */
 export type LiveConversation = {
-  state: 'running' | 'waiting' | 'interrupted' | 'error';
+  /** The Conversation's id, to open it in the Conversation dialog. */
+  conversationId: number;
+  state: 'running' | 'waiting' | 'idle' | 'interrupted' | 'error';
   /** The status line: what the Conversation is doing now (T1066). */
   line: string;
   /** When the current run started, as an ISO string. */
@@ -18,7 +20,11 @@ export type LiveConversation = {
 };
 
 export type ConversationActivity = {
-  /** Per Ticket number, its newest live Conversation; none for idle/stopped. */
+  /**
+   * Per Ticket number, its running or waiting Conversation, else its newest
+   * Conversation when that one is idle or interrupted (an error when it ended
+   * in one); none otherwise.
+   */
   live: Record<number, LiveConversation>;
   /**
    * Per Ticket number, the USD cost summed over all its Conversations, closed
@@ -28,23 +34,25 @@ export type ConversationActivity = {
   /** Tickets with a Conversation whose Agent is working. */
   running: number[];
   /** Tickets with a Conversation that waits for a permission or a reply. */
-  needsYou: number[];
+  waiting: number[];
   /** How many Conversations wait for the User, on Tickets or Projects. */
-  needsYouCount: number;
+  waitingCount: number;
   /** The same count per Project id. */
-  needsYouByProject: Record<number, number>;
+  waitingByProject: Record<number, number>;
 };
 
 export const noConversationActivity: ConversationActivity = {
   live: {},
   cost: {},
   running: [],
-  needsYou: [],
-  needsYouCount: 0,
-  needsYouByProject: {},
+  waiting: [],
+  waitingCount: 0,
+  waitingByProject: {},
 };
 
 export type ActivityRow = {
+  /** The Conversation's id. */
+  id: number;
   ticketNumber: number | null;
   projectId: number;
   state: ConversationState;
@@ -67,7 +75,7 @@ const stoppedStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
   if (row.latest?.role === 'error') {
     return 'error';
   }
-  return row.state === 'interrupted' ? 'interrupted' : null;
+  return row.state;
 };
 
 const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
@@ -78,6 +86,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
     state: LiveConversation['state'],
   ) => {
     live[ticketNumber] = {
+      conversationId: row.id,
       state,
       line: statusLine(row.latest),
       since: row.startedAt,
@@ -111,7 +120,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
 };
 
 /** Whether a Conversation in this state waits for the User (T593). */
-export const needsYou = (state: ConversationState) =>
+export const waitsOnUser = (state: ConversationState) =>
   state === 'waiting' || state === 'idle';
 
 const ticketsOf = (rows: ActivityRow[]): number[] => [
@@ -144,15 +153,15 @@ const countBy = (ids: number[]): Record<number, number> => {
 export function conversationActivity(
   conversations: ActivityRow[],
 ): ConversationActivity {
-  const waiting = conversations.filter(({ state }) => needsYou(state));
+  const waiting = conversations.filter(({ state }) => waitsOnUser(state));
   return {
     live: liveOf(conversations),
     cost: costOf(conversations),
     running: ticketsOf(
       conversations.filter(({ state }) => state === 'running'),
     ),
-    needsYou: ticketsOf(waiting),
-    needsYouCount: waiting.length,
-    needsYouByProject: countBy(waiting.map(({ projectId }) => projectId)),
+    waiting: ticketsOf(waiting),
+    waitingCount: waiting.length,
+    waitingByProject: countBy(waiting.map(({ projectId }) => projectId)),
   };
 }

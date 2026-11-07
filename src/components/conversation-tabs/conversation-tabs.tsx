@@ -3,7 +3,7 @@
 import { IconButton, Tab, TabList, TabPanel, Tabs } from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
-import { needsYou } from '../../conversations/conversation-activity';
+import { waitsOnUser } from '../../conversations/conversation-activity';
 import type { ConversationState } from '../../conversations/conversation-state';
 import type { OpenConversation } from '../../conversations/conversations';
 import { intentNames } from '../conversation-labels/conversation-labels';
@@ -80,7 +80,7 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
       </span>
     );
   }
-  if (needsYou(state)) {
+  if (waitsOnUser(state)) {
     return (
       <span role="img" aria-label="Needs you">
         <Icon name="bell-alert" size="small" />
