@@ -34,6 +34,15 @@ The agent needs to know when it's done. Every agent brief must have concrete, te
 
 In this repo, store the criteria in the Ticket's acceptance criteria field (`update_ticket` with `acceptanceCriteria`), never as a checklist in the brief: agents check them off there with `set_acceptance_criteria_checked`. The brief points to the field. The examples below show criteria inline only to illustrate what good ones look like.
 
+### A changed rule agrees everywhere it is stated
+
+A rule or piece of guidance (process, tracker or behaviour wording) is often stated in several places at once: the MCP server's instructions and tool descriptions, the agent docs, `AGENTS.md` and `CLAUDE.md`, skills, the README and ADRs. When a Ticket changes one, give it a criterion that every place stating the rule says the same afterwards, not only the place the brief names. Describe the rule rather than listing files, in line with "Durability over precision".
+
+The implementer finds those places by searching the repository for the old wording and close paraphrases of it, not by trusting a list in the Ticket. An ADR records a past decision: when it states the changed rule, supersede it with a new ADR or amend it with a note of what changed and why, rather than rewriting what it says was decided.
+
+- **Good:** "Every place that states what to do after the MCP tools change says to start a new session"
+- **Bad:** "Update the server instructions and `docs/agents/issue-tracker.md`": the README says the same thing and is missed
+
 ### One constraint per open decision
 
 A decision the brief leaves to the implementer (placement, naming, UX flow, data shape) gets at most one constraint, or its constraints in priority order, so a conflict has a clear winner. Two unranked constraints that pull apart force a guess.

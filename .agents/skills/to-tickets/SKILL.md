@@ -97,6 +97,8 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 - [ ] Criterion 1
 - [ ] Criterion 2
 
+A ticket that changes a rule or piece of guidance gets a criterion that every place stating the rule says the same afterwards, found by searching for the old wording: see "A changed rule agrees everywhere it is stated" in the triage skill's `AGENT-BRIEF.md`, which holds the rule.
+
 ## Blocked by
 
 - A reference to each blocking ticket, or "None (can start immediately)". Omit this section when blockers were set as native edges.
