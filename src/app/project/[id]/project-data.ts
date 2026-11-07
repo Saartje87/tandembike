@@ -130,18 +130,24 @@ export function runSlotsOf(projectId: number) {
 }
 
 /**
- * Cycle `cycleId`'s Tickets, with the Project's Epics that are not planned
- * themselves, so an Epic shows while its children are on the Cycle.
+ * Cycle `cycleId`'s Tickets, with the Epics planned elsewhere that have a
+ * child on the Cycle, so an Epic shows while its children are on it.
  */
 export function cycleTicketsWithEpics(projectId: number, cycleId: number) {
   const tickets = appTickets('user');
   const planned = tickets.listTickets({ projectId, cycleId });
   const plannedNumbers = new Set(planned.map(({ number }) => number));
+  // An Epic planned elsewhere joins only to hold its children planned here.
+  const parents = new Set(
+    planned.flatMap(({ epic }) => (epic ? [epic.number] : [])),
+  );
   return [
     ...planned,
     ...tickets
       .listTickets({ projectId, type: 'Epic' })
-      .filter(({ number }) => !plannedNumbers.has(number)),
+      .filter(
+        ({ number }) => parents.has(number) && !plannedNumbers.has(number),
+      ),
   ];
 }
 

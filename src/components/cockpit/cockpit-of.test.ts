@@ -626,6 +626,14 @@ describe('cockpitOf', () => {
         ]);
         expect(cockpit.needsYou.count).toBe(1);
       });
+
+      it('lists an Intake Epic given both on the Board and in the Backlog once', () => {
+        const backlogEpic = intakeEpic({ children: [] });
+        const cockpit = cockpitOf([backlogEpic], activity(), [backlogEpic]);
+
+        expect(numbers(cockpit.needsYou.intake)).toEqual([50]);
+        expect(cockpit.needsYou.count).toBe(1);
+      });
     });
 
     it('places a Todo Epic by its label, at its Board position among the Tickets', () => {
