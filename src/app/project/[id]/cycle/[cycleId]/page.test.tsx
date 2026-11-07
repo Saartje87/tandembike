@@ -1,9 +1,11 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../../../../conversations/app-conversations';
 import type { Conversation } from '../../../../../conversations/conversations';
+import { showOpenPopovers } from '../../../../../test/popover';
 import {
   renderPage,
   renderPageError,
@@ -29,22 +31,6 @@ vi.mock('../../../../../conversations/app-conversations', () => ({
 }));
 vi.mock('../../../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
-}));
-vi.mock('../../../../../components/board/board', () => ({
-  Board: ({
-    project,
-    tickets,
-    epics,
-  }: {
-    project: { name: string };
-    tickets: { number: number }[];
-    epics: { number: number }[];
-  }) => (
-    <section aria-label={project.name}>
-      {`Tickets: ${tickets.map((ticket) => `T${ticket.number}`).join(',')}`}
-      <p>{`Epics: ${epics.map((epic) => `T${epic.number}`).join(',')}`}</p>
-    </section>
-  ),
 }));
 vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
   CycleHeader: ({
@@ -84,6 +70,8 @@ vi.mock(
     ),
   }),
 );
+
+showOpenPopovers();
 
 const noSearch = Promise.resolve({});
 
@@ -333,9 +321,18 @@ describe('CyclePage', () => {
     expect(
       screen.getByRole('heading', { level: 2, name: 'Launch' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Website' })).toHaveTextContent(
-      `Tickets: T${planned.number}`,
-    );
+    // A Prepared Cycle's Board: its Tickets in one column, with progress but
+    // no run slots, and the header's Start Cycle choice of Active Cycle.
+    expect(screen.getByText('Active: none')).toBeVisible();
+    expect(screen.getByText('0/1 done')).toBeVisible();
+    expect(screen.queryByText(/^Runs /)).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
+        'link',
+        { name: planned.title },
+      ),
+    ).toBeVisible();
+    expect(screen.queryByText('In the Backlog')).not.toBeInTheDocument();
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
     ).resolves.toEqual({
@@ -343,7 +340,7 @@ describe('CyclePage', () => {
     });
   });
 
-  it("gives the Board every live Epic of the Project, planned or not, to pick the Cycle's from", async () => {
+  it("gives the selection bar every live Epic of the Project, planned or not, to pick the Cycle's from", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const cycle = tickets.createCycle({
@@ -378,9 +375,15 @@ describe('CyclePage', () => {
       <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
     );
 
-    expect(screen.getByText(/^Epics:/)).toHaveTextContent(
-      `Epics: T${epic.number}`,
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Select T\d+ Pay by card/ }),
     );
+    await userEvent.click(screen.getByRole('button', { name: /Add to Epic/ }));
+    expect(
+      screen.getByRole('menuitem', { name: new RegExp(epic.title) }),
+    ).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: /Old/ })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: /Not an Epic/ })).toBeNull();
   });
 
   it("shows an archived Cycle's final Tickets read-only", async () => {

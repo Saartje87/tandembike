@@ -45,7 +45,7 @@ import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
-  cyclePath,
+  boardPathOf,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
 import {
@@ -99,8 +99,8 @@ import { useBoardFilter } from './use-board-filter';
 
 export type CockpitProps = {
   projectId: number;
-  /** The Cycle shown, the Project's Active one. */
-  cycle: Pick<Cycle, 'id' | 'title'>;
+  /** The Cycle shown, or `null` for the Backlog. */
+  cycle: Pick<Cycle, 'id' | 'title'> | null;
   /** The Cycle's Tickets, as its Board gets them. */
   tickets: Ticket[];
   /**
@@ -108,8 +108,18 @@ export type CockpitProps = {
    * their feedback outside any Cycle. Defaults to none.
    */
   backlog?: Ticket[];
-  /** The Project's Start runs working now, and how many it allows at once. */
-  runSlots: { used: number; cap: number };
+  /**
+   * The Project's Start runs working now, and how many it allows at once;
+   * given on the Active Cycle's Board only.
+   */
+  runSlots?: { used: number; cap: number };
+  /**
+   * Whether this is a planning Board, a Prepared Cycle's or the Backlog's:
+   * Queued and Your work start open, and an empty section is hidden.
+   */
+  planning?: boolean;
+  /** The Board's archived Tickets, listed last. Defaults to none. */
+  archived?: Ticket[];
   /** The Project's Cycles, for the selection bar's Move to Cycle. Defaults to none. */
   cycles?: Cycle[];
   /** The Project's live Epics, for the selection bar's Add to Epic. Defaults to none. */
@@ -623,6 +633,8 @@ export const Cockpit: FC<CockpitProps> = ({
   tickets,
   backlog = [],
   runSlots,
+  planning = false,
+  archived = [],
   cycles = [],
   epics = [],
   filter: initialFilter,
@@ -639,12 +651,13 @@ export const Cockpit: FC<CockpitProps> = ({
           : ticket,
       ),
   );
-  const boardPath = cyclePath(projectId, cycle.id);
+  const cycleId = cycle?.id ?? null;
+  const boardPath = boardPathOf(projectId, cycleId);
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
   const everything = cockpitOf(shownTickets, { live, cost }, backlog);
   // The Board filter narrows every section; only the tab keeps the full count.
   const shown = new Set(
-    [...shownTickets, ...backlog]
+    [...shownTickets, ...backlog, ...archived]
       .filter((ticket) => ticketMatches(ticket, filter))
       .map(({ number }) => number),
   );
@@ -657,6 +670,7 @@ export const Cockpit: FC<CockpitProps> = ({
     yourWork: keep(everything.yourWork),
     queued: keep(everything.queued),
     done: keep(everything.done),
+    archived: keep(archived),
     needsYou: (() => {
       const actionNeeded = keep(everything.needsYou.actionNeeded);
       const review = keep(everything.needsYou.review);
@@ -679,6 +693,7 @@ export const Cockpit: FC<CockpitProps> = ({
     ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
+  const hideEmpty = (count: number) => planning && count === 0;
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
   useCountInTitle(everything.needsYou.count);
@@ -689,7 +704,7 @@ export const Cockpit: FC<CockpitProps> = ({
       (ticket) =>
         ticket.status === 'Todo' &&
         !ticket.archived &&
-        (ticket.type !== 'Epic' || ticket.cycle?.id === cycle.id),
+        (ticket.type !== 'Epic' || (ticket.cycle?.id ?? null) === cycleId),
     )
     .sort(
       (left, right) =>
@@ -760,7 +775,7 @@ export const Cockpit: FC<CockpitProps> = ({
       const result = await reorderTickets({
         projectId,
         status: 'Todo',
-        cycleId: cycle.id,
+        cycleId,
         ticketNumbers,
       });
       if (!result.ok) {
@@ -996,190 +1011,239 @@ export const Cockpit: FC<CockpitProps> = ({
     >
       <Stack gap={6}>
         {error && <Alert intent="danger">{error}</Alert>}
-        <NewTicketInline projectId={projectId} cycleId={cycle.id} />
+        <NewTicketInline
+          projectId={projectId}
+          {...(cycleId === null ? {} : { cycleId })}
+        />
         <BoardFilterBar
           filter={filter}
           labels={filterLabels}
           onChange={changeFilter}
         />
-        <Stack gap={2}>
-          <Inline gap={3} alignY="center" alignX="between">
-            <Text color="muted">
-              {done}/{total} done
-            </Text>
-            <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
-              Runs {runSlots.used}/{runSlots.cap}
-            </Tag>
-          </Inline>
-          <Progress
-            value={total === 0 ? 0 : Math.round((done / total) * 100)}
-            aria-label="Cycle progress"
-          />
-        </Stack>
-        <Stack gap={2} asChild>
-          <section aria-label="Needs you">
-            <Inline gap={2} alignY="center">
-              <Heading level={3}>Needs you</Heading>
-              <Tag>{needsYou.count}</Tag>
+        {cycle && (
+          <Stack gap={2}>
+            <Inline gap={3} alignY="center" alignX="between">
+              <Text color="muted">
+                {done}/{total} done
+              </Text>
+              {runSlots && (
+                <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
+                  Runs {runSlots.used}/{runSlots.cap}
+                </Tag>
+              )}
             </Inline>
-            {needsYou.count === 0 ? (
-              <Text color="muted">Nothing needs you.</Text>
-            ) : (
-              <Stack gap={3}>
-                {needsYou.actionNeeded.length > 0 && (
-                  <RowList
-                    title="Action needed"
-                    count={needsYou.actionNeeded.length}
-                    open
-                  >
-                    {needRows(needsYou.actionNeeded, 'actionNeeded')}
-                  </RowList>
-                )}
-                {needsYou.review.length > 0 && (
-                  <RowList title="Review" count={needsYou.review.length} open>
-                    {needRows(needsYou.review, 'review')}
-                  </RowList>
-                )}
-                {needsYou.intake.length > 0 && (
-                  <RowList title="Intake" count={needsYou.intake.length} open>
-                    {needRows(needsYou.intake, 'intake')}
-                  </RowList>
-                )}
-              </Stack>
-            )}
-          </section>
-        </Stack>
-        <Stack gap={2} asChild>
-          <section aria-label="In flight">
-            <Inline gap={2} alignY="center">
-              <Heading level={3}>In flight</Heading>
-              <Tag>{inFlightCount}</Tag>
-            </Inline>
-            {inFlightCount === 0 ? (
-              <Text color="muted">Nothing in flight.</Text>
-            ) : (
-              <Stack gap={1} listStyle="none" role="list" asChild>
-                <ul>
-                  {cockpit.epics.map((row) => (
-                    <TicketRow
-                      key={row.number}
-                      ticket={row}
-                      href={hrefOf(row.number)}
-                      icon="queue-list"
-                      line={inFlightLine(row, now)}
-                      beside={<ChildrenBar row={row} />}
-                      end={
-                        <Inline gap={2} alignY="center" flexWrap="nowrap">
-                          {row.childNeedsYou && (
-                            <Tag
-                              intent="warning"
-                              startSlot={<Icon name="arrow-up" size="small" />}
-                            >
-                              needs you
+            <Progress
+              value={total === 0 ? 0 : Math.round((done / total) * 100)}
+              aria-label="Cycle progress"
+            />
+          </Stack>
+        )}
+        {!hideEmpty(needsYou.count) && (
+          <Stack gap={2} asChild>
+            <section aria-label="Needs you">
+              <Inline gap={2} alignY="center">
+                <Heading level={3}>Needs you</Heading>
+                <Tag>{needsYou.count}</Tag>
+              </Inline>
+              {needsYou.count === 0 ? (
+                <Text color="muted">Nothing needs you.</Text>
+              ) : (
+                <Stack gap={3}>
+                  {needsYou.actionNeeded.length > 0 && (
+                    <RowList
+                      title="Action needed"
+                      count={needsYou.actionNeeded.length}
+                      open
+                    >
+                      {needRows(needsYou.actionNeeded, 'actionNeeded')}
+                    </RowList>
+                  )}
+                  {needsYou.review.length > 0 && (
+                    <RowList title="Review" count={needsYou.review.length} open>
+                      {needRows(needsYou.review, 'review')}
+                    </RowList>
+                  )}
+                  {needsYou.intake.length > 0 && (
+                    <RowList title="Intake" count={needsYou.intake.length} open>
+                      {needRows(needsYou.intake, 'intake')}
+                    </RowList>
+                  )}
+                </Stack>
+              )}
+            </section>
+          </Stack>
+        )}
+        {!hideEmpty(inFlightCount) && (
+          <Stack gap={2} asChild>
+            <section aria-label="In flight">
+              <Inline gap={2} alignY="center">
+                <Heading level={3}>In flight</Heading>
+                <Tag>{inFlightCount}</Tag>
+              </Inline>
+              {inFlightCount === 0 ? (
+                <Text color="muted">Nothing in flight.</Text>
+              ) : (
+                <Stack gap={1} listStyle="none" role="list" asChild>
+                  <ul>
+                    {cockpit.epics.map((row) => (
+                      <TicketRow
+                        key={row.number}
+                        ticket={row}
+                        href={hrefOf(row.number)}
+                        icon="queue-list"
+                        line={inFlightLine(row, now)}
+                        beside={<ChildrenBar row={row} />}
+                        end={
+                          <Inline gap={2} alignY="center" flexWrap="nowrap">
+                            {row.childNeedsYou && (
+                              <Tag
+                                intent="warning"
+                                startSlot={
+                                  <Icon name="arrow-up" size="small" />
+                                }
+                              >
+                                needs you
+                              </Tag>
+                            )}
+                            {row.pullRequest && (
+                              <PullRequestLink url={row.pullRequest} />
+                            )}
+                            <Tag intent={sectionIntent[row.section]}>
+                              {row.section}
                             </Tag>
-                          )}
-                          {row.pullRequest && (
-                            <PullRequestLink url={row.pullRequest} />
-                          )}
-                          <Tag intent={sectionIntent[row.section]}>
-                            {row.section}
-                          </Tag>
-                        </Inline>
-                      }
-                      details={<EpicChildList row={row} />}
-                    />
-                  ))}
-                  {cockpit.inFlight.map((row) => (
-                    <TicketRow
-                      key={row.number}
-                      ticket={row}
-                      href={hrefOf(row.number)}
-                      icon="play"
-                      selection={selectable(row.number, 'inFlight')}
-                      line={inFlightLine(row, now)}
-                      end={
-                        <Inline gap={2} alignY="center" flexWrap="nowrap">
-                          {row.pullRequest && (
-                            <PullRequestLink url={row.pullRequest} />
-                          )}
-                          <Tag intent={sectionIntent[row.section]}>
-                            {row.section}
-                          </Tag>
-                        </Inline>
-                      }
-                    />
-                  ))}
-                </ul>
-              </Stack>
-            )}
-          </section>
-        </Stack>
+                          </Inline>
+                        }
+                        details={<EpicChildList row={row} />}
+                      />
+                    ))}
+                    {cockpit.inFlight.map((row) => (
+                      <TicketRow
+                        key={row.number}
+                        ticket={row}
+                        href={hrefOf(row.number)}
+                        icon="play"
+                        selection={selectable(row.number, 'inFlight')}
+                        line={inFlightLine(row, now)}
+                        end={
+                          <Inline gap={2} alignY="center" flexWrap="nowrap">
+                            {row.pullRequest && (
+                              <PullRequestLink url={row.pullRequest} />
+                            )}
+                            <Tag intent={sectionIntent[row.section]}>
+                              {row.section}
+                            </Tag>
+                          </Inline>
+                        }
+                      />
+                    ))}
+                  </ul>
+                </Stack>
+              )}
+            </section>
+          </Stack>
+        )}
         <Stack gap={2}>
-          <RowList title="Your work" count={cockpit.yourWork.length}>
-            {cockpit.yourWork.map((row) => (
-              <DraggableTicketRow
-                key={row.number}
-                sortable={sortableIn('Your work', row.number)}
-                muted
-                ticket={row}
-                href={hrefOf(row.number)}
-                icon={row.children ? 'queue-list' : 'user'}
-                {...epicParts(row)}
-                selection={
-                  row.children ? undefined : selectable(row.number, 'yourWork')
-                }
-                line={`ready-for-human · for ${age(row.updatedAt)}`}
-                end={<Tag>For human</Tag>}
-              />
-            ))}
-          </RowList>
-          <RowList title="Queued" count={cockpit.queued.length}>
-            {cockpit.queued.map((row, index) => (
-              <DraggableTicketRow
-                key={row.number}
-                sortable={sortableIn('Queued', row.number)}
-                muted
-                ticket={row}
-                href={hrefOf(row.number)}
-                icon={row.children ? 'queue-list' : 'clock'}
-                {...epicParts(row)}
-                selection={
-                  row.children ? undefined : selectable(row.number, 'queued')
-                }
-                line={queuedLine(row, index)}
-                end={
-                  row.blocked ? (
-                    <Tag intent="warning">Blocked</Tag>
-                  ) : index === 0 ? (
-                    <Tag intent="primary">Next</Tag>
-                  ) : (
-                    <Tag>Queued</Tag>
-                  )
-                }
-              />
-            ))}
-          </RowList>
-          <RowList title="Done" count={cockpit.done.length}>
-            {cockpit.done.map((row) => (
-              <TicketRow
-                key={row.number}
-                muted
-                ticket={row}
-                href={hrefOf(row.number)}
-                icon="check-circle"
-                {...epicParts(row)}
-                selection={
-                  row.children ? undefined : selectable(row.number, 'done')
-                }
-                line={lineOf(
-                  `Done ${age(row.updatedAt)} ago`,
-                  row.pullRequest && pullRequestLabel(row.pullRequest),
-                  row.cost > 0 && formatCost(row.cost),
-                )}
-                end={<Tag intent="success">Done</Tag>}
-              />
-            ))}
-          </RowList>
+          {!hideEmpty(cockpit.yourWork.length) && (
+            <RowList
+              title="Your work"
+              count={cockpit.yourWork.length}
+              open={planning}
+            >
+              {cockpit.yourWork.map((row) => (
+                <DraggableTicketRow
+                  key={row.number}
+                  sortable={sortableIn('Your work', row.number)}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon={row.children ? 'queue-list' : 'user'}
+                  {...epicParts(row)}
+                  selection={
+                    row.children
+                      ? undefined
+                      : selectable(row.number, 'yourWork')
+                  }
+                  line={`ready-for-human · for ${age(row.updatedAt)}`}
+                  end={<Tag>For human</Tag>}
+                />
+              ))}
+            </RowList>
+          )}
+          {!hideEmpty(cockpit.queued.length) && (
+            <RowList
+              title="Queued"
+              count={cockpit.queued.length}
+              open={planning}
+            >
+              {cockpit.queued.map((row, index) => (
+                <DraggableTicketRow
+                  key={row.number}
+                  sortable={sortableIn('Queued', row.number)}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon={row.children ? 'queue-list' : 'clock'}
+                  {...epicParts(row)}
+                  selection={
+                    row.children ? undefined : selectable(row.number, 'queued')
+                  }
+                  line={queuedLine(row, index)}
+                  end={
+                    row.blocked ? (
+                      <Tag intent="warning">Blocked</Tag>
+                    ) : index === 0 ? (
+                      <Tag intent="primary">Next</Tag>
+                    ) : (
+                      <Tag>Queued</Tag>
+                    )
+                  }
+                />
+              ))}
+            </RowList>
+          )}
+          {!hideEmpty(cockpit.done.length) && (
+            <RowList title="Done" count={cockpit.done.length}>
+              {cockpit.done.map((row) => (
+                <TicketRow
+                  key={row.number}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon="check-circle"
+                  {...epicParts(row)}
+                  selection={
+                    row.children ? undefined : selectable(row.number, 'done')
+                  }
+                  line={lineOf(
+                    `Done ${age(row.updatedAt)} ago`,
+                    row.pullRequest && pullRequestLabel(row.pullRequest),
+                    row.cost > 0 && formatCost(row.cost),
+                  )}
+                  end={<Tag intent="success">Done</Tag>}
+                />
+              ))}
+            </RowList>
+          )}
+          {!hideEmpty(cockpit.archived.length) && (
+            <RowList title="Archived" count={cockpit.archived.length}>
+              {cockpit.archived.map((ticket) => (
+                <TicketRow
+                  key={ticket.number}
+                  muted
+                  ticket={{
+                    number: ticket.number,
+                    title: ticket.title,
+                    epic: ticket.epic,
+                    updatedAt: ticket.updatedAt,
+                    color: ticket.color,
+                  }}
+                  href={hrefOf(ticket.number)}
+                  icon="archive-box"
+                  line={`Archived · ${ticket.type === 'Epic' ? 'Epic' : 'Ticket'} · ${age(ticket.updatedAt)} ago`}
+                />
+              ))}
+            </RowList>
+          )}
         </Stack>
         {selection.length > 0 && (
           <SelectionBar
@@ -1192,7 +1256,7 @@ export const Cockpit: FC<CockpitProps> = ({
           >
             <MoveToCycleMenu
               cycles={cycles}
-              cycleId={cycle.id}
+              cycleId={cycleId}
               disabled={changing}
               onPick={moveSelectionToCycle}
             />

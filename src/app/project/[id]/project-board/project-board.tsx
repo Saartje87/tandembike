@@ -1,6 +1,5 @@
 import type { FC } from 'react';
 
-import { Board } from '../../../../components/board/board';
 import { Cockpit } from '../../../../components/cockpit/cockpit';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
@@ -76,12 +75,7 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
 };
 
 /** The tab's Board, or an Archived Cycle's read-only list. */
-const BoardTab: FC<ProjectBoardProps> = ({
-  project,
-  tab,
-  openTicket,
-  filter,
-}) => {
+const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
   const tickets = appTickets('user');
   const cycleId = tab === 'backlog' ? null : tab.id;
   const cycles = tickets.listCycles(project.id);
@@ -100,7 +94,26 @@ const BoardTab: FC<ProjectBoardProps> = ({
       </>
     );
   }
-  if (tab !== 'backlog' && tab.state === 'Active') {
+  const archived = tickets
+    .listTickets({ projectId: project.id, cycleId, includeArchived: true })
+    .filter((ticket) => ticket.archived);
+  const epics = tickets.listTickets({ projectId: project.id, type: 'Epic' });
+  if (tab === 'backlog') {
+    // The Backlog is the whole scope of its Board: no progress, no runs.
+    return (
+      <Cockpit
+        projectId={project.id}
+        cycle={null}
+        tickets={tickets.listTickets({ projectId: project.id, cycleId: null })}
+        archived={archived}
+        planning
+        cycles={cycles}
+        epics={epics}
+        filter={filter}
+      />
+    );
+  }
+  if (tab.state === 'Active') {
     // The Active Cycle's Board is one column, by what needs the User.
     return (
       <>
@@ -109,39 +122,35 @@ const BoardTab: FC<ProjectBoardProps> = ({
           projectId={project.id}
           cycle={tab}
           tickets={cycleTicketsWithEpics(project.id, tab.id)}
+          archived={archived}
           backlog={tickets.listTickets({
             projectId: project.id,
             cycleId: null,
           })}
           runSlots={runSlotsOf(project.id)}
           cycles={cycles}
-          epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
+          epics={epics}
           filter={filter}
         />
       </>
     );
   }
-  const shown = tickets.listTickets({
-    projectId: project.id,
-    cycleId,
-    includeArchived: true,
-  });
+  // A Prepared Cycle plans its Tickets: progress and Start Cycle, no runs.
   return (
     <>
-      {tab !== 'backlog' && (
-        <CycleHeader
-          key={tab.id}
-          cycle={tab}
-          activeCycle={cycles.find(({ state }) => state === 'Active')}
-        />
-      )}
-      <Board
-        project={project}
-        tickets={shown}
-        epics={tickets.listTickets({ projectId: project.id, type: 'Epic' })}
-        cycleId={cycleId}
+      <CycleHeader
+        key={tab.id}
+        cycle={tab}
+        activeCycle={cycles.find(({ state }) => state === 'Active')}
+      />
+      <Cockpit
+        projectId={project.id}
+        cycle={tab}
+        tickets={cycleTicketsWithEpics(project.id, tab.id)}
+        archived={archived}
+        planning
         cycles={cycles}
-        openTicket={openTicket}
+        epics={epics}
         filter={filter}
       />
     </>

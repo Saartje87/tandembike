@@ -1193,3 +1193,190 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
     );
   });
 });
+
+describe('Cockpit as a planning Board (T1119)', () => {
+  const quiet = () =>
+    vi
+      .mocked(currentConversationActivity)
+      .mockResolvedValue(noConversationActivity);
+
+  afterEach(() => {
+    vi.mocked(createTicket).mockReset();
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(currentConversationActivity).mockReset();
+  });
+
+  const planning = [
+    ticket({ number: 1, title: 'Queued one', labels: ['ready-for-agent'] }),
+    ticket({
+      number: 2,
+      title: 'Queued two',
+      position: 1,
+      labels: ['ready-for-agent'],
+    }),
+    ticket({
+      number: 3,
+      title: 'Mine',
+      position: 2,
+      labels: ['ready-for-human'],
+    }),
+  ];
+
+  const renderPlanning = (props: Partial<Parameters<typeof Cockpit>[0]> = {}) =>
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <Cockpit
+          projectId={3}
+          cycle={{ id: 9, title: 'Next' }}
+          tickets={planning}
+          planning
+          {...props}
+        />
+      </ConversationActivityProvider>,
+    );
+
+  it("shows a Prepared Cycle's progress without run slots", () => {
+    quiet();
+    renderPlanning();
+
+    expect(screen.getByText('0/3 done')).toBeVisible();
+    expect(
+      screen.getByRole('progressbar', { name: 'Cycle progress' }),
+    ).toBeVisible();
+    expect(screen.queryByText(/^Runs /)).not.toBeInTheDocument();
+  });
+
+  it('shows no progress on the Backlog', () => {
+    quiet();
+    renderPlanning({ cycle: null });
+
+    expect(screen.queryByText(/done$/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  });
+
+  it('starts Queued and Your work open, and Done closed, and hides empty sections', () => {
+    quiet();
+    renderPlanning({
+      tickets: [
+        ...planning,
+        ticket({ number: 4, title: 'Old', status: 'Done' }),
+      ],
+    });
+
+    expect(section('Queued').querySelector('details')).toHaveAttribute('open');
+    expect(section('Your work').querySelector('details')).toHaveAttribute(
+      'open',
+    );
+    expect(section('Done').querySelector('details')).not.toHaveAttribute(
+      'open',
+    );
+    expect(screen.queryByRole('region', { name: 'In flight' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Archived' })).toBeNull();
+  });
+
+  it('hides Queued and Your work when they are empty', () => {
+    quiet();
+    renderPlanning({ tickets: [planning[0]] });
+
+    expect(screen.queryByRole('region', { name: 'Your work' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Done' })).toBeNull();
+    expect(section('Queued')).toBeVisible();
+  });
+
+  it('creates a Backlog Ticket outside any Cycle', async () => {
+    quiet();
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderPlanning({ cycle: null });
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Idea{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: 3,
+      title: 'Idea',
+    });
+  });
+
+  it("reorders the Backlog's Queued rows with no Cycle", async () => {
+    quiet();
+    vi.mocked(reorderTickets).mockResolvedValue({ ok: true });
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.tagName === 'LI') {
+          const rows = [...document.querySelectorAll('li')];
+          return new DOMRect(
+            0,
+            50 + rows.indexOf(this as never) * 100,
+            100,
+            80,
+          );
+        }
+        return new DOMRect(0, 0, 800, 2000);
+      });
+    onTestFinished(() => bounds.mockRestore());
+    renderPlanning({ cycle: null });
+    const row = screen.getByText('T1').closest('li');
+    if (!row) {
+      throw new Error('No row');
+    }
+
+    await keyboardDrag(row, '{ArrowDown}');
+
+    await vi.waitFor(() =>
+      expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        status: 'Todo',
+        cycleId: null,
+        ticketNumbers: [2, 1, 3],
+      }),
+    );
+  });
+
+  it('offers a Backlog selection a move to a Cycle but not to the Backlog', async () => {
+    quiet();
+    const next: Cycle = {
+      id: 9,
+      projectId: 3,
+      title: 'Next',
+      state: 'Prepared',
+    } as Cycle;
+    renderPlanning({ cycle: null, cycles: [next] });
+
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select T1 Queued one' }),
+    );
+
+    expect(screen.getByText('1 selected')).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: /Move to/ }));
+    expect(screen.getByRole('menuitem', { name: 'Next' })).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Backlog' })).toBeNull();
+  });
+
+  it('lists the archived Tickets last, closed, each opening its Ticket', async () => {
+    quiet();
+    renderPlanning({
+      archived: [ticket({ number: 20, title: 'Dropped', archived: true })],
+    });
+
+    const archived = section('Archived');
+    expect(archived.querySelector('details')).not.toHaveAttribute('open');
+    expect(within(archived).getByText('1')).toBeVisible();
+    const regions = screen.getAllByRole('region');
+    expect(regions.at(-1)).toBe(archived);
+    await userEvent.click(within(archived).getByText('Archived'));
+    expect(
+      within(archived).getByRole('link', { name: /Dropped/ }),
+    ).toHaveAttribute('href', expect.stringContaining('ticket=20'));
+  });
+
+  it('shows the Archived list on the Active Cycle, even with none', () => {
+    quiet();
+    renderCockpit();
+
+    expect(section('Archived')).toBeVisible();
+  });
+});
