@@ -596,6 +596,67 @@ describe('Cockpit', () => {
       within(section('In flight')).getByText('Nothing in flight.'),
     ).toBeVisible();
   });
+
+  it('shows a ready-for-agent Epic in Queued and a Done one in Done, each with its children nested', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const childOf = (number: number, status: Ticket['status']) => ({
+      number,
+      title: `Child ${number}`,
+      status,
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+    renderCockpit([
+      ticket({
+        number: 50,
+        title: 'Cockpit',
+        type: 'Epic',
+        color: 'teal',
+        labels: ['ready-for-agent'],
+        children: [childOf(30, 'Todo')],
+      }),
+      ticket({
+        number: 30,
+        title: 'Child 30',
+        labels: ['ready-for-agent'],
+        epic: link,
+      }),
+      ticket({
+        number: 60,
+        title: 'Shipped',
+        type: 'Epic',
+        color: 'pink',
+        status: 'Done',
+        children: [childOf(31, 'Done')],
+      }),
+      ticket({
+        number: 31,
+        title: 'Child 31',
+        status: 'Done',
+        epic: { number: 60, title: 'Shipped', color: 'pink' },
+      }),
+    ]);
+
+    const queued = section('Queued');
+    expect(within(queued).getAllByRole('link')).toHaveLength(1);
+    const epicRow = within(queued)
+      .getByRole('link', { name: 'Cockpit' })
+      .closest('li') as HTMLElement;
+    await userEvent.click(
+      within(epicRow).getByRole('img', { name: '0 of 1 children done' }),
+    );
+    expect(epicRow.querySelector('details')).toHaveAttribute('open');
+    expect(within(epicRow).getByText('Child 30')).toBeInTheDocument();
+    const done = section('Done');
+    expect(
+      within(done).getByRole('link', { name: 'Shipped' }),
+    ).toBeInTheDocument();
+    expect(within(done).queryByRole('link', { name: 'Child 31' })).toBe(null);
+  });
 });
 
 describe('Cockpit drag', () => {

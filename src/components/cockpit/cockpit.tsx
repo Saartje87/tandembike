@@ -392,7 +392,7 @@ const Pip: FC<PipProps> = ({ state, title }) => (
   <span title={title} className={`${styles.pip} ${styles.pipState[state]}`} />
 );
 
-type ChildrenBarProps = { row: EpicRow };
+type ChildrenBarProps = { row: Pick<EpicRow, 'children'> };
 
 /** An Epic's children as one mark each, coloured by where it stands. */
 const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
@@ -419,7 +419,7 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   );
 };
 
-type EpicChildListProps = { row: EpicRow };
+type EpicChildListProps = { row: Pick<EpicRow, 'children'> };
 
 /** An opened Epic row: each child with where it stands. */
 const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
@@ -449,6 +449,18 @@ const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
     </ul>
   </Stack>
 );
+
+/**
+ * What an Epic's row adds to a Ticket's row: its children bar beside the
+ * title, and its children listed when opened. Nothing for a normal Ticket.
+ */
+const epicParts = (row: CockpitTicket) =>
+  row.children
+    ? {
+        beside: <ChildrenBar row={{ children: row.children }} />,
+        details: <EpicChildList row={{ children: row.children }} />,
+      }
+    : {};
 
 type RowListProps = {
   title: string;
@@ -601,6 +613,12 @@ export const Cockpit: FC<CockpitProps> = ({
       .filter(({ number }) => !backlogNumbers.has(number))
       .map(({ number }) => number),
   };
+  // An Epic of another Cycle shown here is not ordered by this Cycle.
+  for (const section of Object.keys(sectionNumbers) as ReorderSection[]) {
+    sectionNumbers[section] = sectionNumbers[section].filter((number) =>
+      todoLane.includes(number),
+    );
+  }
 
   const sortableIn = (
     section: ReorderSection,
@@ -820,7 +838,8 @@ export const Cockpit: FC<CockpitProps> = ({
                 muted
                 ticket={row}
                 href={hrefOf(row.number)}
-                icon="user"
+                icon={row.children ? 'queue-list' : 'user'}
+                {...epicParts(row)}
                 line={`ready-for-human · for ${age(row.updatedAt)}`}
                 end={<Tag>For human</Tag>}
               />
@@ -834,7 +853,8 @@ export const Cockpit: FC<CockpitProps> = ({
                 muted
                 ticket={row}
                 href={hrefOf(row.number)}
-                icon="clock"
+                icon={row.children ? 'queue-list' : 'clock'}
+                {...epicParts(row)}
                 line={queuedLine(row, index)}
                 end={
                   row.blocked ? (
@@ -856,6 +876,7 @@ export const Cockpit: FC<CockpitProps> = ({
                 ticket={row}
                 href={hrefOf(row.number)}
                 icon="check-circle"
+                {...epicParts(row)}
                 line={lineOf(
                   `Done ${age(row.updatedAt)} ago`,
                   row.pullRequest && pullRequestLabel(row.pullRequest),
