@@ -4,7 +4,11 @@ import type {
 } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
-import { type InProgressSection, laneOf } from '../board/board-lanes';
+import {
+  type BoardLane,
+  type InProgressSection,
+  laneOf,
+} from '../board/board-lanes';
 
 /** What every Cockpit row shows of its Ticket. */
 export type CockpitTicket = Pick<
@@ -94,8 +98,14 @@ const rowOf = ({ number, title, epic, updatedAt }: Ticket): CockpitTicket => ({
 const latestPullRequest = (ticket: Ticket): string | null =>
   ticket.externalReferences.findLast(isPullRequestReference) ?? null;
 
-const liveKind: Record<LiveConversation['state'], NeedKind> = {
-  running: 'waiting',
+/**
+ * The kind of an Action needed Ticket by its live Conversation's state. A
+ * running Conversation puts its Ticket in Running, never here.
+ */
+const liveKind: Record<
+  Exclude<LiveConversation['state'], 'running'>,
+  NeedKind
+> = {
   waiting: 'waiting',
   error: 'failed',
   interrupted: 'interrupted',
@@ -140,14 +150,18 @@ export function cockpitOf(
     }))
     .map((entry) => ({ ...entry, ...laneOf(entry.ticket, entry.live) }))
     .sort((left, right) => byPosition(left.ticket, right.ticket));
-  const inLane = (lane: string) =>
+  const inLane = (lane: BoardLane) =>
     placed.filter((entry) => entry.lane === lane);
   const cost = (ticket: Ticket) => activity.cost[ticket.number] ?? 0;
   const inSection = (section: InProgressSection) =>
     inLane('In progress').filter((entry) => entry.section === section);
   const actionNeeded = inSection('Action needed')
     .map(({ ticket, live }) =>
-      needRowOf(ticket, live, live ? liveKind[live.state] : 'stalled'),
+      needRowOf(
+        ticket,
+        live,
+        live && live.state !== 'running' ? liveKind[live.state] : 'stalled',
+      ),
     )
     .sort(longestWaitingFirst);
   const review = inSection('Review')

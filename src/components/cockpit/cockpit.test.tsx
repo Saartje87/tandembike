@@ -207,6 +207,26 @@ describe('Cockpit', () => {
     ).toBeVisible();
   });
 
+  it('puts the count back when the page replaces its title, and takes it off on leaving', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    document.title = 'Cockpit · Website | Tandembike';
+    const { unmount } = renderCockpit();
+    await vi.waitFor(() =>
+      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+    );
+
+    // Next writes the page's metadata title again, as when a drawer opens.
+    document.title = 'Cockpit · Website | Tandembike';
+
+    await vi.waitFor(() =>
+      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+    );
+    unmount();
+    expect(document.title).toBe('Cockpit · Website | Tandembike');
+  });
+
   it('puts the Needs you count in the tab title, and drops it at zero', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,

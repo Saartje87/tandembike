@@ -34,6 +34,7 @@ import {
   type InFlightRow,
   type NeedKind,
   type NeedRow,
+  type QueuedRow,
 } from './cockpit-of';
 
 export type CockpitProps = {
@@ -56,8 +57,10 @@ const sectionIntent = {
 const pullRequestLabel = (url: string) =>
   `PR #${new URL(url).pathname.split('/')[4]}`;
 
+type PullRequestLinkProps = { url: string };
+
 /** A pull request as a link to it, in small text. */
-const PullRequestLink: FC<{ url: string }> = ({ url }) => (
+const PullRequestLink: FC<PullRequestLinkProps> = ({ url }) => (
   <Text fontSize="small">
     <Link href={url} target="_blank" rel="noreferrer">
       {pullRequestLabel(url)}
@@ -81,22 +84,55 @@ const needLabel: Record<NeedKind, string> = {
   review: 'Review',
 };
 
+/** A row's second line: its parts that are there, joined by a dot. */
+const lineOf = (...parts: (string | false | null | undefined)[]) =>
+  parts.filter(Boolean).join(' · ');
+
 /** A Needs you row's second line: what it waits on, and for how long. */
 function needLine(row: NeedRow, waited: string): string {
   const detail =
     row.live?.line ??
     (row.kind === 'review' ? 'PR open' : 'no Claim and no PR');
-  return [needLabel[row.kind], detail, waited].join(' · ');
+  return lineOf(needLabel[row.kind], detail, waited);
 }
+
+/** A queued row's second line: its place, and what blocks it. */
+function queuedLine(row: QueuedRow, index: number): string {
+  const blockedBy =
+    row.blockers.length > 0
+      ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
+      : 'blocked';
+  return lineOf(`Queued #${index + 1}`, row.blocked && blockedBy);
+}
+
+const countPrefix = /^\(\d+\) /;
 
 /**
  * Puts `count` in front of the browser tab's title, as `(3) …`, and takes
- * it off at zero, so a background tab shows what waits on the User.
+ * it off at zero and on unmount, so a background tab shows what waits on the
+ * User. Next writes the page's metadata title again on navigation, such as
+ * opening a drawer, so it watches the head and puts the count back.
  */
 const useCountInTitle = (count: number) => {
   useEffect(() => {
-    const title = document.title.replace(/^\(\d+\) /, '');
-    document.title = count > 0 ? `(${count}) ${title}` : title;
+    const apply = () => {
+      const title = document.title.replace(countPrefix, '');
+      const wanted = count > 0 ? `(${count}) ${title}` : title;
+      if (document.title !== wanted) {
+        document.title = wanted;
+      }
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.head, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+    return () => {
+      observer.disconnect();
+      document.title = document.title.replace(countPrefix, '');
+    };
   }, [count]);
 };
 
@@ -212,12 +248,14 @@ const RowList: FC<RowListProps> = ({
  * claimed Ticket with no live run (such as one worked in a terminal), that.
  */
 function inFlightLine(row: InFlightRow, now: number): string {
-  const parts = row.live
-    ? [row.live.line, formatElapsed(now - new Date(row.live.since).getTime())]
-    : ['Claimed, no live run'];
-  return [...parts, ...(row.cost > 0 ? [formatCost(row.cost)] : [])].join(
-    ' · ',
-  );
+  const cost = row.cost > 0 && formatCost(row.cost);
+  return row.live
+    ? lineOf(
+        row.live.line,
+        formatElapsed(now - new Date(row.live.since).getTime()),
+        cost,
+      )
+    : lineOf('Claimed, no live run', cost);
 }
 
 /**
@@ -362,16 +400,7 @@ export const Cockpit: FC<CockpitProps> = ({
               ticket={row}
               href={hrefOf(row.number)}
               icon="clock"
-              line={[
-                `Queued #${index + 1}`,
-                ...(row.blocked
-                  ? [
-                      row.blockers.length > 0
-                        ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
-                        : 'blocked',
-                    ]
-                  : []),
-              ].join(' · ')}
+              line={queuedLine(row, index)}
               end={
                 row.blocked ? (
                   <Tag intent="warning">Blocked</Tag>
@@ -392,11 +421,11 @@ export const Cockpit: FC<CockpitProps> = ({
               ticket={row}
               href={hrefOf(row.number)}
               icon="check-circle"
-              line={[
+              line={lineOf(
                 `Done ${age(row.updatedAt)} ago`,
-                ...(row.pullRequest ? [pullRequestLabel(row.pullRequest)] : []),
-                ...(row.cost > 0 ? [formatCost(row.cost)] : []),
-              ].join(' · ')}
+                row.pullRequest && pullRequestLabel(row.pullRequest),
+                row.cost > 0 && formatCost(row.cost),
+              )}
               end={<Tag intent="success">Done</Tag>}
             />
           ))}
