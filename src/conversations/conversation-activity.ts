@@ -10,7 +10,7 @@ import { type StatusEntry, statusLine } from './status-line';
 export type LiveConversation = {
   /** The Conversation's id, to open it in the Conversation dialog. */
   conversationId: number;
-  state: 'running' | 'waiting' | 'interrupted' | 'error';
+  state: 'running' | 'waiting' | 'idle' | 'interrupted' | 'error';
   /** The status line: what the Conversation is doing now (T1066). */
   line: string;
   /** When the current run started, as an ISO string. */
@@ -20,7 +20,7 @@ export type LiveConversation = {
 };
 
 export type ConversationActivity = {
-  /** Per Ticket number, its newest live Conversation; none for idle/stopped. */
+  /** Per Ticket number, its live Conversation, or its newest that needs the User. */
   live: Record<number, LiveConversation>;
   /**
    * Per Ticket number, the USD cost summed over all its Conversations, closed
@@ -71,7 +71,7 @@ const stoppedStateOf = (row: ActivityRow): LiveConversation['state'] | null => {
   if (row.latest?.role === 'error') {
     return 'error';
   }
-  return row.state === 'interrupted' ? 'interrupted' : null;
+  return row.state;
 };
 
 const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {

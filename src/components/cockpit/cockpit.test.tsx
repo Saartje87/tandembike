@@ -204,6 +204,25 @@ describe('Cockpit', () => {
     expect(screen.queryByRole('button', { name: /^(Allow|Deny)/ })).toBe(null);
   });
 
+  it('shows an idle run as Idle, with a bell', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({
+        live: {
+          7: liveConversation({
+            conversationId: 43,
+            state: 'idle',
+            line: 'I opened the PR.',
+          }),
+        },
+      }),
+    );
+    renderCockpit();
+
+    await screen.findByRole('button', { name: 'Open the Conversation of T7' });
+    const [row] = within(section('Action needed')).getAllByRole('listitem');
+    expect(row).toHaveTextContent(/Idle · I opened the PR\. · /);
+  });
+
   it('shows a bell on failed and interrupted runs too, not on a stalled Ticket', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({

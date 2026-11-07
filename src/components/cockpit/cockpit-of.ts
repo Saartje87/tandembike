@@ -40,6 +40,7 @@ export type QueuedRow = CockpitTicket & {
 /** What an Action needed or Review Ticket waits on. */
 export type NeedKind =
   | 'waiting'
+  | 'idle'
   | 'failed'
   | 'interrupted'
   | 'stalled'
@@ -107,6 +108,7 @@ const liveKind: Record<
   NeedKind
 > = {
   waiting: 'waiting',
+  idle: 'idle',
   error: 'failed',
   interrupted: 'interrupted',
 };

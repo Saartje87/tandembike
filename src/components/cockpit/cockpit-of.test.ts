@@ -103,6 +103,7 @@ describe('cockpitOf', () => {
         ticket({ number: 2, status: 'In progress', claim }),
         ticket({ number: 3, status: 'In progress', claim }),
         ticket({ number: 4, status: 'In progress' }),
+        ticket({ number: 5, status: 'In progress', claim }),
       ],
       activity({
         live: {
@@ -118,6 +119,7 @@ describe('cockpitOf', () => {
             state: 'interrupted',
             since: '2026-11-07T10:03:00Z',
           }),
+          5: liveConversation({ state: 'idle', since: '2026-11-07T10:04:00Z' }),
         },
       }),
     ).needsYou;
@@ -127,6 +129,7 @@ describe('cockpitOf', () => {
       [1, 'waiting'],
       [2, 'failed'],
       [3, 'interrupted'],
+      [5, 'idle'],
     ]);
   });
 

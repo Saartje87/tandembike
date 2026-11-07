@@ -257,8 +257,17 @@ describe('Conversation actions', () => {
       activity({
         live: {
           [running.number]: liveConversation({
+            conversationId: expect.any(Number),
             line: 'Starting',
             since: expect.any(String),
+          }),
+          // Its turn ended: idle, waiting on the User's reply (T1113).
+          [asking.number]: liveConversation({
+            conversationId: expect.any(Number),
+            state: 'idle',
+            line: 'Starting',
+            since: expect.any(String),
+            cost: 0.1,
           }),
         },
         cost: { [asking.number]: 0.1 },

@@ -44,17 +44,26 @@ export const inProgressSections: readonly InProgressSection[] = [
 
 /**
  * The section of an In progress Ticket. A live Conversation decides first:
- * running is Running, anything else needs the User. Without one, Review with
- * a PR reference, Running with a Claim, else it is stalled and needs action.
+ * running is Running; idle, its Agent having ended its turn, is Review once
+ * the Ticket has a PR reference and no Claim; anything else needs the User.
+ * Without one, Review with a PR reference, Running with a Claim, else it is
+ * stalled and needs action.
  */
 function sectionOf(
   ticket: Pick<Ticket, 'claim' | 'externalReferences'>,
   live: LiveConversation | undefined,
 ): InProgressSection {
-  if (live) {
-    return live.state === 'running' ? 'Running' : 'Action needed';
+  const hasPullRequest = ticket.externalReferences.some(isPullRequestReference);
+  if (live?.state === 'running') {
+    return 'Running';
   }
-  if (ticket.externalReferences.some(isPullRequestReference)) {
+  if (live?.state === 'idle' && hasPullRequest && !ticket.claim) {
+    return 'Review';
+  }
+  if (live) {
+    return 'Action needed';
+  }
+  if (hasPullRequest) {
     return 'Review';
   }
   return ticket.claim ? 'Running' : 'Action needed';

@@ -102,6 +102,7 @@ const ConversationBell: FC<ConversationBellProps> = ({
 
 const needIcon: Record<NeedKind, IconName> = {
   waiting: 'chat-bubble-left-ellipsis',
+  idle: 'hand-raised',
   failed: 'exclamation-circle',
   interrupted: 'pause-circle',
   stalled: 'exclamation-triangle',
@@ -110,6 +111,7 @@ const needIcon: Record<NeedKind, IconName> = {
 
 const needLabel: Record<NeedKind, string> = {
   waiting: 'Waiting',
+  idle: 'Idle',
   failed: 'Failed',
   interrupted: 'Interrupted',
   stalled: 'Stalled',

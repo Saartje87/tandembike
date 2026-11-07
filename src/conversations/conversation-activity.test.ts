@@ -150,11 +150,19 @@ describe('conversationActivity', () => {
       );
     });
 
-    it('reports nothing for an idle or stopped Conversation', () => {
-      expect(liveOf(row(4, 'idle'), row(5, 'stopped'))).toEqual({});
+    it('reports a newest idle Conversation as idle, and nothing for a stopped one', () => {
+      expect(liveOf(row(4, 'idle'), row(5, 'stopped'))).toEqual({
+        4: {
+          conversationId: 104,
+          state: 'idle',
+          line: 'Working on it.',
+          since,
+          cost: 0,
+        },
+      });
     });
 
-    it('ignores an older interrupted or errored Conversation behind a newer idle one', () => {
+    it('reports a newer idle Conversation ahead of an older interrupted or errored one', () => {
       expect(
         liveOf(
           row(4, 'idle'),
@@ -162,7 +170,7 @@ describe('conversationActivity', () => {
           row(5, 'idle'),
           row(5, 'idle', 1, 'error'),
         ),
-      ).toEqual({});
+      ).toMatchObject({ 4: { state: 'idle' }, 5: { state: 'idle' } });
     });
 
     it('lets an older running Conversation beat a newer idle one', () => {
