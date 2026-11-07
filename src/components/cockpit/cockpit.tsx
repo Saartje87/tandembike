@@ -34,13 +34,22 @@ import {
 } from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
-import { cyclePath, ticketOnBoardPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  cyclePath,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
 import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
-import { mergeLaneOrder } from '../board/board-filter';
+import {
+  isFiltering,
+  mergeLaneOrder,
+  ticketMatches,
+} from '../board/board-filter';
 import type { InProgressSection } from '../board/board-lanes';
+import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
   useTicketCosts,
@@ -48,6 +57,7 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
+import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
@@ -62,6 +72,7 @@ import {
   type NeedRow,
   type QueuedRow,
 } from './cockpit-of';
+import { useBoardFilter } from './use-board-filter';
 
 export type CockpitProps = {
   projectId: number;
@@ -76,6 +87,8 @@ export type CockpitProps = {
   backlog?: Ticket[];
   /** The Project's Start runs working now, and how many it allows at once. */
   runSlots: { used: number; cap: number };
+  /** The Board filter in the URL as the Board loads. */
+  filter?: BoardFilter;
 };
 
 const sectionIntent = {
@@ -508,6 +521,7 @@ export const Cockpit: FC<CockpitProps> = ({
   tickets,
   backlog = [],
   runSlots,
+  filter: initialFilter,
 }) => {
   const live = useLiveConversations();
   const cost = useTicketCosts();
@@ -522,15 +536,49 @@ export const Cockpit: FC<CockpitProps> = ({
       ),
   );
   const [error, setError] = useState<string>();
-  const cockpit = cockpitOf(shownTickets, { live, cost }, backlog);
+  const boardPath = cyclePath(projectId, cycle.id);
+  const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
+  const everything = cockpitOf(shownTickets, { live, cost }, backlog);
+  // The Board filter narrows every section; only the tab keeps the full count.
+  const shown = new Set(
+    [...shownTickets, ...backlog]
+      .filter((ticket) => ticketMatches(ticket, filter))
+      .map(({ number }) => number),
+  );
+  const keep = <Row extends { number: number }>(rows: Row[]) =>
+    isFiltering(filter) ? rows.filter(({ number }) => shown.has(number)) : rows;
+  const cockpit = {
+    ...everything,
+    epics: keep(everything.epics),
+    inFlight: keep(everything.inFlight),
+    yourWork: keep(everything.yourWork),
+    queued: keep(everything.queued),
+    done: keep(everything.done),
+    needsYou: (() => {
+      const actionNeeded = keep(everything.needsYou.actionNeeded);
+      const review = keep(everything.needsYou.review);
+      const intake = keep(everything.needsYou.intake);
+      return {
+        actionNeeded,
+        review,
+        intake,
+        count: actionNeeded.length + review.length + intake.length,
+      };
+    })(),
+  };
+  const filterLabels = [
+    ...new Set(
+      [...tickets, ...backlog, filter].flatMap(({ labels }) => labels),
+    ),
+  ].sort();
   const backlogNumbers = new Set(backlog.map(({ number }) => number));
   const hrefOf = (number: number) =>
-    ticketOnBoardPath(cyclePath(projectId, cycle.id), number);
+    ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = cockpit.progress;
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
-  useCountInTitle(needsYou.count);
+  useCountInTitle(everything.needsYou.count);
 
   /** The Todo Tickets this Cycle orders, over all three sections, in order. */
   const todoLane = shownTickets
@@ -646,6 +694,12 @@ export const Cockpit: FC<CockpitProps> = ({
     >
       <Stack gap={6}>
         {error && <Alert intent="danger">{error}</Alert>}
+        <NewTicketInline projectId={projectId} cycleId={cycle.id} />
+        <BoardFilterBar
+          filter={filter}
+          labels={filterLabels}
+          onChange={changeFilter}
+        />
         <Stack gap={2}>
           <Inline gap={3} alignY="center" alignX="between">
             <Text color="muted">
