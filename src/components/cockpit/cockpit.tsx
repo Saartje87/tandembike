@@ -20,6 +20,7 @@ import {
   PointerSensor,
 } from '@dnd-kit/dom';
 import {
+  type BeforeDragStartEvent,
   DragDropProvider as DndProvider,
   type DragEndEvent,
   type DragOverEvent,
@@ -58,6 +59,7 @@ import type { Ticket } from '../../tickets/tickets';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
 import {
+  filteredSelectionDrop,
   isFiltering,
   mergeLaneOrder,
   ticketMatches,
@@ -717,6 +719,31 @@ export const Cockpit: FC<CockpitProps> = ({
     return index < 0 ? undefined : { section, index };
   };
 
+  /**
+   * What a drag of row `source` in `section` carries: the selection it is
+   * part of, in the order shown, else itself. Nothing when that selection
+   * spans sections, or holds a row a drag cannot order.
+   */
+  const carriedBy = (source: number, section: ReorderSection) => {
+    if (selection.length < 2 || !selection.includes(source)) {
+      return [source];
+    }
+    const numbers = sectionNumbers[section];
+    return selection.every((number) => numbers.includes(number))
+      ? numbers.filter((number) => selection.includes(number))
+      : undefined;
+  };
+
+  const startDrag = (event: BeforeDragStartEvent) => {
+    const { source } = event.operation;
+    if (
+      isSortable(source) &&
+      !carriedBy(Number(source.id), sectionOf(source) as ReorderSection)
+    ) {
+      event.preventDefault();
+    }
+  };
+
   const followDrag = (event: DragOverEvent) => {
     const { source, target } = event.operation;
     // dnd-kit would move the row's element into the other section's list,
@@ -726,32 +753,7 @@ export const Cockpit: FC<CockpitProps> = ({
     }
   };
 
-  const finishDrag = (event: DragEndEvent) => {
-    const { source, target } = event.operation;
-    if (event.canceled || !isSortable(source)) {
-      return;
-    }
-    const section = sectionOf(source) as ReorderSection;
-    // A drop in another section changes nothing.
-    if (sectionOf(target) !== section) {
-      return;
-    }
-    const numbers = sectionNumbers[section];
-    const from = numbers.indexOf(Number(source.id));
-    // Over its own slot, the row is where dnd-kit's sorting moved it; over
-    // another row, it takes that row's place.
-    const to =
-      target?.id === source.id
-        ? source.index
-        : numbers.indexOf(Number(target?.id));
-    if (from < 0 || to < 0 || from === to) {
-      return;
-    }
-    const moved = [...numbers];
-    moved.splice(from, 1);
-    moved.splice(to, 0, numbers[from]);
-    // The Todo Tickets of the other sections keep their places around it.
-    const ticketNumbers = mergeLaneOrder(todoLane, moved, [numbers[from]]);
+  const saveOrder = (ticketNumbers: number[]) => {
     setError(undefined);
     startTransition(async () => {
       showOrder(ticketNumbers);
@@ -765,6 +767,49 @@ export const Cockpit: FC<CockpitProps> = ({
         setError(result.error);
       }
     });
+  };
+
+  const finishDrag = (event: DragEndEvent) => {
+    const { source, target } = event.operation;
+    if (event.canceled || !isSortable(source)) {
+      return;
+    }
+    const section = sectionOf(source) as ReorderSection;
+    // A drop in another section changes nothing.
+    if (sectionOf(target) !== section) {
+      return;
+    }
+    const numbers = sectionNumbers[section];
+    const sourceNumber = Number(source.id);
+    const carried = carriedBy(sourceNumber, section);
+    const from = numbers.indexOf(sourceNumber);
+    // Over its own slot, the row is where dnd-kit's sorting moved it; over
+    // another row, it takes that row's place.
+    const to =
+      target?.id === source.id
+        ? source.index
+        : numbers.indexOf(Number(target?.id));
+    if (!carried || from < 0 || to < 0 || from === to) {
+      return;
+    }
+    if (carried.length > 1) {
+      const { laneOrder } = filteredSelectionDrop(
+        todoLane,
+        numbers,
+        carried,
+        sourceNumber,
+        numbers[to],
+      );
+      if (laneOrder.some((number, index) => number !== todoLane[index])) {
+        saveOrder(laneOrder);
+      }
+      return;
+    }
+    const moved = [...numbers];
+    moved.splice(from, 1);
+    moved.splice(to, 0, sourceNumber);
+    // The Todo Tickets of the other sections keep their places around it.
+    saveOrder(mergeLaneOrder(todoLane, moved, [sourceNumber]));
   };
 
   // The rows that can be selected, by list, in the order shown.
@@ -945,6 +990,7 @@ export const Cockpit: FC<CockpitProps> = ({
   return (
     <DndProvider
       sensors={sensors}
+      onBeforeDragStart={startDrag}
       onDragOver={followDrag}
       onDragEnd={finishDrag}
     >

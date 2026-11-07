@@ -639,6 +639,12 @@ describe('Cockpit', () => {
         epic: link,
       }),
       ticket({
+        number: 70,
+        title: 'Plain queued',
+        position: 5,
+        labels: ['ready-for-agent'],
+      }),
+      ticket({
         number: 60,
         title: 'Shipped',
         type: 'Epic',
@@ -655,7 +661,10 @@ describe('Cockpit', () => {
     ]);
 
     const queued = section('Queued');
-    expect(within(queued).getAllByRole('link')).toHaveLength(1);
+    expect(within(queued).getAllByRole('link')).toHaveLength(2);
+    expect(
+      within(queued).getByRole('checkbox', { name: 'Select T70 Plain queued' }),
+    ).toBeInTheDocument();
     const epicRow = within(queued)
       .getByRole('link', { name: 'Cockpit' })
       .closest('li') as HTMLElement;
@@ -1023,6 +1032,52 @@ describe('Cockpit drag', () => {
 
     // The first Queued row's neighbour above is the last of Your work.
     await keyboardDrag(rowOf(1), '{ArrowUp}');
+
+    expect(reorderTickets).not.toHaveBeenCalled();
+    expect(rowsIn('Queued')).toEqual([
+      'First queued',
+      'Second queued',
+      'Third queued',
+    ]);
+  });
+
+  it('drags a selection within one section together, in Board order', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    renderDraggable();
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select T1 First queued' }),
+    );
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select T2 Second queued' }),
+    );
+
+    // Dropped on the third row, the pair lands after it.
+    await keyboardDrag(rowOf(1), '{ArrowDown}{ArrowDown}');
+
+    await vi.waitFor(() =>
+      expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        status: 'Todo',
+        cycleId: 9,
+        ticketNumbers: [3, 1, 2, 4, 5, 6, 7],
+      }),
+    );
+  });
+
+  it('cannot drag a selection that spans sections', async () => {
+    renderDraggable();
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select T1 First queued' }),
+    );
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: 'Select T4 Mine one' }),
+    );
+
+    await keyboardDrag(rowOf(1), '{ArrowDown}');
 
     expect(reorderTickets).not.toHaveBeenCalled();
     expect(rowsIn('Queued')).toEqual([
