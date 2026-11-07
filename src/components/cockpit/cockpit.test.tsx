@@ -4,12 +4,19 @@ import { useRouter } from 'next/navigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import { moveTicketsToCycle } from '../../app/cycles/actions';
 import type { BoardFilter } from '../../app/lib/paths';
-import { createTicket } from '../../app/tickets/actions';
+import {
+  archiveTickets,
+  createTicket,
+  moveTicketsToEpic,
+} from '../../app/tickets/actions';
 import { noConversationActivity } from '../../conversations/conversation-activity';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
+import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
+import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -23,7 +30,15 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
 vi.mock('../../app/conversations/actions', () => ({
   currentConversationActivity: vi.fn(),
 }));
-vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
+
+vi.mock('../../app/cycles/actions', () => ({ moveTicketsToCycle: vi.fn() }));
+vi.mock('../../app/tickets/actions', () => ({
+  createTicket: vi.fn(),
+  archiveTickets: vi.fn(),
+  moveTicketsToEpic: vi.fn(),
+}));
+
+showOpenPopovers();
 
 const ticket = (
   fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
@@ -635,12 +650,230 @@ describe('Cockpit', () => {
       within(epicRow).getByRole('img', { name: '0 of 1 children done' }),
     );
     expect(epicRow.querySelector('details')).toHaveAttribute('open');
+    expect(within(epicRow).queryAllByRole('checkbox')).toHaveLength(0);
     expect(within(epicRow).getByText('Child 30')).toBeInTheDocument();
     const done = section('Done');
     expect(
       within(done).getByRole('link', { name: 'Shipped' }),
     ).toBeInTheDocument();
     expect(within(done).queryByRole('link', { name: 'Child 31' })).toBe(null);
+  });
+
+  describe('selecting rows', () => {
+    const cycle = (
+      id: number,
+      title: string,
+      state: Cycle['state'],
+    ): Cycle => ({
+      id,
+      projectId: 3,
+      title,
+      state,
+      ticketNumbers: [],
+      createdAt: new Date('2026-01-01'),
+      archivedAt: null,
+    });
+    const epics = [
+      ticket({ number: 20, title: 'Cockpit Epic', type: 'Epic' }),
+      ticket({ number: 21, title: 'Other Epic', type: 'Epic' }),
+    ];
+    const queued = [
+      ticket({ number: 30, title: 'First queued' }),
+      ticket({ number: 31, title: 'Second queued' }),
+      ticket({ number: 32, title: 'Third queued' }),
+    ];
+    const renderSelectable = () => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        noConversationActivity,
+      );
+      return renderWithTheme(
+        <ConversationActivityProvider>
+          <Cockpit
+            projectId={3}
+            cycle={{ id: 9, title: 'Factory Board' }}
+            tickets={queued}
+            cycles={[
+              cycle(9, 'Factory Board', 'Active'),
+              cycle(10, 'Next', 'Prepared'),
+            ]}
+            epics={epics}
+            runSlots={{ used: 0, cap: 3 }}
+          />
+        </ConversationActivityProvider>,
+      );
+    };
+    const box = (number: number, title: string) =>
+      screen.getByRole('checkbox', { name: `Select T${number} ${title}` });
+    const bar = () => screen.getByRole('toolbar', { name: 'Selection' });
+
+    afterEach(() => {
+      vi.mocked(moveTicketsToCycle).mockReset();
+      vi.mocked(moveTicketsToEpic).mockReset();
+      vi.mocked(archiveTickets).mockReset();
+    });
+
+    it('selects a row by its checkbox, by Cmd-click and by a Shift-click range', async () => {
+      const user = userEvent.setup();
+      renderSelectable();
+
+      expect(screen.queryByRole('toolbar')).toBeNull();
+      await user.click(box(30, 'First queued'));
+      expect(bar()).toHaveTextContent('1 selected');
+
+      await user.click(box(30, 'First queued'));
+      expect(screen.queryByRole('toolbar')).toBeNull();
+
+      await user.keyboard('{Meta>}');
+      await user.click(screen.getByRole('link', { name: 'Second queued' }));
+      await user.keyboard('{/Meta}');
+      expect(bar()).toHaveTextContent('1 selected');
+      expect(box(31, 'Second queued')).toBeChecked();
+      expect(window.location.pathname).not.toContain('31');
+
+      await user.keyboard('{Shift>}');
+      await user.click(box(32, 'Third queued'));
+      await user.keyboard('{/Shift}');
+      expect(bar()).toHaveTextContent('2 selected');
+      expect(box(32, 'Third queued')).toBeChecked();
+
+      await user.click(within(bar()).getByRole('button', { name: 'Clear' }));
+      expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+
+    it('moves the selection to a Cycle and clears it', async () => {
+      const user = userEvent.setup();
+      vi.mocked(moveTicketsToCycle).mockResolvedValue({ ok: true, failed: [] });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+      await user.click(box(31, 'Second queued'));
+
+      await user.click(
+        within(bar()).getByRole('button', { name: 'Move to Cycle' }),
+      );
+      await user.click(screen.getByRole('menuitem', { name: 'Next' }));
+
+      expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        cycleId: 10,
+        ticketNumbers: [30, 31],
+      });
+      await vi.waitFor(() => expect(screen.queryByRole('toolbar')).toBeNull());
+    });
+
+    it('moves the selection to the Backlog', async () => {
+      const user = userEvent.setup();
+      vi.mocked(moveTicketsToCycle).mockResolvedValue({ ok: true, failed: [] });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+
+      await user.click(
+        within(bar()).getByRole('button', { name: 'Move to Cycle' }),
+      );
+      await user.click(screen.getByRole('menuitem', { name: 'Backlog' }));
+
+      expect(moveTicketsToCycle).toHaveBeenCalledExactlyOnceWith({
+        projectId: 3,
+        cycleId: null,
+        ticketNumbers: [30],
+      });
+    });
+
+    it('lists the Tickets a move refused with their reasons and keeps only them selected', async () => {
+      const user = userEvent.setup();
+      vi.mocked(moveTicketsToCycle).mockResolvedValue({
+        ok: true,
+        failed: [{ number: 31, error: 'T31 is Done' }],
+      });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+      await user.click(box(31, 'Second queued'));
+
+      await user.click(
+        within(bar()).getByRole('button', { name: 'Move to Cycle' }),
+      );
+      await user.click(screen.getByRole('menuitem', { name: 'Next' }));
+
+      expect(await screen.findByText('T31 is Done')).toBeVisible();
+      expect(bar()).toHaveTextContent('1 selected');
+      expect(box(30, 'First queued')).not.toBeChecked();
+      expect(box(31, 'Second queued')).toBeChecked();
+    });
+
+    it("adds the selection to the chosen Epic, listing the Project's Epics", async () => {
+      const user = userEvent.setup();
+      vi.mocked(moveTicketsToEpic).mockResolvedValue({ ok: true });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+      await user.click(box(32, 'Third queued'));
+
+      await user.click(
+        within(bar()).getByRole('button', { name: 'Add to Epic' }),
+      );
+      expect(
+        screen.getAllByRole('menuitem').map((item) => item.textContent),
+      ).toEqual(['T20 Cockpit Epic', 'T21 Other Epic']);
+      await user.click(
+        screen.getByRole('menuitem', { name: 'T21 Other Epic' }),
+      );
+
+      expect(moveTicketsToEpic).toHaveBeenCalledExactlyOnceWith({
+        epic: 21,
+        children: [30, 32],
+      });
+      await vi.waitFor(() => expect(screen.queryByRole('toolbar')).toBeNull());
+    });
+
+    it('shows why adding to an Epic was refused and keeps the selection', async () => {
+      const user = userEvent.setup();
+      vi.mocked(moveTicketsToEpic).mockResolvedValue({
+        ok: false,
+        error: 'T30 is in another Project',
+      });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+
+      await user.click(
+        within(bar()).getByRole('button', { name: 'Add to Epic' }),
+      );
+      await user.click(
+        screen.getByRole('menuitem', { name: 'T20 Cockpit Epic' }),
+      );
+
+      expect(
+        await screen.findByText('T30 is in another Project'),
+      ).toBeVisible();
+      expect(bar()).toHaveTextContent('1 selected');
+    });
+
+    it('archives the selection', async () => {
+      const user = userEvent.setup();
+      vi.mocked(archiveTickets).mockResolvedValue({ ok: true });
+      renderSelectable();
+      await user.click(box(31, 'Second queued'));
+      await user.click(box(30, 'First queued'));
+
+      await user.click(within(bar()).getByRole('button', { name: 'Archive' }));
+
+      expect(archiveTickets).toHaveBeenCalledExactlyOnceWith({
+        ticketNumbers: [30, 31],
+      });
+      await vi.waitFor(() => expect(screen.queryByRole('toolbar')).toBeNull());
+    });
+
+    it('shows why an archive was refused and keeps the selection', async () => {
+      const user = userEvent.setup();
+      vi.mocked(archiveTickets).mockResolvedValue({
+        ok: false,
+        error: 'T30 has open children',
+      });
+      renderSelectable();
+      await user.click(box(30, 'First queued'));
+
+      await user.click(within(bar()).getByRole('button', { name: 'Archive' }));
+
+      expect(await screen.findByText('T30 has open children')).toBeVisible();
+      expect(bar()).toHaveTextContent('1 selected');
+    });
   });
 });
 
