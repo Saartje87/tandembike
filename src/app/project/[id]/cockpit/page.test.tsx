@@ -60,7 +60,11 @@ describe('CockpitPage', () => {
       cycleId: cycle.id,
     });
     tickets.updateTicket(planned.number, { status: 'In progress' });
-    tickets.createTicket({ projectId: project.id, title: 'In the Backlog' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'In the Backlog',
+      labels: ['ready-for-agent'],
+    });
     tickets.startCycle(cycle.id);
     vi.mocked(appTickets).mockReturnValue(tickets);
     stubConversations([
@@ -84,6 +88,33 @@ describe('CockpitPage', () => {
     await expect(generateMetadata(pageProps(project.id))).resolves.toEqual({
       title: 'Cockpit · Website',
     });
+  });
+
+  it("shows the Backlog's Intake in Needs you, not its other Tickets", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Now' });
+    tickets.startCycle(cycle.id);
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Filed by a run',
+      labels: ['needs-triage'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Ready, not planned',
+      labels: ['ready-for-agent'],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(<main>{await CockpitPage(pageProps(project.id))}</main>);
+
+    expect(
+      within(screen.getByRole('region', { name: 'Intake' })).getByRole('link', {
+        name: 'Filed by a run',
+      }),
+    ).toBeVisible();
+    expect(screen.queryByText('Ready, not planned')).toBe(null);
   });
 
   it('allows one Start run at a time without parallel runs', async () => {

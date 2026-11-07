@@ -4,6 +4,7 @@ import type {
 } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
+import { isTriageStateLabel } from '../../tickets/triage-labels';
 import {
   type BoardLane,
   type InProgressSection,
@@ -37,14 +38,15 @@ export type QueuedRow = CockpitTicket & {
   blockers: number[];
 };
 
-/** What an Action needed or Review Ticket waits on. */
+/** What a Ticket in Needs you waits on. */
 export type NeedKind =
   | 'waiting'
   | 'idle'
   | 'failed'
   | 'interrupted'
   | 'stalled'
-  | 'review';
+  | 'review'
+  | 'intake';
 
 /** A Ticket that needs the User, and since when. */
 export type NeedRow = CockpitTicket & {
@@ -52,11 +54,13 @@ export type NeedRow = CockpitTicket & {
   /** Its live Conversation, or `undefined` without one. */
   live: LiveConversation | undefined;
   /**
-   * Since when it waits: its live Conversation's run start, else its latest
-   * change.
+   * Since when it waits: for Intake, its creation; else its live
+   * Conversation's run start, or its latest change.
    */
   since: Date;
   pullRequest: string | null;
+  /** For Intake, its triage state label, `null` without one. */
+  triageLabel: string | null;
 };
 
 /** A Done Ticket, with what it cost and the pull request it ended in. */
@@ -65,15 +69,14 @@ export type DoneRow = CockpitTicket & {
   pullRequest: string | null;
 };
 
-/**
- * A Board's Tickets as the Cockpit shows them. Intake in Needs you (T1107)
- * and Epic rows (T1108) are still to come.
- */
+/** A Board's Tickets as the Cockpit shows them. Epic rows (T1108) are to come. */
 export type Cockpit = {
   /** What waits on the User, each group longest waiting first. */
   needsYou: {
     actionNeeded: NeedRow[];
     review: NeedRow[];
+    /** Todo Tickets still to triage, from this Board and the other given. */
+    intake: NeedRow[];
     /** How many Tickets wait on the User in all. */
     count: number;
   };
@@ -123,7 +126,17 @@ const needRowOf = (
   live,
   since: live ? new Date(live.since) : ticket.updatedAt,
   pullRequest: latestPullRequest(ticket),
+  triageLabel: null,
 });
+
+/** An Intake Ticket as a Needs you row: waiting since it was filed. */
+const intakeRowOf = (ticket: Ticket): NeedRow => ({
+  ...needRowOf(ticket, undefined, 'intake'),
+  since: ticket.createdAt,
+  triageLabel: ticket.labels.find(isTriageStateLabel) ?? null,
+});
+
+const isShown = (ticket: Ticket) => !ticket.archived && ticket.type !== 'Epic';
 
 const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
   left.since.getTime() - right.since.getTime() || left.number - right.number;
@@ -131,15 +144,16 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
 /**
  * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog. It
  * places each Ticket by the Board's own Lane derivation, so the two views
- * never disagree, and reads run state and cost from `activity`.
+ * never disagree, and reads run state and cost from `activity`. Of
+ * `intakeElsewhere`, another Board's Tickets, only the Intake joins Needs you:
+ * on a Cycle's Cockpit, the Backlog's, where runs file their feedback.
  */
 export function cockpitOf(
   tickets: Ticket[],
   activity: Pick<ConversationActivity, 'live' | 'cost'>,
+  intakeElsewhere: Ticket[] = [],
 ): Cockpit {
-  const shown = tickets.filter(
-    (ticket) => !ticket.archived && ticket.type !== 'Epic',
-  );
+  const shown = tickets.filter(isShown);
   const resolved = new Set(
     tickets
       .filter((ticket) => ticket.archived || ticket.status === 'Done')
@@ -169,12 +183,21 @@ export function cockpitOf(
   const review = inSection('Review')
     .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
     .sort(longestWaitingFirst);
+  const intake = [
+    ...inLane('Intake').map(({ ticket }) => ticket),
+    ...intakeElsewhere.filter(
+      (ticket) => isShown(ticket) && laneOf(ticket).lane === 'Intake',
+    ),
+  ]
+    .map(intakeRowOf)
+    .sort(longestWaitingFirst);
 
   return {
     needsYou: {
       actionNeeded,
       review,
-      count: actionNeeded.length + review.length,
+      intake,
+      count: actionNeeded.length + review.length + intake.length,
     },
     inFlight: inSection('Running').map(({ ticket, live, section }) => ({
       ...rowOf(ticket),

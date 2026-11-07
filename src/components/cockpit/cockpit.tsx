@@ -45,6 +45,11 @@ export type CockpitProps = {
   cycle: Pick<Cycle, 'title'>;
   /** The Cycle's Tickets, as its Board gets them. */
   tickets: Ticket[];
+  /**
+   * The Backlog's Tickets: their Intake also needs the User, since runs file
+   * their feedback outside any Cycle. Defaults to none.
+   */
+  backlog?: Ticket[];
   /** The Project's Start runs working now, and how many it allows at once. */
   runSlots: { used: number; cap: number };
 };
@@ -107,6 +112,7 @@ const needIcon: Record<NeedKind, IconName> = {
   interrupted: 'pause-circle',
   stalled: 'exclamation-triangle',
   review: 'check-circle',
+  intake: 'inbox',
 };
 
 const needLabel: Record<NeedKind, string> = {
@@ -116,17 +122,23 @@ const needLabel: Record<NeedKind, string> = {
   interrupted: 'Interrupted',
   stalled: 'Stalled',
   review: 'Review',
+  intake: 'Intake',
 };
 
 /** A row's second line: its parts that are there, joined by a dot. */
 const lineOf = (...parts: (string | false | null | undefined)[]) =>
   parts.filter(Boolean).join(' · ');
 
+/** What a Needs you row without a live Conversation waits on. */
+const parkedDetail: Partial<Record<NeedKind, string>> = {
+  review: 'PR open',
+  intake: 'to triage',
+  stalled: 'no Claim and no PR',
+};
+
 /** A Needs you row's second line: what it waits on, and for how long. */
 function needLine(row: NeedRow, waited: string): string {
-  const detail =
-    row.live?.line ??
-    (row.kind === 'review' ? 'PR open' : 'no Claim and no PR');
+  const detail = row.live?.line ?? parkedDetail[row.kind];
   return lineOf(needLabel[row.kind], detail, waited);
 }
 
@@ -295,8 +307,9 @@ function inFlightLine(row: InFlightRow, now: number): string {
 /**
  * A Project's Cockpit: its Active Cycle in one column, by what needs the
  * User first. The header shows the Cycle's progress and the Start runs
- * working; Needs you shows what waits on the User, in groups that start
- * open, longest waiting first; In flight shows each Running Ticket with what
+ * working; Needs you shows what waits on the User (Action needed, Review,
+ * then Intake from the Cycle and the Backlog), in groups that start open,
+ * longest waiting first; In flight shows each Running Ticket with what
  * its run is doing; Your work, Queued and Done stay closed until opened.
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Cockpit. The browser tab's title carries the Needs you
@@ -306,12 +319,13 @@ export const Cockpit: FC<CockpitProps> = ({
   projectId,
   cycle,
   tickets,
+  backlog = [],
   runSlots,
 }) => {
   const live = useLiveConversations();
   const cost = useTicketCosts();
   const now = useNow();
-  const cockpit = cockpitOf(tickets, { live, cost });
+  const cockpit = cockpitOf(tickets, { live, cost }, backlog);
   const hrefOf = (number: number) =>
     ticketOnBoardPath(cockpitPath(projectId), number);
   const age = (date: Date) => formatElapsed(now - date.getTime());
@@ -328,6 +342,9 @@ export const Cockpit: FC<CockpitProps> = ({
         line={needLine(row, age(row.since))}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
+            {row.kind === 'intake' && (
+              <Tag>{row.triageLabel ?? 'no triage label'}</Tag>
+            )}
             {row.pullRequest && <PullRequestLink url={row.pullRequest} />}
             {row.live && (
               <ConversationBell
@@ -381,6 +398,11 @@ export const Cockpit: FC<CockpitProps> = ({
               {needsYou.review.length > 0 && (
                 <RowList title="Review" count={needsYou.review.length} open>
                   {needRows(needsYou.review)}
+                </RowList>
+              )}
+              {needsYou.intake.length > 0 && (
+                <RowList title="Intake" count={needsYou.intake.length} open>
+                  {needRows(needsYou.intake)}
                 </RowList>
               )}
             </Stack>

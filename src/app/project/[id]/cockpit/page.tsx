@@ -103,6 +103,7 @@ async function cockpitTab(
           projectId: project.id,
           cycleId: active.id,
         })}
+        backlog={tickets.listTickets({ projectId: project.id, cycleId: null })}
         runSlots={runSlotsOf(project.id)}
       />
       {openTicket !== undefined && (

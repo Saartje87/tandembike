@@ -183,6 +183,59 @@ describe('cockpitOf', () => {
     ]);
   });
 
+  it("lists Intake after Review, from this Board and another Board's Intake, longest waiting first", () => {
+    const cockpit = cockpitOf(
+      [
+        ticket({
+          number: 1,
+          labels: ['needs-triage'],
+          createdAt: new Date('2026-11-05'),
+        }),
+        ticket({ number: 2, createdAt: new Date('2026-11-03') }),
+        ticket({ number: 3, labels: ['ready-for-agent'] }),
+      ],
+      activity(),
+      [
+        ticket({
+          number: 4,
+          labels: ['needs-info', 'bug'],
+          createdAt: new Date('2026-11-04'),
+        }),
+        ticket({ number: 5, labels: ['ready-for-agent'] }),
+        ticket({ number: 6, status: 'In progress' }),
+        ticket({ number: 7, status: 'Done' }),
+        ticket({ number: 8, labels: ['ready-for-human'] }),
+      ],
+    );
+
+    expect(
+      cockpit.needsYou.intake.map(({ number, kind, triageLabel, since }) => [
+        number,
+        kind,
+        triageLabel,
+        since,
+      ]),
+    ).toEqual([
+      [2, 'intake', null, new Date('2026-11-03')],
+      [4, 'intake', 'needs-info', new Date('2026-11-04')],
+      [1, 'intake', 'needs-triage', new Date('2026-11-05')],
+    ]);
+    expect(numbers(cockpit.queued)).toEqual([3]);
+    expect(numbers(cockpit.inFlight)).toEqual([]);
+    expect(numbers(cockpit.done)).toEqual([]);
+    expect(numbers(cockpit.yourWork)).toEqual([]);
+    expect(cockpit.needsYou.count).toBe(3);
+  });
+
+  it("leaves another Board's Epics and archived Intake out", () => {
+    const cockpit = cockpitOf([], activity(), [
+      ticket({ number: 1, type: 'Epic', labels: ['needs-triage'] }),
+      ticket({ number: 2, labels: ['needs-triage'], archived: true }),
+    ]);
+
+    expect(cockpit.needsYou.intake).toEqual([]);
+  });
+
   it('counts every Ticket that needs you', () => {
     const cockpit = cockpitOf(
       [
