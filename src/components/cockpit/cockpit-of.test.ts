@@ -183,7 +183,7 @@ describe('cockpitOf', () => {
     ]);
   });
 
-  it("lists Intake after Review, from this Board and another Board's Intake, longest waiting first", () => {
+  it("lists Intake after Review, from this Board in Board order, then another Board's Intake, longest waiting first", () => {
     const cockpit = cockpitOf(
       [
         ticket({
@@ -216,9 +216,9 @@ describe('cockpitOf', () => {
         since,
       ]),
     ).toEqual([
+      [1, 'intake', 'needs-triage', new Date('2026-11-05')],
       [2, 'intake', null, new Date('2026-11-03')],
       [4, 'intake', 'needs-info', new Date('2026-11-04')],
-      [1, 'intake', 'needs-triage', new Date('2026-11-05')],
     ]);
     expect(numbers(cockpit.queued)).toEqual([3]);
     expect(numbers(cockpit.inFlight)).toEqual([]);

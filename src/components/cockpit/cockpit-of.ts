@@ -259,14 +259,15 @@ export function cockpitOf(
   const review = [...inSection('Review'), ...epicsIn('Review')]
     .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
     .sort(longestWaitingFirst);
+  // This Board's Intake in its Board order, which a drag sets; the other
+  // Board's after it, longest waiting first.
   const intake = [
-    ...inLane('Intake').map(({ ticket }) => ticket),
-    ...intakeElsewhere.filter(
-      (ticket) => isShown(ticket) && laneOf(ticket).lane === 'Intake',
-    ),
-  ]
-    .map(intakeRowOf)
-    .sort(longestWaitingFirst);
+    ...inLane('Intake').map(({ ticket }) => intakeRowOf(ticket)),
+    ...intakeElsewhere
+      .filter((ticket) => isShown(ticket) && laneOf(ticket).lane === 'Intake')
+      .map(intakeRowOf)
+      .sort(longestWaitingFirst),
+  ];
   const needsYouNumbers = new Set(
     [...actionNeeded, ...review].map(({ number }) => number),
   );

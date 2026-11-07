@@ -1,11 +1,21 @@
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import { reorderTickets } from '../../app/tickets/actions';
 import { noConversationActivity } from '../../conversations/conversation-activity';
 import { activity, liveConversation } from '../../test/conversation-activity';
+import { keyboardDrag, stubDragAndDrop } from '../../test/drag-and-drop';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Ticket } from '../../tickets/tickets';
@@ -21,6 +31,10 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
 vi.mock('../../app/conversations/actions', () => ({
   currentConversationActivity: vi.fn(),
 }));
+
+vi.mock('../../app/tickets/actions', () => ({ reorderTickets: vi.fn() }));
+// The tests unstub globals when they finish.
+beforeEach(stubDragAndDrop);
 
 const ticket = (
   fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
@@ -288,7 +302,8 @@ describe('Cockpit', () => {
 
     const intake = section('Intake');
     expect(intake.querySelector('details')).toHaveAttribute('open');
-    const [filed, planned] = within(intake).getAllByRole('listitem');
+    // The Cycle's own Intake in Board order, the Backlog's after it.
+    const [planned, filed] = within(intake).getAllByRole('listitem');
     expect(
       within(filed).getByRole('link', { name: 'Tag size missing' }),
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=20');
@@ -576,5 +591,179 @@ describe('Cockpit', () => {
     expect(
       within(section('In flight')).getByText('Nothing in flight.'),
     ).toBeVisible();
+  });
+});
+
+describe('Cockpit drag', () => {
+  const cycle = { id: 9, title: 'Factory Board', state: 'Active' as const };
+  const planned = (
+    fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
+  ) => ticket({ cycle, ...fields });
+
+  /** Lays the rows out one under another, in the order of the page. */
+  const mockRowBounds = () => {
+    const bounds = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.tagName === 'LI') {
+          const rows = [...document.querySelectorAll('li')];
+          return new DOMRect(
+            0,
+            50 + rows.indexOf(this as never) * 100,
+            100,
+            80,
+          );
+        }
+        return new DOMRect(0, 0, 800, 2000);
+      });
+    onTestFinished(() => bounds.mockRestore());
+  };
+
+  const rowOf = (number: number) => {
+    const row = screen.getByText(`T${number}`).closest('li');
+    if (!row) {
+      throw new Error(`No row for T${number}`);
+    }
+    return row;
+  };
+
+  const dragged = [
+    planned({ number: 1, title: 'First queued', labels: ['ready-for-agent'] }),
+    planned({
+      number: 2,
+      title: 'Second queued',
+      position: 1,
+      labels: ['ready-for-agent'],
+    }),
+    planned({
+      number: 3,
+      title: 'Third queued',
+      position: 2,
+      labels: ['ready-for-agent'],
+    }),
+    planned({
+      number: 4,
+      title: 'Mine one',
+      position: 3,
+      labels: ['ready-for-human'],
+    }),
+    planned({
+      number: 5,
+      title: 'Mine two',
+      position: 4,
+      labels: ['ready-for-human'],
+    }),
+    planned({ number: 6, title: 'Idea one', position: 5 }),
+    planned({ number: 7, title: 'Idea two', position: 6 }),
+    planned({ number: 8, title: 'Old work', status: 'Done' }),
+  ];
+
+  const rowsIn = (name: string) =>
+    within(section(name))
+      .getAllByRole('listitem')
+      .map((row) => within(row).getAllByRole('link')[0].textContent);
+
+  const renderDraggable = () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    mockRowBounds();
+    renderCockpit(dragged);
+  };
+
+  afterEach(() => {
+    vi.mocked(reorderTickets).mockReset();
+    vi.mocked(currentConversationActivity).mockReset();
+  });
+
+  it.each([
+    ['Queued', 1, '{ArrowDown}', [2, 1, 3, 4, 5, 6, 7]],
+    ['Your work', 5, '{ArrowUp}', [5, 1, 2, 3, 4, 6, 7]],
+    ['Intake', 6, '{ArrowDown}', [1, 2, 3, 4, 5, 7, 6]],
+  ])(
+    'reorders a row dragged within %s by keyboard, saving the Todo lane',
+    async (_name, number, keys, ticketNumbers) => {
+      const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+      vi.mocked(reorderTickets).mockReturnValue(promise);
+      onTestFinished(async () => {
+        await act(async () => resolve({ ok: true }));
+      });
+      renderDraggable();
+
+      await keyboardDrag(rowOf(number), keys);
+
+      await vi.waitFor(() =>
+        expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
+          projectId: 3,
+          status: 'Todo',
+          cycleId: 9,
+          ticketNumbers,
+        }),
+      );
+    },
+  );
+
+  it('shows a reordered row in its new place at once', async () => {
+    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+    vi.mocked(reorderTickets).mockReturnValue(promise);
+    onTestFinished(async () => {
+      await act(async () => resolve({ ok: true }));
+    });
+    renderDraggable();
+
+    await keyboardDrag(rowOf(1), '{ArrowDown}');
+
+    await vi.waitFor(() =>
+      expect(rowsIn('Queued')).toEqual([
+        'Second queued',
+        'First queued',
+        'Third queued',
+      ]),
+    );
+  });
+
+  it('changes nothing for a row dropped in another section', async () => {
+    renderDraggable();
+
+    // The first Queued row's neighbour above is the last of Your work.
+    await keyboardDrag(rowOf(1), '{ArrowUp}');
+
+    expect(reorderTickets).not.toHaveBeenCalled();
+    expect(rowsIn('Queued')).toEqual([
+      'First queued',
+      'Second queued',
+      'Third queued',
+    ]);
+  });
+
+  it('cannot drag a Done row or a Needs you row, only the rows a drag orders', async () => {
+    renderDraggable();
+
+    await vi.waitFor(() =>
+      expect(rowOf(6)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+    expect(rowOf(1)).toHaveAttribute('aria-roledescription', 'draggable');
+    expect(rowOf(4)).toHaveAttribute('aria-roledescription', 'draggable');
+    expect(rowOf(8)).not.toHaveAttribute('aria-roledescription');
+  });
+
+  it('cannot drag a Review row', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([
+      ...dragged,
+      planned({
+        number: 9,
+        title: 'In review',
+        status: 'In progress',
+        externalReferences: ['https://github.com/owner/repo/pull/9'],
+      }),
+    ]);
+
+    await vi.waitFor(() =>
+      expect(rowOf(6)).toHaveAttribute('aria-roledescription', 'draggable'),
+    );
+    expect(rowOf(9)).not.toHaveAttribute('aria-roledescription');
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Alert,
   Box,
   Heading,
   IconButton,
@@ -11,13 +12,34 @@ import {
   Tag,
   Text,
 } from '@blockle/blocks';
-import { type FC, type ReactNode, useEffect } from 'react';
+import {
+  KeyboardSensor,
+  PointerActivationConstraints,
+  PointerSensor,
+} from '@dnd-kit/dom';
+import {
+  DragDropProvider as DndProvider,
+  type DragEndEvent,
+  type DragOverEvent,
+} from '@dnd-kit/react';
+import { isSortable, useSortable } from '@dnd-kit/react/sortable';
+import {
+  type FC,
+  type ReactNode,
+  type Ref,
+  startTransition,
+  useEffect,
+  useOptimistic,
+  useState,
+} from 'react';
 
 import { modeColors } from '../../app/lib/mode-colors';
 import { cyclePath, ticketOnBoardPath } from '../../app/lib/paths';
+import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
+import { mergeLaneOrder } from '../board/board-filter';
 import type { InProgressSection } from '../board/board-lanes';
 import {
   useLiveConversations,
@@ -191,6 +213,8 @@ type TicketRowProps = {
   end?: ReactNode;
   /** Under the row, opened from it: an Epic's children. */
   details?: ReactNode;
+  /** Set on a row that can be dragged, which then takes focus for the keyboard. */
+  rowRef?: Ref<HTMLLIElement>;
 };
 
 /**
@@ -207,6 +231,7 @@ const TicketRow: FC<TicketRowProps> = ({
   beside,
   end,
   details,
+  rowRef,
 }) => {
   const color = ticket.epic?.color ?? ticket.color;
   const content = (
@@ -256,7 +281,16 @@ const TicketRow: FC<TicketRowProps> = ({
       boxShadow={muted ? undefined : 1}
       className={color ? styles.epicEdge[color] : styles.edge}
     >
-      <li>
+      <li
+        ref={rowRef}
+        // dnd-kit makes a row it drags a button unless it has a role; it
+        // stays a list item, with the drag in its role description.
+        // biome-ignore lint/a11y/noRedundantRoles: see above
+        role={rowRef ? 'listitem' : undefined}
+        // Focusable from the first render when it can be dragged, so Space
+        // picks it up; dnd-kit would add this only on a later frame.
+        tabIndex={rowRef ? 0 : undefined}
+      >
         {details ? (
           <details>
             <Box asChild className={styles.summary}>
@@ -271,6 +305,64 @@ const TicketRow: FC<TicketRowProps> = ({
     </Box>
   );
 };
+
+/** The sections whose rows a drag orders, each among its own rows. */
+type ReorderSection = 'Queued' | 'Your work' | 'Intake';
+
+type Sortable = { section: ReorderSection; index: number };
+
+const SortableTicketRow: FC<TicketRowProps & Sortable> = ({
+  section,
+  index,
+  ...row
+}) => {
+  const { ref } = useSortable({
+    id: row.ticket.number,
+    index,
+    group: section,
+    data: { section },
+    collisionPriority: 3,
+  });
+  return <TicketRow {...row} rowRef={ref} />;
+};
+
+type DraggableTicketRowProps = TicketRowProps & {
+  /** Where a drag moves the row; left out, the row cannot be dragged. */
+  sortable?: Sortable;
+};
+
+/** A row that a drag moves within its section, by pointer or keyboard, if it may. */
+const DraggableTicketRow: FC<DraggableTicketRowProps> = ({
+  sortable,
+  ...row
+}) =>
+  sortable ? (
+    <SortableTicketRow {...row} {...sortable} />
+  ) : (
+    <TicketRow {...row} />
+  );
+
+/**
+ * A row is dragged from anywhere on it. A mouse drag starts once the pointer
+ * moves 5px, so a click still opens it; a touch drag after a 250ms press, so
+ * a swipe still scrolls. Space picks up the focused row by keyboard.
+ */
+const sensors = [
+  PointerSensor.configure({
+    activationConstraints: (event) =>
+      event.pointerType === 'touch'
+        ? [new PointerActivationConstraints.Delay({ value: 250, tolerance: 5 })]
+        : [new PointerActivationConstraints.Distance({ value: 5 })],
+    preventActivation: (event) =>
+      event.target instanceof Element &&
+      event.target.closest('input, button, select, textarea') !== null,
+  }),
+  KeyboardSensor,
+];
+
+const sectionOf = (
+  item: { data: Record<string, unknown> } | null | undefined,
+) => item?.data.section;
 
 const childStateLabel: Record<EpicChildState, string> = {
   done: 'done',
@@ -420,7 +512,18 @@ export const Cockpit: FC<CockpitProps> = ({
   const live = useLiveConversations();
   const cost = useTicketCosts();
   const now = useNow();
-  const cockpit = cockpitOf(tickets, { live, cost }, backlog);
+  const [shownTickets, showOrder] = useOptimistic(
+    tickets,
+    (current, order: number[]) =>
+      current.map((ticket) =>
+        order.includes(ticket.number)
+          ? { ...ticket, position: order.indexOf(ticket.number) }
+          : ticket,
+      ),
+  );
+  const [error, setError] = useState<string>();
+  const cockpit = cockpitOf(shownTickets, { live, cost }, backlog);
+  const backlogNumbers = new Set(backlog.map(({ number }) => number));
   const hrefOf = (number: number) =>
     ticketOnBoardPath(cyclePath(projectId, cycle.id), number);
   const age = (date: Date) => formatElapsed(now - date.getTime());
@@ -428,10 +531,92 @@ export const Cockpit: FC<CockpitProps> = ({
   const { needsYou } = cockpit;
   const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
   useCountInTitle(needsYou.count);
+
+  /** The Todo Tickets this Cycle orders, over all three sections, in order. */
+  const todoLane = shownTickets
+    .filter(
+      (ticket) =>
+        ticket.status === 'Todo' &&
+        !ticket.archived &&
+        (ticket.type !== 'Epic' || ticket.cycle?.id === cycle.id),
+    )
+    .sort(
+      (left, right) =>
+        left.position - right.position || left.number - right.number,
+    )
+    .map(({ number }) => number);
+  /** The rows of a section that a drag orders, in the order shown. */
+  const sectionNumbers: Record<ReorderSection, number[]> = {
+    Queued: cockpit.queued.map(({ number }) => number),
+    'Your work': cockpit.yourWork.map(({ number }) => number),
+    Intake: needsYou.intake
+      .filter(({ number }) => !backlogNumbers.has(number))
+      .map(({ number }) => number),
+  };
+
+  const sortableIn = (
+    section: ReorderSection,
+    number: number,
+  ): Sortable | undefined => {
+    const index = sectionNumbers[section].indexOf(number);
+    return index < 0 ? undefined : { section, index };
+  };
+
+  const followDrag = (event: DragOverEvent) => {
+    const { source, target } = event.operation;
+    // dnd-kit would move the row's element into the other section's list,
+    // which React then fails to remove from its own list on the drop.
+    if (target && sectionOf(target) !== sectionOf(source)) {
+      event.preventDefault();
+    }
+  };
+
+  const finishDrag = (event: DragEndEvent) => {
+    const { source, target } = event.operation;
+    if (event.canceled || !isSortable(source)) {
+      return;
+    }
+    const section = sectionOf(source) as ReorderSection;
+    // A drop in another section changes nothing.
+    if (sectionOf(target) !== section) {
+      return;
+    }
+    const numbers = sectionNumbers[section];
+    const from = numbers.indexOf(Number(source.id));
+    // Over its own slot, the row is where dnd-kit's sorting moved it; over
+    // another row, it takes that row's place.
+    const to =
+      target?.id === source.id
+        ? source.index
+        : numbers.indexOf(Number(target?.id));
+    if (from < 0 || to < 0 || from === to) {
+      return;
+    }
+    const moved = [...numbers];
+    moved.splice(from, 1);
+    moved.splice(to, 0, numbers[from]);
+    // The Todo Tickets of the other sections keep their places around it.
+    const ticketNumbers = mergeLaneOrder(todoLane, moved, [numbers[from]]);
+    setError(undefined);
+    startTransition(async () => {
+      showOrder(ticketNumbers);
+      const result = await reorderTickets({
+        projectId,
+        status: 'Todo',
+        cycleId: cycle.id,
+        ticketNumbers,
+      });
+      if (!result.ok) {
+        setError(result.error);
+      }
+    });
+  };
+
   const needRows = (rows: NeedRow[]) =>
     rows.map((row) => (
-      <TicketRow
+      <DraggableTicketRow
         key={row.number}
+        sortable={sortableIn('Intake', row.number)}
         ticket={row}
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
@@ -454,171 +639,180 @@ export const Cockpit: FC<CockpitProps> = ({
     ));
 
   return (
-    <Stack gap={6}>
-      <Stack gap={2}>
-        <Inline gap={3} alignY="center" alignX="between">
-          <Text color="muted">
-            {done}/{total} done
-          </Text>
-          <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
-            Runs {runSlots.used}/{runSlots.cap}
-          </Tag>
-        </Inline>
-        <Progress
-          value={total === 0 ? 0 : Math.round((done / total) * 100)}
-          aria-label="Cycle progress"
-        />
-      </Stack>
-      <Stack gap={2} asChild>
-        <section aria-label="Needs you">
-          <Inline gap={2} alignY="center">
-            <Heading level={3}>Needs you</Heading>
-            <Tag>{needsYou.count}</Tag>
+    <DndProvider
+      sensors={sensors}
+      onDragOver={followDrag}
+      onDragEnd={finishDrag}
+    >
+      <Stack gap={6}>
+        {error && <Alert intent="danger">{error}</Alert>}
+        <Stack gap={2}>
+          <Inline gap={3} alignY="center" alignX="between">
+            <Text color="muted">
+              {done}/{total} done
+            </Text>
+            <Tag startSlot={<Icon name="cpu-chip" size="small" />}>
+              Runs {runSlots.used}/{runSlots.cap}
+            </Tag>
           </Inline>
-          {needsYou.count === 0 ? (
-            <Text color="muted">Nothing needs you.</Text>
-          ) : (
-            <Stack gap={3}>
-              {needsYou.actionNeeded.length > 0 && (
-                <RowList
-                  title="Action needed"
-                  count={needsYou.actionNeeded.length}
-                  open
-                >
-                  {needRows(needsYou.actionNeeded)}
-                </RowList>
-              )}
-              {needsYou.review.length > 0 && (
-                <RowList title="Review" count={needsYou.review.length} open>
-                  {needRows(needsYou.review)}
-                </RowList>
-              )}
-              {needsYou.intake.length > 0 && (
-                <RowList title="Intake" count={needsYou.intake.length} open>
-                  {needRows(needsYou.intake)}
-                </RowList>
-              )}
-            </Stack>
-          )}
-        </section>
-      </Stack>
-      <Stack gap={2} asChild>
-        <section aria-label="In flight">
-          <Inline gap={2} alignY="center">
-            <Heading level={3}>In flight</Heading>
-            <Tag>{inFlightCount}</Tag>
-          </Inline>
-          {inFlightCount === 0 ? (
-            <Text color="muted">Nothing in flight.</Text>
-          ) : (
-            <Stack gap={1} listStyle="none" role="list" asChild>
-              <ul>
-                {cockpit.epics.map((row) => (
-                  <TicketRow
-                    key={row.number}
-                    ticket={row}
-                    href={hrefOf(row.number)}
-                    icon="queue-list"
-                    line={inFlightLine(row, now)}
-                    beside={<ChildrenBar row={row} />}
-                    end={
-                      <Inline gap={2} alignY="center" flexWrap="nowrap">
-                        {row.childNeedsYou && (
-                          <Tag
-                            intent="warning"
-                            startSlot={<Icon name="arrow-up" size="small" />}
-                          >
-                            needs you
+          <Progress
+            value={total === 0 ? 0 : Math.round((done / total) * 100)}
+            aria-label="Cycle progress"
+          />
+        </Stack>
+        <Stack gap={2} asChild>
+          <section aria-label="Needs you">
+            <Inline gap={2} alignY="center">
+              <Heading level={3}>Needs you</Heading>
+              <Tag>{needsYou.count}</Tag>
+            </Inline>
+            {needsYou.count === 0 ? (
+              <Text color="muted">Nothing needs you.</Text>
+            ) : (
+              <Stack gap={3}>
+                {needsYou.actionNeeded.length > 0 && (
+                  <RowList
+                    title="Action needed"
+                    count={needsYou.actionNeeded.length}
+                    open
+                  >
+                    {needRows(needsYou.actionNeeded)}
+                  </RowList>
+                )}
+                {needsYou.review.length > 0 && (
+                  <RowList title="Review" count={needsYou.review.length} open>
+                    {needRows(needsYou.review)}
+                  </RowList>
+                )}
+                {needsYou.intake.length > 0 && (
+                  <RowList title="Intake" count={needsYou.intake.length} open>
+                    {needRows(needsYou.intake)}
+                  </RowList>
+                )}
+              </Stack>
+            )}
+          </section>
+        </Stack>
+        <Stack gap={2} asChild>
+          <section aria-label="In flight">
+            <Inline gap={2} alignY="center">
+              <Heading level={3}>In flight</Heading>
+              <Tag>{inFlightCount}</Tag>
+            </Inline>
+            {inFlightCount === 0 ? (
+              <Text color="muted">Nothing in flight.</Text>
+            ) : (
+              <Stack gap={1} listStyle="none" role="list" asChild>
+                <ul>
+                  {cockpit.epics.map((row) => (
+                    <TicketRow
+                      key={row.number}
+                      ticket={row}
+                      href={hrefOf(row.number)}
+                      icon="queue-list"
+                      line={inFlightLine(row, now)}
+                      beside={<ChildrenBar row={row} />}
+                      end={
+                        <Inline gap={2} alignY="center" flexWrap="nowrap">
+                          {row.childNeedsYou && (
+                            <Tag
+                              intent="warning"
+                              startSlot={<Icon name="arrow-up" size="small" />}
+                            >
+                              needs you
+                            </Tag>
+                          )}
+                          {row.pullRequest && (
+                            <PullRequestLink url={row.pullRequest} />
+                          )}
+                          <Tag intent={sectionIntent[row.section]}>
+                            {row.section}
                           </Tag>
-                        )}
-                        {row.pullRequest && (
-                          <PullRequestLink url={row.pullRequest} />
-                        )}
-                        <Tag intent={sectionIntent[row.section]}>
-                          {row.section}
-                        </Tag>
-                      </Inline>
-                    }
-                    details={<EpicChildList row={row} />}
-                  />
-                ))}
-                {cockpit.inFlight.map((row) => (
-                  <TicketRow
-                    key={row.number}
-                    ticket={row}
-                    href={hrefOf(row.number)}
-                    icon="play"
-                    line={inFlightLine(row, now)}
-                    end={
-                      <Inline gap={2} alignY="center" flexWrap="nowrap">
-                        {row.pullRequest && (
-                          <PullRequestLink url={row.pullRequest} />
-                        )}
-                        <Tag intent={sectionIntent[row.section]}>
-                          {row.section}
-                        </Tag>
-                      </Inline>
-                    }
-                  />
-                ))}
-              </ul>
-            </Stack>
-          )}
-        </section>
+                        </Inline>
+                      }
+                      details={<EpicChildList row={row} />}
+                    />
+                  ))}
+                  {cockpit.inFlight.map((row) => (
+                    <TicketRow
+                      key={row.number}
+                      ticket={row}
+                      href={hrefOf(row.number)}
+                      icon="play"
+                      line={inFlightLine(row, now)}
+                      end={
+                        <Inline gap={2} alignY="center" flexWrap="nowrap">
+                          {row.pullRequest && (
+                            <PullRequestLink url={row.pullRequest} />
+                          )}
+                          <Tag intent={sectionIntent[row.section]}>
+                            {row.section}
+                          </Tag>
+                        </Inline>
+                      }
+                    />
+                  ))}
+                </ul>
+              </Stack>
+            )}
+          </section>
+        </Stack>
+        <Stack gap={2}>
+          <RowList title="Your work" count={cockpit.yourWork.length}>
+            {cockpit.yourWork.map((row) => (
+              <DraggableTicketRow
+                key={row.number}
+                sortable={sortableIn('Your work', row.number)}
+                muted
+                ticket={row}
+                href={hrefOf(row.number)}
+                icon="user"
+                line={`ready-for-human · for ${age(row.updatedAt)}`}
+                end={<Tag>For human</Tag>}
+              />
+            ))}
+          </RowList>
+          <RowList title="Queued" count={cockpit.queued.length}>
+            {cockpit.queued.map((row, index) => (
+              <DraggableTicketRow
+                key={row.number}
+                sortable={sortableIn('Queued', row.number)}
+                muted
+                ticket={row}
+                href={hrefOf(row.number)}
+                icon="clock"
+                line={queuedLine(row, index)}
+                end={
+                  row.blocked ? (
+                    <Tag intent="warning">Blocked</Tag>
+                  ) : index === 0 ? (
+                    <Tag intent="primary">Next</Tag>
+                  ) : (
+                    <Tag>Queued</Tag>
+                  )
+                }
+              />
+            ))}
+          </RowList>
+          <RowList title="Done" count={cockpit.done.length}>
+            {cockpit.done.map((row) => (
+              <TicketRow
+                key={row.number}
+                muted
+                ticket={row}
+                href={hrefOf(row.number)}
+                icon="check-circle"
+                line={lineOf(
+                  `Done ${age(row.updatedAt)} ago`,
+                  row.pullRequest && pullRequestLabel(row.pullRequest),
+                  row.cost > 0 && formatCost(row.cost),
+                )}
+                end={<Tag intent="success">Done</Tag>}
+              />
+            ))}
+          </RowList>
+        </Stack>
       </Stack>
-      <Stack gap={2}>
-        <RowList title="Your work" count={cockpit.yourWork.length}>
-          {cockpit.yourWork.map((row) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="user"
-              line={`ready-for-human · for ${age(row.updatedAt)}`}
-              end={<Tag>For human</Tag>}
-            />
-          ))}
-        </RowList>
-        <RowList title="Queued" count={cockpit.queued.length}>
-          {cockpit.queued.map((row, index) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="clock"
-              line={queuedLine(row, index)}
-              end={
-                row.blocked ? (
-                  <Tag intent="warning">Blocked</Tag>
-                ) : index === 0 ? (
-                  <Tag intent="primary">Next</Tag>
-                ) : (
-                  <Tag>Queued</Tag>
-                )
-              }
-            />
-          ))}
-        </RowList>
-        <RowList title="Done" count={cockpit.done.length}>
-          {cockpit.done.map((row) => (
-            <TicketRow
-              key={row.number}
-              muted
-              ticket={row}
-              href={hrefOf(row.number)}
-              icon="check-circle"
-              line={lineOf(
-                `Done ${age(row.updatedAt)} ago`,
-                row.pullRequest && pullRequestLabel(row.pullRequest),
-                row.cost > 0 && formatCost(row.cost),
-              )}
-              end={<Tag intent="success">Done</Tag>}
-            />
-          ))}
-        </RowList>
-      </Stack>
-    </Stack>
+    </DndProvider>
   );
 };
