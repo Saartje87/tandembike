@@ -555,8 +555,12 @@ export type TicketSummary = Pick<
 > &
   Partial<Pick<Ticket, 'projectId'>>;
 
-/** A `TicketSummary` as `list_tickets` lists it: always with its type. */
-export type ListedTicketSummary = TicketSummary & Pick<Ticket, 'type'>;
+/**
+ * A `TicketSummary` as `list_tickets` lists it: always with its type, and
+ * with `epicNumber`, the Epic it is a child of, or `null`.
+ */
+export type ListedTicketSummary = TicketSummary &
+  Pick<Ticket, 'type'> & { epicNumber: number | null };
 
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
@@ -1171,6 +1175,7 @@ const summaryColumns = {
   status: tickets.status,
   type: tickets.type,
   projectId: tickets.projectId,
+  epicNumber: tickets.epicNumber,
 };
 
 const relatedTicketColumns = {
@@ -3881,17 +3886,20 @@ function inOrder<Row extends { number: number }>(
 }
 
 /**
- * `rows` as `TicketSummary`s, in one query each for labels and Blockers;
+ * `rows` as `ListedTicketSummary`s, in one query each for labels and Blockers;
  * with their Project only when `withProject`.
  */
 function summaries(
   db: DatabaseConnection,
-  rows: Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'>[],
+  rows: (Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'> & {
+    epicNumber: number | null;
+  })[],
   withProject: boolean,
 ): ListedTicketSummary[] {
   return withBlockers(db, withLabels(db, rows)).map((row) => ({
     ...ticketSummary(row),
     type: row.type,
+    epicNumber: row.epicNumber,
     ...(withProject ? { projectId: row.projectId } : {}),
   }));
 }
