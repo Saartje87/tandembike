@@ -4,6 +4,8 @@ import { useRouter } from 'next/navigation';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
+import type { BoardFilter } from '../../app/lib/paths';
+import { createTicket } from '../../app/tickets/actions';
 import { noConversationActivity } from '../../conversations/conversation-activity';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
@@ -21,6 +23,7 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
 vi.mock('../../app/conversations/actions', () => ({
   currentConversationActivity: vi.fn(),
 }));
+vi.mock('../../app/tickets/actions', () => ({ createTicket: vi.fn() }));
 
 const ticket = (
   fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
@@ -86,13 +89,14 @@ const tickets = [
   ticket({ number: 11, title: 'Old work', status: 'Done' }),
 ];
 
-const renderCockpit = (shown: Ticket[] = tickets) =>
+const renderCockpit = (shown: Ticket[] = tickets, filter?: BoardFilter) =>
   renderWithTheme(
     <ConversationActivityProvider>
       <Cockpit
         projectId={3}
         cycle={{ id: 9, title: 'Factory Board' }}
         tickets={shown}
+        filter={filter}
         runSlots={{ used: 1, cap: 3 }}
       />
     </ConversationActivityProvider>,
@@ -637,5 +641,80 @@ describe('Cockpit', () => {
       within(done).getByRole('link', { name: 'Shipped' }),
     ).toBeInTheDocument();
     expect(within(done).queryByRole('link', { name: 'Child 31' })).toBe(null);
+  });
+});
+
+describe('Cockpit New Ticket field and Board filter (T1118)', () => {
+  afterEach(() => {
+    vi.mocked(createTicket).mockReset();
+    window.history.replaceState(null, '', '/');
+  });
+
+  const quiet = () =>
+    vi
+      .mocked(currentConversationActivity)
+      .mockResolvedValue(noConversationActivity);
+
+  it("creates a Ticket in the Board's Cycle with no state label, so it lands in Intake", async () => {
+    quiet();
+    vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
+    renderCockpit();
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'New Ticket title' }),
+      'Fix the header{Enter}',
+    );
+
+    expect(createTicket).toHaveBeenCalledExactlyOnceWith({
+      projectId: 3,
+      title: 'Fix the header',
+      cycleId: 9,
+    });
+  });
+
+  it('narrows every section to the Tickets matching the search, with filtered counts', async () => {
+    quiet();
+    renderCockpit(tickets, { query: 'merge', labels: [] });
+
+    expect(within(section('Review')).getByText('Merge button')).toBeVisible();
+    expect(screen.queryByText('Status line')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pick a ceiling')).not.toBeInTheDocument();
+    expect(within(section('Queued')).queryByText('Cache the Board')).toBeNull();
+    expect(
+      within(section('Queued')).getByText('0', { selector: 'span' }),
+    ).toBeVisible();
+    expect(within(section('Review')).getByText('1')).toBeVisible();
+  });
+
+  it('narrows by Label from the URL on load', () => {
+    quiet();
+    renderCockpit(tickets, { query: '', labels: ['ready-for-human'] });
+
+    expect(screen.getByText('Pick a ceiling')).toBeInTheDocument();
+    expect(screen.queryByText('Merge button')).not.toBeInTheDocument();
+  });
+
+  it('filters as the search is typed, and writes it to the URL', async () => {
+    quiet();
+    renderCockpit();
+
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Search Tickets' }),
+      'ceiling',
+    );
+
+    expect(screen.getByText('Pick a ceiling')).toBeInTheDocument();
+    expect(screen.queryByText('Merge button')).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(window.location.search).toBe('?q=ceiling'));
+  });
+
+  it('keeps the Needs you count in the tab title unfiltered', async () => {
+    quiet();
+    document.title = 'Board | Tandembike';
+    renderCockpit(tickets, { query: 'nothing matches this', labels: [] });
+
+    await vi.waitFor(() =>
+      expect(document.title).toBe('(1) Board | Tandembike'),
+    );
   });
 });
