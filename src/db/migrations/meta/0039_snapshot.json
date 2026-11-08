@@ -81,9 +81,7 @@
       "indexes": {
         "conversation_entries_conversation_id": {
           "name": "conversation_entries_conversation_id",
-          "columns": [
-            "conversation_id"
-          ],
+          "columns": ["conversation_id"],
           "isUnique": false
         }
       },
@@ -92,12 +90,8 @@
           "name": "conversation_entries_conversation_id_conversations_id_fk",
           "tableFrom": "conversation_entries",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -242,16 +236,12 @@
       "indexes": {
         "conversations_project_id": {
           "name": "conversations_project_id",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         },
         "conversations_ticket_number": {
           "name": "conversations_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -260,12 +250,8 @@
           "name": "conversations_project_id_projects_id_fk",
           "tableFrom": "conversations",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -273,12 +259,8 @@
           "name": "conversations_ticket_number_tickets_number_fk",
           "tableFrom": "conversations",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -308,9 +290,7 @@
       "indexes": {
         "cycle_tickets_ticket_number": {
           "name": "cycle_tickets_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -319,12 +299,8 @@
           "name": "cycle_tickets_cycle_id_cycles_id_fk",
           "tableFrom": "cycle_tickets",
           "tableTo": "cycles",
-          "columnsFrom": [
-            "cycle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["cycle_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -332,22 +308,15 @@
           "name": "cycle_tickets_ticket_number_tickets_number_fk",
           "tableFrom": "cycle_tickets",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "cycle_tickets_cycle_id_ticket_number_pk": {
-          "columns": [
-            "cycle_id",
-            "ticket_number"
-          ],
+          "columns": ["cycle_id", "ticket_number"],
           "name": "cycle_tickets_cycle_id_ticket_number_pk"
         }
       },
@@ -403,16 +372,12 @@
       "indexes": {
         "cycles_project_id": {
           "name": "cycles_project_id",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         },
         "cycles_one_active_per_project": {
           "name": "cycles_one_active_per_project",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": true,
           "where": "\"cycles\".\"state\" = 'Active'"
         }
@@ -422,12 +387,8 @@
           "name": "cycles_project_id_projects_id_fk",
           "tableFrom": "cycles",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -601,9 +562,7 @@
       "indexes": {
         "projects_name_key_unique": {
           "name": "projects_name_key_unique",
-          "columns": [
-            "name_key"
-          ],
+          "columns": ["name_key"],
           "isUnique": true
         }
       },
@@ -647,10 +606,7 @@
       "indexes": {
         "reference_templates_project_prefix": {
           "name": "reference_templates_project_prefix",
-          "columns": [
-            "project_id",
-            "prefix"
-          ],
+          "columns": ["project_id", "prefix"],
           "isUnique": true
         }
       },
@@ -659,12 +615,8 @@
           "name": "reference_templates_project_id_projects_id_fk",
           "tableFrom": "reference_templates",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -765,17 +717,12 @@
       "indexes": {
         "run_outcomes_conversation_id": {
           "name": "run_outcomes_conversation_id",
-          "columns": [
-            "conversation_id"
-          ],
+          "columns": ["conversation_id"],
           "isUnique": false
         },
         "run_outcomes_project_ended": {
           "name": "run_outcomes_project_ended",
-          "columns": [
-            "project_id",
-            "ended_at"
-          ],
+          "columns": ["project_id", "ended_at"],
           "isUnique": false
         }
       },
@@ -784,12 +731,8 @@
           "name": "run_outcomes_conversation_id_conversations_id_fk",
           "tableFrom": "run_outcomes",
           "tableTo": "conversations",
-          "columnsFrom": [
-            "conversation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["conversation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -797,12 +740,8 @@
           "name": "run_outcomes_project_id_projects_id_fk",
           "tableFrom": "run_outcomes",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -810,12 +749,8 @@
           "name": "run_outcomes_ticket_number_tickets_number_fk",
           "tableFrom": "run_outcomes",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -867,9 +802,7 @@
       "indexes": {
         "ticket_acceptance_criteria_ticket_number": {
           "name": "ticket_acceptance_criteria_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -878,12 +811,8 @@
           "name": "ticket_acceptance_criteria_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_acceptance_criteria",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -934,9 +863,7 @@
       "indexes": {
         "ticket_activity_ticket_number": {
           "name": "ticket_activity_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -945,12 +872,8 @@
           "name": "ticket_activity_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_activity",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1022,9 +945,7 @@
       "indexes": {
         "ticket_attachments_ticket_number": {
           "name": "ticket_attachments_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -1033,12 +954,8 @@
           "name": "ticket_attachments_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_attachments",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1068,9 +985,7 @@
       "indexes": {
         "ticket_blockers_blocked_number": {
           "name": "ticket_blockers_blocked_number",
-          "columns": [
-            "blocked_number"
-          ],
+          "columns": ["blocked_number"],
           "isUnique": false
         }
       },
@@ -1079,12 +994,8 @@
           "name": "ticket_blockers_blocker_number_tickets_number_fk",
           "tableFrom": "ticket_blockers",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "blocker_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["blocker_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1092,22 +1003,15 @@
           "name": "ticket_blockers_blocked_number_tickets_number_fk",
           "tableFrom": "ticket_blockers",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "blocked_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["blocked_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "ticket_blockers_blocker_number_blocked_number_pk": {
-          "columns": [
-            "blocker_number",
-            "blocked_number"
-          ],
+          "columns": ["blocker_number", "blocked_number"],
           "name": "ticket_blockers_blocker_number_blocked_number_pk"
         }
       },
@@ -1163,9 +1067,7 @@
       "indexes": {
         "ticket_comments_ticket_number": {
           "name": "ticket_comments_ticket_number",
-          "columns": [
-            "ticket_number"
-          ],
+          "columns": ["ticket_number"],
           "isUnique": false
         }
       },
@@ -1174,12 +1076,8 @@
           "name": "ticket_comments_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_comments",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1216,10 +1114,7 @@
       "indexes": {
         "ticket_external_references_ticket_reference": {
           "name": "ticket_external_references_ticket_reference",
-          "columns": [
-            "ticket_number",
-            "reference"
-          ],
+          "columns": ["ticket_number", "reference"],
           "isUnique": true
         }
       },
@@ -1228,12 +1123,8 @@
           "name": "ticket_external_references_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_external_references",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1263,9 +1154,7 @@
       "indexes": {
         "ticket_labels_label": {
           "name": "ticket_labels_label",
-          "columns": [
-            "label"
-          ],
+          "columns": ["label"],
           "isUnique": false
         }
       },
@@ -1274,22 +1163,15 @@
           "name": "ticket_labels_ticket_number_tickets_number_fk",
           "tableFrom": "ticket_labels",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "ticket_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "ticket_labels_ticket_number_label_pk": {
-          "columns": [
-            "ticket_number",
-            "label"
-          ],
+          "columns": ["ticket_number", "label"],
           "name": "ticket_labels_ticket_number_label_pk"
         }
       },
@@ -1420,23 +1302,17 @@
       "indexes": {
         "tickets_project_id": {
           "name": "tickets_project_id",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": false
         },
         "tickets_epic_number": {
           "name": "tickets_epic_number",
-          "columns": [
-            "epic_number"
-          ],
+          "columns": ["epic_number"],
           "isUnique": false
         },
         "tickets_origin_number": {
           "name": "tickets_origin_number",
-          "columns": [
-            "origin_number"
-          ],
+          "columns": ["origin_number"],
           "isUnique": false
         }
       },
@@ -1445,12 +1321,8 @@
           "name": "tickets_epic_number_tickets_number_fk",
           "tableFrom": "tickets",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "epic_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["epic_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1458,12 +1330,8 @@
           "name": "tickets_origin_number_tickets_number_fk",
           "tableFrom": "tickets",
           "tableTo": "tickets",
-          "columnsFrom": [
-            "origin_number"
-          ],
-          "columnsTo": [
-            "number"
-          ],
+          "columnsFrom": ["origin_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1471,12 +1339,8 @@
           "name": "tickets_project_id_projects_id_fk",
           "tableFrom": "tickets",
           "tableTo": "projects",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
