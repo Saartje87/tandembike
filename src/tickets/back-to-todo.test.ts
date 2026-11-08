@@ -71,15 +71,95 @@ describe('sending a Ticket Back to Todo', () => {
     );
     expect(tickets.getTicket(ticket.number).status).toBe('In progress');
   });
+});
 
-  it('refuses an Epic until it is covered', () => {
-    const { tickets, project } = setup();
+describe('sending an Epic Back to Todo', () => {
+  const setupEpic = () => {
+    const { tickets, project, create } = setup();
     const epic = tickets.createTicket({
       projectId: project.id,
       title: 'Login',
       type: 'Epic',
+      labels: ['ready-for-agent'],
     });
+    const child = (title: string) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        epicNumber: epic.number,
+      });
+    return { tickets, project, create, epic, child };
+  };
 
-    expect(errorFrom(() => tickets.backToTodo(epic.number))).toBeDefined();
+  it("releases the Epic's Claim and sets In progress children to Todo, leaving Done and archived ones", () => {
+    const { tickets, create, epic, child } = setupEpic();
+    const running = child('Running');
+    const review = child('Review');
+    const done = child('Done');
+    const todo = child('Todo');
+    const archived = child('Archived');
+    for (const c of [running, review, done, archived]) {
+      tickets.updateTicket(c.number, { status: 'In progress' });
+    }
+    tickets.updateTicket(done.number, { status: 'Done' });
+    tickets.archiveTicket(archived.number);
+    tickets.claimTicket(epic.number, { agentRunId: 'run-1', agentName: 'A' });
+    const queued = create('Queued');
+
+    const back = tickets.backToTodo(epic.number);
+
+    expect(back.claim).toBeNull();
+    expect(tickets.getTicket(running.number).status).toBe('Todo');
+    expect(tickets.getTicket(review.number).status).toBe('Todo');
+    expect(tickets.getTicket(todo.number).status).toBe('Todo');
+    expect(tickets.getTicket(done.number).status).toBe('Done');
+    expect(tickets.getTicket(archived.number).status).toBe('In progress');
+    expect(tickets.getTicket(running.number).labels).toEqual([
+      'ready-for-agent',
+    ]);
+    expect(tickets.getTicket(running.number).position).toBeGreaterThan(
+      tickets.getTicket(queued.number).position,
+    );
+  });
+
+  it("makes the Epic's derived Status follow its children", () => {
+    const { tickets, epic, child } = setupEpic();
+    const running = child('Running');
+    tickets.updateTicket(running.number, { status: 'In progress' });
+    expect(tickets.getTicket(epic.number).status).toBe('In progress');
+
+    expect(tickets.backToTodo(epic.number).status).toBe('Todo');
+  });
+
+  it('records the Claim release on the Epic and one Activity entry on a changed child', () => {
+    const { tickets, epic, child } = setupEpic();
+    const running = child('Running');
+    tickets.updateTicket(running.number, { status: 'In progress' });
+    tickets.claimTicket(epic.number, { agentRunId: 'run-1', agentName: 'A' });
+    const epicBefore = tickets.listActivity(epic.number).length;
+    const childBefore = tickets.listActivity(running.number).length;
+
+    tickets.backToTodo(epic.number);
+
+    const onEpic = tickets.listActivity(epic.number).slice(epicBefore);
+    expect(JSON.stringify(onEpic.map((a) => a.changes))).toContain(
+      'claimReleased',
+    );
+    const onChild = tickets.listActivity(running.number).slice(childBefore);
+    expect(onChild).toHaveLength(1);
+    expect(onChild[0].actor).toBe('user');
+  });
+
+  it('refuses an Epic in an archived Project, changing no child', () => {
+    const { tickets, project, epic, child } = setupEpic();
+    const running = child('Running');
+    tickets.updateTicket(running.number, { status: 'In progress' });
+    tickets.archiveProject(project.id);
+
+    expect(errorFrom(() => tickets.backToTodo(epic.number))).toBeInstanceOf(
+      NotAllowedError,
+    );
+    expect(tickets.getTicket(running.number).status).toBe('In progress');
   });
 });

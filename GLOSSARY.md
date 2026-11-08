@@ -41,7 +41,7 @@ A situation a Ticket or Epic is in, derived from its Status, its triage state la
 _Avoid_: Column, drop area
 
 **Stalled**:
-An In progress Ticket with no Claim and no pull request among its External references, such as one whose Conversation the User closed. It shows in the Action needed section of the In progress Lane.
+An In progress Ticket or Epic with no live Conversation, no Claim and no pull request among its External references, such as one whose Conversation the User closed. It shows in the Action needed section of the In progress Lane. Back to Todo is offered on any In progress Ticket or Epic without a live Conversation, stalled or not.
 _Avoid_: Stuck, orphaned
 
 **Status line**:

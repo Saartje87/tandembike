@@ -1989,11 +1989,15 @@ export function createTickets(
      * becomes Todo at the end of the Todo order and any Claim is released,
      * with its labels kept, as one Activity entry. An archived Ticket or one in
      * an archived Project is refused. It checks nothing outside
-     * the module, such as GitHub or Conversations. An Epic is refused for now.
+     * the module, such as GitHub or Conversations. For an Epic, its Claim is
+     * released first and every unarchived In progress child becomes Todo the
+     * same way, all or nothing; Done and archived children stay, and the Epic's
+     * Status follows. The Epic and its changed children are announced once.
      */
     backToTodo(number: number): Ticket {
       const todo = checkTicketChanges({ status: 'Todo' });
-      const { type, archived } = getTicket(number);
+      const noChanges = checkTicketChanges({});
+      const { type, archived, children } = getTicket(number);
       checkTicketWritable(db, number);
       if (archived) {
         throw new NotAllowedError(
@@ -2001,9 +2005,22 @@ export function createTickets(
         );
       }
       if (type === 'Epic') {
-        throw new NotAllowedError(
-          `Ticket T${number} is an Epic. Back to Todo does not cover Epics yet.`,
+        const inProgress = children.filter(
+          (child) => !child.archived && child.status === 'In progress',
         );
+        // The Epic's Claim goes first, recorded on the Epic, before its
+        // children's Status changes follow.
+        db.transaction(() => {
+          applyTicketChanges(number, noChanges, { releaseClaim: true });
+          for (const child of inProgress) {
+            applyTicketChanges(child.number, todo);
+          }
+        });
+        changes.publish({
+          type: 'tickets',
+          numbers: [number, ...inProgress.map((child) => child.number)],
+        });
+        return getTicket(number);
       }
 
       const { changedEpic } = applyTicketChanges(number, todo, {

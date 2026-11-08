@@ -271,7 +271,17 @@ describe('isParked', () => {
     expect(isParked({ ...base, status })).toBe(false);
   });
 
-  it('is true for an Epic In progress without a live Conversation', () => {
-    expect(isParked({ ...base, type: 'Epic' })).toBe(true);
+  it.each([
+    ['Action needed', {}],
+    ['Running', { claim }],
+    ['Review', { externalReferences: [pullRequest] }],
+  ])('is true for an Epic in %s without a live Conversation', (_s, rest) => {
+    expect(isParked({ ...base, type: 'Epic', ...rest })).toBe(true);
+  });
+
+  it('is false for an Epic with a live Conversation or not In progress', () => {
+    const epic = { ...base, type: 'Epic' as const };
+    expect(isParked(epic, liveConversation({ state: 'running' }))).toBe(false);
+    expect(isParked({ ...epic, status: 'Todo' })).toBe(false);
   });
 });

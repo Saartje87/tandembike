@@ -553,6 +553,44 @@ describe('TicketDrawer', () => {
       expect(backToTodoButton()).toBeNull();
     });
 
+    it('sends a parked Epic Back to Todo, in Review too', async () => {
+      vi.mocked(backToTodo).mockResolvedValue({ ok: true, projectId: 1 });
+      renderDrawer({
+        ...ticket,
+        type: 'Epic',
+        title: 'Login',
+        externalReferences: [pullRequest],
+      });
+
+      expect(button('Merged T4 Login')).toBeInTheDocument();
+      await userEvent.click(button('Back to Todo'));
+
+      expect(backToTodo).toHaveBeenCalledExactlyOnceWith({ number: 4 });
+    });
+
+    it('does not show on an Epic while a Conversation is live', () => {
+      vi.mocked(useTicketLiveConversation).mockReturnValue(
+        liveConversation({ state: 'running' }),
+      );
+      renderDrawer({ ...ticket, type: 'Epic', title: 'Login' });
+
+      expect(backToTodoButton()).toBeNull();
+    });
+
+    it('shows the reason when an Epic is refused', async () => {
+      vi.mocked(backToTodo).mockResolvedValue({
+        ok: false,
+        error: 'The Project is archived.',
+      });
+      renderDrawer({ ...ticket, type: 'Epic', title: 'Login' });
+
+      await userEvent.click(button('Back to Todo'));
+
+      expect(
+        await inDrawer().findByText('The Project is archived.'),
+      ).toBeInTheDocument();
+    });
+
     it('shows the reason when refused', async () => {
       vi.mocked(backToTodo).mockResolvedValue({
         ok: false,

@@ -17,6 +17,6 @@ A drag only reorders rows within one section; it never changes a Status or a lab
 ## Consequences
 
 - Rows have no actions in the list. Merged and Back to Todo live in the Ticket drawer. The User may revisit this after using the new Board.
-- Back to Todo shows in the drawer on every parked Ticket (In progress with no live Conversation: Action needed, Running or Review), not only a stalled one. It sets Todo at the end of the Todo order and releases any Claim, including one held by something that is not live; labels stay. Merged shows on a Ticket in Review. A Review drawer shows both.
+- Back to Todo shows in the drawer on every parked Ticket (In progress with no live Conversation: Action needed, Running or Review), not only a stalled one. It sets Todo at the end of the Todo order and releases any Claim, including one held by something that is not live; labels stay. Merged shows on a Ticket in Review. A Review drawer shows both. On a parked Epic, Back to Todo releases the Epic's Claim and sets every unarchived In progress child to Todo in one step, all or nothing; Done and archived children stay, and the Epic's Status follows. Merged on an Epic completes every unarchived child, Todo children included, since the one PR covers the whole Epic.
 - `/cockpit` redirects to the Active Cycle's path, or to the Backlog when there is none.
 - Attaching a Ticket to an Epic moves from dropping on a chip to an Add to Epic menu in the selection bar and the drawer.
