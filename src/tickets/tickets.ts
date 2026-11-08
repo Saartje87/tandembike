@@ -39,6 +39,7 @@ import {
   normalizeAgentCommands,
   type ProjectAgentCommands,
 } from './agent-commands';
+import { type AgentRunMode, agentRunModes } from './agent-run-mode';
 import { checkProjectWritable, checkTicketWritable } from './archived-projects';
 import {
   type AddAttachmentInput,
@@ -186,9 +187,6 @@ export type ProjectAgentSettings = {
   spendCeilingUsd: number | null;
 };
 
-export const agentRunModes = ['default', 'auto'] as const;
-export type AgentRunMode = (typeof agentRunModes)[number];
-
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
 
 /**
@@ -224,6 +222,43 @@ const agentSettingsColumns = {
   autopilot: projects.autopilot,
   spendCeilingUsd: projects.spendCeilingUsd,
 };
+
+/** A trimmed text setting; blank reads as not set. */
+function trimmedOrNull(value: string | null): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}
+
+/** Why `runMode` is not an Agent run mode, or `undefined` when it is. */
+function runModeProblem(
+  runMode: SetProjectAgentSettingsInput['runMode'],
+): string | undefined {
+  return runMode === undefined || agentRunModes.includes(runMode)
+    ? undefined
+    : 'Choose default or auto.';
+}
+
+/** Why a model name is refused, or `undefined` when it can be stored. */
+function runModelProblem(model: string | null): string | undefined {
+  return model !== null && /\s/.test(model)
+    ? 'Enter a model name without spaces.'
+    : undefined;
+}
+
+/** Why the Spend ceiling and the Autopilot switch disagree, or `undefined`. */
+function spendCeilingProblem(
+  ceiling: number | null,
+  autopilot: boolean,
+): string | undefined {
+  if (ceiling !== null) {
+    return Number.isFinite(ceiling) && ceiling > 0
+      ? undefined
+      : 'Enter an amount in dollars above 0.';
+  }
+  return autopilot
+    ? 'Set a Spend ceiling before turning on Autopilot.'
+    : undefined;
+}
 
 /** Why `path` cannot be a repository path, or `undefined` when it can. */
 function repositoryPathProblem(path: string): string | undefined {
@@ -1383,17 +1418,11 @@ export function createTickets(
           : spendCeilingUsd;
       const nextAutopilot = autopilot ?? before.autopilot;
       const nextModel =
-        runModel === undefined
-          ? before.runModel
-          : runModel === null || runModel.trim() === ''
-            ? null
-            : runModel.trim();
+        runModel === undefined ? before.runModel : trimmedOrNull(runModel);
       const nextPath =
         repositoryPath === undefined
           ? before.repositoryPath
-          : repositoryPath === null || repositoryPath.trim() === ''
-            ? null
-            : repositoryPath.trim();
+          : trimmedOrNull(repositoryPath);
       throwFieldErrors({
         repositoryPath:
           repositoryPath === undefined || nextPath === null
@@ -1408,21 +1437,10 @@ export function createTickets(
           agentMode === true && nextPath === null
             ? 'Set a repository path before turning on agent mode.'
             : undefined,
-        runMode:
-          runMode === undefined || agentRunModes.includes(runMode)
-            ? undefined
-            : 'Choose default or auto.',
+        runMode: runModeProblem(runMode),
         runModel:
-          runModel === undefined || nextModel === null || !/\s/.test(nextModel)
-            ? undefined
-            : 'Enter a model name without spaces.',
-        spendCeilingUsd:
-          nextCeiling !== null &&
-          !(Number.isFinite(nextCeiling) && nextCeiling > 0)
-            ? 'Enter an amount in dollars above 0.'
-            : nextAutopilot && nextCeiling === null
-              ? 'Set a Spend ceiling before turning on Autopilot.'
-              : undefined,
+          runModel === undefined ? undefined : runModelProblem(nextModel),
+        spendCeilingUsd: spendCeilingProblem(nextCeiling, nextAutopilot),
       });
       const settings = db
         .update(projects)

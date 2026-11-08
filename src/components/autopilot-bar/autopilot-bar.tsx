@@ -7,8 +7,8 @@ import {
   startTransition,
   useId,
   useOptimistic,
-  useState,
 } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { refusalReason } from '../../app/lib/action-result';
 import { setProjectAgentSettings } from '../../app/projects/actions';
@@ -40,7 +40,14 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
 }) => {
   const switchId = useId();
   const errorId = useId();
-  const [error, setError] = useState<string>();
+  // The switch saves at once, so the optimistic value is its pending state and
+  // a refusal shows through the form's errors (AGENTS.md, Forms).
+  const {
+    clearErrors,
+    formState: { errors },
+    setError,
+  } = useForm<{ autopilot: boolean }>({ defaultValues: { autopilot } });
+  const error = errors.autopilot?.message;
   const [shown, showAutopilot] = useOptimistic(
     autopilot,
     (_current, next: boolean) => next,
@@ -50,7 +57,7 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
 
   const change = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.checked;
-    setError(undefined);
+    clearErrors();
     startTransition(async () => {
       showAutopilot(next);
       const result = await setProjectAgentSettings({
@@ -58,7 +65,10 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
         autopilot: next,
       });
       // A refusal puts the switch back when the transition ends.
-      setError(refusalReason(result, 'spendCeilingUsd'));
+      const reason = refusalReason(result, 'spendCeilingUsd');
+      if (reason) {
+        setError('autopilot', { type: 'server', message: reason });
+      }
     });
   };
 

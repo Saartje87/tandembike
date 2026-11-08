@@ -16,7 +16,8 @@ import { useForm } from 'react-hook-form';
 
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
-import type { AgentRunMode, ProjectAgentSettings } from '../../tickets/tickets';
+import type { AgentRunMode } from '../../tickets/agent-run-mode';
+import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { FieldError } from '../field-error/field-error';
 import { ProjectSetup, type SetupOffer } from '../project-setup/project-setup';
 
@@ -37,6 +38,16 @@ type AgentSettingsValues = {
   runModel: string;
   autopilot: boolean;
   spendCeiling: string;
+};
+
+/** The form field each field of a refusal names. */
+const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
+  repositoryPath: 'repositoryPath',
+  maxConcurrentRuns: 'maxConcurrentRuns',
+  agentMode: 'agentMode',
+  runMode: 'runMode',
+  runModel: 'runModel',
+  spendCeilingUsd: 'spendCeiling',
 };
 
 /**
@@ -130,43 +141,16 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       });
       return;
     }
-    const {
-      repositoryPath,
-      maxConcurrentRuns,
-      agentMode,
-      runMode,
-      runModel,
-      spendCeilingUsd,
-    } = result.fieldErrors ?? {};
-    if (repositoryPath) {
-      setError('repositoryPath', { type: 'server', message: repositoryPath });
+    const named = Object.entries(result.fieldErrors ?? {}).flatMap(
+      ([field, message]) => {
+        const name = formFields[field];
+        return name && message ? [{ name, message }] : [];
+      },
+    );
+    for (const { name, message } of named) {
+      setError(name, { type: 'server', message });
     }
-    if (maxConcurrentRuns) {
-      setError('maxConcurrentRuns', {
-        type: 'server',
-        message: maxConcurrentRuns,
-      });
-    }
-    if (agentMode) {
-      setError('agentMode', { type: 'server', message: agentMode });
-    }
-    if (runMode) {
-      setError('runMode', { type: 'server', message: runMode });
-    }
-    if (runModel) {
-      setError('runModel', { type: 'server', message: runModel });
-    }
-    if (spendCeilingUsd) {
-      setError('spendCeiling', { type: 'server', message: spendCeilingUsd });
-    }
-    if (
-      !spendCeilingUsd &&
-      !repositoryPath &&
-      !maxConcurrentRuns &&
-      !agentMode &&
-      !runMode &&
-      !runModel
-    ) {
+    if (named.length === 0) {
       setError('root.server', { message: result.error });
     }
   });
@@ -227,6 +211,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             )}
             <FieldError id={modeErrorId} reason={modeError} />
           </Stack>
+          {/* Blocks has no radio group yet, so a Stack carries the role (T1163). */}
           <Stack gap={1} role="radiogroup" aria-labelledby={runModeLabelId}>
             <Text tag="p" id={runModeLabelId} fontWeight="bold">
               Agent run mode

@@ -7,6 +7,7 @@ import { modeColors } from '../../app/lib/mode-colors';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
+import { roleNames } from '../conversation-labels/conversation-labels';
 import { ConversationPermissionPrompt } from '../conversation-permission-prompt/conversation-permission-prompt';
 import { ConversationQuestionForm } from '../conversation-question-form/conversation-question-form';
 import { Markdown } from '../markdown/markdown';
@@ -71,15 +72,7 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
       <li data-side={fromUser ? 'end' : 'start'}>
         <Stack gap={1}>
           <Text fontSize="small" fontWeight="strong" color="muted">
-            {fromUser
-              ? 'You'
-              : entry.role === 'autopilot'
-                ? 'Autopilot'
-                : entry.role === 'agent'
-                  ? 'Agent'
-                  : entry.role === 'question'
-                    ? 'Question'
-                    : 'Permission'}
+            {roleNames[entry.role]}
           </Text>
           {entry.question !== null ? (
             <ConversationQuestionForm
