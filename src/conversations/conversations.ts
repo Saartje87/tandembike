@@ -372,7 +372,8 @@ export function createConversations({
    * (ADR 0019). Triage and Ask are never limited, and do not count. Only
    * Starts that are working count, running or waiting on a permission: an
    * idle Start waits for a reply and holds no slot. `exceptId` is the
-   * Conversation about to work, not counted against itself.
+   * Conversation about to work, not counted against itself. The User's
+   * reply skips this check (ADR 0031).
    */
   const checkStartLimit = (
     projectId: number,
@@ -412,14 +413,29 @@ export function createConversations({
       .run();
   };
 
-  /** Starts a run for Conversation `id` with `prompt`, resuming `resume`. */
-  const startRun = (id: number, prompt: string, resume?: string) => {
+  /**
+   * Starts a run for Conversation `id` with `prompt`, resuming `resume`.
+   * `limited: false` skips the Start run limit, for the User's reply (ADR 0031).
+   */
+  const startRun = (
+    id: number,
+    prompt: string,
+    resume?: string,
+    limited = true,
+  ) => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
-    checkStartLimit(conversation.projectId, conversation.intent, settings, id);
+    if (limited) {
+      checkStartLimit(
+        conversation.projectId,
+        conversation.intent,
+        settings,
+        id,
+      );
+    }
     const ticket =
       conversation.ticketNumber === null
         ? null
@@ -693,6 +709,8 @@ export function createConversations({
     /**
      * Sends a reply, the User's or Autopilot's: into the run while it is
      * alive, otherwise into a new run that resumes the stored SDK session.
+     * The User's reply is never refused by the Start run limit, so the User
+     * can always answer their Conversations; Autopilot's is (ADR 0031).
      */
     async reply(
       id: number,
@@ -710,22 +728,22 @@ export function createConversations({
         setHidden(id, false);
       }
 
+      const limited = sentBy !== 'user';
       const handle = live.get(id);
       if (handle?.run) {
-        const settings = tickets.getProjectAgentSettings(
-          conversation.projectId,
-        );
-        checkStartLimit(
-          conversation.projectId,
-          conversation.intent,
-          settings,
-          id,
-        );
+        if (limited) {
+          checkStartLimit(
+            conversation.projectId,
+            conversation.intent,
+            tickets.getProjectAgentSettings(conversation.projectId),
+            id,
+          );
+        }
         append(id, sentBy, message);
         update(id, { state: 'running' });
         handle.run.send(message);
       } else {
-        startRun(id, message, conversation.sdkSessionId ?? undefined);
+        startRun(id, message, conversation.sdkSessionId ?? undefined, limited);
         append(id, sentBy, message);
         update(id, { state: 'running' });
       }

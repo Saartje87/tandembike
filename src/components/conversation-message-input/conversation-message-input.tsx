@@ -92,7 +92,17 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   const empty = watch('text').trim() === '';
 
   const submit = handleSubmit(async ({ text }) => {
-    const outcome = await onSend(text);
+    let outcome: SendOutcome;
+    try {
+      outcome = await onSend(text);
+    } catch {
+      // A Server Action that throws, rather than return a refusal, is shown
+      // too, never left as an uncaught rejection (T1185).
+      outcome = {
+        ok: false,
+        error: 'The message could not be sent. Try again.',
+      };
+    }
     if (outcome.ok) {
       reset();
     } else if (outcome.textError) {

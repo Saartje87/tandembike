@@ -1,5 +1,7 @@
 # Autopilot dispatches the Active Cycle's ready work
 
+Amended by [ADR 0031](0031-a-reply-is-never-refused-by-the-start-run-limit.md): a User's reply can take a Project over its Start run limit, and Autopilot dispatches nothing until the working Start runs drop below it.
+
 The User plans a Cycle of `ready-for-agent` Tickets and Epics, and until now had to press Start on each. **Autopilot** is a Project switch: while it is on and the Project has an Active Cycle, Tandembike starts a Start Conversation for each **Eligible** Ticket or Epic by itself, Started by Autopilot (T1126), with the same first message and brief as the Start button.
 
 - **The switch is standing consent.** ADR 0019 let only the User start a run, one press at a time. Turning Autopilot on is the User's consent for the runs that follow, including runs that Agent-fed work causes: a spec run that files `ready-for-agent` children into the Active Cycle makes them Eligible. Autopilot never labels or moves a Ticket itself, so every dispatch traces to a `ready-for-agent` label the User, or an Agent the User started, put on. It leaves `needs-triage` and `needs-info` alone.
