@@ -82,6 +82,8 @@ describe('Starting a Conversation', () => {
     expect(conversation.ticketNumber).toBe(ticket.number);
     const brief = runner.runs[0].options.systemPrompt;
     expect(brief).toContain(`Agent-run ID: ${conversation.id}`);
+    expect(brief).not.toMatch(/claim a Ticket|Use it when/);
+    expect(runner.runs[0].options.agentRunId).toBe(String(conversation.id));
     expect(brief).toContain(`T${ticket.number}`);
     expect(brief).toContain('triage');
     expect(brief).toContain('AskUserQuestion');

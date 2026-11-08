@@ -638,6 +638,7 @@ export function createConversations({
     try {
       handle.run = runner.start({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
+        agentRunId: String(id),
         mcpUrl,
         systemPrompt: runBrief({
           conversationId: id,

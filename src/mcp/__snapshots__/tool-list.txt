@@ -276,8 +276,8 @@
           "description": "The Ticket number, e.g. 42 for T42."
         },
         "agentRunId": {
-          "type": "string",
-          "description": "A unique identifier for this Agent run."
+          "description": "A unique identifier for this Agent run. Runs Tandembike started need not pass it.",
+          "type": "string"
         },
         "agentName": {
           "description": "An optional display name for the Agent holding the claim.",
@@ -293,8 +293,7 @@
         }
       },
       "required": [
-        "number",
-        "agentRunId"
+        "number"
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false
@@ -1255,8 +1254,8 @@
           "description": "The Ticket number, e.g. 42 for T42."
         },
         "agentRunId": {
-          "type": "string",
-          "description": "The unique identifier used when claiming this Ticket."
+          "description": "The unique identifier used when claiming this Ticket. Runs Tandembike started need not pass it.",
+          "type": "string"
         },
         "detail": {
           "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
@@ -1268,8 +1267,7 @@
         }
       },
       "required": [
-        "number",
-        "agentRunId"
+        "number"
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false

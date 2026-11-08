@@ -79,7 +79,7 @@ export function runBrief(brief: RunBrief): string {
       : `This Conversation is about Ticket T${brief.ticketNumber}, "${brief.ticketTitle}"${brief.ticketType === 'Epic' ? ', an Epic' : ''}.`,
     intentLines[brief.intent],
     'A human answers in the Tandembike UI, not in a terminal: when you need a decision, offer the choices with the AskUserQuestion tool, which shows the User a form; ask open questions in your messages.',
-    `Your Agent-run ID: ${brief.conversationId}. Use it when you claim a Ticket with the Tandembike tools.`,
+    `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};
   if (brief.intent === 'new_ticket') {
