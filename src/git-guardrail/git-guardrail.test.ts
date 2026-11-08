@@ -168,6 +168,38 @@ describe('checkCommand', () => {
     );
   });
 
+  it('does not check the body of a heredoc', () => {
+    expect(ruleOf('cat <<EOF\ngit clean -f\nEOF')).toBeNull();
+    expect(
+      ruleOf("gh pr create --body-file - <<'EOF'\ngit reset --hard\nEOF"),
+    ).toBeNull();
+    expect(ruleOf('cat <<-EOF\n\tgit clean -f\n\tEOF')).toBeNull();
+  });
+
+  it('checks the commands around a heredoc', () => {
+    expect(ruleOf('cat <<EOF\nhi\nEOF\ngit clean -f')).toBe('no-clean');
+    expect(ruleOf('cat <<EOF && git clean -f\nhi\nEOF')).toBe('no-clean');
+    expect(ruleOf('git reset --hard <<<x')).toBe('no-reset-hard');
+  });
+
+  it('sees through timeout and xargs', () => {
+    expect(ruleOf('timeout 5 git clean -f')).toBe('no-clean');
+    expect(ruleOf('timeout -s KILL 5m git reset --hard')).toBe('no-reset-hard');
+    expect(ruleOf('xargs git clean -f')).toBe('no-clean');
+    expect(ruleOf('echo x | xargs -n 1 git branch -D')).toBe(
+      'no-branch-force-delete',
+    );
+  });
+
+  it('denies a push to main written as heads/main', () => {
+    expect(ruleOf('git push origin heads/main')).toBe('no-push-main');
+  });
+
+  it('treats arguments after -- as paths', () => {
+    expect(ruleOf('git reset -- --hard')).toBeNull();
+    expect(ruleOf('git branch --contains x -- -D')).toBeNull();
+  });
+
   it('allows ordinary git commands', () => {
     expect(ruleOf('git status')).toBeNull();
     expect(ruleOf('git reset HEAD file.ts')).toBeNull();

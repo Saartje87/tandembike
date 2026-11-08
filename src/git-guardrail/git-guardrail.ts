@@ -13,12 +13,7 @@ export type GuardrailContext = {
   currentBranch: (dir: string) => string | null;
 };
 
-export type Denial = {
-  rule: string;
-  reason: string;
-};
-
-const RULES: Record<string, string> = {
+const RULES = {
   'no-force-push':
     'force pushes (--force, -f, --force-with-lease, +ref) are not allowed',
   'no-push-main': 'pushing to main is not allowed; push a branch and open a PR',
@@ -27,9 +22,16 @@ const RULES: Record<string, string> = {
   'no-branch-force-delete':
     'force-deleting a branch (git branch -D, --delete --force) is not allowed',
   'no-stash-drop': 'git stash drop and git stash clear are not allowed',
+} as const;
+
+export type Rule = keyof typeof RULES;
+
+export type Denial = {
+  rule: Rule;
+  reason: string;
 };
 
-const deny = (rule: string): Denial => ({ rule, reason: RULES[rule] });
+const deny = (rule: Rule): Denial => ({ rule, reason: RULES[rule] });
 
 /** Characters that end a simple command outside quotes. */
 const SEPARATORS = new Set([';', '&', '|', '\n', '(', ')']);
@@ -60,10 +62,32 @@ const closingBacktick = (input: string, start: number): number => {
   return input.length;
 };
 
+type Heredoc = { delimiter: string; stripTabs: boolean };
+
+/** Index after the body of each heredoc whose body starts at `start`. */
+const skipHeredocs = (
+  input: string,
+  start: number,
+  heredocs: Heredoc[],
+): number => {
+  let i = start;
+  for (const { delimiter, stripTabs } of heredocs) {
+    while (i < input.length) {
+      const newline = input.indexOf('\n', i);
+      const end = newline === -1 ? input.length : newline;
+      const line = input.slice(i, end);
+      i = end + 1;
+      if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) break;
+    }
+  }
+  return i;
+};
+
 /**
  * Splits a shell command line into its simple commands, each a list of
  * unquoted words. Commands inside `$(…)` and backticks are listed as well, so
- * a denied command cannot hide in a substitution.
+ * a denied command cannot hide in a substitution. Heredoc bodies are text,
+ * not commands, and are skipped.
  */
 const parse = (input: string): string[][] => {
   const commands: string[][] = [];
@@ -87,10 +111,28 @@ const parse = (input: string): string[][] => {
     return end + 1;
   };
 
+  let heredocs: Heredoc[] = [];
+
   let i = 0;
   while (i < input.length) {
     const c = input[i];
-    if (c === '\\') {
+    if (c === '<' && input[i + 1] === '<' && input[i + 2] !== '<') {
+      endWord();
+      i += 2;
+      const stripTabs = input[i] === '-';
+      if (stripTabs) i++;
+      while (input[i] === ' ' || input[i] === '\t') i++;
+      let delimiter = '';
+      while (i < input.length && !/[\s;&|()<>]/.test(input[i])) {
+        if (!`'"\\`.includes(input[i])) delimiter += input[i];
+        i++;
+      }
+      heredocs.push({ delimiter, stripTabs });
+    } else if (c === '\n' && heredocs.length > 0) {
+      endCommand();
+      i = skipHeredocs(input, i + 1, heredocs);
+      heredocs = [];
+    } else if (c === '\\') {
       if (input[i + 1] !== '\n') word += input[i + 1] ?? '';
       inWord = true;
       i += 2;
@@ -148,8 +190,10 @@ const parse = (input: string): string[][] => {
   return commands;
 };
 
-/** Reserved words and wrappers that run the command after them. */
-const PREFIXES = new Set([
+const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+/** Reserved words that can stand before a command. */
+const RESERVED = new Set([
   '{',
   '}',
   '!',
@@ -160,28 +204,56 @@ const PREFIXES = new Set([
   'do',
   'while',
   'until',
-  'time',
-  'command',
-  'builtin',
-  'exec',
-  'nohup',
-  'nice',
-  'sudo',
-  'env',
 ]);
+
+type Wrapper = {
+  /** Its options that take the next word as their value. */
+  valueOptions: string[];
+  /** How many operands it takes before the command, like timeout's duration. */
+  operands: number;
+};
+
+/** Commands that run the command after their own options. */
+const WRAPPERS: Record<string, Wrapper> = {
+  time: { valueOptions: [], operands: 0 },
+  command: { valueOptions: [], operands: 0 },
+  builtin: { valueOptions: [], operands: 0 },
+  exec: { valueOptions: ['-a'], operands: 0 },
+  nohup: { valueOptions: [], operands: 0 },
+  nice: { valueOptions: ['-n'], operands: 0 },
+  sudo: { valueOptions: ['-u', '-g'], operands: 0 },
+  env: { valueOptions: ['-u', '-C', '-S'], operands: 0 },
+  timeout: { valueOptions: ['-s', '-k'], operands: 1 },
+  xargs: {
+    valueOptions: ['-I', '-n', '-P', '-L', '-d', '-s', '-E', '-a'],
+    operands: 0,
+  },
+};
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
-/** Drops the reserved words, wrappers and variable assignments before a program. */
-const program = (words: string[]): string[] => {
+/**
+ * The words of the command a simple command runs: without the reserved
+ * words, variable assignments and wrappers (with their options) before it.
+ */
+const commandWords = (words: string[]): string[] => {
   let i = 0;
-  let wrapped = false;
   while (i < words.length) {
     const word = words[i];
-    if (PREFIXES.has(word)) wrapped = true;
-    else if (!(ASSIGNMENT.test(word) || (wrapped && word.startsWith('-'))))
-      break;
+    if (RESERVED.has(word) || ASSIGNMENT.test(word)) {
+      i++;
+      continue;
+    }
+    const wrapper = Object.hasOwn(WRAPPERS, basename(word))
+      ? WRAPPERS[basename(word)]
+      : undefined;
+    if (!wrapper) break;
     i++;
+    while (i < words.length && words[i].startsWith('-')) {
+      if (wrapper.valueOptions.includes(words[i])) i++;
+      i++;
+    }
+    i += wrapper.operands;
   }
   return words.slice(i);
 };
@@ -195,8 +267,6 @@ const shellScript = (args: string[]): string | null => {
   );
   return flag === -1 ? null : (args[flag + 1] ?? null);
 };
-
-const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
 /** Whether `args` hold the short flag `flag`, alone or in a cluster like `-df`. */
 const hasShortFlag = (args: string[], flag: string): boolean =>
@@ -229,7 +299,7 @@ const pushTarget = (refspec: string, currentBranch: () => string | null) => {
   if (colon === -1 && (target === 'HEAD' || target === '@')) {
     target = currentBranch() ?? target;
   }
-  return target.replace(/^refs\/heads\//, '');
+  return target.replace(/^(refs\/)?heads\//, '');
 };
 
 const checkPush = (
@@ -279,32 +349,38 @@ const GIT_OPTIONS_WITH_VALUE = new Set([
   '--config-env',
 ]);
 
-const checkGit = (
-  globalAndArgs: string[],
-  context: GuardrailContext,
-): Denial | null => {
+/** The arguments before `--`, after which git reads paths, not options. */
+const beforePaths = (args: string[]): string[] => {
+  const end = args.indexOf('--');
+  return end === -1 ? args : args.slice(0, end);
+};
+
+/** Checks one git invocation; `args` start with git's own global options. */
+const checkGit = (args: string[], context: GuardrailContext): Denial | null => {
   let dir = context.cwd;
   let i = 0;
-  for (; i < globalAndArgs.length; i++) {
-    const arg = globalAndArgs[i];
+  for (; i < args.length; i++) {
+    const arg = args[i];
     if (arg === '-C') {
-      dir = resolve(dir, globalAndArgs[++i] ?? '');
+      dir = resolve(dir, args[++i] ?? '');
     } else if (GIT_OPTIONS_WITH_VALUE.has(arg)) {
       i++;
     } else if (!arg.startsWith('-')) {
       break;
     }
   }
-  const [subcommand, ...rest] = globalAndArgs.slice(i);
+  const [subcommand, ...rest] = args.slice(i);
   switch (subcommand) {
     case 'push':
       return checkPush(rest, () => context.currentBranch(dir));
     case 'reset':
-      return rest.includes('--hard') ? deny('no-reset-hard') : null;
+      return beforePaths(rest).includes('--hard')
+        ? deny('no-reset-hard')
+        : null;
     case 'clean':
       return deny('no-clean');
     case 'branch':
-      return checkBranch(rest);
+      return checkBranch(beforePaths(rest));
     case 'stash':
       return rest[0] === 'drop' || rest[0] === 'clear'
         ? deny('no-stash-drop')
@@ -320,9 +396,9 @@ export const checkCommand = (
 ): Denial | null => {
   let cwd = context.cwd;
   for (const words of parse(command)) {
-    const [name, ...args] = program(words);
+    const [name, ...args] = commandWords(words);
     if (name === undefined) continue;
-    const here = { ...context, cwd };
+    const atCwd = { ...context, cwd };
     let denial: Denial | null = null;
     switch (basename(name)) {
       case 'cd':
@@ -331,14 +407,14 @@ export const checkCommand = (
         }
         break;
       case 'git':
-        denial = checkGit(args, here);
+        denial = checkGit(args, atCwd);
         break;
       case 'eval':
-        denial = checkCommand(args.join(' '), here);
+        denial = checkCommand(args.join(' '), atCwd);
         break;
       default: {
         const script = SHELLS.has(basename(name)) ? shellScript(args) : null;
-        if (script !== null) denial = checkCommand(script, here);
+        if (script !== null) denial = checkCommand(script, atCwd);
       }
     }
     if (denial) return denial;
