@@ -14,7 +14,7 @@ export type BoardLane =
 /** What the Lane of a Ticket is derived from. */
 export type LaneInput = Pick<
   Ticket,
-  'status' | 'labels' | 'claim' | 'externalReferences'
+  'status' | 'labels' | 'claim' | 'externalReferences' | 'type' | 'children'
 >;
 
 /** The sections of the In progress Lane (added with the run state, T1064). */
@@ -54,9 +54,21 @@ function sectionOf(
 }
 
 /**
+ * Whether `ticket` is an Epic without children: none unarchived, on any
+ * Board. It cannot run until someone splits it (ADR 0027).
+ */
+export function isEmptyEpic(ticket: Pick<Ticket, 'type' | 'children'>) {
+  return (
+    ticket.type === 'Epic' && ticket.children.every(({ archived }) => archived)
+  );
+}
+
+/**
  * The Lane a Ticket sits in, derived from its Status and triage state label:
  * a Todo Ticket is in Intake (needs-triage, needs-info, or no state label),
- * Queued (ready-for-agent) or Your work (ready-for-human).
+ * Queued (ready-for-agent) or Your work (ready-for-human). A ready-for-agent
+ * Epic without children is in Intake, not Queued: it must be split first
+ * (ADR 0027).
  */
 export function laneOf(
   ticket: LaneInput,
@@ -69,7 +81,7 @@ export function laneOf(
     return { lane: 'Done', section: null };
   }
   if (ticket.labels.includes(readyForAgent)) {
-    return { lane: 'Queued', section: null };
+    return { lane: isEmptyEpic(ticket) ? 'Intake' : 'Queued', section: null };
   }
   if (ticket.labels.includes(readyForHuman)) {
     return { lane: 'Your work', section: null };

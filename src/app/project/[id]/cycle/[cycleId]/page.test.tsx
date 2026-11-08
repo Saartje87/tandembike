@@ -271,7 +271,12 @@ describe('CyclePage', () => {
       expect(
         within(queued).getByText('No children in this Cycle (1 elsewhere)'),
       ).toBeInTheDocument();
-      expect(within(queued).getByText('No children yet')).toBeInTheDocument();
+      // An Epic without children waits in Intake to be split (T1139).
+      expect(
+        within(screen.getByRole('region', { name: 'Intake' })).getByText(
+          'Ready for an Agent once split: no children yet. Triage it to split it.',
+        ),
+      ).toBeInTheDocument();
     });
 
     it('shows an Epic when its children are planned, though it is not, in Needs you while its run is not going', async () => {
