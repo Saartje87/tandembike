@@ -95,9 +95,10 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
     let outcome: SendOutcome;
     try {
       outcome = await onSend(text);
-    } catch {
+    } catch (thrown) {
       // A Server Action that throws, rather than return a refusal, is shown
       // too, never left as an uncaught rejection (T1185).
+      console.error(thrown);
       outcome = {
         ok: false,
         error: 'The message could not be sent. Try again.',

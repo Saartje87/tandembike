@@ -14,14 +14,30 @@ import {
  * A second copy of this module, as Next bundles one for instrumentation
  * (Autopilot) apart from the Server Actions' copy (T1185).
  */
-async function otherCopy() {
+async function loadSecondCopy() {
   vi.resetModules();
   return import('./errors');
 }
 
 describe('Tickets errors', () => {
+  it('each declare a kind of their own, or they would match their parent', async () => {
+    const errors = await import('./errors');
+    const classes = Object.values(errors).filter(
+      (value) =>
+        typeof value === 'function' &&
+        (value === TicketsError || value.prototype instanceof Error),
+    );
+
+    expect(classes.length).toBeGreaterThan(1);
+    for (const type of classes) {
+      expect(Object.hasOwn(type, 'kind'), type.name).toBe(true);
+    }
+    const kinds = classes.map((type) => (type as typeof TicketsError).kind);
+    expect(new Set(kinds).size).toBe(kinds.length);
+  });
+
   it('are recognised by a second copy of the module, by their own class only', async () => {
-    const other = await otherCopy();
+    const other = await loadSecondCopy();
     expect(other.TicketsError).not.toBe(TicketsError);
 
     const refusal = new other.NotAllowedError('No.');
@@ -35,7 +51,7 @@ describe('Tickets errors', () => {
   });
 
   it('keep a ValidationError’s field errors across copies', async () => {
-    const other = await otherCopy();
+    const other = await loadSecondCopy();
 
     const error: unknown = new other.ValidationError({ text: 'Write one.' });
 
