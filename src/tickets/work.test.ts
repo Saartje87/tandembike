@@ -319,6 +319,27 @@ describe('abandonWork without a Claim of the run', () => {
     expect(tickets.listComments(ticket.number)).toEqual([]);
     expect(tickets.getTicket(ticket.number).status).toBe('In progress');
   });
+
+  it("points a child under the run's Epic Claim to its Epic", () => {
+    const { tickets, make } = setup();
+    const epic = make('Epic', { type: 'Epic' });
+    const child = make('Child');
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [child.number],
+    });
+    tickets.startWork(epic.number, 'run-1');
+    tickets.startWork(child.number, 'run-1');
+
+    expect(
+      errorFrom(() => tickets.abandonWork(child.number, 'run-1', 'Stuck')),
+    ).toEqual(
+      new NotAllowedError(
+        `Ticket T${child.number} is covered by your Claim on Epic T${epic.number}: abandon the Epic instead.`,
+      ),
+    );
+    expect(tickets.listComments(child.number)).toEqual([]);
+  });
 });
 
 describe('linkPullRequest', () => {

@@ -238,6 +238,12 @@ export function createWork(deps: WorkDeps) {
           // Another run's Claim: the release refuses, naming the holder.
           deps.releaseTicketClaim(number, { agentRunId: runId });
         }
+        const epic = ticket.epic && deps.getTicket(ticket.epic.number);
+        if (epic && epic.claim?.agentRunId === runId) {
+          throw new NotAllowedError(
+            `Ticket T${number} is covered by your Claim on Epic T${epic.number}: abandon the Epic instead.`,
+          );
+        }
         throw new NotAllowedError(
           `Ticket T${number} has no Claim of Agent run ${runId} to abandon.`,
         );
