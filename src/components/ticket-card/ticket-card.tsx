@@ -66,7 +66,7 @@ export type TicketCardProps = {
    * Ticket is not in review.
    */
   onMerged?: () => void;
-  /** Sends the Ticket Back to Todo; the button shows on a parked card. */
+  /** Sends the Ticket Back to Todo; the button shows on a stalled card only. */
   onBackToTodo?: () => void;
 };
 
