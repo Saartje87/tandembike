@@ -207,7 +207,12 @@ describe('The Claude runner', () => {
         input: { file_path: 'a.md' },
       },
       { type: 'turn', costUsd: 0.42 },
-      { type: 'turn', costUsd: 0.5, error: 'error_max_turns' },
+      {
+        type: 'turn',
+        costUsd: 0.5,
+        error: 'error_max_turns',
+        errorSubtype: 'error_max_turns',
+      },
       { type: 'exit' },
     ]);
   });
@@ -523,5 +528,18 @@ describe('The Claude runner', () => {
         } as never),
       ).toEqual([]);
     });
+  });
+
+  it('reports the model of the SDK init message with the session', () => {
+    expect(
+      eventsOf({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sess-1',
+        model: 'claude-opus-5',
+      } as never),
+    ).toEqual([
+      { type: 'session', sessionId: 'sess-1', model: 'claude-opus-5' },
+    ]);
   });
 });

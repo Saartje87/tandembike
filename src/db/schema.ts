@@ -19,6 +19,7 @@ import {
   permissionStatuses,
   transcriptRoles,
 } from '../conversations/conversation-state';
+import { runResults } from '../conversations/run-outcome';
 import type { ActivityChange } from '../tickets/activity-change';
 import { defaultAgentCommands } from '../tickets/agent-commands';
 import { agentRunModes } from '../tickets/agent-run-mode';
@@ -44,6 +45,7 @@ export const projects = sqliteTable('projects', {
   repositoryPath: text('repository_path'),
   /** The command that defines green for the repository; null while unset. */
   checkCommand: text('check_command'),
+  prepareCommand: text('prepare_command'),
   /** Whether Start runs of this Project may overlap, each in its own worktree. */
   parallelRuns: integer('parallel_runs', { mode: 'boolean' })
     .notNull()
@@ -387,6 +389,19 @@ export const conversations = sqliteTable(
     defaultEpicNumber: integer('default_epic_number'),
     /** New Ticket: what the title field creates, a default. */
     defaultType: text('default_type', { enum: ticketTypes }),
+    /**
+     * Start with Parallel runs: the worktree Tandembike made for it, the
+     * folder every run of it works in, and what it is detached at. Null
+     * for a Conversation that works in the main checkout.
+     */
+    worktreePath: text('worktree_path'),
+    worktreeBase: text('worktree_base'),
+    /** Why Tandembike kept the worktree at close or Done: it holds `dirty` or `unpushed` work. */
+    worktreeKept: text('worktree_kept', { enum: ['dirty', 'unpushed'] }),
+    /** Tandembike removed the worktree; `worktreePath` stays as the record of where it was. */
+    worktreeRemoved: integer('worktree_removed', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
@@ -424,5 +439,47 @@ export const conversationEntries = sqliteTable(
   },
   (table) => [
     index('conversation_entries_conversation_id').on(table.conversationId),
+  ],
+);
+
+/**
+ * One row per run end of a Conversation (GLOSSARY: Run outcome). Written and
+ * read only by the Conversations module, and kept when a Conversation is
+ * closed.
+ */
+export const runOutcomes = sqliteTable(
+  'run_outcomes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    ticketNumber: integer('ticket_number').references(() => tickets.number),
+    /** The Conversation's intent, the Stage. */
+    stage: text('stage', { enum: conversationIntents }).notNull(),
+    result: text('result', { enum: runResults }).notNull(),
+    startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
+    endedAt: integer('ended_at', { mode: 'timestamp_ms' }).notNull(),
+    /** What this run cost in USD, not the Conversation's total. */
+    costUsd: real('cost_usd').notNull(),
+    /** The model from the SDK's init message; null when the run never reported one. */
+    model: text('model'),
+    /** The `/command` the run's first message started with; null for none. */
+    command: text('command'),
+    /** Whether Autopilot started this run. */
+    startedByAutopilot: integer('started_by_autopilot', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+    /** Whether this run was Autopilot's one automatic resume of a transient end (ADR 0034). */
+    transientResume: integer('transient_resume', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+  },
+  (table) => [
+    index('run_outcomes_conversation_id').on(table.conversationId),
+    index('run_outcomes_project_ended').on(table.projectId, table.endedAt),
   ],
 );

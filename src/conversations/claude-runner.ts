@@ -43,7 +43,13 @@ export function eventsOf(
   createCalls: Set<string> = new Set(),
 ): RunEvent[] {
   if (message.type === 'system' && message.subtype === 'init') {
-    return [{ type: 'session', sessionId: message.session_id }];
+    return [
+      {
+        type: 'session',
+        sessionId: message.session_id,
+        ...(message.model ? { model: message.model } : {}),
+      },
+    ];
   }
   if (message.type === 'assistant') {
     const events: RunEvent[] = [];
@@ -94,7 +100,9 @@ export function eventsOf(
       {
         type: 'turn',
         costUsd: message.total_cost_usd,
-        ...(error === undefined ? {} : { error }),
+        ...(error === undefined
+          ? {}
+          : { error, errorSubtype: message.subtype }),
       },
     ];
   }

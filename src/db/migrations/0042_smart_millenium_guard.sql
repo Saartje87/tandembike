@@ -1,0 +1,1 @@
+ALTER TABLE `run_outcomes` ADD `transient_resume` integer DEFAULT false NOT NULL;

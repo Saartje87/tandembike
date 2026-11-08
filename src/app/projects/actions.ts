@@ -17,6 +17,17 @@ import { boardRoute } from '../lib/paths';
 
 export type CreateProjectResult = ActionResult<{ projectId: number }>;
 
+/** A setting that may be cleared: left out when undefined, null stays null, anything else is a string. */
+const nullableString = <Key extends string>(
+  key: Key,
+  value: string | null | undefined,
+): { [K in Key]?: string | null } =>
+  value === undefined
+    ? {}
+    : ({ [key]: value === null ? null : String(value) } as {
+        [K in Key]?: string | null;
+      });
+
 /**
  * Creates a Project for the UI. Domain errors come back as `error` so the
  * form can show the module's message; anything else is a bug and throws.
@@ -34,12 +45,7 @@ export async function createProject(input: {
       ...(input?.repositoryPath === undefined
         ? {}
         : { repositoryPath: String(input.repositoryPath) }),
-      ...(input?.checkCommand === undefined
-        ? {}
-        : {
-            checkCommand:
-              input.checkCommand === null ? null : String(input.checkCommand),
-          }),
+      ...nullableString('checkCommand', input?.checkCommand),
       ...(input?.referenceTemplate === undefined
         ? {}
         : {
@@ -143,14 +149,8 @@ export async function setProjectAgentSettings(
       ...(settings.repositoryPath === undefined
         ? {}
         : { repositoryPath: settings.repositoryPath }),
-      ...(settings.checkCommand === undefined
-        ? {}
-        : {
-            checkCommand:
-              settings.checkCommand === null
-                ? null
-                : String(settings.checkCommand),
-          }),
+      ...nullableString('checkCommand', settings.checkCommand),
+      ...nullableString('prepareCommand', settings.prepareCommand),
       ...(settings.parallelRuns === undefined
         ? {}
         : { parallelRuns: Boolean(settings.parallelRuns) }),

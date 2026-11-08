@@ -18,6 +18,7 @@ describe("A Project's agent settings", () => {
     expect(tickets.getProjectAgentSettings(project.id)).toEqual({
       repositoryPath: null,
       checkCommand: null,
+      prepareCommand: null,
       parallelRuns: false,
       maxConcurrentRuns: 3,
       agentMode: false,
@@ -45,6 +46,28 @@ describe("A Project's agent settings", () => {
       tickets.setProjectAgentSettings(project.id, { checkCommand: '   ' })
         .checkCommand,
     ).toBeNull();
+  });
+
+  it('save the Prepare command trimmed and clear it when empty', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        prepareCommand: '  npm ci  ',
+      }).prepareCommand,
+    ).toBe('npm ci');
+    expect(
+      tickets.setProjectAgentSettings(project.id, { runMode: 'auto' })
+        .prepareCommand,
+    ).toBe('npm ci');
+    expect(
+      tickets.setProjectAgentSettings(project.id, { prepareCommand: '  ' })
+        .prepareCommand,
+    ).toBeNull();
+    expect(JSON.stringify(tickets.getProject(project.id))).not.toContain(
+      'prepare',
+    );
   });
 
   it('turn Autopilot on only with a Spend ceiling, and keep the ceiling while it is on', () => {

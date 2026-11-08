@@ -45,6 +45,9 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,
+  worktreePath: null,
+  worktreeKept: null,
+  worktreeRemoved: false,
   createdAt: at,
   updatedAt: at,
   ...values,
@@ -81,6 +84,17 @@ describe('ConversationChat', () => {
     vi.mocked(answerConversationQuestion).mockReset();
     vi.mocked(replyToConversation).mockReset();
     vi.mocked(stopConversation).mockReset();
+  });
+
+  it('shows the worktree path in the header while there is one', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ worktreePath: '/wt/1/c1' }, [])}
+      />,
+    );
+
+    expect(screen.getByText('Worktree: /wt/1/c1')).toBeInTheDocument();
   });
 
   it('shows the transcript with who said what', () => {

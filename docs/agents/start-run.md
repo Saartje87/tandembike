@@ -20,7 +20,7 @@ A Claim covers one Agent run's work, through its merge.
 - A later run that works on the open PR, for example on review findings, claims the Ticket for that work and releases it when done.
 - When the merging run did not complete it, any later run that finds an `In progress` Ticket whose PR reference is merged with CI green does; failing both, the User does with the **Merged** button in the drawer.
 - Abandoning the work with no PR leaves the Ticket stalled in the Board's Action needed section, so also move it back to `Todo`, or comment why it stays `In progress`.
-- A run in a worktree of its own removes it last, by "Clean up" in "Worktrees for parallel runs".
+- A terminal session or subagent in a worktree of its own removes it last, by "Clean up" in "Worktrees for parallel runs".
 
 ## Completing
 

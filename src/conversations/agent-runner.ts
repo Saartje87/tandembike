@@ -7,8 +7,11 @@ import type { PermissionAnswer } from './conversation-state';
 
 /** What a run reports while it works. */
 export type RunEvent =
-  /** The run's SDK session, which a later reply resumes. */
-  | { type: 'session'; sessionId: string }
+  /**
+   * The run's SDK session, which a later reply resumes, and the model it
+   * runs on, from the SDK's init message.
+   */
+  | { type: 'session'; sessionId: string; model?: string }
   /** Something the Agent said. */
   | { type: 'agent'; text: string }
   /**
@@ -25,7 +28,13 @@ export type RunEvent =
    * A turn ended. `costUsd` is what this run has cost in total so far, not
    * counting earlier runs of the Conversation.
    */
-  | { type: 'turn'; costUsd: number; error?: string }
+  | {
+      type: 'turn';
+      costUsd: number;
+      error?: string;
+      /** The SDK result subtype an error came with, for classifying it. */
+      errorSubtype?: string;
+    }
   /** Tickets the Agent created over MCP, by number. */
   | { type: 'created'; numbers: number[] }
   /** The run waits for the User (`true`) or goes on again (`false`). */

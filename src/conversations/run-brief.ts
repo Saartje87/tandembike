@@ -20,6 +20,8 @@ export type RunBrief = {
   /** Retro only: the Cycle it looks back on. */
   retroCycle?: RetroCycle | null;
   parallelRuns: boolean;
+  /** The worktree Tandembike made for this Conversation, and what it is detached at. */
+  worktree?: { path: string; base: string } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
@@ -92,7 +94,11 @@ export function runBrief(brief: RunBrief): string {
       );
     }
   }
-  if (brief.parallelRuns && brief.intent === 'start') {
+  if (brief.worktree && brief.intent === 'start') {
+    lines.push(
+      `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
+    );
+  } else if (brief.parallelRuns && brief.intent === 'start') {
     lines.push(
       "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     );

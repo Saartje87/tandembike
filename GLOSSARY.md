@@ -123,12 +123,16 @@ The User can always reply: their reply is never refused by the Project's Start r
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
 **Autopilot**:
-A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. A User's reply can take the Project over its Start run limit; Autopilot then dispatches nothing until the working Start runs drop below it (ADR 0031). It never retries and never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030.
+A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. A User's reply can take the Project over its Start run limit; Autopilot then dispatches nothing until the working Start runs drop below it (ADR 0031). It resumes a Start Conversation once after a transient end (API overload, rate limit or network error), a minute later and within the run limit and Spend ceiling, and retries nothing else (ADR 0034); it never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030 and ADR 0034.
 _Avoid_: Auto mode (that is the Agent run mode), scheduler
 
 **Check command**:
 A Project's command that defines green for its repository, such as `npm run check`. A Start run's brief names it as what must pass before the run opens a pull request; with none set, the brief tells the run to follow the repository's own instructions. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can redefine green for itself.
 _Avoid_: Test command, build command
+
+**Prepare command**:
+A Project's command, such as `npm ci`, that Tandembike runs through the User's shell in each new worktree before the run starts, so the run finds its dependencies ready. When it exits non-zero no run starts: its output goes into the transcript as an error entry and the Conversation is interrupted, so its Ticket shows in Action needed. With none set, the run starts right after the worktree is created. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can make Tandembike run a command of its choosing.
+_Avoid_: Setup command, install command
 
 **Eligible**:
 Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no open Start Conversation on it, whatever state its run is in, so a failed run waits for the User. A Start Conversation from before the Ticket's latest move to Todo, such as Back to Todo, no longer counts, unless its run is still working.
@@ -137,6 +141,10 @@ _Avoid_: Ready (that is the label), startable
 **Started by**:
 Who started a Conversation: the **User**, or **Autopilot**. Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
 _Avoid_: Owner, author, initiator
+
+**Run outcome**:
+The record a Conversation's run leaves when it ends: a turn result, an exit or the User's stop. It holds the Conversation, Project and Ticket, the Stage (the Conversation's intent), the result, when the run started and ended, what it cost, the model, the command its first message started with and whether Autopilot started it. The result is the first that matches: `stopped` (the User stopped it), `failed_transient` or `failed` (the end carries an error; transient means an API overload, rate limit, 5xx or network error, everything else is substantive), `completed` (the Ticket is Done), `pr_open` (the Ticket has a PR reference), `abandoned` (a Start whose Ticket is Todo), else `needs_reply`. Only the Conversations module writes and reads Run outcomes, never an MCP tool, so no Agent can shape its own statistics; they stay when a Conversation is closed. The Stats page shows them per Project and Stage over the last 30 days.
+_Avoid_: Run result, run log
 
 **Spend ceiling**:
 A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
