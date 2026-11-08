@@ -45,6 +45,7 @@ export function createMcpServer(
   tickets: Tickets,
   origin = 'http://localhost:4747',
   cwd?: string,
+  runId?: string,
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -54,6 +55,7 @@ export function createMcpServer(
     tickets,
     origin,
     cwd,
+    runId,
     resolveProjectId: (ref) => tickets.resolveProjectId({ ...ref, cwd }),
     registerTool: toolRegistrar(server),
   };
@@ -89,7 +91,13 @@ export async function handleMcpRequest(
     );
   }
   const cwd = request.headers.get('x-tandembike-cwd')?.trim() || undefined;
-  const server = createMcpServer(tickets, new URL(request.url).origin, cwd);
+  const runId = request.headers.get('x-tandembike-run')?.trim() || undefined;
+  const server = createMcpServer(
+    tickets,
+    new URL(request.url).origin,
+    cwd,
+    runId,
+  );
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

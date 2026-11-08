@@ -5,6 +5,7 @@ import {
   commentId,
   criterionId,
   detail,
+  requireRunId,
   respond,
   respondTicket,
   returnsSummary,
@@ -14,6 +15,7 @@ import {
 
 export const registerWorkTools = ({
   tickets,
+  runId,
   registerTool,
 }: ToolContext): void => {
   registerTool(
@@ -25,7 +27,10 @@ export const registerWorkTools = ({
         number: ticketNumber,
         agentRunId: z
           .string()
-          .describe('A unique identifier for this Agent run.'),
+          .optional()
+          .describe(
+            'A unique identifier for this Agent run. Runs Tandembike started need not pass it.',
+          ),
         agentName: z
           .string()
           .optional()
@@ -39,7 +44,11 @@ export const registerWorkTools = ({
     ({ number, agentRunId, agentName, detail }) =>
       respondTicket(
         detail,
-        () => tickets.claimTicket(number, { agentRunId, agentName }),
+        () =>
+          tickets.claimTicket(number, {
+            agentRunId: requireRunId(agentRunId, runId),
+            agentName,
+          }),
         ({ claim }) => ({ claim }),
       ),
   );
@@ -53,7 +62,10 @@ export const registerWorkTools = ({
         number: ticketNumber,
         agentRunId: z
           .string()
-          .describe('The unique identifier used when claiming this Ticket.'),
+          .optional()
+          .describe(
+            'The unique identifier used when claiming this Ticket. Runs Tandembike started need not pass it.',
+          ),
         detail,
       },
       annotations: { idempotentHint: true },
@@ -61,7 +73,10 @@ export const registerWorkTools = ({
     ({ number, agentRunId, detail }) =>
       respondTicket(
         detail,
-        () => tickets.releaseTicketClaim(number, { agentRunId }),
+        () =>
+          tickets.releaseTicketClaim(number, {
+            agentRunId: requireRunId(agentRunId, runId),
+          }),
         ({ claim }) => ({ claim }),
       ),
   );

@@ -11,7 +11,7 @@ it('lists the same tools, descriptions and schemas as before the split (T1211)',
 
   const { tools } = await client.listTools();
 
-  expect(tools).toHaveLength(43);
+  expect(tools).toHaveLength(47);
   await expect(
     JSON.stringify(
       [...tools].sort((a, b) => a.name.localeCompare(b.name)),
