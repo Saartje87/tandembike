@@ -478,20 +478,27 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   );
 };
 
+/** Whose Board a Cockpit is: a Cycle's or the Backlog's. */
+type BoardKind = 'Cycle' | 'Backlog';
+
+const boardName: Record<BoardKind, string> = {
+  Cycle: 'this Cycle',
+  Backlog: 'the Backlog',
+};
+
 type EpicChildListProps = {
   row: Pick<EpicRow, 'children' | 'childrenElsewhere'>;
   /** Whose Board it is, to say where its children are not. */
-  board: 'Cycle' | 'Backlog';
+  board: BoardKind;
 };
 
-/** Where an Epic's children are, when none of them are on this Board. */
-const noChildrenText = (
-  childrenElsewhere: number,
-  board: EpicChildListProps['board'],
-) =>
-  childrenElsewhere === 0
-    ? 'No children yet'
-    : `No children in ${board === 'Cycle' ? 'this Cycle' : 'the Backlog'} (${childrenElsewhere} elsewhere)`;
+/** What an Epic's row says when none of its children are on this Board. */
+const noChildrenText = (childrenElsewhere: number, board: BoardKind) => {
+  if (childrenElsewhere === 0) {
+    return 'No children yet';
+  }
+  return `No children in ${boardName[board]} (${childrenElsewhere} elsewhere)`;
+};
 
 /**
  * An opened Epic row: each child on this Board with where it stands, or
@@ -536,7 +543,7 @@ const EpicChildList: FC<EpicChildListProps> = ({ row, board }) =>
  * What an Epic's row adds to a Ticket's row: its children bar beside the
  * title, and its children listed when opened. Nothing for a normal Ticket.
  */
-const epicParts = (row: CockpitTicket, board: EpicChildListProps['board']) =>
+const epicParts = (row: CockpitTicket, board: BoardKind) =>
   row.children
     ? {
         beside: <ChildrenBar row={{ children: row.children }} />,
@@ -674,7 +681,7 @@ export const Cockpit: FC<CockpitProps> = ({
       ),
   );
   const cycleId = cycle?.id ?? null;
-  const board = cycle ? 'Cycle' : 'Backlog';
+  const board: BoardKind = cycle ? 'Cycle' : 'Backlog';
   const boardPath = boardPathOf(projectId, cycleId);
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
   // The Board filter narrows every section and its counts; only the tab and

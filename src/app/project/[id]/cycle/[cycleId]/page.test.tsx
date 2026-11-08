@@ -170,6 +170,7 @@ describe('CyclePage', () => {
         labels: ['ready-for-agent'],
       });
       vi.mocked(appTickets).mockReturnValue(tickets);
+      document.title = 'Now | Tandembike';
 
       await renderPage(
         <main>
@@ -193,6 +194,10 @@ describe('CyclePage', () => {
       ).toBeVisible();
       expect(screen.queryByText('Filed by a run')).toBe(null);
       expect(screen.queryByText('Ready, not planned')).toBe(null);
+      // The browser tab counts the planned idea only.
+      await vi.waitFor(() =>
+        expect(document.title).toBe('(1) Now | Tandembike'),
+      );
     });
 
     it("lists only an Epic's children planned in it, saying when the rest are elsewhere", async () => {
