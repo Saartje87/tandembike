@@ -107,6 +107,7 @@ describe('BoardTicketDrawer', () => {
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go',
+      startedBy: 'user',
     });
     vi.mocked(appTickets).mockReturnValue(world.tickets);
     vi.mocked(appConversations).mockReturnValue(world.conversations);

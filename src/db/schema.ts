@@ -14,6 +14,7 @@ import {
 import type { QuestionEntry } from '../conversations/conversation-state';
 import {
   conversationIntents,
+  conversationStarters,
   conversationStates,
   permissionStatuses,
   transcriptRoles,
@@ -344,6 +345,10 @@ export const conversations = sqliteTable(
     ticketNumber: integer('ticket_number').references(() => tickets.number),
     intent: text('intent', { enum: conversationIntents }).notNull(),
     state: text('state', { enum: conversationStates }).notNull(),
+    /** Who started it, the User or Autopilot; older rows read the User. */
+    startedBy: text('started_by', { enum: conversationStarters })
+      .notNull()
+      .default('user'),
     /** The Claude Agent SDK session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
     costUsd: real('cost_usd').notNull().default(0),

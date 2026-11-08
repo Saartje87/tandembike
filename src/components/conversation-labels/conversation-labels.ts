@@ -1,5 +1,6 @@
 import type {
   ConversationIntent,
+  ConversationStarter,
   ConversationState,
 } from '../../conversations/conversation-state';
 import type {
@@ -18,6 +19,12 @@ export const intentNames: Record<ConversationIntent, string> = {
   ask: 'Ask',
   new_ticket: 'New Ticket',
   setup: 'Setup',
+};
+
+/** Who started a Conversation, as the header says it. */
+export const starterNames: Record<ConversationStarter, string> = {
+  user: 'you',
+  autopilot: 'Autopilot',
 };
 
 export const stateNames: Record<ConversationState, string> = {

@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `started_by` text DEFAULT 'user' NOT NULL;

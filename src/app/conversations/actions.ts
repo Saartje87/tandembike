@@ -43,7 +43,8 @@ async function conversationResult(
 
 /** Starts a Conversation on a Ticket or a Project, with its first message. */
 export async function startConversation(
-  input: StartConversationInput,
+  // The browser never says who starts: only the User does, by this action.
+  input: Omit<StartConversationInput, 'startedBy'>,
 ): Promise<ActionResult<{ conversation: Conversation }>> {
   return conversationResult(() =>
     appConversations().start({
@@ -55,6 +56,7 @@ export async function startConversation(
         : { ticketNumber: Number(input.ticketNumber) }),
       intent: input?.intent,
       prompt: String(input?.prompt ?? ''),
+      startedBy: 'user',
       ...(input?.defaults === undefined ? {} : { defaults: input.defaults }),
     }),
   );
@@ -76,6 +78,7 @@ export async function startSetup(input: {
       projectId: Number(input?.projectId),
       intent: 'setup',
       prompt: setupPrompt,
+      startedBy: 'user',
     }),
   );
 }
@@ -89,6 +92,7 @@ export async function replyToConversation(input: {
     appConversations().reply(
       Number(input?.conversationId),
       String(input?.text ?? ''),
+      'user',
     ),
   );
 }

@@ -21,6 +21,7 @@ import type {
 import type { ActivityRow } from './conversation-activity';
 import {
   type ConversationIntent,
+  type ConversationStarter,
   type ConversationState,
   type PermissionAnswer,
   type PermissionStatus,
@@ -37,6 +38,8 @@ export type Conversation = {
   ticketNumber: number | null;
   intent: ConversationIntent;
   state: ConversationState;
+  /** Who started it, the User or Autopilot. */
+  startedBy: ConversationStarter;
   sdkSessionId: string | null;
   costUsd: number;
   /** Closed by the User: stopped, and left out of the open Conversations. */
@@ -70,6 +73,8 @@ export type TranscriptEntry = {
 };
 
 export type StartConversationInput = {
+  /** Who starts the Conversation; its first message is recorded as theirs. */
+  startedBy: ConversationStarter;
   /** The Project, unless `ticketNumber` names a Ticket of it. */
   projectId?: number;
   ticketNumber?: number;
@@ -474,11 +479,11 @@ export function createConversations({
      * latest entries come from one query.
      */
     activityRows(): ActivityRow[] {
-      const latestOf = (role?: TranscriptRole) =>
+      const latestOf = (roles?: TranscriptRole[]) =>
         db
           .select({ id: max(conversationEntries.id) })
           .from(conversationEntries)
-          .where(role ? eq(conversationEntries.role, role) : undefined)
+          .where(roles ? inArray(conversationEntries.role, roles) : undefined)
           .groupBy(conversationEntries.conversationId);
       const entriesOf = (ids: ReturnType<typeof latestOf>) =>
         db
@@ -500,7 +505,7 @@ export function createConversations({
       // Every run starts with the User's message, so the latest one is the
       // run's start: no column of its own is needed.
       const started = new Map(
-        entriesOf(latestOf('user')).map((entry) => [
+        entriesOf(latestOf(['user', 'autopilot'])).map((entry) => [
           entry.conversationId,
           entry.createdAt,
         ]),
@@ -629,13 +634,14 @@ export function createConversations({
           defaultCycleId: input.defaults?.cycleId ?? null,
           defaultEpicNumber: input.defaults?.epicNumber ?? null,
           defaultType: input.defaults?.type ?? null,
+          startedBy: input.startedBy,
           state: 'running',
           createdAt: now,
           updatedAt: now,
         })
         .returning({ id: conversations.id })
         .get();
-      append(created.id, 'user', prompt);
+      append(created.id, input.startedBy, prompt);
       try {
         startRun(created.id, prompt);
       } catch (error) {
@@ -649,10 +655,14 @@ export function createConversations({
     },
 
     /**
-     * Sends the User's reply: into the run while it is alive, otherwise into
+     * Sends a reply, the User's or Autopilot's: into the run while it is alive, otherwise into
      * a new run that resumes the stored SDK session.
      */
-    async reply(id: number, text: string): Promise<Conversation> {
+    async reply(
+      id: number,
+      text: string,
+      sentBy: ConversationStarter,
+    ): Promise<Conversation> {
       const message = (text ?? '').trim();
       if (message === '') {
         throw new ValidationError({ text: 'Write a reply first.' });
@@ -675,12 +685,12 @@ export function createConversations({
           settings,
           id,
         );
-        append(id, 'user', message);
+        append(id, sentBy, message);
         update(id, { state: 'running' });
         handle.run.send(message);
       } else {
         startRun(id, message, conversation.sdkSessionId ?? undefined);
-        append(id, 'user', message);
+        append(id, sentBy, message);
         update(id, { state: 'running' });
       }
       announce(id);

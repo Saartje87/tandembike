@@ -189,6 +189,7 @@ const aConversation = (
   ticketNumber: 4,
   intent: 'start',
   state: 'idle',
+  startedBy: 'user',
   sdkSessionId: null,
   costUsd: 0,
   hidden: false,

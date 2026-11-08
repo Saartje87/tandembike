@@ -28,7 +28,7 @@ const withTicketLinks = (text: string): ReactNode[] =>
   );
 
 /**
- * One transcript entry as a chat message: the User's on the right, the
+ * One transcript entry as a chat message: the User's on the right, Autopilot's and the
  * Agent's, an error and a permission request on the left, and a tool call or
  * the Tickets the Agent created as a muted, compact line.
  */
@@ -73,18 +73,22 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
           <Text fontSize="small" fontWeight="strong" color="muted">
             {fromUser
               ? 'You'
-              : entry.role === 'agent'
-                ? 'Agent'
-                : entry.role === 'question'
-                  ? 'Question'
-                  : 'Permission'}
+              : entry.role === 'autopilot'
+                ? 'Autopilot'
+                : entry.role === 'agent'
+                  ? 'Agent'
+                  : entry.role === 'question'
+                    ? 'Question'
+                    : 'Permission'}
           </Text>
           {entry.question !== null ? (
             <ConversationQuestionForm
               entryId={entry.id}
               question={entry.question}
             />
-          ) : entry.role === 'agent' || entry.role === 'user' ? (
+          ) : entry.role === 'agent' ||
+            entry.role === 'user' ||
+            entry.role === 'autopilot' ? (
             <Markdown headingLevel={4} breaks>
               {entry.text}
             </Markdown>

@@ -26,9 +26,15 @@ export const conversationStates = [
 ] as const;
 export type ConversationState = (typeof conversationStates)[number];
 
+/** Who started a Conversation (GLOSSARY: Started by). */
+export const conversationStarters = ['user', 'autopilot'] as const;
+export type ConversationStarter = (typeof conversationStarters)[number];
+
 /** Who wrote a transcript entry. */
 export const transcriptRoles = [
   'user',
+  /** A message Autopilot sent in place of the User. */
+  'autopilot',
   'agent',
   'tool',
   'error',
