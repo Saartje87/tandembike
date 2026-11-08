@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +21,8 @@ const { notFound } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('next/navigation', () => ({ notFound, useRouter: vi.fn() }));
+vi.mock('../../../../cycles/actions', () => ({ archiveCycle: vi.fn() }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../../tickets/app-tickets', () => ({
   appTickets: vi.fn(),
@@ -144,6 +145,44 @@ describe('CyclePage', () => {
       ).toBeVisible();
       expect(screen.queryByText('In the Backlog')).not.toBeInTheDocument();
       expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
+    });
+
+    it('shows the Cycle complete banner only while every Ticket in it is Done', async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Factory Board',
+      });
+      const planned = tickets.createTicket({
+        projectId: project.id,
+        title: 'Show the status line',
+        cycleId: cycle.id,
+        status: 'Done',
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      const params = Promise.resolve({
+        id: String(project.id),
+        cycleId: String(cycle.id),
+      });
+      const page = async () =>
+        renderPage(
+          <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+        );
+
+      await page();
+      expect(screen.getByText(/the Cycle is complete/)).toBeVisible();
+      expect(
+        screen.getByRole('button', { name: 'Archive Cycle' }),
+      ).toBeVisible();
+      cleanup();
+
+      tickets.updateTicket(planned.number, { status: 'Todo' });
+      await page();
+      expect(
+        screen.queryByText(/the Cycle is complete/),
+      ).not.toBeInTheDocument();
     });
 
     it("shows Autopilot's switch, spend against the ceiling and the paused notice in its header", async () => {
@@ -612,6 +651,35 @@ describe('CyclePage', () => {
     expect(
       screen.getByRole('list', { name: 'Tickets in this Cycle' }),
     ).toHaveTextContent(`T${done.number}ShippedDoneT${moved.number}MovedDone`);
+  });
+
+  it('does not show the Cycle complete banner on a Prepared Cycle, even with every Ticket Done', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Done work',
+      status: 'Done',
+      cycleId: cycle.id,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(
+      <main>
+        {
+          await CyclePage({
+            params: Promise.resolve({
+              id: String(project.id),
+              cycleId: String(cycle.id),
+            }),
+            searchParams: noSearch,
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.queryByText(/the Cycle is complete/)).not.toBeInTheDocument();
   });
 
   it("tells a Prepared Cycle's header which Cycle is Active", async () => {

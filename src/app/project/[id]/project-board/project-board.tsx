@@ -1,6 +1,7 @@
 import type { FC } from 'react';
 
 import { Cockpit } from '../../../../components/cockpit/cockpit';
+import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
@@ -129,6 +130,9 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     return (
       <>
         <CycleHeader key={tab.id} cycle={tab} />
+        {tickets.isCycleComplete(tab.id) && (
+          <CycleCompleteBanner key={tab.id} cycle={tab} />
+        )}
         <Cockpit
           {...shared}
           cycle={tab}

@@ -15,6 +15,7 @@ import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
+import { archiveCycleConfirmation } from './archive-cycle-confirmation';
 
 export type CycleHeaderProps = {
   cycle: Cycle;
@@ -96,11 +97,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
   };
 
   const archive = () => {
-    if (
-      window.confirm(
-        `Archive the Cycle "${cycle.title}"? Its unfinished Tickets go back to the Backlog.`,
-      )
-    ) {
+    if (window.confirm(archiveCycleConfirmation(cycle.title))) {
       run(archiveCycle, () => router.push(projectPath(cycle.projectId)));
     }
   };

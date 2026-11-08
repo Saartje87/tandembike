@@ -904,6 +904,30 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     },
 
     /**
+     * Whether Cycle `id` is complete: Active, with at least one unarchived
+     * Ticket planned in it and every unarchived Ticket planned in it Done, an
+     * Epic by its derived Status. Derived on read, never stored (ADR 0010).
+     */
+    isCycleComplete(id: number): boolean {
+      if (cycleRow(id).state !== 'Active') {
+        return false;
+      }
+      const statuses = db
+        .select({ status: tickets.status })
+        .from(tickets)
+        .where(
+          and(
+            eq(tickets.archived, false),
+            inArray(tickets.number, cycleMembers(db, id)),
+          ),
+        )
+        .all();
+      return (
+        statuses.length > 0 && statuses.every(({ status }) => status === 'Done')
+      );
+    },
+
+    /**
      * Plans Ticket `number` into Cycle `cycleId`; planning a member again
      * changes nothing. Only a non-archived Ticket of the Cycle's Project can
      * be planned, whatever its Status, and only while it is in no other Cycle
