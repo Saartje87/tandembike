@@ -170,6 +170,32 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options.systemPrompt).toContain('worktree');
   });
 
+  it("starts every run with the Project's run mode and model, and resumes with them", async () => {
+    const { conversations, runner, tickets, project } = setup();
+
+    await conversations.start({
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    expect(runner.runs[0].options).toMatchObject({ runMode: 'default' });
+    expect(runner.runs[0].options.model).toBeUndefined();
+
+    tickets.setProjectAgentSettings(project.id, {
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
+    });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'triage',
+      prompt: 'Go.',
+    });
+    expect(runner.runs[1].options).toMatchObject({
+      runMode: 'auto',
+      model: 'claude-opus-5-5',
+    });
+  });
+
   it('gives only Start runs the worktree instruction, and says how to make the worktree', async () => {
     const { conversations, runner, tickets, project } = setup();
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
@@ -1441,6 +1467,26 @@ describe('Setup', () => {
     expect(brief).toContain('added (uncommitted)');
     expect(brief).toContain('skipped by the User');
     expect(brief).toContain('missing');
+  });
+
+  it("reports the Project's run mode and a git-blocking hook as advisory items, without suggesting auto", async () => {
+    const { conversations, runner, project } = setup();
+    await startSetup(conversations, project.id);
+
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toMatch(/run mode is default/i);
+    expect(brief).toMatch(/hook[^.]*(blocks|block)[^.]*destructive git/i);
+    expect(brief).not.toMatch(/consider (turning on|using) auto/i);
+    expect(brief).not.toMatch(/recommend[^.]*auto/i);
+  });
+
+  it('says the run mode is auto in the Setup brief when the Project uses it', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { runMode: 'auto' });
+
+    await startSetup(conversations, project.id);
+
+    expect(runner.runs[0].options.systemPrompt).toMatch(/run mode is auto/i);
   });
 
   it('lists the worktree item only with Parallel runs on', async () => {

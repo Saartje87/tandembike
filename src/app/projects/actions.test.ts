@@ -89,6 +89,8 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       maxConcurrentRuns: 2,
       agentMode: true,
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
     });
 
     expect(result).toEqual({ ok: true });
@@ -97,6 +99,8 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       maxConcurrentRuns: 2,
       agentMode: true,
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
     });
     expect(revalidatePath).toHaveBeenCalled();
   });
@@ -114,6 +118,24 @@ describe('setProjectAgentSettings', () => {
     expect(result).toMatchObject({
       ok: false,
       fieldErrors: { repositoryPath: 'There is no directory at this path.' },
+    });
+  });
+});
+
+describe('setProjectAgentSettings run mode', () => {
+  it('refuses an unknown run mode on the field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      runMode: 'bypassPermissions' as never,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: { runMode: 'Choose default or auto.' },
     });
   });
 });

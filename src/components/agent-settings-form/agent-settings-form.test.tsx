@@ -18,6 +18,8 @@ const unset: ProjectAgentSettings = {
   parallelRuns: false,
   maxConcurrentRuns: 3,
   agentMode: false,
+  runMode: 'default',
+  runModel: null,
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -73,6 +75,8 @@ describe('AgentSettingsForm', () => {
         parallelRuns: false,
         maxConcurrentRuns: 3,
         agentMode: false,
+        runMode: 'default',
+        runModel: null,
       }),
     );
   });
@@ -96,8 +100,48 @@ describe('AgentSettingsForm', () => {
         parallelRuns: true,
         maxConcurrentRuns: 5,
         agentMode: true,
+        runMode: 'default',
+        runModel: null,
       }),
     );
+  });
+
+  it('saves the run mode with its trade-off shown, and the run model', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(screen.getByRole('radio', { name: /Default/ })).toBeChecked();
+    expect(screen.getByText(/hard reset/)).toBeInTheDocument();
+    expect(screen.getByText(/outbound POST/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Auto/ }));
+    await userEvent.type(
+      screen.getByLabelText('Run model'),
+      ' claude-opus-5-5 ',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runMode: 'auto',
+          runModel: 'claude-opus-5-5',
+        }),
+      ),
+    );
+  });
+
+  it('shows a run mode refusal on the field', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Choose default or auto.',
+      fieldErrors: { runMode: 'Choose default or auto.' },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Choose default or auto.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a refusal under the field it names and keeps the draft', async () => {

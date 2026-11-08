@@ -14,7 +14,7 @@ Existing terms keep their meaning: Ticket, Epic, Cycle, Board, Lane, Status, Lab
 
 - **Autopilot**: a Project switch. While it is on and the Project has an Active Cycle, Tandembike starts Start Conversations for the Cycle's eligible work.
 - **Eligible**: a Ticket or Epic in the Active Cycle, Status Todo, labelled `ready-for-agent`, with no unresolved Blocker, unclaimed and not archived. An Epic is eligible by its own label, once it has at least one child (2026-11-07: an Epic with no children is Todo, and the spec flow creates the Epic before its children), and is dispatched as one unit; a child is never dispatched on its own.
-- **Agent run mode**: a Project setting, `default` or `auto`, that every run the Project starts is pinned to.
+- **Agent run mode**: a Project setting, `default` or `auto`, that every run the Project starts uses (ADR 0029).
 - **Started by**: who started a Conversation, the User or Autopilot. Recorded on the Conversation and shown in its header.
 - **Spend ceiling** (2026-11-07): a Project setting in dollars that bounds what Autopilot spends in one Cycle. Autopilot cannot be turned on without one.
 - **Lane** (revised): a Board section that holds the Tickets in one situation, in their order. Lanes are derived from Status, triage labels and run state; Status stays the fixed set Todo, In progress, Done.

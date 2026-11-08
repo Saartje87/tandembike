@@ -174,6 +174,8 @@ export function createClaudeRunner(): AgentRunner {
       systemPrompt,
       prompt,
       resume,
+      runMode = 'default',
+      model,
       askPermission,
       askQuestion,
       onEvent,
@@ -186,9 +188,11 @@ export function createClaudeRunner(): AgentRunner {
         options: {
           cwd,
           ...(resume === undefined ? {} : { resume }),
-          // Pinned, so a repository's or the user's defaultMode (such as
-          // bypassPermissions) cannot skip the relay below.
-          permissionMode: 'default',
+          ...(model === undefined ? {} : { model }),
+          // The Project's run mode, never the repository's or the user's
+          // defaultMode, so bypassPermissions cannot skip the relay below;
+          // calls the auto classifier cannot decide still reach canUseTool.
+          permissionMode: runMode,
           // The server injected below is ours, so its tools never prompt (ADR 0021).
           allowedTools: ['mcp__tandembike'],
           // What a terminal would ask the User comes to the Conversation.

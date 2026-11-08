@@ -129,6 +129,10 @@ _Avoid_: Pending Conversation, unsent Conversation
 A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
 _Avoid_: First-time setup, onboarding, readiness check
 
+**Agent run mode**:
+A Project setting, `default` or `auto`, that every run the Project starts uses as its permission mode, whoever starts it. `default` asks the User about every call the repository has not allowed; `auto` lets the SDK's classifier decide and asks only for calls it cannot. New and existing Projects are `default`. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. The Project also has a run model, the model its runs start on, unset for the User's default. See ADR 0029.
+_Avoid_: Permission level, trust mode
+
 **Skill**:
 A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
 _Avoid_: Command chip, preset, slash command (for the setting)

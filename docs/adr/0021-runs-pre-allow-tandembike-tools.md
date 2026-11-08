@@ -2,7 +2,7 @@
 
 ADR 0019 relays every permission prompt a run would show in a terminal to the User as Allow or Deny in the Conversation. In practice the User allowed all of the first 40 requests and denied none, and a quarter of them were Tandembike's own MCP tools. Each prompt idles the run until the User returns. This ADR refines ADR 0019 to cut the prompts the User always answers the same way, without giving up the relay.
 
-Runs stay pinned to the `default` permission mode, so neither a repository's `defaultMode` nor `bypassPermissions` can skip the relay. The runner pre-allows exactly one thing, the `mcp__tandembike` server it injects itself, so a run never asks before reading or updating Tickets, in any repository or worktree. It pre-allows nothing else: what other tools a repository trusts is that repository's own allowlist (ADR 0014).
+Runs were pinned to the `default` permission mode (superseded: ADR 0029 makes the mode a Project setting, `default` unless the User chooses `auto`), so neither a repository's `defaultMode` nor `bypassPermissions` can skip the relay. The runner pre-allows exactly one thing, the `mcp__tandembike` server it injects itself, so a run never asks before reading or updating Tickets, in any repository or worktree. It pre-allows nothing else: what other tools a repository trusts is that repository's own allowlist (ADR 0014).
 
 When a run proposes a rule for a request, the User can choose "Always allow" in the Conversation. That allows the call and saves the rule to the repository's local, gitignored Claude Code settings, never the committed file. Later runs in that repository, and its worktrees, stop asking for it. The User sees the exact rule on the button before choosing it.
 

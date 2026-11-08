@@ -63,6 +63,54 @@ describe('The Claude runner', () => {
     expect(options.permissionMode).toBe('default');
   });
 
+  it('uses the auto permission mode for an auto run, keeps the pre-allow and the relay, and never bypasses', async () => {
+    query.mockReturnValue(fakeQuery([]));
+    const askPermission = vi.fn(async () => 'allow' as const);
+
+    createClaudeRunner().start({
+      cwd: '/repo',
+      mcpUrl: 'http://localhost:4747/api/mcp',
+      systemPrompt: 'Your situation.',
+      prompt: 'Hi',
+      runMode: 'auto',
+      askPermission,
+      askQuestion: async () => ({}),
+      onEvent: () => {},
+    });
+
+    const { options } = query.mock.calls[0][0];
+    expect(options.permissionMode).toBe('auto');
+    expect(options.allowedTools).toEqual(['mcp__tandembike']);
+    await options.canUseTool(
+      'Bash',
+      { command: 'ls' },
+      { suggestions: [], signal: new AbortController().signal },
+    );
+    expect(askPermission).toHaveBeenCalled();
+  });
+
+  it('passes the model option only when the Project sets one', () => {
+    query.mockReturnValue(fakeQuery([]));
+    const start = (model?: string) =>
+      createClaudeRunner().start({
+        cwd: '/repo',
+        mcpUrl: 'http://localhost:4747/api/mcp',
+        systemPrompt: 'Your situation.',
+        prompt: 'Hi',
+        runMode: 'default',
+        ...(model === undefined ? {} : { model }),
+        askPermission: async () => 'deny',
+        askQuestion: async () => ({}),
+        onEvent: () => {},
+      });
+
+    start('claude-opus-5-5');
+    start();
+
+    expect(query.mock.calls[0][0].options.model).toBe('claude-opus-5-5');
+    expect(query.mock.calls[1][0].options).not.toHaveProperty('model');
+  });
+
   it('pre-allows the Tandembike MCP server it injects, and nothing else', () => {
     query.mockReturnValue(fakeQuery([]));
 

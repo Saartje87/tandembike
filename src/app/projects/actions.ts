@@ -89,8 +89,8 @@ export async function styleProject(
 }
 
 /**
- * Sets a Project's repository path, Parallel runs, max concurrent Start runs
- * and agent mode for the UI. Only a Server Action does this, never an MCP
+ * Sets a Project's repository path, Parallel runs, max concurrent Start runs,
+ * agent mode, run mode and run model for the UI. Only a Server Action does this, never an MCP
  * tool (ADR 0019). Domain errors come back as `error`, with `fieldErrors`.
  */
 export async function setProjectAgentSettings(
@@ -111,6 +111,13 @@ export async function setProjectAgentSettings(
       ...(settings.agentMode === undefined
         ? {}
         : { agentMode: Boolean(settings.agentMode) }),
+      ...(settings.runMode === undefined ? {} : { runMode: settings.runMode }),
+      ...(settings.runModel === undefined
+        ? {}
+        : {
+            runModel:
+              settings.runModel === null ? null : String(settings.runModel),
+          }),
     });
     revalidatePath(boardRoute, 'layout');
     return {};

@@ -50,6 +50,12 @@ export const projects = sqliteTable('projects', {
   agentMode: integer('agent_mode', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /** The permission mode of every run this Project starts (ADR 0029). */
+  runMode: text('run_mode', { enum: ['default', 'auto'] })
+    .notNull()
+    .default('default'),
+  /** The model its runs start on; null is the User's default model. */
+  runModel: text('run_model'),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()

@@ -431,6 +431,7 @@ export function createConversations({
           projectName: tickets.getProject(conversation.projectId).name,
           intent: conversation.intent,
           parallelRuns: settings.parallelRuns,
+          runMode: settings.runMode,
           defaults: {
             cycleId: conversation.defaultCycleId,
             epicNumber: conversation.defaultEpicNumber,
@@ -438,6 +439,8 @@ export function createConversations({
           },
         }),
         prompt,
+        runMode: settings.runMode,
+        ...(settings.runModel === null ? {} : { model: settings.runModel }),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
         askQuestion: (questions) => askQuestion(id, handle, questions),

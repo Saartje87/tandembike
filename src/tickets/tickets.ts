@@ -176,7 +176,14 @@ export type ProjectAgentSettings = {
   maxConcurrentRuns: number;
   /** Whether the title fields create through a Conversation. */
   agentMode: boolean;
+  /** The permission mode of every run the Project starts (ADR 0029). */
+  runMode: AgentRunMode;
+  /** The model its runs start on, or `null` for the User's default model. */
+  runModel: string | null;
 };
+
+export const agentRunModes = ['default', 'auto'] as const;
+export type AgentRunMode = (typeof agentRunModes)[number];
 
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
 
@@ -208,6 +215,8 @@ const agentSettingsColumns = {
   parallelRuns: projects.parallelRuns,
   maxConcurrentRuns: projects.maxConcurrentRuns,
   agentMode: projects.agentMode,
+  runMode: projects.runMode,
+  runModel: projects.runModel,
 };
 
 /** Why `path` cannot be a repository path, or `undefined` when it can. */
@@ -1352,8 +1361,20 @@ export function createTickets(
     ): ProjectAgentSettings {
       checkProjectWritable(db, id);
       const before = this.getProjectAgentSettings(id);
-      const { repositoryPath, parallelRuns, maxConcurrentRuns, agentMode } =
-        input;
+      const {
+        repositoryPath,
+        parallelRuns,
+        maxConcurrentRuns,
+        agentMode,
+        runMode,
+        runModel,
+      } = input;
+      const nextModel =
+        runModel === undefined
+          ? before.runModel
+          : runModel === null || runModel.trim() === ''
+            ? null
+            : runModel.trim();
       const nextPath =
         repositoryPath === undefined
           ? before.repositoryPath
@@ -1374,6 +1395,14 @@ export function createTickets(
           agentMode === true && nextPath === null
             ? 'Set a repository path before turning on agent mode.'
             : undefined,
+        runMode:
+          runMode === undefined || agentRunModes.includes(runMode)
+            ? undefined
+            : 'Choose default or auto.',
+        runModel:
+          runModel === undefined || nextModel === null || !/\s/.test(nextModel)
+            ? undefined
+            : 'Enter a model name without spaces.',
       });
       const settings = db
         .update(projects)
@@ -1383,6 +1412,8 @@ export function createTickets(
           ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
           agentMode:
             nextPath === null ? false : (agentMode ?? before.agentMode),
+          ...(runMode === undefined ? {} : { runMode }),
+          runModel: nextModel,
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)

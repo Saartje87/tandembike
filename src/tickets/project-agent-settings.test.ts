@@ -20,7 +20,69 @@ describe("A Project's agent settings", () => {
       parallelRuns: false,
       maxConcurrentRuns: 3,
       agentMode: false,
+      runMode: 'default',
+      runModel: null,
     });
+  });
+
+  it('set and change the run mode and the run model, and clear the model', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        runMode: 'auto',
+        runModel: ' claude-opus-5-5 ',
+      }),
+    ).toMatchObject({ runMode: 'auto', runModel: 'claude-opus-5-5' });
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
+    });
+    tickets.setProjectAgentSettings(project.id, {
+      runMode: 'default',
+      runModel: null,
+    });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      runMode: 'default',
+      runModel: null,
+    });
+    tickets.setProjectAgentSettings(project.id, { runModel: 'x' });
+    tickets.setProjectAgentSettings(project.id, { runModel: '  ' });
+    expect(tickets.getProjectAgentSettings(project.id).runModel).toBe(null);
+  });
+
+  it('refuse an unknown run mode or a run model with spaces, naming the field', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    const mode = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, {
+        runMode: 'bypassPermissions' as never,
+      }),
+    );
+    expect((mode as ValidationError).fieldErrors).toHaveProperty('runMode');
+    const model = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { runModel: 'two words' }),
+    );
+    expect((model as ValidationError).fieldErrors).toHaveProperty('runModel');
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      runMode: 'default',
+      runModel: null,
+    });
+  });
+
+  it('keep the run mode and model out of the MCP-visible Project', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      runMode: 'auto',
+      runModel: 'm',
+    });
+
+    expect(tickets.getProject(project.id)).not.toHaveProperty('runMode');
+    expect(tickets.getProject(project.id)).not.toHaveProperty('runModel');
   });
 
   it('set, change and clear the repository path', () => {
