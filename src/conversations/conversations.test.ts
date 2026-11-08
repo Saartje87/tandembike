@@ -235,6 +235,23 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[2].options.systemPrompt).not.toContain('worktree');
   });
 
+  it('tells a Start run to remove its own worktree before it finishes, as no exit prompt will', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    const start = runner.runs[0].options.systemPrompt;
+    expect(start).toContain('Remove your worktree before you finish');
+    expect(start).toContain('ExitWorktree');
+    expect(start).toContain('no prompt to keep or remove it');
+  });
+
   it('is refused when the Project has no repository path', async () => {
     const { conversations, tickets, runner } = setup();
     const bare = tickets.createProject({ name: 'Bare' });
