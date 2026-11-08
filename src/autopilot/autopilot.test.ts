@@ -287,6 +287,42 @@ describe('Autopilot dispatch', () => {
     stop();
   });
 
+  it('dispatches nothing while a User reply keeps working Starts at or over the limit (T1185)', async () => {
+    const {
+      tickets,
+      conversations,
+      project,
+      cycle,
+      autopilot,
+      ready,
+      started,
+      runner,
+    } = setup();
+    const a = ready('A');
+    const b = ready('B');
+    const c = ready('C');
+    tickets.startCycle(cycle.id);
+    await autopilot.evaluate(project.id);
+    // A goes idle waiting for the User, so its slot goes to B.
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number, b.number]);
+
+    // The User answers A: two Starts work against a limit of one.
+    const first = conversations.list({ ticketNumber: a.number })[0];
+    await conversations.reply(first.id, 'Go on', 'user');
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number, b.number]);
+
+    // Back at the limit, still nothing; below it, the next Ticket starts.
+    runner.runs[1].emit({ type: 'turn', costUsd: 0 });
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number, b.number]);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number, b.number, c.number]);
+  });
+
   it('leaves running runs alone when it is turned off', async () => {
     const world = setup();
     const {

@@ -1213,13 +1213,27 @@ describe('The Start run limit', () => {
     await startOn(conversations, project.id);
   });
 
-  it('refuses a reply to an idle Start while another Start works', async () => {
+  it('lets the User reply to an idle Start while the slots are full (T1185)', async () => {
     const { conversations, runner, project } = setup();
     const first = await startOn(conversations, project.id);
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
     await startOn(conversations, project.id);
 
-    const error = await failure(conversations.reply(first.id, 'More', 'user'));
+    await conversations.reply(first.id, 'More', 'user');
+
+    expect(conversations.get(first.id).state).toBe('running');
+    expect(runner.runs[0].sent).toContain('More');
+  });
+
+  it('refuses Autopilot’s reply to an idle Start while the slots are full', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await startOn(conversations, project.id);
+
+    const error = await failure(
+      conversations.reply(first.id, 'More', 'autopilot'),
+    );
 
     expect(error).toBeInstanceOf(NotAllowedError);
     expect(conversations.get(first.id).state).toBe('idle');
@@ -1286,13 +1300,58 @@ describe('The Start run limit', () => {
     await startOn(conversations, project.id);
   });
 
-  it('refuses a reply that would resume a Start beyond the limit', async () => {
+  it('lets the User resume an interrupted Start while the slots are full (T1185)', async () => {
     const { conversations, runner, project } = setup();
     const first = await startOn(conversations, project.id);
     runner.runs[0].emit({ type: 'exit', error: 'died' });
     await startOn(conversations, project.id);
 
-    const error = await failure(conversations.reply(first.id, 'Go on', 'user'));
+    await conversations.reply(first.id, 'Go on', 'user');
+
+    expect(conversations.get(first.id).state).toBe('running');
+    expect(runner.runs).toHaveLength(3);
+  });
+
+  it('lets the User reopen a closed Start while the slots are full (T1185)', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    await conversations.close(first.id);
+    await startOn(conversations, project.id);
+
+    await conversations.reply(first.id, 'Go on', 'user');
+
+    expect(conversations.get(first.id)).toMatchObject({
+      state: 'running',
+      hidden: false,
+    });
+    expect(runner.runs).toHaveLength(3);
+  });
+
+  it('refuses Autopilot’s reply that would resume a Start beyond the limit', async () => {
+    const { conversations, runner, project } = setup();
+    const first = await startOn(conversations, project.id);
+    runner.runs[0].emit({ type: 'exit', error: 'died' });
+    await startOn(conversations, project.id);
+
+    const error = await failure(
+      conversations.reply(first.id, 'Go on', 'autopilot'),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('refuses a new Start by Autopilot while the slots are full', async () => {
+    const { conversations, project } = setup();
+    await startOn(conversations, project.id);
+
+    const error = await failure(
+      conversations.start({
+        projectId: project.id,
+        intent: 'start',
+        prompt: 'Go.',
+        startedBy: 'autopilot',
+      }),
+    );
 
     expect(error).toBeInstanceOf(NotAllowedError);
   });

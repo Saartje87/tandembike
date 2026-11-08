@@ -85,3 +85,32 @@ describe('ConversationMessageInput Skills', () => {
     expect(field).toHaveValue('/mattpocock-skills:to-spec the header');
   });
 });
+
+describe('ConversationMessageInput refusals', () => {
+  it('shows a refusal as an alert and keeps the text', async () => {
+    const user = userEvent.setup();
+    const { field } = renderInput({
+      onSend: vi.fn().mockResolvedValue({ ok: false, error: 'Not now.' }),
+    });
+
+    await user.type(field, 'More{Enter}');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Not now.');
+    expect(field).toHaveValue('More');
+  });
+
+  it('shows a send that throws as an alert, not an uncaught rejection (T1185)', async () => {
+    const user = userEvent.setup();
+    const { field } = renderInput({
+      onSend: vi.fn().mockRejectedValue(new Error('Server Action failed')),
+    });
+
+    await user.type(field, 'More{Enter}');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'could not be sent',
+    );
+    expect(field).toHaveValue('More');
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled();
+  });
+});
