@@ -1805,3 +1805,140 @@ describe('Autopilot spend', () => {
     ).toBeCloseTo(8);
   });
 });
+
+describe('A Retro Conversation', () => {
+  it('records its Cycle and the User, and sends the plain prompt when the Retro command is blank', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentCommands(project.id, {
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: '',
+    });
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch the beta',
+    });
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    expect(retro).toMatchObject({
+      projectId: project.id,
+      ticketNumber: null,
+      intent: 'retro',
+      startedBy: 'user',
+      retroCycleId: cycle.id,
+    });
+    expect(runner.runs[0].options.prompt).toBe(
+      'Retro on Cycle "Launch the beta"',
+    );
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      `"Launch the beta" (Cycle ${cycle.id})`,
+    );
+    expect(conversations.transcript(retro.id)).toMatchObject([
+      { role: 'user', text: 'Retro on Cycle "Launch the beta"' },
+    ]);
+  });
+
+  it('sends the Retro command with the Cycle’s title and id when it is set', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentCommands(project.id, {
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: 'retro',
+    });
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch the beta',
+    });
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    const message = `/retro "Launch the beta" (Cycle ${cycle.id})`;
+    expect(runner.runs[0].options.prompt).toBe(message);
+    expect(conversations.transcript(retro.id)).toMatchObject([
+      { role: 'user', text: message },
+    ]);
+  });
+
+  it('refuses a Retro without a Cycle, with another Project’s Cycle, or a second one', async () => {
+    const { conversations, tickets, project } = setup();
+    const other = tickets.createProject({ name: 'Other' });
+    const foreign = tickets.createCycle({ projectId: other.id, title: 'X' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+
+    const missing = await failure(
+      conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'retro',
+        prompt: 'Retro',
+      }),
+    );
+    expect(missing).toBeInstanceOf(ValidationError);
+    expect(Object.keys((missing as ValidationError).fieldErrors)).toEqual([
+      'retroCycleId',
+    ]);
+    const wrongProject = await failure(
+      conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'retro',
+        prompt: 'Retro',
+        retroCycleId: foreign.id,
+      }),
+    );
+    expect(wrongProject).toBeInstanceOf(ValidationError);
+    expect(Object.keys((wrongProject as ValidationError).fieldErrors)).toEqual([
+      'retroCycleId',
+    ]);
+    await conversations.startRetro({ cycleId: cycle.id });
+    expect(
+      await failure(conversations.startRetro({ cycleId: cycle.id })),
+    ).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('is found for its Cycle, also once closed or the Cycle is archived', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const other = tickets.createCycle({ projectId: project.id, title: 'B' });
+    expect(conversations.retroOf(cycle.id)).toBeNull();
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+    await conversations.close(retro.id);
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    expect(conversations.retroOf(cycle.id)?.id).toBe(retro.id);
+    expect(conversations.retroOf(other.id)).toBeNull();
+  });
+
+  it('keeps its tab in the dialog after its Cycle is archived', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    expect(
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toContain(retro.id);
+  });
+
+  it('does not count in Autopilot’s spend', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+
+    await conversations.startRetro({ cycleId: cycle.id });
+    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBe(0);
+  });
+});

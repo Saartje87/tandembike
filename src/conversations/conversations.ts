@@ -30,6 +30,7 @@ import {
   type QuestionEntry,
   type TranscriptRole,
 } from './conversation-state';
+import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 
 /** Who sends a reply: the User, or Autopilot in their place. */
@@ -47,6 +48,8 @@ export type Conversation = {
   costUsd: number;
   /** Closed by the User: stopped, and left out of the open Conversations. */
   hidden: boolean;
+  /** Retro: the Cycle it looks back on; null for other intents. */
+  retroCycleId: number | null;
   defaultCycleId: number | null;
   defaultEpicNumber: number | null;
   defaultType: TicketType | null;
@@ -89,6 +92,8 @@ export type StartConversationInput = {
    * Spend ceiling the cost counts against.
    */
   cycleId?: number;
+  /** Retro only: the Cycle of the Project it looks back on. */
+  retroCycleId?: number;
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
 };
@@ -459,6 +464,10 @@ export function createConversations({
           ticketType: ticket?.type ?? null,
           projectName: tickets.getProject(conversation.projectId).name,
           intent: conversation.intent,
+          retroCycle:
+            conversation.retroCycleId === null
+              ? null
+              : tickets.getCycle(conversation.retroCycleId),
           parallelRuns: settings.parallelRuns,
           runMode: settings.runMode,
           defaults: {
@@ -479,6 +488,111 @@ export function createConversations({
       live.delete(id);
       throw error;
     }
+  };
+
+  /** The Retro of a Cycle, closed or not; null when it has none. */
+  const retroOf = (cycleId: number): Conversation | null =>
+    db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.retroCycleId, cycleId))
+      .orderBy(conversations.id)
+      .limit(1)
+      .get() ?? null;
+
+  /**
+   * Starts a Conversation on a Ticket or a Project and its first run.
+   * Refused when the Project has no repository path.
+   */
+  const start = async (
+    input: StartConversationInput,
+  ): Promise<Conversation> => {
+    const prompt = (input.prompt ?? '').trim();
+    if (prompt === '') {
+      throw new ValidationError({ prompt: 'Write a message for the Agent.' });
+    }
+    let projectId = input.projectId;
+    if (input.ticketNumber !== undefined) {
+      projectId = tickets.getTicket(input.ticketNumber).projectId;
+    }
+    if (projectId === undefined) {
+      throw new ValidationError({
+        projectId: 'Choose a Project or a Ticket.',
+      });
+    }
+    if (input.intent === 'setup') {
+      if (input.ticketNumber !== undefined) {
+        throw new ValidationError({
+          ticketNumber: 'Setup is about a Project, not a Ticket.',
+        });
+      }
+      // At most one running Setup per Project: two would edit the same
+      // checkout (ADR 0020). Starting another opens the running one.
+      for (const id of live.keys()) {
+        const other = get(id);
+        if (other.projectId === projectId && other.intent === 'setup') {
+          return other;
+        }
+      }
+    }
+    if (input.intent === 'retro') {
+      if (input.ticketNumber !== undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Retro is about a Cycle, not a Ticket.',
+        });
+      }
+      if (input.retroCycleId === undefined) {
+        throw new ValidationError({
+          retroCycleId: 'Choose the Cycle to look back on.',
+        });
+      }
+      if (tickets.getCycle(input.retroCycleId).projectId !== projectId) {
+        throw new ValidationError({
+          retroCycleId: 'That Cycle belongs to another Project.',
+        });
+      }
+      if (retroOf(input.retroCycleId) !== null) {
+        throw new NotAllowedError('This Cycle already has a Retro.');
+      }
+    }
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    checkStartLimit(projectId, input.intent, settings);
+
+    const now = new Date();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId,
+        ticketNumber: input.ticketNumber ?? null,
+        intent: input.intent,
+        defaultCycleId: input.defaults?.cycleId ?? null,
+        defaultEpicNumber: input.defaults?.epicNumber ?? null,
+        defaultType: input.defaults?.type ?? null,
+        startedBy: input.startedBy,
+        autopilotCycleId:
+          input.startedBy === 'autopilot' ? (input.cycleId ?? null) : null,
+        retroCycleId:
+          input.intent === 'retro' ? (input.retroCycleId ?? null) : null,
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, input.startedBy, prompt);
+    try {
+      startRun(created.id, prompt);
+    } catch (error) {
+      update(created.id, { state: 'interrupted' });
+      append(created.id, 'error', 'The Agent could not be started.');
+      announce(created.id);
+      throw error;
+    }
+    announce(created.id);
+    return get(created.id);
   };
 
   return {
@@ -635,76 +749,28 @@ export function createConversations({
         .all();
     },
 
-    /**
-     * Starts a Conversation on a Ticket or a Project and its first run.
-     * Refused when the Project has no repository path.
-     */
-    async start(input: StartConversationInput): Promise<Conversation> {
-      const prompt = (input.prompt ?? '').trim();
-      if (prompt === '') {
-        throw new ValidationError({ prompt: 'Write a message for the Agent.' });
-      }
-      let projectId = input.projectId;
-      if (input.ticketNumber !== undefined) {
-        projectId = tickets.getTicket(input.ticketNumber).projectId;
-      }
-      if (projectId === undefined) {
-        throw new ValidationError({
-          projectId: 'Choose a Project or a Ticket.',
-        });
-      }
-      if (input.intent === 'setup') {
-        if (input.ticketNumber !== undefined) {
-          throw new ValidationError({
-            ticketNumber: 'Setup is about a Project, not a Ticket.',
-          });
-        }
-        // At most one running Setup per Project: two would edit the same
-        // checkout (ADR 0020). Starting another opens the running one.
-        for (const id of live.keys()) {
-          const other = get(id);
-          if (other.projectId === projectId && other.intent === 'setup') {
-            return other;
-          }
-        }
-      }
-      const settings = tickets.getProjectAgentSettings(projectId);
-      if (settings.repositoryPath === null) {
-        throw new ValidationError(noRepositoryPath);
-      }
-      checkStartLimit(projectId, input.intent, settings);
+    start,
 
-      const now = new Date();
-      const created = db
-        .insert(conversations)
-        .values({
-          projectId,
-          ticketNumber: input.ticketNumber ?? null,
-          intent: input.intent,
-          defaultCycleId: input.defaults?.cycleId ?? null,
-          defaultEpicNumber: input.defaults?.epicNumber ?? null,
-          defaultType: input.defaults?.type ?? null,
-          startedBy: input.startedBy,
-          autopilotCycleId:
-            input.startedBy === 'autopilot' ? (input.cycleId ?? null) : null,
-          state: 'running',
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning({ id: conversations.id })
-        .get();
-      append(created.id, input.startedBy, prompt);
-      try {
-        startRun(created.id, prompt);
-      } catch (error) {
-        update(created.id, { state: 'interrupted' });
-        append(created.id, 'error', 'The Agent could not be started.');
-        announce(created.id);
-        throw error;
-      }
-      announce(created.id);
-      return get(created.id);
+    /**
+     * Starts the Retro of a Cycle: a Conversation about its Project that looks
+     * back on the Cycle. The User's click starts it, never Autopilot, so its
+     * cost stays out of the Spend ceiling. A Cycle has at most one.
+     */
+    async startRetro(input: { cycleId: number }): Promise<Conversation> {
+      const cycle = tickets.getCycle(input.cycleId);
+      return start({
+        startedBy: 'user',
+        projectId: cycle.projectId,
+        intent: 'retro',
+        prompt: retroPrompt(
+          cycle,
+          tickets.getProjectAgentCommands(cycle.projectId).retroCommand,
+        ),
+        retroCycleId: cycle.id,
+      });
     },
+
+    retroOf,
 
     /**
      * Sends a reply, the User's or Autopilot's: into the run while it is

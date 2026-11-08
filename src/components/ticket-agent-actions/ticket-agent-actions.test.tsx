@@ -15,12 +15,14 @@ const commands = {
   triageCommand: '/mattpocock-skills:triage',
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: '/mattpocock-skills:implement-spec',
+  retroCommand: '/retro',
 };
 
 const none = {
   triageCommand: null,
   startCommand: null,
   startEpicCommand: null,
+  retroCommand: null,
 };
 
 const started = {

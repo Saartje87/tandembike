@@ -2,14 +2,16 @@ import { maxSkillLength } from './skills';
 import type { TicketType } from './ticket-type';
 
 /**
- * The commands a Project's Triage and Start buttons send as the first
- * message of a run, each `null` when it has none (T621, ADR 0019).
+ * The commands a Project's Triage, Start and Retro buttons send as the
+ * first message of a run, each `null` when it has none (T621, ADR 0019).
  */
 export type ProjectAgentCommands = {
   triageCommand: string | null;
   startCommand: string | null;
   /** Start on an Epic; falls back to `startCommand` when `null`. */
   startEpicCommand: string | null;
+  /** Retro on a Cycle, sent with the Cycle's title and id (T1171). */
+  retroCommand: string | null;
 };
 
 /** The commands every Project starts with (T621). */
@@ -17,6 +19,7 @@ export const defaultAgentCommands = {
   triageCommand: '/mattpocock-skills:triage',
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: '/mattpocock-skills:implement-spec',
+  retroCommand: '/mattpocock-skills:retro',
 } satisfies ProjectAgentCommands;
 
 /** No commands: Triage and Start send the plain `Triage T42` / `Start T42`. */
@@ -24,6 +27,7 @@ export const noAgentCommands: ProjectAgentCommands = {
   triageCommand: null,
   startCommand: null,
   startEpicCommand: null,
+  retroCommand: null,
 };
 
 /** The buttons that send an agent command. */

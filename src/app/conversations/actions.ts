@@ -83,6 +83,18 @@ export async function startSetup(input: {
   );
 }
 
+/**
+ * Starts the Retro of a Cycle from the Cycle complete banner. Refused when
+ * the Cycle already has one.
+ */
+export async function startRetro(input: {
+  cycleId: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().startRetro({ cycleId: Number(input?.cycleId) }),
+  );
+}
+
 /** Sends the User's reply into a Conversation, resuming it if its run ended. */
 export async function replyToConversation(input: {
   conversationId: number;

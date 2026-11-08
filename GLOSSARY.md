@@ -17,7 +17,7 @@ A named group of Tickets. Every Ticket belongs to exactly one Project. A Project
 _Avoid_: Workspace, sub-project
 
 **Cycle**:
-A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time.
+A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time. An Active Cycle is **complete** when it has at least one unarchived Ticket planned in it and every one is Done, an Epic by its derived Status; its Board then shows a banner offering to archive it, and archiving stays the User's click (ADR 0010).
 _Avoid_: Sprint
 
 **Backlog**:
@@ -117,7 +117,7 @@ A unique identifier for one Agent run, used to claim Tickets independently of it
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
-An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; the User starts one by sending its first message, or Autopilot starts one in their place (see **Started by**).
+An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, **Retro**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A **Retro** Conversation is Project-scoped too: the User starts it from the Cycle complete banner to look back on one Cycle, which it records apart from the Cycle Autopilot started a Conversation for, so a Retro never counts against the Spend ceiling; a Cycle has at most one, and it stays reachable once the Cycle is archived. A Ticket can have several Conversations; the User starts one by sending its first message, or Autopilot starts one in their place (see **Started by**).
 A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
 The User can always reply: their reply is never refused by the Project's Start run limit, whether it goes into an idle run or resumes an interrupted, stopped or closed one. A new Start, and a reply Autopilot sends, stay limited. See ADR 0031.
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
@@ -155,7 +155,7 @@ A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project off
 _Avoid_: Command chip, preset, slash command (for the setting)
 
 **Agent command**:
-A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
+A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, or a Cycle's Retro sends with the Cycle, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. It also has a **Retro command**, which a Retro starts with, followed by the Cycle's title and id (`/mattpocock-skills:retro "Factory p2" (Cycle 44)`); a blank one sends the plain `Retro on Cycle "Factory p2"`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
 _Avoid_: Triage skill, Start skill, preset
 
 **Activity**:

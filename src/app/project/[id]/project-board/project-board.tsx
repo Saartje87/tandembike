@@ -1,10 +1,12 @@
 import type { FC } from 'react';
 
 import { Cockpit } from '../../../../components/cockpit/cockpit';
+import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
+import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
 import type { Project } from '../../../../tickets/tickets';
@@ -129,6 +131,13 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     return (
       <>
         <CycleHeader key={tab.id} cycle={tab} />
+        {tickets.isCycleComplete(tab.id) && (
+          <CycleCompleteBanner
+            key={tab.id}
+            cycle={tab}
+            retro={appConversations().retroOf(tab.id)}
+          />
+        )}
         <Cockpit
           {...shared}
           cycle={tab}

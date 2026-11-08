@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `retro_cycle_id` integer;

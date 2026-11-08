@@ -14,6 +14,7 @@ import {
   reopenConversation,
   replyToConversation,
   startConversation,
+  startRetro,
   startSetup,
   stopConversation,
 } from './actions';
@@ -94,6 +95,24 @@ describe('Conversation actions', () => {
     expect(await startSetup({ projectId: project.id })).toMatchObject({
       ok: false,
     });
+  });
+
+  it('start a Retro on a Cycle, and refuse a second one', async () => {
+    const { project, tickets, runner } = setup();
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch',
+    });
+
+    const first = await startRetro({ cycleId: cycle.id });
+    const second = await startRetro({ cycleId: cycle.id });
+
+    expect(first).toMatchObject({
+      ok: true,
+      conversation: { intent: 'retro', retroCycleId: cycle.id },
+    });
+    expect(second).toMatchObject({ ok: false });
+    expect(runner.runs).toHaveLength(1);
   });
 
   it('send a reply and stop the run', async () => {

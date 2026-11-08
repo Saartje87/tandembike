@@ -79,6 +79,10 @@ export const projects = sqliteTable('projects', {
   startEpicCommand: text('start_epic_command').default(
     defaultAgentCommands.startEpicCommand,
   ),
+  /** The command a Retro sends before the Cycle reference; null for none. */
+  retroCommand: text('retro_command').default(
+    defaultAgentCommands.retroCommand,
+  ),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -370,6 +374,11 @@ export const conversations = sqliteTable(
      * Cycle's Spend ceiling. Null for a hand-started Conversation.
      */
     autopilotCycleId: integer('autopilot_cycle_id'),
+    /**
+     * Retro: the Cycle it looks back on. Separate from `autopilotCycleId`,
+     * so a Retro never counts against the Spend ceiling. Null for others.
+     */
+    retroCycleId: integer('retro_cycle_id'),
     /** New Ticket: the Cycle the title field was on, a default for the Agent. */
     defaultCycleId: integer('default_cycle_id'),
     /** New Ticket: the Epic the title field was under, a default. */

@@ -72,7 +72,9 @@ async function settingsTab(params: ProjectPageProps['params']) {
               The Claude Code commands a Ticket's Triage and Start buttons send
               before its number, such as /mattpocock-skills:implement T42. Start
               on an Epic uses the Epic command, or the Start command when that
-              is blank. Blank sends a plain "Triage T42" or "Start T42".
+              is blank. Blank sends a plain "Triage T42" or "Start T42". The
+              Retro command starts a Retro on a Cycle, followed by the Cycle's
+              title and id; blank sends a plain "Retro on Cycle".
             </Text>
           </Stack>
           <AgentCommandsForm

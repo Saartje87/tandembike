@@ -204,13 +204,15 @@ export async function setProjectSkills(input: {
 /**
  * Replaces a Project's agent commands, the ones its Triage and Start buttons
  * send, and refreshes its pages; returns them as saved. A refusal names the
- * field at fault: `triageCommand`, `startCommand` or `startEpicCommand`.
+ * field at fault: `triageCommand`, `startCommand`, `startEpicCommand` or
+ * `retroCommand`.
  */
 export async function setProjectAgentCommands(input: {
   projectId: number;
   triageCommand: string;
   startCommand: string;
   startEpicCommand: string;
+  retroCommand: string;
 }): Promise<ActionResult<{ commands: ProjectAgentCommands }>> {
   return actionResult(() => {
     const commands = appTickets('user').setProjectAgentCommands(
@@ -219,6 +221,7 @@ export async function setProjectAgentCommands(input: {
         triageCommand: String(input?.triageCommand ?? ''),
         startCommand: String(input?.startCommand ?? ''),
         startEpicCommand: String(input?.startEpicCommand ?? ''),
+        retroCommand: String(input?.retroCommand ?? ''),
       },
     );
     revalidatePath(boardRoute, 'layout');

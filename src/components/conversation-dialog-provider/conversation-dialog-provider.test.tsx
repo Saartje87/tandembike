@@ -65,6 +65,7 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   sdkSessionId: null,
   costUsd: 0,
   hidden: false,
+  retroCycleId: null,
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,
