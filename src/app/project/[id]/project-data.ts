@@ -130,6 +130,20 @@ export function runSlotsOf(projectId: number) {
 }
 
 /**
+ * The Project's Autopilot switch and Spend ceiling, and what Autopilot has
+ * spent on Cycle `cycleId`, for the Active Cycle's Board header.
+ */
+export function autopilotOf(projectId: number, cycleId: number) {
+  const { autopilot, spendCeilingUsd } =
+    appTickets('user').getProjectAgentSettings(projectId);
+  return {
+    autopilot,
+    spendCeilingUsd,
+    spendUsd: appConversations().autopilotSpend({ projectId, cycleId }),
+  };
+}
+
+/**
  * Cycle `cycleId`'s Tickets, with the Epics planned elsewhere that have a
  * child on the Cycle, so an Epic shows while its children are on it.
  */

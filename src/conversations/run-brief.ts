@@ -17,6 +17,8 @@ export type RunBrief = {
   projectName: string;
   intent: ConversationIntent;
   parallelRuns: boolean;
+  /** The Project's Agent run mode, which Setup reports (ADR 0029). */
+  runMode: 'default' | 'auto';
   defaults?: NewTicketDefaults;
 };
 
@@ -39,6 +41,10 @@ const setupChecklist = (brief: RunBrief): string[] => {
     'The Tandembike MCP server is configured for the repository (for example in .mcp.json), for Agents the User starts in a terminal.',
     'The permission allowlist covers the Tandembike MCP tools.',
   ];
+  items.push(
+    `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
+    'Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.',
+  );
   if (brief.parallelRuns) {
     items.push(
       "Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.",

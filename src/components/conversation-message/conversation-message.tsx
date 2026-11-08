@@ -7,6 +7,7 @@ import { modeColors } from '../../app/lib/mode-colors';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
+import { roleNames } from '../conversation-labels/conversation-labels';
 import { ConversationPermissionPrompt } from '../conversation-permission-prompt/conversation-permission-prompt';
 import { ConversationQuestionForm } from '../conversation-question-form/conversation-question-form';
 import { Markdown } from '../markdown/markdown';
@@ -28,7 +29,7 @@ const withTicketLinks = (text: string): ReactNode[] =>
   );
 
 /**
- * One transcript entry as a chat message: the User's on the right, the
+ * One transcript entry as a chat message: the User's on the right, Autopilot's and the
  * Agent's, an error and a permission request on the left, and a tool call or
  * the Tickets the Agent created as a muted, compact line.
  */
@@ -71,20 +72,16 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
       <li data-side={fromUser ? 'end' : 'start'}>
         <Stack gap={1}>
           <Text fontSize="small" fontWeight="strong" color="muted">
-            {fromUser
-              ? 'You'
-              : entry.role === 'agent'
-                ? 'Agent'
-                : entry.role === 'question'
-                  ? 'Question'
-                  : 'Permission'}
+            {roleNames[entry.role]}
           </Text>
           {entry.question !== null ? (
             <ConversationQuestionForm
               entryId={entry.id}
               question={entry.question}
             />
-          ) : entry.role === 'agent' || entry.role === 'user' ? (
+          ) : entry.role === 'agent' ||
+            entry.role === 'user' ||
+            entry.role === 'autopilot' ? (
             <Markdown headingLevel={4} breaks>
               {entry.text}
             </Markdown>

@@ -57,6 +57,7 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   ticketNumber: null,
   intent: 'new_ticket',
   state: 'idle',
+  startedBy: 'user',
   sdkSessionId: null,
   costUsd: 0,
   hidden: false,

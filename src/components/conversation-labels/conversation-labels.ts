@@ -1,6 +1,8 @@
 import type {
   ConversationIntent,
+  ConversationStarter,
   ConversationState,
+  TranscriptRole,
 } from '../../conversations/conversation-state';
 import type {
   Conversation,
@@ -18,6 +20,24 @@ export const intentNames: Record<ConversationIntent, string> = {
   ask: 'Ask',
   new_ticket: 'New Ticket',
   setup: 'Setup',
+};
+
+/** Who started a Conversation, as the header says it. */
+export const starterNames: Record<ConversationStarter, string> = {
+  user: 'you',
+  autopilot: 'Autopilot',
+};
+
+/** Who a transcript entry is from, as its bubble says it. */
+export const roleNames: Record<TranscriptRole, string> = {
+  user: 'You',
+  autopilot: 'Autopilot',
+  agent: 'Agent',
+  tool: 'Tool',
+  error: 'Error',
+  permission: 'Permission',
+  question: 'Question',
+  created: 'Created',
 };
 
 export const stateNames: Record<ConversationState, string> = {

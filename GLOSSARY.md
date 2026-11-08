@@ -117,9 +117,25 @@ A unique identifier for one Agent run, used to claim Tickets independently of it
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
-An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; only the User starts one, by sending its first message.
+An exchange between the User and an Agent that Tandembike starts for them, about one Ticket or, before a Ticket exists, about one Project. It opens with an intent, **Start**, **Triage**, **Setup**, a free-form **Ask** or **New Ticket**, and continues as the User replies, answers the Agent's questions and allows or denies what it asks to do. It can span several Agent runs, since an interrupted one is resumed, and it is the Agent-run ID its Agent claims Tickets with. A **New Ticket** Conversation is Project-scoped: the User starts it from a title field, whose Cycle, Epic and type are the Agent's defaults, and the Agent decides what to create. A Ticket can have several Conversations; the User starts one by sending its first message, or Autopilot starts one in their place (see **Started by**).
 A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
+
+**Autopilot**:
+A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. It never retries and never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030.
+_Avoid_: Auto mode (that is the Agent run mode), scheduler
+
+**Eligible**:
+Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no open Start Conversation on it, whatever state its run is in, so a failed run waits for the User. A Start Conversation from before the Ticket's latest move to Todo, such as Back to Todo, no longer counts, unless its run is still working.
+_Avoid_: Ready (that is the label), startable
+
+**Started by**:
+Who started a Conversation: the **User**, or **Autopilot**. Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
+_Avoid_: Owner, author, initiator
+
+**Spend ceiling**:
+A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
+_Avoid_: Budget, cap (that is the run cap), limit
 
 **Draft**:
 A Conversation the User has begun but not yet sent: an intent, its Ticket or Project, and the text typed so far, with a New Ticket draft also holding its title field's defaults. Nothing runs until the User sends it, which starts the Conversation. A Draft lives only in the browser tab: a reload loses it, and closing it discards it.
@@ -128,6 +144,10 @@ _Avoid_: Pending Conversation, unsent Conversation
 **Setup**:
 A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
 _Avoid_: First-time setup, onboarding, readiness check
+
+**Agent run mode**:
+A Project setting, `default` or `auto`, that every run the Project starts uses as its permission mode, whoever starts it. `default` asks the User about every call the repository has not allowed; `auto` lets the SDK's classifier decide and asks only for calls it cannot. New and existing Projects are `default`. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. The Project also has a run model, the model its runs start on, unset for the User's default. See ADR 0029.
+_Avoid_: Permission level, trust mode
 
 **Skill**:
 A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.

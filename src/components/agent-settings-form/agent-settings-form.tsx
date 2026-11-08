@@ -5,6 +5,7 @@ import {
   Button,
   Inline,
   Label,
+  Radio,
   Stack,
   Switch,
   Text,
@@ -15,6 +16,7 @@ import { useForm } from 'react-hook-form';
 
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
+import type { AgentRunMode } from '../../tickets/agent-run-mode';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { FieldError } from '../field-error/field-error';
 import { ProjectSetup, type SetupOffer } from '../project-setup/project-setup';
@@ -32,6 +34,20 @@ type AgentSettingsValues = {
   parallelRuns: boolean;
   maxConcurrentRuns: number;
   agentMode: boolean;
+  runMode: AgentRunMode;
+  runModel: string;
+  autopilot: boolean;
+  spendCeiling: string;
+};
+
+/** The form field each field of a refusal names. */
+const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
+  repositoryPath: 'repositoryPath',
+  maxConcurrentRuns: 'maxConcurrentRuns',
+  agentMode: 'agentMode',
+  runMode: 'runMode',
+  runModel: 'runModel',
+  spendCeilingUsd: 'spendCeiling',
 };
 
 /**
@@ -57,6 +73,10 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const capErrorId = useId();
   const modeReasonId = useId();
   const modeErrorId = useId();
+  const runModeErrorId = useId();
+  const runModeLabelId = useId();
+  const runModelId = useId();
+  const runModelErrorId = useId();
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -68,12 +88,25 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       parallelRuns: settings.parallelRuns,
       maxConcurrentRuns: settings.maxConcurrentRuns,
       agentMode: settings.agentMode,
+      runMode: settings.runMode,
+      runModel: settings.runModel ?? '',
+      autopilot: settings.autopilot,
+      spendCeiling:
+        settings.spendCeilingUsd === null
+          ? ''
+          : String(settings.spendCeilingUsd),
     },
   });
   const hasPath = settings.repositoryPath !== null;
   const pathError = errors.repositoryPath?.message;
   const capError = errors.maxConcurrentRuns?.message;
   const modeError = errors.agentMode?.message;
+  const runModeError = errors.runMode?.message;
+  const runModelError = errors.runModel?.message;
+  const ceilingError = errors.spendCeiling?.message;
+  const ceilingId = useId();
+  const ceilingErrorId = useId();
+  const autopilotId = useId();
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
@@ -83,6 +116,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       parallelRuns: values.parallelRuns,
       maxConcurrentRuns: Number(values.maxConcurrentRuns),
       agentMode: values.agentMode,
+      runMode: values.runMode,
+      runModel: values.runModel.trim() === '' ? null : values.runModel.trim(),
+      autopilot: values.autopilot,
+      spendCeilingUsd:
+        values.spendCeiling.trim() === '' ? null : Number(values.spendCeiling),
     });
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
@@ -103,21 +141,16 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       });
       return;
     }
-    const { repositoryPath, maxConcurrentRuns, agentMode } =
-      result.fieldErrors ?? {};
-    if (repositoryPath) {
-      setError('repositoryPath', { type: 'server', message: repositoryPath });
+    const named = Object.entries(result.fieldErrors ?? {}).flatMap(
+      ([field, message]) => {
+        const name = formFields[field];
+        return name && message ? [{ name, message }] : [];
+      },
+    );
+    for (const { name, message } of named) {
+      setError(name, { type: 'server', message });
     }
-    if (maxConcurrentRuns) {
-      setError('maxConcurrentRuns', {
-        type: 'server',
-        message: maxConcurrentRuns,
-      });
-    }
-    if (agentMode) {
-      setError('agentMode', { type: 'server', message: agentMode });
-    }
-    if (!repositoryPath && !maxConcurrentRuns && !agentMode) {
+    if (named.length === 0) {
       setError('root.server', { message: result.error });
     }
   });
@@ -177,6 +210,68 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               </Text>
             )}
             <FieldError id={modeErrorId} reason={modeError} />
+          </Stack>
+          {/* Blocks has no radio group yet, so a Stack carries the role (T1163). */}
+          <Stack gap={1} role="radiogroup" aria-labelledby={runModeLabelId}>
+            <Text tag="p" id={runModeLabelId} fontWeight="bold">
+              Agent run mode
+            </Text>
+            <Radio {...register('runMode')} value="default">
+              Default: asks before each tool call the repository has not
+              allowed.
+            </Radio>
+            <Radio {...register('runMode')} value="auto">
+              Auto: a classifier decides, so runs wait less.
+            </Radio>
+            <Text tag="p" fontSize="small" color="muted">
+              In the spike the auto classifier allowed a hard reset, writes
+              outside the repository, an outbound POST and a push without
+              asking. Calls it cannot decide still ask you. Applies to every run
+              this Project starts.
+            </Text>
+            <FieldError id={runModeErrorId} reason={runModeError} />
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={runModelId}>Run model</Label>
+            <TextInput
+              {...register('runModel')}
+              id={runModelId}
+              placeholder="Your default model"
+              autoComplete="off"
+              aria-invalid={runModelError ? true : undefined}
+              aria-describedby={runModelError ? runModelErrorId : undefined}
+            />
+            <Text tag="p" fontSize="small" color="muted">
+              The model runs start on; leave empty for your default. A run can
+              still change models itself.
+            </Text>
+            <FieldError id={runModelErrorId} reason={runModelError} />
+          </Stack>
+          <Stack gap={1}>
+            <Inline gap={2} alignY="center">
+              <Switch {...register('autopilot')} id={autopilotId} />
+              <Label htmlFor={autopilotId}>Autopilot</Label>
+            </Inline>
+            <Text tag="p" fontSize="small" color="muted">
+              While on, and the Project has an Active Cycle, Tandembike starts
+              runs for the Cycle's ready work by itself, as many as Parallel
+              runs allow. Turning it off leaves running runs alone.
+            </Text>
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={ceilingId}>Spend ceiling (USD)</Label>
+            <TextInput
+              {...register('spendCeiling')}
+              id={ceilingId}
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              placeholder="No ceiling"
+              aria-invalid={ceilingError ? true : undefined}
+              aria-describedby={ceilingError ? ceilingErrorId : undefined}
+            />
+            <FieldError id={ceilingErrorId} reason={ceilingError} />
           </Stack>
           {serverError && <Alert intent="danger">{serverError}</Alert>}
           <div>

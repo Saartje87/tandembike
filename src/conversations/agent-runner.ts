@@ -82,6 +82,10 @@ export type RunOptions = {
   systemPrompt: string;
   /** The User's first message of this run. */
   prompt: string;
+  /** The permission mode of the run; `default` when left out (ADR 0029). */
+  runMode?: 'default' | 'auto';
+  /** The model to start on; left out for the User's default model. */
+  model?: string;
   /** The SDK session to continue, for a Conversation that was interrupted. */
   resume?: string;
   onEvent(event: RunEvent): void;

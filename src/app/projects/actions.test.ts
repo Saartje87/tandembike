@@ -89,6 +89,8 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       maxConcurrentRuns: 2,
       agentMode: true,
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
     });
 
     expect(result).toEqual({ ok: true });
@@ -97,6 +99,10 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       maxConcurrentRuns: 2,
       agentMode: true,
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
+      autopilot: false,
+      spendCeilingUsd: null,
     });
     expect(revalidatePath).toHaveBeenCalled();
   });
@@ -114,6 +120,52 @@ describe('setProjectAgentSettings', () => {
     expect(result).toMatchObject({
       ok: false,
       fieldErrors: { repositoryPath: 'There is no directory at this path.' },
+    });
+  });
+});
+
+describe('setProjectAgentSettings run mode', () => {
+  it('refuses an unknown run mode on the field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      runMode: 'bypassPermissions' as never,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: { runMode: 'Choose default or auto.' },
+    });
+  });
+});
+
+describe('setProjectAgentSettings Autopilot', () => {
+  it('saves the switch with a ceiling, and refuses the switch without one on the ceiling field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const refused = await setProjectAgentSettings({
+      projectId: project.id,
+      autopilot: true,
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      fieldErrors: { spendCeilingUsd: expect.any(String) },
+    });
+
+    const saved = await setProjectAgentSettings({
+      projectId: project.id,
+      autopilot: true,
+      spendCeilingUsd: 20,
+    });
+    expect(saved).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      autopilot: true,
+      spendCeilingUsd: 20,
     });
   });
 });

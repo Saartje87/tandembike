@@ -18,6 +18,10 @@ const unset: ProjectAgentSettings = {
   parallelRuns: false,
   maxConcurrentRuns: 3,
   agentMode: false,
+  runMode: 'default',
+  runModel: null,
+  autopilot: false,
+  spendCeilingUsd: null,
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -73,6 +77,10 @@ describe('AgentSettingsForm', () => {
         parallelRuns: false,
         maxConcurrentRuns: 3,
         agentMode: false,
+        runMode: 'default',
+        runModel: null,
+        autopilot: false,
+        spendCeilingUsd: null,
       }),
     );
   });
@@ -96,8 +104,88 @@ describe('AgentSettingsForm', () => {
         parallelRuns: true,
         maxConcurrentRuns: 5,
         agentMode: true,
+        runMode: 'default',
+        runModel: null,
+        autopilot: false,
+        spendCeilingUsd: null,
       }),
     );
+  });
+
+  it('saves the run mode with its trade-off shown, and the run model', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(screen.getByRole('radio', { name: /Default/ })).toBeChecked();
+    expect(screen.getByText(/hard reset/)).toBeInTheDocument();
+    expect(screen.getByText(/outbound POST/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /Auto/ }));
+    await userEvent.type(
+      screen.getByLabelText('Run model'),
+      ' claude-opus-5-5 ',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runMode: 'auto',
+          runModel: 'claude-opus-5-5',
+        }),
+      ),
+    );
+  });
+
+  it('saves Autopilot with its Spend ceiling in dollars', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(screen.getByRole('switch', { name: 'Autopilot' })).not.toBeChecked();
+    await userEvent.type(screen.getByLabelText('Spend ceiling (USD)'), '25.5');
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autopilot: true, spendCeilingUsd: 25.5 }),
+      ),
+    );
+  });
+
+  it('sends no ceiling when the field is empty, and shows the refusal on it', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Set a Spend ceiling before turning on Autopilot.',
+      fieldErrors: {
+        spendCeilingUsd: 'Set a Spend ceiling before turning on Autopilot.',
+      },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText(
+        'Set a Spend ceiling before turning on Autopilot.',
+      ),
+    ).toBeInTheDocument();
+    expect(setProjectAgentSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ autopilot: true, spendCeilingUsd: null }),
+    );
+  });
+
+  it('shows a run mode refusal on the field', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Choose default or auto.',
+      fieldErrors: { runMode: 'Choose default or auto.' },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Choose default or auto.'),
+    ).toBeInTheDocument();
   });
 
   it('shows a refusal under the field it names and keeps the draft', async () => {

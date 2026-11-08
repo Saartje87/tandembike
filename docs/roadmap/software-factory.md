@@ -14,7 +14,7 @@ Existing terms keep their meaning: Ticket, Epic, Cycle, Board, Lane, Status, Lab
 
 - **Autopilot**: a Project switch. While it is on and the Project has an Active Cycle, Tandembike starts Start Conversations for the Cycle's eligible work.
 - **Eligible**: a Ticket or Epic in the Active Cycle, Status Todo, labelled `ready-for-agent`, with no unresolved Blocker, unclaimed and not archived. An Epic is eligible by its own label, once it has at least one child (2026-11-07: an Epic with no children is Todo, and the spec flow creates the Epic before its children), and is dispatched as one unit; a child is never dispatched on its own.
-- **Agent run mode**: a Project setting, `default` or `auto`, that every run the Project starts is pinned to.
+- **Agent run mode**: a Project setting, `default` or `auto`, that every run the Project starts uses (ADR 0029).
 - **Started by**: who started a Conversation, the User or Autopilot. Recorded on the Conversation and shown in its header.
 - **Spend ceiling** (2026-11-07): a Project setting in dollars that bounds what Autopilot spends in one Cycle. Autopilot cannot be turned on without one.
 - **Lane** (revised): a Board section that holds the Tickets in one situation, in their order. Lanes are derived from Status, triage labels and run state; Status stays the fixed set Todo, In progress, Done.
@@ -63,7 +63,7 @@ Five Lanes over three Statuses, with three sections in In progress, made the Boa
 - It offers no actions in its lists. A run waiting on the User shows a bell that opens its Conversation, so the User decides with the run's context in view; a row's title opens the Ticket, where its state is set. Rejected: Allow and Deny in the list, which would approve on a one-line rule; Merged, Back to Todo and triage controls in the list, which the Ticket drawer already offers.
 - It derives every place from the Lane derivation, through one pure function over any Board's Tickets.
 - A drag only reorders rows within a section; it never changes a Status. The Board also creates Tickets inline, filters, nests an Epic's children in its row and selects many Tickets (Move to Cycle, Add to Epic, Archive).
-- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend and paused notice go there in phase 3. The browser tab's title and the Active Cycle's tab carry the Needs you count.
+- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend against the ceiling and paused notice sit there too (T1128). The browser tab's title and the Active Cycle's tab carry the Needs you count.
 
 ### Status line on In progress cards
 
@@ -153,6 +153,8 @@ Docs and skills only, no app change.
 Done on 2026-11-08 (T1090): "Feedback as Tickets" in `docs/agents/issue-tracker.md`; the `AGENTS.md` Blocks and process feedback rules point at it; the `implement` skill's hand-off step files the feedback. Sources are `from:agent-run` and `from:tandembike`.
 
 ### Phase 3: Autopilot
+
+Specced into Epic T1091 and built (2026-11-08).
 
 Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
 

@@ -14,12 +14,14 @@ import {
 import type { QuestionEntry } from '../conversations/conversation-state';
 import {
   conversationIntents,
+  conversationStarters,
   conversationStates,
   permissionStatuses,
   transcriptRoles,
 } from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
 import { defaultAgentCommands } from '../tickets/agent-commands';
+import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
@@ -50,6 +52,16 @@ export const projects = sqliteTable('projects', {
   agentMode: integer('agent_mode', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /** The permission mode of every run this Project starts (ADR 0029). */
+  runMode: text('run_mode', { enum: agentRunModes })
+    .notNull()
+    .default('default'),
+  /** The model its runs start on; null is the User's default model. */
+  runModel: text('run_model'),
+  /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
+  autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
+  /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
+  spendCeilingUsd: real('spend_ceiling_usd'),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()
@@ -344,11 +356,20 @@ export const conversations = sqliteTable(
     ticketNumber: integer('ticket_number').references(() => tickets.number),
     intent: text('intent', { enum: conversationIntents }).notNull(),
     state: text('state', { enum: conversationStates }).notNull(),
+    /** Who started it, the User or Autopilot; older rows read the User. */
+    startedBy: text('started_by', { enum: conversationStarters })
+      .notNull()
+      .default('user'),
     /** The Claude Agent SDK session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
     costUsd: real('cost_usd').notNull().default(0),
     /** Closed by the User: stopped and left out of the Project's list. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * The Active Cycle Autopilot started it for; its cost counts against that
+     * Cycle's Spend ceiling. Null for a hand-started Conversation.
+     */
+    autopilotCycleId: integer('autopilot_cycle_id'),
     /** New Ticket: the Cycle the title field was on, a default for the Agent. */
     defaultCycleId: integer('default_cycle_id'),
     /** New Ticket: the Epic the title field was under, a default. */

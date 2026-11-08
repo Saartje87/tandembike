@@ -35,6 +35,7 @@ describe('Starting a Conversation', () => {
     const { conversations, runner, project, repositoryDir } = setup();
 
     const conversation = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'What is left to do?',
@@ -68,6 +69,7 @@ describe('Starting a Conversation', () => {
     });
 
     const conversation = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'triage',
       prompt: 'Triage this.',
@@ -92,6 +94,7 @@ describe('Starting a Conversation', () => {
     });
 
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go.',
@@ -111,6 +114,7 @@ describe('Starting a Conversation', () => {
     });
 
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: epic.number,
       intent: 'start',
       prompt: 'Go.',
@@ -143,6 +147,7 @@ describe('Starting a Conversation', () => {
     });
 
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go.',
@@ -162,6 +167,7 @@ describe('Starting a Conversation', () => {
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
 
     await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'start',
       prompt: 'Go.',
@@ -170,21 +176,52 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options.systemPrompt).toContain('worktree');
   });
 
-  it('gives only Start runs the worktree instruction, and says how to make the worktree', async () => {
+  it("starts every run with the Project's run mode and model", async () => {
     const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
 
     await conversations.start({
       projectId: project.id,
       intent: 'start',
       prompt: 'Go.',
+      startedBy: 'user',
+    });
+    expect(runner.runs[0].options).toMatchObject({ runMode: 'default' });
+    expect(runner.runs[0].options.model).toBeUndefined();
+
+    tickets.setProjectAgentSettings(project.id, {
+      runMode: 'auto',
+      runModel: 'claude-opus-5-5',
     });
     await conversations.start({
       projectId: project.id,
       intent: 'triage',
       prompt: 'Go.',
+      startedBy: 'user',
+    });
+    expect(runner.runs[1].options).toMatchObject({
+      runMode: 'auto',
+      model: 'claude-opus-5-5',
+    });
+  });
+
+  it('gives only Start runs the worktree instruction, and says how to make the worktree', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
     });
     await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'triage',
+      prompt: 'Go.',
+    });
+    await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Go.',
@@ -203,7 +240,12 @@ describe('Starting a Conversation', () => {
     const bare = tickets.createProject({ name: 'Bare' });
 
     const error = await failure(
-      conversations.start({ projectId: bare.id, intent: 'ask', prompt: 'Hi' }),
+      conversations.start({
+        projectId: bare.id,
+        intent: 'ask',
+        prompt: 'Hi',
+        startedBy: 'user',
+      }),
     );
 
     expect(error).toBeInstanceOf(ValidationError);
@@ -218,17 +260,28 @@ describe('Starting a Conversation', () => {
 
     expect(
       await failure(
-        conversations.start({ projectId: 999, intent: 'ask', prompt: 'Hi' }),
-      ),
-    ).toBeInstanceOf(NotFoundError);
-    expect(
-      await failure(
-        conversations.start({ ticketNumber: 999, intent: 'ask', prompt: 'Hi' }),
+        conversations.start({
+          projectId: 999,
+          intent: 'ask',
+          prompt: 'Hi',
+          startedBy: 'user',
+        }),
       ),
     ).toBeInstanceOf(NotFoundError);
     expect(
       await failure(
         conversations.start({
+          ticketNumber: 999,
+          intent: 'ask',
+          prompt: 'Hi',
+          startedBy: 'user',
+        }),
+      ),
+    ).toBeInstanceOf(NotFoundError);
+    expect(
+      await failure(
+        conversations.start({
+          startedBy: 'user',
           projectId: project.id,
           intent: 'ask',
           prompt: '   ',
@@ -242,6 +295,7 @@ describe('A running Conversation', () => {
   it('stores the SDK session ID, the Agent’s words and tool use in the transcript', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -264,6 +318,7 @@ describe('A running Conversation', () => {
   it('is idle when a turn ends, and adds the cost of every turn and run', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -280,7 +335,7 @@ describe('A running Conversation', () => {
 
     // A resumed run starts counting from zero again.
     runner.runs[0].emit({ type: 'exit', error: 'crashed' });
-    await conversations.reply(id, 'Again');
+    await conversations.reply(id, 'Again', 'user');
     runner.runs[1].emit({ type: 'turn', costUsd: 0.1 });
     expect(conversations.get(id).costUsd).toBeCloseTo(0.6);
   });
@@ -288,6 +343,7 @@ describe('A running Conversation', () => {
   it('waits for the User when the run says so, and works again after', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -303,6 +359,7 @@ describe('A running Conversation', () => {
   it('is interrupted, with the reason in the transcript, when its run dies', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -322,14 +379,15 @@ describe('Replying to a Conversation', () => {
   it('goes into the same run while it is running or idle', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
     });
 
-    await conversations.reply(id, 'Also this');
+    await conversations.reply(id, 'Also this', 'user');
     runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
-    const after = await conversations.reply(id, 'And that');
+    const after = await conversations.reply(id, 'And that', 'user');
 
     expect(runner.runs).toHaveLength(1);
     expect(runner.runs[0].sent).toEqual(['Also this', 'And that']);
@@ -344,6 +402,7 @@ describe('Replying to a Conversation', () => {
   it('resumes an interrupted Conversation from its stored SDK session ID', async () => {
     const { conversations, runner, project, repositoryDir } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -351,7 +410,7 @@ describe('Replying to a Conversation', () => {
     runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
     runner.runs[0].emit({ type: 'exit', error: 'died' });
 
-    const after = await conversations.reply(id, 'Carry on');
+    const after = await conversations.reply(id, 'Carry on', 'user');
 
     expect(after.state).toBe('running');
     expect(runner.runs).toHaveLength(2);
@@ -365,6 +424,7 @@ describe('Replying to a Conversation', () => {
   it('is interrupted, not idle, when its run ends after a finished turn', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -378,6 +438,7 @@ describe('Replying to a Conversation', () => {
   it('records the Tickets a run created as one transcript entry', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'Add coupons',
@@ -394,6 +455,7 @@ describe('Replying to a Conversation', () => {
   it('resumes an idle Conversation whose run has ended', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -402,7 +464,7 @@ describe('Replying to a Conversation', () => {
     runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
     runner.runs[0].emit({ type: 'exit' });
 
-    await conversations.reply(id, 'More');
+    await conversations.reply(id, 'More', 'user');
 
     expect(runner.runs[1].options.resume).toBe('sess-1');
   });
@@ -410,22 +472,24 @@ describe('Replying to a Conversation', () => {
   it('is refused for an empty reply or an unknown Conversation', async () => {
     const { conversations, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
     });
 
-    expect(await failure(conversations.reply(id, ' '))).toBeInstanceOf(
+    expect(await failure(conversations.reply(id, ' ', 'user'))).toBeInstanceOf(
       ValidationError,
     );
-    expect(await failure(conversations.reply(999, 'Hi'))).toBeInstanceOf(
-      NotFoundError,
-    );
+    expect(
+      await failure(conversations.reply(999, 'Hi', 'user')),
+    ).toBeInstanceOf(NotFoundError);
   });
 
   it('resumes a stopped Conversation from its stored SDK session ID', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -433,7 +497,7 @@ describe('Replying to a Conversation', () => {
     runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
     await conversations.stop(id);
 
-    const replied = await conversations.reply(id, 'More');
+    const replied = await conversations.reply(id, 'More', 'user');
 
     expect(replied.state).toBe('running');
     expect(runner.runs[1].options.resume).toBe('sess-1');
@@ -442,6 +506,7 @@ describe('Replying to a Conversation', () => {
   it('is refused once the Project lost its repository path', async () => {
     const { conversations, runner, tickets, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -449,7 +514,7 @@ describe('Replying to a Conversation', () => {
     runner.runs[0].emit({ type: 'exit', error: 'died' });
     tickets.setProjectAgentSettings(project.id, { repositoryPath: null });
 
-    expect(await failure(conversations.reply(id, 'Hi'))).toBeInstanceOf(
+    expect(await failure(conversations.reply(id, 'Hi', 'user'))).toBeInstanceOf(
       ValidationError,
     );
   });
@@ -459,6 +524,7 @@ describe('Stopping a Conversation', () => {
   it('interrupts the run, ends it and marks the Conversation stopped', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -478,6 +544,7 @@ describe('Stopping a Conversation', () => {
   it('records the cost the interrupted turn reports after the stop', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -494,6 +561,7 @@ describe('Stopping a Conversation', () => {
   it('stops a Conversation with no live run too', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -508,11 +576,13 @@ describe('Restarting the server', () => {
   it('marks the Conversations whose run was alive as interrupted', async () => {
     const { conversations, runner, project, restart } = setup();
     const running = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
     });
     const stopped = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -534,11 +604,13 @@ describe('Reading Conversations', () => {
     const { conversations, tickets, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     const first = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'One',
     });
     const second = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Two',
@@ -567,12 +639,14 @@ describe('Activity rows', () => {
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
     const first = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
     });
     vi.setSystemTime(new Date('2026-11-07T10:05:00Z'));
     const second = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Two',
@@ -620,13 +694,14 @@ describe('Activity rows', () => {
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     vi.setSystemTime(new Date('2026-11-07T10:00:00Z'));
     const { id } = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
     });
     runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
     vi.setSystemTime(new Date('2026-11-07T11:00:00Z'));
-    await conversations.reply(id, 'More');
+    await conversations.reply(id, 'More', 'user');
     runner.runs
       .at(-1)
       ?.emit({ type: 'tool', text: 'Read {"file_path":"a.ts"}' });
@@ -646,6 +721,7 @@ describe('Activity rows', () => {
     const { conversations, tickets, runner, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     const { id } = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
@@ -674,6 +750,7 @@ describe('Activity rows', () => {
     const { conversations, tickets, runner, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
@@ -696,6 +773,7 @@ describe('Activity rows', () => {
     const { conversations, tickets, runner, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'One',
@@ -729,6 +807,7 @@ describe('Live updates', () => {
     seen.mockClear();
 
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -760,6 +839,7 @@ describe('Permission requests', () => {
   async function started() {
     const world = setup();
     const conversation = await world.conversations.start({
+      startedBy: 'user',
       projectId: world.project.id,
       intent: 'start',
       prompt: 'Go',
@@ -968,6 +1048,7 @@ describe('Questions of the Agent', () => {
   async function started() {
     const world = setup();
     const conversation = await world.conversations.start({
+      startedBy: 'user',
       projectId: world.project.id,
       intent: 'start',
       prompt: 'Go',
@@ -1087,7 +1168,13 @@ describe('The Start run limit', () => {
     conversations: ReturnType<typeof setup>['conversations'],
     projectId: number,
     intent: 'start' | 'triage' | 'ask' = 'start',
-  ) => conversations.start({ projectId, intent, prompt: 'Go.' });
+  ) =>
+    conversations.start({
+      projectId,
+      intent,
+      prompt: 'Go.',
+      startedBy: 'user',
+    });
 
   it('refuses a second running Start with Parallel runs off, with a reason', async () => {
     const { conversations, project } = setup();
@@ -1115,7 +1202,7 @@ describe('The Start run limit', () => {
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
     await startOn(conversations, project.id);
 
-    const error = await failure(conversations.reply(first.id, 'More'));
+    const error = await failure(conversations.reply(first.id, 'More', 'user'));
 
     expect(error).toBeInstanceOf(NotAllowedError);
     expect(conversations.get(first.id).state).toBe('idle');
@@ -1188,7 +1275,7 @@ describe('The Start run limit', () => {
     runner.runs[0].emit({ type: 'exit', error: 'died' });
     await startOn(conversations, project.id);
 
-    const error = await failure(conversations.reply(first.id, 'Go on'));
+    const error = await failure(conversations.reply(first.id, 'Go on', 'user'));
 
     expect(error).toBeInstanceOf(NotAllowedError);
   });
@@ -1199,8 +1286,8 @@ describe('The Start run limit', () => {
     const triage = await startOn(conversations, project.id, 'triage');
     runner.runs[1].emit({ type: 'exit', error: 'died' });
 
-    await conversations.reply(first.id, 'More');
-    await conversations.reply(triage.id, 'Again');
+    await conversations.reply(first.id, 'More', 'user');
+    await conversations.reply(triage.id, 'Again', 'user');
   });
 });
 
@@ -1214,6 +1301,7 @@ describe('New Ticket Conversations', () => {
     });
 
     const conversation = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'Add a coupon field',
@@ -1230,7 +1318,7 @@ describe('New Ticket Conversations', () => {
     expect(brief).toContain('type Ticket');
 
     const resumed = restart();
-    await resumed.reply(conversation.id, 'Make it optional');
+    await resumed.reply(conversation.id, 'Make it optional', 'user');
     expect(runner.runs[1].options.systemPrompt).toContain('Cycle 7');
   });
 
@@ -1238,6 +1326,7 @@ describe('New Ticket Conversations', () => {
     const { conversations, runner, project } = setup();
 
     await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'Add an Epic',
@@ -1253,17 +1342,20 @@ describe('New Ticket Conversations', () => {
     const { conversations, tickets, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
     await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go',
     });
 
     await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'One',
     });
     await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'Two',
@@ -1272,6 +1364,7 @@ describe('New Ticket Conversations', () => {
     const other = tickets.createTicket({ projectId: project.id, title: 'B' });
     const refusal = await failure(
       conversations.start({
+        startedBy: 'user',
         ticketNumber: other.number,
         intent: 'start',
         prompt: 'Go',
@@ -1293,11 +1386,13 @@ describe('Open Conversations', () => {
       title: 'Fix the footer',
     });
     const first = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'triage',
       prompt: 'Triage it',
     });
     const second = await conversations.start({
+      startedBy: 'user',
       projectId: other.id,
       intent: 'new_ticket',
       prompt: 'Add coupons',
@@ -1342,11 +1437,13 @@ describe('Open Conversations', () => {
     });
     const { conversations, runner } = world;
     const about = await conversations.start({
+      startedBy: 'user',
       ticketNumber: ticket.number,
       intent: 'ask',
       prompt: 'On a Ticket',
     });
     const kept = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'new_ticket',
       prompt: 'On a Project',
@@ -1370,11 +1467,13 @@ describe('Open Conversations', () => {
   it('reopens a closed Conversation, keeping its place in the order opened', async () => {
     const { conversations, project } = setup();
     const first = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'One',
     });
     const second = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Two',
@@ -1396,6 +1495,7 @@ describe('Open Conversations', () => {
   it('reopens and resumes a closed Conversation when the User replies', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'ask',
       prompt: 'Hi',
@@ -1403,7 +1503,7 @@ describe('Open Conversations', () => {
     runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
     await conversations.close(id);
 
-    const replied = await conversations.reply(id, 'More');
+    const replied = await conversations.reply(id, 'More', 'user');
 
     expect(replied).toMatchObject({ hidden: false, state: 'running' });
     expect(runner.runs[1].options.resume).toBe('sess-1');
@@ -1419,6 +1519,7 @@ describe('Setup', () => {
     projectId: number,
   ) =>
     conversations.start({
+      startedBy: 'user',
       projectId,
       intent: 'setup',
       prompt: 'Check this repository.',
@@ -1443,6 +1544,26 @@ describe('Setup', () => {
     expect(brief).toContain('missing');
   });
 
+  it("reports the Project's run mode and a git-blocking hook as advisory items, without suggesting auto", async () => {
+    const { conversations, runner, project } = setup();
+    await startSetup(conversations, project.id);
+
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toMatch(/run mode is default/i);
+    expect(brief).toMatch(/hook[^.]*(blocks|block)[^.]*destructive git/i);
+    expect(brief).not.toMatch(/consider (turning on|using) auto/i);
+    expect(brief).not.toMatch(/recommend[^.]*auto/i);
+  });
+
+  it('says the run mode is auto in the Setup brief when the Project uses it', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { runMode: 'auto' });
+
+    await startSetup(conversations, project.id);
+
+    expect(runner.runs[0].options.systemPrompt).toMatch(/run mode is auto/i);
+  });
+
   it('lists the worktree item only with Parallel runs on', async () => {
     const { conversations, tickets, runner, project } = setup();
     const first = await startSetup(conversations, project.id);
@@ -1460,6 +1581,7 @@ describe('Setup', () => {
 
     const error = await failure(
       conversations.start({
+        startedBy: 'user',
         ticketNumber: ticket.number,
         intent: 'setup',
         prompt: 'Check.',
@@ -1501,11 +1623,109 @@ describe('Setup', () => {
     await startSetup(conversations, project.id);
 
     const start = await conversations.start({
+      startedBy: 'user',
       projectId: project.id,
       intent: 'start',
       prompt: 'Go.',
     });
 
     expect(start.intent).toBe('start');
+  });
+});
+
+describe('Started by', () => {
+  it('records who started a Conversation and lists it', async () => {
+    const { conversations, project } = setup();
+
+    const byUser = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hello',
+      startedBy: 'user',
+    });
+    const byAutopilot = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hello',
+      startedBy: 'autopilot',
+    });
+
+    expect(byUser.startedBy).toBe('user');
+    expect(byAutopilot.startedBy).toBe('autopilot');
+    expect(
+      conversations.list({ projectId: project.id }).map((c) => c.startedBy),
+    ).toEqual(expect.arrayContaining(['user', 'autopilot']));
+  });
+
+  it('records an Autopilot reply in the transcript with its own role, apart from the User', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hello',
+      startedBy: 'autopilot',
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await conversations.reply(id, 'Continue T42', 'autopilot');
+    await conversations.reply(id, 'Thanks', 'user');
+
+    expect(
+      conversations.transcript(id).filter((e) => e.role !== 'agent'),
+    ).toMatchObject([
+      { role: 'autopilot', text: 'Hello' },
+      { role: 'autopilot', text: 'Continue T42' },
+      { role: 'user', text: 'Thanks' },
+    ]);
+  });
+});
+
+describe('Autopilot spend', () => {
+  it("sums the cost of the Autopilot-started Conversations of the Cycle they were started for, resumes included, not hand-started ones or other Cycles'", async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const other = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const ticket = (title: string, cycleId: number) =>
+      tickets.createTicket({ projectId: project.id, title, cycleId });
+    const first = ticket('First', cycle.id);
+    const second = ticket('Second', cycle.id);
+    const elsewhere = ticket('Elsewhere', other.id);
+    const startFor = async (
+      ticketNumber: number,
+      startedBy: 'user' | 'autopilot',
+      costUsd: number,
+      cycleId?: number,
+    ) => {
+      const started = await conversations.start({
+        startedBy,
+        ticketNumber,
+        intent: 'start',
+        prompt: 'Go',
+        ...(cycleId === undefined ? {} : { cycleId }),
+      });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd });
+      return started;
+    };
+
+    const run = await startFor(first.number, 'autopilot', 0.5, cycle.id);
+    await startFor(second.number, 'autopilot', 0.25, cycle.id);
+    await startFor(second.number, 'user', 4);
+    await startFor(elsewhere.number, 'autopilot', 8, other.id);
+    // A resume adds to the same Conversation, so it stays with its Cycle.
+    await conversations.stop(run.id);
+    await conversations.reply(run.id, 'Go on', 'autopilot');
+    runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 1 });
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBeCloseTo(1.75);
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: other.id,
+      }),
+    ).toBeCloseTo(8);
   });
 });

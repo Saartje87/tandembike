@@ -1,0 +1,1 @@
+ALTER TABLE `conversations` ADD `autopilot_cycle_id` integer;
