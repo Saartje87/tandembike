@@ -274,6 +274,13 @@
       "when": 1794176279925,
       "tag": "0038_run_outcomes",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1794176524586,
+      "tag": "0039_conversation_worktree",
+      "breakpoints": true
     }
   ]
 }

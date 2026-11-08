@@ -11,6 +11,7 @@ import {
 import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
+import type { Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
   AgentRunner,
@@ -55,6 +56,8 @@ export type Conversation = {
   defaultCycleId: number | null;
   defaultEpicNumber: number | null;
   defaultType: TicketType | null;
+  /** The worktree Tandembike made for it; every run works there. Null: the main checkout. */
+  worktreePath: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -156,6 +159,8 @@ export type ConversationsDeps = {
   tickets: Tickets;
   changes?: ChangeChannel;
   runner: AgentRunner;
+  /** The only code that runs git: makes and inspects the worktrees of Start runs. */
+  worktrees: Worktrees;
   /** The Tandembike MCP server the runs connect to. */
   mcpUrl: string;
 };
@@ -212,6 +217,7 @@ export function createConversations({
   tickets,
   changes,
   runner,
+  worktrees,
   mcpUrl,
 }: ConversationsDeps) {
   /** The runs alive in this process, by Conversation id. */
@@ -234,7 +240,14 @@ export function createConversations({
 
   const update = (
     id: number,
-    values: Partial<Pick<Conversation, 'state' | 'sdkSessionId' | 'costUsd'>>,
+    values: Partial<
+      Pick<
+        Conversation,
+        'state' | 'sdkSessionId' | 'costUsd' | 'worktreePath'
+      > & {
+        worktreeBase: string | null;
+      }
+    >,
   ) => {
     db.update(conversations)
       .set({ ...values, updatedAt: new Date() })
@@ -520,6 +533,13 @@ export function createConversations({
     }
   };
 
+  const worktreeBaseOf = (id: number): string =>
+    db
+      .select({ base: conversations.worktreeBase })
+      .from(conversations)
+      .where(eq(conversations.id, id))
+      .get()?.base ?? 'the default branch';
+
   const setHidden = (id: number, hidden: boolean) => {
     db.update(conversations)
       .set({ hidden, updatedAt: new Date() })
@@ -572,7 +592,7 @@ export function createConversations({
     live.set(id, handle);
     try {
       handle.run = runner.start({
-        cwd: settings.repositoryPath,
+        cwd: conversation.worktreePath ?? settings.repositoryPath,
         mcpUrl,
         systemPrompt: runBrief({
           conversationId: id,
@@ -586,6 +606,13 @@ export function createConversations({
               ? null
               : tickets.getCycle(conversation.retroCycleId),
           parallelRuns: settings.parallelRuns,
+          worktree:
+            conversation.worktreePath === null
+              ? null
+              : {
+                  path: conversation.worktreePath,
+                  base: worktreeBaseOf(id),
+                },
           checkCommand: settings.checkCommand,
           runMode: settings.runMode,
           defaults: {
@@ -701,6 +728,32 @@ export function createConversations({
       .returning({ id: conversations.id })
       .get();
     append(created.id, input.startedBy, prompt);
+    if (input.intent === 'start' && settings.parallelRuns) {
+      try {
+        const made = await worktrees.create({
+          repositoryPath: settings.repositoryPath,
+          projectId,
+          conversationId: created.id,
+        });
+        update(created.id, {
+          worktreePath: made.path,
+          worktreeBase: made.base,
+        });
+      } catch (error) {
+        // No run starts in a broken checkout: the Conversation waits for the
+        // User in Action needed (ADR 0023).
+        update(created.id, { state: 'interrupted' });
+        append(
+          created.id,
+          'error',
+          `Tandembike could not create a worktree for this Conversation: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        announce(created.id);
+        return get(created.id);
+      }
+    }
     try {
       startRun(created.id, prompt, undefined, true, input.startedBy);
     } catch (error) {
@@ -980,6 +1033,15 @@ export function createConversations({
         throw new ValidationError({ text: 'Write a reply first.' });
       }
       const conversation = get(id);
+      if (
+        conversation.worktreePath !== null &&
+        !live.get(id)?.run &&
+        (await worktrees.state(conversation.worktreePath)) === 'missing'
+      ) {
+        throw new ValidationError({
+          text: `The worktree of this Conversation is gone (${conversation.worktreePath}), so a reply cannot resume in it.`,
+        });
+      }
       // A stopped or closed Conversation keeps its tab, and a reply resumes
       // it from its SDK session, reopening it when it was closed.
       if (conversation.hidden) {

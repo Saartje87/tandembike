@@ -388,6 +388,13 @@ export const conversations = sqliteTable(
     defaultEpicNumber: integer('default_epic_number'),
     /** New Ticket: what the title field creates, a default. */
     defaultType: text('default_type', { enum: ticketTypes }),
+    /**
+     * Start with Parallel runs: the worktree Tandembike made for it, the
+     * folder every run of it works in, and what it is detached at. Null
+     * for a Conversation that works in the main checkout.
+     */
+    worktreePath: text('worktree_path'),
+    worktreeBase: text('worktree_base'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },

@@ -197,6 +197,7 @@ const aConversation = (
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,
+  worktreePath: null,
   createdAt: at,
   updatedAt: at,
   ...values,

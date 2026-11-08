@@ -3,6 +3,7 @@ import { openDatabase } from '../db/connection';
 import type { ChangeChannel } from '../tickets/changes';
 import { createTickets } from '../tickets/tickets';
 import { createFakeRunner } from './fake-runner';
+import { createFakeWorktrees } from './fake-worktrees';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,12 +20,14 @@ export function createTestConversations(changes?: ChangeChannel) {
   const db = openDatabase(':memory:');
   const tickets = createTickets(db, 'user', changes);
   const runner = createFakeRunner();
+  const worktrees = createFakeWorktrees();
   const create = () =>
     createConversations({
       db,
       tickets,
       changes,
       runner,
+      worktrees,
       mcpUrl: 'http://localhost:4747/api/mcp',
     });
   const repositoryDir = mkdtempSync(join(tmpdir(), 'tandembike-repo-'));
@@ -33,6 +36,7 @@ export function createTestConversations(changes?: ChangeChannel) {
     restart: create,
     tickets,
     runner,
+    worktrees,
     repositoryDir,
   };
 }
