@@ -548,6 +548,24 @@ describe('cockpitOf', () => {
       expect(numbers(cockpit.yourWork)).toEqual([53]);
     });
 
+    it('labels such an Epic ready-for-agent in Intake whatever other state label it carries', () => {
+      const [row] = cockpitOf(
+        [
+          epic({
+            number: 52,
+            status: 'Todo',
+            claim: null,
+            labels: ['needs-info', 'ready-for-agent'],
+            children: [],
+          }),
+        ],
+        activity(),
+      ).needsYou.intake;
+
+      // As laneOf reads it: ready-for-agent decides first.
+      expect(row).toMatchObject({ number: 52, triageLabel: 'ready-for-agent' });
+    });
+
     it("sums the Epic's own cost and its children's, and carries its live Conversation", () => {
       const live = liveConversation({ line: 'Editing cockpit.tsx' });
       const [row] = cockpitOf(

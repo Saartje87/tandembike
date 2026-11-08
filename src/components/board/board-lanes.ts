@@ -57,7 +57,7 @@ function sectionOf(
  * Whether `ticket` is an Epic without children: none unarchived, on any
  * Board. It cannot run until someone splits it (ADR 0027).
  */
-export function isEmptyEpic(ticket: Pick<Ticket, 'type' | 'children'>) {
+function isEmptyEpic(ticket: Pick<Ticket, 'type' | 'children'>) {
   return (
     ticket.type === 'Epic' && ticket.children.every(({ archived }) => archived)
   );

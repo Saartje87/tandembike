@@ -6,7 +6,7 @@ import type {
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { PaletteColor } from '../../tickets/palette';
 import type { Ticket } from '../../tickets/tickets';
-import { isTriageStateLabel } from '../../tickets/triage-labels';
+import { isTriageStateLabel, readyForAgent } from '../../tickets/triage-labels';
 import { isFiltering, ticketMatches } from '../board/board-filter';
 import {
   type BoardLane,
@@ -194,14 +194,20 @@ const needRowOf = (
   triageLabel: null,
 });
 
-/** An Intake Ticket as a Needs you row: waiting since it was filed. */
+/**
+ * An Intake Ticket as a Needs you row: waiting since it was filed. Its triage
+ * label is `ready-for-agent` whenever it carries it, as the Lane derivation
+ * reads it: only an Epic without children is in Intake with it (ADR 0027).
+ */
 const intakeRowOf = (ticket: Ticket): NeedRow => ({
   ...rowOf(ticket),
   kind: 'intake',
   live: undefined,
   since: ticket.createdAt,
   pullRequest: null,
-  triageLabel: ticket.labels.find(isTriageStateLabel) ?? null,
+  triageLabel: ticket.labels.includes(readyForAgent)
+    ? readyForAgent
+    : (ticket.labels.find(isTriageStateLabel) ?? null),
 });
 
 const isShown = (ticket: Ticket) => !ticket.archived && ticket.type !== 'Epic';
