@@ -36,6 +36,7 @@ export type AgentSettingsFormProps = {
 type AgentSettingsValues = {
   repositoryPath: string;
   checkCommand: string;
+  prepareCommand: string;
   parallelRuns: boolean;
   maxConcurrentRuns: number;
   agentMode: boolean;
@@ -49,6 +50,7 @@ type AgentSettingsValues = {
 const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   repositoryPath: 'repositoryPath',
   checkCommand: 'checkCommand',
+  prepareCommand: 'prepareCommand',
   maxConcurrentRuns: 'maxConcurrentRuns',
   agentMode: 'agentMode',
   runMode: 'runMode',
@@ -98,6 +100,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     defaultValues: {
       repositoryPath: settings.repositoryPath ?? '',
       checkCommand: settings.checkCommand ?? '',
+      prepareCommand: settings.prepareCommand ?? '',
       parallelRuns: settings.parallelRuns,
       maxConcurrentRuns: settings.maxConcurrentRuns,
       agentMode: settings.agentMode,
@@ -113,6 +116,9 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const hasPath = settings.repositoryPath !== null;
   const pathError = errors.repositoryPath?.message;
   const checkError = errors.checkCommand?.message;
+  const prepareError = errors.prepareCommand?.message;
+  const prepareId = useId();
+  const prepareErrorId = useId();
   const capError = errors.maxConcurrentRuns?.message;
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
@@ -148,6 +154,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       repositoryPath: values.repositoryPath,
       checkCommand:
         values.checkCommand.trim() === '' ? null : values.checkCommand,
+      prepareCommand:
+        values.prepareCommand.trim() === '' ? null : values.prepareCommand,
       parallelRuns: values.parallelRuns,
       maxConcurrentRuns: Number(values.maxConcurrentRuns),
       agentMode: values.agentMode,
@@ -230,6 +238,22 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               the repository's own instructions.
             </Text>
           </CheckCommandField>
+          <Stack gap={1}>
+            <Label htmlFor={prepareId}>Prepare command</Label>
+            <TextInput
+              {...register('prepareCommand')}
+              id={prepareId}
+              placeholder="npm ci"
+              autoComplete="off"
+              aria-invalid={prepareError ? true : undefined}
+              aria-describedby={prepareError ? prepareErrorId : undefined}
+            />
+            <Text tag="p" fontSize="small" color="muted">
+              Run in each new worktree before its run starts, so the run finds
+              its dependencies ready. A failing command starts no run.
+            </Text>
+            <FieldError id={prepareErrorId} reason={prepareError} />
+          </Stack>
           {hasPath && (
             <>
               <Inline gap={2} alignY="center">

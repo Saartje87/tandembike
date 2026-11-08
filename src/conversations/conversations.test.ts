@@ -322,6 +322,65 @@ describe('Starting a Conversation', () => {
     expect(entry?.text).toContain('fatal: invalid reference: origin/main');
   });
 
+  it('runs the Prepare command in the new worktree before the run starts', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      parallelRuns: true,
+      prepareCommand: 'npm ci',
+    });
+
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(worktrees.prepared).toEqual([
+      { path: conversation.worktreePath, command: 'npm ci' },
+    ]);
+    expect(runner.runs).toHaveLength(1);
+    expect(conversation.state).toBe('running');
+  });
+
+  it('runs no Prepare command when none is set', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(worktrees.prepared).toEqual([]);
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('starts no run and leaves the Conversation interrupted when the Prepare command fails', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      parallelRuns: true,
+      prepareCommand: 'npm ci',
+    });
+    worktrees.prepareResult = { exitCode: 1, output: 'npm ERR! no lockfile' };
+
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(conversation.state).toBe('interrupted');
+    expect(runner.runs).toHaveLength(0);
+    const entry = conversations.transcript(conversation.id).at(-1);
+    expect(entry).toMatchObject({ role: 'error' });
+    expect(entry?.text).toContain('npm ERR! no lockfile');
+    expect(entry?.text).toContain('exit code 1');
+  });
+
   it('is refused when the Project has no repository path', async () => {
     const { conversations, tickets, runner } = setup();
     const bare = tickets.createProject({ name: 'Bare' });

@@ -739,6 +739,23 @@ export function createConversations({
           worktreePath: made.path,
           worktreeBase: made.base,
         });
+        if (settings.prepareCommand !== null) {
+          const prepared = await worktrees.runPrepare(
+            made.path,
+            settings.prepareCommand,
+          );
+          if (prepared.exitCode !== 0) {
+            // No run starts in a worktree its dependencies are missing from.
+            update(created.id, { state: 'interrupted' });
+            append(
+              created.id,
+              'error',
+              `The Prepare command \`${settings.prepareCommand}\` failed with exit code ${prepared.exitCode}.\n\n${prepared.output}`.trim(),
+            );
+            announce(created.id);
+            return get(created.id);
+          }
+        }
       } catch (error) {
         // No run starts in a broken checkout: the Conversation waits for the
         // User in Action needed (ADR 0023).
