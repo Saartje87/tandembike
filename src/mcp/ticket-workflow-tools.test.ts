@@ -172,8 +172,6 @@ describe('workflow Ticket tools', () => {
     });
     tickets.addBlocker({ blocker: a.number, blocked: b.number });
 
-    const viaOld = async (name: string, args: Record<string, unknown>) =>
-      resultText(await client.callTool({ name, arguments: args }));
     const loop = await client.callTool({
       name: 'update_ticket',
       arguments: { number: a.number, addBlockers: [b.number] },
@@ -185,7 +183,7 @@ describe('workflow Ticket tools', () => {
 
     expect(loop.isError).toBe(true);
     expect(resultText(loop)).toBe(
-      await viaOld('add_blocker', { blocker: b.number, blocked: a.number }),
+      'T2 cannot block T1, because T1 already blocks T2: T1 → T2.',
     );
     expect(epicStatus.isError).toBe(true);
     expect(resultText(epicStatus)).toMatch(/follows its child Tickets/);
@@ -213,7 +211,7 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 
-  it('attach and read_attachment behave as add_attachment and get_attachment', async () => {
+  it('attach and read_attachment add and read an Attachment', async () => {
     const { tickets, project, client } = await setup();
     const { number } = tickets.createTicket({
       projectId: project.id,

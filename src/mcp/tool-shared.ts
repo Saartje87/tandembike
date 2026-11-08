@@ -43,7 +43,7 @@ export const projectId = z
   .number()
   .int()
   .positive()
-  .describe('The id of a Project, as returned by list_projects.');
+  .describe('The id of a Project, as returned by get_project.');
 
 export const ticketNumber = z
   .number()
@@ -61,7 +61,7 @@ export const addLabels = z
   .array(label)
   .optional()
   .describe(
-    'Labels to add, after removeLabels are removed. Call list_labels to reuse existing ones.',
+    'Labels to add, after removeLabels are removed. Call get_project to reuse the labels in use.',
   );
 
 export const removeLabels = z
@@ -95,9 +95,7 @@ export const commentId = z
   .number()
   .int()
   .positive()
-  .describe(
-    'The id of a comment, as returned by list_comments or add_comment.',
-  );
+  .describe('The id of a comment, as returned by get_ticket.');
 
 export const commentBody = z
   .string()
@@ -109,9 +107,7 @@ export const attachmentId = z
   .number()
   .int()
   .positive()
-  .describe(
-    'The id of an Attachment, as returned by get_ticket or add_attachment.',
-  );
+  .describe('The id of an Attachment, as returned by get_ticket or attach.');
 
 export const base64Content = /^[A-Za-z0-9+/]*={0,2}$/;
 
@@ -196,7 +192,7 @@ export const cycleId = z
   .number()
   .int()
   .positive()
-  .describe('The id of a Cycle, as returned by list_cycles or create_cycle.');
+  .describe('The id of a Cycle, as returned by get_project or create_cycle.');
 
 export const batchTicketNumbers = z
   .array(ticketNumber)
@@ -249,7 +245,7 @@ export function returnsSummary({
   return `Returns ${subject}'s summary: ${summaryFields}${extra ? `, plus ${extra}` : ''}. detail: "full" returns the whole Ticket instead, as get_ticket does.`;
 }
 
-/** What the text fields of a `create_tickets` Ticket say about `{{T:n}}`. */
+/** What the text fields of a `file_tickets` Ticket say about `{{T:n}}`. */
 export const placeholderNote =
   '{{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.';
 
@@ -260,7 +256,7 @@ export function withPlaceholderNote<Field extends z.ZodType>(
   return field.describe(`${field.description} ${placeholderNote}`);
 }
 
-/** The fields of a new Ticket that `create_ticket` and `create_tickets` share. */
+/** The fields of a new Ticket that `file_tickets` share. */
 export const newTicketFields = {
   title: z.string().describe('A one-line title, at most 200 characters.'),
   description: z
@@ -273,7 +269,7 @@ export const newTicketFields = {
   labels: z
     .array(label)
     .optional()
-    .describe('Optional labels. Call list_labels to reuse existing ones.'),
+    .describe('Optional labels. Call get_project to reuse the labels in use.'),
   externalReferences: z
     .array(externalReference)
     .optional()
@@ -384,43 +380,12 @@ export function respondBatch(
 }
 
 /**
- * How attach_to_epic and detach_from_epic describe their answer, the Epic
- * each Ticket is in afterwards being `epic`.
- */
-export function returnsEpicMembers(epic: string) {
-  return `Returns { tickets }: each Ticket given, in order, as its summary (${summaryFields}) plus epicNumber, now ${epic}. detail: "full" returns whole Tickets instead, as get_ticket does.`;
-}
-
-/**
- * Runs a Tickets module call that changes which Epic Tickets are in and
- * answers with `{ tickets }`: whole when `detail` is "full", otherwise each
- * one's summary plus its `epicNumber`.
- */
-export function respondEpicMembers(
-  detail: TicketDetail | undefined,
-  call: () => Ticket[],
-): CallToolResult {
-  return respond(() => {
-    const changed = call();
-    return {
-      tickets:
-        detail === 'full'
-          ? changed
-          : changed.map((ticket) => ({
-              ...ticketSummary(ticket),
-              epicNumber: ticket.epic?.number ?? null,
-            })),
-    };
-  });
-}
-
-/**
- * `message`, pointing an Agent to move_tickets when it is the refusal to plan
+ * `message`, pointing an Agent to update_ticket's cycleId when it is the refusal to plan
  * a Ticket that is in another Cycle already.
  */
 export function withMoveHint(message: string): string {
   return message.endsWith(removeFromCycleFirst)
-    ? `${message.slice(0, -removeFromCycleFirst.length)} Move it with move_tickets, or unplan it from that Cycle first.`
+    ? `${message.slice(0, -removeFromCycleFirst.length)} Move it with update_ticket cycleId, or unplan it from that Cycle first.`
     : message;
 }
 
@@ -440,10 +405,9 @@ export type StrictInput<Shape extends z.ZodRawShape> = z.ZodObject<
  */
 export const alwaysLoadedTools = new Set([
   'get_ticket',
-  'list_comments',
-  'add_comment',
+  'add_note',
   'update_ticket',
-  'claim_ticket',
+  'start_work',
 ]);
 
 export const hasProject = ({

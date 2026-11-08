@@ -327,7 +327,7 @@ describe('Referring to a Ticket in the batch by position', () => {
     );
   });
 
-  it('leaves create_ticket text as given', () => {
+  it('leaves file_tickets text as given', () => {
     const { tickets, project } = setUp();
 
     const ticket = tickets.createTicket({

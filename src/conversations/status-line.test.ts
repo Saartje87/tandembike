@@ -90,16 +90,12 @@ describe('statusLine', () => {
     it.each([
       ['get_ticket', { number: 42 }, 'Reading T42'],
       ['update_ticket', { number: 42, status: 'Done' }, 'Updating T42'],
-      ['add_comment', { number: 42, body: 'Hi' }, 'Commenting on T42'],
-      ['claim_ticket', { number: 42, agentRunId: 'x' }, 'Claiming T42'],
-      ['create_ticket', { title: 'A' }, 'Creating a Ticket'],
-      ['list_tickets', {}, 'Listing Tickets'],
-      [
-        'set_acceptance_criteria_checked',
-        { number: 3 },
-        'Checking criteria on T3',
-      ],
-      ['archive_cycle', { cycleId: 2 }, 'Archiving a Cycle'],
+      ['add_note', { number: 42, body: 'Hi' }, 'Commenting on T42'],
+      ['start_work', { number: 42 }, 'Starting T42'],
+      ['file_tickets', { tickets: [] }, 'Creating Tickets'],
+      ['find_tickets', {}, 'Listing Tickets'],
+      ['check_criterion', { number: 3 }, 'Checking criteria of T3'],
+      ['create_cycle', { title: 'A' }, 'Creating a Cycle'],
     ])('maps the Tandembike tool %s %j to "%s"', (name, input, line) => {
       expect(statusLine(tool(`mcp__tandembike__${name}`, input))).toBe(line);
     });

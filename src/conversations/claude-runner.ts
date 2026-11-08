@@ -12,9 +12,9 @@ const maxToolTextLength = 300;
 /** The tool the Agent asks the User questions with; the chat shows it as a form. */
 const askTool = 'AskUserQuestion';
 
-const createToolName = /(^|__)(create_tickets?|file_tickets)$/;
+const createToolName = /(^|__)file_tickets$/;
 
-/** The Ticket numbers in the JSON result of file_tickets (or the old create_ticket and create_tickets). */
+/** The Ticket numbers in the JSON result of file_tickets. */
 function createdNumbers(content: unknown): number[] {
   const text = Array.isArray(content)
     ? content.map((part) => (part?.type === 'text' ? part.text : '')).join('')
@@ -35,7 +35,7 @@ function createdNumbers(content: unknown): number[] {
 
 /**
  * What a run reports for one SDK message; unknown kinds report nothing.
- * `createCalls` holds the ids of create_ticket(s) calls still awaiting their
+ * `createCalls` holds the ids of file_tickets calls still awaiting their
  * result, so only Tickets the Agent actually created are reported.
  */
 export function eventsOf(

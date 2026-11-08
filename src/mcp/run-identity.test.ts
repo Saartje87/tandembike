@@ -16,21 +16,21 @@ const setup = () => {
 };
 
 describe('Run identity through X-Tandembike-Run', () => {
-  it('claims and releases under the header run ID without agentRunId', async () => {
+  it('starts and abandons work under the header run ID without agentRunId', async () => {
     const { tickets, ticket } = setup();
     const client = await connectMcpClient(tickets, { runId: 'conv-7' });
 
     const claimed = await client.callTool({
-      name: 'claim_ticket',
+      name: 'start_work',
       arguments: { number: ticket.number },
     });
     expect(resultJson(claimed)).toMatchObject({
-      claim: { agentRunId: 'conv-7' },
+      ticket: { claim: { agentRunId: 'conv-7' } },
     });
 
     const released = await client.callTool({
-      name: 'release_ticket_claim',
-      arguments: { number: ticket.number },
+      name: 'abandon_work',
+      arguments: { number: ticket.number, reason: 'Not now.' },
     });
     expect(resultJson(released)).toMatchObject({ claim: null });
     await client.close();
@@ -41,24 +41,27 @@ describe('Run identity through X-Tandembike-Run', () => {
     const client = await connectMcpClient(tickets, { runId: 'conv-7' });
 
     const claimed = await client.callTool({
-      name: 'claim_ticket',
+      name: 'start_work',
       arguments: { number: ticket.number, agentRunId: 'other' },
     });
 
     expect(resultJson(claimed)).toMatchObject({
-      claim: { agentRunId: 'other' },
+      ticket: { claim: { agentRunId: 'other' } },
     });
     await client.close();
   });
 
-  it('refuses a claim with neither the header nor agentRunId', async () => {
+  it('refuses start_work and abandon_work with neither the header nor agentRunId', async () => {
     const { tickets, ticket } = setup();
     const client = await connectMcpClient(tickets);
 
-    for (const name of ['claim_ticket', 'release_ticket_claim']) {
+    for (const [name, extra] of [
+      ['start_work', {}],
+      ['abandon_work', { reason: 'Not now.' }],
+    ] as const) {
       const result = await client.callTool({
         name,
-        arguments: { number: ticket.number },
+        arguments: { number: ticket.number, ...extra },
       });
       expect(result.isError).toBe(true);
       expect(resultText(result)).toBe(

@@ -681,7 +681,7 @@ export type TicketSummary = Pick<
   Partial<Pick<Ticket, 'projectId'>>;
 
 /**
- * A `TicketSummary` as `list_tickets` lists it: always with its type and
+ * A `TicketSummary` as `find_tickets` lists it: always with its type and
  * updated time, and with `epicNumber`, the Epic it is a child of, or `null`.
  */
 export type ListedTicketSummary = TicketSummary &
