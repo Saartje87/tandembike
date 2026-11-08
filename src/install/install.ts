@@ -15,27 +15,36 @@ const databaseFiles = [
 ];
 
 /**
- * The folder holding the database: `TANDEMBIKE_DATA_DIR` when set (the
- * `tandembike` command sets it to `~/.tandembike`), else `data` in the
- * checkout, which `npm run dev`, `npm start` and worktree servers keep.
- */
-export function dataFolder(
-  env: Record<string, string | undefined>,
-  checkout: string,
-): string {
-  return env.TANDEMBIKE_DATA_DIR || join(checkout, 'data');
-}
-
-/**
  * The files of the checkout's database to copy into a new data folder: none
  * unless the target has no database yet and the source has one, then the
  * database with any -wal and -shm files that exist.
  */
 export function planFirstRunCopy(source: string, target: string): string[] {
   if (resolve(source) === resolve(target)) return [];
-  if (existsSync(join(target, databaseFile))) return [];
   if (!existsSync(join(source, databaseFile))) return [];
+  if (databaseFiles.some((name) => existsSync(join(target, name)))) return [];
   return databaseFiles.filter((name) => existsSync(join(source, name)));
+}
+
+/**
+ * What to tell the User when the copy is skipped because the data folder has
+ * only some of the database files (a -wal or -shm without the database): a
+ * partial copy or an overwrite would corrupt it. `undefined` when the copy
+ * may go ahead or the data folder simply has its database already.
+ */
+export function firstRunCopyBlocker(
+  source: string,
+  target: string,
+): string | undefined {
+  if (resolve(source) === resolve(target)) return undefined;
+  if (!existsSync(join(source, databaseFile))) return undefined;
+  if (existsSync(join(target, databaseFile))) return undefined;
+  const present = databaseFiles.filter((name) =>
+    existsSync(join(target, name)),
+  );
+  return present.length === 0
+    ? undefined
+    : `Not copying your existing database: ${present.join(', ')} already in ${target}.`;
 }
 
 /** Copies what `planFirstRunCopy` plans, never moving or overwriting. */
@@ -148,4 +157,19 @@ export function planMcpOffer(state: {
     steps,
     text: mcpCommandText(steps),
   };
+}
+
+/**
+ * How to run the offer: `ask` prompts, `print` only shows the command. The
+ * offer counts as made once it was prompted, skipped, or printed because
+ * `claude` is missing; a start with no terminal shows no prompt, so the next
+ * interactive start asks.
+ */
+export function decideMcpOffer(
+  plan: McpOfferPlan,
+  isTTY: boolean,
+): { mode: 'ask' | 'print' | 'skip'; markMade: boolean } {
+  if (plan.action === 'skip') return { mode: 'skip', markMade: true };
+  if (plan.action === 'ask' && isTTY) return { mode: 'ask', markMade: true };
+  return { mode: 'print', markMade: plan.action !== 'ask' };
 }

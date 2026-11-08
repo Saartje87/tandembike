@@ -148,8 +148,8 @@ import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
-import { realpathSync, statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 
 export type Project = {
   id: number;
@@ -303,22 +303,13 @@ function repositoryPathProblem(path: string): string | undefined {
   return 'This path is not a directory.';
 }
 
-/** `path` with symlinks and trailing slashes resolved, as far as it exists. */
-function canonicalPath(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
-  }
-}
-
 /** The name of a Project other than `exceptId` that uses `path`, if any. */
 function repositoryPathHolder(
   db: DatabaseConnection,
   path: string,
   exceptId?: number,
 ): string | undefined {
-  const wanted = canonicalPath(path);
+  const wanted = canonicalFolder(path);
   return db
     .select({
       id: projects.id,
@@ -331,7 +322,7 @@ function repositoryPathHolder(
       (project) =>
         project.id !== exceptId &&
         project.repositoryPath !== null &&
-        canonicalPath(project.repositoryPath) === wanted,
+        canonicalFolder(project.repositoryPath) === wanted,
     )?.name;
 }
 
@@ -4447,6 +4438,7 @@ function projectIdOfFolder(
       id: projects.id,
       name: projects.name,
       repositoryPath: projects.repositoryPath,
+      archived: projects.archived,
     })
     .from(projects)
     .orderBy(asc(projects.name))
@@ -4474,7 +4466,9 @@ function projectIdOfFolder(
     if (!refuseUnknown) {
       return undefined;
     }
-    const names = candidates.map(({ name }) => `"${name}"`);
+    const names = candidates
+      .filter(({ archived }) => !archived)
+      .map(({ name }) => `"${name}"`);
     throw new ValidationError({
       cwd: `No Project has a repository containing ${folder}. ${
         names.length === 0

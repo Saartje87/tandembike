@@ -21,6 +21,7 @@ import {
 import type { Conversation } from '../../conversations/conversations';
 import type { AgentRunMode } from '../../tickets/agent-run-mode';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
+import { CheckCommandField } from '../check-command-field/check-command-field';
 import { FieldError } from '../field-error/field-error';
 import { ProjectSetup, type SetupOffer } from '../project-setup/project-setup';
 
@@ -76,8 +77,6 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const parallelId = useId();
   const modeId = useId();
   const pathErrorId = useId();
-  const checkId = useId();
-  const checkErrorId = useId();
   const capId = useId();
   const capErrorId = useId();
   const modeReasonId = useId();
@@ -94,6 +93,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     register,
     setError,
     setValue,
+    watch,
   } = useForm<AgentSettingsValues>({
     defaultValues: {
       repositoryPath: settings.repositoryPath ?? '',
@@ -217,44 +217,19 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               </Button>
             </div>
           </Stack>
-          <Stack gap={1}>
-            <Label htmlFor={checkId}>Check command</Label>
-            <TextInput
-              {...register('checkCommand')}
-              id={checkId}
-              placeholder="npm run check"
-              autoComplete="off"
-              aria-invalid={checkError ? true : undefined}
-              aria-describedby={checkError ? checkErrorId : undefined}
-            />
+          <CheckCommandField
+            registration={register('checkCommand')}
+            value={watch('checkCommand')}
+            error={checkError}
+            candidates={candidates}
+            onUse={(candidate) => setValue('checkCommand', candidate)}
+          >
             <Text tag="p" fontSize="small" color="muted">
               The command that defines green for the repository. Start runs must
               see it pass before they open a pull request; leave empty to follow
               the repository's own instructions.
             </Text>
-            {candidates !== null && (
-              <Inline gap={1} alignY="center">
-                {candidates.length === 0 ? (
-                  <Text tag="p" fontSize="small" color="muted">
-                    No Check command candidates found.
-                  </Text>
-                ) : (
-                  candidates.map((candidate) => (
-                    <Button
-                      key={candidate}
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      onClick={() => setValue('checkCommand', candidate)}
-                    >
-                      Use {candidate}
-                    </Button>
-                  ))
-                )}
-              </Inline>
-            )}
-            <FieldError id={checkErrorId} reason={checkError} />
-          </Stack>
+          </CheckCommandField>
           {hasPath && (
             <>
               <Inline gap={2} alignY="center">

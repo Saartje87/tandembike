@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   copyFirstRunDatabase,
-  dataFolder,
+  decideMcpOffer,
+  firstRunCopyBlocker,
   markOffersMade,
   mcpCommandText,
   mcpRegistration,
@@ -23,24 +24,6 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-describe('dataFolder', () => {
-  it('is the checkout data folder when nothing is set', () => {
-    expect(dataFolder({}, '/code/tandembike')).toBe('/code/tandembike/data');
-  });
-
-  it('is TANDEMBIKE_DATA_DIR when set', () => {
-    expect(
-      dataFolder({ TANDEMBIKE_DATA_DIR: '/home/me/.tandembike' }, '/code/t'),
-    ).toBe('/home/me/.tandembike');
-  });
-
-  it('ignores an empty TANDEMBIKE_DATA_DIR', () => {
-    expect(dataFolder({ TANDEMBIKE_DATA_DIR: '' }, '/code/t')).toBe(
-      '/code/t/data',
-    );
-  });
-});
 
 describe('first-run copy', () => {
   let root: string;
@@ -113,6 +96,83 @@ describe('first-run copy', () => {
 
     expect(copyFirstRunDatabase(source, target)).toEqual([]);
     expect(readFileSync(join(target, 'ticket.db'), 'utf8')).toBe('mine');
+  });
+});
+
+describe('first-run copy blocker', () => {
+  let root: string;
+  let source: string;
+  let target: string;
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'tandembike-blocker-'));
+    source = join(root, 'data');
+    target = join(root, 'home');
+    mkdirSync(source, { recursive: true });
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(source, 'ticket.db'), 'old');
+    writeFileSync(join(source, 'ticket.db-wal'), 'wal');
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('has no blocker when the target is empty', () => {
+    expect(firstRunCopyBlocker(source, target)).toBeUndefined();
+  });
+
+  it('names an existing -wal file and copies nothing, not even the database', () => {
+    writeFileSync(join(target, 'ticket.db-wal'), 'mine');
+
+    expect(firstRunCopyBlocker(source, target)).toContain('ticket.db-wal');
+    expect(copyFirstRunDatabase(source, target)).toEqual([]);
+    expect(existsSync(join(target, 'ticket.db'))).toBe(false);
+    expect(readFileSync(join(target, 'ticket.db-wal'), 'utf8')).toBe('mine');
+  });
+
+  it('stays quiet when the data folder has its database, and copies nothing', () => {
+    writeFileSync(join(target, 'ticket.db'), 'mine');
+
+    expect(firstRunCopyBlocker(source, target)).toBeUndefined();
+    expect(copyFirstRunDatabase(source, target)).toEqual([]);
+    expect(existsSync(join(target, 'ticket.db-wal'))).toBe(false);
+  });
+
+  it('has no blocker when the checkout has no database', () => {
+    rmSync(join(source, 'ticket.db'));
+    writeFileSync(join(target, 'ticket.db'), 'mine');
+
+    expect(firstRunCopyBlocker(source, target)).toBeUndefined();
+  });
+});
+
+describe('decideMcpOffer', () => {
+  const ask = { action: 'ask' as const, steps: [], text: 'x' };
+
+  it('asks and marks the offer made on a terminal', () => {
+    expect(decideMcpOffer(ask, true)).toEqual({ mode: 'ask', markMade: true });
+  });
+
+  it('prints without marking the offer made when there is no terminal', () => {
+    expect(decideMcpOffer(ask, false)).toEqual({
+      mode: 'print',
+      markMade: false,
+    });
+  });
+
+  it('prints and marks when claude is not on the path', () => {
+    expect(decideMcpOffer({ ...ask, action: 'print' }, false)).toEqual({
+      mode: 'print',
+      markMade: true,
+    });
+  });
+
+  it('skips and marks when already registered', () => {
+    expect(decideMcpOffer({ ...ask, action: 'skip' }, true)).toEqual({
+      mode: 'skip',
+      markMade: true,
+    });
   });
 });
 

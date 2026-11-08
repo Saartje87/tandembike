@@ -1,5 +1,7 @@
 import {
   copyFirstRunDatabase,
+  decideMcpOffer,
+  firstRunCopyBlocker,
   markOffersMade,
   mcpRegistration,
   offersMade,
@@ -21,6 +23,8 @@ import { createInterface } from 'node:readline/promises';
 const checkout = process.env.TANDEMBIKE_PACKAGE_DIR ?? process.cwd();
 const home = process.env.TANDEMBIKE_DATA_DIR || join(homedir(), '.tandembike');
 
+const blocker = firstRunCopyBlocker(join(checkout, 'data'), home);
+if (blocker) console.log(blocker);
 const copied = copyFirstRunDatabase(join(checkout, 'data'), home);
 if (copied.length > 0) {
   console.log(
@@ -38,21 +42,23 @@ function readClaudeJson(): unknown {
   }
 }
 
-async function offerMcp(): Promise<void> {
+/** Runs the offer; returns whether it counts as made. */
+async function offerMcp(): Promise<boolean> {
   const claudeOnPath = spawnSync('claude', ['--version']).status === 0;
   const plan = planMcpOffer({
     claudeOnPath,
     registration: mcpRegistration(readClaudeJson()),
   });
-  if (plan.action === 'skip') {
+  const decision = decideMcpOffer(plan, Boolean(process.stdin.isTTY));
+  if (decision.mode === 'skip') {
     console.log('Tandembike is already registered in Claude Code.');
-    return;
+    return decision.markMade;
   }
   const intro =
     'To reach Tandembike from Claude Code in every repository, register its MCP server at user scope:';
-  if (plan.action === 'print' || !process.stdin.isTTY) {
+  if (decision.mode === 'print') {
     console.log(`${intro}\n\n${plan.text}\n`);
-    return;
+    return decision.markMade;
   }
   console.log(`${intro}\n\n${plan.text}\n`);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -60,25 +66,24 @@ async function offerMcp(): Promise<void> {
   rl.close();
   if (!/^y(es)?$/i.test(answer.trim())) {
     console.log('Skipped. Run `tandembike mcp` to be asked again.');
-    return;
+    return true;
   }
   for (const step of plan.steps) {
     if (spawnSync('claude', step, { stdio: 'inherit' }).status !== 0) {
       console.log(`That failed. Run it yourself later:\n\n${plan.text}`);
-      return;
+      return true;
     }
   }
+  return true;
 }
 
 if (process.argv[2] === 'mcp') {
-  await offerMcp();
-  markOffersMade(home, 'mcp');
+  if (await offerMcp()) markOffersMade(home, 'mcp');
   process.exit(0);
 }
 
 if (shouldOfferMcp(offersMade(home), false)) {
-  await offerMcp();
-  markOffersMade(home, 'mcp');
+  if (await offerMcp()) markOffersMade(home, 'mcp');
 }
 
 const server = spawn(

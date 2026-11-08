@@ -231,5 +231,23 @@ describe('NewProjectForm', () => {
       ).toHaveValue('npm run check');
       expect(router.push).not.toHaveBeenCalled();
     });
+
+    it('shows a refused Check command on its field, keeping the draft', async () => {
+      vi.mocked(createProject).mockResolvedValue({
+        ok: false,
+        error: 'x',
+        fieldErrors: { checkCommand: 'The Check command is too long.' },
+      });
+      await detect();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Create Project' }),
+      );
+
+      expect(
+        screen.getByRole('textbox', { name: 'Check command' }),
+      ).toHaveAccessibleDescription('The Check command is too long.');
+      expect(router.push).not.toHaveBeenCalled();
+    });
   });
 });

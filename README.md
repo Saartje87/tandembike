@@ -66,9 +66,11 @@ port (`http://localhost:<port>/api/mcp`).
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:4747/api/mcp`. This repository's `.mcp.json` registers it
-for Claude Code in this checkout; to reach it from every repository, register
-it once at user level as described in the next section.
+`http://localhost:4747/api/mcp`. The `tandembike` command offers to register it
+for Claude Code at user level on its first start, so every repository reaches
+it; to register it yourself, or for other clients, see the next section. This
+repository's own `.mcp.json` registers it only for development in this
+checkout.
 
 Keep `npm run dev` (or `npm run start`) running while the Agent works. The
 server's instructions explain the tracker to Agents: moving a Ticket to In

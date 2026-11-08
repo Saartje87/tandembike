@@ -3886,6 +3886,41 @@ describe("Project of the caller's folder", () => {
     await client.close();
   });
 
+  it('refuses a write from an archived Project folder as it does naming the Project', async () => {
+    const { tickets, root, website } = setup();
+    tickets.archiveProject(website.id);
+    const client = await connectMcpClient(tickets, { cwd: root });
+    const byName = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Named', projectName: 'Website' },
+    });
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'From the folder' },
+    });
+
+    expect(byName.isError).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(resultText(byName));
+    await client.close();
+  });
+
+  it('names only unarchived Projects when the folder belongs to none', async () => {
+    const { tickets } = setup();
+    tickets.archiveProject(tickets.createProject({ name: 'Old site' }).id);
+    const client = await connectMcpClient(tickets, { cwd: folder() });
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Lost' },
+    });
+
+    expect(resultText(result)).toMatch(/one of "Blog", "Website"\./);
+    expect(resultText(result)).not.toMatch(/Old site/);
+    await client.close();
+  });
+
   it('asks for a Project when the request carries no folder', async () => {
     const { tickets } = setup();
     const client = await connectMcpClient(tickets);

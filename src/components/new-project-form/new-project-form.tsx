@@ -4,7 +4,6 @@ import {
   Alert,
   Button,
   Checkbox,
-  Inline,
   Label,
   Stack,
   Text,
@@ -20,6 +19,7 @@ import {
   type DetectedRepository,
   detectProjectRepository,
 } from '../../app/projects/actions';
+import { CheckCommandField } from '../check-command-field/check-command-field';
 import { FieldError } from '../field-error/field-error';
 
 export type NewProjectFormProps = {
@@ -50,7 +50,6 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
   const errorId = useId();
   const folderId = useId();
   const folderErrorId = useId();
-  const checkId = useId();
   const [detected, setDetected] = useState<DetectedRepository | null>(null);
   const {
     formState: { errors, isSubmitting },
@@ -71,6 +70,7 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
   const error = errors.root?.server?.message;
   const folderError = errors.repositoryPath?.message;
   const folder = watch('repositoryPath').trim();
+  const checkError = errors.checkCommand?.message;
   const checkCommand = watch('checkCommand');
   const showDetected = detected !== null && detected.path === folder;
   const needsDetection = folder !== '' && !showDetected;
@@ -110,8 +110,11 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
     });
     if (!result.ok) {
       const onFolder = result.fieldErrors?.repositoryPath;
+      const onCheck = result.fieldErrors?.checkCommand;
       if (onFolder) {
         setError('repositoryPath', { type: 'server', message: onFolder });
+      } else if (onCheck) {
+        setError('checkCommand', { type: 'server', message: onCheck });
       } else {
         setError('root.server', { message: result.error });
       }
@@ -167,30 +170,13 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
               </Text>
               <Text tag="p">{detected.remote ?? 'None'}</Text>
             </Stack>
-            <Stack gap={1}>
-              <Label htmlFor={checkId}>Check command</Label>
-              <TextInput
-                {...register('checkCommand')}
-                id={checkId}
-                placeholder="npm run check"
-                autoComplete="off"
-              />
-              <Inline gap={1}>
-                {detected.checkCommands
-                  .filter((candidate) => candidate !== checkCommand)
-                  .map((candidate) => (
-                    <Button
-                      key={candidate}
-                      type="button"
-                      size="small"
-                      variant="ghost"
-                      onClick={() => setValue('checkCommand', candidate)}
-                    >
-                      Use {candidate}
-                    </Button>
-                  ))}
-              </Inline>
-            </Stack>
+            <CheckCommandField
+              registration={register('checkCommand')}
+              value={checkCommand}
+              error={checkError}
+              candidates={detected.checkCommands}
+              onUse={(candidate) => setValue('checkCommand', candidate)}
+            />
             {detected.referenceTemplate && (
               <Checkbox {...register('acceptTemplate')}>
                 Add Reference template {detected.referenceTemplate.prefix}{' '}

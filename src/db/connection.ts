@@ -5,7 +5,7 @@ import {
 } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
-import { dataFolder } from '../install/install';
+import { dataFolder } from './data-folder';
 import * as schema from './schema';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
