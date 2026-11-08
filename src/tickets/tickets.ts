@@ -3606,6 +3606,13 @@ type ClaimColumns = {
   claimAgentName: string | null;
 };
 
+/** The Claim a Ticket's claim columns hold, or `null` without one. */
+function claimOf({ claimAgentRunId, claimAgentName }: ClaimColumns) {
+  return claimAgentRunId === null
+    ? null
+    : { agentRunId: claimAgentRunId, agentName: claimAgentName };
+}
+
 /**
  * A Claim change of `type` for the Claim a Ticket row holds, or none when it
  * holds none.
@@ -4042,10 +4049,7 @@ function withClaimAndLinks<Row extends { number: number }>(
   const withClaims = rows.map(
     ({ claimAgentRunId, claimAgentName, ...row }) => ({
       ...row,
-      claim:
-        claimAgentRunId === null
-          ? null
-          : { agentRunId: claimAgentRunId, agentName: claimAgentName },
+      claim: claimOf({ claimAgentRunId, claimAgentName }),
     }),
   );
   return withBlockers(db, withLabels(db, withEpics(db, withClaims)));
@@ -4082,10 +4086,7 @@ function withEpics<Row extends { epicNumber: number | null }>(
         epic.number,
         epicLinkOf({
           ...epic,
-          claim:
-            claimAgentRunId === null
-              ? null
-              : { agentRunId: claimAgentRunId, agentName: claimAgentName },
+          claim: claimOf({ claimAgentRunId, claimAgentName }),
         }),
       ],
     ),

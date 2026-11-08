@@ -21,8 +21,11 @@ export type LaneInput = Pick<
   'status' | 'labels' | 'claim' | 'externalReferences' | 'type' | 'children'
 > & { epic?: EpicLink | null };
 
-/** What a section is derived from: a Claim and whether there is a PR reference. */
-type RunState = { claim: Ticket['claim']; hasPullRequest: boolean };
+/**
+ * What a section is derived from: a Claim and whether there is a PR
+ * reference. An `EpicLink` is one, the Epic's (T1143).
+ */
+type RunState = Pick<EpicLink, 'claim' | 'hasPullRequest'>;
 
 /** The sections of the In progress Lane (added with the run state, T1064). */
 export type InProgressSection = 'Action needed' | 'Running' | 'Review';
@@ -155,7 +158,10 @@ export function isInReview(
   ticket: LaneInput,
   live?: LiveConversation,
 ): boolean {
-  return laneOf({ ...ticket, epic: null }, live).section === 'Review';
+  return (
+    ticket.status === 'In progress' &&
+    sectionOf(ownRunState(ticket), live) === 'Review'
+  );
 }
 
 /**
