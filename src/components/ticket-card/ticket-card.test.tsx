@@ -263,7 +263,13 @@ describe('TicketCard', () => {
           boardPath="/project/1/cycle/7"
           ticket={{
             ...ticket,
-            epic: { number: 2, title: 'Checkout', color: 'teal' },
+            epic: {
+              number: 2,
+              title: 'Checkout',
+              color: 'teal',
+              claim: null,
+              hasPullRequest: false,
+            },
           }}
         />,
       );
@@ -279,7 +285,13 @@ describe('TicketCard', () => {
           boardPath="/project/1/cycle/7"
           ticket={{
             ...ticket,
-            epic: { number: 2, title: 'Checkout', color: 'amber' },
+            epic: {
+              number: 2,
+              title: 'Checkout',
+              color: 'amber',
+              claim: null,
+              hasPullRequest: false,
+            },
           }}
         />,
       );
@@ -415,6 +427,55 @@ describe('Selecting a TicketCard', () => {
       );
       expect(screen.queryByText('Agent running')).not.toBeInTheDocument();
       expect(screen.queryByText('Needs you')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Back to Todo for a child of an Epic (T1143)', () => {
+    const link = {
+      number: 50,
+      title: 'Checkout',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
+    const renderChild = (epicRunning: boolean) => {
+      vi.mocked(currentConversationActivity).mockResolvedValue(
+        activity(
+          epicRunning
+            ? {
+                live: { 50: liveConversation({ state: 'running' }) },
+                running: [50],
+              }
+            : {},
+        ),
+      );
+      renderWithTheme(
+        <ConversationActivityProvider>
+          <TicketCard
+            ticket={{ ...ticket, status: 'In progress', epic: link }}
+            boardPath="/project/1"
+            onBackToTodo={vi.fn()}
+          />
+        </ConversationActivityProvider>,
+      );
+    };
+
+    it('offers Back to Todo when its Epic is stalled too', async () => {
+      renderChild(false);
+
+      expect(
+        await screen.findByRole('button', { name: 'Back to Todo' }),
+      ).toBeInTheDocument();
+    });
+
+    it("offers none while its Epic's run goes", async () => {
+      renderChild(true);
+
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: 'Back to Todo' }),
+        ).not.toBeInTheDocument(),
+      );
     });
   });
 

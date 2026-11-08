@@ -70,6 +70,8 @@ describe('Creating a Ticket under an Epic', () => {
       number: epic.number,
       title: 'Checkout',
       color: 'red',
+      claim: null,
+      hasPullRequest: false,
     });
     expect(tickets.getTicket(epic.number).children).toEqual([
       {
@@ -174,6 +176,8 @@ describe('Attaching and detaching', () => {
       number: epic.number,
       title: 'Checkout',
       color: 'red',
+      claim: null,
+      hasPullRequest: false,
     });
     expect(
       tickets.getTicket(epic.number).children.map(({ number }) => number),
@@ -254,6 +258,8 @@ describe('Moving a Ticket to an Epic', () => {
       number: epic.number,
       title: 'Checkout',
       color: 'red',
+      claim: null,
+      hasPullRequest: false,
     });
   });
 
@@ -1080,6 +1086,46 @@ describe('Blockers and Epics', () => {
   });
 });
 
+describe("A child's link to its Epic (T1143)", () => {
+  it("carries the Epic's Claim and whether it has a PR reference", () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    tickets.claimTicket(epic.number, { agentRunId: 'run-1' });
+    tickets.updateTicket(epic.number, {
+      addExternalReferences: [
+        'ABC-33',
+        'https://github.com/owner/repo/pull/143',
+      ],
+    });
+
+    expect(tickets.getTicket(child.number).epic).toMatchObject({
+      claim: { agentRunId: 'run-1', agentName: null },
+      hasPullRequest: true,
+    });
+    expect(
+      tickets
+        .listTickets({ projectId: project.id })
+        .find(({ number }) => number === child.number)?.epic,
+    ).toMatchObject({ claim: { agentRunId: 'run-1' }, hasPullRequest: true });
+  });
+
+  it('has no Claim or PR reference while its Epic has none', () => {
+    const { tickets, project, epic } = setUp();
+    tickets.updateTicket(epic.number, { addExternalReferences: ['ABC-33'] });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+
+    expect(child.epic).toMatchObject({ claim: null, hasPullRequest: false });
+  });
+});
+
 describe('Claiming an Epic', () => {
   const run1 = { agentRunId: 'run-1', agentName: 'Frontend Agent' };
   const run2 = { agentRunId: 'run-2' };
@@ -1341,6 +1387,8 @@ describe('Epic colours', () => {
       number: epic.number,
       title: 'Checkout',
       color: 'teal',
+      claim: null,
+      hasPullRequest: false,
     });
   });
 

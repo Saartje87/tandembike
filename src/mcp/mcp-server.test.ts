@@ -423,6 +423,19 @@ describe('MCP server', () => {
     await client.close();
   });
 
+  it("warns that releasing an Epic's Claim with no PR leaves its In progress children stalled too (T1143)", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+
+    expect(
+      tools.find((tool) => tool.name === 'release_ticket_claim')?.description,
+    ).toMatch(
+      /Releasing an Epic's claim with no PR reference leaves its In progress children stalled too/,
+    );
+    await client.close();
+  });
+
   it('keeps the instructions and every tool description within the cap clients read whole', async () => {
     const client = await connectMcpClient(createTestTickets());
 
@@ -747,6 +760,46 @@ describe('Ticket tools', () => {
       tickets: [{ number: epic.number, type: 'Epic' }],
       total: 1,
     });
+    await client.close();
+  });
+
+  it("returns a child's epic as its number, title and colour only (T1143)", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Launch',
+      type: 'Epic',
+      externalReferences: ['https://github.com/owner/repo/pull/143'],
+    });
+    tickets.claimTicket(epic.number, { agentRunId: 'run-1' });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Header',
+      epicNumber: epic.number,
+    });
+    const client = await connectMcpClient(tickets);
+    const link = { number: epic.number, title: 'Launch', color: 'red' };
+
+    const read = await client.callTool({
+      name: 'get_ticket',
+      arguments: { number: child.number },
+    });
+    const listed = await client.callTool({
+      name: 'list_tickets',
+      arguments: { epicNumber: epic.number, detail: 'full' },
+    });
+    const updated = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: child.number, title: 'Footer', detail: 'full' },
+    });
+
+    type WithEpic = { epic: unknown };
+    expect((resultJson(read) as WithEpic).epic).toEqual(link);
+    expect(
+      (resultJson(listed) as { tickets: WithEpic[] }).tickets[0].epic,
+    ).toEqual(link);
+    expect((resultJson(updated) as WithEpic).epic).toEqual(link);
     await client.close();
   });
 

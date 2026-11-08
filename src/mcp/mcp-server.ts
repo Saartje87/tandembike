@@ -12,6 +12,7 @@ import { isAllowedHost } from '../http/allowed-host';
 import { isPreviewable, isTextMediaType } from '../tickets/attachment-preview';
 import { maxAttachmentSize } from '../tickets/attachments';
 import { removeFromCycleFirst } from '../tickets/cycles';
+import { agentEpicLink, type EpicLink } from '../tickets/epic-link';
 import {
   type BatchFailure,
   TicketsError,
@@ -330,9 +331,29 @@ function agentProject({ id, name, archived, createdAt }: Project) {
   return { id, name, archived, createdAt };
 }
 
+/**
+ * A Ticket's `epic` as Agents see it, wherever a result holds one: its
+ * number, title and colour. The Claim and PR reference it also carries are
+ * for the Board's Lanes (T1143); Agents read those on the Epic itself.
+ */
+function agentValue(key: string, value: unknown): unknown {
+  return key === 'epic' && isEpicLink(value) ? agentEpicLink(value) : value;
+}
+
+function isEpicLink(value: unknown): value is EpicLink {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'number' in value &&
+    'hasPullRequest' in value
+  );
+}
+
 /** `value` as a tool result of pretty-printed JSON text. */
 function jsonResult(value: unknown): CallToolResult {
-  return { content: [{ type: 'text', text: JSON.stringify(value, null, 2) }] };
+  return {
+    content: [{ type: 'text', text: JSON.stringify(value, agentValue, 2) }],
+  };
 }
 
 /**
@@ -726,7 +747,7 @@ export function createMcpServer(
     'release_ticket_claim',
     {
       title: 'Release Ticket claim',
-      description: `Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim. Releasing an In progress Ticket with no PR reference in its External references leaves it stalled in Action needed on the Board, so when abandoning the work, also move it back to Todo or say why in a comment. ${returnsSummary({ extra: 'its claim, now null' })}`,
+      description: `Release a Ticket claim held by this Agent run. A different Agent run cannot release another run's claim. Releasing an In progress Ticket with no PR reference in its External references leaves it stalled in Action needed on the Board, so when abandoning the work, also move it back to Todo or say why in a comment. Releasing an Epic's claim with no PR reference leaves its In progress children stalled too, as they run on the Epic's claim. ${returnsSummary({ extra: 'its claim, now null' })}`,
       inputSchema: {
         number: ticketNumber,
         agentRunId: z

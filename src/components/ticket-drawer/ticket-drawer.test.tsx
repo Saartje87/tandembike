@@ -1447,7 +1447,13 @@ describe('TicketDrawer', () => {
 
     it("offers a normal Ticket the Project's Epics to attach it to, but not an Epic", () => {
       const epics: EpicLink[] = [
-        { number: 8, title: 'Checkout', color: 'teal' },
+        {
+          number: 8,
+          title: 'Checkout',
+          color: 'teal',
+          claim: null,
+          hasPullRequest: false,
+        },
       ];
       const { unmount } = renderWithTheme(
         <InShell ticket={ticket} epics={epics} />,
@@ -1470,7 +1476,13 @@ describe('TicketDrawer', () => {
     it('links a child to its Epic and lists no children', () => {
       renderDrawer({
         ...ticket,
-        epic: { number: 8, title: 'Checkout', color: 'teal' },
+        epic: {
+          number: 8,
+          title: 'Checkout',
+          color: 'teal',
+          claim: null,
+          hasPullRequest: false,
+        },
       });
 
       expect(

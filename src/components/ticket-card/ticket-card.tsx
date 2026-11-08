@@ -19,6 +19,7 @@ import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockedMarker } from '../blocked-marker/blocked-marker';
 import { isStalled } from '../board/board-lanes';
 import {
+  useLiveConversations,
   useTicketActivity,
   useTicketCost,
   useTicketLiveConversation,
@@ -192,6 +193,9 @@ export const TicketCard: FC<TicketCardProps> = ({
   const changed = useTicketChanged(ticket.number);
   const activity = useTicketActivity(ticket.number);
   const live = useTicketLiveConversation(ticket.number);
+  // A child with no run state of its own runs on its Epic's (T1143).
+  const lives = useLiveConversations();
+  const epicLive = ticket.epic ? lives[ticket.epic.number] : undefined;
   const cost = useTicketCost(ticket.number);
   const selectable = selected !== undefined && onSelect !== undefined;
 
@@ -318,7 +322,7 @@ export const TicketCard: FC<TicketCardProps> = ({
             ) : null}
             <CriteriaProgress acceptanceCriteria={ticket.acceptanceCriteria} />
             {onMerged && <MergedButton ticket={ticket} onMerged={onMerged} />}
-            {onBackToTodo && isStalled(ticket, live) && (
+            {onBackToTodo && isStalled(ticket, live, epicLive) && (
               <Inline gap={0}>
                 <BackToTodoButton onClick={onBackToTodo} />
               </Inline>
