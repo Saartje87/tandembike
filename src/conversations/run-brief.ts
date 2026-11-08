@@ -44,8 +44,6 @@ const intentLines: Record<ConversationIntent, string> = {
 const setupChecklist = (brief: RunBrief): string[] => {
   const items = [
     "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
-    `The instructions name the Tandembike Project to use for this repository (this one is "${brief.projectName}").`,
-    'The Tandembike MCP server is configured for the repository (for example in .mcp.json), for Agents the User starts in a terminal.',
     'The permission allowlist covers the Tandembike MCP tools.',
   ];
   items.push(

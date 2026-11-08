@@ -84,8 +84,12 @@ MCP tools change" in `docs/agents/issue-tracker.md`.
 
 One running app serves every repository on this machine: give each repository
 its own Project, and its Agents keep their Tickets there. The MCP server's
-instructions explain how the tracker works, so a repository only needs to
-name its Project (see `docs/adr/0014-server-explains-tracker.md`).
+instructions explain how the tracker works. A tool that takes a Project uses
+the one whose repository contains the Agent's working folder, so a repository
+names its Project nowhere (see
+`docs/adr/0036-mcp-calls-default-to-the-project-of-the-callers-folder.md`).
+Set each Project's repository folder when you create it, or on its agent
+settings.
 
 **1. Register the server once, for all repositories.** Keep the app running
 on `localhost:4747`, then register it at user level for each client you use:
@@ -93,8 +97,11 @@ on `localhost:4747`, then register it at user level for each client you use:
 - **Claude Code:**
 
   ```bash
-  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp
+  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'
   ```
+
+  Keep the single quotes: Claude Code expands `${PWD}` to the folder each
+  session starts in, which is how Tandembike finds that folder's Project.
 
 - **GitHub Copilot CLI:**
 
@@ -113,15 +120,9 @@ on `localhost:4747`, then register it at user level for each client you use:
 After registering, start a new session (or reconnect, `/mcp` in Claude Code)
 so the client loads the tools.
 
-**2. Name the repository's Project in its `AGENTS.md`.** Add one line, with
-the Project's name as it shows in the app:
-
-```markdown
-Tickets for this repository live in the Tandembike Project `Shop` (MCP server `tandembike`).
-```
-
-Copilot reads `AGENTS.md` itself. Claude Code reads `CLAUDE.md`, so a
-repository that has no `CLAUDE.md` yet gets one containing just:
+**2. Give the repository a `CLAUDE.md` that loads its `AGENTS.md`.** Copilot
+reads `AGENTS.md` itself. Claude Code reads `CLAUDE.md`, so a repository that
+has no `CLAUDE.md` yet gets one containing just:
 
 ```markdown
 @AGENTS.md

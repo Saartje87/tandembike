@@ -9,11 +9,18 @@ import type { Tickets } from '../tickets/tickets';
  * (no running server), backed by `tickets`. Close it at the end of the test.
  * Test files that use it need `// @vitest-environment node` on line 1.
  */
-export async function connectMcpClient(tickets: Tickets): Promise<Client> {
+export async function connectMcpClient(
+  tickets: Tickets,
+  { cwd }: { cwd?: string } = {},
+): Promise<Client> {
   const client = new Client({ name: 'test-agent', version: '0.0.0' });
   const transport = new StreamableHTTPClientTransport(
     new URL('http://localhost:3000/api/mcp'),
-    { fetch: (url, init) => handleMcpRequest(new Request(url, init), tickets) },
+    {
+      requestInit:
+        cwd === undefined ? {} : { headers: { 'X-Tandembike-Cwd': cwd } },
+      fetch: (url, init) => handleMcpRequest(new Request(url, init), tickets),
+    },
   );
   await client.connect(transport);
   return client;

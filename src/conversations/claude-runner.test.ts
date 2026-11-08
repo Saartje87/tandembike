@@ -51,7 +51,13 @@ describe('The Claude runner', () => {
       cwd: '/repo',
       resume: 'sess-1',
       mcpServers: {
-        tandembike: { type: 'http', url: 'http://localhost:4747/api/mcp' },
+        // The literal folder: the SDK expands ${PWD} against its own process,
+        // not the run's cwd (docs/research/mcp-caller-folder.md).
+        tandembike: {
+          type: 'http',
+          url: 'http://localhost:4747/api/mcp',
+          headers: { 'X-Tandembike-Cwd': '/repo' },
+        },
       },
       systemPrompt: {
         type: 'preset',

@@ -41,7 +41,7 @@ function read(path: string): string | null {
 }
 
 /** The repository's own `.git` folder, following a worktree's `gitdir:` file. */
-function commonGitDir(path: string): string | null {
+export function commonGitDir(path: string): string | null {
   const dot = join(path, '.git');
   let stat: ReturnType<typeof statSync>;
   try {

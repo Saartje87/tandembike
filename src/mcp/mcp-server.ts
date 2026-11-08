@@ -55,11 +55,11 @@ export const maxInstructionsLength = 3500;
 export const instructions = `This server is a ticket tracker shared with the User, who watches the Board in a browser. Work is organised as Tickets in Projects; every Ticket has a Status: Todo, In progress or Done.
 
 - Move a Ticket to In progress when you start it and finish it with complete_ticket, so the User can follow your progress.
-- When your repository's instructions name a Project, keep that repository's Tickets in it and pass it as projectName. Otherwise reuse a fitting Project from list_projects before creating one.
+- Project tools default to the Project of your working folder's repository, worktrees too; projectName or projectId picks another. With none, reuse a fitting Project from list_projects before creating one.
 - Only the User archives and restores Projects; an archived Project, its Tickets and Cycles are read-only until restored.
 - Claim Tickets before starting with claim_ticket, using a unique Agent-run ID. Done releases a Claim; release_ticket_claim abandons one. Claims coordinate; they do not authenticate.
 - Share progress, findings and triage notes as comments (add_comment), not by editing the description. list_activity shows what changed on a Ticket, when, and by whom.
-- Attach files to a Ticket with add_attachment, not comments; get_attachment reads it.
+- Attach files with add_attachment, not comments; get_attachment reads them.
 - Record that one Ticket must be finished before another can start with add_blocker, not in the description. Find ready, unclaimed work with list_tickets: status: "Todo", labels: ["ready-for-agent"], blocked: false, claimed: false.
 - Rank a Status's Board order with sort_lane, never Blockers; a Board Lane shows it filtered by labels.
 - Create related Tickets in one create_tickets call, the Blockers between them given by position; it creates an Epic and its children in the same call (type: "Epic" plus epicPosition).
@@ -67,11 +67,11 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Store a Ticket's ordered checklist in acceptanceCriteria, never as a checklist in the description or a comment, and check each off with set_acceptance_criteria_checked as you verify it.
 - Work with Tickets through these tools, not direct database access.
 - Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
-- Refer to Tickets by number with a T, like T42, as the User does.
+- Refer to Tickets by number with a T, like T42.
 - Classify and triage Tickets with labels, reusing existing ones from list_labels.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Create a new Epic with its children in one create_tickets call; attach existing Tickets with attach_to_epic. To work it, claim the Epic once with claim_ticket, which covers its children, then work them in Blocker order, next an unfinished one with blocked: false, moving each to In progress and Done.
 - A Cycle is a goal-led plan of Tickets in one Project, not a fixed-length sprint: Prepared, Active (at most one per Project) or Archived. Plan Tickets in with plan_tickets and move them to another Cycle or the Backlog with move_tickets.
-- Load the tools a flow uses at once, e.g. planning a Cycle: list_cycles, create_cycle, create_tickets, plan_tickets, start_cycle; turning a spec into an Epic: create_tickets, attach_to_epic, add_blocker.
+- Load a flow's tools at once, e.g. planning a Cycle: list_cycles, create_cycle, create_tickets, plan_tickets, start_cycle; turning a spec into an Epic: create_tickets, attach_to_epic, add_blocker.
 - Your client keeps the tools and these instructions from when it connected: when the app's MCP tools change, ask the User to start a new session, as reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket is finished; follow them where they say more.`;
 
@@ -478,15 +478,30 @@ const alwaysLoadedTools = new Set([
   'claim_ticket',
 ]);
 
+const hasProject = ({
+  projectId,
+  projectName,
+}: {
+  projectId?: number;
+  projectName?: string;
+}) => projectId !== undefined || projectName !== undefined;
+
 /** An MCP server whose tools call the Tickets module `tickets` only. */
 export function createMcpServer(
   tickets: Tickets,
   origin = 'http://localhost:4747',
+  cwd?: string,
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
     { instructions },
   );
+
+  /** The Project `ref` names, else the one of the caller's folder (ADR 0036). */
+  const resolveProjectId = (ref: {
+    projectId?: number;
+    projectName?: string;
+  }) => tickets.resolveProjectId({ ...ref, cwd });
 
   /**
    * Registers a tool on `server` whose input refuses any field it does not
@@ -605,6 +620,12 @@ export function createMcpServer(
           .describe(
             'Only list Tickets that have every one of these labels, ignoring case.',
           ),
+        allProjects: z
+          .boolean()
+          .optional()
+          .describe(
+            "List Tickets of every Project. Without a Project, projectName or projectId, list_tickets lists the Project of your working folder when one contains it; true lists every Project's instead.",
+          ),
         includeArchived: z
           .boolean()
           .optional()
@@ -685,8 +706,16 @@ export function createMcpServer(
       },
       annotations: { readOnlyHint: true },
     },
-    ({ description, ...input }) =>
+    ({ description, allProjects, ...rest }) =>
       respond(() => {
+        const folderProjectId =
+          allProjects || cwd === undefined || hasProject(rest)
+            ? undefined
+            : tickets.findProjectIdOfFolder(cwd);
+        const input =
+          folderProjectId === undefined
+            ? rest
+            : { ...rest, projectId: folderProjectId };
         const page = tickets.findTickets(input);
         return input.detail === 'full' && description === false
           ? {
@@ -830,7 +859,7 @@ export function createMcpServer(
       respondTicket(detail, () =>
         tickets.createTicket({
           ...input,
-          projectId: tickets.resolveProjectId({ projectId, projectName }),
+          projectId: resolveProjectId({ projectId, projectName }),
         }),
       ),
   );
@@ -919,7 +948,7 @@ export function createMcpServer(
         numbers: tickets
           .createTicketBatch({
             ...input,
-            projectId: tickets.resolveProjectId({ projectId, projectName }),
+            projectId: resolveProjectId({ projectId, projectName }),
           })
           .map(({ number }) => number),
       })),
@@ -1000,7 +1029,7 @@ export function createMcpServer(
           ...(projectId === undefined && projectName === undefined
             ? {}
             : {
-                projectId: tickets.resolveProjectId({ projectId, projectName }),
+                projectId: resolveProjectId({ projectId, projectName }),
               }),
         }),
       ),
@@ -1441,9 +1470,7 @@ export function createMcpServer(
     },
     ({ projectId, projectName }) =>
       respond(() =>
-        tickets.listCycles(
-          tickets.resolveProjectId({ projectId, projectName }),
-        ),
+        tickets.listCycles(resolveProjectId({ projectId, projectName })),
       ),
   );
 
@@ -1471,7 +1498,7 @@ export function createMcpServer(
     ({ projectId, projectName, title }) =>
       respond(() =>
         tickets.createCycle({
-          projectId: tickets.resolveProjectId({ projectId, projectName }),
+          projectId: resolveProjectId({ projectId, projectName }),
           title,
         }),
       ),
@@ -1614,7 +1641,7 @@ export function createMcpServer(
     ({ projectId, projectName, ...input }) =>
       respond(() => ({
         ticketNumbers: tickets.sortLane({
-          projectId: tickets.resolveProjectId({ projectId, projectName }),
+          projectId: resolveProjectId({ projectId, projectName }),
           ...input,
         }),
       })),
@@ -1678,7 +1705,8 @@ export async function handleMcpRequest(
       { status: 403 },
     );
   }
-  const server = createMcpServer(tickets, new URL(request.url).origin);
+  const cwd = request.headers.get('x-tandembike-cwd')?.trim() || undefined;
+  const server = createMcpServer(tickets, new URL(request.url).origin, cwd);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

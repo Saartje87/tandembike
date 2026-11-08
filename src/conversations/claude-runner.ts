@@ -240,7 +240,15 @@ export function createClaudeRunner(): AgentRunner {
                 }
               : { behavior: 'allow', updatedInput: toolInput };
           },
-          mcpServers: { tandembike: { type: 'http', url: mcpUrl } },
+          // The run's folder as the literal path: the SDK expands ${PWD} against
+          // its own process, not the run's cwd (T1199).
+          mcpServers: {
+            tandembike: {
+              type: 'http',
+              url: mcpUrl,
+              headers: { 'X-Tandembike-Cwd': cwd },
+            },
+          },
           systemPrompt: {
             type: 'preset',
             preset: 'claude_code',

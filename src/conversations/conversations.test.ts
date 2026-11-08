@@ -1614,7 +1614,10 @@ describe('Setup', () => {
     expect(brief).toContain('Website');
     expect(brief).toContain('CLAUDE.md');
     expect(brief).toContain('AGENTS.md');
-    expect(brief).toContain('.mcp.json');
+    // The Project defaults from the folder, so Setup asks for neither (ADR 0036).
+    expect(brief).not.toContain('.mcp.json');
+    expect(brief).not.toMatch(/instructions name the Tandembike Project/);
+    expect(brief).not.toMatch(/MCP server is configured/);
     expect(brief).toContain('allowlist');
     expect(brief).toMatch(/main checkout/);
     expect(brief).toMatch(/never commit, push or open a pull request/i);
