@@ -89,7 +89,7 @@ export function runBrief(brief: RunBrief): string {
   }
   if (brief.parallelRuns && brief.intent === 'start') {
     lines.push(
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules.",
+      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as the last step of your work: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree. Tandembike gives no prompt to keep or remove it when this run ends, so do not tell the User they will be asked.",
     );
   }
   if (brief.intent === 'setup') {
