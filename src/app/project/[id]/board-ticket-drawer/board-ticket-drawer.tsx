@@ -5,14 +5,30 @@ import type { FC } from 'react';
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
-import { boardCycleOf } from '../../../../tickets/cycles';
+import { boardCycleOf, type Cycle } from '../../../../tickets/cycles';
 import { epicLinkOf } from '../../../../tickets/epic-link';
+import type { EpicChild } from '../../../../tickets/tickets';
 import {
   type BoardFilter,
   boardPathOf,
   noBoardFilter,
 } from '../../../lib/paths';
 import { findBoardTicket } from '../project-data';
+
+/**
+ * The numbers of `children` that show on Cycle `cycleId`'s Board, or the
+ * Backlog's for `null`, by `boardCycleOf`. An archived one counts too: the
+ * Board lists its archived Tickets.
+ */
+function childrenOnBoard(
+  children: EpicChild[],
+  cycles: Cycle[],
+  cycleId: number | null,
+): number[] {
+  return children
+    .filter((child) => (boardCycleOf(cycles, child)?.id ?? null) === cycleId)
+    .map((child) => child.number);
+}
 
 export type BoardTicketDrawerProps = {
   /** The Project whose Board it opens over. */
@@ -74,11 +90,7 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
       board={{
         path: boardPathOf(projectId, cycleId),
         filter,
-        onBoard: ticket.children
-          .filter(
-            (child) => (boardCycleOf(cycles, child)?.id ?? null) === cycleId,
-          )
-          .map((child) => child.number),
+        onBoard: childrenOnBoard(ticket.children, cycles, cycleId),
       }}
     />
   );

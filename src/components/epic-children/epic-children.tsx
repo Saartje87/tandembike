@@ -65,6 +65,19 @@ function describeChild(child: EpicChild): string {
 }
 
 /**
+ * Where child `number` opens: over `board` when it is on it, keeping the
+ * Board's scroll, else over its own Board.
+ */
+function childLink(number: number, board: ChildrenBoard | undefined) {
+  return board?.onBoard.includes(number)
+    ? {
+        href: ticketOnBoardPath(board.path, number, board.filter),
+        scroll: false,
+      }
+    : { href: ticketByNumberPath(number) };
+}
+
+/**
  * An Epic's child Tickets in its drawer (ADR 0011): each with its title
  * linked, over this Board when it is on it and else over its own (ADR 0013),
  * its Status and a button to detach it, which shows at once. Below, unless the
@@ -145,22 +158,9 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items, board }) => {
                   <Text fontSize="small" fontFamily="mono" color="muted">
                     T{child.number}
                   </Text>
-                  {board?.onBoard.includes(child.number) ? (
-                    <AppLink
-                      href={ticketOnBoardPath(
-                        board.path,
-                        child.number,
-                        board.filter,
-                      )}
-                      scroll={false}
-                    >
-                      {child.title}
-                    </AppLink>
-                  ) : (
-                    <AppLink href={ticketByNumberPath(child.number)}>
-                      {child.title}
-                    </AppLink>
-                  )}
+                  <AppLink {...childLink(child.number, board)}>
+                    {child.title}
+                  </AppLink>
                   <Text fontSize="xsmall" color="muted">
                     {describeChild(child)}
                   </Text>

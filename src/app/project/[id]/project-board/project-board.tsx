@@ -41,18 +41,16 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   filter = noBoardFilter,
 }) => {
   const settings = appTickets('user').getProjectAgentSettings(project.id);
+  const cycleId = tab === 'backlog' ? null : tab.id;
   // Closing the drawer keeps the Board filtered.
-  const boardPath = filteredBoardPath(
-    boardPathOf(project.id, tab === 'backlog' ? null : tab.id),
-    filter,
-  );
+  const boardPath = filteredBoardPath(boardPathOf(project.id, cycleId), filter);
   // One drawer for every Ticket opened over this tab, so it slides in once
   // and only its contents stream in (T333).
   const drawer = openTicket !== undefined && (
     <TicketDrawerShell number={openTicket} boardPath={boardPath}>
       <BoardTicketDrawer
         projectId={project.id}
-        cycleId={tab === 'backlog' ? null : tab.id}
+        cycleId={cycleId}
         filter={filter}
         number={openTicket}
       />
