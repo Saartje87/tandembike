@@ -592,3 +592,139 @@ describe('Autopilot startup', () => {
     expect(noCycle.stateOf(noCycle.mine.number)).toBe('interrupted');
   });
 });
+
+describe('Autopilot transient resume (ADR 0034)', () => {
+  const resumeText =
+    'The last run ended on a transient error. Continue where you left off.';
+  const overloaded = {
+    type: 'turn',
+    costUsd: 1,
+    error: 'API Error: 529 overloaded',
+  } as const;
+
+  const begin = async (options: Parameters<typeof setup>[0] = {}) => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const world = setup({ parallel: 3, ...options });
+    const ticket = world.ready('A');
+    world.tickets.startCycle(world.cycle.id);
+    await world.autopilot.evaluate(world.project.id);
+    const conversation = world.conversations.list({
+      ticketNumber: ticket.number,
+    })[0];
+    const resumes = () =>
+      world.conversations
+        .transcript(conversation.id)
+        .filter((entry) => entry.text === resumeText);
+    return { ...world, ticket, conversation, resumes };
+  };
+
+  it('resumes a failed_transient Start Conversation once, 60 seconds later, as Autopilot', async () => {
+    const { runner, autopilot, project, resumes } = await begin();
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(resumes()).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await autopilot.idle();
+
+    expect(resumes().map((entry) => entry.role)).toEqual(['autopilot']);
+  });
+
+  it('does not resume a failed outcome', async () => {
+    const { runner, autopilot, project, resumes } = await begin();
+    runner.runs[0].emit({ type: 'turn', costUsd: 1, error: 'error_max_turns' });
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(0);
+  });
+
+  it('does not resume while Autopilot is off', async () => {
+    const { runner, autopilot, project, tickets, resumes } = await begin();
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    tickets.setProjectAgentSettings(project.id, { autopilot: false });
+    await vi.advanceTimersByTimeAsync(120_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(0);
+  });
+
+  it('does not resume over the Spend ceiling', async () => {
+    const { runner, autopilot, project, tickets, resumes } = await begin();
+    runner.runs[0].emit(overloaded);
+    tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(0);
+  });
+
+  it('does not resume beyond the Start run limit', async () => {
+    const { runner, autopilot, project, tickets, conversations, resumes } =
+      await begin({ parallel: 1 });
+    runner.runs[0].emit(overloaded);
+    const other = tickets.createTicket({ projectId: project.id, title: 'B' });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: other.number,
+      intent: 'start',
+      prompt: 'go',
+    });
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(0);
+  });
+
+  it('resumes a hand-started Conversation while Autopilot is on', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const { tickets, conversations, runner, autopilot, project, cycle } = setup(
+      { parallel: 3 },
+    );
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Manual',
+      cycleId: cycle.id,
+    });
+    tickets.startCycle(cycle.id);
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'go',
+    });
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await autopilot.idle();
+    expect(
+      conversations
+        .transcript(conversation.id)
+        .filter((entry) => entry.text === resumeText),
+    ).toHaveLength(1);
+  });
+
+  it('resumes no second time after a transient end of its own resume, until the User replies', async () => {
+    const { runner, autopilot, project, conversations, conversation, resumes } =
+      await begin();
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(1);
+
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(300_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(1);
+
+    await conversations.reply(conversation.id, 'try again', 'user');
+    runner.runs[0].emit(overloaded);
+    await autopilot.evaluate(project.id);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await autopilot.idle();
+    expect(resumes()).toHaveLength(2);
+  });
+});

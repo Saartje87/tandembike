@@ -10,7 +10,7 @@ The User plans a Cycle of `ready-for-agent` Tickets and Epics, and until now had
 - **Eligible** is a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, and an Epic only with at least one child, with no open Start Conversation on it (not closed by the User), whatever state its run is in. The last rule covers the gap between a dispatch and the run's Claim, and is what stops retries. Back to Todo does not close a Conversation, so a Conversation from before the Ticket's latest move to Todo (children's, for an Epic) no longer counts, unless its run is still working.
 - **Order and slots.** Eligible work goes in the Cycle Board's Todo Lane order, so dragging and `sort_lane` set the priority, and Autopilot starts at most as many as the Project's free Start run slots, by the cap the Conversations module already enforces. Parallel runs off makes it serial.
 - **One serialised `evaluate(projectId)`.** Evaluations never overlap, and each reads the world afresh, so a burst of changes cannot start a Ticket twice, whatever order they arrive in. It runs on Ticket, Cycle and Conversation changes, and when the switch or a setting changes, and once for every Project at server start from Next's `register` hook in the Node.js runtime.
-- **No retries.** A failed or questioning run waits in Action needed for the User, and its Ticket is not Eligible while its Conversation is open. Back to Todo (T1094) is the retry path, since a Ticket sent back is Eligible again; so is closing the Conversation. A refused start, such as a missing repository path, is not retried until the next change.
+- **No retries, except one for a transient end** ([ADR 0034](0034-transient-run-ends-are-resumed-once.md) amends this). A failed or questioning run waits in Action needed for the User, and its Ticket is not Eligible while its Conversation is open. Back to Todo (T1094) is the retry path, since a Ticket sent back is Eligible again; so is closing the Conversation. A refused start, such as a missing repository path, is not retried until the next change.
 - **Settings.** `autopilot` (default off) and `spendCeilingUsd` are Project agent settings, set only through Server Actions and absent from the MCP-visible `Project`, so no Agent can switch the factory on. Turning Autopilot on without a ceiling, or clearing the ceiling while it is on, is refused naming the ceiling field. Starting a Cycle does not turn it on. At or over the ceiling for the Active Cycle (the Conversations Autopilot started for it, each of which records its Cycle; resumes add to their Conversation), an evaluation dispatches nothing; the next change, such as a raised ceiling or the next Cycle, evaluates again.
 - **Off stops new dispatches only.** Running runs finish.
 
@@ -20,7 +20,7 @@ Autopilot reads Tickets only through the Tickets module and starts runs only thr
 
 - Dispatch only on a timer: a slot freed or a Blocker done would wait for the next tick.
 - Dispatch inside the Tickets module: it would have to know Conversations, which ADR 0004 keeps out of it.
-- Automatic retries: a failing run would spend money repeatedly on the same Ticket.
+- Automatic retries of every failure (ADR 0034 allows one for a transient end only): a failing run would spend money repeatedly on the same Ticket.
 
 ## Consequences
 
