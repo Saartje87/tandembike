@@ -23,6 +23,7 @@ import {
 import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import {
   archiveTicket,
+  backToTodo,
   clearTicketClaim,
   completeTicket,
   restoreTicket,
@@ -45,8 +46,9 @@ import type {
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
+import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
-import { isInReview } from '../board/board-lanes';
+import { isInReview, isParked } from '../board/board-lanes';
 import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
@@ -243,7 +245,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
   const live = useTicketLiveConversation(ticket.number);
-  // Shared by the buttons beside Status (Merged, and Back to Todo next).
+  // Shared by the buttons beside Status (Merged and Back to Todo).
   const [actionError, setActionError] = useState<string>();
   const [actionPending, startAction] = useTransition();
 
@@ -323,6 +325,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   };
 
   const showMerged = isInReview(ticket, live);
+  const showBackToTodo = isParked(ticket, live);
 
   const statusActions = (
     <Stack gap={1}>
@@ -332,6 +335,12 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             ticket={ticket}
             pending={actionPending}
             onMerged={() => runAction(completeTicket)}
+          />
+        )}
+        {showBackToTodo && (
+          <BackToTodoButton
+            pending={actionPending}
+            onClick={() => runAction(backToTodo)}
           />
         )}
       </Inline>

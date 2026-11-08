@@ -1985,6 +1985,35 @@ export function createTickets(
     },
 
     /**
+     * Back to Todo, the User's action on a parked Ticket (ADR 0024): Status
+     * becomes Todo at the end of the Todo order and any Claim is released,
+     * with its labels kept, as one Activity entry. An archived Ticket or one in
+     * an archived Project is refused. It checks nothing outside
+     * the module, such as GitHub or Conversations. An Epic is refused for now.
+     */
+    backToTodo(number: number): Ticket {
+      const todo = checkTicketChanges({ status: 'Todo' });
+      const { type, archived } = getTicket(number);
+      checkTicketWritable(db, number);
+      if (archived) {
+        throw new NotAllowedError(
+          `Ticket T${number} is archived. Restore it before sending it Back to Todo.`,
+        );
+      }
+      if (type === 'Epic') {
+        throw new NotAllowedError(
+          `Ticket T${number} is an Epic. Back to Todo does not cover Epics yet.`,
+        );
+      }
+
+      const { changedEpic } = applyTicketChanges(number, todo, {
+        releaseClaim: true,
+      });
+      publishWith(number, changedEpic);
+      return getTicket(number);
+    },
+
+    /**
      * The completion rule (docs/agents/issue-tracker.md), the one place that
      * applies it: Ticket `number` becomes Done, loses its triage state label
      * (never `wontfix` or a category label), and its Claim is released, with

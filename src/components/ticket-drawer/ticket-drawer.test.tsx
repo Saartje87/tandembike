@@ -10,6 +10,7 @@ import {
   addTicketBlocker,
   addTicketLabel,
   archiveTicket,
+  backToTodo,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
   completeTicket,
@@ -51,6 +52,7 @@ vi.mock('../../app/cycles/actions', () => ({
 }));
 vi.mock('../../app/tickets/actions', () => ({
   addTicketBlocker: vi.fn(),
+  backToTodo: vi.fn(),
   removeTicketBlocker: vi.fn(),
   attachTicketToEpic: vi.fn(),
   detachTicketFromEpic: vi.fn(),
@@ -210,6 +212,7 @@ describe('TicketDrawer', () => {
     vi.mocked(addTicketLabel).mockReset();
     vi.mocked(clearTicketClaim).mockReset();
     vi.mocked(completeTicket).mockReset();
+    vi.mocked(backToTodo).mockReset();
     vi.mocked(useTicketLiveConversation).mockReset().mockReturnValue(undefined);
     vi.mocked(useConversationDialog).mockReturnValue(dialog);
     dialog.open.mockReset();
@@ -489,6 +492,79 @@ describe('TicketDrawer', () => {
       renderDrawer(inReview);
 
       expect(field('Status')).toHaveValue('In progress');
+    });
+  });
+
+  describe('Back to Todo', () => {
+    const pullRequest = 'https://github.com/owner/repo/pull/87';
+    const parkedTickets: [string, Ticket][] = [
+      ['Action needed', ticket],
+      [
+        'Running',
+        { ...ticket, claim: { agentRunId: 'run-1', agentName: 'A' } },
+      ],
+      ['Review', { ...ticket, externalReferences: [pullRequest] }],
+    ];
+    const backToTodoButton = () =>
+      inDrawer().queryByRole('button', { name: 'Back to Todo' });
+
+    it.each(parkedTickets)(
+      'sends a parked Ticket in %s Back to Todo, pending meanwhile',
+      async (_section, shown) => {
+        const { promise, resolve } = Promise.withResolvers<{
+          ok: true;
+          projectId: number;
+        }>();
+        vi.mocked(backToTodo).mockReturnValue(promise);
+        onTestFinished(() => resolve({ ok: true, projectId: 1 }));
+        renderDrawer(shown);
+
+        await userEvent.click(button('Back to Todo'));
+
+        expect(backToTodo).toHaveBeenCalledExactlyOnceWith({ number: 4 });
+        expect(button('Back to Todo')).toBeDisabled();
+        await act(async () => resolve({ ok: true, projectId: 1 }));
+        expect(button('Back to Todo')).toBeEnabled();
+      },
+    );
+
+    it('shows both Merged and Back to Todo in Review', () => {
+      renderDrawer({ ...ticket, externalReferences: [pullRequest] });
+
+      expect(button('Merged T4 Fix the header')).toBeInTheDocument();
+      expect(button('Back to Todo')).toBeInTheDocument();
+    });
+
+    it.each(['running', 'idle'] as const)(
+      'does not show while a %s Conversation is live',
+      (state) => {
+        vi.mocked(useTicketLiveConversation).mockReturnValue(
+          liveConversation({ state }),
+        );
+        renderDrawer(ticket);
+
+        expect(backToTodoButton()).toBeNull();
+      },
+    );
+
+    it('does not show for a Ticket that is not In progress', () => {
+      renderDrawer({ ...ticket, status: 'Todo' });
+
+      expect(backToTodoButton()).toBeNull();
+    });
+
+    it('shows the reason when refused', async () => {
+      vi.mocked(backToTodo).mockResolvedValue({
+        ok: false,
+        error: 'The Project is archived.',
+      });
+      renderDrawer(ticket);
+
+      await userEvent.click(button('Back to Todo'));
+
+      expect(
+        await inDrawer().findByText('The Project is archived.'),
+      ).toBeInTheDocument();
     });
   });
 

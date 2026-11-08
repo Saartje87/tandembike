@@ -91,8 +91,9 @@ export function laneOf(
 
 /**
  * Whether a Ticket is stalled: it needs action with no live Conversation, so
- * it has no Claim and no PR reference either. Only a stalled card offers
- * Back to Todo.
+ * it has no Claim and no PR reference either. It is the Glossary term for
+ * the Action needed section; Back to Todo is offered more widely, see
+ * `isParked`.
  */
 export function isStalled(ticket: LaneInput, live?: LiveConversation): boolean {
   return live === undefined && laneOf(ticket).section === 'Action needed';
@@ -100,11 +101,21 @@ export function isStalled(ticket: LaneInput, live?: LiveConversation): boolean {
 
 /**
  * Whether a Ticket sits in the Review section: In progress with a PR
- * reference and no live Conversation. Only a Review card offers Merged.
+ * reference and no live Conversation. The drawer offers Merged there.
  */
 export function isInReview(
   ticket: LaneInput,
   live?: LiveConversation,
 ): boolean {
   return laneOf(ticket, live).section === 'Review';
+}
+
+/**
+ * Whether a Ticket or Epic is parked: In progress with no live Conversation,
+ * whatever its section (Action needed, Running or Review). Back to Todo shows
+ * in the drawer exactly then, so a Claim left behind or a PR closed without
+ * merge has a way out.
+ */
+export function isParked(ticket: LaneInput, live?: LiveConversation): boolean {
+  return ticket.status === 'In progress' && live === undefined;
 }
