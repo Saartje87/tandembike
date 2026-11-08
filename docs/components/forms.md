@@ -100,8 +100,11 @@ with `refusalReason(result, field)` from `src/app/lib/action-result.ts`.
   Supply a meaningful label; do not use it for selecting among multiple
   choices. Its `onChange` is the native change handler of its `<input>`:
   read the new value from `event.target.checked`
-  (`onChange={(event) => setShowArchived(event.target.checked)}`). Its
-  accessible role is `switch`, so tests find it with
+  (`onChange={(event) => setShowArchived(event.target.checked)}`).
+  `checked`, `defaultChecked` and `onChange` go straight to the input, and
+  its look follows the input's own `:checked` state, so
+  `<Switch {...register('name')} />` and `reset()` keep the look in sync
+  with the value. Its accessible role is `switch`, so tests find it with
   `getByRole('switch', { name })`.
 - **`Slider`** is for choosing a value across a range, especially when
   adjusting a continuous or stepped quantity. Use `step` when the range has

@@ -5,10 +5,3 @@ import { style } from '@vanilla-extract/css';
 export const panel = style({
   maxInlineSize: `calc(${vars.space[8]} * 7)`,
 });
-
-/** The icon buttons in even rows; `Grid` has no auto-fill columns. */
-export const icons = style({
-  display: 'grid',
-  gridTemplateColumns: `repeat(auto-fill, minmax(${vars.space[6]}, 1fr))`,
-  gap: vars.space[1],
-});

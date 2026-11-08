@@ -43,6 +43,23 @@ describe('AgentSettingsForm', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows saved settings as on in their registered Switches', () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, parallelRuns: true, agentMode: true }}
+      />,
+    );
+
+    // Blocks 3.5 styles the Switch from its input's `:checked` (T1132), so a
+    // checked input is what makes it look on.
+    for (const name of ['Parallel runs', 'Agent mode']) {
+      const toggle = screen.getByRole('switch', { name });
+      expect(toggle).toBeChecked();
+      expect(toggle.matches(':checked')).toBe(true);
+    }
+  });
+
   it('saves a new path', async () => {
     renderWithTheme(<AgentSettingsForm projectId={3} settings={unset} />);
 

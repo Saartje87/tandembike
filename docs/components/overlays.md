@@ -124,7 +124,7 @@ content that can be read inline.
 
 ## Drawer caveats
 
-Checked against `@blockle/blocks-react` 3.4.0:
+Checked against `@blockle/blocks-react` 3.5.0:
 
 - The theme sizes it 300px wide (or high), at most 100%. Its `size` prop
   (`medium` 480px, `large` 640px) sets another; no `className` is needed.
@@ -149,7 +149,7 @@ Checked against `@blockle/blocks-react` 3.4.0:
 
 ## Menu
 
-Checked against `@blockle/blocks-react` 3.4.0. A `Menu` is a button that opens
+Checked against `@blockle/blocks-react` 3.5.0. A `Menu` is a button that opens
 a list of items, built on `Popover`. It is a menu to assistive technology (role
 `menu`, with `menuitem` and `menuitemradio` items), with arrow keys, Home, End
 and typeahead, and it returns focus to the trigger. It keeps itself inside the
@@ -183,12 +183,13 @@ import { Button, Menu } from '@blockle/blocks';
   `disabled`, `startSlot`, `endSlot`), a `{ type: 'separator' }`, or a
   `{ type: 'radio-group', value, onChange, items }` whose items are
   `{ value, label, disabled?, endSlot? }`.
-- `menuRadioGroup({ type: 'radio-group', value, onChange, items })` builds the
-  radio group typed over a union of string values: `V` is inferred from `value`
-  and `onChange`, and the items' values are checked against it
-  (`MenuRadioGroupItem<V>`, `MenuRadioItem<V>`). `type: 'radio-group'` is still
-  required (Blocks T688). It returns the group as is, so put it in `items`, as
-  `ColorModeMenu` does.
+- `menuRadioGroup({ value, onChange, items })` builds the radio group typed
+  over a union of string values: `V` is inferred from `value` and `onChange`,
+  and the items' values are checked against it (`MenuRadioGroupItem<V>`,
+  `MenuRadioItem<V>`). It adds `type: 'radio-group'` itself, and its parameter
+  type leaves `type` out, so passing it fails typecheck. Put the group it
+  returns in `items`, as `ColorModeMenu` does. A plain `MenuRadioGroupItem`
+  literal in `items` still needs `type: 'radio-group'`.
 - Pass `textValue` for typeahead when `label` is not a plain string.
 - It is uncontrolled unless you pass `open` and `onOpenChange`. `placement`
   defaults to `bottom-start`.
