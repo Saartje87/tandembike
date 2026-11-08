@@ -28,6 +28,7 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,
+  worktreePath: null,
   createdAt: at,
   updatedAt: at,
   ...values,

@@ -267,6 +267,13 @@
       "when": 1794173163362,
       "tag": "0037_bright_fenris",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1794176295088,
+      "tag": "0038_conversation_worktree",
+      "breakpoints": true
     }
   ]
 }

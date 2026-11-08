@@ -165,20 +165,6 @@ describe('Starting a Conversation', () => {
     expect(brief).not.toContain('overlaps the drawer');
   });
 
-  it('asks for a git worktree of its own when the Project allows parallel runs', async () => {
-    const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
-
-    await conversations.start({
-      startedBy: 'user',
-      projectId: project.id,
-      intent: 'start',
-      prompt: 'Go.',
-    });
-
-    expect(runner.runs[0].options.systemPrompt).toContain('worktree');
-  });
-
   it("starts every run with the Project's run mode and model", async () => {
     const { conversations, runner, tickets, project } = setup();
 
@@ -207,40 +193,50 @@ describe('Starting a Conversation', () => {
     });
   });
 
-  it('gives only Start runs the worktree instruction, and says how to make the worktree', async () => {
-    const { conversations, runner, tickets, project } = setup();
+  it('starts a Start run with Parallel runs on in a worktree Tandembike made, and says so in the brief', async () => {
+    const {
+      conversations,
+      runner,
+      tickets,
+      project,
+      worktrees,
+      repositoryDir,
+    } = setup();
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
 
-    await conversations.start({
+    const conversation = await conversations.start({
       startedBy: 'user',
       projectId: project.id,
       intent: 'start',
       prompt: 'Go.',
     });
-    await conversations.start({
-      startedBy: 'user',
-      projectId: project.id,
-      intent: 'triage',
-      prompt: 'Go.',
-    });
-    await conversations.start({
-      startedBy: 'user',
-      projectId: project.id,
-      intent: 'ask',
-      prompt: 'Go.',
-    });
 
-    const start = runner.runs[0].options.systemPrompt;
-    expect(start).toContain('EnterWorktree');
-    expect(start).toContain('before you change any file');
-    expect(start).toContain('branch');
-    expect(runner.runs[1].options.systemPrompt).not.toContain('worktree');
-    expect(runner.runs[2].options.systemPrompt).not.toContain('worktree');
+    const path = `/fake/worktrees/${project.id}/c${conversation.id}`;
+    expect(worktrees.created).toEqual([
+      {
+        repositoryPath: repositoryDir,
+        projectId: project.id,
+        conversationId: conversation.id,
+      },
+    ]);
+    expect(conversation.worktreePath).toBe(path);
+    expect(runner.runs[0].options.cwd).toBe(path);
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toContain(
+      `You are in a git worktree Tandembike made for this Conversation at ${path}, detached at origin/main.`,
+    );
+    expect(brief).not.toContain('EnterWorktree');
   });
 
-  it('tells a Start run to remove its own worktree before it finishes, as no exit prompt will', async () => {
-    const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+  it('keeps the main checkout with Parallel runs off and for every other intent', async () => {
+    const {
+      conversations,
+      runner,
+      tickets,
+      project,
+      worktrees,
+      repositoryDir,
+    } = setup();
 
     await conversations.start({
       startedBy: 'user',
@@ -248,11 +244,82 @@ describe('Starting a Conversation', () => {
       intent: 'start',
       prompt: 'Go.',
     });
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    for (const intent of ['triage', 'ask'] as const) {
+      await conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent,
+        prompt: 'Go.',
+      });
+    }
 
-    const start = runner.runs[0].options.systemPrompt;
-    expect(start).toContain('Remove your worktree before you finish');
-    expect(start).toContain('ExitWorktree');
-    expect(start).toContain('no prompt to keep or remove it');
+    expect(worktrees.created).toEqual([]);
+    for (const run of runner.runs) {
+      expect(run.options.cwd).toBe(repositoryDir);
+      expect(run.options.systemPrompt).not.toContain('worktree');
+    }
+  });
+
+  it('resumes every later run in the same worktree', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    runner.runs[0].emit({ type: 'session', sessionId: 's1' });
+    runner.runs[0].emit({ type: 'exit' });
+
+    await conversations.reply(conversation.id, 'More.', 'user');
+
+    expect(runner.runs).toHaveLength(2);
+    expect(runner.runs[1].options.cwd).toBe(conversation.worktreePath);
+    expect(runner.runs[1].options.systemPrompt).toContain(
+      'git worktree Tandembike made',
+    );
+  });
+
+  it('refuses a reply while the worktree is missing, naming the reason', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    runner.runs[0].emit({ type: 'exit' });
+    worktrees.states.set(conversation.worktreePath as string, 'missing');
+
+    const error = await failure(
+      conversations.reply(conversation.id, 'More.', 'user'),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as Error).message).toContain('worktree');
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('leaves the Conversation interrupted with the message of git when the worktree cannot be created', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    worktrees.failCreateWith = 'fatal: invalid reference: origin/main';
+
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(conversation.state).toBe('interrupted');
+    expect(runner.runs).toHaveLength(0);
+    const entry = conversations.transcript(conversation.id).at(-1);
+    expect(entry).toMatchObject({ role: 'error' });
+    expect(entry?.text).toContain('fatal: invalid reference: origin/main');
   });
 
   it('is refused when the Project has no repository path', async () => {

@@ -68,3 +68,35 @@ describe('runBrief and the Check command', () => {
     }
   });
 });
+
+describe('runBrief and the worktree', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: 7,
+    ticketTitle: 'Fix it',
+    ticketType: 'Ticket' as const,
+    projectName: 'Website',
+    intent: 'start' as const,
+    parallelRuns: true,
+    runMode: 'default' as const,
+  };
+
+  it('replaces the Parallel runs line with the worktree line when there is a worktree', () => {
+    const brief = runBrief({
+      ...base,
+      worktree: { path: '/w/1/c5', base: 'origin/main' },
+    });
+
+    expect(brief).toContain(
+      'You are in a git worktree Tandembike made for this Conversation at /w/1/c5, detached at origin/main. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.',
+    );
+    expect(brief).not.toContain('Other runs may work in this repository');
+  });
+
+  it('keeps the Parallel runs line without a worktree', () => {
+    const brief = runBrief({ ...base, worktree: null });
+
+    expect(brief).toContain('Other runs may work in this repository');
+    expect(brief).not.toContain('Tandembike made for this Conversation');
+  });
+});
