@@ -39,6 +39,11 @@ export const pip = style({
 
 export const pipState = styleVariants({
   done: { backgroundColor: vars.colorRole.success.solid },
+  // Finished on the Epic's branch, not yet merged: done's colour, hollowed.
+  built: {
+    backgroundColor: vars.colorRole.success.subtle,
+    boxShadow: `inset 0 0 0 ${vars.borderWidth.thin} ${vars.colorRole.success.solid}`,
+  },
   review: { backgroundColor: vars.colorRole.info.solid },
   running: { backgroundColor: vars.colorRole.primary.solid },
   'needs-you': { backgroundColor: vars.colorRole.warning.solid },

@@ -442,6 +442,7 @@ const sectionOf = (
 
 const childStateLabel: Record<EpicChildState, string> = {
   done: 'done',
+  built: 'built',
   running: 'running',
   'needs-you': 'needs you',
   review: 'in review',
@@ -465,14 +466,17 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   if (row.children.length === 0) {
     return null;
   }
-  const done = row.children.filter(({ state }) => state === 'done').length;
+  // A built child counts as finished: it waits only for its Epic to merge (T1144).
+  const done = row.children.filter(
+    ({ state }) => state === 'done' || state === 'built',
+  ).length;
   return (
     <Inline
       gap={1}
       alignY="center"
       flexWrap="nowrap"
       role="img"
-      aria-label={`${done} of ${row.children.length} children done`}
+      aria-label={`${done} of ${row.children.length} children done or built`}
     >
       {row.children.map((child) => (
         <Pip

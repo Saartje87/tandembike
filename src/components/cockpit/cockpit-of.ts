@@ -44,9 +44,14 @@ export type InFlightRow = CockpitTicket & {
   pullRequest: string | null;
 };
 
-/** Where a child of an Epic stands, for its Epic's row. */
+/**
+ * Where a child of an Epic stands, for its Epic's row. `built` is an In
+ * progress child whose acceptance criteria are all checked: finished on the
+ * Epic's branch, waiting for the Epic to merge (T1144).
+ */
 export type EpicChildState =
   | 'done'
+  | 'built'
   | 'running'
   | 'needs-you'
   | 'review'
@@ -164,6 +169,16 @@ const childStateBySection: Record<InProgressSection, EpicChildState> = {
   Review: 'review',
   'Action needed': 'needs-you',
 };
+
+/**
+ * Whether an In progress child is finished on its Epic's branch: it has
+ * acceptance criteria and every one is checked. Only its Epic's row reads it;
+ * the child keeps its own Lane and section.
+ */
+const isBuilt = (ticket: Ticket): boolean =>
+  ticket.status === 'In progress' &&
+  ticket.acceptanceCriteria.length > 0 &&
+  ticket.acceptanceCriteria.every(({ checked }) => checked);
 
 const latestPullRequest = (ticket: Ticket): string | null =>
   ticket.externalReferences.findLast(isPullRequestReference) ?? null;
@@ -347,6 +362,9 @@ export function cockpitOf(
     [...actionNeeded, ...review].map(({ number }) => number),
   );
   const childStateOf = (entry: (typeof placed)[number]): EpicChildState => {
+    if (isBuilt(entry.ticket)) {
+      return 'built';
+    }
     if (entry.lane === 'In progress' && entry.section) {
       return childStateBySection[entry.section];
     }

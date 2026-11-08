@@ -512,6 +512,104 @@ describe('cockpitOf', () => {
       });
     });
 
+    describe('children built on the Epic branch (T1144)', () => {
+      const criteria = (...checked: boolean[]) =>
+        checked.map((isChecked, index) => ({
+          id: index + 1,
+          text: `Criterion ${index + 1}`,
+          checked: isChecked,
+        }));
+      const reviewLink = { ...link, hasPullRequest: true };
+      const reviewEpic = (children: ReturnType<typeof child>[]) =>
+        epic({
+          claim: null,
+          externalReferences: [pullRequest(143)],
+          children,
+        });
+
+      it('marks an In progress child with every acceptance criterion checked as built', () => {
+        const [row] = cockpitOf(
+          [
+            reviewEpic([
+              child(2, 'In progress'),
+              child(5, 'In progress'),
+              child(6, 'In progress'),
+            ]),
+            ticket({
+              number: 2,
+              status: 'In progress',
+              epic: reviewLink,
+              acceptanceCriteria: criteria(true, true),
+            }),
+            ticket({
+              number: 5,
+              status: 'In progress',
+              epic: reviewLink,
+              acceptanceCriteria: criteria(true, false),
+            }),
+            ticket({ number: 6, status: 'In progress', epic: reviewLink }),
+          ],
+          activity(),
+        ).needsYou.review;
+
+        expect(
+          row.children?.map(({ number, state }) => [number, state]),
+        ).toEqual([
+          [2, 'built'],
+          [5, 'review'],
+          [6, 'review'],
+        ]);
+      });
+
+      it("keeps a built child's Lane and section: it still has no row of its own", () => {
+        const cockpit = cockpitOf(
+          [
+            epic({ claim, children: [child(2, 'In progress')] }),
+            ticket({
+              number: 2,
+              status: 'In progress',
+              claim,
+              epic: { ...link, claim },
+              acceptanceCriteria: criteria(true),
+            }),
+          ],
+          activity(),
+        );
+
+        expect(cockpit.epics[0].children).toMatchObject([
+          { number: 2, state: 'built' },
+        ]);
+        expect(numbers(cockpit.inFlight)).toEqual([]);
+        expect(numbers(cockpit.done)).toEqual([]);
+      });
+
+      it('never marks a Todo or Done child built', () => {
+        const [row] = cockpitOf(
+          [
+            epic({ children: [child(1, 'Done'), child(3, 'Todo')] }),
+            ticket({
+              number: 1,
+              status: 'Done',
+              epic: link,
+              acceptanceCriteria: criteria(true),
+            }),
+            ticket({
+              number: 3,
+              labels: ['ready-for-agent'],
+              epic: link,
+              acceptanceCriteria: criteria(true),
+            }),
+          ],
+          activity(),
+        ).epics;
+
+        expect(row.children.map(({ state }) => state)).toEqual([
+          'done',
+          'queued',
+        ]);
+      });
+    });
+
     it('marks a child that needs you or is in review', () => {
       const [row] = cockpitOf(
         [

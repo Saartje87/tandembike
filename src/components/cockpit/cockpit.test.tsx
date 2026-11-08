@@ -433,7 +433,9 @@ describe('Cockpit', () => {
       .getByRole('link', { name: 'Cockpit' })
       .closest('li') as HTMLElement;
     expect(
-      within(epicRow).getByRole('img', { name: '1 of 3 children done' }),
+      within(epicRow).getByRole('img', {
+        name: '1 of 3 children done or built',
+      }),
     ).toBeVisible();
     const summary = epicRow.querySelector('summary') as HTMLElement;
     expect(within(summary).getByText('needs you')).toBeVisible();
@@ -441,7 +443,9 @@ describe('Cockpit', () => {
     expect(rowLinks(inFlight)).not.toContain('Child 31');
 
     await userEvent.click(
-      within(epicRow).getByRole('img', { name: '1 of 3 children done' }),
+      within(epicRow).getByRole('img', {
+        name: '1 of 3 children done or built',
+      }),
     );
 
     expect(epicRow.querySelector('details')).toHaveAttribute('open');
@@ -467,6 +471,73 @@ describe('Cockpit', () => {
     expect(
       within(section('Action needed')).getByRole('link', { name: 'Child 32' }),
     ).toBeVisible();
+  });
+
+  it("counts an Epic's built children with its done ones, telling them apart (T1144)", async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const link = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim,
+      hasPullRequest: false,
+    };
+    const childOf = (number: number, status: Ticket['status']) => ({
+      number,
+      title: `Child ${number}`,
+      status,
+      archived: false,
+      blockedBy: [],
+      blocked: false,
+    });
+    const checked = [{ id: 1, text: 'Works', checked: true }];
+    renderCockpit([
+      ticket({
+        number: 50,
+        title: 'Cockpit',
+        type: 'Epic',
+        color: 'teal',
+        status: 'In progress',
+        claim,
+        children: [
+          childOf(30, 'Done'),
+          childOf(31, 'In progress'),
+          childOf(32, 'In progress'),
+        ],
+      }),
+      ticket({ number: 30, title: 'Child 30', status: 'Done', epic: link }),
+      ticket({
+        number: 31,
+        title: 'Child 31',
+        status: 'In progress',
+        epic: link,
+        acceptanceCriteria: checked,
+      }),
+      ticket({
+        number: 32,
+        title: 'Child 32',
+        status: 'In progress',
+        epic: link,
+      }),
+    ]);
+
+    const epicRow = within(section('In flight'))
+      .getByRole('link', { name: 'Cockpit' })
+      .closest('li') as HTMLElement;
+    const bar = within(epicRow).getByRole('img', {
+      name: '2 of 3 children done or built',
+    });
+    expect(bar).toHaveTextContent('2/3');
+
+    await userEvent.click(bar);
+
+    expect(
+      within(epicRow)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['T30Child 30done', 'T31Child 31built', 'T32Child 32running']);
   });
 
   it("links an opened Epic row's children over this Board, keeping its filter", async () => {
@@ -513,7 +584,9 @@ describe('Cockpit', () => {
       .getByRole('link', { name: 'Cockpit' })
       .closest('li') as HTMLElement;
     await userEvent.click(
-      within(epicRow).getByRole('img', { name: '0 of 1 children done' }),
+      within(epicRow).getByRole('img', {
+        name: '0 of 1 children done or built',
+      }),
     );
 
     expect(
@@ -605,7 +678,7 @@ describe('Cockpit', () => {
     expect(rowLinks(intake)).toEqual(['Big idea']);
     expect(within(row).queryAllByRole('checkbox')).toHaveLength(0);
     await userEvent.click(
-      within(row).getByRole('img', { name: '0 of 1 children done' }),
+      within(row).getByRole('img', { name: '0 of 1 children done or built' }),
     );
     expect(row.querySelector('details')).toHaveAttribute('open');
     expect(within(row).getByText('Child 30')).toBeVisible();
@@ -876,7 +949,9 @@ describe('Cockpit', () => {
       .getByRole('link', { name: 'Cockpit' })
       .closest('li') as HTMLElement;
     await userEvent.click(
-      within(epicRow).getByRole('img', { name: '0 of 1 children done' }),
+      within(epicRow).getByRole('img', {
+        name: '0 of 1 children done or built',
+      }),
     );
     expect(epicRow.querySelector('details')).toHaveAttribute('open');
     expect(within(epicRow).queryAllByRole('checkbox')).toHaveLength(0);
