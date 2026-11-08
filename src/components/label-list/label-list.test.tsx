@@ -46,6 +46,12 @@ describe('LabelList', () => {
     expect(items[2]).toHaveAttribute('title', 'ui, docs');
   });
 
+  it('names a single hidden label in the singular', () => {
+    renderWithTheme(<LabelList labels={['bug', 'ui', 'docs']} max={2} />);
+
+    expect(screen.getByText('+1')).toHaveAccessibleName('1 more label: docs');
+  });
+
   it('shows no overflow tag when the labels fit `max`', () => {
     renderWithTheme(<LabelList labels={['bug', 'ui']} max={2} />);
 

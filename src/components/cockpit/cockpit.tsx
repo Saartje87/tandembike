@@ -345,7 +345,7 @@ const TicketRow: FC<TicketRowProps> = ({
           </Text>
         </Stack>
       </Inline>
-      <Inline gap={2} alignY="center" flexWrap="nowrap">
+      <Inline gap={2} alignY="center" flexWrap="nowrap" flexShrink={0}>
         <LabelList labels={ticket.labels} max={2} />
         {end}
       </Inline>

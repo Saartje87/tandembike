@@ -31,6 +31,7 @@ export const LabelList: FC<LabelListProps> = ({
 
   const shown = max === undefined ? labels : labels.slice(0, max);
   const hidden = labels.slice(shown.length);
+  const hiddenText = hidden.join(', ');
 
   return (
     <Inline
@@ -67,8 +68,8 @@ export const LabelList: FC<LabelListProps> = ({
         {hidden.length > 0 && (
           <Tag asChild>
             <li
-              aria-label={`${hidden.length} more labels: ${hidden.join(', ')}`}
-              title={hidden.join(', ')}
+              aria-label={`${hidden.length} more ${hidden.length === 1 ? 'label' : 'labels'}: ${hiddenText}`}
+              title={hiddenText}
             >
               +{hidden.length}
             </li>
