@@ -44,8 +44,8 @@ export type ProjectTabsProps = {
    */
   needsYou?: number;
   /**
-   * The rows of Needs you → Intake on the Backlog's Board: its tab shows them
-   * in a badge of their own, beside its open Tickets. Defaults to 0.
+   * The rows of Needs you → Intake on the Backlog's Board: its open Tickets'
+   * badge turns to a warning while there are any. Defaults to 0.
    */
   backlogIntake?: number;
 };
@@ -89,11 +89,12 @@ type ProjectTabProps = {
   openTickets?: number;
   /** What needs the User on the tab's Board, shown in a badge when above 0. */
   needsYou?: number;
-  /** The Intake on the tab's Board, shown in a badge of its own when above 0. */
+  /**
+   * The Intake on the tab's Board, among its open Tickets: above 0, their
+   * badge turns to a warning and names it.
+   */
   intake?: number;
 };
-
-type Badge = { count: number; name: string; intent?: 'warning' };
 
 const ProjectTab: FC<ProjectTabProps> = ({
   href,
@@ -103,54 +104,42 @@ const ProjectTab: FC<ProjectTabProps> = ({
   needsYou,
   intake = 0,
 }) => {
-  const badges: Badge[] = [];
-  if (needsYou === undefined) {
-    if (openTickets !== undefined) {
-      badges.push({
-        count: openTickets,
-        name: `${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`,
-      });
-    }
-  } else if (needsYou > 0) {
-    badges.push({
-      count: needsYou,
-      name: `${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`,
-      intent: 'warning',
-    });
-  }
-  if (intake > 0) {
-    badges.push({
-      count: intake,
-      name: `${intake} in Intake`,
-      intent: 'warning',
-    });
-  }
+  const badge =
+    needsYou === undefined
+      ? openTickets === undefined
+        ? undefined
+        : {
+            count: openTickets,
+            name: `${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}${intake > 0 ? `, ${intake} in Intake` : ''}`,
+            intent: intake > 0 ? ('warning' as const) : undefined,
+          }
+      : needsYou > 0
+        ? {
+            count: needsYou,
+            name: `${needsYou} ${needsYou === 1 ? 'needs' : 'need'} you`,
+            intent: 'warning' as const,
+          }
+        : undefined;
   return (
     <Tab
       asChild
       current={current}
-      // The badges sit outside the link (a Tab's slots do), so they are only
-      // shown here; the counts are read out as part of the link's name below.
+      // The badge sits outside the link (a Tab's slots do), so it is only shown
+      // here; the count is read out as part of the link's name below.
       endSlot={
-        badges.length > 0 && (
-          <Inline gap={1} alignY="center" flexWrap="nowrap">
-            {badges.map((badge) => (
-              <Tag key={badge.name} aria-hidden intent={badge.intent}>
-                {badge.count}
-              </Tag>
-            ))}
-          </Inline>
+        badge && (
+          <Tag aria-hidden intent={badge.intent}>
+            {badge.count}
+          </Tag>
         )
       }
     >
       <AppLink href={href} intent="inherit">
         {children}
-        {badges.length > 0 && (
+        {badge && (
           <>
             {' '}
-            <VisuallyHidden>
-              {badges.map(({ name }) => name).join(', ')}
-            </VisuallyHidden>
+            <VisuallyHidden>{badge.name}</VisuallyHidden>
           </>
         )}
       </AppLink>
@@ -225,7 +214,7 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
  * each Prepared one, the History of archived ones and its Settings, with a
  * New Cycle button that adds one. The Backlog's and each Cycle's tab shows its open
  * Tickets in a badge, whatever the Board filter; the Active Cycle's shows what
- * needs the User instead, and the Backlog's its Intake beside them. It marks the tab on screen
+ * needs the User instead, and the Backlog's turns to a warning with Intake. It marks the tab on screen
  * from the URL, so the Project's layout can keep it mounted across its tabs,
  * and carries the Board filter in the URL from one Board's tab to another's.
  */

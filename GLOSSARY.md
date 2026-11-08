@@ -57,7 +57,7 @@ The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It doe
 _Avoid_: For human, Waiting on me
 
 **Needs you**:
-The Board's first grouping: the Tickets and Epics waiting on the User, which are those in the Action needed section of the In progress Lane, those in Review, and Intake. Each Board's Needs you holds only its own Tickets: the Backlog's Intake is on the Backlog's Board, not the Active Cycle's (ADR 0025). `ready-for-human` work is not Needs you: it is the User's own work, not a request. The Active Cycle's count shows on its tab, and the Backlog's Intake count on the Backlog's tab beside its open Tickets; a Board's count shows in the browser tab title. These counts ignore the Board filter.
+The Board's first grouping: the Tickets and Epics waiting on the User, which are those in the Action needed section of the In progress Lane, those in Review, and Intake. Each Board's Needs you holds only its own Tickets: the Backlog's Intake is on the Backlog's Board, not the Active Cycle's (ADR 0025). `ready-for-human` work is not Needs you: it is the User's own work, not a request. The Active Cycle's count shows on its tab, and the Backlog's tab badge of open Tickets turns to a warning and names its Intake count while it has any; a Board's count shows in the browser tab title. These counts ignore the Board filter.
 _Avoid_: Action items, attention list
 
 **In flight**:

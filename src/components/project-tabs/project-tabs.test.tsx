@@ -223,7 +223,7 @@ describe('ProjectTabs', () => {
     );
   });
 
-  it("shows the Backlog's Intake in a badge of its own, beside its open Tickets", () => {
+  it("shows the Backlog's Intake in its open Tickets' badge", () => {
     renderTabs(
       [cycle({ id: 8, title: 'Launch', state: 'Active' })],
       [],
@@ -236,6 +236,13 @@ describe('ProjectTabs', () => {
     expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
       'Backlog 4 open Tickets, 2 in Intake',
     );
+    // One badge: the open Tickets, Intake among them.
+    expect(
+      screen
+        .getAllByText(/^\d+$/)
+        .filter((badge) => badge.closest('a') === null)
+        .map(({ textContent }) => textContent),
+    ).toEqual(['4', '1']);
     expect(screen.getByRole('link', { name: /^Launch/ })).toHaveTextContent(
       'Launch 1 needs you',
     );
