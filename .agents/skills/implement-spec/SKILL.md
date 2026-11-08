@@ -27,7 +27,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
 4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
-   - creates its worktree off the integration branch by "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`, which has the command that is safe to run in parallel and how to recover a failed one;
+   - creates and prepares its worktree off the integration branch by "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`, which has the one command that is safe to run in parallel, how to recover a failed one, and when to skip the install;
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
    - is told which sibling tickets run alongside it on the same files, and keeps its changes to those files additive, making a structural edit there (see `to-tickets`) only when its ticket cannot work without one, and naming it in its report;
    - calls the Skill tool with `tdd` to build the ticket;
@@ -41,4 +41,4 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 8. If a draft PR exists, mark it ready for review. Otherwise, mark each completed Ticket `Done` only after its work is merged into the integration branch and the required checks and review pass. Report the integration branch.
 
-9. Clean up all **implementer subagent** worktrees.
+9. Clean up all **implementer subagent** worktrees by "Clean up" in "Worktrees for parallel runs".
