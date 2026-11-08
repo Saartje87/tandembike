@@ -20,6 +20,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     activity,
     epics,
     epicChildren,
+    outsideBlockers,
     referenceTemplates,
     conversations,
     agentCommands,
@@ -30,6 +31,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     activity: { changes: { type: string }[] }[];
     epics: unknown;
     epicChildren: unknown;
+    outsideBlockers: unknown;
     referenceTemplates: { prefix: string }[];
     conversations: unknown[];
     agentCommands: unknown;
@@ -42,6 +44,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
         .map(({ prefix }) => prefix)
         .join(' ')}
       data-epic-children={JSON.stringify(epicChildren)}
+      data-outside-blockers={JSON.stringify(outsideBlockers)}
       data-conversations={conversations.length}
       data-agent-commands={JSON.stringify(agentCommands)}
       data-board={JSON.stringify(board)}
@@ -343,6 +346,53 @@ describe('BoardTicketDrawer', () => {
         title: 'Build',
         claim: { agentRunId: 'run-1', agentName: null },
         blocks: [expect.objectContaining({ number: 1 })],
+      },
+    ]);
+  });
+
+  it("gives an Epic's drawer its children's direct Blockers from outside it", async () => {
+    const { tickets, website, elsewhere } = setUp();
+    const epic = tickets.createTicket({
+      projectId: website.id,
+      title: 'Launch',
+      type: 'Epic',
+    });
+    const build = tickets.createTicket({
+      projectId: website.id,
+      title: 'Build',
+      epicNumber: epic.number,
+    });
+    const ship = tickets.createTicket({
+      projectId: website.id,
+      title: 'Ship',
+      epicNumber: epic.number,
+    });
+    tickets.addBlocker({ blocker: build.number, blocked: ship.number });
+    tickets.addBlocker({ blocker: elsewhere.number, blocked: ship.number });
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: epic.number,
+            cycleId: null,
+          })
+        }
+      </div>,
+    );
+
+    expect(
+      JSON.parse(
+        screen.getByRole('dialog').getAttribute('data-outside-blockers') ?? '',
+      ),
+    ).toEqual([
+      {
+        number: elsewhere.number,
+        title: 'Other',
+        status: 'Todo',
+        projectId: elsewhere.projectId,
+        blocks: [ship.number],
       },
     ]);
   });
