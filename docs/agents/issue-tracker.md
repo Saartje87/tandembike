@@ -65,9 +65,9 @@ A spec is always an Epic in Tandembike, whatever its size, so that its build Tic
 
 Check what changed in the target Project before you publish, since a spec session can run long while other sessions publish or change the work it builds on:
 
-- **When.** Right before `/to-spec` publishes the spec or fills its placeholder Epic, and again right before `/to-tickets` creates its Tickets. Take the session's start as the time you first read the tracker in it; note it then, in UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`).
-- **The call.** List the target Project's open Epics changed since then: `list_tickets` with `projectName`, `type: "Epic"`, `status: ["Todo", "In progress"]` and `changedSince` set to that time, plus `cycleId` when the work is planned into a Cycle. An Epic counts as changed when one of its children was created, attached, detached or changed.
-- **What to read.** Read each Epic that comes back with `get_ticket`, leaving out the spec's own Epic once it is published or filled.
+- **When.** Right before `/to-spec` publishes the spec or fills its placeholder Epic, and again right before `/to-tickets` creates its Tickets. The session starts when you first read the tracker in it, since everything before that is already in what you read; note that time then, in UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`).
+- **The call.** List the target Project's open Epics changed since then: `list_tickets` with `projectName`, `type: "Epic"`, `status: ["Todo", "In progress"]` and `changedSince` set to that time, plus `cycleId` when the work is planned into a Cycle.
+- **What to read.** Read each Epic that comes back with `get_ticket`, except the spec's own Epic.
 - **What to do.** If one removes, renames or rebuilds something the spec relies on, stop and tell the User before publishing. Otherwise go ahead.
 
 When the spec refines an idea Ticket, for example one grilled in `/triage`:
