@@ -104,6 +104,8 @@ fit, each at least that wide. It takes one value, not a responsive array.
 Children need no `GridItem`; a `GridItem` `colSpan` spans the auto-fill tracks.
 
 ```tsx
+import { Grid, IconButton } from '@blockle/blocks';
+
 <Grid minColumnWidth={6} gap={1}>
   {icons.map((icon) => (
     <IconButton key={icon} label={icon}>
