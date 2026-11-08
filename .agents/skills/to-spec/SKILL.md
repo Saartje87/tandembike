@@ -16,7 +16,7 @@ The issue tracker and triage label vocabulary should have been provided to you. 
 
 Check with the user that these seams match their expectations, in one question, and wait for the answer before writing the spec.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage. In Tandembike a spec is always an Epic, whatever its size: see "Publishing a spec" in `docs/agents/issue-tracker.md`.
+3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage. In Tandembike a spec is always an Epic, whatever its size: see "Publishing a spec" in `docs/agents/issue-tracker.md`, including the check of what changed in the target Project right before you publish.
 
 <spec-template>
 

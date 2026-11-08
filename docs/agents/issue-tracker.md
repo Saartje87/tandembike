@@ -63,6 +63,13 @@ Record triage roles as labels: one category label (`bug` or `enhancement`) and o
 
 A spec is always an Epic in Tandembike, whatever its size, so that its build Tickets hang off it and "Working an Epic" applies. Unless it fills a placeholder Epic, one being triaged or named by the User (below), `/to-spec` publishes it with `create_ticket` (`type: "Epic"`) in the work's Project, with the spec as its description and the `ready-for-agent` label; `/to-tickets` then creates its children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. A spec of one Ticket's worth is an Epic with one child.
 
+Check what changed in the target Project before you publish, since a spec session can run long while other sessions publish or change the work it builds on:
+
+- **When.** Right before `/to-spec` publishes the spec or fills its placeholder Epic, and again right before `/to-tickets` creates its Tickets. Take the session's start as the time you first read the tracker in it; note it then, in UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`).
+- **The call.** List the target Project's open Epics changed since then: `list_tickets` with `projectName`, `type: "Epic"`, `status: ["Todo", "In progress"]` and `changedSince` set to that time, plus `cycleId` when the work is planned into a Cycle. An Epic counts as changed when one of its children was created, attached, detached or changed.
+- **What to read.** Read each Epic that comes back with `get_ticket`, leaving out the spec's own Epic once it is published or filled.
+- **What to do.** If one removes, renames or rebuilds something the spec relies on, stop and tell the User before publishing. Otherwise go ahead.
+
 When the spec refines an idea Ticket, for example one grilled in `/triage`:
 
 1. Stop triaging it, tell the User, and continue in the same session with `/to-spec`, then `/to-tickets`.
