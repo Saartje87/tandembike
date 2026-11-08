@@ -176,13 +176,14 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options.systemPrompt).toContain('worktree');
   });
 
-  it("starts every run with the Project's run mode and model, and resumes with them", async () => {
+  it("starts every run with the Project's run mode and model", async () => {
     const { conversations, runner, tickets, project } = setup();
 
     await conversations.start({
       projectId: project.id,
       intent: 'start',
       prompt: 'Go.',
+      startedBy: 'user',
     });
     expect(runner.runs[0].options).toMatchObject({ runMode: 'default' });
     expect(runner.runs[0].options.model).toBeUndefined();
@@ -195,6 +196,7 @@ describe('Starting a Conversation', () => {
       projectId: project.id,
       intent: 'triage',
       prompt: 'Go.',
+      startedBy: 'user',
     });
     expect(runner.runs[1].options).toMatchObject({
       runMode: 'auto',
