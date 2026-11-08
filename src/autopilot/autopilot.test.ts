@@ -9,7 +9,7 @@ import { createAutopilot } from './autopilot';
 function setup(options: { autopilot?: boolean; parallel?: number } = {}) {
   const changes = createChangeChannel();
   const world = createTestConversations(changes);
-  const { tickets, conversations, runner } = world;
+  const { tickets, conversations } = world;
   const project = tickets.createProject({ name: 'Website' });
   tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
@@ -342,5 +342,132 @@ describe('Autopilot dispatch', () => {
 
       expect(world.started()).toHaveLength(2);
     });
+  });
+});
+
+describe('Autopilot startup', () => {
+  /**
+   * Two Tickets in a started Cycle, each with a run that Autopilot started and
+   * one the User started, then a server restart: a new Conversations module
+   * and a new Autopilot over the same database, with every run interrupted.
+   */
+  async function restarted(
+    options: {
+      autopilot?: boolean;
+      parallel?: number;
+      ceiling?: number;
+      spent?: number;
+    } = {},
+  ) {
+    const world = setup({ parallel: 9 });
+    const { tickets, conversations, project, cycle, ready } = world;
+    const mine = ready('Autopilot run');
+    const yours = ready('User run');
+    tickets.startCycle(cycle.id);
+    await conversations.start({
+      startedBy: 'autopilot',
+      ticketNumber: mine.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: yours.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    // The runs claimed and moved their Tickets, as Agents do.
+    tickets.updateTicket(mine.number, { status: 'In progress' });
+    tickets.updateTicket(yours.number, { status: 'In progress' });
+    if (options.spent !== undefined) {
+      world.runner.runs[0].emit({ type: 'turn', costUsd: options.spent });
+    }
+    const fresh = world.restart();
+    fresh.interruptStale();
+    tickets.setProjectAgentSettings(project.id, {
+      parallelRuns: true,
+      maxConcurrentRuns: options.parallel ?? 9,
+      ...(options.autopilot === undefined
+        ? {}
+        : { autopilot: options.autopilot }),
+      ...(options.ceiling === undefined
+        ? {}
+        : { spendCeilingUsd: options.ceiling }),
+    });
+    const autopilot = createAutopilot({
+      tickets,
+      conversations: fresh,
+      changes: world.changes,
+    });
+    const stateOf = (ticketNumber: number) =>
+      fresh.list({ ticketNumber })[0].state;
+    return { ...world, fresh, autopilot, mine, yours, stateOf };
+  }
+
+  it('resumes its own interrupted Conversations with the fixed reply, sent by Autopilot, and leaves the User ones', async () => {
+    const { fresh, autopilot, mine, yours, stateOf } = await restarted();
+
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    expect(stateOf(mine.number)).toBe('running');
+    expect(stateOf(yours.number)).toBe('interrupted');
+    const conversation = fresh.list({ ticketNumber: mine.number })[0];
+    const last = fresh.transcript(conversation.id).at(-1);
+    expect(last?.role).toBe('autopilot');
+    expect(last?.text).toBe(
+      `The server restarted. Continue T${mine.number} from where you left off`,
+    );
+    stop();
+  });
+
+  it('resumes before it dispatches new work, and never beyond the cap', async () => {
+    const { fresh, autopilot, project, ready, mine, stateOf } = await restarted(
+      { parallel: 1 },
+    );
+    const fresh1 = ready('New');
+
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    expect(stateOf(mine.number)).toBe('running');
+    expect(fresh.list({ ticketNumber: fresh1.number })).toEqual([]);
+    const working = fresh
+      .list({ projectId: project.id })
+      .filter((x) => x.state === 'running');
+    expect(working).toHaveLength(1);
+    stop();
+  });
+
+  it('dispatches new work in the slots the resumes leave', async () => {
+    const { fresh, autopilot, ready, mine, stateOf } = await restarted({
+      parallel: 2,
+    });
+    const next = ready('New');
+
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    expect(stateOf(mine.number)).toBe('running');
+    expect(fresh.list({ ticketNumber: next.number })[0].state).toBe('running');
+    stop();
+  });
+
+  it('resumes nothing with the switch off, without an Active Cycle, or at the ceiling', async () => {
+    const off = await restarted({ autopilot: false });
+    off.autopilot.start();
+    await off.autopilot.idle();
+    expect(off.stateOf(off.mine.number)).toBe('interrupted');
+
+    const over = await restarted({ ceiling: 1, spent: 2 });
+    over.autopilot.start();
+    await over.autopilot.idle();
+    expect(over.stateOf(over.mine.number)).toBe('interrupted');
+
+    const noCycle = await restarted();
+    noCycle.tickets.archiveCycle(noCycle.cycle.id);
+    noCycle.autopilot.start();
+    await noCycle.autopilot.idle();
+    expect(noCycle.stateOf(noCycle.mine.number)).toBe('interrupted');
   });
 });

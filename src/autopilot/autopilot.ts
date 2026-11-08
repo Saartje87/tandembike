@@ -75,27 +75,34 @@ export function createAutopilot({
     );
   };
 
-  const dispatch = async (projectId: number) => {
+  /**
+   * The Active Cycle and free Start run slots Autopilot may use for the
+   * Project now, or null with the switch off, no Active Cycle, the Spend
+   * ceiling reached or no free slot. At or over the ceiling nothing new
+   * starts; the switch stays on and running runs finish. Raising the ceiling
+   * or starting the next Cycle (whose spend is zero) lets the next evaluation
+   * go on.
+   */
+  const room = (
+    projectId: number,
+  ): { cycleId: number; slots: number } | null => {
     const project = tickets.getProject(projectId);
     const settings = tickets.getProjectAgentSettings(projectId);
     if (project.archived || !settings.autopilot) {
-      return;
+      return null;
     }
     const cycle = tickets
       .listCycles(projectId)
       .find((candidate) => candidate.state === 'Active');
     if (!cycle) {
-      return;
+      return null;
     }
-    // At or over the Spend ceiling nothing new starts; the switch stays on and
-    // running runs finish. Raising the ceiling or starting the next Cycle (whose
-    // spend is zero) lets the next evaluation dispatch again.
     if (
       settings.spendCeilingUsd !== null &&
       conversations.autopilotSpend({ projectId, cycleId: cycle.id }) >=
         settings.spendCeilingUsd
     ) {
-      return;
+      return null;
     }
     const working = conversations
       .list({ projectId })
@@ -105,11 +112,51 @@ export function createAutopilot({
           workingStates.includes(conversation.state),
       ).length;
     const slots = startRunLimit(settings) - working;
-    if (slots <= 0) {
+    return slots > 0 ? { cycleId: cycle.id, slots } : null;
+  };
+
+  /**
+   * Startup: replies to each of Autopilot's own interrupted Start
+   * Conversations, oldest first, within the free slots. The User's stay
+   * interrupted until the User replies. A resumed run is working at once, so
+   * the dispatch after it sees its slot taken.
+   */
+  const resume = async (projectId: number) => {
+    const open = room(projectId);
+    if (!open) {
       return;
     }
+    const interrupted = conversations
+      .list({ projectId })
+      .reverse()
+      .filter(
+        (conversation) =>
+          conversation.startedBy === 'autopilot' &&
+          conversation.intent === 'start' &&
+          conversation.state === 'interrupted' &&
+          conversation.ticketNumber !== null,
+      );
+    for (const conversation of interrupted.slice(0, open.slots)) {
+      try {
+        await conversations.reply(
+          conversation.id,
+          `The server restarted. Continue T${conversation.ticketNumber} from where you left off`,
+          'autopilot',
+        );
+      } catch {
+        // No retries: the next change tries again.
+      }
+    }
+  };
+
+  const dispatch = async (projectId: number) => {
+    const open = room(projectId);
+    if (!open) {
+      return;
+    }
+    const { cycleId, slots } = open;
     const commands = tickets.getProjectAgentCommands(projectId);
-    for (const ticket of eligible(projectId, cycle.id).slice(0, slots)) {
+    for (const ticket of eligible(projectId, cycleId).slice(0, slots)) {
       try {
         await conversations.start({
           startedBy: 'autopilot',
@@ -164,6 +211,20 @@ export function createAutopilot({
     return run;
   };
 
+  /** Resumes first, then dispatches, as one queued step. */
+  const startup = (projectId: number): Promise<void> => {
+    const run = queue.then(async () => {
+      try {
+        await resume(projectId);
+        await dispatch(projectId);
+      } catch {
+        // A Project that vanished or is unreadable has nothing to resume.
+      }
+    });
+    queue = run;
+    return run;
+  };
+
   return {
     /**
      * Dispatches the Project's Eligible work now. Evaluations are queued, one
@@ -181,8 +242,8 @@ export function createAutopilot({
     },
 
     /**
-     * Re-evaluates the Project each change touches, and every Project with
-     * Autopilot on once now. Returns a function that stops listening.
+     * Re-evaluates the Project each change touches, and for every Project
+     * resumes Autopilot's interrupted Conversations, then dispatches, once now. Returns a function that stops listening.
      */
     start(): () => void {
       const unsubscribe = changes.subscribe((change) => {
@@ -192,7 +253,7 @@ export function createAutopilot({
         }
       });
       for (const project of tickets.listProjects()) {
-        void evaluate(project.id);
+        void startup(project.id);
       }
       return unsubscribe;
     },

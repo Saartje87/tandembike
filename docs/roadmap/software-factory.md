@@ -154,6 +154,8 @@ Done on 2026-11-08 (T1090): "Feedback as Tickets" in `docs/agents/issue-tracker.
 
 ### Phase 3: Autopilot
 
+Specced into Epic T1091 and built (2026-11-08).
+
 Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
 
 - Agent run mode setting, per Project, with the runner honouring it, the trade-off written next to the switch, and Setup's checklist gaining "a hook blocks destructive git" (advisory, reporting only).
