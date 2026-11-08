@@ -148,6 +148,7 @@ import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
+import { createWork } from './work';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
@@ -1337,7 +1338,7 @@ export function createTickets(
   actor: Actor,
   changes: ChangeChannel = createChangeChannel(),
 ) {
-  return {
+  const core = {
     ...createCycles(db, changes),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
@@ -3044,6 +3045,7 @@ export function createTickets(
       }
     },
   };
+  return { ...core, ...createWork(core) };
 
   /**
    * Announces Ticket `number`'s change, together with that of each of the

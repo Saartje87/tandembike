@@ -1,5 +1,46 @@
 [
   {
+    "name": "abandon_work",
+    "title": "Abandon work",
+    "description": "Give up a Ticket: comment your reason, release your Claim and, if it is In progress with no PR among its External references, move it back to Todo so it is not left Stalled. With a PR it stays In progress. Refused when another run holds the Claim. Returns the Ticket's summary: number, title, status, labels and blocked, plus its claim, now null. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Why you stopped, in Markdown. It becomes a comment on the Ticket."
+        },
+        "agentRunId": {
+          "description": "This Agent run's unique ID. Runs Tandembike started need not pass it; in a terminal session pass one of your own.",
+          "type": "string"
+        },
+        "detail": {
+          "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "reason"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "add_attachment",
     "title": "Add attachment",
     "description": "Attach a file to a Ticket or Epic, added by you as an Agent, and return its metadata (id, ticketNumber, name, mediaType, size, author, createdAt). Give exactly one of path or content. path is an absolute local file path that the app reads on the machine running it, so a saved screenshot never passes through your context; name defaults to the file's base name. content is the file as base64 and needs a name. At most 10 MB per file and 50 Attachments per Ticket. An Attachment cannot be renamed or replaced. mediaType defaults from the name's extension, else application/octet-stream.",
@@ -111,6 +152,35 @@
     },
     "_meta": {
       "anthropic/alwaysLoad": true
+    }
+  },
+  {
+    "name": "add_note",
+    "title": "Add note",
+    "description": "Add a Markdown comment to a Ticket, written by you as an Agent, to share progress, findings or a decision without editing the description. Returns the comment.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "body": {
+          "type": "string",
+          "description": "The comment in Markdown, at most 50,000 characters. It is trimmed and may not be empty."
+        }
+      },
+      "required": [
+        "number",
+        "body"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
     }
   },
   {
@@ -291,6 +361,57 @@
       "required": [
         "epic",
         "ticketNumbers"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "idempotentHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "check_criterion",
+    "title": "Check criterion",
+    "description": "Check or uncheck some of a Ticket's acceptance criteria by id as you verify them. Its other criteria, their order and Status stay as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus acceptanceCriteria holding only the criteria named in the call. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The id of one of the Ticket's acceptance criteria, as returned by get_ticket."
+          },
+          "description": "The criteria to change, each once, at least one."
+        },
+        "checked": {
+          "type": "boolean",
+          "description": "true when they are met, false to uncheck them."
+        },
+        "detail": {
+          "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "ids",
+        "checked"
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false
@@ -1114,6 +1235,41 @@
     }
   },
   {
+    "name": "finish_work",
+    "title": "Finish work",
+    "description": "Finish a Ticket or an Epic by the completion rule, as the User's Merged button does: Done, its triage state label removed (never wontfix or a category label) and its Claim released. For an Epic, every child that is not archived is finished the same way, all or nothing. Before calling it, check that the PR is merged with CI green and the acceptance criteria are checked: the tool checks none of this. Returns the Ticket's summary: number, title, status, labels and blocked. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "detail": {
+          "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "idempotentHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "get_attachment",
     "title": "Get attachment",
     "description": "Get an Attachment by its id, as returned by get_ticket or add_attachment. The first content is its metadata (id, ticketNumber, name, mediaType, size, author, createdAt, url) as JSON. A PNG, JPEG, GIF or WebP follows as image content you can look at, and a text type (text/*, JSON, XML, YAML, JavaScript) as text. Any other type is metadata only; its url is where the app serves it on localhost.",
@@ -1525,6 +1681,82 @@
       "required": [
         "cycleId",
         "ticketNumbers"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "idempotentHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "next_work",
+    "title": "Next work",
+    "description": "Find the top item to work next in your Project's Active Cycle, in Board order: Todo, labelled ready-for-agent, unblocked, unclaimed, not archived, not an Epic's child, and an Epic only once it has a child. Returns { ticket } with the whole Ticket, or { ticket: null, reason } where reason is \"no-active-cycle\", \"nothing-ready\" or \"all-blocked-or-claimed\": tell the User. It does not see Conversations, so an item with an open Start Conversation may still be returned. Then call start_work with its number. The Project defaults to your folder's.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "description": "The Project (id from get_project).",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "projectName": {
+          "description": "The name of the Project, ignoring case, in place of projectId.",
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "open_pr",
+    "title": "Open PR",
+    "description": "Link the pull request you opened to a Ticket by adding its URL as an External reference. With handOff: true it also releases your Claim, so the Ticket lands in Review for the User; use it when you stop at an open PR. Returns the Ticket's summary: number, title, status, labels and blocked, plus externalReferences and its claim. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "url": {
+          "type": "string",
+          "description": "The URL of the pull request."
+        },
+        "handOff": {
+          "description": "true to also release your Claim. Defaults to false.",
+          "type": "boolean"
+        },
+        "agentRunId": {
+          "description": "This Agent run's unique ID. Runs Tandembike started need not pass it; in a terminal session pass one of your own.",
+          "type": "string"
+        },
+        "detail": {
+          "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        }
+      },
+      "required": [
+        "number",
+        "url"
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false
@@ -2061,6 +2293,37 @@
       ],
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "start_work",
+    "title": "Start work",
+    "description": "Begin a Ticket or an Epic: claim it for this Agent run and, for a Todo Ticket, move it to In progress (an Epic's Status follows its children; an In progress Ticket is only claimed; a child under your own Epic Claim moves to In progress). Refused naming the holder when another run holds the Claim, and naming the unresolved Blockers when the Ticket is blocked. Returns the bundle you need to begin: { ticket (description, acceptance criteria, labels, External references, Epic link), comments, blockers (with Statuses), epic (null, or the Epic with its children's Statuses and Blockers and nextChild, the next child to work in Blocker order), cycle, checkCommand (what must pass before a PR, or null) }.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "agentRunId": {
+          "description": "This Agent run's unique ID. Runs Tandembike started need not pass it; in a terminal session pass one of your own.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "idempotentHint": true
     },
     "execution": {
       "taskSupport": "forbidden"
