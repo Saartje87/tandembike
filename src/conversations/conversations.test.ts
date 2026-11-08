@@ -1678,3 +1678,59 @@ describe('Started by', () => {
     ]);
   });
 });
+
+describe('Autopilot spend', () => {
+  it("sums the cost of Autopilot-started Conversations on the Cycle's Tickets and Epics, not hand-started ones or other Cycles'", async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const other = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Epic',
+      type: 'Epic',
+      cycleId: cycle.id,
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Child',
+      epicNumber: epic.number,
+      cycleId: cycle.id,
+    });
+    const elsewhere = tickets.createTicket({
+      projectId: project.id,
+      title: 'Elsewhere',
+      cycleId: other.id,
+    });
+    const startFor = async (
+      ticketNumber: number,
+      startedBy: 'user' | 'autopilot',
+      costUsd: number,
+    ) => {
+      await conversations.start({
+        startedBy,
+        ticketNumber,
+        intent: 'start',
+        prompt: 'Go',
+      });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd });
+    };
+
+    await startFor(epic.number, 'autopilot', 0.5);
+    await startFor(child.number, 'autopilot', 0.25);
+    await startFor(child.number, 'user', 4);
+    await startFor(elsewhere.number, 'autopilot', 8);
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBeCloseTo(0.75);
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: other.id,
+      }),
+    ).toBeCloseTo(8);
+  });
+});

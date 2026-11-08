@@ -51,6 +51,10 @@ import { readyForAgent } from '../../tickets/triage-labels';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
 import {
+  AutopilotBar,
+  type AutopilotBarProps,
+} from '../autopilot-bar/autopilot-bar';
+import {
   filteredSelectionDrop,
   isFiltering,
   mergeLaneOrder,
@@ -101,6 +105,11 @@ export type CockpitProps = {
    * given on the Active Cycle's Board only.
    */
   runSlots?: { used: number; cap: number };
+  /**
+   * The Project's Autopilot switch, Spend ceiling and the Cycle's Autopilot
+   * spend; given on the Active Cycle's Board only.
+   */
+  autopilot?: Omit<AutopilotBarProps, 'projectId'>;
   /**
    * Whether this is a planning Board, a Prepared Cycle's or the Backlog's:
    * Your work and Queued start open, and an empty section is hidden.
@@ -696,6 +705,7 @@ export const Cockpit: FC<CockpitProps> = ({
   cycle,
   tickets,
   runSlots,
+  autopilot,
   planning = false,
   archived = [],
   cycles = [],
@@ -956,6 +966,7 @@ export const Cockpit: FC<CockpitProps> = ({
                 </Tag>
               )}
             </Inline>
+            {autopilot && <AutopilotBar projectId={projectId} {...autopilot} />}
             <Progress
               value={total === 0 ? 0 : Math.round((done / total) * 100)}
               aria-label="Cycle progress"

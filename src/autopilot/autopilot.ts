@@ -87,6 +87,16 @@ export function createAutopilot({
     if (!cycle) {
       return;
     }
+    // At or over the Spend ceiling nothing new starts; the switch stays on and
+    // running runs finish. Raising the ceiling or starting the next Cycle (whose
+    // spend is zero) lets the next evaluation dispatch again.
+    if (
+      settings.spendCeilingUsd !== null &&
+      conversations.autopilotSpend({ projectId, cycleId: cycle.id }) >=
+        settings.spendCeilingUsd
+    ) {
+      return;
+    }
     const working = conversations
       .list({ projectId })
       .filter(

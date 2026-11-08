@@ -133,6 +133,10 @@ _Avoid_: Ready (that is the label), startable
 Who started a Conversation: the **User**, or **Autopilot**. Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
 _Avoid_: Owner, author, initiator
 
+**Spend ceiling**:
+A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of Autopilot-started Conversations on the Active Cycle's Tickets and Epics, resumes included, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
+_Avoid_: Budget, cap (that is the run cap), limit
+
 **Draft**:
 A Conversation the User has begun but not yet sent: an intent, its Ticket or Project, and the text typed so far, with a New Ticket draft also holding its title field's defaults. Nothing runs until the User sends it, which starts the Conversation. A Draft lives only in the browser tab: a reload loses it, and closing it discards it.
 _Avoid_: Pending Conversation, unsent Conversation

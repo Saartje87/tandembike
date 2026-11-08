@@ -80,9 +80,10 @@ const conversation = (
   fields: Pick<Conversation, 'intent' | 'state'>,
 ): Conversation => fields as Conversation;
 
-const stubConversations = (list: Conversation[]) =>
+const stubConversations = (list: Conversation[], spendUsd = 0) =>
   vi.mocked(appConversations).mockReturnValue({
     list: () => list,
+    autopilotSpend: () => spendUsd,
   } as unknown as ReturnType<typeof appConversations>);
 
 describe('CyclePage', () => {
@@ -143,6 +144,34 @@ describe('CyclePage', () => {
       ).toBeVisible();
       expect(screen.queryByText('In the Backlog')).not.toBeInTheDocument();
       expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
+    });
+
+    it("shows Autopilot's switch, spend against the ceiling and the paused notice in its header", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Factory Board',
+      });
+      tickets.setProjectAgentSettings(project.id, {
+        autopilot: true,
+        spendCeilingUsd: 5,
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      stubConversations([], 5.5);
+      const params = Promise.resolve({
+        id: String(project.id),
+        cycleId: String(cycle.id),
+      });
+
+      await renderPage(
+        <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+      );
+
+      expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
+      expect(screen.getByText('$5.50 of $5.00')).toBeVisible();
+      expect(screen.getByText('paused: over ceiling ($5.50)')).toBeVisible();
     });
 
     it("shows only its own Intake in Needs you, none of the Backlog's", async () => {

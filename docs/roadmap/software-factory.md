@@ -63,7 +63,7 @@ Five Lanes over three Statuses, with three sections in In progress, made the Boa
 - It offers no actions in its lists. A run waiting on the User shows a bell that opens its Conversation, so the User decides with the run's context in view; a row's title opens the Ticket, where its state is set. Rejected: Allow and Deny in the list, which would approve on a one-line rule; Merged, Back to Todo and triage controls in the list, which the Ticket drawer already offers.
 - It derives every place from the Lane derivation, through one pure function over any Board's Tickets.
 - A drag only reorders rows within a section; it never changes a Status. The Board also creates Tickets inline, filters, nests an Epic's children in its row and selects many Tickets (Move to Cycle, Add to Epic, Archive).
-- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend and paused notice go there in phase 3. The browser tab's title and the Active Cycle's tab carry the Needs you count.
+- Its header carries the Cycle's progress and the Start runs working; Autopilot's switch, spend against the ceiling and paused notice sit there too (T1128). The browser tab's title and the Active Cycle's tab carry the Needs you count.
 
 ### Status line on In progress cards
 

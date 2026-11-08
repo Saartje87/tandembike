@@ -253,4 +253,94 @@ describe('Autopilot dispatch', () => {
       'running',
     );
   });
+
+  describe('Spend ceiling', () => {
+    /** Cycle with A running, spent $1.50 against a $1 ceiling, and B queued. */
+    async function overCeiling() {
+      const world = setup();
+      const { tickets, conversations, runner, project, cycle, ready } = world;
+      const a = ready('A');
+      const b = ready('B');
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
+      tickets.startCycle(cycle.id);
+      const stop = world.autopilot.start();
+      await world.autopilot.idle();
+      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+      tickets.completeTicket(a.number);
+      await conversations.stop(
+        conversations.list({ projectId: project.id })[0].id,
+      );
+      await world.autopilot.idle();
+      return { ...world, a, b, stop };
+    }
+
+    it('starts nothing at or over the ceiling, keeps the switch on and leaves a running run alone', async () => {
+      const world = setup({ parallel: 3 });
+      const { tickets, conversations, runner, project, cycle, ready } = world;
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
+      const a = ready('A');
+      tickets.startCycle(cycle.id);
+      await world.autopilot.evaluate(project.id);
+      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      ready('B');
+
+      await world.autopilot.evaluate(project.id);
+
+      expect(world.started()).toEqual([a.number]);
+      expect(tickets.getProjectAgentSettings(project.id).autopilot).toBe(true);
+      expect(conversations.list({ projectId: project.id })[0].state).toBe(
+        'idle',
+      );
+    });
+
+    it('resumes at once when the ceiling is raised', async () => {
+      const { tickets, project, autopilot, started, a, b, stop } =
+        await overCeiling();
+      expect(started()).toEqual([a.number]);
+
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 10 });
+      await autopilot.idle();
+
+      expect(started()).toEqual([a.number, b.number]);
+      stop();
+    });
+
+    it('resumes at once when the next Cycle starts, since the spend is per Cycle', async () => {
+      const { tickets, project, autopilot, started, a, b, stop } =
+        await overCeiling();
+      const next = tickets.createCycle({
+        projectId: project.id,
+        title: 'Next',
+      });
+      // The open B rolls over into the new Cycle, whose spend starts at zero.
+      tickets.startCycle(next.id, { archiveActive: true });
+      await autopilot.idle();
+
+      expect(started()).toEqual([a.number, b.number]);
+      stop();
+    });
+
+    it("does not count hand-started Conversations' cost", async () => {
+      const world = setup();
+      const { tickets, conversations, runner, project, cycle, ready } = world;
+      const a = ready('A');
+      ready('B');
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
+      tickets.startCycle(cycle.id);
+      await conversations.start({
+        startedBy: 'user',
+        ticketNumber: a.number,
+        intent: 'start',
+        prompt: 'Go',
+      });
+      runner.runs[0].emit({ type: 'turn', costUsd: 5 });
+      await conversations.stop(
+        conversations.list({ projectId: project.id })[0].id,
+      );
+
+      await world.autopilot.evaluate(project.id);
+
+      expect(world.started()).toHaveLength(2);
+    });
+  });
 });

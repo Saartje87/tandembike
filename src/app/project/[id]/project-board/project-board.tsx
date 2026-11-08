@@ -15,7 +15,11 @@ import {
   noBoardFilter,
 } from '../../../lib/paths';
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
-import { cycleTicketsWithEpics, runSlotsOf } from '../project-data';
+import {
+  autopilotOf,
+  cycleTicketsWithEpics,
+  runSlotsOf,
+} from '../project-data';
 
 export type ProjectBoardProps = {
   project: Project;
@@ -130,6 +134,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
           cycle={tab}
           tickets={cycleTicketsWithEpics(project.id, tab.id)}
           runSlots={runSlotsOf(project.id)}
+          autopilot={autopilotOf(project.id, tab.id)}
         />
       </>
     );

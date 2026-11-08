@@ -460,6 +460,35 @@ export function createConversations({
   return {
     get,
 
+    /**
+     * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
+     * ceiling): the total cost of the Autopilot-started Conversations on the
+     * Cycle's Tickets and Epics, resumes included. Hand-started ones do not
+     * count, so it starts again at zero with each Cycle.
+     */
+    autopilotSpend(input: { projectId: number; cycleId: number }): number {
+      const numbers = new Set(
+        tickets
+          .listTickets({
+            projectId: input.projectId,
+            cycleId: input.cycleId,
+            includeArchived: true,
+          })
+          .map(({ number }) => number),
+      );
+      return db
+        .select()
+        .from(conversations)
+        .all()
+        .filter(
+          (row) =>
+            row.startedBy === 'autopilot' &&
+            row.ticketNumber !== null &&
+            numbers.has(row.ticketNumber),
+        )
+        .reduce((total, row) => total + (row.costUsd ?? 0), 0);
+    },
+
     /** Conversations of a Project and/or Ticket, newest first. */
     list(filter: ListConversationsFilter = {}): Conversation[] {
       const rows = db
