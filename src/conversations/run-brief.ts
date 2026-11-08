@@ -112,7 +112,7 @@ export function runBrief(brief: RunBrief): string {
   }
   if (brief.intent === 'retro' && brief.retroCycle) {
     lines.push(
-      `The Cycle to look back on is ${cycleReference(brief.retroCycle)}. Read its Tickets live with list_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
+      `The Cycle to look back on is ${cycleReference(brief.retroCycle)}. Read its Tickets live with find_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
     );
   }
   if (brief.intent === 'setup') {

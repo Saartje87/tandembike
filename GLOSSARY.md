@@ -49,7 +49,7 @@ The one line on an In progress card saying what its live Conversation is doing n
 _Avoid_: Progress line, activity line
 
 **Queued**:
-The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent can take. Its order is the Autopilot priority, set by dragging or by `sort_lane`. A `ready-for-agent` Epic not yet split is in Intake, not here: see **Intake**. Formerly called Todo.
+The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent can take. Its order is the Autopilot priority, set by dragging. A `ready-for-agent` Epic not yet split is in Intake, not here: see **Intake**. Formerly called Todo.
 _Avoid_: Todo Lane, Ready
 
 **Intake**:

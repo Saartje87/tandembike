@@ -16,7 +16,7 @@ let rpcId = 0;
 /**
  * Calls an MCP tool on the throwaway server and returns its parsed reply.
  * Throws on a refused call. Read each tool's input shape from its
- * `registerTool` call in `src/mcp/mcp-server.ts`.
+ * `registerTool` call in `src/mcp/*-tools.ts`.
  */
 export async function call(name, args) {
   const res = await fetch(`${base}/api/mcp`, {
@@ -44,9 +44,23 @@ export async function call(name, args) {
   }
 }
 
-/** A fresh Project, so each run starts from the same state. */
-export const freshProject = () =>
-  call('create_project', { name: `Check ${Date.now()}` });
+/**
+ * A fresh Project, so each run starts from the same state. Creating a Project
+ * is the User's, so MCP has no tool for it: this fills the New Project form on
+ * /projects, as the User does, and returns { id, name }.
+ */
+export async function freshProject(page) {
+  const name = `Check ${Date.now()}`;
+  await page.goto(`${base}/projects`);
+  const field = page.getByLabel('Project name');
+  if (!(await field.isVisible())) {
+    await page.getByRole('button', { name: /new project/i }).click();
+  }
+  await field.fill(name);
+  await page.getByRole('button', { name: 'Create Project' }).click();
+  await page.waitForURL(/\/project\/\d+/);
+  return { id: Number(new URL(page.url()).pathname.split('/')[2]), name };
+}
 
 /** The open Ticket drawer for T`number`, apart from any Board behind it. */
 export const drawerOf = (page, number) =>

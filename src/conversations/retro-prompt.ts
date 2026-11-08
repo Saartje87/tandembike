@@ -5,7 +5,7 @@ export type RetroCycle = Pick<Cycle, 'id' | 'title'>;
 
 /**
  * How a Retro names its Cycle, by title and id, so a skill can read its
- * Tickets with `list_tickets` and `cycleId`.
+ * Tickets with `find_tickets` and `cycleId`.
  */
 export const cycleReference = (cycle: RetroCycle): string =>
   `"${cycle.title}" (Cycle ${cycle.id})`;

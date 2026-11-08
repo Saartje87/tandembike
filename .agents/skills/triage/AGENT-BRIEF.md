@@ -32,7 +32,7 @@ The agent needs to know when it's done. Every agent brief must have concrete, te
 - **Good:** "Running `gh issue list --label needs-triage` returns issues that have been through initial classification"
 - **Bad:** "Triage should work correctly"
 
-In this repo, store the criteria in the Ticket's acceptance criteria field (`update_ticket` with `acceptanceCriteria`), never as a checklist in the brief: agents check them off there with `set_acceptance_criteria_checked`. The brief points to the field. The examples below show criteria inline only to illustrate what good ones look like.
+In this repo, store the criteria in the Ticket's acceptance criteria field (`update_ticket` with `acceptanceCriteria`), never as a checklist in the brief: agents check them off there with `check_criterion`. The brief points to the field. The examples below show criteria inline only to illustrate what good ones look like.
 
 ### A changed rule agrees everywhere it is stated
 

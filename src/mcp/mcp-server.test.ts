@@ -232,38 +232,21 @@ describe('MCP server', () => {
 
     expect(instructions).toMatch(/In progress/);
     expect(instructions).toMatch(/Done/);
-    expect(instructions).toMatch(/list_projects/);
     expect(instructions).toMatch(/like T42/);
     expect(instructions).not.toMatch(/#\d/);
-    expect(instructions).toMatch(/list_labels/);
-    expect(instructions).toMatch(/add_comment/);
-    expect(instructions).toMatch(/add_attachment/);
-    expect(instructions).toMatch(/list_activity/);
-    expect(instructions).toMatch(/add_blocker/);
-    expect(instructions).toMatch(/create_tickets/);
+    expect(instructions).toMatch(/Begin with start_work/);
+    expect(instructions).toMatch(/next_work/);
+    expect(instructions).toMatch(/End with finish_work/);
+    expect(instructions).toMatch(/abandon_work/);
+    expect(instructions).toMatch(/add_note/);
+    expect(instructions).toMatch(/file_tickets/);
     expect(instructions).toMatch(/Epic/);
-    expect(instructions).toMatch(/attach_to_epic/);
-    expect(instructions).toMatch(
-      /create_tickets[^\n]*an Epic and its children in the same call \(type: "Epic" plus epicPosition\)/,
-    );
-    expect(instructions).toMatch(
-      /Create a new Epic with its children in one create_tickets call; attach existing Tickets with attach_to_epic/,
-    );
-    expect(instructions).toMatch(
-      /planning a Cycle: list_cycles, create_cycle, create_tickets, plan_tickets, start_cycle/,
-    );
-    expect(instructions).toMatch(
-      /turning a spec into an Epic: create_tickets, attach_to_epic, add_blocker/,
-    );
-    expect(instructions).toMatch(/claim_ticket/);
-    expect(instructions).toMatch(/release_ticket_claim/);
-    expect(instructions).toMatch(/finish it with complete_ticket/);
-    expect(instructions).toMatch(/set_acceptance_criteria_checked/);
-    expect(instructions).toMatch(/list_cycles/);
-    expect(instructions).toMatch(/plan_tickets/);
-    expect(instructions).toMatch(/move_tickets/);
-    expect(instructions).toMatch(/sort_lane/);
-    expect(instructions).toMatch(/split.*originNumber/);
+    expect(instructions).toMatch(/update_ticket \(addBlockers\)/);
+    expect(instructions).toMatch(/check_criterion/);
+    expect(instructions).toMatch(/get_project/);
+    expect(instructions).toMatch(/create_cycle/);
+    expect(instructions).toMatch(/find_tickets/);
+    expect(instructions).toMatch(/originNumber/);
     await client.close();
   });
 
@@ -402,7 +385,6 @@ describe('MCP server', () => {
   it("calls a Status's order its Board order, never a lane, and keeps the name sort_lane", async () => {
     const client = await connectMcpClient(createTestTickets());
 
-    const instructions = client.getInstructions() ?? '';
     const { tools } = await client.listTools();
     const sortLane = tools.find((tool) => tool.name === 'sort_lane');
     const sort = JSON.stringify(
@@ -411,7 +393,6 @@ describe('MCP server', () => {
     );
 
     for (const [where, text] of [
-      ['instructions', instructions],
       ['sort_lane', JSON.stringify(sortLane)],
       ['sort', sort],
     ] as const) {
@@ -423,12 +404,13 @@ describe('MCP server', () => {
     await client.close();
   });
 
-  it('defines ready work as unblocked, unclaimed, ready-for-agent Todo Tickets', async () => {
+  it('sends Agents to next_work for ready work, not to a filter recipe', async () => {
     const client = await connectMcpClient(createTestTickets());
 
-    expect(client.getInstructions()).toMatch(
-      /status: "Todo", labels: \["ready-for-agent"\], blocked: false, claimed: false/,
-    );
+    const instructions = client.getInstructions();
+
+    expect(instructions).toMatch(/next_work gives the top ready item/);
+    expect(instructions).not.toMatch(/blocked: false/);
     await client.close();
   });
 

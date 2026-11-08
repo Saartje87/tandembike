@@ -85,6 +85,18 @@ const fileOf = (input: ToolInput) => {
  * line to use when the input names none.
  */
 const tandembike: Record<string, [line: string, without: string]> = {
+  next_work: ['Finding the next work', 'Finding the next work'],
+  start_work: ['Starting {T}', 'Starting a Ticket'],
+  add_note: ['Commenting on {T}', 'Commenting'],
+  check_criterion: ['Checking criteria of {T}', 'Checking criteria'],
+  open_pr: ['Linking a pull request to {T}', 'Linking a pull request'],
+  finish_work: ['Finishing {T}', 'Finishing a Ticket'],
+  abandon_work: ['Giving up {T}', 'Giving up a Ticket'],
+  file_tickets: ['Creating Tickets', 'Creating Tickets'],
+  find_tickets: ['Listing Tickets', 'Listing Tickets'],
+  attach: ['Attaching a file to {T}', 'Attaching a file'],
+  read_attachment: ['Reading an attachment of {T}', 'Reading an attachment'],
+  get_project: ['Reading a Project', 'Reading a Project'],
   list_projects: ['Listing Projects', 'Listing Projects'],
   create_project: ['Creating a Project', 'Creating a Project'],
   rename_project: ['Renaming a Project', 'Renaming a Project'],
