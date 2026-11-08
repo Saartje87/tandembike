@@ -370,6 +370,11 @@ export const conversations = sqliteTable(
      * Cycle's Spend ceiling. Null for a hand-started Conversation.
      */
     autopilotCycleId: integer('autopilot_cycle_id'),
+    /**
+     * Retro: the Cycle it looks back on. Separate from `autopilotCycleId`,
+     * so a Retro never counts against the Spend ceiling. Null for others.
+     */
+    retroCycleId: integer('retro_cycle_id'),
     /** New Ticket: the Cycle the title field was on, a default for the Agent. */
     defaultCycleId: integer('default_cycle_id'),
     /** New Ticket: the Epic the title field was under, a default. */

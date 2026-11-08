@@ -1805,3 +1805,95 @@ describe('Autopilot spend', () => {
     ).toBeCloseTo(8);
   });
 });
+
+describe('A Retro Conversation', () => {
+  it('records its Cycle and the User, and sends the plain prompt', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch the beta',
+    });
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    expect(retro).toMatchObject({
+      projectId: project.id,
+      ticketNumber: null,
+      intent: 'retro',
+      startedBy: 'user',
+      retroCycleId: cycle.id,
+    });
+    expect(runner.runs[0].options.prompt).toBe(
+      'Retro on Cycle "Launch the beta"',
+    );
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      `"Launch the beta" (Cycle ${cycle.id})`,
+    );
+    expect(conversations.transcript(retro.id)).toMatchObject([
+      { role: 'user', text: 'Retro on Cycle "Launch the beta"' },
+    ]);
+  });
+
+  it('refuses a Retro without a Cycle, with another Project’s Cycle, or a second one', async () => {
+    const { conversations, tickets, project } = setup();
+    const other = tickets.createProject({ name: 'Other' });
+    const foreign = tickets.createCycle({ projectId: other.id, title: 'X' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+
+    expect(
+      await failure(
+        conversations.start({
+          startedBy: 'user',
+          projectId: project.id,
+          intent: 'retro',
+          prompt: 'Retro',
+        }),
+      ),
+    ).toBeInstanceOf(ValidationError);
+    expect(
+      await failure(
+        conversations.start({
+          startedBy: 'user',
+          projectId: project.id,
+          intent: 'retro',
+          prompt: 'Retro',
+          retroCycleId: foreign.id,
+        }),
+      ),
+    ).toBeInstanceOf(ValidationError);
+    await conversations.startRetro({ cycleId: cycle.id });
+    expect(
+      await failure(conversations.startRetro({ cycleId: cycle.id })),
+    ).toBeInstanceOf(NotAllowedError);
+  });
+
+  it('is found for its Cycle, also once closed or the Cycle is archived', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const other = tickets.createCycle({ projectId: project.id, title: 'B' });
+    expect(conversations.retroOf(cycle.id)).toBeNull();
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+    await conversations.close(retro.id);
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    expect(conversations.retroOf(cycle.id)?.id).toBe(retro.id);
+    expect(conversations.retroOf(other.id)).toBeNull();
+  });
+
+  it('does not count in Autopilot’s spend', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+
+    await conversations.startRetro({ cycleId: cycle.id });
+    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBe(0);
+  });
+});

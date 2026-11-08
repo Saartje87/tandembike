@@ -85,6 +85,7 @@ const stubConversations = (list: Conversation[], spendUsd = 0) =>
   vi.mocked(appConversations).mockReturnValue({
     list: () => list,
     autopilotSpend: () => spendUsd,
+    retroOf: () => null,
   } as unknown as ReturnType<typeof appConversations>);
 
 describe('CyclePage', () => {

@@ -16,6 +16,8 @@ export type RunBrief = {
   ticketType: TicketType | null;
   projectName: string;
   intent: ConversationIntent;
+  /** Retro only: the Cycle it looks back on. */
+  retroCycle?: { id: number; title: string } | null;
   parallelRuns: boolean;
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
   runMode: 'default' | 'auto';
@@ -31,6 +33,8 @@ const intentLines: Record<ConversationIntent, string> = {
     'The User started this Conversation from a title field, to create a new Ticket together with you. Their first message is the title they typed. Create one or more Tickets, an Epic with children, or none, over the Tandembike tools, as the conversation leads.',
   setup:
     "The User started this Conversation to check that this Project's repository has what Tandembike's Agent runs rely on (Setup). Their first message asks for it.",
+  retro:
+    'The User started this Conversation for a retrospective (Retro) on a Cycle.',
 };
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
@@ -90,6 +94,12 @@ export function runBrief(brief: RunBrief): string {
   if (brief.parallelRuns && brief.intent === 'start') {
     lines.push(
       "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
+    );
+  }
+  if (brief.intent === 'retro' && brief.retroCycle) {
+    const { id, title } = brief.retroCycle;
+    lines.push(
+      `The Cycle to look back on is "${title}" (Cycle ${id}). Read its Tickets live with list_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
     );
   }
   if (brief.intent === 'setup') {
