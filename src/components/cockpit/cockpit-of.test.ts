@@ -564,16 +564,15 @@ describe('cockpitOf', () => {
       it("keeps a built child's Lane and section: it still has no row of its own", () => {
         const cockpit = cockpitOf(
           [
-            epic({ claim, children: [child(2, 'In progress')] }),
+            epic({ claim: null, children: [child(2, 'In progress')] }),
             ticket({
               number: 2,
               status: 'In progress',
-              claim,
-              epic: { ...link, claim },
+              epic: link,
               acceptanceCriteria: criteria(true),
             }),
           ],
-          activity(),
+          activity({ live: { 50: liveConversation({ state: 'running' }) } }),
         );
 
         expect(cockpit.epics[0].children).toMatchObject([
@@ -581,6 +580,44 @@ describe('cockpitOf', () => {
         ]);
         expect(numbers(cockpit.inFlight)).toEqual([]);
         expect(numbers(cockpit.done)).toEqual([]);
+      });
+
+      it("lets a built child's own run outrank built: running, or needing the User", () => {
+        const cockpit = cockpitOf(
+          [
+            epic({
+              children: [child(2, 'In progress'), child(5, 'In progress')],
+            }),
+            ticket({
+              number: 2,
+              status: 'In progress',
+              claim,
+              epic: link,
+              acceptanceCriteria: criteria(true),
+            }),
+            ticket({
+              number: 5,
+              status: 'In progress',
+              claim,
+              epic: link,
+              acceptanceCriteria: criteria(true),
+            }),
+          ],
+          activity({
+            live: {
+              2: liveConversation({ state: 'running' }),
+              5: liveConversation({ state: 'waiting' }),
+            },
+          }),
+        );
+
+        expect(
+          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+        ).toEqual([
+          [2, 'running'],
+          [5, 'needs-you'],
+        ]);
+        expect(cockpit.epics[0].childNeedsYou).toBe(true);
       });
 
       it('never marks a Todo or Done child built', () => {

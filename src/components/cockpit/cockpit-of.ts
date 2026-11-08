@@ -362,7 +362,12 @@ export function cockpitOf(
     [...actionNeeded, ...review].map(({ number }) => number),
   );
   const childStateOf = (entry: (typeof placed)[number]): EpicChildState => {
-    if (isBuilt(entry.ticket)) {
+    // A child's own run outranks built: it is still being worked, or it needs
+    // the User. A section it only inherits from its Epic's run does not.
+    const ownRun =
+      !entry.inherited &&
+      (entry.section === 'Running' || entry.section === 'Action needed');
+    if (!ownRun && isBuilt(entry.ticket)) {
       return 'built';
     }
     if (entry.lane === 'In progress' && entry.section) {
