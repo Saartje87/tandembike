@@ -6,7 +6,11 @@ import type {
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { PaletteColor } from '../../tickets/palette';
 import type { Ticket } from '../../tickets/tickets';
-import { isTriageStateLabel, readyForAgent } from '../../tickets/triage-labels';
+import {
+  isRowLabel,
+  isTriageStateLabel,
+  readyForAgent,
+} from '../../tickets/triage-labels';
 import { isFiltering, ticketMatches } from '../board/board-filter';
 import {
   type BoardLane,
@@ -23,6 +27,8 @@ export type CockpitTicket = Pick<
 > & {
   /** An Epic's own colour; `null` for a normal Ticket. */
   color: PaletteColor | null;
+  /** Its labels the row shows, in its order: those `isRowLabel` keeps. */
+  labels: string[];
   /**
    * For an Epic row outside In flight (Needs you, Queued, Your work, Done),
    * its children on this Board, how many more are elsewhere, and whether one
@@ -150,12 +156,14 @@ const byPosition = (left: Ticket, right: Ticket) =>
 /** An Epic's colour: every Epic has one; grey only stands in should it lack it. */
 const epicColorOf = (epic: Ticket): PaletteColor => epic.color ?? 'grey';
 
-const rowOf = (ticket: Ticket): CockpitTicket => ({
+/** What every row shows of `ticket`; an archived row too. */
+export const rowOf = (ticket: Ticket): CockpitTicket => ({
   number: ticket.number,
   title: ticket.title,
   epic: ticket.epic,
   updatedAt: ticket.updatedAt,
   color: ticket.type === 'Epic' ? epicColorOf(ticket) : null,
+  labels: ticket.labels.filter(isRowLabel),
 });
 
 /** Where an In progress child on this Board stands, by its section. */

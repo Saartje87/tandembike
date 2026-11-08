@@ -353,6 +353,36 @@ describe('cockpitOf', () => {
     expect(row.epic).toEqual(epic);
   });
 
+  it("gives every row the Ticket's labels, in its order, without state labels", () => {
+    const cockpit = cockpitOf(
+      [
+        ticket({
+          number: 1,
+          labels: ['from:tandembike', 'needs-triage', 'bug', 'wontfix'],
+        }),
+        ticket({
+          number: 2,
+          status: 'In progress',
+          claim,
+          labels: ['enhancement', 'ready-for-agent'],
+        }),
+        ticket({ number: 3, labels: ['ready-for-human', 'bug'] }),
+        ticket({ number: 4, labels: ['ready-for-agent'] }),
+        ticket({ number: 5, status: 'Done', labels: ['bug', 'wontfix'] }),
+      ],
+      activity(),
+    );
+
+    expect(cockpit.needsYou.intake[0].labels).toEqual([
+      'from:tandembike',
+      'bug',
+    ]);
+    expect(cockpit.inFlight[0].labels).toEqual(['enhancement']);
+    expect(cockpit.yourWork[0].labels).toEqual(['bug']);
+    expect(cockpit.queued[0].labels).toEqual([]);
+    expect(cockpit.done[0].labels).toEqual(['bug']);
+  });
+
   it('counts the Tickets done of all, without Epics or archived ones', () => {
     const cockpit = cockpitOf(
       [

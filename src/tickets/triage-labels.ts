@@ -15,3 +15,10 @@ export const readyForHuman: TriageStateLabel = 'ready-for-human';
 /** Whether `label` is a triage state label, which the completion rule removes. */
 export const isTriageStateLabel = (label: string): label is TriageStateLabel =>
   (triageStateLabels as readonly string[]).includes(label);
+
+/**
+ * Whether a Board row shows `label`: every label but the triage state labels
+ * and `wontfix`, since the section a row sits in already says its state.
+ */
+export const isRowLabel = (label: string): boolean =>
+  !isTriageStateLabel(label) && label !== 'wontfix';
