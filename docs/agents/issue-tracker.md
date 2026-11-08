@@ -77,6 +77,8 @@ When the spec is feedback on an Epic that is already built or in review, such as
 
 When a skill's template (such as a `to-tickets` issue or a `triage` agent brief) has an acceptance-criteria checklist, pass those items as `acceptanceCriteria` on `create_ticket` or `update_ticket` and leave that section out of the description or comment. Confirm with `get_ticket` that they were stored.
 
+A criterion that names a doc, a section or a `GLOSSARY.md` entry says "add" when it does not exist yet and "update" when it does, so the implementer need not guess. Check that it exists before you write the criterion.
+
 Older Tickets may still carry an acceptance-criteria checklist in the description; when you touch one, move those items into `acceptanceCriteria` (keeping their checked state) and delete the checklist, preserving the rest of the description.
 
 Move a Ticket to `Done` only once every criterion is checked; if one is deliberately left unmet, say why in a comment first.

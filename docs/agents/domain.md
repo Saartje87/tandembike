@@ -44,6 +44,13 @@ When your output names a domain concept (in an issue title, a refactor proposal,
 
 If the concept you need isn't in the glossary yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 
+## Writing GLOSSARY entries
+
+Two conventions for this repo's `GLOSSARY.md`, on top of the `/domain-modeling` skill's format:
+
+- **State a rule once.** A rule that touches several terms lives in one home entry, the term it is most about. The other entries point to it ("see **Intake**") instead of repeating it, so a later change has one copy to update.
+- **Give meanings, not UI copy.** An entry says what the UI tells the User, not its exact words. Exact strings live in the component, its test and the ADR that decided them; cite the ADR.
+
 ## Flag ADR conflicts
 
 If your output contradicts an existing ADR, surface it explicitly rather than silently overriding:
