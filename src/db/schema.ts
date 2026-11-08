@@ -19,6 +19,7 @@ import {
   permissionStatuses,
   transcriptRoles,
 } from '../conversations/conversation-state';
+import { runResults } from '../conversations/run-outcome';
 import type { ActivityChange } from '../tickets/activity-change';
 import { defaultAgentCommands } from '../tickets/agent-commands';
 import { agentRunModes } from '../tickets/agent-run-mode';
@@ -424,5 +425,43 @@ export const conversationEntries = sqliteTable(
   },
   (table) => [
     index('conversation_entries_conversation_id').on(table.conversationId),
+  ],
+);
+
+/**
+ * One row per run end of a Conversation (GLOSSARY: Run outcome). Written and
+ * read only by the Conversations module, and kept when a Conversation is
+ * closed.
+ */
+export const runOutcomes = sqliteTable(
+  'run_outcomes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    ticketNumber: integer('ticket_number').references(() => tickets.number),
+    /** The Conversation's intent, the Stage. */
+    stage: text('stage', { enum: conversationIntents }).notNull(),
+    result: text('result', { enum: runResults }).notNull(),
+    startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
+    endedAt: integer('ended_at', { mode: 'timestamp_ms' }).notNull(),
+    /** What this run cost in USD, not the Conversation's total. */
+    costUsd: real('cost_usd').notNull(),
+    /** The model from the SDK's init message; null when the run never reported one. */
+    model: text('model'),
+    /** The `/command` the run's first message started with; null for none. */
+    command: text('command'),
+    /** Whether Autopilot started this run. */
+    startedByAutopilot: integer('started_by_autopilot', { mode: 'boolean' })
+      .notNull()
+      .default(false),
+  },
+  (table) => [
+    index('run_outcomes_conversation_id').on(table.conversationId),
+    index('run_outcomes_project_ended').on(table.projectId, table.endedAt),
   ],
 );
