@@ -1,6 +1,6 @@
 import { detectRepository } from '../repository/detect-repository';
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -9,9 +9,11 @@ const run = promisify(execFile);
 
 /**
  * What a worktree holds, for deciding whether it is safe to remove or
- * resume in: `missing` when the folder is gone.
+ * resume in: `dirty` with uncommitted or untracked changes, `unpushed` with
+ * commits on HEAD that no remote branch contains (no branch at all without a
+ * remote), `missing` when the folder is gone.
  */
-export type WorktreeState = 'clean' | 'dirty' | 'missing';
+export type WorktreeState = 'clean' | 'dirty' | 'unpushed' | 'missing';
 
 export type CreatedWorktree = {
   path: string;
@@ -37,6 +39,19 @@ export type Worktrees = {
    */
   create(input: CreateWorktreeInput): Promise<CreatedWorktree>;
   state(path: string): Promise<WorktreeState>;
+  /**
+   * `git worktree remove` without force, then `git worktree prune`. Rejects
+   * with git's message when the worktree holds changes. The branch stays.
+   */
+  remove(repositoryPath: string, path: string): Promise<void>;
+  /** The worktrees in the worktrees folder, found by their `<project id>/c<conversation id>` path. */
+  list(): Promise<ListedWorktree[]>;
+};
+
+export type ListedWorktree = {
+  path: string;
+  projectId: number;
+  conversationId: number;
 };
 
 /** The folder worktrees go in: `<data folder>/worktrees`, `~/.tandembike` by default. */
@@ -84,7 +99,46 @@ export function createWorktrees({
         return 'missing';
       }
       const status = await git(path, ['status', '--porcelain']);
-      return status.trim() === '' ? 'clean' : 'dirty';
+      if (status.trim() !== '') {
+        return 'dirty';
+      }
+      const remotes = (await git(path, ['remote'])).trim();
+      const unpushed = await git(path, [
+        'rev-list',
+        '--count',
+        'HEAD',
+        '--not',
+        remotes === '' ? '--branches' : '--remotes',
+      ]);
+      return Number(unpushed.trim()) > 0 ? 'unpushed' : 'clean';
+    },
+
+    async remove(repositoryPath, path) {
+      await git(repositoryPath, ['worktree', 'remove', path]);
+      await git(repositoryPath, ['worktree', 'prune']);
+    },
+
+    async list() {
+      const found: ListedWorktree[] = [];
+      if (!existsSync(root)) {
+        return found;
+      }
+      for (const project of readdirSync(root)) {
+        if (!/^\d+$/.test(project)) {
+          continue;
+        }
+        for (const folder of readdirSync(join(root, project))) {
+          const match = /^c(\d+)$/.exec(folder);
+          if (match) {
+            found.push({
+              path: join(root, project, folder),
+              projectId: Number(project),
+              conversationId: Number(match[1]),
+            });
+          }
+        }
+      }
+      return found;
     },
   };
 }

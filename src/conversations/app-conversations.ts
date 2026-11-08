@@ -37,6 +37,7 @@ export function appConversations(): Conversations {
       mcpUrl,
     });
     conversations.interruptStale();
+    void conversations.cleanupWorktrees().catch(() => undefined);
     global[globalKey] = conversations;
   }
   return global[globalKey];

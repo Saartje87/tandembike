@@ -198,6 +198,8 @@ const aConversation = (
   defaultEpicNumber: null,
   defaultType: null,
   worktreePath: null,
+  worktreeKept: null,
+  worktreeRemoved: false,
   createdAt: at,
   updatedAt: at,
   ...values,

@@ -158,6 +158,15 @@ export async function closeConversation(input: {
   );
 }
 
+/** Removes the kept worktree of a Conversation, once the User confirmed. */
+export async function removeConversationWorktree(input: {
+  conversationId: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().removeWorktree(Number(input?.conversationId)),
+  );
+}
+
 /** Opens a closed Conversation again. */
 export async function reopenConversation(input: {
   conversationId: number;

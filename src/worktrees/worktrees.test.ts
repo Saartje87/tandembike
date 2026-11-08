@@ -117,3 +117,108 @@ describe('worktrees.state', () => {
     expect(await worktrees.state(path)).toBe('missing');
   });
 });
+
+describe('worktrees.state with commits', () => {
+  it('reports unpushed for a commit no remote branch contains, and clean once pushed', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    git(path, 'config', 'user.email', 't@example.com');
+    git(path, 'config', 'user.name', 'T');
+    git(path, 'switch', '-c', 'feature');
+    writeFileSync(join(path, 'new.txt'), 'x');
+    git(path, 'add', '.');
+    git(path, 'commit', '-m', 'work');
+
+    expect(await worktrees.state(path)).toBe('unpushed');
+    git(path, 'push', 'origin', 'feature');
+    expect(await worktrees.state(path)).toBe('clean');
+  });
+
+  it('reports dirty before unpushed', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    git(path, 'config', 'user.email', 't@example.com');
+    git(path, 'config', 'user.name', 'T');
+    writeFileSync(join(path, 'new.txt'), 'x');
+    git(path, 'add', '.');
+    git(path, 'commit', '-m', 'work');
+    writeFileSync(join(path, 'more.txt'), 'y');
+
+    expect(await worktrees.state(path)).toBe('dirty');
+  });
+
+  it('counts a commit on a local branch as safe without a remote', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    expect(await worktrees.state(path)).toBe('clean');
+    git(path, 'config', 'user.email', 't@example.com');
+    git(path, 'config', 'user.name', 'T');
+    writeFileSync(join(path, 'new.txt'), 'x');
+    git(path, 'add', '.');
+    git(path, 'commit', '-m', 'work');
+    expect(await worktrees.state(path)).toBe('unpushed');
+    git(path, 'switch', '-c', 'feature');
+    expect(await worktrees.state(path)).toBe('clean');
+  });
+});
+
+describe('worktrees.remove', () => {
+  it('removes a clean worktree, prunes it and leaves the branch', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    git(path, 'switch', '-c', 'feature');
+
+    await worktrees.remove(repo, path);
+
+    expect(await worktrees.state(path)).toBe('missing');
+    expect(git(repo, 'worktree', 'list', '--porcelain')).not.toContain(path);
+    expect(git(repo, 'branch', '--list', 'feature')).toContain('feature');
+  });
+
+  it('refuses a dirty worktree without force and leaves it', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    writeFileSync(join(path, 'untracked.txt'), 'x');
+
+    await expect(worktrees.remove(repo, path)).rejects.toThrow(
+      /untracked|modified/i,
+    );
+    expect(await worktrees.state(path)).toBe('dirty');
+  });
+});
+
+describe('worktrees.list', () => {
+  it('lists the worktrees in the folder by project and conversation', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    expect(await worktrees.list()).toEqual([]);
+    const a = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+    });
+
+    expect(await worktrees.list()).toEqual([
+      { path: a.path, projectId: 3, conversationId: 12 },
+    ]);
+  });
+});

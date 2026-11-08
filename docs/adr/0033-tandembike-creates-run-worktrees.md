@@ -15,5 +15,5 @@ With Parallel runs on, Tandembike now creates a git worktree for each Start and 
 
 - Tandembike runs `git worktree add`, `remove` and `prune`, and records each Conversation's worktree path. It still runs no other git command.
 - A run never shares the main checkout with another, so no instruction about worktrees goes in the brief.
-- What to do with a dirty worktree at removal is left to phase 7's spec (keep and flag it, or refuse).
+- A worktree with uncommitted or untracked changes, or with commits no remote branch contains, is kept and flagged, never force-removed (T1208). Only a clean worktree is removed, at close, when the Ticket reaches Done and at server start. The Conversation shows "Worktree kept" with why and a Remove worktree button, which removes it after confirming if it is clean by then and refuses naming the state otherwise. The branch is never deleted.
 - `tandembike start` from a terminal uses the same worktree path (phase 10).

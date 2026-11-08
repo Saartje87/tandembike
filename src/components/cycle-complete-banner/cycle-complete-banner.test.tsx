@@ -37,6 +37,8 @@ const retroConversation = (
   defaultEpicNumber: null,
   defaultType: null,
   worktreePath: null,
+  worktreeKept: null,
+  worktreeRemoved: false,
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,

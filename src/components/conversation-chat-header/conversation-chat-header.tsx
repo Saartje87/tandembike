@@ -12,6 +12,7 @@ import {
   starterNames,
   stateNames,
 } from '../conversation-labels/conversation-labels';
+import { ConversationWorktree } from '../conversation-worktree/conversation-worktree';
 
 export type ConversationChatHeaderProps = {
   conversation: Conversation;
@@ -68,6 +69,7 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
           </Button>
         )}
       </Inline>
+      <ConversationWorktree conversation={conversation} />
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

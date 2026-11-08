@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
@@ -58,6 +58,10 @@ export type Conversation = {
   defaultType: TicketType | null;
   /** The worktree Tandembike made for it; every run works there. Null: the main checkout. */
   worktreePath: string | null;
+  /** Why the worktree was kept at close or Done, until it is removed. */
+  worktreeKept: 'dirty' | 'unpushed' | null;
+  /** Tandembike removed the worktree; `worktreePath` is where it was. */
+  worktreeRemoved: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -243,7 +247,12 @@ export function createConversations({
     values: Partial<
       Pick<
         Conversation,
-        'state' | 'sdkSessionId' | 'costUsd' | 'worktreePath'
+        | 'state'
+        | 'sdkSessionId'
+        | 'costUsd'
+        | 'worktreePath'
+        | 'worktreeKept'
+        | 'worktreeRemoved'
       > & {
         worktreeBase: string | null;
       }
@@ -766,6 +775,81 @@ export function createConversations({
     return get(created.id);
   };
 
+  const repositoryPathOf = (projectId: number): string | null => {
+    try {
+      return tickets.getProjectAgentSettings(projectId).repositoryPath ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  /**
+   * Removes the Conversation's worktree when it holds nothing but what git
+   * has elsewhere, and otherwise keeps it and says why (ADR 0033). Never
+   * forces. A worktree already gone counts as removed.
+   */
+  const releaseWorktree = async (id: number) => {
+    const conversation = get(id);
+    const path = conversation.worktreePath;
+    if (path === null || conversation.worktreeRemoved) {
+      return;
+    }
+    const state = await worktrees.state(path);
+    if (state === 'dirty' || state === 'unpushed') {
+      if (conversation.worktreeKept !== state) {
+        update(id, { worktreeKept: state });
+        announce(id);
+      }
+      return;
+    }
+    if (state === 'clean') {
+      const repositoryPath = repositoryPathOf(conversation.projectId);
+      if (repositoryPath === null) {
+        return;
+      }
+      await worktrees.remove(repositoryPath, path);
+    }
+    update(id, { worktreeKept: null, worktreeRemoved: true });
+    announce(id);
+  };
+
+  /** Releases quietly: a failure leaves the worktree for the User's button. */
+  const tryRelease = (id: number) => releaseWorktree(id).catch(() => undefined);
+
+  // A Ticket reaching Done, by `complete_ticket` or the Merged button, frees
+  // the worktrees of its Conversations.
+  changes?.subscribe((change) => {
+    if (change.type !== 'ticket' && change.type !== 'tickets') {
+      return;
+    }
+    const numbers = change.type === 'ticket' ? [change.number] : change.numbers;
+    for (const number of numbers) {
+      let status: string;
+      try {
+        status = tickets.getTicket(number).status;
+      } catch {
+        continue;
+      }
+      if (status !== 'Done') {
+        continue;
+      }
+      const open = db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.ticketNumber, number),
+            isNotNull(conversations.worktreePath),
+            eq(conversations.worktreeRemoved, false),
+          ),
+        )
+        .all();
+      for (const { id } of open) {
+        void tryRelease(id);
+      }
+    }
+  });
+
   return {
     get,
 
@@ -1120,7 +1204,69 @@ export function createConversations({
       await this.stop(id);
       setHidden(id, true);
       announce(id);
+      await tryRelease(id);
       return get(id);
+    },
+
+    /**
+     * The User's Remove worktree of a kept worktree, after confirming. It
+     * removes it when it is clean now, and otherwise refuses naming the state.
+     */
+    async removeWorktree(id: number): Promise<Conversation> {
+      const conversation = get(id);
+      if (conversation.worktreePath === null || conversation.worktreeRemoved) {
+        throw new NotAllowedError('This Conversation has no worktree.');
+      }
+      const state = await worktrees.state(conversation.worktreePath);
+      if (state === 'dirty' || state === 'unpushed') {
+        update(id, { worktreeKept: state });
+        announce(id);
+        throw new NotAllowedError(
+          state === 'dirty'
+            ? 'The worktree still has uncommitted changes, so it was not removed.'
+            : 'The worktree still has commits that no remote branch contains, so it was not removed.',
+        );
+      }
+      await releaseWorktree(id);
+      return get(id);
+    },
+
+    /**
+     * For the server to call once on start: removes the clean worktrees of
+     * closed Conversations, and of Conversations that no longer exist, so a
+     * crash mid-removal leaks no folders. Dirty ones stay.
+     */
+    async cleanupWorktrees(): Promise<void> {
+      const closed = db
+        .select({ id: conversations.id })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.hidden, true),
+            isNotNull(conversations.worktreePath),
+            eq(conversations.worktreeRemoved, false),
+          ),
+        )
+        .all();
+      for (const { id } of closed) {
+        await tryRelease(id);
+      }
+      for (const found of await worktrees.list()) {
+        const exists = db
+          .select({ id: conversations.id })
+          .from(conversations)
+          .where(eq(conversations.id, found.conversationId))
+          .get();
+        const repositoryPath = repositoryPathOf(found.projectId);
+        if (exists || repositoryPath === null) {
+          continue;
+        }
+        if ((await worktrees.state(found.path)) === 'clean') {
+          await worktrees
+            .remove(repositoryPath, found.path)
+            .catch(() => undefined);
+        }
+      }
     },
 
     /** Opens a closed Conversation again. It stays stopped until a reply. */
