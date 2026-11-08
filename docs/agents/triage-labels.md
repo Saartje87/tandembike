@@ -10,7 +10,7 @@ The skills speak in terms of five canonical triage state roles. Each is a native
 | `ready-for-human` | `ready-for-human` | Requires human implementation                |
 | `wontfix`         | `wontfix`         | Will not be actioned                         |
 
-Source labels (`from:tandembike`, `from:agent-run`) say which run filed a Ticket; they sit beside the state and category labels and change neither. See "Feedback as Tickets" in `issue-tracker.md`.
+Source labels (`from:tandembike`, `from:agent-run`) say where a filed Ticket came from: Blocks friction or an Agent run; they sit beside the state and category labels and change neither. See "Feedback as Tickets" in `issue-tracker.md`.
 
 Triage category roles are the labels `bug` and `enhancement`. Find Tickets in a role with `list_tickets` and its `labels` filter, for example `labels: ["ready-for-agent"]`.
 
