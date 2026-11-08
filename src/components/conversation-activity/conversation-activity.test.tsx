@@ -3,13 +3,13 @@ import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { currentConversationActivity } from '../../app/conversations/actions';
-import { activity } from '../../test/conversation-activity';
+import { activity, liveConversation } from '../../test/conversation-activity';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { LiveUpdates } from '../live-updates/live-updates';
 import {
   ConversationActivityProvider,
-  useTicketActivity,
+  useTicketLiveConversation,
 } from './conversation-activity';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
@@ -29,8 +29,8 @@ class FakeEventSource {
 }
 
 const Probe = () => {
-  const activity = useTicketActivity(4);
-  return <p>{`running=${activity.running} waiting=${activity.waiting}`}</p>;
+  const live = useTicketLiveConversation(4);
+  return <p>{live ? `${live.state}: ${live.line}` : 'nothing live'}</p>;
 };
 
 const show = () =>
@@ -53,26 +53,28 @@ describe('ConversationActivityProvider', () => {
     vi.mocked(currentConversationActivity).mockReset();
   });
 
-  it('starts with nothing running or waiting', () => {
+  it('starts with nothing live', () => {
     vi.mocked(currentConversationActivity).mockReturnValue(
       new Promise(() => {}),
     );
     show();
 
-    expect(screen.getByText('running=false waiting=false')).toBeInTheDocument();
+    expect(screen.getByText('nothing live')).toBeInTheDocument();
   });
 
   it('loads the activity, and loads it again when a Conversation changes', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity({ running: [4] }),
+      activity({ live: { 4: liveConversation({ line: 'Reading a.ts' }) } }),
     );
     show();
     expect(
-      await screen.findByText('running=true waiting=false'),
+      await screen.findByText('running: Reading a.ts'),
     ).toBeInTheDocument();
 
     vi.mocked(currentConversationActivity).mockResolvedValueOnce(
-      activity({ waiting: [4], waitingCount: 2 }),
+      activity({
+        live: { 4: liveConversation({ state: 'waiting', line: 'Asks a.ts' }) },
+      }),
     );
     act(() => {
       FakeEventSource.instances[0]?.onmessage?.(
@@ -83,9 +85,7 @@ describe('ConversationActivityProvider', () => {
     });
 
     await waitFor(() =>
-      expect(
-        screen.getByText('running=false waiting=true'),
-      ).toBeInTheDocument(),
+      expect(screen.getByText('waiting: Asks a.ts')).toBeInTheDocument(),
     );
   });
 });

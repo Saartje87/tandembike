@@ -1,13 +1,12 @@
 import { act, screen } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
+import type { FC } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Change } from '../../tickets/changes';
-import type { Ticket } from '../../tickets/tickets';
-import { TicketCard } from '../ticket-card/ticket-card';
-import { LiveUpdates } from './live-updates';
+import { LiveUpdates, useTicketChanged } from './live-updates';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 
@@ -45,31 +44,14 @@ const source = () => {
   return only;
 };
 
-const ticket = (number: number): Ticket => ({
-  number,
-  title: `Ticket ${number}`,
-  description: '',
-  status: 'Todo',
-  projectId: 1,
-  position: 0,
-  archived: false,
-  labels: [],
-  externalReferences: [],
-  attachments: [],
-  blockedBy: [],
-  blocked: false,
-  type: 'Ticket',
-  color: null,
-  epic: null,
-  children: [],
-  origin: null,
-  splitOff: [],
-  cycle: null,
-  claim: null,
-  acceptanceCriteria: [],
-  createdAt: new Date('2026-01-01'),
-  updatedAt: new Date('2026-01-01'),
-});
+type RowProps = { number: number };
+
+/** A Board row as far as the highlight goes: marked while its Ticket changed. */
+const Row: FC<RowProps> = ({ number }) => (
+  <li data-changed={useTicketChanged(number) ? '' : undefined}>
+    <a href={`#${number}`}>Ticket {number}</a>
+  </li>
+);
 
 const card = (number: number) =>
   screen.getByRole('link', { name: `Ticket ${number}` }).closest('li');
@@ -92,8 +74,8 @@ const renderBoardCards = () =>
   renderWithTheme(
     <LiveUpdates>
       <ul>
-        <TicketCard ticket={ticket(4)} boardPath="/project/1" />
-        <TicketCard ticket={ticket(5)} boardPath="/project/1" />
+        <Row number={4} />
+        <Row number={5} />
       </ul>
     </LiveUpdates>,
   );

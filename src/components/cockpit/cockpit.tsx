@@ -69,17 +69,13 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
+import { useTicketChanged } from '../live-updates/live-updates';
 import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
-import {
-  isSelectClick,
-  type SelectMode,
-  selectModeOf,
-} from '../ticket-card/ticket-card';
 import * as styles from './cockpit.css';
 import {
   type CockpitTicket,
@@ -91,6 +87,7 @@ import {
   type NeedRow,
   type QueuedRow,
 } from './cockpit-of';
+import { isSelectClick, type SelectMode, selectModeOf } from './select-click';
 import { useBoardFilter } from './use-board-filter';
 import { type SelectionList, useSelection } from './use-selection';
 
@@ -269,7 +266,8 @@ type TicketRowProps = {
 /**
  * One Ticket as a row: the same shape in every list of the Cockpit, edged in
  * its Epic's colour, or its own for an Epic. With `details`, the row opens
- * and closes on itself to show them.
+ * and closes on itself to show them. It is highlighted for a moment after
+ * the Ticket changes (see `LiveUpdates`).
  */
 const TicketRow: FC<TicketRowProps> = ({
   ticket,
@@ -284,6 +282,7 @@ const TicketRow: FC<TicketRowProps> = ({
   selection,
 }) => {
   const color = ticket.epic?.color ?? ticket.color;
+  const changed = useTicketChanged(ticket.number);
   // Runs before the title link's own click, so it neither navigates nor opens a tab.
   const selectByClick = (event: MouseEvent<HTMLLIElement>) => {
     if (
@@ -351,8 +350,15 @@ const TicketRow: FC<TicketRowProps> = ({
       paddingBlock={2}
       paddingInline={3}
       borderRadius={2}
-      backgroundColor={muted ? modeColors.sunken : modeColors.raised}
+      backgroundColor={
+        changed
+          ? modeColors.primarySubtle
+          : muted
+            ? modeColors.sunken
+            : modeColors.raised
+      }
       boxShadow={muted ? undefined : 1}
+      transition="slow"
       className={color ? styles.epicEdge[color] : styles.edge}
     >
       {/* Keyboard users select with the checkbox. */}
@@ -365,6 +371,7 @@ const TicketRow: FC<TicketRowProps> = ({
         // Focusable from the first render when it can be dragged, so Space
         // picks it up; dnd-kit would add this only on a later frame.
         tabIndex={rowRef ? 0 : undefined}
+        data-changed={changed ? '' : undefined}
         onClick={selectByClick}
       >
         {details ? (
