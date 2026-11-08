@@ -1680,52 +1680,47 @@ describe('Started by', () => {
 });
 
 describe('Autopilot spend', () => {
-  it("sums the cost of Autopilot-started Conversations on the Cycle's Tickets and Epics, not hand-started ones or other Cycles'", async () => {
+  it("sums the cost of the Autopilot-started Conversations of the Cycle they were started for, resumes included, not hand-started ones or other Cycles'", async () => {
     const { conversations, runner, tickets, project } = setup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
     const other = tickets.createCycle({ projectId: project.id, title: 'B' });
-    const epic = tickets.createTicket({
-      projectId: project.id,
-      title: 'Epic',
-      type: 'Epic',
-      cycleId: cycle.id,
-    });
-    const child = tickets.createTicket({
-      projectId: project.id,
-      title: 'Child',
-      epicNumber: epic.number,
-      cycleId: cycle.id,
-    });
-    const elsewhere = tickets.createTicket({
-      projectId: project.id,
-      title: 'Elsewhere',
-      cycleId: other.id,
-    });
+    const ticket = (title: string, cycleId: number) =>
+      tickets.createTicket({ projectId: project.id, title, cycleId });
+    const first = ticket('First', cycle.id);
+    const second = ticket('Second', cycle.id);
+    const elsewhere = ticket('Elsewhere', other.id);
     const startFor = async (
       ticketNumber: number,
       startedBy: 'user' | 'autopilot',
       costUsd: number,
+      cycleId?: number,
     ) => {
-      await conversations.start({
+      const started = await conversations.start({
         startedBy,
         ticketNumber,
         intent: 'start',
         prompt: 'Go',
+        ...(cycleId === undefined ? {} : { cycleId }),
       });
       runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd });
+      return started;
     };
 
-    await startFor(epic.number, 'autopilot', 0.5);
-    await startFor(child.number, 'autopilot', 0.25);
-    await startFor(child.number, 'user', 4);
-    await startFor(elsewhere.number, 'autopilot', 8);
+    const run = await startFor(first.number, 'autopilot', 0.5, cycle.id);
+    await startFor(second.number, 'autopilot', 0.25, cycle.id);
+    await startFor(second.number, 'user', 4);
+    await startFor(elsewhere.number, 'autopilot', 8, other.id);
+    // A resume adds to the same Conversation, so it stays with its Cycle.
+    await conversations.stop(run.id);
+    await conversations.reply(run.id, 'Go on', 'autopilot');
+    runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 1 });
 
     expect(
       conversations.autopilotSpend({
         projectId: project.id,
         cycleId: cycle.id,
       }),
-    ).toBeCloseTo(0.75);
+    ).toBeCloseTo(1.75);
     expect(
       conversations.autopilotSpend({
         projectId: project.id,

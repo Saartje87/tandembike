@@ -126,7 +126,7 @@ A Project switch, off by default, that makes Tandembike start Start Conversation
 _Avoid_: Auto mode (that is the Agent run mode), scheduler
 
 **Eligible**:
-Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no Start Conversation running, waiting or idle on it.
+Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no open Start Conversation on it, whatever state its run is in, so a failed run waits for the User. A Start Conversation from before the Ticket's latest move to Todo, such as Back to Todo, no longer counts, unless its run is still working.
 _Avoid_: Ready (that is the label), startable
 
 **Started by**:
@@ -134,7 +134,7 @@ Who started a Conversation: the **User**, or **Autopilot**. Every Conversation r
 _Avoid_: Owner, author, initiator
 
 **Spend ceiling**:
-A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of Autopilot-started Conversations on the Active Cycle's Tickets and Epics, resumes included, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
+A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
 _Avoid_: Budget, cap (that is the run cap), limit
 
 **Draft**:

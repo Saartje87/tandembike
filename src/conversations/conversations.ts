@@ -1,4 +1,4 @@
-import { desc, eq, inArray, max } from 'drizzle-orm';
+import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations } from '../db/schema';
@@ -31,6 +31,9 @@ import {
   type TranscriptRole,
 } from './conversation-state';
 import { type NewTicketDefaults, runBrief } from './run-brief';
+
+/** Who sends a reply: the User, or Autopilot in their place. */
+export type ConversationSender = ConversationStarter;
 
 export type Conversation = {
   id: number;
@@ -81,6 +84,11 @@ export type StartConversationInput = {
   intent: ConversationIntent;
   /** The User's first message. */
   prompt: string;
+  /**
+   * Autopilot only: the Active Cycle it starts the Conversation for, whose
+   * Spend ceiling the cost counts against.
+   */
+  cycleId?: number;
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
 };
@@ -462,31 +470,25 @@ export function createConversations({
 
     /**
      * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
-     * ceiling): the total cost of the Autopilot-started Conversations on the
-     * Cycle's Tickets and Epics, resumes included. Hand-started ones do not
-     * count, so it starts again at zero with each Cycle.
+     * ceiling): the total cost of the Conversations it started for that Cycle,
+     * resumes included, since a resume adds to its Conversation. Hand-started
+     * ones do not count, and the next Cycle starts again at zero.
      */
     autopilotSpend(input: { projectId: number; cycleId: number }): number {
-      const numbers = new Set(
-        tickets
-          .listTickets({
-            projectId: input.projectId,
-            cycleId: input.cycleId,
-            includeArchived: true,
-          })
-          .map(({ number }) => number),
-      );
-      return db
-        .select()
+      const row = db
+        .select({
+          total: sql<number>`coalesce(sum(${conversations.costUsd}), 0)`,
+        })
         .from(conversations)
-        .all()
-        .filter(
-          (row) =>
-            row.startedBy === 'autopilot' &&
-            row.ticketNumber !== null &&
-            numbers.has(row.ticketNumber),
+        .where(
+          and(
+            eq(conversations.projectId, input.projectId),
+            eq(conversations.startedBy, 'autopilot'),
+            eq(conversations.autopilotCycleId, input.cycleId),
+          ),
         )
-        .reduce((total, row) => total + (row.costUsd ?? 0), 0);
+        .get();
+      return row?.total ?? 0;
     },
 
     /** Conversations of a Project and/or Ticket, newest first. */
@@ -667,6 +669,8 @@ export function createConversations({
           defaultEpicNumber: input.defaults?.epicNumber ?? null,
           defaultType: input.defaults?.type ?? null,
           startedBy: input.startedBy,
+          autopilotCycleId:
+            input.startedBy === 'autopilot' ? (input.cycleId ?? null) : null,
           state: 'running',
           createdAt: now,
           updatedAt: now,
@@ -687,13 +691,13 @@ export function createConversations({
     },
 
     /**
-     * Sends a reply, the User's or Autopilot's: into the run while it is alive, otherwise into
-     * a new run that resumes the stored SDK session.
+     * Sends a reply, the User's or Autopilot's: into the run while it is
+     * alive, otherwise into a new run that resumes the stored SDK session.
      */
     async reply(
       id: number,
       text: string,
-      sentBy: ConversationStarter,
+      sentBy: ConversationSender,
     ): Promise<Conversation> {
       const message = (text ?? '').trim();
       if (message === '') {

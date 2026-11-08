@@ -21,6 +21,7 @@ import {
 } from '../conversations/conversation-state';
 import type { ActivityChange } from '../tickets/activity-change';
 import { defaultAgentCommands } from '../tickets/agent-commands';
+import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
@@ -52,7 +53,7 @@ export const projects = sqliteTable('projects', {
     .notNull()
     .default(false),
   /** The permission mode of every run this Project starts (ADR 0029). */
-  runMode: text('run_mode', { enum: ['default', 'auto'] })
+  runMode: text('run_mode', { enum: agentRunModes })
     .notNull()
     .default('default'),
   /** The model its runs start on; null is the User's default model. */
@@ -364,6 +365,11 @@ export const conversations = sqliteTable(
     costUsd: real('cost_usd').notNull().default(0),
     /** Closed by the User: stopped and left out of the Project's list. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * The Active Cycle Autopilot started it for; its cost counts against that
+     * Cycle's Spend ceiling. Null for a hand-started Conversation.
+     */
+    autopilotCycleId: integer('autopilot_cycle_id'),
     /** New Ticket: the Cycle the title field was on, a default for the Agent. */
     defaultCycleId: integer('default_cycle_id'),
     /** New Ticket: the Epic the title field was under, a default. */
