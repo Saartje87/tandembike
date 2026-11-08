@@ -103,8 +103,7 @@ export type CockpitProps = {
   runSlots?: { used: number; cap: number };
   /**
    * Whether this is a planning Board, a Prepared Cycle's or the Backlog's:
-   * Your work starts open, and an empty section is hidden. Queued starts
-   * open on every Board.
+   * Your work and Queued start open, and an empty section is hidden.
    */
   planning?: boolean;
   /** The Board's archived Tickets, listed last. Defaults to none. */
@@ -679,9 +678,9 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * User first. The header shows the Cycle's progress and the Start runs
  * working; Needs you shows what waits on the User on this Board (Action
  * needed, Review, then Intake), in groups that start open,
- * longest waiting first; Queued, open, shows what runs next; In flight
- * shows each Running Ticket with what its run is doing; Your work, on the
- * Active Cycle's Board, and Done stay closed until opened (ADR 0026).
+ * longest waiting first; In flight shows each Running Ticket with what
+ * its run is doing; Your work, Queued and Done stay closed until opened
+ * on the Active Cycle's Board.
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Cockpit. The browser tab's title carries the Needs you
  * count. It follows live Conversations as the Board does.
@@ -998,34 +997,6 @@ export const Cockpit: FC<CockpitProps> = ({
             </section>
           </Stack>
         )}
-        {!hideEmpty(cockpit.queued.length) && (
-          <RowList title="Queued" count={cockpit.queued.length} open>
-            {cockpit.queued.map((row, index) => (
-              <DraggableTicketRow
-                key={row.number}
-                sortable={sortableIn('Queued', row.number)}
-                muted
-                ticket={row}
-                href={hrefOf(row.number)}
-                icon={row.children ? 'queue-list' : 'clock'}
-                {...epicParts(row, board, hrefOf)}
-                selection={
-                  row.children ? undefined : selectable(row.number, 'queued')
-                }
-                line={queuedLine(row, index)}
-                end={
-                  row.blocked ? (
-                    <Tag intent="warning">Blocked</Tag>
-                  ) : index === 0 ? (
-                    <Tag intent="primary">Next</Tag>
-                  ) : (
-                    <Tag>Queued</Tag>
-                  )
-                }
-              />
-            ))}
-          </RowList>
-        )}
         {!hideEmpty(inFlightCount) && (
           <Stack gap={2} asChild>
             <section aria-label="In flight">
@@ -1124,6 +1095,38 @@ export const Cockpit: FC<CockpitProps> = ({
                   }
                   line={`ready-for-human · for ${age(row.updatedAt)}`}
                   end={<Tag>Your work</Tag>}
+                />
+              ))}
+            </RowList>
+          )}
+          {!hideEmpty(cockpit.queued.length) && (
+            <RowList
+              title="Queued"
+              count={cockpit.queued.length}
+              open={planning}
+            >
+              {cockpit.queued.map((row, index) => (
+                <DraggableTicketRow
+                  key={row.number}
+                  sortable={sortableIn('Queued', row.number)}
+                  muted
+                  ticket={row}
+                  href={hrefOf(row.number)}
+                  icon={row.children ? 'queue-list' : 'clock'}
+                  {...epicParts(row, board, hrefOf)}
+                  selection={
+                    row.children ? undefined : selectable(row.number, 'queued')
+                  }
+                  line={queuedLine(row, index)}
+                  end={
+                    row.blocked ? (
+                      <Tag intent="warning">Blocked</Tag>
+                    ) : index === 0 ? (
+                      <Tag intent="primary">Next</Tag>
+                    ) : (
+                      <Tag>Queued</Tag>
+                    )
+                  }
                 />
               ))}
             </RowList>

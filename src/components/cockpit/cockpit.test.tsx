@@ -679,7 +679,7 @@ describe('Cockpit', () => {
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=7');
   });
 
-  it('shows its sections in the order Needs you, Queued, In flight, Your work, Done, Archived', async () => {
+  it('shows its sections in the order Needs you, In flight, Your work, Queued, Done, Archived', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
@@ -687,9 +687,9 @@ describe('Cockpit', () => {
 
     const boardSections = [
       'Needs you',
-      'Queued',
       'In flight',
       'Your work',
+      'Queued',
       'Done',
       'Archived',
     ];
@@ -701,32 +701,31 @@ describe('Cockpit', () => {
     ).toEqual(boardSections);
   });
 
-  it('starts Queued open, keeps Your work and Done closed with their counts, and opens them on click', async () => {
+  it('keeps Your work, Queued and Done closed with their counts, and opens them on click', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
     renderCockpit();
 
-    const queued = section('Queued');
-    expect(queued.querySelector('details')).toHaveAttribute('open');
-    expect(within(queued).getByText('1')).toBeVisible();
-    const [row] = within(queued).getAllByRole('listitem');
-    expect(row).toHaveTextContent('Cache the Board');
-    expect(row).toHaveTextContent('Queued #1 · blocked by T7');
-    expect(within(row).getByText('Blocked')).toBeVisible();
-
     const yourWork = section('Your work');
     expect(yourWork.querySelector('details')).not.toHaveAttribute('open');
     expect(within(yourWork).getByText('1')).toBeVisible();
+    const queued = section('Queued');
+    expect(queued.querySelector('details')).not.toHaveAttribute('open');
+    expect(within(queued).getByText('1')).toBeVisible();
     const done = section('Done');
     expect(done.querySelector('details')).not.toHaveAttribute('open');
     expect(within(done).getByText('1')).toBeVisible();
 
     await userEvent.click(
-      within(yourWork).getByText('Your work', { selector: 'summary span' }),
+      within(queued).getByText('Queued', { selector: 'summary span' }),
     );
 
-    expect(yourWork.querySelector('details')).toHaveAttribute('open');
+    expect(queued.querySelector('details')).toHaveAttribute('open');
+    const [row] = within(queued).getAllByRole('listitem');
+    expect(row).toHaveTextContent('Cache the Board');
+    expect(row).toHaveTextContent('Queued #1 · blocked by T7');
+    expect(within(row).getByText('Blocked')).toBeVisible();
   });
 
   it("follows a run's Conversation as it changes", async () => {
