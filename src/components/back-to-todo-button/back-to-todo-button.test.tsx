@@ -14,4 +14,10 @@ describe('BackToTodoButton', () => {
 
     expect(onClick).toHaveBeenCalledOnce();
   });
+
+  it('is disabled while pending', () => {
+    renderWithTheme(<BackToTodoButton onClick={vi.fn()} pending />);
+
+    expect(screen.getByRole('button', { name: 'Back to Todo' })).toBeDisabled();
+  });
 });

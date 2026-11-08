@@ -79,6 +79,19 @@ describe('completing an Epic', () => {
     expect(tickets.getTicket(c.number).labels).toEqual(['needs-info']);
   });
 
+  it('completes a Todo child too, since the one PR covers the whole Epic', () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', [], { type: 'Epic' });
+    const todo = create('Todo child', ['ready-for-agent'], {
+      epicNumber: epic.number,
+    });
+    expect(tickets.getTicket(todo.number).status).toBe('Todo');
+
+    tickets.completeTicket(epic.number);
+
+    expect(tickets.getTicket(todo.number).status).toBe('Done');
+  });
+
   it("releases the Epic's own Claim and records one Activity entry on each Ticket", () => {
     const { tickets, create } = setup();
     const epic = create('Login', ['ready-for-agent'], { type: 'Epic' });

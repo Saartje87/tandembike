@@ -748,7 +748,7 @@ export function createMcpServer(
     'complete_ticket',
     {
       title: 'Complete Ticket',
-      description: `Finish a Ticket or an Epic by the completion rule, as the User's Merged button on the Board does: its Status becomes Done, its triage state label is removed (never wontfix or a category label) and its Claim is released. For an Epic, every child that is not archived is completed the same way, all or nothing, and the Epic loses its own triage state label; its Status follows its children. Before calling it, check that the work's PR is merged with CI green and that its acceptance criteria are checked: the tool checks none of this, and completes a Ticket whatever its Status. ${returnsSummary()}`,
+      description: `Finish a Ticket or an Epic by the completion rule, as the User's Merged button in the Ticket drawer does: its Status becomes Done, its triage state label is removed (never wontfix or a category label) and its Claim is released. For an Epic, every child that is not archived is completed the same way, all or nothing, and the Epic loses its own triage state label; its Status follows its children. Before calling it, check that the work's PR is merged with CI green and that its acceptance criteria are checked: the tool checks none of this, and completes a Ticket whatever its Status. ${returnsSummary()}`,
       inputSchema: { number: ticketNumber, detail },
       annotations: { idempotentHint: true },
     },

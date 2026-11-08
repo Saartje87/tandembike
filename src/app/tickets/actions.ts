@@ -111,6 +111,22 @@ export async function completeTicket(input: {
 }
 
 /**
+ * Sends a parked Ticket Back to Todo, as the User: Todo at the end of the
+ * Todo order, any Claim released. There is no MCP tool for it (ADR 0019).
+ */
+export async function backToTodo(input: {
+  number: number;
+}): Promise<ActionResult<{ projectId: number }>> {
+  return actionResult(() => {
+    const ticket = appTickets('user').backToTodo(Number(input?.number));
+    revalidatePath(projectPath(ticket.projectId));
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    return { projectId: ticket.projectId };
+  });
+}
+
+/**
  * Saves a complete Status-lane order and refreshes the Board. A stale lane
  * order is refused by the Tickets module so concurrent changes are not lost.
  */

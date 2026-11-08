@@ -1985,6 +1985,42 @@ export function createTickets(
     },
 
     /**
+     * Back to Todo, the User's action on a parked Ticket (ADR 0024): Status
+     * becomes Todo at the end of the Todo order and any Claim is released,
+     * with its labels kept, as one Activity entry. An archived Ticket or one
+     * in an archived Project is refused. It checks nothing outside the module,
+     * such as GitHub or Conversations. For an Epic, its Claim is released
+     * first and every unarchived In progress child becomes Todo the same way,
+     * all or nothing; Done and archived children stay, and the Epic's Status
+     * follows. The Epic and its changed children are announced once.
+     */
+    backToTodo(number: number): Ticket {
+      const todo = checkTicketChanges({ status: 'Todo' });
+      const { type, archived, children } = getTicket(number);
+      checkTicketWritable(db, number);
+      if (archived) {
+        throw new NotAllowedError(
+          `Ticket T${number} is archived. Restore it before sending it Back to Todo.`,
+        );
+      }
+      if (type === 'Epic') {
+        return changeEpicChildren(
+          number,
+          children.filter(
+            (child) => !child.archived && child.status === 'In progress',
+          ),
+          todo,
+        );
+      }
+
+      const { changedEpic } = applyTicketChanges(number, todo, {
+        releaseClaim: true,
+      });
+      publishWith(number, changedEpic);
+      return getTicket(number);
+    },
+
+    /**
      * The completion rule (docs/agents/issue-tracker.md), the one place that
      * applies it: Ticket `number` becomes Done, loses its triage state label
      * (never `wontfix` or a category label), and its Claim is released, with
@@ -1995,32 +2031,21 @@ export function createTickets(
     completeTicket(number: number): Ticket {
       const stateLabels = { removeLabels: [...triageStateLabels] };
       const done = checkTicketChanges({ status: 'Done', ...stateLabels });
-      const labelsOnly = checkTicketChanges(stateLabels);
       const { type, children } = getTicket(number);
       checkTicketWritable(db, number);
 
-      const related = db.transaction(() => {
-        if (type !== 'Epic') {
-          return [applyTicketChanges(number, done).changedEpic];
-        }
-        // Merged releases the Epic's own Claim, recorded with its label
-        // change. First, before its children's Status clears it silently.
-        applyTicketChanges(number, labelsOnly, { releaseClaim: true });
-        return children
-          .filter((child) => !child.archived)
-          .map((child) => applyTicketChanges(child.number, done).changedEpic);
-      });
       if (type === 'Epic') {
-        changes.publish({
-          type: 'tickets',
-          numbers: [
-            number,
-            ...children.filter((child) => !child.archived).map((c) => c.number),
-          ],
-        });
-      } else {
-        publishWith(number, ...related);
+        return changeEpicChildren(
+          number,
+          children.filter((child) => !child.archived),
+          done,
+          checkTicketChanges(stateLabels),
+        );
       }
+      const { changedEpic } = db.transaction(() =>
+        applyTicketChanges(number, done),
+      );
+      publishWith(number, changedEpic);
       return getTicket(number);
     },
 
@@ -2841,6 +2866,32 @@ export function createTickets(
    * Announces Ticket `number`'s change, together with that of each of the
    * `related` Tickets given, such as its Epic or Origin.
    */
+  /**
+   * The Epic sequence Merged and Back to Todo share: the Epic's Claim is
+   * released first, recorded on the Epic with `epicChange` (no change by
+   * default), before the children's changes would clear it silently; then
+   * `change` is applied to each of `selected`, all in one transaction. The
+   * Epic and the changed children are announced once.
+   */
+  function changeEpicChildren(
+    epic: number,
+    selected: { number: number }[],
+    change: ReturnType<typeof checkTicketChanges>,
+    epicChange = checkTicketChanges({}),
+  ): Ticket {
+    db.transaction(() => {
+      applyTicketChanges(epic, epicChange, { releaseClaim: true });
+      for (const child of selected) {
+        applyTicketChanges(child.number, change);
+      }
+    });
+    changes.publish({
+      type: 'tickets',
+      numbers: [epic, ...selected.map((child) => child.number)],
+    });
+    return getTicket(epic);
+  }
+
   function publishWith(number: number, ...related: (number | null)[]) {
     const others = [
       ...new Set(related.filter((other) => other !== null && other !== number)),

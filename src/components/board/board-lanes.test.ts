@@ -4,7 +4,7 @@ import type { LiveConversation } from '../../conversations/conversation-activity
 import { liveConversation } from '../../test/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
-import { isInReview, isStalled, laneOf } from './board-lanes';
+import { isInReview, isParked, isStalled, laneOf } from './board-lanes';
 
 const placed = (
   status: Status,
@@ -239,5 +239,49 @@ describe('isStalled and isInReview', () => {
     expect(isInReview(withPullRequest, live)).toBe(false);
     expect(isInReview(base)).toBe(false);
     expect(isInReview({ ...withPullRequest, status: 'Done' })).toBe(false);
+  });
+});
+
+describe('isParked', () => {
+  const base = {
+    status: 'In progress' as const,
+    labels: [],
+    claim: null,
+    externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
+  };
+
+  it.each([
+    ['Action needed', base],
+    ['Running', { ...base, claim }],
+    ['Review', { ...base, externalReferences: [pullRequest] }],
+  ])('is true in %s without a live Conversation', (_section, ticket) => {
+    expect(isParked(ticket)).toBe(true);
+  });
+
+  it.each([
+    ['running', 'running' as const],
+    ['idle', 'idle' as const],
+  ])('is false with a %s Conversation', (_name, state) => {
+    expect(isParked(base, liveConversation({ state }))).toBe(false);
+  });
+
+  it.each(['Todo', 'Done'] as const)('is false for a %s Ticket', (status) => {
+    expect(isParked({ ...base, status })).toBe(false);
+  });
+
+  it.each([
+    ['Action needed', {}],
+    ['Running', { claim }],
+    ['Review', { externalReferences: [pullRequest] }],
+  ])('is true for an Epic in %s without a live Conversation', (_s, rest) => {
+    expect(isParked({ ...base, type: 'Epic', ...rest })).toBe(true);
+  });
+
+  it('is false for an Epic with a live Conversation or not In progress', () => {
+    const epic = { ...base, type: 'Epic' as const };
+    expect(isParked(epic, liveConversation({ state: 'running' }))).toBe(false);
+    expect(isParked({ ...epic, status: 'Todo' })).toBe(false);
   });
 });

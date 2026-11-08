@@ -13,6 +13,7 @@ import {
   archiveTicket,
   archiveTickets,
   attachTicketToEpic,
+  backToTodo,
   checkTicketAcceptanceCriterion,
   clearTicketClaim,
   completeTicket,
@@ -442,6 +443,41 @@ describe('Ticket actions', () => {
       '/project/[id]/cycle/[cycleId]',
       'page',
     );
+  });
+
+  it('sends a Ticket Back to Todo as the User and refreshes its Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      labels: ['ready-for-agent'],
+    });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await backToTodo({ number: ticket.number });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(ticket.number).status).toBe('Todo');
+    expect(appTickets).toHaveBeenCalledWith('user');
+    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(revalidatePath).toHaveBeenCalledWith(
+      '/project/[id]/cycle/[cycleId]',
+      'page',
+    );
+  });
+
+  it('refuses Back to Todo in an archived Project', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.archiveProject(project.id);
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    expect(await backToTodo({ number: ticket.number })).toMatchObject({
+      ok: false,
+    });
   });
 
   it('refuses to complete a Ticket in an archived Project', async () => {
