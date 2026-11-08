@@ -217,6 +217,46 @@
     }
   },
   {
+    "name": "attach",
+    "title": "Attach file",
+    "description": "Attach a file to a Ticket or Epic, added by you as an Agent, and return its metadata (id, ticketNumber, name, mediaType, size, author, createdAt). Give exactly one of path or content. path is an absolute local file path that the app reads on the machine running it, so a saved screenshot never passes through your context; name defaults to the file's base name. content is the file as base64 and needs a name. At most 10 MB per file and 50 Attachments per Ticket. An Attachment cannot be renamed or replaced. mediaType defaults from the name's extension, else application/octet-stream.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "name": {
+          "description": "The file name: one line of at most 255 characters. It is trimmed and may not be empty. Required with content; defaults to the base name of path.",
+          "type": "string"
+        },
+        "path": {
+          "description": "The absolute path of a file on the machine running the app, which the app reads. Give this or content.",
+          "type": "string"
+        },
+        "content": {
+          "description": "The file's bytes as standard base64. Give this or path.",
+          "type": "string"
+        },
+        "mediaType": {
+          "description": "The media type, such as image/png. Inferred from the name when left out.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "attach_to_epic",
     "title": "Attach Tickets to Epic",
     "description": "Make existing normal Tickets children of an Epic in the same Project. An Epic cannot be a child, a Ticket is in at most one Epic (detach_from_epic it first), and a Ticket that blocks or is blocked by the Epic cannot join it. A Ticket in the Epic already stays as it is. All or nothing: if any Ticket cannot join, none does, and the error names every one that cannot and why. To create a new Epic with its children, use create_tickets instead. Returns { tickets }: each Ticket given, in order, as its summary (number, title, status, labels and blocked) plus epicNumber, now the Epic. detail: \"full\" returns whole Tickets instead, as get_ticket does.",
@@ -533,7 +573,7 @@
   {
     "name": "create_tickets",
     "title": "Create Tickets",
-    "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one create_ticket and add_blocker call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. Returns { numbers }: the new Ticket numbers, in the order given.",
+    "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. Returns { numbers }: the new Ticket numbers, in the order given.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -757,6 +797,324 @@
     }
   },
   {
+    "name": "file_tickets",
+    "title": "File Tickets",
+    "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. Returns { numbers }: the new Ticket numbers, in the order given.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "description": "The Project the Tickets belong to (id from list_projects). Give this or projectName.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "projectName": {
+          "description": "The name of the Project the Tickets belong to, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.",
+          "type": "string"
+        },
+        "epicNumber": {
+          "description": "Create every Ticket as a child of this Epic, which must be in the same Project.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "originNumber": {
+          "description": "The Ticket they were all split from, such as the spec they came out of, in any Project.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cycleId": {
+          "description": "Plan every Ticket into this Cycle, by the rules of plan_ticket: it must be Prepared or Active and in the same Project. A refused Cycle creates none.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "tickets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "A one-line title, at most 200 characters. {{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0."
+              },
+              "description": {
+                "description": "Optional details in Markdown, at most 50,000 characters. {{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.",
+                "type": "string"
+              },
+              "status": {
+                "description": "The starting Status. Defaults to \"Todo\".",
+                "type": "string",
+                "enum": [
+                  "Todo",
+                  "In progress",
+                  "Done"
+                ]
+              },
+              "labels": {
+                "description": "Optional labels. Call list_labels to reuse existing ones.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "A label, one line of at most 50 characters. It is trimmed and lower-cased."
+                }
+              },
+              "externalReferences": {
+                "description": "Optional External references, in order, at most 50: where the same work lives in another system.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "An External reference: the same work in another system, such as a GitHub issue or a Jira issue. Either an absolute http(s) URL of at most 2,000 characters, or a key without spaces of at most 100 characters, such as ABC-33, or a GitHub issue number after a hash, alone or after owner/repo. It is trimmed and kept as typed."
+                }
+              },
+              "acceptanceCriteria": {
+                "description": "Optional acceptance criteria, in order, at most 100: independently verifiable conditions for the Ticket's outcome. {{T:n}} is replaced by the number of the Ticket at position n of this list, counted from 0.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "The criterion: one line of at most 500 characters. It is trimmed and may not be empty."
+                    },
+                    "checked": {
+                      "description": "Whether it is met already. Defaults to false.",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "type": {
+                "description": "Ticket, the default, or Epic: a Ticket that groups child Tickets. Name an Epic of this list by epicPosition to create Tickets under it. An Epic's Status follows its children, so give it none; an Epic cannot have epicPosition or the batch epicNumber.",
+                "type": "string",
+                "enum": [
+                  "Ticket",
+                  "Epic"
+                ]
+              },
+              "color": {
+                "description": "For an Epic: its colour, one of red, orange, amber, green, teal, blue, indigo, purple, pink, grey. Left out, it gets the colour fewest live Epics in the Project use. Only an Epic has a colour.",
+                "type": "string",
+                "enum": [
+                  "red",
+                  "orange",
+                  "amber",
+                  "green",
+                  "teal",
+                  "blue",
+                  "indigo",
+                  "purple",
+                  "pink",
+                  "grey"
+                ]
+              },
+              "epicPosition": {
+                "description": "The position, counted from 0, of an earlier Ticket in this list created with type \"Epic\", to create this Ticket under. Not together with the batch epicNumber.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "originPosition": {
+                "description": "The position, counted from 0, of an earlier Ticket in this list that this one was split from. Not together with the batch originNumber.",
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "blockedByPositions": {
+                "description": "The positions, counted from 0, of earlier Tickets in this list that block this one. Only earlier positions can be named, so list the Tickets in dependency order.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              }
+            },
+            "required": [
+              "title"
+            ],
+            "additionalProperties": false
+          },
+          "description": "The Tickets to create, in order, from 1 to 50."
+        }
+      },
+      "required": [
+        "tickets"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "find_tickets",
+    "title": "Find Tickets",
+    "description": "Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: \"Epic\" lists a Project's Epics without detail: \"full\"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin, containing a search query and/or created or changed since a time (changedSince). Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels, blocked (whether any Blocker is unresolved), epicNumber (the Epic it is a child of, the same number the epicNumber filter takes, or null) and updatedAt, plus projectId when the list is not for one Project. With detail: \"full\", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it. Add description: false to leave each description out and keep everything else, which is much shorter when you need a Project's structure, labels or criteria.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "description": "Only list Tickets in this Project (id from list_projects).",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "projectName": {
+          "description": "Only list Tickets in the Project with this name, ignoring case, in place of projectId. An unknown name is refused with the names of the existing Projects. Giving both is refused unless they name the same Project.",
+          "type": "string"
+        },
+        "status": {
+          "description": "Only list Tickets in this Status, or with a list such as [\"Todo\", \"In progress\"], in any of those Statuses.",
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "Todo",
+                "In progress",
+                "Done"
+              ],
+              "description": "The Status: \"Todo\", \"In progress\" or \"Done\"."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "Todo",
+                  "In progress",
+                  "Done"
+                ],
+                "description": "The Status: \"Todo\", \"In progress\" or \"Done\"."
+              }
+            }
+          ]
+        },
+        "type": {
+          "description": "Only list Tickets of this type: \"Epic\" lists only Epics, \"Ticket\" only normal Tickets. Use type: \"Epic\" to find a Project's Epics without detail: \"full\".",
+          "type": "string",
+          "enum": [
+            "Ticket",
+            "Epic"
+          ]
+        },
+        "epicNumber": {
+          "description": "Only list the children of this Epic. Combines with the other filters, such as status, blocked, claimed and labels. Use it to see an Epic's children, Statuses and blocked flags without reading the Epic with get_ticket.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "labels": {
+          "description": "Only list Tickets that have every one of these labels, ignoring case.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "A label, one line of at most 50 characters. It is trimmed and lower-cased."
+          }
+        },
+        "allProjects": {
+          "description": "List Tickets of every Project. Without a Project, projectName or projectId, find_tickets lists the Project of your working folder when one contains it; true lists every Project's instead.",
+          "type": "boolean"
+        },
+        "includeArchived": {
+          "description": "Also list archived Tickets, and Tickets of archived Projects. Defaults to false. Naming an archived Project by projectId or projectName lists its Tickets without this.",
+          "type": "boolean"
+        },
+        "blocked": {
+          "description": "true lists only Tickets with an unresolved Blocker; false lists only Tickets with none, ready to start once their Status allows.",
+          "type": "boolean"
+        },
+        "claimed": {
+          "description": "true lists only claimed Tickets; false lists only unclaimed Tickets. A claimed Epic's children count as claimed, since its Claim covers them.",
+          "type": "boolean"
+        },
+        "query": {
+          "description": "Only list Tickets whose title or description contains this text, trimmed and ignoring case (for ASCII letters only). % and _ match literally.",
+          "type": "string"
+        },
+        "externalReferences": {
+          "description": "Only list Tickets that have any of these External references, unlike labels, which needs every one. Each is trimmed and matched exactly, never partly: ABC-3 does not match ABC-33, and a GitHub issue number after a hash does not match the URL of that issue. Use it to check whether a Ticket for an item in another system already exists; pass includeArchived: true when checking for duplicates, since the earlier Ticket may be archived. An empty list is refused.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "An External reference: the same work in another system, such as a GitHub issue or a Jira issue. Either an absolute http(s) URL of at most 2,000 characters, or a key without spaces of at most 100 characters, such as ABC-33, or a GitHub issue number after a hash, alone or after owner/repo. It is trimmed and kept as typed."
+          }
+        },
+        "limit": {
+          "description": "List at most this many Tickets, from 1 to 200. Defaults to 50.",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "cursor": {
+          "description": "Continue after this Ticket number: the nextCursor of the previous page, with the same filters.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "detail": {
+          "description": "How much of each Ticket to list. \"summary\", the default: number, title, status, type, labels, blocked, epicNumber and updatedAt, plus projectId unless the list is for one Project. \"full\": the whole Ticket, as get_ticket returns it.",
+          "type": "string",
+          "enum": [
+            "summary",
+            "full"
+          ]
+        },
+        "description": {
+          "description": "With detail: \"full\", whether to include each Markdown description. Defaults to true; false leaves it out and returns everything else unchanged. A summary has no description, so it ignores this.",
+          "type": "boolean"
+        },
+        "sort": {
+          "description": "The order to list Tickets in. \"created\", the default: oldest-created first. \"position\": Board order, the order the User ranks Tickets in: a Status's Board order for Todo, In progress and Done in turn, each top to bottom (a Board Lane, such as Todo, shows that order filtered by labels); it needs projectId or projectName. Paging in Board order can skip or repeat a Ticket that moves on the Board between calls.",
+          "type": "string",
+          "enum": [
+            "created",
+            "position"
+          ]
+        },
+        "originNumber": {
+          "description": "Only list the Tickets split from this Ticket: those whose Origin it is.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cycleId": {
+          "description": "Only list the Tickets planned into this Cycle, or with null, the Backlog: those in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "The id of a Cycle, as returned by list_cycles or create_cycle."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "changedSince": {
+          "description": "Only list Tickets created or changed at or after this ISO 8601 timestamp with a time zone, such as 2026-11-07T23:05:00Z. An Epic also counts as changed when one of its children was created, attached, detached or changed since. Use it to check what other sessions changed before publishing work, such as list_tickets({ projectName, cycleId, type: \"Epic\", changedSince }) with the time you started.",
+          "type": "string"
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "get_attachment",
     "title": "Get attachment",
     "description": "Get an Attachment by its id, as returned by get_ticket or add_attachment. The first content is its metadata (id, ticketNumber, name, mediaType, size, author, createdAt, url) as JSON. A PNG, JPEG, GIF or WebP follows as image content you can look at, and a text type (text/*, JSON, XML, YAML, JavaScript) as text. Any other type is metadata only; its url is where the app serves it on localhost.",
@@ -786,7 +1144,7 @@
   {
     "name": "get_ticket",
     "title": "Get Ticket",
-    "description": "Get one Ticket by its number, including the full Markdown description and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added. Read it before starting work on the Ticket. Pass description: false to leave the description out and get everything else, which is much shorter when you only need an Epic's children with their Statuses and Blockers, or a Ticket's labels, claim or criteria.",
+    "description": "Get one Ticket by its number, including the full Markdown description, its comments (oldest first, each with id, author, body, createdAt, editedAt) and its acceptanceCriteria (each with id, text and checked, in order). Its type is Ticket or Epic, and color is the colour of an Epic, or null for a normal Ticket; epic is the Epic it is a child of ({ number, title, color }) or null, and an Epic lists its children, each with number, title, Status, archived, blockedBy and blocked. origin is the Ticket it was split from ({ number, title, status }) or null, and splitOff lists the Tickets split from it, each with number, title, status and archived. cycle is the Cycle whose Board it shows on ({ id, title, state }): the Prepared or Active Cycle it is planned into, else for a Done Ticket the most recently archived Cycle that kept it, else null for the Backlog. externalReferences lists the URLs and keys of the same work in other systems, in the order they were added. attachments lists its files (id, name, mediaType, size, author, createdAt; never the content), in the order added; read one with read_attachment. include: [\"activity\"] adds its Activity, oldest first: one entry per action that changed it, each with id, actor, createdAt and changes. Read it before starting work on the Ticket. Pass description: false to leave the description out and get everything else, which is much shorter when you only need an Epic's children with their Statuses and Blockers, or a Ticket's labels, claim or criteria.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -799,6 +1157,16 @@
         "description": {
           "description": "Whether to include the Markdown description. Defaults to true; false leaves it out and returns everything else unchanged.",
           "type": "boolean"
+        },
+        "include": {
+          "description": "Extra parts to include. \"activity\" adds the Ticket's Activity as activity.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "activity"
+            ]
+          }
         }
       },
       "required": [
@@ -1236,6 +1604,33 @@
     },
     "annotations": {
       "idempotentHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
+    "name": "read_attachment",
+    "title": "Read attachment",
+    "description": "Get an Attachment by its id, as returned by get_ticket or add_attachment. The first content is its metadata (id, ticketNumber, name, mediaType, size, author, createdAt, url) as JSON. A PNG, JPEG, GIF or WebP follows as image content you can look at, and a text type (text/*, JSON, XML, YAML, JavaScript) as text. Any other type is metadata only; its url is where the app serves it on localhost.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The id of an Attachment, as returned by get_ticket or add_attachment."
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
     },
     "execution": {
       "taskSupport": "forbidden"
@@ -1748,15 +2143,30 @@
   {
     "name": "update_ticket",
     "title": "Update Ticket",
-    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references and acceptance criteria in one atomic change. Fields left out stay as they are. Use it to move a Ticket to \"In progress\" when you start and to \"Done\" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use complete_ticket, which applies the whole completion rule; setting Done here leaves the labels as they are. The same rules apply as for create_ticket. Returns the Ticket's summary: number, title, status, labels and blocked. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog) and archived (true archives, false restores). Fields left out stay as they are. The core fields change atomically; the Epic, Blockers, Cycle and archived steps then follow in that order, and a refusal stops there, leaving earlier steps done. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to \"In progress\" when you start and to \"Done\" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use complete_ticket, which applies the whole completion rule; setting Done here leaves the labels as they are. The same rules apply as for create_ticket. Returns the Ticket's summary: number, title, status, labels and blocked. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "number": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 9007199254740991,
-          "description": "The Ticket number, e.g. 42 for T42."
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "The Ticket number, e.g. 42 for T42."
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991,
+                "description": "The Ticket number, e.g. 42 for T42."
+              },
+              "description": "The Ticket numbers, each once, from 1 to 50 of them."
+            }
+          ],
+          "description": "The Ticket, e.g. 42 for T42, or a list of Ticket numbers to apply the same change to."
         },
         "title": {
           "description": "A new one-line title, at most 200 characters.",
@@ -1846,6 +2256,58 @@
             "type": "string",
             "description": "An External reference: the same work in another system, such as a GitHub issue or a Jira issue. Either an absolute http(s) URL of at most 2,000 characters, or a key without spaces of at most 100 characters, such as ABC-33, or a GitHub issue number after a hash, alone or after owner/repo. It is trimmed and kept as typed."
           }
+        },
+        "epicNumber": {
+          "description": "Make the Ticket a child of this Epic, in the same Project (a Ticket in another Epic must leave it first), or with null take it out of its Epic.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "The Ticket number, e.g. 42 for T42."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "addBlockers": {
+          "description": "Numbers of Tickets that must be resolved (Done or archived) before this one can start. A Ticket cannot block itself, a Blocker that makes a cycle is refused, and Blockers between an Epic and its own children are refused.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The Ticket number, e.g. 42 for T42."
+          }
+        },
+        "removeBlockers": {
+          "description": "Numbers of Tickets to stop blocking this one; ones that do not block it are ignored.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991,
+            "description": "The Ticket number, e.g. 42 for T42."
+          }
+        },
+        "cycleId": {
+          "description": "Plan the Ticket into this Prepared or Active Cycle of its Project, moving it out of the Cycle it is in, or with null take it out of its Cycle, back to the Backlog.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "description": "The id of a Cycle, as returned by list_cycles or create_cycle."
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "archived": {
+          "description": "true archives the Ticket, as archive_ticket does; false restores it, as restore_ticket does.",
+          "type": "boolean"
         },
         "acceptanceCriteria": {
           "description": "The Ticket's whole new list of acceptance criteria, in order, at most 100. Criteria left out are removed; an empty list removes them all. To only check or uncheck criteria, use set_acceptance_criteria_checked.",
