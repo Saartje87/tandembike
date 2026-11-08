@@ -14,7 +14,10 @@ import {
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { setProjectAgentSettings } from '../../app/projects/actions';
+import {
+  detectProjectRepository,
+  setProjectAgentSettings,
+} from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { AgentRunMode } from '../../tickets/agent-run-mode';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
@@ -67,6 +70,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     parallelRuns: settings.parallelRuns,
   });
   const [offer, setOffer] = useState<SetupOffer | null>(null);
+  const [candidates, setCandidates] = useState<string[] | null>(null);
+  const [detecting, setDetecting] = useState(false);
   const pathId = useId();
   const parallelId = useId();
   const modeId = useId();
@@ -83,9 +88,12 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const runModelErrorId = useId();
   const {
     formState: { errors, isSubmitting },
+    clearErrors,
+    getValues,
     handleSubmit,
     register,
     setError,
+    setValue,
   } = useForm<AgentSettingsValues>({
     defaultValues: {
       repositoryPath: settings.repositoryPath ?? '',
@@ -114,6 +122,25 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const ceilingErrorId = useId();
   const autopilotId = useId();
   const serverError = errors.root?.server?.message;
+
+  /** Re-runs detection for the path in the field and offers its candidates. */
+  const detect = async () => {
+    setDetecting(true);
+    try {
+      const result = await detectProjectRepository({
+        path: getValues('repositoryPath'),
+      });
+      if (result.ok) {
+        clearErrors('repositoryPath');
+        setCandidates(result.repository.checkCommands);
+      } else {
+        setCandidates(null);
+        setError('repositoryPath', { type: 'server', message: result.error });
+      }
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const submit = handleSubmit(async (values) => {
     const result = await setProjectAgentSettings({
@@ -178,6 +205,17 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={pathError ? pathErrorId : undefined}
             />
             <FieldError id={pathErrorId} reason={pathError} />
+            <div>
+              <Button
+                type="button"
+                size="small"
+                variant="ghost"
+                loading={detecting}
+                onClick={detect}
+              >
+                Detect
+              </Button>
+            </div>
           </Stack>
           <Stack gap={1}>
             <Label htmlFor={checkId}>Check command</Label>
@@ -194,6 +232,27 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               see it pass before they open a pull request; leave empty to follow
               the repository's own instructions.
             </Text>
+            {candidates !== null && (
+              <Inline gap={1} alignY="center">
+                {candidates.length === 0 ? (
+                  <Text tag="p" fontSize="small" color="muted">
+                    No Check command candidates found.
+                  </Text>
+                ) : (
+                  candidates.map((candidate) => (
+                    <Button
+                      key={candidate}
+                      type="button"
+                      size="small"
+                      variant="ghost"
+                      onClick={() => setValue('checkCommand', candidate)}
+                    >
+                      Use {candidate}
+                    </Button>
+                  ))
+                )}
+              </Inline>
+            )}
             <FieldError id={checkErrorId} reason={checkError} />
           </Stack>
           {hasPath && (

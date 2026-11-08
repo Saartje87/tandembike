@@ -1282,8 +1282,8 @@ describe('The Start run limit', () => {
     const { conversations, tickets, project } = setup();
     const other = tickets.createProject({ name: 'Other' });
     tickets.setProjectAgentSettings(other.id, {
-      repositoryPath: tickets.getProjectAgentSettings(project.id)
-        .repositoryPath,
+      // A repository belongs to one Project, so Other gets a folder of its own.
+      repositoryPath: mkdtempSync(join(tmpdir(), 'other-repo-')),
     });
     await startOn(conversations, project.id);
 
@@ -1682,8 +1682,8 @@ describe('Setup', () => {
     const { conversations, tickets, project } = setup();
     const other = tickets.createProject({ name: 'Other' });
     tickets.setProjectAgentSettings(other.id, {
-      repositoryPath: tickets.getProjectAgentSettings(project.id)
-        .repositoryPath,
+      // A repository belongs to one Project, so Other gets a folder of its own.
+      repositoryPath: mkdtempSync(join(tmpdir(), 'other-repo-')),
     });
     const first = await startSetup(conversations, project.id);
     expect((await startSetup(conversations, other.id)).id).not.toBe(first.id);

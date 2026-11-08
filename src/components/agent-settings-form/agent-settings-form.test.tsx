@@ -3,13 +3,17 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startSetup } from '../../app/conversations/actions';
-import { setProjectAgentSettings } from '../../app/projects/actions';
+import {
+  detectProjectRepository,
+  setProjectAgentSettings,
+} from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { AgentSettingsForm } from './agent-settings-form';
 
 vi.mock('../../app/conversations/actions', () => ({ startSetup: vi.fn() }));
 vi.mock('../../app/projects/actions', () => ({
+  detectProjectRepository: vi.fn(),
   setProjectAgentSettings: vi.fn(),
 }));
 
@@ -30,6 +34,48 @@ describe('AgentSettingsForm', () => {
   beforeEach(() => {
     vi.mocked(setProjectAgentSettings).mockReset();
     vi.mocked(setProjectAgentSettings).mockResolvedValue({ ok: true });
+  });
+
+  it('detects Check command candidates for the path in the field and offers them', async () => {
+    vi.mocked(detectProjectRepository).mockResolvedValue({
+      ok: true,
+      repository: {
+        ok: true,
+        path: '/other',
+        defaultBranch: 'main',
+        remote: null,
+        referenceTemplate: null,
+        checkCommands: ['npm run check', 'make test'],
+      },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+    const path = screen.getByLabelText('Repository path');
+    await userEvent.clear(path);
+    await userEvent.type(path, '/other');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detect' }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Use make test' }),
+    );
+
+    expect(detectProjectRepository).toHaveBeenCalledWith({ path: '/other' });
+    expect(screen.getByLabelText('Check command')).toHaveValue('make test');
+  });
+
+  it('shows why detection failed on the path field', async () => {
+    vi.mocked(detectProjectRepository).mockResolvedValue({
+      ok: false,
+      error: 'This folder is not a git repository: it has no .git inside.',
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detect' }));
+
+    expect(
+      screen.getByLabelText('Repository path'),
+    ).toHaveAccessibleDescription(
+      'This folder is not a git repository: it has no .git inside.',
+    );
   });
 
   it('hides the run controls and disables agent mode with a reason while the path is unset', () => {

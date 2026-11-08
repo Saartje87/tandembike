@@ -128,7 +128,10 @@ import {
   type ProjectIcon,
   projectIconRule,
 } from './project-icons';
-import { createReferenceTemplates } from './reference-templates';
+import {
+  createReferenceTemplates,
+  type ReferenceTemplateInput,
+} from './reference-templates';
 import {
   checkBatchNumbers,
   checkTitle,
@@ -141,8 +144,8 @@ import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
-import { statSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { realpathSync, statSync } from 'node:fs';
+import { isAbsolute, resolve } from 'node:path';
 
 export type Project = {
   id: number;
@@ -156,7 +159,14 @@ export type Project = {
   createdAt: Date;
 };
 
-export type CreateProjectInput = { name: string };
+export type CreateProjectInput = {
+  name: string;
+  /** Saved with the Project, by the rules of the agent settings. */
+  repositoryPath?: string;
+  checkCommand?: string | null;
+  /** A Reference template added with the Project. */
+  referenceTemplate?: ReferenceTemplateInput;
+};
 
 export type RenameProjectInput = { name: string };
 
@@ -279,6 +289,50 @@ function repositoryPathProblem(path: string): string | undefined {
     return 'There is no directory at this path.';
   }
   return 'This path is not a directory.';
+}
+
+/** `path` with symlinks and trailing slashes resolved, as far as it exists. */
+function canonicalPath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/** The name of a Project other than `exceptId` that uses `path`, if any. */
+function repositoryPathHolder(
+  db: DatabaseConnection,
+  path: string,
+  exceptId?: number,
+): string | undefined {
+  const wanted = canonicalPath(path);
+  return db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      repositoryPath: projects.repositoryPath,
+    })
+    .from(projects)
+    .all()
+    .find(
+      (project) =>
+        project.id !== exceptId &&
+        project.repositoryPath !== null &&
+        canonicalPath(project.repositoryPath) === wanted,
+    )?.name;
+}
+
+/** Why another Project's use of `path` refuses it, if one does. */
+function repositoryPathTakenProblem(
+  db: DatabaseConnection,
+  path: string,
+  exceptId?: number,
+): string | undefined {
+  const holder = repositoryPathHolder(db, path, exceptId);
+  return holder === undefined
+    ? undefined
+    : `The Project "${holder}" already uses this repository. A repository belongs to one Project.`;
 }
 
 export type Ticket = {
@@ -1320,11 +1374,25 @@ export function createTickets(
     /** Creates a Project with a trimmed name, unique ignoring case. */
     createProject(input: CreateProjectInput): Project {
       const { name, nameKey } = availableProjectName(db, input.name);
-      const project = db
-        .insert(projects)
-        .values({ name, nameKey, createdAt: new Date() })
-        .returning(projectColumns)
-        .get();
+      const { repositoryPath, checkCommand, referenceTemplate } = input;
+      // The Project and its repository settings are saved all or nothing.
+      const project = db.transaction(() => {
+        const created = db
+          .insert(projects)
+          .values({ name, nameKey, createdAt: new Date() })
+          .returning(projectColumns)
+          .get();
+        if (repositoryPath !== undefined || checkCommand !== undefined) {
+          this.setProjectAgentSettings(created.id, {
+            ...(repositoryPath === undefined ? {} : { repositoryPath }),
+            ...(checkCommand === undefined ? {} : { checkCommand }),
+          });
+        }
+        if (referenceTemplate !== undefined) {
+          this.addReferenceTemplate(created.id, referenceTemplate);
+        }
+        return created;
+      });
       changes.publish({ type: 'project', id: project.id });
       return project;
     },
@@ -1441,7 +1509,8 @@ export function createTickets(
         repositoryPath:
           repositoryPath === undefined || nextPath === null
             ? undefined
-            : repositoryPathProblem(nextPath),
+            : (repositoryPathProblem(nextPath) ??
+              repositoryPathTakenProblem(db, nextPath, id)),
         maxConcurrentRuns:
           maxConcurrentRuns === undefined ||
           (Number.isInteger(maxConcurrentRuns) && maxConcurrentRuns >= 1)

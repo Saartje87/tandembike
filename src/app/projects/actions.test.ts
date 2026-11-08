@@ -8,6 +8,8 @@ import { appTickets } from '../../tickets/app-tickets';
 import { boardRoute } from '../lib/paths';
 import {
   addReferenceTemplate,
+  createProject,
+  detectProjectRepository,
   loadProjectSkills,
   removeReferenceTemplate,
   setProjectAgentCommands,
@@ -16,6 +18,9 @@ import {
   styleProject,
   updateReferenceTemplate,
 } from './actions';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
@@ -23,6 +28,57 @@ vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 describe('Project actions', () => {
   beforeEach(() => {
     vi.mocked(revalidatePath).mockClear();
+  });
+
+  it('creates a Project with its repository, Check command and template', async () => {
+    const tickets = createTestTickets();
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+
+    const result = await createProject({
+      name: 'Site',
+      repositoryPath: path,
+      checkCommand: 'make check',
+      referenceTemplate: { prefix: '#', url: 'https://example.com/{n}' },
+    });
+
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
+    expect(tickets.getProjectAgentSettings(result.projectId)).toMatchObject({
+      repositoryPath: path,
+      checkCommand: 'make check',
+    });
+  });
+
+  it('refuses a repository another Project uses on the repositoryPath field', async () => {
+    const tickets = createTestTickets();
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+    await createProject({ name: 'Site', repositoryPath: path });
+
+    const result = await createProject({ name: 'Other', repositoryPath: path });
+
+    expect(result).toMatchObject({
+      ok: false,
+      fieldErrors: { repositoryPath: expect.stringContaining('"Site"') },
+    });
+  });
+
+  it('detects a repository, or says why a folder is not one', async () => {
+    const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+    mkdirSync(join(path, '.git'));
+    writeFileSync(join(path, 'Makefile'), 'check:\n\techo');
+
+    expect(await detectProjectRepository({ path })).toMatchObject({
+      ok: true,
+      repository: { checkCommands: ['make check'] },
+    });
+    expect(
+      await detectProjectRepository({
+        path: realpathSync(mkdtempSync(join(tmpdir(), 'action-'))),
+      }),
+    ).toMatchObject({ ok: false, error: expect.stringContaining('not a git') });
   });
 
   it("sets a Project's colour and icon and refreshes every page", async () => {
