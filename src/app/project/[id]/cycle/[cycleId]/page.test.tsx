@@ -145,7 +145,7 @@ describe('CyclePage', () => {
       expect(screen.queryByText(/^Tickets:/)).not.toBeInTheDocument();
     });
 
-    it("shows the Backlog's Intake in Needs you, not its other Tickets", async () => {
+    it("shows only its own Intake in Needs you, none of the Backlog's", async () => {
       const tickets = createTestTickets();
       const project = tickets.createProject({ name: 'Website' });
       const cycle = tickets.createCycle({
@@ -153,6 +153,12 @@ describe('CyclePage', () => {
         title: 'Now',
       });
       tickets.startCycle(cycle.id);
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Planned idea',
+        labels: ['needs-triage'],
+        cycleId: cycle.id,
+      });
       tickets.createTicket({
         projectId: project.id,
         title: 'Filed by a run',
@@ -164,6 +170,7 @@ describe('CyclePage', () => {
         labels: ['ready-for-agent'],
       });
       vi.mocked(appTickets).mockReturnValue(tickets);
+      document.title = 'Now | Tandembike';
 
       await renderPage(
         <main>
@@ -182,10 +189,89 @@ describe('CyclePage', () => {
       expect(
         within(screen.getByRole('region', { name: 'Intake' })).getByRole(
           'link',
-          { name: 'Filed by a run' },
+          { name: 'Planned idea' },
         ),
       ).toBeVisible();
+      expect(screen.queryByText('Filed by a run')).toBe(null);
       expect(screen.queryByText('Ready, not planned')).toBe(null);
+      // The browser tab counts the planned idea only.
+      await vi.waitFor(() =>
+        expect(document.title).toBe('(1) Now | Tandembike'),
+      );
+    });
+
+    it("lists only an Epic's children planned in it, saying when the rest are elsewhere", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Now',
+      });
+      const split = tickets.createTicket({
+        projectId: project.id,
+        title: 'Split Epic',
+        type: 'Epic',
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Planned child',
+        epicNumber: split.number,
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Backlog child',
+        epicNumber: split.number,
+        labels: ['ready-for-agent'],
+      });
+      const away = tickets.createTicket({
+        projectId: project.id,
+        title: 'Away Epic',
+        type: 'Epic',
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Away child',
+        epicNumber: away.number,
+        labels: ['ready-for-agent'],
+      });
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Empty Epic',
+        type: 'Epic',
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      const queued = screen.getByRole('region', { name: 'Queued' });
+      expect(within(queued).getByText('Planned child')).toBeInTheDocument();
+      expect(screen.queryByText('Backlog child')).toBe(null);
+      expect(screen.queryByText('Away child')).toBe(null);
+      expect(
+        within(queued).getByText('No children in this Cycle (1 elsewhere)'),
+      ).toBeInTheDocument();
+      expect(within(queued).getByText('No children yet')).toBeInTheDocument();
     });
 
     it('shows an Epic when its children are planned, though it is not, in Needs you while its run is not going', async () => {
@@ -234,7 +320,7 @@ describe('CyclePage', () => {
       expect(screen.getByText('Nothing in flight.')).toBeVisible();
     });
 
-    it("leaves out Epics with no Tickets on it, but lists the Backlog's Intake Epic once", async () => {
+    it("leaves out Epics with no Tickets on it, the Backlog's Intake Epic too", async () => {
       const tickets = createTestTickets();
       const project = tickets.createProject({ name: 'Website' });
       const earlier = tickets.createCycle({
@@ -281,12 +367,7 @@ describe('CyclePage', () => {
         </main>,
       );
 
-      expect(
-        within(screen.getByRole('region', { name: 'Intake' })).getAllByRole(
-          'link',
-          { name: 'Rough idea' },
-        ),
-      ).toHaveLength(1);
+      expect(screen.queryByText('Rough idea')).toBe(null);
       expect(screen.queryByText('Ready, not planned')).toBe(null);
       expect(screen.queryByText('Planned elsewhere')).toBe(null);
     });

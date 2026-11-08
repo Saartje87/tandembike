@@ -43,6 +43,11 @@ export type ProjectTabsProps = {
    * place of its open Tickets. Defaults to 0.
    */
   needsYou?: number;
+  /**
+   * The rows of Needs you → Intake on the Backlog's Board: its open Tickets'
+   * badge turns to a warning while there are any. Defaults to 0.
+   */
+  backlogIntake?: number;
 };
 
 /**
@@ -84,6 +89,11 @@ type ProjectTabProps = {
   openTickets?: number;
   /** What needs the User on the tab's Board, shown in a badge when above 0. */
   needsYou?: number;
+  /**
+   * The Intake on the tab's Board, among its open Tickets: above 0, their
+   * badge turns to a warning and names it.
+   */
+  intake?: number;
 };
 
 const ProjectTab: FC<ProjectTabProps> = ({
@@ -92,6 +102,7 @@ const ProjectTab: FC<ProjectTabProps> = ({
   children,
   openTickets,
   needsYou,
+  intake = 0,
 }) => {
   const badge =
     needsYou === undefined
@@ -99,8 +110,8 @@ const ProjectTab: FC<ProjectTabProps> = ({
         ? undefined
         : {
             count: openTickets,
-            name: `${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}`,
-            intent: undefined,
+            name: `${openTickets} open ${openTickets === 1 ? 'Ticket' : 'Tickets'}${intake > 0 ? `, ${intake} in Intake` : ''}`,
+            intent: intake > 0 ? ('warning' as const) : undefined,
           }
       : needsYou > 0
         ? {
@@ -202,7 +213,8 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
  * A Project's views as tabs: its Backlog, its Active Cycle,
  * each Prepared one, the History of archived ones and its Settings, with a
  * New Cycle button that adds one. The Backlog's and each Cycle's tab shows its open
- * Tickets in a badge, whatever the Board filter. It marks the tab on screen
+ * Tickets in a badge, whatever the Board filter; the Active Cycle's shows what
+ * needs the User instead, and the Backlog's turns to a warning with Intake. It marks the tab on screen
  * from the URL, so the Project's layout can keep it mounted across its tabs,
  * and carries the Board filter in the URL from one Board's tab to another's.
  */
@@ -211,6 +223,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
   cycles,
   openTicketCounts,
   needsYou = 0,
+  backlogIntake = 0,
 }) => {
   const [adding, setAdding] = useState(false);
   const current = currentTab(useSelectedLayoutSegments(), cycles);
@@ -227,6 +240,7 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           href={filteredBoardPath(projectPath(projectId), filter)}
           current={current === 'backlog'}
           openTickets={openTicketCounts.backlog}
+          intake={backlogIntake}
         >
           Backlog
         </ProjectTab>

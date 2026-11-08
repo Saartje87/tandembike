@@ -91,6 +91,63 @@ describe('ProjectPage', () => {
     ).resolves.toEqual({ title: 'Website' });
   });
 
+  it("lists only an Epic's children in the Backlog, saying when the rest are elsewhere", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const split = tickets.createTicket({
+      projectId: project.id,
+      title: 'Split Epic',
+      type: 'Epic',
+      labels: ['ready-for-agent'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Backlog child',
+      epicNumber: split.number,
+      labels: ['ready-for-agent'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Planned child',
+      epicNumber: split.number,
+      labels: ['ready-for-agent'],
+      cycleId: beta.id,
+    });
+    const away = tickets.createTicket({
+      projectId: project.id,
+      title: 'Away Epic',
+      type: 'Epic',
+      labels: ['ready-for-agent'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Away child',
+      epicNumber: away.number,
+      labels: ['ready-for-agent'],
+      cycleId: beta.id,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await renderPage(
+      <main>
+        {
+          await ProjectPage({
+            params: Promise.resolve({ id: String(project.id) }),
+            searchParams: noSearch,
+          })
+        }
+      </main>,
+    );
+
+    expect(screen.getByText('Backlog child')).toBeInTheDocument();
+    expect(screen.queryByText('Planned child')).toBe(null);
+    expect(screen.queryByText('Away child')).toBe(null);
+    expect(
+      screen.getByText('No children in the Backlog (1 elsewhere)'),
+    ).toBeInTheDocument();
+  });
+
   it("lists the Backlog's archived Tickets last, closed", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

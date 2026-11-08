@@ -282,7 +282,7 @@ describe('Cockpit', () => {
     ).toBe(null);
   });
 
-  it("shows Intake from the Cycle and the Backlog after Review, with each Ticket's triage label", async () => {
+  it("shows the Cycle's Intake after Review, with each Ticket's triage label", async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
@@ -297,19 +297,14 @@ describe('Cockpit', () => {
               number: 14,
               title: 'Planned idea',
               createdAt: new Date('2026-11-02'),
+              position: 1,
             }),
-          ]}
-          backlog={[
             ticket({
               number: 20,
               title: 'Tag size missing',
               labels: ['needs-triage'],
               createdAt: new Date('2026-11-01'),
-            }),
-            ticket({
-              number: 21,
-              title: 'Ready later',
-              labels: ['ready-for-agent'],
+              position: 2,
             }),
           ]}
           runSlots={{ used: 1, cap: 3 }}
@@ -319,7 +314,7 @@ describe('Cockpit', () => {
 
     const intake = section('Intake');
     expect(intake.querySelector('details')).toHaveAttribute('open');
-    // The Cycle's own Intake in Board order, the Backlog's after it.
+    // In Board order.
     const [planned, filed] = within(intake).getAllByRole('listitem');
     expect(
       within(filed).getByRole('link', { name: 'Tag size missing' }),
@@ -327,7 +322,6 @@ describe('Cockpit', () => {
     expect(filed).toHaveTextContent(/Intake · to triage · /);
     expect(within(filed).getByText('needs-triage')).toBeVisible();
     expect(within(planned).getByText('no triage label')).toBeVisible();
-    expect(screen.queryByText('Ready later')).toBe(null);
     expect(within(section('Needs you')).getAllByText('3')[0]).toBeVisible();
   });
 

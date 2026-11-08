@@ -153,11 +153,11 @@ export function cycleTicketsWithEpics(projectId: number, cycleId: number) {
 
 /**
  * How many Tickets need the User on Project `projectId`'s Active Cycle's
- * Board, unfiltered; 0 without an Active Cycle.
+ * Board, unfiltered; 0 without an Active Cycle. The Backlog's Intake is the
+ * Backlog's own (ADR 0025).
  */
 export function needsYouCountOf(projectId: number): number {
-  const tickets = appTickets('user');
-  const active = tickets
+  const active = appTickets('user')
     .listCycles(projectId)
     .find(({ state }) => state === 'Active');
   if (!active) {
@@ -166,6 +166,16 @@ export function needsYouCountOf(projectId: number): number {
   return cockpitOf(
     cycleTicketsWithEpics(projectId, active.id),
     conversationActivity(appConversations().activityRows()),
-    tickets.listTickets({ projectId, cycleId: null }),
   ).needsYou.count;
+}
+
+/**
+ * How many rows Needs you → Intake holds on Project `projectId`'s Backlog
+ * Board, unfiltered, counted as the Active Cycle's Needs you is.
+ */
+export function backlogIntakeCountOf(projectId: number): number {
+  return cockpitOf(
+    appTickets('user').listTickets({ projectId, cycleId: null }),
+    conversationActivity(appConversations().activityRows()),
+  ).needsYou.intake.length;
 }

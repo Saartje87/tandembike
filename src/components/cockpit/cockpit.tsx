@@ -96,11 +96,6 @@ export type CockpitProps = {
   /** The Cycle's Tickets, as its Board gets them. */
   tickets: Ticket[];
   /**
-   * The Backlog's Tickets: their Intake also needs the User, since runs file
-   * their feedback outside any Cycle. Defaults to none.
-   */
-  backlog?: Ticket[];
-  /**
    * The Project's Start runs working now, and how many it allows at once;
    * given on the Active Cycle's Board only.
    */
@@ -452,8 +447,14 @@ const Pip: FC<PipProps> = ({ state, title }) => (
 
 type ChildrenBarProps = { row: Pick<EpicRow, 'children'> };
 
-/** An Epic's children as one mark each, coloured by where it stands. */
+/**
+ * An Epic's children on this Board as one mark each, coloured by where it
+ * stands; nothing without any.
+ */
 const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
+  if (row.children.length === 0) {
+    return null;
+  }
   const done = row.children.filter(({ state }) => state === 'done').length;
   return (
     <Inline
@@ -477,46 +478,84 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   );
 };
 
-type EpicChildListProps = { row: Pick<EpicRow, 'children'> };
+/** Whose Board a Cockpit is: a Cycle's or the Backlog's. */
+type BoardKind = 'Cycle' | 'Backlog';
 
-/** An opened Epic row: each child with where it stands. */
-const EpicChildList: FC<EpicChildListProps> = ({ row }) => (
-  <Stack
-    gap={1}
-    paddingBlockStart={2}
-    paddingInlineStart={6}
-    listStyle="none"
-    role="list"
-    asChild
-  >
-    <ul>
-      {row.children.map((child) => (
-        <li key={child.number}>
-          <Inline gap={2} alignY="center">
-            <Pip state={child.state} />
-            <Text fontSize="small" fontFamily="mono" color="muted">
-              T{child.number}
-            </Text>
-            <Text fontSize="small">{child.title}</Text>
-            <Text fontSize="small" color="muted">
-              {childStateLabel[child.state]}
-            </Text>
-          </Inline>
-        </li>
-      ))}
-    </ul>
-  </Stack>
-);
+const boardName: Record<BoardKind, string> = {
+  Cycle: 'this Cycle',
+  Backlog: 'the Backlog',
+};
+
+type EpicChildListProps = {
+  row: Pick<EpicRow, 'children' | 'childrenElsewhere'>;
+  /** Whose Board it is, to say where its children are not. */
+  board: BoardKind;
+};
+
+/** What an Epic's row says when none of its children are on this Board. */
+const noChildrenText = (childrenElsewhere: number, board: BoardKind) => {
+  if (childrenElsewhere === 0) {
+    return 'No children yet';
+  }
+  return `No children in ${boardName[board]} (${childrenElsewhere} elsewhere)`;
+};
+
+/**
+ * An opened Epic row: each child on this Board with where it stands, or
+ * where they are when none is.
+ */
+const EpicChildList: FC<EpicChildListProps> = ({ row, board }) =>
+  row.children.length === 0 ? (
+    <Box paddingBlockStart={2} paddingInlineStart={6}>
+      <Text fontSize="small" color="muted">
+        {noChildrenText(row.childrenElsewhere, board)}
+      </Text>
+    </Box>
+  ) : (
+    <Stack
+      gap={1}
+      paddingBlockStart={2}
+      paddingInlineStart={6}
+      listStyle="none"
+      role="list"
+      asChild
+    >
+      <ul>
+        {row.children.map((child) => (
+          <li key={child.number}>
+            <Inline gap={2} alignY="center">
+              <Pip state={child.state} />
+              <Text fontSize="small" fontFamily="mono" color="muted">
+                T{child.number}
+              </Text>
+              <Text fontSize="small">{child.title}</Text>
+              <Text fontSize="small" color="muted">
+                {childStateLabel[child.state]}
+              </Text>
+            </Inline>
+          </li>
+        ))}
+      </ul>
+    </Stack>
+  );
 
 /**
  * What an Epic's row adds to a Ticket's row: its children bar beside the
  * title, and its children listed when opened. Nothing for a normal Ticket.
  */
-const epicParts = (row: CockpitTicket) =>
+const epicParts = (row: CockpitTicket, board: BoardKind) =>
   row.children
     ? {
         beside: <ChildrenBar row={{ children: row.children }} />,
-        details: <EpicChildList row={{ children: row.children }} />,
+        details: (
+          <EpicChildList
+            row={{
+              children: row.children,
+              childrenElsewhere: row.childrenElsewhere ?? 0,
+            }}
+            board={board}
+          />
+        ),
       }
     : {};
 
@@ -604,8 +643,8 @@ function inFlightLine(row: InFlightRow, now: number): string {
 /**
  * A Project's Cockpit: its Active Cycle in one column, by what needs the
  * User first. The header shows the Cycle's progress and the Start runs
- * working; Needs you shows what waits on the User (Action needed, Review,
- * then Intake from the Cycle and the Backlog), in groups that start open,
+ * working; Needs you shows what waits on the User on this Board (Action
+ * needed, Review, then Intake), in groups that start open,
  * longest waiting first; In flight shows each Running Ticket with what
  * its run is doing; Your work, Queued and Done stay closed until opened.
  * Its lists offer no actions: every row's title opens its Ticket in a
@@ -622,7 +661,6 @@ export const Cockpit: FC<CockpitProps> = ({
   projectId,
   cycle,
   tickets,
-  backlog = [],
   runSlots,
   planning = false,
   archived = [],
@@ -643,22 +681,20 @@ export const Cockpit: FC<CockpitProps> = ({
       ),
   );
   const cycleId = cycle?.id ?? null;
+  const board: BoardKind = cycle ? 'Cycle' : 'Backlog';
   const boardPath = boardPathOf(projectId, cycleId);
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
   // The Board filter narrows every section and its counts; only the tab and
   // the browser title keep the full Needs you count.
   const cockpit = {
-    ...cockpitOf(shownTickets, { live, cost }, backlog, filter),
+    ...cockpitOf(shownTickets, { live, cost }, filter),
     archived: isFiltering(filter)
       ? archived.filter((ticket) => ticketMatches(ticket, filter))
       : archived,
   };
   const filterLabels = [
-    ...new Set(
-      [...tickets, ...backlog, filter].flatMap(({ labels }) => labels),
-    ),
+    ...new Set([...tickets, filter].flatMap(({ labels }) => labels)),
   ].sort();
-  const backlogNumbers = new Set(backlog.map(({ number }) => number));
   const hrefOf = (number: number) =>
     ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
@@ -685,9 +721,7 @@ export const Cockpit: FC<CockpitProps> = ({
   const sectionNumbers: Record<ReorderSection, number[]> = {
     Queued: cockpit.queued.map(({ number }) => number),
     'Your work': cockpit.yourWork.map(({ number }) => number),
-    Intake: needsYou.intake
-      .filter(({ number }) => !backlogNumbers.has(number))
-      .map(({ number }) => number),
+    Intake: needsYou.intake.map(({ number }) => number),
   };
   // An Epic of another Cycle shown here is not ordered by this Cycle.
   for (const section of Object.keys(sectionNumbers) as ReorderSection[]) {
@@ -831,7 +865,7 @@ export const Cockpit: FC<CockpitProps> = ({
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
-        {...epicParts(row)}
+        {...epicParts(row, board)}
         selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
@@ -961,7 +995,7 @@ export const Cockpit: FC<CockpitProps> = ({
                             </Tag>
                           </Inline>
                         }
-                        details={<EpicChildList row={row} />}
+                        details={<EpicChildList row={row} board={board} />}
                       />
                     ))}
                     {cockpit.inFlight.map((row) => (
@@ -1005,7 +1039,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon={row.children ? 'queue-list' : 'user'}
-                  {...epicParts(row)}
+                  {...epicParts(row, board)}
                   selection={
                     row.children
                       ? undefined
@@ -1031,7 +1065,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon={row.children ? 'queue-list' : 'clock'}
-                  {...epicParts(row)}
+                  {...epicParts(row, board)}
                   selection={
                     row.children ? undefined : selectable(row.number, 'queued')
                   }
@@ -1058,7 +1092,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon="check-circle"
-                  {...epicParts(row)}
+                  {...epicParts(row, board)}
                   selection={
                     row.children ? undefined : selectable(row.number, 'done')
                   }
