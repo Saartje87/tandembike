@@ -1,6 +1,6 @@
 # Roadmap 2: a software factory for any local repository
 
-Status: agreed on 2026-11-08 in a grilling session (T1191). It continues [`software-factory.md`](software-factory.md), whose phases 0 to 5 end with the independent Review stage (T1093). Each phase below has a placeholder Epic, specced with `/to-spec` and `/to-tickets` when its turn comes, by "Publishing a spec" in `docs/agents/issue-tracker.md`. Decisions here can be revisited. When one changes, update this file in the same PR.
+Status: agreed on 2026-11-08 in a grilling session (T1191). It continues [`software-factory.md`](software-factory.md), whose phases 0 to 4 are built. Its phase 5, the independent Review stage (T1093), was rejected on 2026-11-08: see [`.out-of-scope/independent-review-runs.md`](../../.out-of-scope/independent-review-runs.md). Each phase below has a placeholder Epic, specced with `/to-spec` and `/to-tickets` when its turn comes, by "Publishing a spec" in `docs/agents/issue-tracker.md`. Decisions here can be revisited. When one changes, update this file in the same PR.
 
 ## Goal
 
@@ -10,7 +10,7 @@ Point Tandembike at any repository on the machine and the factory works there, w
 
 Existing terms keep their meaning. New terms this roadmap introduces, added to `GLOSSARY.md` by the phase that builds them:
 
-- **Stage**: a step of the flow with its own Conversation intent and Playbook skill: Triage, Spec, Start (Build), Review, Merge, Plan, Retro.
+- **Stage**: a step of the flow with its own Conversation intent and Playbook skill: Triage, Spec, Start (build, with its inline review), Merge, Plan, Retro.
 - **Playbook**: the skills Tandembike ships and loads into every run, one per Stage. A Project's Agent command, when set, overrides the Playbook for its Stage.
 - **Run outcome**: what a Conversation's run ended in, recorded when it ends: its Stage, its result, cost, duration, model, and whether the Playbook or an override ran.
 - **Merge gate**: the point where a reviewed PR with green checks waits for the User's Approve merge.
@@ -35,7 +35,7 @@ This reverses part of ADR 0019, which leaves the whole process to the repository
 
 ### The flow is a pipeline of Stages (Q10)
 
-Intake → Triage → (Spec, for work too big for one Ticket, splitting into an Epic) → Queued → Start → Review → Merge gate → Done. Status stays Todo, In progress and Done, and Lanes stay derived (ADR 0023). A Stage is a Conversation intent with its own Playbook skill. Spec and Merge are new intents.
+Intake → Triage → (Spec, for work too big for one Ticket, splitting into an Epic) → Queued → Start (build, check, inline review, open PR) → Merge gate → Done. Status stays Todo, In progress and Done, and Lanes stay derived (ADR 0023). A Stage is a Conversation intent with its own Playbook skill. Spec and Merge are new intents. There is no separate Review run: the Start run reviews its own PR with the Playbook's review skill, and the User at the Merge gate is the second pair of eyes. An independent Review run per PR (T1093) was measured and rejected, with 0 real misses in 5 PRs.
 
 ### Human gates (Q4)
 
@@ -47,11 +47,11 @@ A Ticket whose PR is reviewed and green waits in Needs you with **Approve merge*
 
 ### Tandembike creates run worktrees (Q3, Q7)
 
-This reverses ADR 0019's "Tandembike never runs git and does not track worktrees". Leaving worktrees to each run cost tokens in every run and failed in practice (T1145, T1146, T1161, T1162), and a run started in the main checkout shares it until it follows the instruction. With Parallel runs on, Tandembike creates a worktree for each Start, Review and Merge run before the run starts and sets the run's cwd to it. It then runs the Project's prepare command, if any (such as `npm ci`), and removes the worktree when the Conversation closes or the PR merges. The Agent still branches, commits, pushes and opens the PR. Triage, Spec, Plan, Setup and Retro run in the main checkout and change no code. See ADR 0033.
+This reverses ADR 0019's "Tandembike never runs git and does not track worktrees". Leaving worktrees to each run cost tokens in every run and failed in practice (T1145, T1146, T1161, T1162), and a run started in the main checkout shares it until it follows the instruction. With Parallel runs on, Tandembike creates a worktree for each Start and Merge run before the run starts and sets the run's cwd to it. It then runs the Project's prepare command, if any (such as `npm ci`), and removes the worktree when the Conversation closes or the PR merges. The Agent still branches, commits, pushes and opens the PR. Triage, Spec, Plan, Setup and Retro run in the main checkout and change no code. See ADR 0033.
 
 ### Onboarding a repository (Q14, Q16)
 
-New Project means picking a folder. Tandembike detects git, the default branch, the remote and a Check command (from `package.json` scripts, a `Makefile` and the like), and the User confirms. The Check command is handed to Start and Review runs as the definition of green before a PR. Setup stays, but only to suggest extras such as a `CLAUDE.md`. It is no longer needed to start (amends ADR 0020). MCP calls default to the Project whose repository path contains the caller's cwd, worktrees included. An explicit `projectName` still wins, and an unknown path is refused with the known Projects named. A repository's `CLAUDE.md` no longer has to name its Project.
+New Project means picking a folder. Tandembike detects git, the default branch, the remote and a Check command (from `package.json` scripts, a `Makefile` and the like), and the User confirms. The Check command is handed to Start and Merge runs as the definition of green before a PR. Setup stays, but only to suggest extras such as a `CLAUDE.md`. It is no longer needed to start (amends ADR 0020). MCP calls default to the Project whose repository path contains the caller's cwd, worktrees included. An explicit `projectName` still wins, and an unknown path is refused with the known Projects named. A repository's `CLAUDE.md` no longer has to name its Project.
 
 ### Workflow MCP tools (Q6, Q15)
 
@@ -96,7 +96,7 @@ Autopilot also dispatches Triage runs for Intake, Backlog included, on a Project
 
 ## Phases
 
-Each phase is one Epic, blocked by the one before. Phase 6 waits for phase 5 (T1093).
+Each phase is one Epic, blocked by the one before. Phase 6 comes first.
 
 ### Phase 6: repo integration and local install (T1192)
 
