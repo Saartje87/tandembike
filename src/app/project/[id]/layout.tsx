@@ -7,6 +7,7 @@ import { ProjectHeader } from '../../../components/project-header/project-header
 import { ProjectTabs } from '../../../components/project-tabs/project-tabs';
 import { appTickets } from '../../../tickets/app-tickets';
 import {
+  backlogIntakeCountOf,
   findProject,
   needsYouCountOf,
   type ProjectPageProps,
@@ -38,6 +39,7 @@ async function projectShell(
           cycles={tickets.listCycles(project.id)}
           openTicketCounts={tickets.openTicketCounts(project.id)}
           needsYou={needsYouCountOf(project.id)}
+          backlogIntake={backlogIntakeCountOf(project.id)}
         />
       </ProjectHeader>
       {children}

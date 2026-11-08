@@ -19,15 +19,19 @@ vi.mock('../../../components/project-tabs/project-tabs', () => ({
     cycles,
     openTicketCounts,
     needsYou,
+    backlogIntake,
   }: {
     projectId: number;
     cycles: { id: number; title: string }[];
     openTicketCounts: { backlog: number; cycles: Record<number, number> };
     needsYou: number;
+    backlogIntake: number;
   }) => (
     <nav>{`Tabs of ${projectId}: Backlog ${openTicketCounts.backlog}, ${cycles
       .map(({ id, title }) => `${title} ${openTicketCounts.cycles[id]}`)
-      .join(', ')}; needs you ${needsYou}`}</nav>
+      .join(
+        ', ',
+      )}; needs you ${needsYou}; Backlog Intake ${backlogIntake}`}</nav>
   ),
 }));
 
@@ -63,12 +67,12 @@ describe('ProjectLayout', () => {
       screen.getByRole('heading', { level: 1, name: 'Website' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('navigation')).toHaveTextContent(
-      `Tabs of ${project.id}: Backlog 2, Beta 1; needs you 0`,
+      `Tabs of ${project.id}: Backlog 2, Beta 1; needs you 0; Backlog Intake 2`,
     );
     expect(screen.getByText('The tab')).toBeInTheDocument();
   });
 
-  it("counts the Active Cycle's Needs you for its tab, with the Backlog's Intake", async () => {
+  it("counts the Active Cycle's Needs you for its tab, and the Backlog's Intake for its own", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Now' });
@@ -101,7 +105,9 @@ describe('ProjectLayout', () => {
       </main>,
     );
 
-    expect(screen.getByRole('navigation')).toHaveTextContent('needs you 2');
+    expect(screen.getByRole('navigation')).toHaveTextContent(
+      'needs you 1; Backlog Intake 1',
+    );
   });
 
   it('shows the loading state until the Project loads', async () => {

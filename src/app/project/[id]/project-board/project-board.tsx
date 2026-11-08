@@ -126,10 +126,6 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
           {...shared}
           cycle={tab}
           tickets={cycleTicketsWithEpics(project.id, tab.id)}
-          backlog={tickets.listTickets({
-            projectId: project.id,
-            cycleId: null,
-          })}
           runSlots={runSlotsOf(project.id)}
         />
       </>

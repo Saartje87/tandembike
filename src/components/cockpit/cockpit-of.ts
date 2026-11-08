@@ -5,7 +5,6 @@ import type {
 } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { PaletteColor } from '../../tickets/palette';
-import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import { isTriageStateLabel } from '../../tickets/triage-labels';
 import { isFiltering, ticketMatches } from '../board/board-filter';
@@ -25,9 +24,11 @@ export type CockpitTicket = Pick<
   color: PaletteColor | null;
   /**
    * For an Epic row outside In flight (Needs you, Queued, Your work, Done),
-   * its children and whether one needs the User; absent for a normal Ticket.
+   * its children on this Board, how many more are elsewhere, and whether one
+   * needs the User; absent for a normal Ticket.
    */
   children?: EpicChildRow[];
+  childrenElsewhere?: number;
   childNeedsYou?: boolean;
 };
 
@@ -60,14 +61,18 @@ export type EpicChildRow = {
 /** An In progress Epic: its own run, and how far its children are. */
 export type EpicRow = InFlightRow & {
   color: PaletteColor;
-  /** Its unarchived children, in the Epic's order, each with its state. */
+  /** Its unarchived children on this Board, in the Epic's order, each with its state. */
   children: EpicChildRow[];
+  /** How many of its unarchived children are on another Board. */
+  childrenElsewhere: number;
   /** Whether one of its children is in Needs you. */
   childNeedsYou: boolean;
 };
 
 /** An Epic's children, for its row outside In flight. */
-type EpicChildren = Required<Pick<CockpitTicket, 'children' | 'childNeedsYou'>>;
+type EpicChildren = Required<
+  Pick<CockpitTicket, 'children' | 'childrenElsewhere' | 'childNeedsYou'>
+>;
 
 /** A ready-for-agent Todo Ticket, in the queue's order. */
 export type QueuedRow = CockpitTicket & {
@@ -116,7 +121,7 @@ export type Cockpit = {
   needsYou: {
     actionNeeded: NeedRow[];
     review: NeedRow[];
-    /** Todo Tickets still to triage, from this Board and the other given. */
+    /** This Board's Todo Tickets still to triage. */
     intake: NeedRow[];
     /** How many Tickets wait on the User, under the Board filter. */
     count: number;
@@ -151,13 +156,6 @@ const rowOf = (ticket: Ticket): CockpitTicket => ({
   updatedAt: ticket.updatedAt,
   color: ticket.type === 'Epic' ? epicColorOf(ticket) : null,
 });
-
-/** Where a child stands when it is on another Board: its Status says it all. */
-const childStateByStatus: Record<Status, EpicChildState> = {
-  Todo: 'queued',
-  'In progress': 'running',
-  Done: 'done',
-};
 
 /** Where an In progress child on this Board stands, by its section. */
 const childStateBySection: Record<InProgressSection, EpicChildState> = {
@@ -210,22 +208,19 @@ const isShown = (ticket: Ticket) => !ticket.archived && ticket.type !== 'Epic';
 
 /**
  * Whether the Board filter keeps `ticket`: it matches, or it is an Epic and
- * one of its children does. `known` finds a child's Ticket on this Board; one
- * on another Board has no labels to go by.
+ * one of its children on this Board, found in `onBoard`, does.
  */
 function keeps(
   ticket: Ticket,
   filter: BoardFilter,
-  known: Map<number, Ticket>,
+  onBoard: Map<number, Ticket>,
 ): boolean {
   return (
     ticketMatches(ticket, filter) ||
-    ticket.children.some((child) =>
-      ticketMatches(
-        known.get(child.number) ?? { ...child, labels: [] },
-        filter,
-      ),
-    )
+    ticket.children.some((child) => {
+      const known = onBoard.get(child.number);
+      return known !== undefined && ticketMatches(known, filter);
+    })
   );
 }
 
@@ -233,30 +228,24 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
   left.since.getTime() - right.since.getTime() || left.number - right.number;
 
 /**
- * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog. It
- * places each Ticket by the Board's own Lane derivation, so the two views
- * never disagree, and reads run state and cost from `activity`. Of
- * `elsewhere`, another Board's Tickets, only the Intake joins Needs you:
- * on a Cycle's Cockpit, the Backlog's, where runs file their feedback.
+ * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog, and
+ * nothing else (ADR 0025). It places each Ticket by the Board's own Lane
+ * derivation, so the two views never disagree, and reads run state and cost
+ * from `activity`. An Epic's row lists only its children on this Board, and
+ * counts the others as `childrenElsewhere`; its cost still covers them all.
  *
  * The Board `filter` narrows every section: a row stays when its Ticket
- * matches, and an Epic's row also when one of its children does, then listing
- * only the matching children (all of them when the Epic matches itself).
- * `needsYou.count` and the lists follow the filter; `needsYou.total`, and the
- * `progress`, do not.
+ * matches, and an Epic's row also when one of its children here does, then
+ * listing only the matching children (all of them when the Epic matches
+ * itself). `needsYou.count` and the lists follow the filter;
+ * `needsYou.total`, and the `progress`, do not.
  */
 export function cockpitOf(
   tickets: Ticket[],
   activity: Pick<ConversationActivity, 'live' | 'cost'>,
-  elsewhere: Ticket[] = [],
   filter: BoardFilter = noBoardFilter,
 ): Cockpit {
-  // A Ticket on this Board, such as a Backlog Epic holding a child here, is
-  // placed with it, not again as the other Board's Intake.
-  const onBoard = new Set(tickets.map(({ number }) => number));
-  const intakeElsewhere = elsewhere.filter(
-    ({ number }) => !onBoard.has(number),
-  );
+  const onBoard = new Map(tickets.map((ticket) => [ticket.number, ticket]));
   const shown = tickets.filter(isShown);
   // Every Epic is placed by its lane, like a Ticket.
   const allEpics = tickets
@@ -323,25 +312,28 @@ export function cockpitOf(
   const needsYouNumbers = new Set(
     [...actionNeeded, ...review].map(({ number }) => number),
   );
-  const childStateOf = (child: Ticket['children'][number]): EpicChildState => {
-    const entry = placed.find(({ ticket }) => ticket.number === child.number);
-    if (!entry) {
-      return childStateByStatus[child.status];
-    }
+  const childStateOf = (entry: (typeof placed)[number]): EpicChildState => {
     if (entry.lane === 'In progress' && entry.section) {
       return childStateBySection[entry.section];
     }
     return entry.lane === 'Done' ? 'done' : 'queued';
   };
   const childrenOf = (epic: Ticket): EpicChildren => {
-    const children = epic.children.filter(({ archived }) => !archived);
+    const unarchived = epic.children.filter(({ archived }) => !archived);
+    const here = unarchived.flatMap((child) => {
+      const entry = placed.find(({ ticket }) => ticket.number === child.number);
+      return entry ? [{ child, entry }] : [];
+    });
     return {
-      children: children.map((child) => ({
+      children: here.map(({ child, entry }) => ({
         number: child.number,
         title: child.title,
-        state: childStateOf(child),
+        state: childStateOf(entry),
       })),
-      childNeedsYou: children.some(({ number }) => needsYouNumbers.has(number)),
+      childrenElsewhere: unarchived.length - here.length,
+      childNeedsYou: here.some(({ child }) =>
+        needsYouNumbers.has(child.number),
+      ),
     };
   };
   /** A row of `ticket` outside In flight: an Epic's carries its children. */
@@ -364,16 +356,10 @@ export function cockpitOf(
   const costOf = (ticket: Ticket) =>
     ticket.type === 'Epic' ? epicCost(ticket, activity.cost) : cost(ticket);
 
-  // Intake: this Board's in its Board order, which a drag sets, Epics among
-  // them, their children in their rows; the other Board's after it, longest
-  // waiting first.
+  // Intake: in its Board order, which a drag sets, Epics among them, their
+  // children in their rows.
   const intakeEpics = new Set(
-    [
-      ...allEpics.map(({ epic, lane }) => ({ epic, lane })),
-      ...intakeElsewhere
-        .filter((ticket) => ticket.type === 'Epic' && !ticket.archived)
-        .map((epic) => ({ epic, lane: laneOf(epic).lane })),
-    ]
+    allEpics
       .filter(({ lane }) => lane === 'Intake')
       .map(({ epic }) => epic.number),
   );
@@ -384,25 +370,14 @@ export function cockpitOf(
     ...withChildren(ticket),
   });
   const intake = [
-    ...[
-      ...inLane('Intake').map(({ ticket }) => ticket),
-      ...allEpics
-        .filter((entry) => entry.lane === 'Intake')
-        .map(({ epic }) => epic),
-    ]
-      .filter((ticket) => !inIntakeEpic(ticket))
-      .sort(byPosition)
-      .map(intakeRow),
-    ...intakeElsewhere
-      .filter(
-        (ticket) =>
-          !ticket.archived &&
-          laneOf(ticket).lane === 'Intake' &&
-          !inIntakeEpic(ticket),
-      )
-      .map(intakeRow)
-      .sort(longestWaitingFirst),
-  ];
+    ...inLane('Intake').map(({ ticket }) => ticket),
+    ...allEpics
+      .filter((entry) => entry.lane === 'Intake')
+      .map(({ epic }) => epic),
+  ]
+    .filter((ticket) => !inIntakeEpic(ticket))
+    .sort(byPosition)
+    .map(intakeRow);
   const needsYouRow = (row: NeedRow): NeedRow => {
     const epic = allEpics.find(({ epic }) => epic.number === row.number);
     return epic ? { ...row, ...childrenOf(epic.epic) } : row;
@@ -458,18 +433,15 @@ export function cockpitOf(
   }
 
   // Narrow every section by the Board filter.
-  const known = new Map(
-    [...tickets, ...intakeElsewhere].map((ticket) => [ticket.number, ticket]),
-  );
   const matchesSelf = (number: number) => {
-    const ticket = known.get(number);
+    const ticket = onBoard.get(number);
     return ticket !== undefined && ticketMatches(ticket, filter);
   };
   const keep = <Row extends CockpitTicket>(rows: Row[]): Row[] =>
     rows
       .filter(({ number }) => {
-        const ticket = known.get(number);
-        return ticket !== undefined && keeps(ticket, filter, known);
+        const ticket = onBoard.get(number);
+        return ticket !== undefined && keeps(ticket, filter, onBoard);
       })
       .map((row) => {
         const { children } = row;
@@ -478,12 +450,7 @@ export function cockpitOf(
         }
         return {
           ...row,
-          children: children.filter((child) =>
-            ticketMatches(
-              known.get(child.number) ?? { ...child, labels: [] },
-              filter,
-            ),
-          ),
+          children: children.filter(({ number }) => matchesSelf(number)),
         };
       });
   const narrowed = {

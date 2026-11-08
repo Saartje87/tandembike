@@ -41,6 +41,7 @@ const renderTabs = (
   search = '',
   counts: OpenTicketCounts = { backlog: 0, cycles: {} },
   needsYou = 0,
+  backlogIntake = 0,
 ) => {
   vi.mocked(useSelectedLayoutSegments).mockReturnValue(segments);
   vi.mocked(useSearchParams).mockReturnValue(
@@ -52,6 +53,7 @@ const renderTabs = (
       cycles={cycles}
       openTicketCounts={counts}
       needsYou={needsYou}
+      backlogIntake={backlogIntake}
     />,
   );
 };
@@ -218,6 +220,32 @@ describe('ProjectTabs', () => {
     );
     expect(screen.getByRole('link', { name: /^Beta/ })).toHaveTextContent(
       'Beta 2 open Tickets',
+    );
+  });
+
+  it("shows the Backlog's Intake in a badge of its own, beside its open Tickets", () => {
+    renderTabs(
+      [cycle({ id: 8, title: 'Launch', state: 'Active' })],
+      [],
+      '',
+      { backlog: 4, cycles: { 8: 5 } },
+      1,
+      2,
+    );
+
+    expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
+      'Backlog 4 open Tickets, 2 in Intake',
+    );
+    expect(screen.getByRole('link', { name: /^Launch/ })).toHaveTextContent(
+      'Launch 1 needs you',
+    );
+  });
+
+  it("shows no Intake badge on the Backlog's tab when it has no Intake", () => {
+    renderTabs([], [], '', { backlog: 4, cycles: {} }, 0, 0);
+
+    expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
+      /^Backlog 4 open Tickets$/,
     );
   });
 
