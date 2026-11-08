@@ -10,20 +10,22 @@ import {
   Text,
   TextInput,
 } from '@blockle/blocks';
-import { type FC, useId } from 'react';
+import { type FC, useEffect, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { answerConversationQuestion } from '../../app/conversations/actions';
 import type { QuestionEntry } from '../../conversations/conversation-state';
+import {
+  type QuestionAnswers,
+  useKeptConversation,
+} from '../conversation-dialog-provider/kept-conversations';
 
 export type ConversationQuestionFormProps = {
   entryId: number;
   question: QuestionEntry;
 };
 
-type Values = {
-  answers: { choice: string; choices: string[]; other: string }[];
-};
+type Values = QuestionAnswers;
 
 /**
  * One question's answer from what the form holds: the Other text when given
@@ -45,13 +47,16 @@ const answerOf = (
  * with its answer. Pending, a single single-choice question is answered by
  * one click on a choice; otherwise each question gets its row of choices
  * (checkboxes where several are allowed) and an Other field, and Submit
- * becomes active once every question has an answer.
+ * becomes active once every question has an answer. In the dialog, unsent
+ * answers are kept while another tab is shown, until the question is answered
+ * or expires (T1100).
  */
 export const ConversationQuestionForm: FC<ConversationQuestionFormProps> = ({
   entryId,
   question: { questions, answers, expired },
 }) => {
   const id = useId();
+  const kept = useKeptConversation();
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -59,18 +64,36 @@ export const ConversationQuestionForm: FC<ConversationQuestionFormProps> = ({
     setError,
     watch,
   } = useForm<Values>({
-    defaultValues: {
+    defaultValues: kept?.answers.get(entryId) ?? {
       answers: questions.map(() => ({ choice: '', choices: [], other: '' })),
     },
   });
   const values = watch('answers');
+  const settled = answers !== null || expired;
+
+  // Keep what the User picks and types, until the question is settled.
+  useEffect(() => {
+    if (!kept) {
+      return;
+    }
+    if (settled) {
+      kept.answers.delete(entryId);
+      return;
+    }
+    const subscription = watch((current) => {
+      kept.answers.set(entryId, structuredClone(current) as Values);
+    });
+    return () => subscription.unsubscribe();
+  }, [kept, entryId, settled, watch]);
 
   const send = async (given: Record<string, string>) => {
     const result = await answerConversationQuestion({
       entryId,
       answers: given,
     });
-    if (!result.ok) {
+    if (result.ok) {
+      kept?.answers.delete(entryId);
+    } else {
       setError('root.server', { message: result.error });
     }
   };

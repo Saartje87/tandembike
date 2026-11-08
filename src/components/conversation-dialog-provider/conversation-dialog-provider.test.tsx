@@ -11,12 +11,15 @@ import type { FC } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  answerConversationQuestion,
   closeConversation,
   listOpenConversations,
   loadConversation,
   reopenConversation,
+  replyToConversation,
   startConversation,
 } from '../../app/conversations/actions';
+import type { QuestionEntry } from '../../conversations/conversation-state';
 import type {
   Conversation,
   OpenConversation,
@@ -37,6 +40,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
+  answerConversationQuestion: vi.fn(),
   closeConversation: vi.fn(),
   listOpenConversations: vi.fn(),
   loadConversation: vi.fn(),
@@ -156,6 +160,52 @@ const show = () =>
       <Opener />
     </ConversationDialogProvider>,
   );
+
+/**
+ * Shows the dialog at `?conversation=<id>`, and returns how to move the URL
+ * to another tab, as the router would after a switch.
+ */
+const showSwitching = async (id: number) => {
+  at$('/project/3', `conversation=${id}`);
+  const { rerender } = show();
+  await screen.findByRole('dialog', { name: 'Conversations' });
+  return (next: number) => {
+    at$('/project/3', `conversation=${next}`);
+    rerender(
+      <ConversationDialogProvider>
+        <Opener />
+      </ConversationDialogProvider>,
+    );
+  };
+};
+
+const shownPanel = () => screen.getByRole('tabpanel');
+
+/** A question with one choice and several choices, which takes a Submit. */
+const pendingQuestion: QuestionEntry = {
+  questions: [
+    {
+      question: 'Which colour?',
+      header: 'Colour',
+      options: [
+        { label: 'Red', description: 'Warm' },
+        { label: 'Blue', description: 'Cool' },
+      ],
+      multiSelect: false,
+    },
+    {
+      question: 'Which sizes?',
+      header: 'Sizes',
+      options: [
+        { label: 'Small', description: 'S' },
+        { label: 'Medium', description: 'M' },
+      ],
+      multiSelect: true,
+    },
+  ],
+  answers: null,
+  expired: false,
+};
 
 const tabNamed = (name: RegExp | string) => screen.getByRole('tab', { name });
 
@@ -417,6 +467,255 @@ describe('ConversationDialogProvider', () => {
         scroll: false,
       }),
     );
+  });
+
+  describe('only the shown tab is mounted (T1100)', () => {
+    const replyBox = () =>
+      within(shownPanel()).getByRole('textbox', { name: 'Reply' });
+
+    beforeEach(() => {
+      vi.mocked(replyToConversation).mockReset();
+      vi.mocked(answerConversationQuestion).mockReset();
+    });
+
+    it("mounts only the shown tab's chat, and still marks the others", async () => {
+      at$('/project/3', 'conversation=2');
+      show();
+
+      expect(await screen.findByText('Hello from 2')).toBeInTheDocument();
+      expect(screen.queryByText('Hello from 1')).toBeNull();
+      expect(screen.queryByText('Hello from 3')).toBeNull();
+      expect(loadConversation).not.toHaveBeenCalledWith({ conversationId: 1 });
+      expect(screen.getAllByRole('textbox', { name: 'Reply' })).toHaveLength(1);
+      expect(
+        within(tabNamed(/T42/)).getByRole('img', { name: 'Agent running' }),
+      ).toBeInTheDocument();
+      expect(
+        within(tabNamed(/T7 · Ask/)).getByRole('img', { name: 'Needs you' }),
+      ).toBeInTheDocument();
+    });
+
+    it('keeps an unsent reply across a switch, and drops it once sent', async () => {
+      vi.mocked(replyToConversation).mockResolvedValue({
+        ok: true,
+        conversation: conversation({ id: 1 }),
+      });
+      const switchTo = await showSwitching(1);
+      await screen.findByText('Hello from 1');
+      fireEvent.change(replyBox(), { target: { value: 'Not yet sent' } });
+
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      expect(replyBox()).toHaveValue('');
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      expect(replyBox()).toHaveValue('Not yet sent');
+
+      fireEvent.click(
+        within(shownPanel()).getByRole('button', { name: 'Send' }),
+      );
+      await waitFor(() => expect(replyBox()).toHaveValue(''));
+      expect(replyToConversation).toHaveBeenCalledExactlyOnceWith({
+        conversationId: 1,
+        text: 'Not yet sent',
+      });
+
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      expect(replyBox()).toHaveValue('');
+    });
+
+    it('keeps a refused reply and shows the reason, across a switch too', async () => {
+      vi.mocked(replyToConversation).mockResolvedValue({
+        ok: false,
+        error: 'The Agent is still working.',
+      });
+      const switchTo = await showSwitching(1);
+      await screen.findByText('Hello from 1');
+      fireEvent.change(replyBox(), { target: { value: 'Try this' } });
+
+      fireEvent.click(
+        within(shownPanel()).getByRole('button', { name: 'Send' }),
+      );
+
+      expect(
+        await screen.findByText('The Agent is still working.'),
+      ).toBeInTheDocument();
+      expect(replyBox()).toHaveValue('Try this');
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      expect(replyBox()).toHaveValue('Try this');
+    });
+
+    it('drops the kept reply when its tab closes', async () => {
+      vi.mocked(closeConversation).mockResolvedValue({
+        ok: true,
+        conversation: conversation({ id: 2, hidden: true }),
+      });
+      const switchTo = await showSwitching(2);
+      await screen.findByText('Hello from 2');
+      fireEvent.change(replyBox(), { target: { value: 'Forget me' } });
+
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Close Website · New Ticket' }),
+      );
+      await waitFor(() =>
+        expect(screen.queryByRole('tab', { name: /Website/ })).toBeNull(),
+      );
+      switchTo(3);
+      await screen.findByText('Hello from 3');
+
+      // Reopened later, it starts clean.
+      act(() => opener?.open(2));
+      await screen.findByRole('tab', { name: /Website/ });
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      expect(replyBox()).toHaveValue('');
+    });
+
+    it("keeps a question form's unsent answers across a switch, and drops them once answered", async () => {
+      vi.mocked(loadConversation).mockImplementation(
+        async ({ conversationId }) => ({
+          ok: true,
+          conversation: conversation({ id: conversationId }),
+          transcript: [
+            entry(conversationId, `Hello from ${conversationId}`),
+            ...(conversationId === 2
+              ? [{ ...entry(20, 'Asked'), question: pendingQuestion }]
+              : []),
+          ],
+        }),
+      );
+      vi.mocked(answerConversationQuestion)
+        .mockResolvedValueOnce({ ok: false, error: 'Not now.' })
+        .mockResolvedValue({ ok: true, conversation: conversation({ id: 2 }) });
+      const other = () =>
+        screen.getByRole('textbox', { name: 'Other answer to Which sizes?' });
+      const switchTo = await showSwitching(2);
+      await screen.findByText('Which colour?');
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Medium' }));
+      fireEvent.change(other(), { target: { value: 'Huge' } });
+
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      expect(screen.queryByText('Which colour?')).toBeNull();
+      switchTo(2);
+      await screen.findByText('Which colour?');
+      expect(screen.getByRole('radio', { name: 'Blue' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Medium' })).toBeChecked();
+      expect(other()).toHaveValue('Huge');
+
+      // A refused submit keeps the answers.
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+      expect(await screen.findByText('Not now.')).toBeInTheDocument();
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      await screen.findByText('Which colour?');
+      expect(screen.getByRole('radio', { name: 'Blue' })).toBeChecked();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+      await waitFor(() =>
+        expect(answerConversationQuestion).toHaveBeenLastCalledWith({
+          entryId: 20,
+          answers: { 'Which colour?': 'Blue', 'Which sizes?': 'Medium, Huge' },
+        }),
+      );
+      // Here the transcript still shows it pending, so a kept answer would show.
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      await screen.findByText('Which colour?');
+      expect(screen.getByRole('radio', { name: 'Blue' })).not.toBeChecked();
+      expect(other()).toHaveValue('');
+    });
+
+    it("drops a question form's kept answers once the question expires", async () => {
+      let question = pendingQuestion;
+      vi.mocked(loadConversation).mockImplementation(
+        async ({ conversationId }) => ({
+          ok: true,
+          conversation: conversation({ id: conversationId }),
+          transcript: [
+            entry(conversationId, `Hello from ${conversationId}`),
+            ...(conversationId === 2
+              ? [{ ...entry(20, 'Asked'), question }]
+              : []),
+          ],
+        }),
+      );
+      const switchTo = await showSwitching(2);
+      await screen.findByText('Which colour?');
+      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+
+      question = { ...pendingQuestion, expired: true };
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      expect(await screen.findByText('Not answered')).toBeInTheDocument();
+
+      // Even shown as pending again, the answers it had are gone.
+      question = pendingQuestion;
+      switchTo(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      expect(
+        await screen.findByRole('radio', { name: 'Blue' }),
+      ).not.toBeChecked();
+    });
+
+    it('shows the last loaded transcript at once on a switch, and loads it again', async () => {
+      const switchTo = await showSwitching(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      vi.mocked(loadConversation).mockClear();
+      vi.mocked(loadConversation).mockReturnValue(new Promise(() => {}));
+
+      switchTo(1);
+
+      expect(
+        within(shownPanel()).getByText('Hello from 1'),
+      ).toBeInTheDocument();
+      expect(loadConversation).toHaveBeenCalledWith({ conversationId: 1 });
+    });
+
+    it('keeps the transcript under the error when a reload fails, until a load succeeds', async () => {
+      const loads = vi.mocked(loadConversation).getMockImplementation();
+      const switchTo = await showSwitching(1);
+      await screen.findByText('Hello from 1');
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      vi.mocked(loadConversation).mockResolvedValue({
+        ok: false,
+        error: 'The database is busy.',
+      });
+
+      switchTo(1);
+
+      const error = await screen.findByText('The database is busy.');
+      const transcript = within(shownPanel()).getByText('Hello from 1');
+      expect(
+        error.compareDocumentPosition(transcript) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      if (loads) {
+        vi.mocked(loadConversation).mockImplementation(loads);
+      }
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      switchTo(1);
+      await waitFor(() =>
+        expect(screen.queryByText('The database is busy.')).toBeNull(),
+      );
+      expect(screen.getByText('Hello from 1')).toBeInTheDocument();
+    });
   });
 
   describe('drafts', () => {

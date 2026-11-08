@@ -42,7 +42,10 @@ export type ConversationMessageInputProps = {
   /** The text to start with. */
   initialText?: string;
   autoFocus?: boolean;
-  /** Called as the User types. */
+  /**
+   * Called as the text changes: as the User types, a chip or the chat adds to
+   * it, and with `''` once it is sent.
+   */
   onTextChange?: (text: string) => void;
   control?: Ref<MessageInputControl>;
   className?: string;
@@ -91,6 +94,12 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   const text = register('text');
   const empty = watch('text').trim() === '';
 
+  /** Sets the text other than by typing, and reports it. */
+  const changeText = (next: string) => {
+    setValue('text', next);
+    onTextChange?.(next);
+  };
+
   const submit = handleSubmit(async ({ text }) => {
     let outcome: SendOutcome;
     try {
@@ -105,7 +114,8 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
       };
     }
     if (outcome.ok) {
-      reset();
+      reset({ text: '' });
+      onTextChange?.('');
     } else if (outcome.textError) {
       setError('text', { type: 'server', message: outcome.textError });
     } else {
@@ -118,12 +128,12 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
       const lines = watch('text')
         .split('\n')
         .filter((existing) => existing !== '' && !existing.startsWith(prefix));
-      setValue('text', [...lines, line].join('\n'));
+      changeText([...lines, line].join('\n'));
     },
     sendWith: (line) => {
       if (!isSubmitting) {
         const typed = watch('text').trim();
-        setValue('text', typed === '' ? line : `${typed}\n${line}`);
+        changeText(typed === '' ? line : `${typed}\n${line}`);
         submit();
       }
     },
@@ -131,8 +141,7 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
 
   const chooseSkill = (command: string) => {
     const next = withSkill(watch('text'), command);
-    setValue('text', next);
-    onTextChange?.(next);
+    changeText(next);
     field.current?.focus();
     field.current?.setSelectionRange(next.length, next.length);
   };

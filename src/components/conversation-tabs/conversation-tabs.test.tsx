@@ -165,18 +165,46 @@ describe('ConversationTabs', () => {
     expect(drafts.onClose).toHaveBeenCalledWith('draft-a');
   });
 
-  it('labels each panel by its tab and keeps the panels that are not selected mounted', () => {
-    setup();
+  it('labels each panel by its tab and renders only the selected one', () => {
+    const renderConversation = vi.fn((open: OpenConversation) => (
+      <p>Chat {open.conversation.id}</p>
+    ));
+    const renderDraft = vi.fn((draft: { key: string }) => (
+      <p>Draft {draft.key}</p>
+    ));
+    setup({ renderConversation, renderDraft });
 
     const panel = screen.getByRole('tabpanel', {
       name: /Website · New Ticket/,
     });
     expect(within(panel).getByText('Chat 2')).toBeVisible();
-    const hidden = screen
-      .getAllByRole('tabpanel', { hidden: true })
-      .find((item) => item.hidden && item.textContent === 'Chat 1');
-    expect(hidden).toHaveAttribute('aria-labelledby', tabNamed(/^T42/).id);
-    expect(hidden).not.toBeVisible();
-    expect(screen.getByText('Draft draft-a')).toBeInTheDocument();
+    expect(
+      renderConversation.mock.calls.map(([open]) => open.conversation.id),
+    ).toSatisfy((ids: number[]) => ids.every((id) => id === 2));
+    expect(renderDraft).not.toHaveBeenCalled();
+    expect(screen.queryByText('Chat 1')).toBeNull();
+    expect(screen.queryByText('Draft draft-a')).toBeNull();
+    const panels = screen.getAllByRole('tabpanel', { hidden: true });
+    expect(panels).toHaveLength(4);
+    const first = panels.find(
+      (item) => item.getAttribute('aria-labelledby') === tabNamed(/^T42/).id,
+    );
+    expect(first).toBeEmptyDOMElement();
+    expect(first).not.toBeVisible();
+  });
+
+  it('renders the selected draft only, when a draft is selected', () => {
+    setup({
+      selectedId: undefined,
+      drafts: {
+        items: [{ key: 'draft-a', label: 'Draft · Ask T42' }],
+        selectedKey: 'draft-a',
+        onSelect: vi.fn(),
+        onClose: vi.fn(),
+      },
+    });
+
+    expect(screen.getByText('Draft draft-a')).toBeVisible();
+    expect(screen.queryByText(/^Chat/)).toBeNull();
   });
 });

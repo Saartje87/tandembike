@@ -10,6 +10,7 @@ import {
   replyQuestions,
 } from '../../conversations/reply-options';
 import { ConversationChatHeader } from '../conversation-chat-header/conversation-chat-header';
+import { useKeptConversation } from '../conversation-dialog-provider/kept-conversations';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import { ConversationMessages } from '../conversation-messages/conversation-messages';
 import {
@@ -23,6 +24,8 @@ export type ConversationChatProps = {
   item: ConversationWithTranscript;
   /** What the Conversation is about: its Ticket, or its Project. */
   title: string;
+  /** Why the latest reload failed, shown above the transcript it keeps (T1100). */
+  error?: string | undefined;
 };
 
 /** The options of the Agent's latest message, while it waits for the User. */
@@ -40,13 +43,16 @@ const optionsToAnswer = (
  * One Conversation with an Agent (ADR 0019) as a chat window, in the
  * Conversation dialog: a header, the messages, which the dialog refreshes
  * while the run works, and a reply input fixed at the bottom. It only lays
- * those out; each part is its own component.
+ * those out; each part is its own component. In the dialog, the unsent reply
+ * is kept while another tab is shown (T1100).
  */
 export const ConversationChat: FC<ConversationChatProps> = ({
   item: { conversation, transcript },
   title,
+  error,
 }) => {
   const reply = useRef<ReplyControl>(null);
+  const kept = useKeptConversation();
   const questions = optionsToAnswer(
     waitsOnUser(conversation.state),
     transcript,
@@ -55,6 +61,7 @@ export const ConversationChat: FC<ConversationChatProps> = ({
   return (
     <div className={styles.chat}>
       <ConversationChatHeader conversation={conversation} title={title} />
+      {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
       {conversation.state === 'interrupted' && (
         <Alert intent="warning">
@@ -81,6 +88,14 @@ export const ConversationChat: FC<ConversationChatProps> = ({
         conversationId={conversation.id}
         projectId={conversation.projectId}
         control={reply}
+        {...(kept
+          ? {
+              initialText: kept.reply,
+              onTextChange: (text: string) => {
+                kept.reply = text;
+              },
+            }
+          : {})}
       />
     </div>
   );

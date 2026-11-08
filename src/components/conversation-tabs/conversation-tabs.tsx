@@ -32,9 +32,12 @@ export type ConversationTabsProps<D extends DraftTab = DraftTab> = {
   onClose: (conversationId: number) => void;
   /** Draft tabs, after the Conversations. */
   drafts: TabDrafts<D>;
-  /** The content of a Conversation's panel; every panel stays mounted. */
+  /**
+   * The content of a Conversation's panel, called for the selected tab only:
+   * the other panels stay empty, so their content unmounts on a switch (T1100).
+   */
   renderConversation?: (open: OpenConversation) => ReactNode;
-  /** The content of a draft's panel, given the draft item; every panel stays mounted. */
+  /** The content of a draft's panel, given the draft item; called for the selected tab only. */
   renderDraft?: (draft: D) => ReactNode;
   /** Shown between the tab row and the panels, such as an error. */
   notice?: ReactNode;
@@ -53,7 +56,8 @@ type TabItem = {
   selected: boolean;
   select: () => void;
   close: () => void;
-  panel: ReactNode;
+  /** Renders the panel's content; called for the selected tab only. */
+  panel: () => ReactNode;
 };
 
 /** `T42 · Triage`, or `<Project> · New Ticket` for a Conversation about a Project. */
@@ -94,9 +98,11 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
  * The Conversation dialog's tabs and panels on Blocks `Tabs`: one tab per open
  * Conversation in the order opened, then the draft tabs. Blocks draws the
  * moving indicator, scrolls an overflowing row and handles the arrow keys,
- * Home and End. A tab's close button and state marker sit in its slots. Every
- * panel stays mounted, so a draft reply and the scroll position survive a
- * switch of tab.
+ * Home and End. A tab's close button and state marker sit in its slots. Each
+ * tab keeps its panel, which it labels, but only the selected panel has
+ * content: what a tab must keep across a switch, such as an unsent reply,
+ * lives in the Conversation dialog's state (T1100). Blocks `TabPanel` has no
+ * option to unmount hidden content, so it is left out here.
  */
 export const ConversationTabs = <D extends DraftTab>({
   tabs,
@@ -120,7 +126,7 @@ export const ConversationTabs = <D extends DraftTab>({
         selected: id === selectedId,
         select: () => onSelect(id),
         close: () => onClose(id),
-        panel: renderConversation?.(item),
+        panel: () => renderConversation?.(item),
       };
     }),
     ...drafts.items.map(
@@ -132,7 +138,7 @@ export const ConversationTabs = <D extends DraftTab>({
         selected: selectedId === undefined && draft.key === drafts.selectedKey,
         select: () => drafts.onSelect(draft.key),
         close: () => drafts.onClose(draft.key),
-        panel: renderDraft?.(draft),
+        panel: () => renderDraft?.(draft),
       }),
     ),
   ];
@@ -169,7 +175,7 @@ export const ConversationTabs = <D extends DraftTab>({
       {notice}
       {items.map((item) => (
         <TabPanel key={item.value} value={item.value} className={styles.panel}>
-          {item.panel}
+          {item.selected && item.panel()}
         </TabPanel>
       ))}
     </Tabs>
