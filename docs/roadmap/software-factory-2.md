@@ -132,7 +132,7 @@ As already specced, blocked by phase 9 so the Playbook and the runner seam exist
 
 ## Risks and open questions
 
-- **Plugins through the SDK.** Phase 9 assumes the Agent SDK loads a local plugin per run, and that its skills run as commands in the first message, as today's Agent commands do. Spike it first in phase 9.
+- **Plugins through the SDK.** Phase 9 assumes the Agent SDK loads a local plugin per run, and that its skills run as commands in the first message, as today's Agent commands do. Spiked in T1205: it holds, with the Playbook's commands always namespaced and the user-scope copy kept current in phase 10 ([`sdk-plugin-per-run.md`](../research/sdk-plugin-per-run.md)).
 - **Worktree cleanup and resume.** Removing a worktree on close loses an uncommitted change the User may want. Phase 7 must decide whether a dirty worktree is kept and flagged instead. `claude --resume` from a terminal (phase 10) also needs the worktree to still exist.
 - **Project from cwd with nested repositories.** Two Projects whose paths nest need a rule, such as the longest match wins.
 - **Terminal sessions without a transcript.** A Status line from MCP calls alone may be too sparse. Revisit after real use.
