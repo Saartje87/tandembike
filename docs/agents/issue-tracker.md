@@ -61,7 +61,7 @@ Record triage roles as labels: one category label (`bug` or `enhancement`) and o
 
 ## Publishing a spec
 
-A spec is always an Epic in Tandembike, whatever its size, so that its build Tickets hang off it and "Working an Epic" applies. `/to-spec` publishes it with `create_ticket` (`type: "Epic"`) in the work's Project, with the spec as its description and the `ready-for-agent` label; `/to-tickets` then creates its children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. A spec of one Ticket's worth is an Epic with one child.
+A spec is always an Epic in Tandembike, whatever its size, so that its build Tickets hang off it and "Working an Epic" applies. Unless it fills a placeholder Epic (below), `/to-spec` publishes it with `create_ticket` (`type: "Epic"`) in the work's Project, with the spec as its description and the `ready-for-agent` label; `/to-tickets` then creates its children in one `create_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. A spec of one Ticket's worth is an Epic with one child.
 
 When the spec refines an idea Ticket, for example one grilled in `/triage`:
 
@@ -69,7 +69,7 @@ When the spec refines an idea Ticket, for example one grilled in `/triage`:
 2. Publish the Epic with the idea Ticket as its `originNumber`. The idea Ticket itself cannot become the Epic: a Ticket's type is fixed at creation.
 3. Comment `Refined into Epic T<number>` on the idea Ticket, remove its triage state label, and archive it with `archive_ticket`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
 
-When the Ticket being triaged is already an Epic with no children, such as a follow-up an earlier spec filed as an Epic, it becomes the spec itself: replace its description with the spec, create its children under it with `/to-tickets`, and swap its triage state label for `ready-for-agent`. Do not publish a new Epic or archive it.
+When the Ticket being triaged is an Epic with no children, or the User names an existing Epic with no children while running `/to-spec`, that Epic is a placeholder and becomes the spec itself, such as a follow-up an earlier spec filed as an Epic or a roadmap phase's Epic. Replace its description with the spec and give it `ready-for-agent` with `update_ticket`, removing any other triage state label in the same call; a placeholder may carry none. It keeps its number, its other labels and its Origin. `/to-tickets` then creates its children under it with its `epicNumber`. Do not publish a new Epic, and archive or replace nothing. An Epic is a placeholder only because it is being triaged or the User names it, never because of a label or because it has no children; without either, `/to-spec` publishes a new Epic as above.
 
 When the spec is feedback on an Epic that is already built or in review, such as follow-up requests after its PR, publish a new Epic with the existing Epic as its `originNumber`, and leave the existing Epic unchanged: no comment, no archive. Its new branch starts from the existing Epic's branch, and its PR targets that branch while the earlier PR is open.
 

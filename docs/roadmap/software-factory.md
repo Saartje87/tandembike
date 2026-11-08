@@ -1,6 +1,6 @@
 # Roadmap: Tandembike as a local software factory
 
-Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the one-column Board (Epic T1102), grilled and prototyped (T1103). Each phase is specced into an Epic with `/to-spec` and `/to-tickets` when its turn comes, with T1058 as the Origin. Decisions here can be revisited; when one changes, update this file in the same PR.
+Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the one-column Board (Epic T1102), grilled and prototyped (T1103). Each phase is specced into its placeholder Epic, named next to it below, with `/to-spec` and `/to-tickets` when its turn comes, by "Publishing a spec" in `docs/agents/issue-tracker.md`; no new Epic is created for it. Decisions here can be revisited; when one changes, update this file in the same PR.
 
 ## Goal
 
@@ -139,7 +139,7 @@ Goal: a Board that shows the factory's state before any dispatcher exists. Usefu
 
 Decision records: ADR "Lanes are derived from Status, labels and run state"; Glossary: Lane revised, Status line, Stalled, Your work.
 
-Specced as Epic T1059 on 2026-11-06. The 2026-11-07 amendments that reached it: the idle rule went into T1065 and the tool entry columns into T1066 before they were built; Back to Todo on Review Tickets and Epics, and Merged on an Epic covering Todo children, came after T1068 and T1069 were specced and are a follow-up Epic with T1059 as its Origin, by "Publishing a spec" in `docs/agents/issue-tracker.md`.
+Specced as Epic T1059 on 2026-11-06. The 2026-11-07 amendments that reached it: the idle rule went into T1065 and the tool entry columns into T1066 before they were built; Back to Todo on Review Tickets and Epics, and Merged on an Epic covering Todo children, came after T1068 and T1069 were specced and are the follow-up Epic T1094, with T1059 as its Origin, by "Publishing a spec" in `docs/agents/issue-tracker.md`.
 
 ### Phase 2: feedback as Tickets
 
@@ -168,6 +168,8 @@ Decision records: ADR "Autopilot dispatches the Active Cycle's ready work", reco
 
 ### Phase 4: Cycle end
 
+Placeholder Epic: T1092, not specced yet.
+
 Goal: a Cycle closes on purpose.
 
 - Cycle Board banner when every Ticket is Done: archive the Cycle; start a Retro Conversation.
@@ -176,6 +178,8 @@ Goal: a Cycle closes on purpose.
 Decision records: ADR 0010 consequence noted; Glossary: Retro if it becomes an intent.
 
 ### Phase 5: independent Review stage
+
+Placeholder Epic: T1093, not specced yet.
 
 Goal: a second pair of eyes on every PR without the User reading every diff.
 
