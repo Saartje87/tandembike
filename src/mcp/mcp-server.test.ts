@@ -96,6 +96,7 @@ describe('MCP server', () => {
       'detach_from_epic',
       'edit_comment',
       'get_attachment',
+      'get_project',
       'get_ticket',
       'list_activity',
       'list_blockers',
