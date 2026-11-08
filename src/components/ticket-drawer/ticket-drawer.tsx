@@ -20,10 +20,11 @@ import {
   useTransition,
 } from 'react';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import {
   archiveTicket,
   clearTicketClaim,
+  completeTicket,
   restoreTicket,
   updateTicket,
 } from '../../app/tickets/actions';
@@ -45,6 +46,8 @@ import type {
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
+import { isInReview } from '../board/board-lanes';
+import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
@@ -61,6 +64,7 @@ import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
+import { MergedButton } from '../merged-button/merged-button';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
 import { TicketAgentActions } from '../ticket-agent-actions/ticket-agent-actions';
@@ -238,6 +242,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const dialog = useConversationDialog();
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
+  const live = useTicketLiveConversation(ticket.number);
+  // Shared by the buttons beside Status (Merged, and Back to Todo next).
+  const [actionError, setActionError] = useState<string>();
+  const [actionPending, startAction] = useTransition();
 
   const save: SaveField = (edit, onRefused) => {
     const field = fieldOf(edit);
@@ -301,6 +309,36 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     (item) => String(item.id) === claim?.agentRunId,
   );
 
+  // No optimistic display: the live update moves the row on the Board.
+  const runAction = (
+    action: (input: { number: number }) => Promise<ActionResult>,
+  ) => {
+    setActionError(undefined);
+    startAction(async () => {
+      const result = await action({ number: ticket.number });
+      if (!result.ok) {
+        setActionError(result.error);
+      }
+    });
+  };
+
+  const showMerged = isInReview(ticket, live);
+
+  const statusActions = (
+    <Stack gap={1}>
+      <Inline gap={2} alignY="center">
+        {showMerged && (
+          <MergedButton
+            ticket={ticket}
+            pending={actionPending}
+            onMerged={() => runAction(completeTicket)}
+          />
+        )}
+      </Inline>
+      {actionError && <Alert intent="danger">{actionError}</Alert>}
+    </Stack>
+  );
+
   const clearClaim = () => {
     setClaimError(undefined);
     startClaimClear(async () => {
@@ -352,7 +390,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       <Stack gap={3}>
         {ticket.type === 'Epic' ? (
           <Detail name={<DetailName>Status</DetailName>}>
-            <Text>{ticket.status} · follows its child Tickets</Text>
+            <Stack gap={2}>
+              <Text>{ticket.status} · follows its child Tickets</Text>
+              {statusActions}
+            </Stack>
           </Detail>
         ) : (
           <Detail
@@ -372,6 +413,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 aria-describedby={statusError ? statusErrorId : undefined}
               />
               <FieldError id={statusErrorId} reason={statusError} />
+              {statusActions}
             </Stack>
           </Detail>
         )}
