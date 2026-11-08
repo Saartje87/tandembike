@@ -12,9 +12,9 @@ const maxToolTextLength = 300;
 /** The tool the Agent asks the User questions with; the chat shows it as a form. */
 const askTool = 'AskUserQuestion';
 
-const createToolName = /(^|__)create_tickets?$/;
+const createToolName = /(^|__)(create_tickets?|file_tickets)$/;
 
-/** The Ticket numbers in the JSON result of create_ticket or create_tickets. */
+/** The Ticket numbers in the JSON result of file_tickets (or the old create_ticket and create_tickets). */
 function createdNumbers(content: unknown): number[] {
   const text = Array.isArray(content)
     ? content.map((part) => (part?.type === 'text' ? part.text : '')).join('')

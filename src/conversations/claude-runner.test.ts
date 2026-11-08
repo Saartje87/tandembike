@@ -226,7 +226,7 @@ describe('The Claude runner', () => {
     ]);
   });
 
-  it('reports the Tickets the Agent created from the results of create_ticket and create_tickets', async () => {
+  it('reports the Tickets the Agent created from the results of create_ticket, create_tickets and file_tickets', async () => {
     const toolUse = (id: string, name: string) => ({
       type: 'assistant',
       message: { content: [{ type: 'tool_use', id, name, input: {} }] },
@@ -254,6 +254,8 @@ describe('The Claude runner', () => {
         toolResult('c', JSON.stringify({ number: 7 })),
         toolUse('d', 'mcp__tandembike__create_ticket'),
         toolResult('d', 'Refused.', true),
+        toolUse('e', 'mcp__tandembike__file_tickets'),
+        toolResult('e', JSON.stringify({ numbers: [44] })),
       ]),
     );
     const events: RunEvent[] = [];
@@ -273,6 +275,7 @@ describe('The Claude runner', () => {
     expect(events.filter((event) => event.type === 'created')).toEqual([
       { type: 'created', numbers: [41] },
       { type: 'created', numbers: [42, 43] },
+      { type: 'created', numbers: [44] },
     ]);
   });
 
