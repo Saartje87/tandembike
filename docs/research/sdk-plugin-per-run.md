@@ -4,6 +4,8 @@ Question: can Tandembike ship its Playbook as a Claude Code plugin that it loads
 
 Date: 2026-11-08. Claude Agent SDK 0.3.316 with its bundled Claude Code 2.1.316 for the SDK runs; Claude Code 2.1.319 (the User's `claude` on `PATH`) for the terminal session and the `claude plugin` commands. Model `claude-haiku-5-5`.
 
+Answer in short: yes to all five questions. ADR 0032's decision stands. Building it needs three details the ADR leaves open: always send the Playbook's commands namespaced, name the plugin `tandembike`, and keep the user-scope copy current in phase 10 (see Verdict).
+
 ## Method
 
 Everything lived in a throwaway folder, `/tmp/t1205/`, outside any repository:
@@ -11,7 +13,8 @@ Everything lived in a throwaway folder, `/tmp/t1205/`, outside any repository:
 - `plugin/`: a plugin named `tandembike-spike` (`.claude-plugin/plugin.json`) with one skill, `skills/hello/SKILL.md`, set to `disable-model-invocation: true`. Its body tells the model to reply `MARKER: PLUGIN-HELLO $ARGUMENTS`, count its `mcp__tandembike*` tools, call `list_projects` once, and quote a secret word from the repository's `CLAUDE.md` from context, without reading any file.
 - `repo/`: a fresh git repository whose `CLAUDE.md` holds the secret word `PELICAN-7`. It has no `.claude/` folder, except in the shadowing runs, which add `.claude/skills/hello/SKILL.md` replying `MARKER: REPO-HELLO $ARGUMENTS`.
 - `market/`: a local marketplace (`.claude-plugin/marketplace.json`, a `source: "./plugin"` entry) over a copy of the plugin, for question 5.
-- `scripts/spike.mjs`: one `query()` call with the options `src/conversations/claude-runner.ts` passes today (`cwd`, `permissionMode: 'default'`, `allowedTools: ['mcp__tandembike']`, the Tandembike HTTP MCP server on port 4747, the `claude_code` preset with an appended prompt, default `settingSources`), plus `plugins: [{ type: 'local', path: '/tmp/t1205/plugin' }]`. The prompt is a plain string that starts with the command. It printed the init message's `plugins`, `slash_commands` and `skills`, every tool call and the result.
+- `scripts/spike.mjs`: one `query()` call with the options `src/conversations/claude-runner.ts` passes today (`cwd`, `permissionMode: 'default'`, `allowedTools: ['mcp__tandembike']`, a `canUseTool` that denied and logged, the Tandembike HTTP MCP server on port 4747, the `claude_code` preset with an appended prompt, default `settingSources`), plus `plugins: [{ type: 'local', path: '/tmp/t1205/plugin' }]`. The model was pinned to `claude-haiku-5-5` for cost. The prompt is a plain string that starts with the command. It printed the init message's `plugins`, `slash_commands` and `skills`, every tool call and the result.
+- `scripts/stream.mjs`: the same options in streaming input mode, as the runner sends its first message (an async iterable of user messages). It re-checked questions 2 to 4 with a repository `hello` present: `/tandembike-spike:hello T8` ran the plugin's skill, called `list_projects` and quoted `PELICAN-7`, and `/hello T9` ran the repository's. The input mode makes no difference.
 - For question 5: `expect` drove an interactive `claude` in a pseudo-terminal. It typed the command's prefix to see the `/` menu, then ran the command.
 
 The User's `~/.claude/settings.json`, `plugins/known_marketplaces.json` and `plugins/installed_plugins.json` were copied before the user-scope install and compared after removal (see Clean-up).
@@ -59,14 +62,14 @@ Three details for phase 10:
 
 ## Verdict
 
-**Build ADR 0032 as written.** Every assumption holds: the SDK loads a local plugin per run with no trace in the repository, its skills run as first-message commands, they see the run's MCP tools and the repository's `CLAUDE.md`, a repository's skill of the same name stays reachable for overrides, and a user-scope install gives terminal sessions the same commands.
+**ADR 0032's decision holds; build it.** Every assumption it rests on holds: the SDK loads a local plugin per run with no trace in the repository, its skills run as first-message commands, they see the run's MCP tools and the repository's `CLAUDE.md`, a repository's skill of the same name stays reachable for overrides, and a user-scope install gives terminal sessions the same commands.
 
-Three things to settle while building it:
+The ADR's text needs no change. These three build details go into phase 9 (T1195) and phase 10:
 
-1. **Always send the namespaced command for the Playbook**, such as `/tandembike:implement T42`, never a bare `/implement`. A bare name resolves to the repository's skill, then the inline plugin, and the User's own plugins (`mattpocock-skills` has `implement`, `tdd` and `triage`) sit in the same namespace. A Project's override stays whatever command the User enters.
+1. **Always send the namespaced command for the Playbook**, such as `/tandembike:implement T42`, never a bare `/implement`. In these runs a bare name went to the repository's skill first and the inline plugin's next, but that order is observed, not documented, and the User's own plugins (`mattpocock-skills` has `implement`, `tdd` and `triage`) sit in the same namespace. A Project's override stays whatever command the User enters.
 2. **Name the plugin `tandembike`**, so the commands read `/tandembike:<stage>`, as the roadmap already writes them (`/tandembike:start T42`).
 3. **Phase 10 must keep the user-scope copy current**: bump the plugin `version` with each Playbook change, and have Tandembike run `claude plugin update` (or tell the User to), since the install is a cached copy. SDK runs are unaffected because the inline copy wins.
 
 ## Clean-up
 
-The User approved installing into their real config for question 5, after the auto-mode classifier refused it. The plugin was uninstalled and the marketplace removed. `settings.json` and `installed_plugins.json` match the copies taken before. In `known_marketplaces.json` the only difference is the `claude-plugins-official` marketplace's `lastUpdated`, which Claude Code refreshed on its own. The plugin's cache folder was removed. `~/.claude.json` keeps two usage counters Claude Code wrote, `pluginUsage["tandembike-spike@inline"]` and `skillUsage["tandembike-spike:hello"]`. They are not settings and change no behaviour, and were left alone rather than edited under a running session. `/tmp/t1205/` was deleted after this file was written.
+The User approved installing into their real config for question 5, after the auto-mode classifier refused it. The plugin was uninstalled and the marketplace removed. `settings.json` and `installed_plugins.json` match the copies taken before. In `known_marketplaces.json` the only difference is the `claude-plugins-official` marketplace's `lastUpdated`, which Claude Code refreshed on its own. The plugin's cache folder was removed. `~/.claude.json` keeps two usage counters Claude Code wrote, `pluginUsage["tandembike-spike@inline"]` and `skillUsage["tandembike-spike:hello"]`. They are not settings and change no behaviour, and were left alone rather than edited under a running session. The scratch folders `/tmp/t1205/` and `/tmp/t1205b/` were deleted after this file was written; they held only the files described in Method.
