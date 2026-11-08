@@ -18,7 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Prefer atom props (`Box`, `Text`, `Heading`, `Stack`, `Inline`) over new `.css.ts` classes; see `docs/components/styling.md`. Only fall back to plain HTML plus a vanilla-extract `.css.ts` file when Blocks has no equivalent or atoms cannot express the style. Style with `vars` tokens from `@blockle/blocks`; no hard-coded colours or spacing, no inline `style`.
 - In `.css.ts` files use logical CSS properties (`inlineSize`, `paddingBlock`, `marginInline`, `borderInlineStart`), not physical ones (`width`, `padding-top`, `border-left`).
 - When upgrading `@blockle/blocks`, check `docs/` against the new package's types and atoms and update them in the same change.
-- Blocks feedback: while working, note friction with Blocks, such as a missing component, prop or atom, a workaround that needed custom CSS, an inconsistent API, or a docs gap. File each item as a Ticket by "Feedback as Tickets" in `docs/agents/issue-tracker.md`. Cite the Ticket number in a code comment next to a workaround, e.g. `(T315)`. Leave the library's code alone unless asked.
+- Blocks feedback: while working, note friction with Blocks, such as a missing component, prop or atom, a workaround that needed custom CSS, an inconsistent API, or a docs gap. File each item as a Ticket by "Feedback as Tickets" in `docs/agents/start-run.md`. Cite the Ticket number in a code comment next to a workaround, e.g. `(T315)`. Leave the library's code alone unless asked.
 - Links: use the `AppLink` component (`src/components/app-link/app-link.tsx`), never `next/link` directly. Links to files served by route handlers (not pages) use a plain Blocks `Link`, not `AppLink`, so Next does not prefetch them.
 
 ### Components
@@ -63,10 +63,10 @@ The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) run
 - Do each Ticket on its own branch off `main`, named `ticket-<number>-<slug>` (e.g. `ticket-23-remove-blocker-missing`). An Epic is one unit: claim it once, work its children in Blocker order on one branch named after the Epic, and open one PR for it; see "Working an Epic" in `docs/agents/issue-tracker.md`.
 - Give each Agent run its own git worktree when another run may share the checkout: runs in one tree sweep each other's staged files into commits and fail each other's pre-commit typecheck. See "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`.
 - Push that branch and open a PR with `gh` freely; write the body with the `pr` skill.
-- Changes reach `main` through a merged PR. Merge a PR yourself with `gh pr merge --merge` once CI is green, its review is complete and its Ticket's acceptance criteria are checked; see `docs/agents/issue-tracker.md` for the Ticket side. Ask the User before pushing to `main` directly.
+- Changes reach `main` through a merged PR. Merge a PR yourself with `gh pr merge --merge` once CI is green, its review is complete and its Ticket's acceptance criteria are checked; see `docs/agents/start-run.md` for the Ticket side. Ask the User before pushing to `main` directly.
 - Refer to a Ticket in commits and PRs as `T23` (ADR 0016).
 - A PreToolUse hook (`src/git-guardrail/`, wired in `.claude/settings.json`) denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D` and `git stash drop`/`clear` in every session: a denial naming a `Git guardrail` rule is policy, not a bug, so do not work around it; ask the User.
-- When a Ticket's work is done, see `docs/agents/issue-tracker.md` for when to move it to `Done`.
+- When a Ticket's work is done, see `docs/agents/start-run.md` for when to move it to `Done`.
 
 ### Before finishing
 
@@ -74,4 +74,4 @@ Run `npm run check` (Biome, typecheck, tests). It must pass. The pre-commit hook
 
 ### Process feedback
 
-While working with Tickets, the Tandembike MCP tools, the agent docs (`docs/agents/`, `AGENTS.md`, `CLAUDE.md`) or the User's request itself, note friction you actually hit: a missing tool or parameter, an unclear error, docs that contradict each other, a vague Ticket or missing acceptance criteria, an ambiguous request. File each item as a Ticket by "Feedback as Tickets" in `docs/agents/issue-tracker.md`. Raise an item mid-task only when it blocks the work or forces a guess.
+While working with Tickets, the Tandembike MCP tools, the agent docs (`docs/agents/`, `AGENTS.md`, `CLAUDE.md`) or the User's request itself, note friction you actually hit: a missing tool or parameter, an unclear error, docs that contradict each other, a vague Ticket or missing acceptance criteria, an ambiguous request. File each item as a Ticket by "Feedback as Tickets" in `docs/agents/start-run.md`. Raise an item mid-task only when it blocks the work or forces a guess.

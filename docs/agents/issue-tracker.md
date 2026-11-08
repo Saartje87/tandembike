@@ -1,21 +1,12 @@
 # Issue tracker: Local Tandembike app (MCP)
 
-This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike` (id 3, so its pages are under `http://localhost:4747/project/3`): use it for all work on this codebase, and do not create a second one. Ticket summaries carry no Project id; `get_ticket` returns it as `projectId`. Reach it through its MCP server at `http://localhost:4747/api/mcp` with an MCP-capable client; the app must be running. Use its tools, not `gh`, `glab` or `.scratch/` files, even where a skill describes another tracker. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them.
+This repository's Tickets live in the local Tandembike app, in the Project named `Tandembike` (id 3, so its pages are under `http://localhost:4747/project/3`): use it for all work on this codebase, and do not create a second one. Ticket summaries carry no Project id; `get_ticket` returns it as `projectId`. Reach it through its MCP server at `http://localhost:4747/api/mcp` with an MCP-capable client; the app must be running. Use its tools, not `gh`, `glab` or `.scratch/` files, even where a skill describes another tracker. The server's instructions and tool descriptions explain how the tracker works: Statuses, Claims, acceptance criteria, Blockers, Epics, Cycles and each tool's rules (ADR 0014). This document adds only this repository's process on top of them. One Ticket's run, from claim through merge, follows [`start-run.md`](start-run.md); this document holds the rest.
 
 ## When the MCP tools change
 
 A change to `src/mcp/mcp-server.ts` reaches the running app on save under `npm run dev`, and only after `npm run build` and a restart under `npm run start`. Once it has, ask the User to start a new session to pick up the new tool descriptions and instructions. Reconnecting with `/mcp` in Claude Code is not enough: it reconnects the server, but tool descriptions this session has already loaded stay as they were. Until the new session, treat your loaded tool descriptions as out of date.
 
-## Development work in this repository
-
-Before implementation, look for a clearly matching Ticket in that Project. If the user gave a Ticket reference, fetch that Ticket and use it. Ready work for an Agent is `list_tickets` with `status: "Todo", labels: ["ready-for-agent"], blocked: false, claimed: false`: the Board's Queued Lane holds only `ready-for-agent` Tickets, and other Todo Tickets sit in Intake or Your work. If exactly one existing Ticket clearly matches, claim it with `claim_ticket` and update it to `In progress` before starting. If several Tickets could match, ask which one; if none clearly matches, proceed with the user's request without creating a Ticket unless asked. Once you open the Ticket's PR (see "Git workflow" in `AGENTS.md`), add its URL to the Ticket as an External reference with `update_ticket` `addExternalReferences`; do not post it as a comment. If that PR is closed and replaced, add the new PR's URL as another reference and leave the old one: references are history, not status. Update the relevant Ticket to `Done` only once its PR is merged into `main` with CI green, review is complete, and its acceptance criteria are checked off (see below), with `complete_ticket`, which applies the completion rule in `triage-labels.md`. Until then it stays `In progress`. When work spans multiple Tickets, update each Ticket as it starts and mark each `Done` only when its work is merged and verified.
-
-A Claim covers the work of one Agent run, through its merge:
-
-- The run that opens the PR waits for CI (`gh pr checks <number> --watch`). Green: it merges the PR with `gh pr merge <number> --merge` and calls `complete_ticket`, which also releases the Claim. Red: it fixes the branch and waits again, or, when it cannot, comments on the Ticket why the PR stays open and releases the Claim with `release_ticket_claim`. The Ticket then stays `In progress`; that and the PR reference show it is taken. Either way, a run in a worktree of its own then removes it, by "Clean up" in "Worktrees for parallel runs".
-- A later Agent run that works on the open PR, for example to fix review findings, claims the Ticket for that work and releases it again when done.
-- After the merge, the Agent run that merged the PR moves the Ticket to `Done`. Otherwise any later run that finds an `In progress` Ticket whose PR, in its External references, is merged with CI green does; failing both, the User does, with the **Merged** button in the Ticket's drawer. An Agent run does it with `complete_ticket`: it and the Merged button both apply the completion rule through the Tickets module's `completeTicket`, and neither checks anything on GitHub, so check the merge, CI and acceptance criteria first.
-- Abandoning the work without a PR? Releasing the Claim of an `In progress` Ticket with no PR reference leaves it stalled in the Action needed section of the Board's In progress Lane, so also move it back to `Todo` with `update_ticket`, or say in a comment why it stays `In progress`.
+## The Board and Ticket lists
 
 Board Lanes (Intake, Queued, In progress, Your work, Done) and the In progress sections (Action needed, Running, Review) are derived in the UI and stay out of the MCP tools (ADR 0023): no tool returns or filters by a Lane. `sort_lane` sets a Status's Board order, which a Lane shows filtered by labels.
 
@@ -48,22 +39,13 @@ An Epic is handed off, worked and delivered as one unit:
 1. `get_ticket` the Epic and claim it once with `claim_ticket`, as the server's instructions describe.
 2. Leave the children unclaimed: the Epic's Claim covers them.
 3. Work the children in Blocker order on one branch named after the Epic, `ticket-<epic number>-<slug>`: next is an unfinished child whose Blockers are Done, archived, or children already worked on this branch. Move each child to `In progress` as you start it, check off its acceptance criteria as you verify them, and commit it on its own, naming it (`T42`).
-4. Open one PR for the whole Epic, named after it, and add its URL to the Epic as an External reference with `update_ticket` `addExternalReferences`, not to its children. Then merge it or release the Epic's Claim, by the Claim rule in "Development work in this repository"; a later run working on an open PR claims the Epic again.
+4. Open one PR for the whole Epic, named after it, and add its URL to the Epic as an External reference with `update_ticket` `addExternalReferences`, not to its children. Then merge it or release the Epic's Claim, by "The Claim, through merge" in `start-run.md`; a later run working on an open PR claims the Epic again.
 5. Once the PR is merged with CI green, whoever that rule names calls `complete_ticket` on the Epic: in one transaction it completes every unarchived child, removes the Epic's own triage state label and releases its Claim; the Epic reaches `Done` with its children. Its category labels (`bug`, `enhancement`) and `wontfix` stay. This is the Epic case of the completion rule in `triage-labels.md`, and what the User's **Merged** button does.
 6. A run in a worktree of its own removes it last, after `complete_ticket` on the Epic or after releasing the Epic's Claim, by "Clean up" in "Worktrees for parallel runs".
 
 ## Feedback as Tickets
 
-Friction you hit while working a Ticket becomes a Ticket, because a reply nobody reads loses it: the Blocks and process feedback rules in `AGENTS.md` point here. File the Tickets at the end of the task, before you release your Claim or end the Conversation; nothing you learned survives it.
-
-1. Check each claim against the installed types or the docs first.
-2. Pick the Project the item is about: `@blockle/blocks` for Blocks friction, `Tandembike` for process and tooling friction.
-3. Search that Project with `list_tickets` (a `query`, `includeArchived: true`). When a Ticket already covers the item, add a comment with the new repro and the workaround you used, and stop.
-4. Otherwise create one Ticket per item in that Project, outside any Cycle or Epic. Its description has Problem, Repro, Expected, Workaround and Question sections; its acceptance criteria are taken from Expected. Labels: `needs-triage`, `bug` (a defect in existing behaviour) or `enhancement`, and a source label: `from:tandembike` for Blocks Tickets, `from:agent-run` for process Tickets.
-5. Make its first comment "Found while working T<number>", naming the Ticket you were on.
-6. Close your final message with one line per Ticket you filed or commented on, as a pointer to it, and nothing when there was none.
-
-The factory leaves these Tickets alone, and only the User decides to label one `ready-for-agent`.
+The steps for filing friction as Tickets are in "Feedback as Tickets" in [`start-run.md`](start-run.md).
 
 ## Triage and Blockers
 
@@ -98,14 +80,12 @@ A criterion that names a doc, a section or a `GLOSSARY.md` entry says "add" when
 
 Older Tickets may still carry an acceptance-criteria checklist in the description; when you touch one, move those items into `acceptanceCriteria` (keeping their checked state) and delete the checklist, preserving the rest of the description.
 
-Move a Ticket to `Done` only once every criterion is checked; if one is deliberately left unmet, say why in a comment first.
-
 ## When a skill says “publish to the issue tracker”
 
 Create one Ticket per approved work item in the selected Project, using the MCP tools, with its acceptance criteria in `acceptanceCriteria`. Create them in one `create_tickets` call, in dependency order, with each dependency in `blockedByPositions`; for more than 50 items, or a dependency on an existing Ticket, use further calls and `add_blocker`. To name a sibling in a title, description or criterion, write `{{T:n}}` (n its position in the call, from 0) instead of guessing its number.
 
-When the items are split from an existing Ticket that is not an Epic, such as a spec, pass that Ticket as `originNumber` so they form its Origin group (ADR 0015). Then move the split Ticket to `Done`, removing its triage state label, and do not archive it: its drawer lists the split-off Tickets and stays on the Board as the group's view. Each split-off Ticket is then worked on its own, by "Development work in this repository".
+When the items are split from an existing Ticket that is not an Epic, such as a spec, pass that Ticket as `originNumber` so they form its Origin group (ADR 0015). Then move the split Ticket to `Done`, removing its triage state label, and do not archive it: its drawer lists the split-off Tickets and stays on the Board as the group's view. Each split-off Ticket is then worked on its own, by `start-run.md`.
 
 ## When a skill says “fetch the relevant ticket”
 
-Call `get_ticket` with the Ticket number and read its full description and its `acceptanceCriteria`, the definition of done, then `list_comments` for its comments.
+Read it by "Pick up" in [`start-run.md`](start-run.md).
