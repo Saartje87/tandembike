@@ -492,6 +492,8 @@ export type ToolContext = {
   tickets: Tickets;
   origin: string;
   cwd: string | undefined;
+  /** The Agent-run ID of the caller's `X-Tandembike-Run` header, if sent. */
+  runId: string | undefined;
   /** The Project `ref` names, else the one of the caller's folder (ADR 0036). */
   resolveProjectId: (ref: {
     projectId?: number;
@@ -499,3 +501,15 @@ export type ToolContext = {
   }) => number;
   registerTool: RegisterTool;
 };
+
+/** An explicit `agentRunId` wins over the run's header; with neither, refuse. */
+export function requireRunId(
+  explicit: string | undefined,
+  runId: string | undefined,
+): string {
+  const id = explicit?.trim() || runId;
+  if (!id) {
+    throw new Error('Pass agentRunId, a unique ID for this Agent run.');
+  }
+  return id;
+}

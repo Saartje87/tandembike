@@ -11,14 +11,18 @@ import type { Tickets } from '../tickets/tickets';
  */
 export async function connectMcpClient(
   tickets: Tickets,
-  { cwd }: { cwd?: string } = {},
+  { cwd, runId }: { cwd?: string; runId?: string } = {},
 ): Promise<Client> {
   const client = new Client({ name: 'test-agent', version: '0.0.0' });
   const transport = new StreamableHTTPClientTransport(
     new URL('http://localhost:3000/api/mcp'),
     {
-      requestInit:
-        cwd === undefined ? {} : { headers: { 'X-Tandembike-Cwd': cwd } },
+      requestInit: {
+        headers: {
+          ...(cwd === undefined ? {} : { 'X-Tandembike-Cwd': cwd }),
+          ...(runId === undefined ? {} : { 'X-Tandembike-Run': runId }),
+        },
+      },
       fetch: (url, init) => handleMcpRequest(new Request(url, init), tickets),
     },
   );
