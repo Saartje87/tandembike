@@ -17,11 +17,11 @@ export type AutopilotDeps = {
 };
 
 const readyLabel = 'ready-for-agent';
-/** Its run is doing something, or waiting on an answer, and holds a slot. */
 /** How long a transient end waits before its one automatic resume. */
 const transientBackoffMs = 60_000;
 const transientResumeText =
   'The last run ended on a transient error. Continue where you left off.';
+/** Its run is doing something, or waiting on an answer, and holds a slot. */
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /**
@@ -217,8 +217,8 @@ export function createAutopilot({
   /**
    * ADR 0034: resumes each open Start Conversation of the Active Cycle whose
    * latest Run outcome is `failed_transient` and a minute old, unless that run
-   * was itself an automatic resume (an Autopilot reply, so not the Conversation's
-   * first run; the User's reply starts the count again). One not yet old enough
+   * was itself an automatic resume (marked on its outcome; the startup resume
+   * and the User's reply start the count again). One not yet old enough
    * gets a timer that evaluates the Project when it is.
    */
   const resumeTransient = async (projectId: number) => {
@@ -226,7 +226,6 @@ export function createAutopilot({
     if (!open) {
       return;
     }
-    let slots = open.slots;
     for (const conversation of startConversations(projectId)) {
       if (conversation.hidden || workingStates.includes(conversation.state)) {
         continue;
@@ -235,9 +234,7 @@ export function createAutopilot({
       if (outcome?.result !== 'failed_transient') {
         continue;
       }
-      const resumed =
-        outcome.startedByAutopilot &&
-        conversations.runOutcomes(conversation.id).length > 1;
+      const resumed = outcome.transientResume;
       const ticket = tickets.getTicket(conversation.ticketNumber as number);
       if (
         resumed ||
@@ -260,7 +257,8 @@ export function createAutopilot({
         }
         continue;
       }
-      if (slots <= 0) {
+      // Room is read again for each resume: the one before took a slot.
+      if (!room(projectId)) {
         break;
       }
       try {
@@ -268,8 +266,8 @@ export function createAutopilot({
           conversation.id,
           transientResumeText,
           'autopilot',
+          { transientResume: true },
         );
-        slots -= 1;
       } catch (error) {
         console.error(
           `Autopilot could not resume T${conversation.ticketNumber}`,

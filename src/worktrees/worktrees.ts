@@ -15,6 +15,9 @@ const run = promisify(execFile);
  */
 export type WorktreeState = 'clean' | 'dirty' | 'unpushed' | 'missing';
 
+/** Why a worktree is kept rather than removed. */
+export type KeptWorktreeState = Exclude<WorktreeState, 'clean' | 'missing'>;
+
 export type CreatedWorktree = {
   path: string;
   /** What it is detached at: `origin/<default branch>`, or the local branch without a remote. */
@@ -56,6 +59,12 @@ export type Worktrees = {
    * with git's message when the worktree holds changes. The branch stays.
    */
   remove(repositoryPath: string, path: string): Promise<void>;
+  /**
+   * The repository a worktree belongs to, read from the worktree itself, so a
+   * worktree can be removed without knowing its Project's repository path;
+   * null when the folder is gone or is not a linked worktree.
+   */
+  repositoryOf(path: string): Promise<string | null>;
   /** The worktrees in the worktrees folder, found by their `<project id>/c<conversation id>` path. */
   list(): Promise<ListedWorktree[]>;
 };
@@ -136,6 +145,28 @@ export function createWorktrees({
     async remove(repositoryPath, path) {
       await git(repositoryPath, ['worktree', 'remove', path]);
       await git(repositoryPath, ['worktree', 'prune']);
+    },
+
+    async repositoryOf(path) {
+      if (!existsSync(path)) {
+        return null;
+      }
+      try {
+        const common = (
+          await git(path, [
+            'rev-parse',
+            '--path-format=absolute',
+            '--git-common-dir',
+          ])
+        ).trim();
+        const top = (await git(path, ['rev-parse', '--show-toplevel'])).trim();
+        // A linked worktree's common dir is the main repository's `.git`.
+        return common.endsWith('/.git') && common !== join(top, '.git')
+          ? common.slice(0, -'/.git'.length)
+          : null;
+      } catch {
+        return null;
+      }
     },
 
     async list() {

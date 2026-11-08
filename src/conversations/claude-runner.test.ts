@@ -207,7 +207,12 @@ describe('The Claude runner', () => {
         input: { file_path: 'a.md' },
       },
       { type: 'turn', costUsd: 0.42 },
-      { type: 'turn', costUsd: 0.5, error: 'error_max_turns' },
+      {
+        type: 'turn',
+        costUsd: 0.5,
+        error: 'error_max_turns',
+        errorSubtype: 'error_max_turns',
+      },
       { type: 'exit' },
     ]);
   });

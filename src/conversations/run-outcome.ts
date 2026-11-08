@@ -13,12 +13,18 @@ export const runResults = [
 ] as const;
 export type RunResult = (typeof runResults)[number];
 
+/**
+ * A 429 or 5xx counts only as an HTTP status: after `API Error:`, `status`,
+ * `status code` or `HTTP`, or as the whole text's leading code, so a port or
+ * a count in a message does not match.
+ */
+const statusMarker =
+  /(?:^\s*|(?:api error|status(?: code)?|http(?:\/[\d.]+)?):?\s*)(?:429|5\d\d)\b/;
+
 const transientMarkers = [
-  /\b529\b/,
+  statusMarker,
   /overloaded/,
-  /\b429\b/,
   /rate[_ ]limit/,
-  /\b5\d\d\b/,
   /api_error/,
   /econnreset/,
   /etimedout/,
@@ -48,6 +54,8 @@ export type RunEnd = {
   stopped: boolean;
   /** The error the end carries, if any. */
   error: string | undefined;
+  /** The SDK result subtype that came with the error, if any. */
+  errorSubtype?: string;
   /** The Conversation's Ticket Status; null for a Conversation without one. */
   ticketStatus: Status | null;
   /** The Ticket, or its Epic, has a PR reference. */
@@ -61,7 +69,7 @@ export function runResultOf(end: RunEnd): RunResult {
     return 'stopped';
   }
   if (end.error !== undefined) {
-    return classifyRunError(end.error) === 'transient'
+    return classifyRunError(end.error, end.errorSubtype) === 'transient'
       ? 'failed_transient'
       : 'failed';
   }

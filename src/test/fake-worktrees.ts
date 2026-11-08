@@ -13,6 +13,8 @@ export type FakeWorktrees = Worktrees & {
   states: Map<string, WorktreeState>;
   /** Every `remove`, oldest first; it deletes the state, so the worktree reads `missing`. */
   removed: string[];
+  /** What `repositoryOf` reports, by path; null for the rest. */
+  repositories: Map<string, string>;
   /** What `list` reports. */
   listed: ListedWorktree[];
   /** Makes the next `create` fail with this message. */
@@ -29,6 +31,7 @@ export function createFakeWorktrees(): FakeWorktrees {
     created: [],
     states: new Map(),
     removed: [],
+    repositories: new Map(),
     listed: [],
     failCreateWith: null,
     prepared: [],
@@ -58,6 +61,9 @@ export function createFakeWorktrees(): FakeWorktrees {
       }
       fake.states.delete(path);
       fake.removed.push(path);
+    },
+    async repositoryOf(path) {
+      return fake.repositories.get(path) ?? null;
     },
     async list() {
       return fake.listed;

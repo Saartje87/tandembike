@@ -519,6 +519,30 @@ describe('Autopilot startup', () => {
     stop();
   });
 
+  it('still gives the startup resume its one transient resume when it ends on a transient error', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const { fresh, autopilot, mine, runner } = await restarted({ spent: 1 });
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    runner.runs[runner.runs.length - 1].emit({
+      type: 'turn',
+      costUsd: 1,
+      error: 'API Error: 529 overloaded',
+    });
+    await autopilot.evaluate(mine.projectId);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await autopilot.idle();
+
+    const conversation = fresh.list({ ticketNumber: mine.number })[0];
+    expect(
+      fresh
+        .transcript(conversation.id)
+        .filter((entry) => entry.text.startsWith('The last run ended')),
+    ).toHaveLength(1);
+    stop();
+  });
+
   it("leaves Autopilot's interrupted Conversations interrupted when their Ticket is Done, archived or not in the Active Cycle", async () => {
     const done = await restarted();
     done.tickets.completeTicket(done.mine.number);

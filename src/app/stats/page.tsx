@@ -14,24 +14,23 @@ async function loadStats() {
 }
 
 /** Each Project's per-Stage run stats, by Project id. */
-async function loadRunStats() {
-  await connection();
+async function loadRunStats(stats: ReturnType<typeof loadStats>) {
+  const { projects } = await stats;
   const conversations = appConversations();
   return Object.fromEntries(
-    appTickets('user')
-      .getStats()
-      .projects.map(({ project }) => [
-        project.id,
-        conversations.runStats(project.id),
-      ]),
+    projects.map(({ project }) => [
+      project.id,
+      conversations.runStats(project.id),
+    ]),
   );
 }
 
 // The promise is passed down unawaited so the uncached read suspends inside
 // StatsOverview's boundary instead of the page itself (Cache Components).
 // `LiveUpdates` refetches the page on every change, which keeps it current.
-const StatsPage: FC = () => (
-  <StatsOverview stats={loadStats()} runStats={loadRunStats()} />
-);
+const StatsPage: FC = () => {
+  const stats = loadStats();
+  return <StatsOverview stats={stats} runStats={loadRunStats(stats)} />;
+};
 
 export default StatsPage;

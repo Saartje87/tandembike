@@ -100,7 +100,9 @@ export function eventsOf(
       {
         type: 'turn',
         costUsd: message.total_cost_usd,
-        ...(error === undefined ? {} : { error }),
+        ...(error === undefined
+          ? {}
+          : { error, errorSubtype: message.subtype }),
       },
     ];
   }

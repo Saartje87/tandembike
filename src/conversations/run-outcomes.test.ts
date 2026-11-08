@@ -173,6 +173,20 @@ describe('Run outcomes', () => {
       expect(conversations.latestRunOutcome(broken.id)?.result).toBe('failed');
     });
 
+    it('classifies by the error subtype the turn carries', async () => {
+      const { conversations, runner, startOnTicket } = setup();
+      const conversation = await startOnTicket();
+      runner.runs[0].emit({
+        type: 'turn',
+        costUsd: 1,
+        error: 'The run failed',
+        errorSubtype: 'api_error',
+      });
+      expect(conversations.latestRunOutcome(conversation.id)?.result).toBe(
+        'failed_transient',
+      );
+    });
+
     it('uses only the error and stopped rules for a Conversation without a Ticket', async () => {
       const { conversations, runner, project } = setup();
       const ask = await conversations.start({
@@ -235,6 +249,20 @@ describe('Run outcomes', () => {
       await conversations.stop(working.id);
       runner.runs[0].emit({ type: 'turn', costUsd: 2 });
       expect(conversations.runOutcomes(working.id)).toHaveLength(1);
+    });
+
+    it('carries the final cost the stopped run reports after the stop', async () => {
+      const { conversations, runner, startOnTicket } = setup();
+      const working = await startOnTicket();
+      await conversations.stop(working.id);
+      expect(conversations.runOutcomes(working.id)[0].costUsd).toBe(0);
+
+      runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+      runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+
+      expect(conversations.runOutcomes(working.id)).toMatchObject([
+        { result: 'stopped', costUsd: 2 },
+      ]);
     });
   });
 

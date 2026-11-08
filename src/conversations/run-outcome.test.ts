@@ -10,6 +10,10 @@ describe('classifyRunError', () => {
     'rate_limit_error: slow down',
     'API Error: 500 Internal server error',
     'API Error: 503 service unavailable',
+    '503 Service Unavailable',
+    'Request failed with status 502',
+    'HTTP 500 from upstream',
+    'status code 504',
     'upstream api_error',
     'read ECONNRESET',
     'connect ETIMEDOUT 1.2.3.4:443',
@@ -26,6 +30,9 @@ describe('classifyRunError', () => {
     'API Error: 400 invalid request',
     'API Error: 401 unauthorized',
     'The Agent could not finish',
+    'could not connect to port 5432',
+    'Processed 512 files without a fix',
+    'Migration 500 of 600 failed',
   ])('marks %j substantive', (error) => {
     expect(classifyRunError(error)).toBe('substantive');
   });
@@ -33,6 +40,7 @@ describe('classifyRunError', () => {
   it('reads the SDK result subtype too', () => {
     expect(classifyRunError('', 'error_during_execution')).toBe('substantive');
     expect(classifyRunError('', 'api_error')).toBe('transient');
+    expect(classifyRunError('', 'error_max_turns')).toBe('substantive');
   });
 });
 
@@ -62,6 +70,15 @@ describe('runResultOf', () => {
     ).toBe('failed_transient');
     expect(
       runResultOf({ ...base, error: 'error_max_turns', ticketStatus: 'Done' }),
+    ).toBe('failed');
+  });
+
+  it('reads the error subtype of the end too', () => {
+    expect(
+      runResultOf({ ...base, error: 'oops', errorSubtype: 'api_error' }),
+    ).toBe('failed_transient');
+    expect(
+      runResultOf({ ...base, error: 'oops', errorSubtype: 'error_max_turns' }),
     ).toBe('failed');
   });
 

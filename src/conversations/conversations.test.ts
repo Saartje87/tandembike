@@ -1936,6 +1936,47 @@ describe('Autopilot spend', () => {
       }),
     ).toBeCloseTo(8);
   });
+
+  it("counts what Autopilot's replies cost on a hand-started Conversation of the Cycle, for those runs only", async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const other = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Manual',
+      cycleId: cycle.id,
+    });
+    const elsewhere = tickets.createTicket({
+      projectId: project.id,
+      title: 'Elsewhere',
+      cycleId: other.id,
+    });
+    const hand = async (ticketNumber: number) => {
+      const started = await conversations.start({
+        startedBy: 'user',
+        ticketNumber,
+        intent: 'start',
+        prompt: 'Go',
+      });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 4 });
+      await conversations.reply(started.id, 'Resume', 'autopilot');
+      // The live run reports its running total.
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 5.5 });
+      return started;
+    };
+    const manual = await hand(ticket.number);
+    await hand(elsewhere.number);
+    // The User's own reply adds nothing.
+    await conversations.reply(manual.id, 'Thanks', 'user');
+    runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 8 });
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBeCloseTo(1.5);
+  });
 });
 
 describe('A Retro Conversation', () => {

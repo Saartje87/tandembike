@@ -28,7 +28,13 @@ export type RunEvent =
    * A turn ended. `costUsd` is what this run has cost in total so far, not
    * counting earlier runs of the Conversation.
    */
-  | { type: 'turn'; costUsd: number; error?: string }
+  | {
+      type: 'turn';
+      costUsd: number;
+      error?: string;
+      /** The SDK result subtype an error came with, for classifying it. */
+      errorSubtype?: string;
+    }
   /** Tickets the Agent created over MCP, by number. */
   | { type: 'created'; numbers: number[] }
   /** The run waits for the User (`true`) or goes on again (`false`). */

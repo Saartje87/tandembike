@@ -58,8 +58,16 @@ describe('Worktree cleanup', () => {
   );
 
   it('removes a clean worktree when its Ticket reaches Done', async () => {
-    const { conversations, tickets, worktrees, conversation, ticket, path } =
-      await setup();
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+    runner.runs[0].emit({ type: 'exit' });
 
     tickets.completeTicket(ticket.number);
 
@@ -67,9 +75,39 @@ describe('Worktree cleanup', () => {
     expect(conversations.get(conversation.id).worktreeRemoved).toBe(true);
   });
 
+  it('waits for a live run to end before removing the worktree of a Ticket that reached Done', async () => {
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+
+    // The run itself completes its Ticket, and is still working in the worktree.
+    tickets.completeTicket(ticket.number);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(worktrees.removed).toEqual([]);
+
+    runner.runs[0].emit({ type: 'exit' });
+
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+    expect(conversations.get(conversation.id).worktreeRemoved).toBe(true);
+  });
+
   it('keeps a dirty worktree when its Ticket reaches Done', async () => {
-    const { conversations, tickets, worktrees, conversation, ticket, path } =
-      await setup();
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+    runner.runs[0].emit({ type: 'exit' });
     worktrees.states.set(path, 'dirty');
 
     tickets.completeTicket(ticket.number);
@@ -123,6 +161,21 @@ describe('Worktree cleanup', () => {
     worktrees.listed = [
       { path: orphan, projectId: project.id, conversationId: 999 },
       { path: dirty, projectId: project.id, conversationId: 998 },
+    ];
+
+    await restart().cleanupWorktrees();
+
+    expect(worktrees.removed).toEqual([orphan]);
+  });
+
+  it('removes the clean orphan worktree of a Project without a repository path, found from the worktree', async () => {
+    const { restart, worktrees, tickets, project } = await setup();
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: null });
+    const orphan = `/fake/worktrees/${project.id}/c999`;
+    worktrees.states.set(orphan, 'clean');
+    worktrees.repositories.set(orphan, '/fake/repo');
+    worktrees.listed = [
+      { path: orphan, projectId: project.id, conversationId: 999 },
     ];
 
     await restart().cleanupWorktrees();

@@ -473,6 +473,10 @@ export const runOutcomes = sqliteTable(
     startedByAutopilot: integer('started_by_autopilot', { mode: 'boolean' })
       .notNull()
       .default(false),
+    /** Whether this run was Autopilot's one automatic resume of a transient end (ADR 0034). */
+    transientResume: integer('transient_resume', { mode: 'boolean' })
+      .notNull()
+      .default(false),
   },
   (table) => [
     index('run_outcomes_conversation_id').on(table.conversationId),

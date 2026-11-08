@@ -8,6 +8,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -262,6 +263,33 @@ describe('worktrees.remove', () => {
       /untracked|modified/i,
     );
     expect(await worktrees.state(path)).toBe('dirty');
+  });
+});
+
+describe('worktrees.repositoryOf', () => {
+  it('finds the repository a worktree belongs to from the worktree itself', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+
+    const found = await worktrees.repositoryOf(path);
+
+    expect(found && realpathSync(found)).toBe(realpathSync(repo));
+    // It is enough to remove the worktree.
+    await worktrees.remove(found as string, path);
+    expect(await worktrees.state(path)).toBe('missing');
+  });
+
+  it('is null for a folder that is gone or not a worktree', async () => {
+    const { worktrees } = repository({ remote: false });
+    const plain = temp('plain');
+    folders.push(plain);
+
+    expect(await worktrees.repositoryOf(join(plain, 'nope'))).toBeNull();
+    expect(await worktrees.repositoryOf(plain)).toBeNull();
   });
 });
 

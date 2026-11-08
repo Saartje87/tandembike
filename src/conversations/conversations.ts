@@ -11,7 +11,7 @@ import {
 import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
-import type { Worktrees } from '../worktrees/worktrees';
+import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
   AgentRunner,
@@ -59,7 +59,7 @@ export type Conversation = {
   /** The worktree Tandembike made for it; every run works there. Null: the main checkout. */
   worktreePath: string | null;
   /** Why the worktree was kept at close or Done, until it is removed. */
-  worktreeKept: 'dirty' | 'unpushed' | null;
+  worktreeKept: KeptWorktreeState | null;
   /** Tandembike removed the worktree; `worktreePath` is where it was. */
   worktreeRemoved: boolean;
   createdAt: Date;
@@ -83,6 +83,8 @@ export type RunOutcome = {
   /** The `/command` the run's first message started with; null for none. */
   command: string | null;
   startedByAutopilot: boolean;
+  /** Autopilot's automatic resume of a transient end, not its startup resume. */
+  transientResume: boolean;
 };
 
 /** How one Stage of a Project ended over the last 30 days. */
@@ -177,6 +179,10 @@ type LiveRun = {
   stopped?: boolean;
   /** The model the run reported in its init message. */
   model: string | null;
+  /** The `stopped` outcome of this run, waiting for the cost its last turn reports. */
+  stoppedOutcome?: { id: number; costAtStart: number };
+  /** Its Ticket reached Done while it was alive: release the worktree when it ends. */
+  releaseWhenEnded?: boolean;
   /**
    * The message the run is working on, until it ends (a turn, an exit or a
    * stop): what its Run outcome is recorded from. Null between runs.
@@ -195,6 +201,7 @@ type PendingRun = {
   costAtStart: number;
   command: string | null;
   startedByAutopilot: boolean;
+  transientResume: boolean;
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -272,11 +279,16 @@ export function createConversations({
   const recordOutcome = (
     id: number,
     handle: LiveRun,
-    end: { stopped?: boolean; error?: string; cost: number },
+    end: {
+      stopped?: boolean;
+      error?: string;
+      errorSubtype?: string;
+      cost: number;
+    },
   ) => {
     const pending = handle.pending;
     if (!pending) {
-      return;
+      return undefined;
     }
     handle.pending = null;
     const conversation = get(id);
@@ -287,6 +299,7 @@ export function createConversations({
     const result = runResultOf({
       stopped: end.stopped ?? false,
       error: end.error,
+      errorSubtype: end.errorSubtype,
       ticketStatus: ticket?.status ?? null,
       hasPullRequest:
         ticket !== null &&
@@ -294,7 +307,8 @@ export function createConversations({
           ticket.epic?.hasPullRequest === true),
       intent: conversation.intent,
     });
-    db.insert(runOutcomes)
+    return db
+      .insert(runOutcomes)
       .values({
         conversationId: id,
         projectId: conversation.projectId,
@@ -307,8 +321,10 @@ export function createConversations({
         model: handle.model,
         command: pending.command,
         startedByAutopilot: pending.startedByAutopilot,
+        transientResume: pending.transientResume,
       })
-      .run();
+      .returning({ id: runOutcomes.id })
+      .get().id;
   };
 
   /** The input if its JSON fits the cap; the reader falls back to the entry's text otherwise. */
@@ -437,6 +453,20 @@ export function createConversations({
     if (live.get(id) !== handle) {
       // An interrupted turn reports its cost after the stop (T587).
       if (handle.stopped && event.type === 'turn') {
+        // The stopped outcome takes the first cost the stopped turn reports.
+        const outcome = handle.stoppedOutcome;
+        if (outcome) {
+          handle.stoppedOutcome = undefined;
+          db.update(runOutcomes)
+            .set({
+              costUsd: Math.max(
+                0,
+                handle.costBefore + event.costUsd - outcome.costAtStart,
+              ),
+            })
+            .where(eq(runOutcomes.id, outcome.id))
+            .run();
+        }
         update(id, { costUsd: handle.costBefore + event.costUsd });
         announce(id);
       }
@@ -477,6 +507,7 @@ export function createConversations({
         });
         recordOutcome(id, handle, {
           error: event.error,
+          errorSubtype: event.errorSubtype,
           cost: handle.costBefore + event.costUsd,
         });
         break;
@@ -497,6 +528,9 @@ export function createConversations({
           error: event.error,
           cost: get(id).costUsd,
         });
+        if (handle.releaseWhenEnded) {
+          void tryRelease(id);
+        }
         break;
       }
     }
@@ -566,6 +600,7 @@ export function createConversations({
     resume?: string,
     limited = true,
     sentBy: ConversationSender = 'user',
+    transientResume = false,
   ) => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
@@ -594,6 +629,7 @@ export function createConversations({
         costAtStart: conversation.costUsd,
         command: commandOf(prompt),
         startedByAutopilot: sentBy === 'autopilot',
+        transientResume,
       },
       asking: new Map(),
       questioning: new Map(),
@@ -862,7 +898,13 @@ export function createConversations({
         )
         .all();
       for (const { id } of open) {
-        void tryRelease(id);
+        const handle = live.get(id);
+        if (handle?.run) {
+          // The run still works in the worktree, so it is released at its end.
+          handle.releaseWhenEnded = true;
+        } else {
+          void tryRelease(id);
+        }
       }
     }
   });
@@ -873,11 +915,13 @@ export function createConversations({
     /**
      * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
      * ceiling): the total cost of the Conversations it started for that Cycle,
-     * resumes included, since a resume adds to its Conversation. Hand-started
-     * ones do not count, and the next Cycle starts again at zero.
+     * resumes included, since a resume adds to its Conversation. A hand-started
+     * Conversation counts as started by Autopilot for Autopilot's replies only
+     * (ADR 0034): the cost of those runs, on Tickets planned in the Cycle,
+     * adds to it. The next Cycle starts again at zero.
      */
     autopilotSpend(input: { projectId: number; cycleId: number }): number {
-      const row = db
+      const started = db
         .select({
           total: sql<number>`coalesce(sum(${conversations.costUsd}), 0)`,
         })
@@ -890,7 +934,29 @@ export function createConversations({
           ),
         )
         .get();
-      return row?.total ?? 0;
+      const numbers = tickets.getCycle(input.cycleId).ticketNumbers;
+      const replies =
+        numbers.length === 0
+          ? null
+          : db
+              .select({
+                total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+              })
+              .from(runOutcomes)
+              .innerJoin(
+                conversations,
+                eq(conversations.id, runOutcomes.conversationId),
+              )
+              .where(
+                and(
+                  eq(runOutcomes.projectId, input.projectId),
+                  eq(runOutcomes.startedByAutopilot, true),
+                  eq(conversations.startedBy, 'user'),
+                  inArray(runOutcomes.ticketNumber, numbers),
+                ),
+              )
+              .get();
+      return (started?.total ?? 0) + (replies?.total ?? 0);
     },
 
     /**
@@ -1123,12 +1189,16 @@ export function createConversations({
      * alive, otherwise into a new run that resumes the stored SDK session.
      * The User's reply is never refused by the Start run limit, so the User
      * can always answer their Conversations; Autopilot's is (ADR 0031).
+     * `transientResume` marks Autopilot's automatic resume of a transient end
+     * (ADR 0034), recorded on the run's outcome so it is resumed only once.
      */
     async reply(
       id: number,
       text: string,
       sentBy: ConversationSender,
+      options: { transientResume?: boolean } = {},
     ): Promise<Conversation> {
+      const transientResume = options.transientResume ?? false;
       const message = (text ?? '').trim();
       if (message === '') {
         throw new ValidationError({ text: 'Write a reply first.' });
@@ -1167,6 +1237,7 @@ export function createConversations({
           costAtStart: conversation.costUsd,
           command: commandOf(message),
           startedByAutopilot: sentBy === 'autopilot',
+          transientResume,
         };
         handle.run.send(message);
       } else {
@@ -1176,6 +1247,7 @@ export function createConversations({
           conversation.sdkSessionId ?? undefined,
           limited,
           sentBy,
+          transientResume,
         );
         append(id, sentBy, message);
         update(id, { state: 'running' });
@@ -1193,10 +1265,14 @@ export function createConversations({
       const handle = live.get(id);
       live.delete(id);
       if (handle) {
-        recordOutcome(id, handle, {
+        const costAtStart = handle.pending?.costAtStart ?? 0;
+        const outcomeId = recordOutcome(id, handle, {
           stopped: true,
           cost: conversation.costUsd,
         });
+        if (outcomeId !== undefined) {
+          handle.stoppedOutcome = { id: outcomeId, costAtStart };
+        }
         handle.stopped = true;
         expireAsking(handle);
         expireQuestioning(handle);
@@ -1209,6 +1285,9 @@ export function createConversations({
         } finally {
           handle.run.close();
         }
+      }
+      if (handle?.releaseWhenEnded) {
+        await tryRelease(id);
       }
       return get(id);
     },
@@ -1274,8 +1353,14 @@ export function createConversations({
           .from(conversations)
           .where(eq(conversations.id, found.conversationId))
           .get();
-        const repositoryPath = repositoryPathOf(found.projectId);
-        if (exists || repositoryPath === null) {
+        if (exists) {
+          continue;
+        }
+        // The Project may be gone or have no path; the worktree knows its repository.
+        const repositoryPath =
+          repositoryPathOf(found.projectId) ??
+          (await worktrees.repositoryOf(found.path));
+        if (repositoryPath === null) {
           continue;
         }
         if ((await worktrees.state(found.path)) === 'clean') {
