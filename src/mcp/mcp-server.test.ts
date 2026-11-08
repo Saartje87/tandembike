@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
@@ -734,6 +734,7 @@ describe('Ticket tools', () => {
           blocked: false,
           type: 'Ticket',
           epicNumber: null,
+          updatedAt: started.updatedAt.toISOString(),
         },
       ],
       nextCursor: null,
@@ -888,6 +889,83 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
+  it('lists only Tickets changed since a time, each with updatedAt', async () => {
+    vi.useFakeTimers({
+      now: new Date('2026-03-01T09:00:00Z'),
+      toFake: ['Date'],
+    });
+    try {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const epic = tickets.createTicket({
+        projectId: project.id,
+        title: 'Launch',
+        type: 'Epic',
+      });
+      tickets.createTicket({ projectId: project.id, title: 'Footer' });
+      vi.setSystemTime(new Date('2026-03-01T11:00:00Z'));
+      tickets.createTicket({
+        projectId: project.id,
+        title: 'Header',
+        epicNumber: epic.number,
+      });
+      const client = await connectMcpClient(tickets);
+
+      const listed = resultJson(
+        await client.callTool({
+          name: 'list_tickets',
+          arguments: {
+            projectName: 'Website',
+            type: 'Epic',
+            changedSince: '2026-03-01T10:00:00Z',
+          },
+        }),
+      );
+
+      expect(listed).toEqual({
+        tickets: [
+          expect.objectContaining({
+            number: epic.number,
+            // Its own updated time: it matches through the child created since.
+            updatedAt: '2026-03-01T09:00:00.000Z',
+          }),
+        ],
+        nextCursor: null,
+        total: 1,
+      });
+      await client.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a malformed changedSince, naming it', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const result = await client.callTool({
+      name: 'list_tickets',
+      arguments: { changedSince: 'last Tuesday' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/changedSince.*ISO 8601/);
+    await client.close();
+  });
+
+  it('documents changedSince for checking what other sessions changed', async () => {
+    const client = await connectMcpClient(createTestTickets());
+    const { tools } = await client.listTools();
+    const listTickets = tools.find(({ name }) => name === 'list_tickets');
+
+    expect(listTickets?.description).toMatch(/changedSince/);
+    expect(listTickets?.description).toMatch(/updatedAt/);
+    expect(
+      JSON.stringify(listTickets?.inputSchema.properties?.changedSince),
+    ).toMatch(/other sessions changed.*before publishing/);
+    expect(client.getInstructions()).not.toMatch(/changedSince/);
+    await client.close();
+  });
+
   it('lists whole Tickets in full detail, and only summaries by default', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -919,6 +997,7 @@ describe('Ticket tools', () => {
           blocked: false,
           type: 'Ticket',
           epicNumber: null,
+          updatedAt: ticket.updatedAt.toISOString(),
           projectId: project.id,
         },
       ],

@@ -26,6 +26,7 @@ describe('Finding Tickets', () => {
           labels: ['bug'],
           type: 'Ticket',
           epicNumber: null,
+          updatedAt: ticket.updatedAt,
           blocked: false,
           projectId: project.id,
         },
@@ -160,8 +161,26 @@ describe('Finding Tickets', () => {
     const byName = tickets.findTickets({ projectName: 'Website' }).tickets;
 
     expect(byId.map((row) => Object.keys(row))).toEqual([
-      ['number', 'title', 'status', 'labels', 'blocked', 'type', 'epicNumber'],
-      ['number', 'title', 'status', 'labels', 'blocked', 'type', 'epicNumber'],
+      [
+        'number',
+        'title',
+        'status',
+        'labels',
+        'blocked',
+        'type',
+        'epicNumber',
+        'updatedAt',
+      ],
+      [
+        'number',
+        'title',
+        'status',
+        'labels',
+        'blocked',
+        'type',
+        'epicNumber',
+        'updatedAt',
+      ],
     ]);
     expect(byName).toEqual(byId);
   });
