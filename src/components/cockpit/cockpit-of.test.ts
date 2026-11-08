@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { activity, liveConversation } from '../../test/conversation-activity';
+import type { EpicLink } from '../../tickets/epic-link';
 import type { Ticket } from '../../tickets/tickets';
 import { cockpitOf } from './cockpit-of';
 
@@ -337,7 +338,13 @@ describe('cockpitOf', () => {
   });
 
   it("keeps a child's Epic on its row", () => {
-    const epic = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const epic = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     const [row] = cockpitOf(
       [ticket({ number: 1, labels: ['ready-for-agent'], epic })],
       activity(),
@@ -363,7 +370,13 @@ describe('cockpitOf', () => {
   });
 
   describe('Epics', () => {
-    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const link: EpicLink = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal',
+      claim: null,
+      hasPullRequest: false,
+    };
     const child = (
       number: number,
       status: Ticket['status'],
@@ -418,6 +431,85 @@ describe('cockpitOf', () => {
         },
       ]);
       expect(numbers(cockpit.inFlight)).toEqual([4]);
+    });
+
+    describe("children placed by their Epic's run (T1143)", () => {
+      const started = (number: number, epic = link) =>
+        ticket({ number, status: 'In progress', epic });
+      const twoStarted = [child(2, 'In progress'), child(5, 'In progress')];
+
+      it('counts an Epic in Review with its two In progress children as one Needs you row', () => {
+        const cockpit = cockpitOf(
+          [
+            epic({
+              claim: null,
+              externalReferences: [pullRequest(143)],
+              children: twoStarted,
+            }),
+            started(2, { ...link, hasPullRequest: true }),
+            started(5, { ...link, hasPullRequest: true }),
+          ],
+          activity(),
+        );
+
+        expect(numbers(cockpit.needsYou.review)).toEqual([50]);
+        expect(cockpit.needsYou.actionNeeded).toEqual([]);
+        expect(cockpit.needsYou.count).toBe(1);
+        expect(cockpit.needsYou.review[0]).toMatchObject({
+          childNeedsYou: false,
+          children: [
+            { number: 2, state: 'review' },
+            { number: 5, state: 'review' },
+          ],
+        });
+      });
+
+      it("shows children running while their Epic's run goes, with no rows of their own", () => {
+        const cockpit = cockpitOf(
+          [epic({ claim: null, children: twoStarted }), started(2), started(5)],
+          activity({ live: { 50: liveConversation({ state: 'running' }) } }),
+        );
+
+        expect(cockpit.needsYou.count).toBe(0);
+        expect(numbers(cockpit.inFlight)).toEqual([]);
+        expect(
+          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+        ).toEqual([
+          [2, 'running'],
+          [5, 'running'],
+        ]);
+      });
+
+      it("folds the children of a stalled Epic into the Epic's Action needed row", () => {
+        const cockpit = cockpitOf(
+          [epic({ claim: null, children: twoStarted }), started(2), started(5)],
+          activity(),
+        );
+
+        expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([50]);
+        expect(cockpit.needsYou.count).toBe(1);
+      });
+
+      it('keeps a Needs you row for a child whose own Conversation needs the User', () => {
+        const cockpit = cockpitOf(
+          [
+            epic({ children: twoStarted }),
+            started(2, { ...link, claim }),
+            started(5, { ...link, claim }),
+          ],
+          activity({ live: { 5: liveConversation({ state: 'waiting' }) } }),
+        );
+
+        expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([5]);
+        expect(cockpit.epics[0].childNeedsYou).toBe(true);
+      });
+
+      it('places a child whose Epic is on another Board by that Epic, in a row of its own', () => {
+        const cockpit = cockpitOf([started(2, { ...link, claim })], activity());
+
+        expect(numbers(cockpit.inFlight)).toEqual([2]);
+        expect(cockpit.needsYou.count).toBe(0);
+      });
     });
 
     it('marks a child that needs you or is in review', () => {
@@ -791,7 +883,13 @@ describe('cockpitOf', () => {
       query,
       labels,
     });
-    const link = { number: 50, title: 'Epic', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Epic',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     const child = (number: number, title: string) => ({
       number,
       title,

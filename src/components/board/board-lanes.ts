@@ -1,4 +1,5 @@
 import type { LiveConversation } from '../../conversations/conversation-activity';
+import type { EpicLink } from '../../tickets/epic-link';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { Ticket } from '../../tickets/tickets';
 import { readyForAgent, readyForHuman } from '../../tickets/triage-labels';
@@ -11,11 +12,17 @@ export type BoardLane =
   | 'Your work'
   | 'Done';
 
-/** What the Lane of a Ticket is derived from. */
+/**
+ * What the Lane of a Ticket is derived from. A child's `epic` carries the
+ * run state it falls back to (T1143); without it, none.
+ */
 export type LaneInput = Pick<
   Ticket,
   'status' | 'labels' | 'claim' | 'externalReferences' | 'type' | 'children'
->;
+> & { epic?: EpicLink | null };
+
+/** What a section is derived from: a Claim and whether there is a PR reference. */
+type RunState = { claim: Ticket['claim']; hasPullRequest: boolean };
 
 /** The sections of the In progress Lane (added with the run state, T1064). */
 export type InProgressSection = 'Action needed' | 'Running' | 'Review';
@@ -34,14 +41,13 @@ export type LanePlacement = {
  * stalled and needs action.
  */
 function sectionOf(
-  ticket: Pick<Ticket, 'claim' | 'externalReferences'>,
+  { claim, hasPullRequest }: RunState,
   live: LiveConversation | undefined,
 ): InProgressSection {
-  const hasPullRequest = ticket.externalReferences.some(isPullRequestReference);
   if (live?.state === 'running') {
     return 'Running';
   }
-  if (live?.state === 'idle' && hasPullRequest && !ticket.claim) {
+  if (live?.state === 'idle' && hasPullRequest && !claim) {
     return 'Review';
   }
   if (live) {
@@ -50,7 +56,31 @@ function sectionOf(
   if (hasPullRequest) {
     return 'Review';
   }
-  return ticket.claim ? 'Running' : 'Action needed';
+  return claim ? 'Running' : 'Action needed';
+}
+
+const ownRunState = (ticket: LaneInput): RunState => ({
+  claim: ticket.claim,
+  hasPullRequest: ticket.externalReferences.some(isPullRequestReference),
+});
+
+/**
+ * Whether an In progress child takes its section from its Epic: it has no
+ * Claim, PR reference or live Conversation of its own, as the Epic workflow
+ * keeps all three on the Epic (T1143).
+ */
+export function inheritsSection(
+  ticket: LaneInput,
+  live?: LiveConversation,
+): boolean {
+  const own = ownRunState(ticket);
+  return (
+    ticket.status === 'In progress' &&
+    Boolean(ticket.epic) &&
+    live === undefined &&
+    own.claim === null &&
+    !own.hasPullRequest
+  );
 }
 
 /**
@@ -69,13 +99,22 @@ function isEmptyEpic(ticket: Pick<Ticket, 'type' | 'children'>) {
  * Queued (ready-for-agent) or Your work (ready-for-human). A ready-for-agent
  * Epic without children is in Intake, not Queued: it must be split first
  * (ADR 0027).
+ *
+ * An In progress child with no run state of its own is placed by its Epic's:
+ * the Epic's Claim, PR reference and `epicLive`, its live Conversation
+ * (T1143).
  */
 export function laneOf(
   ticket: LaneInput,
   live?: LiveConversation,
+  epicLive?: LiveConversation,
 ): LanePlacement {
   if (ticket.status === 'In progress') {
-    return { lane: 'In progress', section: sectionOf(ticket, live) };
+    const section =
+      ticket.epic && inheritsSection(ticket, live)
+        ? sectionOf(ticket.epic, epicLive)
+        : sectionOf(ownRunState(ticket), live);
+    return { lane: 'In progress', section };
   }
   if (ticket.status === 'Done') {
     return { lane: 'Done', section: null };
@@ -93,21 +132,30 @@ export function laneOf(
  * Whether a Ticket is stalled: it needs action with no live Conversation, so
  * it has no Claim and no PR reference either. It is the Glossary term for
  * the Action needed section; Back to Todo is offered more widely, see
- * `isParked`.
+ * `isParked`. A child with no run state of its own is stalled only when its
+ * Epic, with `epicLive`, is.
  */
-export function isStalled(ticket: LaneInput, live?: LiveConversation): boolean {
-  return live === undefined && laneOf(ticket).section === 'Action needed';
+export function isStalled(
+  ticket: LaneInput,
+  live?: LiveConversation,
+  epicLive?: LiveConversation,
+): boolean {
+  return (
+    live === undefined &&
+    laneOf(ticket, undefined, epicLive).section === 'Action needed'
+  );
 }
 
 /**
- * Whether a Ticket sits in the Review section: In progress with a PR
- * reference and no live Conversation. The drawer offers Merged there.
+ * Whether a Ticket sits in the Review section by its own PR reference: In
+ * progress with one and no live Conversation. The drawer offers Merged
+ * there; a child in Review by its Epic's PR is not, as Merged is the Epic's.
  */
 export function isInReview(
   ticket: LaneInput,
   live?: LiveConversation,
 ): boolean {
-  return laneOf(ticket, live).section === 'Review';
+  return laneOf({ ...ticket, epic: null }, live).section === 'Review';
 }
 
 /**

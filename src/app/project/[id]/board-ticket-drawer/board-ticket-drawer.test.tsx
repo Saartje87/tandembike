@@ -231,7 +231,15 @@ describe('BoardTicketDrawer', () => {
 
     expect(
       JSON.parse(screen.getByRole('dialog').dataset.epics ?? 'null'),
-    ).toEqual([{ number: epic.number, title: 'Checkout', color: 'red' }]);
+    ).toEqual([
+      {
+        number: epic.number,
+        title: 'Checkout',
+        color: 'red',
+        claim: null,
+        hasPullRequest: false,
+      },
+    ]);
   });
 
   it("links keys by the Reference templates of the Ticket's Project, after a move too", async () => {

@@ -4,7 +4,13 @@ import type { LiveConversation } from '../../conversations/conversation-activity
 import { liveConversation } from '../../test/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
-import { isInReview, isParked, isStalled, laneOf } from './board-lanes';
+import {
+  inheritsSection,
+  isInReview,
+  isParked,
+  isStalled,
+  laneOf,
+} from './board-lanes';
 
 const placed = (
   status: Status,
@@ -283,5 +289,91 @@ describe('isParked', () => {
     const epic = { ...base, type: 'Epic' as const };
     expect(isParked(epic, liveConversation({ state: 'running' }))).toBe(false);
     expect(isParked({ ...epic, status: 'Todo' })).toBe(false);
+  });
+});
+
+describe('a child of an Epic (T1143)', () => {
+  const epic = (
+    rest: { claim?: typeof claim | null; hasPullRequest?: boolean } = {},
+  ) => ({
+    number: 50,
+    title: 'Epic',
+    color: 'blue' as const,
+    claim: null,
+    hasPullRequest: false,
+    ...rest,
+  });
+  const childOf = (
+    link: ReturnType<typeof epic>,
+    rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
+  ) => ({
+    status: 'In progress' as const,
+    labels: [],
+    claim: null,
+    externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
+    epic: link,
+    ...rest,
+  });
+
+  it("takes its section from its Epic's Claim, PR reference and live Conversation", () => {
+    expect(laneOf(childOf(epic({ claim }))).section).toBe('Running');
+    expect(laneOf(childOf(epic({ hasPullRequest: true }))).section).toBe(
+      'Review',
+    );
+    expect(laneOf(childOf(epic())).section).toBe('Action needed');
+    expect(
+      laneOf(childOf(epic()), undefined, liveConversation({ state: 'running' }))
+        .section,
+    ).toBe('Running');
+    expect(
+      laneOf(
+        childOf(epic({ hasPullRequest: true })),
+        undefined,
+        liveConversation({ state: 'waiting' }),
+      ).section,
+    ).toBe('Action needed');
+  });
+
+  it('is placed by its own Claim, PR reference or live Conversation first', () => {
+    const inReview = epic({ hasPullRequest: true });
+    expect(laneOf(childOf(inReview, { claim })).section).toBe('Running');
+    expect(
+      laneOf(childOf(epic({ claim }), { externalReferences: [pullRequest] }))
+        .section,
+    ).toBe('Review');
+    expect(
+      laneOf(childOf(inReview), liveConversation({ state: 'waiting' })).section,
+    ).toBe('Action needed');
+  });
+
+  it('says whether its section is inherited', () => {
+    expect(inheritsSection(childOf(epic({ claim })))).toBe(true);
+    expect(inheritsSection(childOf(epic(), { claim }))).toBe(false);
+    expect(
+      inheritsSection(childOf(epic()), liveConversation({ state: 'idle' })),
+    ).toBe(false);
+    expect(inheritsSection({ ...childOf(epic()), epic: null })).toBe(false);
+    expect(inheritsSection({ ...childOf(epic()), status: 'Todo' })).toBe(false);
+  });
+
+  it('is not stalled while its Epic runs, and stalled when its Epic is', () => {
+    expect(isStalled(childOf(epic({ claim })))).toBe(false);
+    expect(
+      isStalled(
+        childOf(epic()),
+        undefined,
+        liveConversation({ state: 'running' }),
+      ),
+    ).toBe(false);
+    expect(isStalled(childOf(epic()))).toBe(true);
+  });
+
+  it("is not in Review for its Epic's PR: Merged belongs to the Epic", () => {
+    expect(isInReview(childOf(epic({ hasPullRequest: true })))).toBe(false);
+    expect(
+      isInReview(childOf(epic(), { externalReferences: [pullRequest] })),
+    ).toBe(true);
   });
 });

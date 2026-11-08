@@ -375,9 +375,18 @@ describe('Cockpit', () => {
 
   it("shows an In progress Epic In flight with its children's progress, opening to list them", async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
-      activity({ cost: { 50: 1, 31: 0.5 } }),
+      activity({
+        cost: { 50: 1, 31: 0.5 },
+        live: { 32: liveConversation({ state: 'waiting' }) },
+      }),
     );
-    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim,
+      hasPullRequest: false,
+    };
     const childOf = (number: number, status: Ticket['status']) => ({
       number,
       title: `Child ${number}`,
@@ -464,7 +473,13 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     renderCockpit(
       [
         ticket({
@@ -512,7 +527,13 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     renderCockpit([
       ticket({
         number: 50,
@@ -550,7 +571,13 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    const link = { number: 50, title: 'Big idea', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Big idea',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     renderCockpit([
       ticket({
         number: 50,
@@ -782,7 +809,13 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    const link = {
+      number: 50,
+      title: 'Cockpit',
+      color: 'teal' as const,
+      claim: null,
+      hasPullRequest: false,
+    };
     const childOf = (number: number, status: Ticket['status']) => ({
       number,
       title: `Child ${number}`,
@@ -824,7 +857,13 @@ describe('Cockpit', () => {
         number: 31,
         title: 'Child 31',
         status: 'Done',
-        epic: { number: 60, title: 'Shipped', color: 'pink' },
+        epic: {
+          number: 60,
+          title: 'Shipped',
+          color: 'pink',
+          claim: null,
+          hasPullRequest: false,
+        },
       }),
     ]);
 

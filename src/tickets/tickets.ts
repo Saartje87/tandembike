@@ -4051,7 +4051,10 @@ function withClaimAndLinks<Row extends { number: number }>(
   return withBlockers(db, withLabels(db, withEpics(db, withClaims)));
 }
 
-/** `rows` with each Ticket's Epic by number and title, in one query. */
+/**
+ * `rows` with each Ticket's Epic: its number, title and colour, and the
+ * Claim and PR reference its children fall back to (T1143).
+ */
 function withEpics<Row extends { epicNumber: number | null }>(
   db: DatabaseConnection,
   rows: Row[],
@@ -4059,7 +4062,7 @@ function withEpics<Row extends { epicNumber: number | null }>(
   const epicNumbers = [
     ...new Set(rows.flatMap(({ epicNumber }) => epicNumber ?? [])),
   ];
-  const epics = new Map(
+  const epicRows =
     epicNumbers.length === 0
       ? []
       : db
@@ -4067,11 +4070,25 @@ function withEpics<Row extends { epicNumber: number | null }>(
             number: tickets.number,
             title: tickets.title,
             color: tickets.color,
+            claimAgentRunId: tickets.claimAgentRunId,
+            claimAgentName: tickets.claimAgentName,
           })
           .from(tickets)
           .where(inArray(tickets.number, epicNumbers))
-          .all()
-          .map((epic) => [epic.number, epicLinkOf(epic)]),
+          .all();
+  const epics = new Map(
+    withExternalReferences(db, epicRows).map(
+      ({ claimAgentRunId, claimAgentName, ...epic }) => [
+        epic.number,
+        epicLinkOf({
+          ...epic,
+          claim:
+            claimAgentRunId === null
+              ? null
+              : { agentRunId: claimAgentRunId, agentName: claimAgentName },
+        }),
+      ],
+    ),
   );
   return rows.map(({ epicNumber, ...row }) => ({
     ...row,

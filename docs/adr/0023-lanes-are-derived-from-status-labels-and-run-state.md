@@ -4,6 +4,8 @@ Superseded in part by [ADR 0024](0024-the-board-is-one-column-and-a-drag-only-re
 
 Superseded in part by [ADR 0027](0027-an-epic-without-children-is-not-queued.md): a Todo Epic labelled `ready-for-agent` with no unarchived children is in Intake, not Todo (now Queued).
 
+Amended by [ADR 0028](0028-an-epic-child-runs-on-its-epics-run-state.md): an In progress child of an Epic with no run state of its own takes its section from its Epic's Claim, PR reference and live Conversation.
+
 The Board used to show one Lane per Status. The software factory (`docs/roadmap/software-factory.md`) needs more situations on the Board than three Statuses: a Todo Ticket still to be triaged, one ready for an Agent, one the User works on; later, an In progress Ticket that needs the User, is running, or waits for review. So a Lane is no longer a Status. The Board has five Lanes in a fixed order, Intake, Todo, In progress, For human and Done, and a pure function (`laneOf` in `src/components/board/board-lanes.ts`) derives the Lane of each Ticket from its Status, its triage state label and, in later Tickets, the run state of its Conversation:
 
 - Todo with `needs-triage`, `needs-info` or no state label is in Intake.

@@ -18,7 +18,13 @@ vi.mock('../../app/tickets/actions', () => ({
 const child = {
   number: 5,
   projectId: 1,
-  epic: { number: 4, title: 'Checkout', color: 'teal' } as EpicLink,
+  epic: {
+    number: 4,
+    title: 'Checkout',
+    color: 'teal',
+    claim: null,
+    hasPullRequest: false,
+  } as EpicLink,
 };
 
 describe('TicketEpic', () => {
@@ -66,8 +72,20 @@ describe('TicketEpic', () => {
 
   describe('picking an Epic', () => {
     const epics: EpicLink[] = [
-      { number: 4, title: 'Checkout', color: 'teal' },
-      { number: 8, title: 'Search', color: 'teal' },
+      {
+        number: 4,
+        title: 'Checkout',
+        color: 'teal',
+        claim: null,
+        hasPullRequest: false,
+      },
+      {
+        number: 8,
+        title: 'Search',
+        color: 'teal',
+        claim: null,
+        hasPullRequest: false,
+      },
     ];
     const options = (name: string) =>
       screen
@@ -166,7 +184,15 @@ describe('TicketEpic', () => {
       renderWithTheme(
         <TicketEpic
           ticket={child}
-          epics={[{ number: 4, title: 'Checkout', color: 'teal' }]}
+          epics={[
+            {
+              number: 4,
+              title: 'Checkout',
+              color: 'teal',
+              claim: null,
+              hasPullRequest: false,
+            },
+          ]}
         />,
       );
 

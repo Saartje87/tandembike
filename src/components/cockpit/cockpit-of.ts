@@ -11,6 +11,7 @@ import { isFiltering, ticketMatches } from '../board/board-filter';
 import {
   type BoardLane,
   type InProgressSection,
+  inheritsSection,
   laneOf,
 } from '../board/board-lanes';
 import { epicCost } from '../conversation-activity/epic-cost';
@@ -266,17 +267,41 @@ export function cockpitOf(
   // A child of a shown Epic is in its row, not a row of its own (Needs you aside).
   const isNested = (ticket: Ticket) =>
     ticket.epic !== null && shownEpics.has(ticket.epic.number);
+  const runningEpics = new Set(
+    allEpics
+      .filter(({ lane }) => lane === 'In progress')
+      .map(({ epic }) => epic.number),
+  );
+  // In Needs you too, when it is placed by its In progress Epic's run: the
+  // Epic's row, in Needs you or In flight, carries it (T1143).
+  const isFolded = ({
+    ticket,
+    inherited,
+  }: {
+    ticket: Ticket;
+    inherited: boolean;
+  }) =>
+    inherited && ticket.epic !== null && runningEpics.has(ticket.epic.number);
   const resolved = new Set(
     tickets
       .filter((ticket) => ticket.archived || ticket.status === 'Done')
       .map(({ number }) => number),
   );
+  // A child with no run state of its own is placed by its Epic's (T1143).
   const placed = shown
     .map((ticket) => ({
       ticket,
       live: activity.live[ticket.number],
     }))
-    .map((entry) => ({ ...entry, ...laneOf(entry.ticket, entry.live) }))
+    .map((entry) => ({
+      ...entry,
+      ...laneOf(
+        entry.ticket,
+        entry.live,
+        entry.ticket.epic ? activity.live[entry.ticket.epic.number] : undefined,
+      ),
+      inherited: inheritsSection(entry.ticket, entry.live),
+    }))
     .sort((left, right) => byPosition(left.ticket, right.ticket));
   const inLane = (lane: BoardLane) =>
     placed.filter((entry) => entry.lane === lane);
@@ -296,12 +321,15 @@ export function cockpitOf(
   const cost = (ticket: Ticket) => activity.cost[ticket.number] ?? 0;
   const inSection = (section: InProgressSection) =>
     inLane('In progress').filter((entry) => entry.section === section);
+  /** The section's Tickets that need the User in a row of their own. */
+  const needInSection = (section: InProgressSection) =>
+    inSection(section).filter((entry) => !isFolded(entry));
   const epicsIn = (section: InProgressSection) =>
     allEpics
       .filter((entry) => entry.section === section)
       .map(({ epic, live }) => ({ ticket: epic, live }));
   const actionNeeded = [
-    ...inSection('Action needed'),
+    ...needInSection('Action needed'),
     ...epicsIn('Action needed'),
   ]
     .map(({ ticket, live }) =>
@@ -312,7 +340,7 @@ export function cockpitOf(
       ),
     )
     .sort(longestWaitingFirst);
-  const review = [...inSection('Review'), ...epicsIn('Review')]
+  const review = [...needInSection('Review'), ...epicsIn('Review')]
     .map(({ ticket, live }) => needRowOf(ticket, live, 'review'))
     .sort(longestWaitingFirst);
   const needsYouNumbers = new Set(
