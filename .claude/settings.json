@@ -34,14 +34,14 @@
       "Bash(git log *)",
       "Bash(git fetch)",
       "Bash(git fetch *)",
-      "Bash(git worktree *)"
+      "Bash(git worktree *)",
+      "Bash(gh pr merge *)"
     ],
     "ask": [
       "Bash(git push origin main)",
       "Bash(git push origin main *)",
       "Bash(git push origin HEAD:main)",
-      "Bash(git push origin HEAD:main *)",
-      "Bash(gh pr merge *)"
+      "Bash(git push origin HEAD:main *)"
     ]
   }
 }
