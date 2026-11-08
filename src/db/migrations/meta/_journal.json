@@ -232,6 +232,13 @@
       "when": 1794145655838,
       "tag": "0032_sturdy_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1794145752802,
+      "tag": "0033_curious_trish_tilby",
+      "breakpoints": true
     }
   ]
 }

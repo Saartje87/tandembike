@@ -57,6 +57,10 @@ export const projects = sqliteTable('projects', {
     .default('default'),
   /** The model its runs start on; null is the User's default model. */
   runModel: text('run_model'),
+  /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
+  autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
+  /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
+  spendCeilingUsd: real('spend_ceiling_usd'),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()

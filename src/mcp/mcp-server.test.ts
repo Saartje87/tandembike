@@ -20,7 +20,9 @@ describe('MCP server and Project agent settings', () => {
     expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
       /repository|agent_setting|parallel|agent_mode/,
     );
-    expect(listed).not.toMatch(/repositoryPath|parallelRuns|agentMode|\/tmp/);
+    expect(listed).not.toMatch(
+      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|\/tmp/,
+    );
     await client.close();
   });
 });

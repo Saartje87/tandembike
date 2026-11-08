@@ -35,6 +35,8 @@ type AgentSettingsValues = {
   agentMode: boolean;
   runMode: AgentRunMode;
   runModel: string;
+  autopilot: boolean;
+  spendCeiling: string;
 };
 
 /**
@@ -77,6 +79,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       agentMode: settings.agentMode,
       runMode: settings.runMode,
       runModel: settings.runModel ?? '',
+      autopilot: settings.autopilot,
+      spendCeiling:
+        settings.spendCeilingUsd === null
+          ? ''
+          : String(settings.spendCeilingUsd),
     },
   });
   const hasPath = settings.repositoryPath !== null;
@@ -85,6 +92,10 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
   const runModelError = errors.runModel?.message;
+  const ceilingError = errors.spendCeiling?.message;
+  const ceilingId = useId();
+  const ceilingErrorId = useId();
+  const autopilotId = useId();
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
@@ -96,6 +107,9 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       agentMode: values.agentMode,
       runMode: values.runMode,
       runModel: values.runModel.trim() === '' ? null : values.runModel.trim(),
+      autopilot: values.autopilot,
+      spendCeilingUsd:
+        values.spendCeiling.trim() === '' ? null : Number(values.spendCeiling),
     });
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
@@ -116,8 +130,14 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       });
       return;
     }
-    const { repositoryPath, maxConcurrentRuns, agentMode, runMode, runModel } =
-      result.fieldErrors ?? {};
+    const {
+      repositoryPath,
+      maxConcurrentRuns,
+      agentMode,
+      runMode,
+      runModel,
+      spendCeilingUsd,
+    } = result.fieldErrors ?? {};
     if (repositoryPath) {
       setError('repositoryPath', { type: 'server', message: repositoryPath });
     }
@@ -136,7 +156,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     if (runModel) {
       setError('runModel', { type: 'server', message: runModel });
     }
+    if (spendCeilingUsd) {
+      setError('spendCeiling', { type: 'server', message: spendCeilingUsd });
+    }
     if (
+      !spendCeilingUsd &&
       !repositoryPath &&
       !maxConcurrentRuns &&
       !agentMode &&
@@ -237,6 +261,32 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               still change models itself.
             </Text>
             <FieldError id={runModelErrorId} reason={runModelError} />
+          </Stack>
+          <Stack gap={1}>
+            <Inline gap={2} alignY="center">
+              <Switch {...register('autopilot')} id={autopilotId} />
+              <Label htmlFor={autopilotId}>Autopilot</Label>
+            </Inline>
+            <Text tag="p" fontSize="small" color="muted">
+              While on, and the Project has an Active Cycle, Tandembike starts
+              runs for the Cycle's ready work by itself, as many as Parallel
+              runs allow. Turning it off leaves running runs alone.
+            </Text>
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={ceilingId}>Spend ceiling (USD)</Label>
+            <TextInput
+              {...register('spendCeiling')}
+              id={ceilingId}
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              placeholder="No ceiling"
+              aria-invalid={ceilingError ? true : undefined}
+              aria-describedby={ceilingError ? ceilingErrorId : undefined}
+            />
+            <FieldError id={ceilingErrorId} reason={ceilingError} />
           </Stack>
           {serverError && <Alert intent="danger">{serverError}</Alert>}
           <div>

@@ -180,6 +180,10 @@ export type ProjectAgentSettings = {
   runMode: AgentRunMode;
   /** The model its runs start on, or `null` for the User's default model. */
   runModel: string | null;
+  /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
+  autopilot: boolean;
+  /** What Autopilot may spend on one Cycle, in dollars; `null` while unset. */
+  spendCeilingUsd: number | null;
 };
 
 export const agentRunModes = ['default', 'auto'] as const;
@@ -217,6 +221,8 @@ const agentSettingsColumns = {
   agentMode: projects.agentMode,
   runMode: projects.runMode,
   runModel: projects.runModel,
+  autopilot: projects.autopilot,
+  spendCeilingUsd: projects.spendCeilingUsd,
 };
 
 /** Why `path` cannot be a repository path, or `undefined` when it can. */
@@ -1368,7 +1374,14 @@ export function createTickets(
         agentMode,
         runMode,
         runModel,
+        autopilot,
+        spendCeilingUsd,
       } = input;
+      const nextCeiling =
+        spendCeilingUsd === undefined
+          ? before.spendCeilingUsd
+          : spendCeilingUsd;
+      const nextAutopilot = autopilot ?? before.autopilot;
       const nextModel =
         runModel === undefined
           ? before.runModel
@@ -1403,6 +1416,13 @@ export function createTickets(
           runModel === undefined || nextModel === null || !/\s/.test(nextModel)
             ? undefined
             : 'Enter a model name without spaces.',
+        spendCeilingUsd:
+          nextCeiling !== null &&
+          !(Number.isFinite(nextCeiling) && nextCeiling > 0)
+            ? 'Enter an amount in dollars above 0.'
+            : nextAutopilot && nextCeiling === null
+              ? 'Set a Spend ceiling before turning on Autopilot.'
+              : undefined,
       });
       const settings = db
         .update(projects)
@@ -1414,6 +1434,8 @@ export function createTickets(
             nextPath === null ? false : (agentMode ?? before.agentMode),
           ...(runMode === undefined ? {} : { runMode }),
           runModel: nextModel,
+          autopilot: nextAutopilot,
+          spendCeilingUsd: nextCeiling,
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)

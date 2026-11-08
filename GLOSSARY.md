@@ -121,6 +121,14 @@ An exchange between the User and an Agent that Tandembike starts for them, about
 A Conversation is **open** until the User closes it, whatever its run is doing; closing stops its run and keeps its transcript.
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
+**Autopilot**:
+A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. It never retries and never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030.
+_Avoid_: Auto mode (that is the Agent run mode), scheduler
+
+**Eligible**:
+Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no Start Conversation running, waiting or idle on it.
+_Avoid_: Ready (that is the label), startable
+
 **Started by**:
 Who started a Conversation: the **User**, or **Autopilot**. Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
 _Avoid_: Owner, author, initiator

@@ -118,6 +118,17 @@ export async function setProjectAgentSettings(
             runModel:
               settings.runModel === null ? null : String(settings.runModel),
           }),
+      ...(settings.autopilot === undefined
+        ? {}
+        : { autopilot: Boolean(settings.autopilot) }),
+      ...(settings.spendCeilingUsd === undefined
+        ? {}
+        : {
+            spendCeilingUsd:
+              settings.spendCeilingUsd === null
+                ? null
+                : Number(settings.spendCeilingUsd),
+          }),
     });
     revalidatePath(boardRoute, 'layout');
     return {};

@@ -101,6 +101,8 @@ describe('setProjectAgentSettings', () => {
       agentMode: true,
       runMode: 'auto',
       runModel: 'claude-opus-5-5',
+      autopilot: false,
+      spendCeilingUsd: null,
     });
     expect(revalidatePath).toHaveBeenCalled();
   });
@@ -136,6 +138,34 @@ describe('setProjectAgentSettings run mode', () => {
     expect(result).toMatchObject({
       ok: false,
       fieldErrors: { runMode: 'Choose default or auto.' },
+    });
+  });
+});
+
+describe('setProjectAgentSettings Autopilot', () => {
+  it('saves the switch with a ceiling, and refuses the switch without one on the ceiling field', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const refused = await setProjectAgentSettings({
+      projectId: project.id,
+      autopilot: true,
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      fieldErrors: { spendCeilingUsd: expect.any(String) },
+    });
+
+    const saved = await setProjectAgentSettings({
+      projectId: project.id,
+      autopilot: true,
+      spendCeilingUsd: 20,
+    });
+    expect(saved).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      autopilot: true,
+      spendCeilingUsd: 20,
     });
   });
 });

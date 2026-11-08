@@ -20,6 +20,8 @@ const unset: ProjectAgentSettings = {
   agentMode: false,
   runMode: 'default',
   runModel: null,
+  autopilot: false,
+  spendCeilingUsd: null,
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -77,6 +79,8 @@ describe('AgentSettingsForm', () => {
         agentMode: false,
         runMode: 'default',
         runModel: null,
+        autopilot: false,
+        spendCeilingUsd: null,
       }),
     );
   });
@@ -102,6 +106,8 @@ describe('AgentSettingsForm', () => {
         agentMode: true,
         runMode: 'default',
         runModel: null,
+        autopilot: false,
+        spendCeilingUsd: null,
       }),
     );
   });
@@ -126,6 +132,44 @@ describe('AgentSettingsForm', () => {
           runModel: 'claude-opus-5-5',
         }),
       ),
+    );
+  });
+
+  it('saves Autopilot with its Spend ceiling in dollars', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(screen.getByRole('switch', { name: 'Autopilot' })).not.toBeChecked();
+    await userEvent.type(screen.getByLabelText('Spend ceiling (USD)'), '25.5');
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autopilot: true, spendCeilingUsd: 25.5 }),
+      ),
+    );
+  });
+
+  it('sends no ceiling when the field is empty, and shows the refusal on it', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Set a Spend ceiling before turning on Autopilot.',
+      fieldErrors: {
+        spendCeilingUsd: 'Set a Spend ceiling before turning on Autopilot.',
+      },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText(
+        'Set a Spend ceiling before turning on Autopilot.',
+      ),
+    ).toBeInTheDocument();
+    expect(setProjectAgentSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ autopilot: true, spendCeilingUsd: null }),
     );
   });
 

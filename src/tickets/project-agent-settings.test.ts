@@ -22,7 +22,67 @@ describe("A Project's agent settings", () => {
       agentMode: false,
       runMode: 'default',
       runModel: null,
+      autopilot: false,
+      spendCeilingUsd: null,
     });
+  });
+
+  it('turn Autopilot on only with a Spend ceiling, and keep the ceiling while it is on', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    const refused = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { autopilot: true }),
+    );
+    expect(refused).toBeInstanceOf(ValidationError);
+    expect((refused as ValidationError).fieldErrors).toHaveProperty(
+      'spendCeilingUsd',
+    );
+    expect(tickets.getProjectAgentSettings(project.id).autopilot).toBe(false);
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autopilot: true,
+        spendCeilingUsd: 25.5,
+      }),
+    ).toMatchObject({ autopilot: true, spendCeilingUsd: 25.5 });
+
+    const cleared = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: null }),
+    );
+    expect((cleared as ValidationError).fieldErrors).toHaveProperty(
+      'spendCeilingUsd',
+    );
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      autopilot: true,
+      spendCeilingUsd: 25.5,
+    });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autopilot: false,
+        spendCeilingUsd: null,
+      }),
+    ).toMatchObject({ autopilot: false, spendCeilingUsd: null });
+  });
+
+  it('refuse a Spend ceiling that is not a positive number', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    for (const spendCeilingUsd of [
+      0,
+      -3,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, { spendCeilingUsd }),
+      );
+      expect((error as ValidationError).fieldErrors).toHaveProperty(
+        'spendCeilingUsd',
+      );
+    }
   });
 
   it('set and change the run mode and the run model, and clear the model', () => {
