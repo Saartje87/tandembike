@@ -31,6 +31,7 @@ export type AgentSettingsFormProps = {
 
 type AgentSettingsValues = {
   repositoryPath: string;
+  checkCommand: string;
   parallelRuns: boolean;
   maxConcurrentRuns: number;
   agentMode: boolean;
@@ -43,6 +44,7 @@ type AgentSettingsValues = {
 /** The form field each field of a refusal names. */
 const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   repositoryPath: 'repositoryPath',
+  checkCommand: 'checkCommand',
   maxConcurrentRuns: 'maxConcurrentRuns',
   agentMode: 'agentMode',
   runMode: 'runMode',
@@ -69,6 +71,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const parallelId = useId();
   const modeId = useId();
   const pathErrorId = useId();
+  const checkId = useId();
+  const checkErrorId = useId();
   const capId = useId();
   const capErrorId = useId();
   const modeReasonId = useId();
@@ -85,6 +89,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   } = useForm<AgentSettingsValues>({
     defaultValues: {
       repositoryPath: settings.repositoryPath ?? '',
+      checkCommand: settings.checkCommand ?? '',
       parallelRuns: settings.parallelRuns,
       maxConcurrentRuns: settings.maxConcurrentRuns,
       agentMode: settings.agentMode,
@@ -99,6 +104,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   });
   const hasPath = settings.repositoryPath !== null;
   const pathError = errors.repositoryPath?.message;
+  const checkError = errors.checkCommand?.message;
   const capError = errors.maxConcurrentRuns?.message;
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
@@ -113,6 +119,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     const result = await setProjectAgentSettings({
       projectId,
       repositoryPath: values.repositoryPath,
+      checkCommand:
+        values.checkCommand.trim() === '' ? null : values.checkCommand,
       parallelRuns: values.parallelRuns,
       maxConcurrentRuns: Number(values.maxConcurrentRuns),
       agentMode: values.agentMode,
@@ -170,6 +178,23 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={pathError ? pathErrorId : undefined}
             />
             <FieldError id={pathErrorId} reason={pathError} />
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={checkId}>Check command</Label>
+            <TextInput
+              {...register('checkCommand')}
+              id={checkId}
+              placeholder="npm run check"
+              autoComplete="off"
+              aria-invalid={checkError ? true : undefined}
+              aria-describedby={checkError ? checkErrorId : undefined}
+            />
+            <Text tag="p" fontSize="small" color="muted">
+              The command that defines green for the repository. Start runs must
+              see it pass before they open a pull request; leave empty to follow
+              the repository's own instructions.
+            </Text>
+            <FieldError id={checkErrorId} reason={checkError} />
           </Stack>
           {hasPath && (
             <>

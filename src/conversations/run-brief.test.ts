@@ -30,3 +30,41 @@ describe('runBrief for a Retro', () => {
     expect(brief).not.toMatch(/\bT\d+\b|\$\d|Todo|In progress/);
   });
 });
+
+describe('runBrief and the Check command', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: 7,
+    ticketTitle: 'Fix it',
+    ticketType: 'Ticket' as const,
+    projectName: 'Website',
+    parallelRuns: false,
+    runMode: 'default' as const,
+  };
+
+  it('tells a Start run to run the command and see it pass before a PR', () => {
+    const brief = runBrief({
+      ...base,
+      intent: 'start',
+      checkCommand: 'npm run check',
+    });
+
+    expect(brief).toContain('`npm run check`');
+    expect(brief).toMatch(/see it pass before you open a pull request/);
+  });
+
+  it('tells a Start run with none to follow the repository instructions', () => {
+    const brief = runBrief({ ...base, intent: 'start', checkCommand: null });
+
+    expect(brief).toContain('no Check command');
+    expect(brief).toContain("repository's own instructions");
+  });
+
+  it('leaves other intents without a Check command line', () => {
+    for (const intent of ['triage', 'ask', 'setup'] as const) {
+      expect(
+        runBrief({ ...base, intent, checkCommand: 'npm run check' }),
+      ).not.toContain('Check command');
+    }
+  });
+});

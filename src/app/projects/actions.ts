@@ -102,6 +102,14 @@ export async function setProjectAgentSettings(
       ...(settings.repositoryPath === undefined
         ? {}
         : { repositoryPath: settings.repositoryPath }),
+      ...(settings.checkCommand === undefined
+        ? {}
+        : {
+            checkCommand:
+              settings.checkCommand === null
+                ? null
+                : String(settings.checkCommand),
+          }),
       ...(settings.parallelRuns === undefined
         ? {}
         : { parallelRuns: Boolean(settings.parallelRuns) }),

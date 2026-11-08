@@ -9,7 +9,10 @@ describe('MCP server and Project agent settings', () => {
   it('offers no tool for them and never shows the repository path', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: '/tmp',
+      checkCommand: 'npm run check',
+    });
     const client = await connectMcpClient(tickets);
 
     const { tools } = await client.listTools();
@@ -21,7 +24,7 @@ describe('MCP server and Project agent settings', () => {
       /repository|agent_setting|parallel|agent_mode/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|npm run check|\/tmp/,
     );
     await client.close();
   });

@@ -469,6 +469,7 @@ export function createConversations({
               ? null
               : tickets.getCycle(conversation.retroCycleId),
           parallelRuns: settings.parallelRuns,
+          checkCommand: settings.checkCommand,
           runMode: settings.runMode,
           defaults: {
             cycleId: conversation.defaultCycleId,

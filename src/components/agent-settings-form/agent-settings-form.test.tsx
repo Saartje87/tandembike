@@ -15,6 +15,7 @@ vi.mock('../../app/projects/actions', () => ({
 
 const unset: ProjectAgentSettings = {
   repositoryPath: null,
+  checkCommand: null,
   parallelRuns: false,
   maxConcurrentRuns: 3,
   agentMode: false,
@@ -74,6 +75,7 @@ describe('AgentSettingsForm', () => {
       expect(setProjectAgentSettings).toHaveBeenCalledWith({
         projectId: 3,
         repositoryPath: '/repo',
+        checkCommand: null,
         parallelRuns: false,
         maxConcurrentRuns: 3,
         agentMode: false,
@@ -82,6 +84,45 @@ describe('AgentSettingsForm', () => {
         autopilot: false,
         spendCeilingUsd: null,
       }),
+    );
+  });
+
+  it('shows the saved Check command and saves an edit of it', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, checkCommand: 'npm run check' }}
+      />,
+    );
+
+    const field = screen.getByLabelText('Check command');
+    expect(field).toHaveValue('npm run check');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'make test');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ projectId: 3, checkCommand: 'make test' }),
+      ),
+    );
+  });
+
+  it('saves a cleared Check command as null', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, checkCommand: 'npm test' }}
+      />,
+    );
+
+    await userEvent.clear(screen.getByLabelText('Check command'));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ checkCommand: null }),
+      ),
     );
   });
 
@@ -101,6 +142,7 @@ describe('AgentSettingsForm', () => {
       expect(setProjectAgentSettings).toHaveBeenCalledWith({
         projectId: 3,
         repositoryPath: '/repo',
+        checkCommand: null,
         parallelRuns: true,
         maxConcurrentRuns: 5,
         agentMode: true,

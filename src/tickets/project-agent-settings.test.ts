@@ -17,6 +17,7 @@ describe("A Project's agent settings", () => {
 
     expect(tickets.getProjectAgentSettings(project.id)).toEqual({
       repositoryPath: null,
+      checkCommand: null,
       parallelRuns: false,
       maxConcurrentRuns: 3,
       agentMode: false,
@@ -25,6 +26,25 @@ describe("A Project's agent settings", () => {
       autopilot: false,
       spendCeilingUsd: null,
     });
+  });
+
+  it('save the Check command trimmed and clear it when empty', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        checkCommand: '  npm run check  ',
+      }).checkCommand,
+    ).toBe('npm run check');
+    expect(
+      tickets.setProjectAgentSettings(project.id, { runMode: 'auto' })
+        .checkCommand,
+    ).toBe('npm run check');
+    expect(
+      tickets.setProjectAgentSettings(project.id, { checkCommand: '   ' })
+        .checkCommand,
+    ).toBeNull();
   });
 
   it('turn Autopilot on only with a Spend ceiling, and keep the ceiling while it is on', () => {
