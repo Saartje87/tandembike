@@ -569,7 +569,7 @@ export function createMcpServer(
     'list_tickets',
     {
       title: 'List Tickets',
-      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin and/or containing a search query. Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels, blocked (whether any Blocker is unresolved) and epicNumber (the Epic it is a child of, the same number the epicNumber filter takes, or null), plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it. Add description: false to leave each description out and keep everything else, which is much shorter when you need a Project's structure, labels or criteria.`,
+      description: `Find Tickets, oldest-created first or in Board order (sort), optionally only those in one Project (by projectId or projectName), in one or more Statuses, only Tickets or only Epics (type: "Epic" lists a Project's Epics without detail: "full"), only the children of one Epic (epicNumber lists an Epic's children with their Statuses and blocked flags, without get_ticket's description), with given labels, with any of given External references, split from one Origin, containing a search query and/or created or changed since a time (changedSince). Returns { tickets, nextCursor, total }: a page of at most limit Tickets, the cursor for the next page, or null on the last page, and total, how many Tickets match the filters over all pages, whatever the cursor. An empty tickets list means nothing matched. By default each Ticket is a summary: its number, title, status, type (Ticket or Epic), labels, blocked (whether any Blocker is unresolved), epicNumber (the Epic it is a child of, the same number the epicNumber filter takes, or null) and updatedAt, plus projectId when the list is not for one Project. With detail: "full", each is the whole Ticket: also its description, type, color, epic, blockedBy, claim, External references, acceptance criteria, children, Board position, archived flag and timestamps, as get_ticket returns it. Add description: false to leave each description out and keep everything else, which is much shorter when you need a Project's structure, labels or criteria.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -651,7 +651,7 @@ export function createMcpServer(
           .enum(ticketDetails)
           .optional()
           .describe(
-            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels, blocked and epicNumber, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
+            'How much of each Ticket to list. "summary", the default: number, title, status, type, labels, blocked, epicNumber and updatedAt, plus projectId unless the list is for one Project. "full": the whole Ticket, as get_ticket returns it.',
           ),
         description: z
           .boolean()
@@ -675,6 +675,12 @@ export function createMcpServer(
           .optional()
           .describe(
             'Only list the Tickets planned into this Cycle, or with null, the Backlog: those in no Prepared or Active Cycle, except the Done Tickets of an Archived Cycle, which stay with it.',
+          ),
+        changedSince: z
+          .string()
+          .optional()
+          .describe(
+            'Only list Tickets created or changed at or after this ISO 8601 timestamp with a time zone, such as 2026-11-07T23:05:00Z. An Epic also counts as changed when one of its children was created, attached, detached or changed since. Use it to check what other sessions changed before publishing work, such as list_tickets({ projectName, cycleId, type: "Epic", changedSince }) with the time you started.',
           ),
       },
       annotations: { readOnlyHint: true },

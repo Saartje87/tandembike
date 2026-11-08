@@ -5,6 +5,7 @@ import {
   count,
   eq,
   gt,
+  gte,
   inArray,
   isNotNull,
   isNull,
@@ -16,6 +17,7 @@ import {
   type SQLWrapper,
   sql,
 } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
@@ -578,6 +580,12 @@ export type FindTicketsInput = ListTicketsFilter &
     detail?: TicketDetail;
     /** The order to list them in; defaults to `created`. */
     sort?: TicketSort;
+    /**
+     * Only Tickets created or changed at or after this ISO 8601 timestamp,
+     * which needs a time zone. An Epic also counts as changed when one of its
+     * children was created, attached, detached or changed since.
+     */
+    changedSince?: string;
   };
 
 /**
@@ -608,11 +616,11 @@ export type TicketSummary = Pick<
   Partial<Pick<Ticket, 'projectId'>>;
 
 /**
- * A `TicketSummary` as `list_tickets` lists it: always with its type, and
- * with `epicNumber`, the Epic it is a child of, or `null`.
+ * A `TicketSummary` as `list_tickets` lists it: always with its type and
+ * updated time, and with `epicNumber`, the Epic it is a child of, or `null`.
  */
 export type ListedTicketSummary = TicketSummary &
-  Pick<Ticket, 'type'> & { epicNumber: number | null };
+  Pick<Ticket, 'type' | 'updatedAt'> & { epicNumber: number | null };
 
 /** `ticket` as a `TicketSummary`, without its Project. */
 export function ticketSummary({
@@ -1228,6 +1236,7 @@ const summaryColumns = {
   type: tickets.type,
   projectId: tickets.projectId,
   epicNumber: tickets.epicNumber,
+  updatedAt: tickets.updatedAt,
 };
 
 const relatedTicketColumns = {
@@ -1591,7 +1600,12 @@ export function createTickets(
               .where(eq(tickets.number, input.cursor))
               .get();
       const order = input.sort === 'position' ? boardOrder : oldestCreatedOrder;
+      const changedSince =
+        input.changedSince === undefined
+          ? undefined
+          : parseTimestamp(input.changedSince);
       throwFieldErrors({
+        changedSince: changedSince === null ? changedSinceRule : undefined,
         limit: checkLimit(limit),
         status:
           input.status === undefined
@@ -1617,6 +1631,7 @@ export function createTickets(
         references === undefined
           ? undefined
           : withAnyExternalReference(db, references),
+        changedSince == null ? undefined : changedAtOrAfter(db, changedSince),
       );
       const numbers = db
         .select({ number: tickets.number })
@@ -3478,6 +3493,56 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
   );
 }
 
+const changedSinceRule =
+  'Give changedSince as an ISO 8601 timestamp with a time zone, such as 2026-11-07T23:05:00Z.';
+
+/**
+ * An ISO 8601 date-time with a time zone (`Z` or an offset), as a Date, or
+ * `null` when `text` is not one or names no real moment, such as 30 February.
+ */
+function parseTimestamp(text: string): Date | null {
+  const match =
+    /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.exec(
+      text.trim(),
+    );
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day] = match.map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  const time = Date.parse(text.trim());
+  return date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    !Number.isNaN(time)
+    ? new Date(time)
+    : null;
+}
+
+/** The children an Epic is checked against for `changedSince`. */
+const changedChildren = alias(tickets, 'changed_children');
+
+/**
+ * Tickets created or changed at or after `since`, and Epics with a child
+ * that was. Attaching and detaching a child bump its Epic's updated time.
+ */
+function changedAtOrAfter(db: DatabaseConnection, since: Date) {
+  return or(
+    gte(tickets.updatedAt, since),
+    inArray(
+      tickets.number,
+      db
+        .select({ number: changedChildren.epicNumber })
+        .from(changedChildren)
+        .where(
+          and(
+            isNotNull(changedChildren.epicNumber),
+            gte(changedChildren.updatedAt, since),
+          ),
+        ),
+    ),
+  );
+}
+
 /** `status` as a list: one Status, or the Statuses given. */
 function statusList(status: Status | readonly Status[]): Status[] {
   return typeof status === 'string' ? [status] : [...status];
@@ -4065,7 +4130,10 @@ function inOrder<Row extends { number: number }>(
  */
 function summaries(
   db: DatabaseConnection,
-  rows: (Pick<Ticket, 'number' | 'title' | 'status' | 'type' | 'projectId'> & {
+  rows: (Pick<
+    Ticket,
+    'number' | 'title' | 'status' | 'type' | 'projectId' | 'updatedAt'
+  > & {
     epicNumber: number | null;
   })[],
   withProject: boolean,
@@ -4074,6 +4142,7 @@ function summaries(
     ...ticketSummary(row),
     type: row.type,
     epicNumber: row.epicNumber,
+    updatedAt: row.updatedAt,
     ...(withProject ? { projectId: row.projectId } : {}),
   }));
 }
