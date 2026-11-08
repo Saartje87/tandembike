@@ -44,16 +44,16 @@ An Epic is handed off, worked and delivered as one unit:
 
 ## Feedback as Tickets
 
-Friction you hit while working a Ticket becomes a Ticket, not a section of your reply: the Blocks and process feedback rules in `AGENTS.md` point here. The Ticket is the hand-off; a reply nobody reads loses it.
+Friction you hit while working a Ticket becomes a Ticket, because a reply nobody reads loses it: the Blocks and process feedback rules in `AGENTS.md` point here. File the Tickets at the end of the task, before you release your Claim or end the Conversation; nothing you learned survives it.
 
 1. Check each claim against the installed types or the docs first.
 2. Pick the Project the item is about: `@blockle/blocks` for Blocks friction, `Tandembike` for process and tooling friction.
 3. Search that Project with `list_tickets` (a `query`, `includeArchived: true`). When a Ticket already covers the item, add a comment with the new repro and the workaround you used, and stop.
 4. Otherwise create one Ticket per item in that Project, outside any Cycle or Epic. Its description has Problem, Repro, Expected, Workaround and Question sections; its acceptance criteria are taken from Expected. Labels: `needs-triage`, `bug` (a defect in existing behaviour) or `enhancement`, and a source label: `from:tandembike` for Blocks Tickets, `from:agent-run` for process Tickets.
-5. Make its first comment "Found while working T42" (the Ticket you were on).
-6. End your reply with one line per Ticket you filed or commented on, and nothing when there was none.
+5. Make its first comment "Found while working T<number>", naming the Ticket you were on.
+6. Close your final message with one line per Ticket you filed or commented on, as a pointer to it, and nothing when there was none.
 
-The factory never acts on these Tickets: `ready-for-agent` stays the User's decision.
+The factory leaves these Tickets alone, and only the User decides to label one `ready-for-agent`.
 
 ## Triage and Blockers
 
