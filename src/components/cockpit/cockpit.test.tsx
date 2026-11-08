@@ -335,6 +335,123 @@ describe('Cockpit', () => {
     expect(within(section('Needs you')).getAllByText('3')[0]).toBeVisible();
   });
 
+  it("shows each row's labels in every section, leaving out the state labels", async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <Cockpit
+          projectId={3}
+          cycle={{ id: 9, title: 'Factory Board' }}
+          tickets={[
+            ticket({
+              number: 20,
+              title: 'Filed bug',
+              labels: ['needs-triage', 'bug', 'from:tandembike'],
+            }),
+            ticket({
+              number: 7,
+              title: 'Status line',
+              status: 'In progress',
+              claim,
+              labels: ['enhancement'],
+            }),
+            ticket({
+              number: 9,
+              title: 'Pick a ceiling',
+              labels: ['ready-for-human', 'docs'],
+            }),
+            ticket({
+              number: 10,
+              title: 'Cache the Board',
+              labels: ['ready-for-agent', 'performance'],
+            }),
+            ticket({
+              number: 11,
+              title: 'Old work',
+              status: 'Done',
+              labels: ['bug', 'wontfix'],
+            }),
+          ]}
+          archived={[
+            ticket({
+              number: 14,
+              title: 'Gone',
+              archived: true,
+              labels: ['wontfix', 'idea'],
+            }),
+          ]}
+          runSlots={{ used: 1, cap: 3 }}
+        />
+      </ConversationActivityProvider>,
+    );
+
+    const labelsIn = (name: string) =>
+      within(section(name))
+        .getAllByRole('list', { name: 'Labels' })
+        .map((list) =>
+          within(list)
+            .getAllByRole('listitem')
+            .map((item) => item.textContent),
+        );
+    expect(labelsIn('Intake')).toEqual([['bug', 'from:tandembike']]);
+    expect(labelsIn('In flight')).toEqual([['enhancement']]);
+    expect(labelsIn('Your work')).toEqual([['docs']]);
+    expect(labelsIn('Queued')).toEqual([['performance']]);
+    expect(labelsIn('Done')).toEqual([['bug']]);
+    expect(labelsIn('Archived')).toEqual([['idea']]);
+    // Intake keeps its triage tag, after the labels, and shows it once.
+    const intakeRow = within(section('Intake')).getAllByRole('listitem')[0];
+    expect(within(intakeRow).getAllByText('needs-triage')).toHaveLength(1);
+    expect(
+      within(intakeRow)
+        .getByText('bug')
+        .compareDocumentPosition(within(intakeRow).getByText('needs-triage')),
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    // Label tags are not links or buttons.
+    for (const list of screen.getAllByRole('list', { name: 'Labels' })) {
+      expect(within(list).queryByRole('link')).not.toBeInTheDocument();
+      expect(within(list).queryByRole('button')).not.toBeInTheDocument();
+    }
+  });
+
+  it('shows at most two labels on a row, then a tag naming the rest', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([
+      ticket({
+        number: 7,
+        title: 'Status line',
+        status: 'In progress',
+        claim,
+        labels: ['bug', 'ui', 'from:agent-run', 'docs'],
+      }),
+    ]);
+
+    const list = within(section('In flight')).getByRole('list', {
+      name: 'Labels',
+    });
+    const items = within(list).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual(['bug', 'ui', '+2']);
+    expect(items[2]).toHaveAccessibleName(
+      '2 more labels: from:agent-run, docs',
+    );
+    expect(items[2]).toHaveAttribute('title', 'from:agent-run, docs');
+  });
+
+  it('renders no label list on a row without labels to show', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit();
+
+    expect(
+      screen.queryByRole('list', { name: 'Labels' }),
+    ).not.toBeInTheDocument();
+  });
+
   it('says an Intake Epic without children is ready for an Agent once split (T1139)', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,

@@ -69,6 +69,7 @@ import {
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
+import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
 import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
@@ -86,6 +87,7 @@ import {
   type NeedKind,
   type NeedRow,
   type QueuedRow,
+  rowOf,
 } from './cockpit-of';
 import { isSelectClick, type SelectMode, selectModeOf } from './select-click';
 import { useBoardFilter } from './use-board-filter';
@@ -299,7 +301,7 @@ const TicketRow: FC<TicketRowProps> = ({
     selection.onSelect(selectModeOf(event));
   };
   const content = (
-    <Inline gap={3} alignY="center" alignX="between">
+    <Inline gap={3} alignY="center" alignX="between" flexWrap="nowrap">
       <Inline gap={2} alignY="center" minInlineSize={0} flex={1}>
         {selection && (
           <Checkbox
@@ -343,7 +345,10 @@ const TicketRow: FC<TicketRowProps> = ({
           </Text>
         </Stack>
       </Inline>
-      {end}
+      <Inline gap={2} alignY="center" flexWrap="nowrap" flexShrink={0}>
+        <LabelList labels={ticket.labels} max={2} />
+        {end}
+      </Inline>
     </Inline>
   );
   return (
@@ -1178,13 +1183,7 @@ export const Cockpit: FC<CockpitProps> = ({
                 <TicketRow
                   key={ticket.number}
                   muted
-                  ticket={{
-                    number: ticket.number,
-                    title: ticket.title,
-                    epic: ticket.epic,
-                    updatedAt: ticket.updatedAt,
-                    color: ticket.color,
-                  }}
+                  ticket={rowOf(ticket)}
                   href={hrefOf(ticket.number)}
                   icon="archive-box"
                   line={`Archived · ${ticket.type === 'Epic' ? 'Epic' : 'Ticket'} · ${age(ticket.updatedAt)} ago`}

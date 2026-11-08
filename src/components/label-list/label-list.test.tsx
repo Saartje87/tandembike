@@ -29,6 +29,39 @@ describe('LabelList', () => {
     );
   });
 
+  it('shows at most `max` labels, then one tag naming the rest', () => {
+    renderWithTheme(
+      <LabelList labels={['bug', 'from:agent-run', 'ui', 'docs']} max={2} />,
+    );
+
+    const items = within(
+      screen.getByRole('list', { name: 'Labels' }),
+    ).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual([
+      'bug',
+      'from:agent-run',
+      '+2',
+    ]);
+    expect(items[2]).toHaveAccessibleName('2 more labels: ui, docs');
+    expect(items[2]).toHaveAttribute('title', 'ui, docs');
+  });
+
+  it('names a single hidden label in the singular', () => {
+    renderWithTheme(<LabelList labels={['bug', 'ui', 'docs']} max={2} />);
+
+    expect(screen.getByText('+1')).toHaveAccessibleName('1 more label: docs');
+  });
+
+  it('shows no overflow tag when the labels fit `max`', () => {
+    renderWithTheme(<LabelList labels={['bug', 'ui']} max={2} />);
+
+    expect(
+      within(screen.getByRole('list', { name: 'Labels' }))
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual(['bug', 'ui']);
+  });
+
   it('shows nothing without labels', () => {
     renderWithTheme(<LabelList labels={[]} />);
 

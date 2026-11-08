@@ -11,6 +11,11 @@ export type LabelListProps = {
   name?: string;
   /** When given, each label gets a button that removes it. */
   onRemove?: (label: string) => void;
+  /**
+   * When given, the list shows at most this many labels on one line, then a
+   * `+N` tag whose accessible name and tooltip list the rest.
+   */
+  max?: number;
 };
 
 /** A Ticket's labels as small pills; nothing when it has none. */
@@ -18,15 +23,26 @@ export const LabelList: FC<LabelListProps> = ({
   labels,
   name = 'Labels',
   onRemove,
+  max,
 }) => {
   if (labels.length === 0) {
     return null;
   }
 
+  const shown = max === undefined ? labels : labels.slice(0, max);
+  const hidden = labels.slice(shown.length);
+  const hiddenText = hidden.join(', ');
+
   return (
-    <Inline gap={1} flexWrap="wrap" listStyle="none" role="list" asChild>
+    <Inline
+      gap={1}
+      flexWrap={max === undefined ? 'wrap' : 'nowrap'}
+      listStyle="none"
+      role="list"
+      asChild
+    >
       <ul aria-label={name}>
-        {labels.map((label) => (
+        {shown.map((label) => (
           <Tag
             key={label}
             asChild
@@ -49,6 +65,16 @@ export const LabelList: FC<LabelListProps> = ({
             <li>{label}</li>
           </Tag>
         ))}
+        {hidden.length > 0 && (
+          <Tag asChild>
+            <li
+              aria-label={`${hidden.length} more ${hidden.length === 1 ? 'label' : 'labels'}: ${hiddenText}`}
+              title={hiddenText}
+            >
+              +{hidden.length}
+            </li>
+          </Tag>
+        )}
       </ul>
     </Inline>
   );
