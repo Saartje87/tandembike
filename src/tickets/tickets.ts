@@ -30,6 +30,10 @@ import {
   tickets,
 } from '../db/schema';
 import {
+  canonicalFolder,
+  repositoryRootOf,
+} from '../repository/repository-root';
+import {
   type ActivityEntry,
   type Actor,
   activityOf,
@@ -128,7 +132,10 @@ import {
   type ProjectIcon,
   projectIconRule,
 } from './project-icons';
-import { createReferenceTemplates } from './reference-templates';
+import {
+  createReferenceTemplates,
+  type ReferenceTemplateInput,
+} from './reference-templates';
 import {
   checkBatchNumbers,
   checkTitle,
@@ -156,7 +163,14 @@ export type Project = {
   createdAt: Date;
 };
 
-export type CreateProjectInput = { name: string };
+export type CreateProjectInput = {
+  name: string;
+  /** Saved with the Project, by the rules of the agent settings. */
+  repositoryPath?: string;
+  checkCommand?: string | null;
+  /** A Reference template added with the Project. */
+  referenceTemplate?: ReferenceTemplateInput;
+};
 
 export type RenameProjectInput = { name: string };
 
@@ -173,6 +187,8 @@ export type StyleProjectInput = {
 export type ProjectAgentSettings = {
   /** An absolute directory where runs start, or `null` while unset. */
   repositoryPath: string | null;
+  /** The command that defines green for the repository, or `null` while unset. */
+  checkCommand: string | null;
   /** Whether Start runs may overlap, each in a worktree of its own. */
   parallelRuns: boolean;
   /** The most Start runs running at once; at least 1. */
@@ -195,7 +211,15 @@ export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
  * A Project by its id, its name (ignoring case and surrounding spaces) or
  * both, when they name the same Project.
  */
-export type ProjectRef = { projectId?: number; projectName?: string };
+export type ProjectRef = {
+  projectId?: number;
+  projectName?: string;
+  /**
+   * A folder, such as an Agent's working directory: it names the Project whose
+   * repository contains it, when neither a name nor an id is given.
+   */
+  cwd?: string;
+};
 
 export type Tickets = ReturnType<typeof createTickets>;
 
@@ -217,6 +241,7 @@ const agentCommandColumns = {
 
 const agentSettingsColumns = {
   repositoryPath: projects.repositoryPath,
+  checkCommand: projects.checkCommand,
   parallelRuns: projects.parallelRuns,
   maxConcurrentRuns: projects.maxConcurrentRuns,
   agentMode: projects.agentMode,
@@ -276,6 +301,41 @@ function repositoryPathProblem(path: string): string | undefined {
     return 'There is no directory at this path.';
   }
   return 'This path is not a directory.';
+}
+
+/** The name of a Project other than `exceptId` that uses `path`, if any. */
+function repositoryPathHolder(
+  db: DatabaseConnection,
+  path: string,
+  exceptId?: number,
+): string | undefined {
+  const wanted = canonicalFolder(path);
+  return db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      repositoryPath: projects.repositoryPath,
+    })
+    .from(projects)
+    .all()
+    .find(
+      (project) =>
+        project.id !== exceptId &&
+        project.repositoryPath !== null &&
+        canonicalFolder(project.repositoryPath) === wanted,
+    )?.name;
+}
+
+/** Why another Project's use of `path` refuses it, if one does. */
+function repositoryPathTakenProblem(
+  db: DatabaseConnection,
+  path: string,
+  exceptId?: number,
+): string | undefined {
+  const holder = repositoryPathHolder(db, path, exceptId);
+  return holder === undefined
+    ? undefined
+    : `The Project "${holder}" already uses this repository. A repository belongs to one Project.`;
 }
 
 export type Ticket = {
@@ -1314,14 +1374,36 @@ export function createTickets(
       return projectId;
     },
 
+    /**
+     * The id of the Project whose repository contains `folder`, or
+     * `undefined` when none does. Two Projects that tie are still refused.
+     */
+    findProjectIdOfFolder(folder: string): number | undefined {
+      return projectIdOfFolder(db, folder, false);
+    },
+
     /** Creates a Project with a trimmed name, unique ignoring case. */
     createProject(input: CreateProjectInput): Project {
       const { name, nameKey } = availableProjectName(db, input.name);
-      const project = db
-        .insert(projects)
-        .values({ name, nameKey, createdAt: new Date() })
-        .returning(projectColumns)
-        .get();
+      const { repositoryPath, checkCommand, referenceTemplate } = input;
+      // The Project and its repository settings are saved all or nothing.
+      const project = db.transaction(() => {
+        const created = db
+          .insert(projects)
+          .values({ name, nameKey, createdAt: new Date() })
+          .returning(projectColumns)
+          .get();
+        if (repositoryPath !== undefined || checkCommand !== undefined) {
+          this.setProjectAgentSettings(created.id, {
+            ...(repositoryPath === undefined ? {} : { repositoryPath }),
+            ...(checkCommand === undefined ? {} : { checkCommand }),
+          });
+        }
+        if (referenceTemplate !== undefined) {
+          this.addReferenceTemplate(created.id, referenceTemplate);
+        }
+        return created;
+      });
       changes.publish({ type: 'project', id: project.id });
       return project;
     },
@@ -1414,6 +1496,7 @@ export function createTickets(
       const before = this.getProjectAgentSettings(id);
       const {
         repositoryPath,
+        checkCommand,
         parallelRuns,
         maxConcurrentRuns,
         agentMode,
@@ -1437,7 +1520,8 @@ export function createTickets(
         repositoryPath:
           repositoryPath === undefined || nextPath === null
             ? undefined
-            : repositoryPathProblem(nextPath),
+            : (repositoryPathProblem(nextPath) ??
+              repositoryPathTakenProblem(db, nextPath, id)),
         maxConcurrentRuns:
           maxConcurrentRuns === undefined ||
           (Number.isInteger(maxConcurrentRuns) && maxConcurrentRuns >= 1)
@@ -1456,6 +1540,10 @@ export function createTickets(
         .update(projects)
         .set({
           repositoryPath: nextPath,
+          checkCommand:
+            checkCommand === undefined
+              ? before.checkCommand
+              : trimmedOrNull(checkCommand),
           ...(parallelRuns === undefined ? {} : { parallelRuns }),
           ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
           agentMode:
@@ -4280,9 +4368,12 @@ function withChildren<Row extends { number: number }>(
  */
 function resolvedProjectId(
   db: DatabaseConnection,
-  { projectId, projectName }: ProjectRef,
+  { projectId, projectName, cwd }: ProjectRef,
 ): number | undefined {
   if (projectName === undefined) {
+    if (projectId === undefined && cwd !== undefined) {
+      return projectIdOfFolder(db, cwd, true);
+    }
     return projectId;
   }
   const name = projectName.trim();
@@ -4318,6 +4409,80 @@ function resolvedProjectId(
     });
   }
   return named.id;
+}
+
+/**
+ * The id of the Project whose repository contains `folder`: the longest
+ * repository path that is a prefix of the folder's repository wins, so a
+ * nested repository belongs to its own Project. Throws when none contains it
+ * (naming the Projects) or when two Projects tie.
+ */
+function projectIdOfFolder(
+  db: DatabaseConnection,
+  folder: string,
+  refuseUnknown: true,
+): number;
+function projectIdOfFolder(
+  db: DatabaseConnection,
+  folder: string,
+  refuseUnknown: false,
+): number | undefined;
+function projectIdOfFolder(
+  db: DatabaseConnection,
+  folder: string,
+  refuseUnknown: boolean,
+): number | undefined {
+  const root = repositoryRootOf(folder) ?? canonicalFolder(folder);
+  const candidates = db
+    .select({
+      id: projects.id,
+      name: projects.name,
+      repositoryPath: projects.repositoryPath,
+      archived: projects.archived,
+    })
+    .from(projects)
+    .orderBy(asc(projects.name))
+    .all();
+  let best: { id: number; name: string }[] = [];
+  let bestLength = -1;
+  for (const { id, name, repositoryPath } of candidates) {
+    if (repositoryPath === null) {
+      continue;
+    }
+    const path = canonicalFolder(repositoryPath);
+    const contains =
+      root === path || root.startsWith(`${path}/`) || path === '/';
+    if (!contains || path.length < bestLength) {
+      continue;
+    }
+    if (path.length > bestLength) {
+      best = [];
+      bestLength = path.length;
+    }
+    best.push({ id, name });
+  }
+  const [first, second] = best;
+  if (first === undefined) {
+    if (!refuseUnknown) {
+      return undefined;
+    }
+    const names = candidates
+      .filter(({ archived }) => !archived)
+      .map(({ name }) => `"${name}"`);
+    throw new ValidationError({
+      cwd: `No Project has a repository containing ${folder}. ${
+        names.length === 0
+          ? 'There are no Projects yet.'
+          : `Pass projectName: one of ${names.join(', ')}.`
+      }`,
+    });
+  }
+  if (second !== undefined) {
+    throw new ValidationError({
+      cwd: `The folder ${folder} is in the repository of both "${first.name}" and "${second.name}". Pass projectName.`,
+    });
+  }
+  return first.id;
 }
 
 /**

@@ -2,6 +2,10 @@
 
 import { revalidatePath } from 'next/cache';
 
+import {
+  detectRepository,
+  type RepositoryDetection,
+} from '../../repository/detect-repository';
 import type { ProjectAgentCommands } from '../../tickets/agent-commands';
 import { appTickets } from '../../tickets/app-tickets';
 import type {
@@ -19,14 +23,51 @@ export type CreateProjectResult = ActionResult<{ projectId: number }>;
  */
 export async function createProject(input: {
   name: string;
+  /** The repository folder, with what the User accepted of its detection. */
+  repositoryPath?: string;
+  checkCommand?: string | null;
+  referenceTemplate?: { prefix: string; url: string };
 }): Promise<CreateProjectResult> {
   return actionResult(() => {
     const project = appTickets('user').createProject({
       name: String(input?.name ?? ''),
+      ...(input?.repositoryPath === undefined
+        ? {}
+        : { repositoryPath: String(input.repositoryPath) }),
+      ...(input?.checkCommand === undefined
+        ? {}
+        : {
+            checkCommand:
+              input.checkCommand === null ? null : String(input.checkCommand),
+          }),
+      ...(input?.referenceTemplate === undefined
+        ? {}
+        : {
+            referenceTemplate: {
+              prefix: String(input.referenceTemplate.prefix ?? ''),
+              url: String(input.referenceTemplate.url ?? ''),
+            },
+          }),
     });
     revalidatePath('/', 'layout');
     return { projectId: project.id };
   });
+}
+
+export type DetectedRepository = Extract<RepositoryDetection, { ok: true }>;
+
+/**
+ * What the folder at `path` is: a git repository with its default branch,
+ * origin remote and Check command candidates, or a refusal naming why not.
+ * It only reads files, and changes nothing.
+ */
+export async function detectProjectRepository(input: {
+  path: string;
+}): Promise<ActionResult<{ repository: DetectedRepository }>> {
+  const detection = detectRepository(String(input?.path ?? '').trim());
+  return detection.ok
+    ? { ok: true, repository: detection }
+    : { ok: false, error: detection.message };
 }
 
 /**
@@ -102,6 +143,14 @@ export async function setProjectAgentSettings(
       ...(settings.repositoryPath === undefined
         ? {}
         : { repositoryPath: settings.repositoryPath }),
+      ...(settings.checkCommand === undefined
+        ? {}
+        : {
+            checkCommand:
+              settings.checkCommand === null
+                ? null
+                : String(settings.checkCommand),
+          }),
       ...(settings.parallelRuns === undefined
         ? {}
         : { parallelRuns: Boolean(settings.parallelRuns) }),

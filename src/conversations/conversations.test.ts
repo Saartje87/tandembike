@@ -11,6 +11,9 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { maxToolInputLength } from './conversations';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function setup() {
   const world = createTestConversations();
@@ -1282,8 +1285,8 @@ describe('The Start run limit', () => {
     const { conversations, tickets, project } = setup();
     const other = tickets.createProject({ name: 'Other' });
     tickets.setProjectAgentSettings(other.id, {
-      repositoryPath: tickets.getProjectAgentSettings(project.id)
-        .repositoryPath,
+      // A repository belongs to one Project, so Other gets a folder of its own.
+      repositoryPath: mkdtempSync(join(tmpdir(), 'other-repo-')),
     });
     await startOn(conversations, project.id);
 
@@ -1611,7 +1614,10 @@ describe('Setup', () => {
     expect(brief).toContain('Website');
     expect(brief).toContain('CLAUDE.md');
     expect(brief).toContain('AGENTS.md');
-    expect(brief).toContain('.mcp.json');
+    // The Project defaults from the folder, so Setup asks for neither (ADR 0036).
+    expect(brief).not.toContain('.mcp.json');
+    expect(brief).not.toMatch(/instructions name the Tandembike Project/);
+    expect(brief).not.toMatch(/MCP server is configured/);
     expect(brief).toContain('allowlist');
     expect(brief).toMatch(/main checkout/);
     expect(brief).toMatch(/never commit, push or open a pull request/i);
@@ -1682,8 +1688,8 @@ describe('Setup', () => {
     const { conversations, tickets, project } = setup();
     const other = tickets.createProject({ name: 'Other' });
     tickets.setProjectAgentSettings(other.id, {
-      repositoryPath: tickets.getProjectAgentSettings(project.id)
-        .repositoryPath,
+      // A repository belongs to one Project, so Other gets a folder of its own.
+      repositoryPath: mkdtempSync(join(tmpdir(), 'other-repo-')),
     });
     const first = await startSetup(conversations, project.id);
     expect((await startSetup(conversations, other.id)).id).not.toBe(first.id);

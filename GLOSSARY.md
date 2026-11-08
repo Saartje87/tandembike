@@ -126,6 +126,10 @@ _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycl
 A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. A User's reply can take the Project over its Start run limit; Autopilot then dispatches nothing until the working Start runs drop below it (ADR 0031). It never retries and never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030.
 _Avoid_: Auto mode (that is the Agent run mode), scheduler
 
+**Check command**:
+A Project's command that defines green for its repository, such as `npm run check`. A Start run's brief names it as what must pass before the run opens a pull request; with none set, the brief tells the run to follow the repository's own instructions. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can redefine green for itself.
+_Avoid_: Test command, build command
+
 **Eligible**:
 Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no open Start Conversation on it, whatever state its run is in, so a failed run waits for the User. A Start Conversation from before the Ticket's latest move to Todo, such as Back to Todo, no longer counts, unless its run is still working.
 _Avoid_: Ready (that is the label), startable

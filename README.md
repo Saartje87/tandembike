@@ -23,7 +23,26 @@ reach it (see `docs/adr/0022-local-only-enforced-in-four-layers.md`):
 Start the app with the npm scripts: running `next dev` or `next start`
 directly skips the first two guards.
 
-## Getting started
+## Install and start
+
+Tandembike installs from its checkout; nothing is published to npm. In a clone,
+run once:
+
+```bash
+npm run setup
+```
+
+This runs `npm ci`, `npm run build` and `npm link`, which adds a global
+`tandembike` command. From then on, `tandembike` in any folder serves the app
+on [http://localhost:4747](http://localhost:4747), with its database in
+`~/.tandembike/`. On the first run, when `~/.tandembike/ticket.db` is missing
+and the checkout has `data/ticket.db`, the command copies that database (with
+any `-wal` and `-shm` files) and says so. It never moves, deletes or
+overwrites a database. Pass `-p <port>` to use another port.
+
+See `docs/adr/0035-tandembike-installs-from-its-checkout.md`.
+
+## Getting started (development)
 
 Install dependencies and start the development server:
 
@@ -47,9 +66,11 @@ port (`http://localhost:<port>/api/mcp`).
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:4747/api/mcp`. This repository's `.mcp.json` registers it
-for Claude Code in this checkout; to reach it from every repository, register
-it once at user level as described in the next section.
+`http://localhost:4747/api/mcp`. The `tandembike` command offers to register it
+for Claude Code at user level on its first start, so every repository reaches
+it; to register it yourself, or for other clients, see the next section. This
+repository's own `.mcp.json` registers it only for development in this
+checkout.
 
 Keep `npm run dev` (or `npm run start`) running while the Agent works. The
 server's instructions explain the tracker to Agents: moving a Ticket to In
@@ -65,8 +86,12 @@ MCP tools change" in `docs/agents/issue-tracker.md`.
 
 One running app serves every repository on this machine: give each repository
 its own Project, and its Agents keep their Tickets there. The MCP server's
-instructions explain how the tracker works, so a repository only needs to
-name its Project (see `docs/adr/0014-server-explains-tracker.md`).
+instructions explain how the tracker works. A tool that takes a Project uses
+the one whose repository contains the Agent's working folder, so a repository
+names its Project nowhere (see
+`docs/adr/0036-mcp-calls-default-to-the-project-of-the-callers-folder.md`).
+Set each Project's repository folder when you create it, or on its agent
+settings.
 
 **1. Register the server once, for all repositories.** Keep the app running
 on `localhost:4747`, then register it at user level for each client you use:
@@ -74,8 +99,11 @@ on `localhost:4747`, then register it at user level for each client you use:
 - **Claude Code:**
 
   ```bash
-  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp
+  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'
   ```
+
+  Keep the single quotes: Claude Code expands `${PWD}` to the folder each
+  session starts in, which is how Tandembike finds that folder's Project.
 
 - **GitHub Copilot CLI:**
 
@@ -94,15 +122,9 @@ on `localhost:4747`, then register it at user level for each client you use:
 After registering, start a new session (or reconnect, `/mcp` in Claude Code)
 so the client loads the tools.
 
-**2. Name the repository's Project in its `AGENTS.md`.** Add one line, with
-the Project's name as it shows in the app:
-
-```markdown
-Tickets for this repository live in the Tandembike Project `Shop` (MCP server `tandembike`).
-```
-
-Copilot reads `AGENTS.md` itself. Claude Code reads `CLAUDE.md`, so a
-repository that has no `CLAUDE.md` yet gets one containing just:
+**2. Give the repository a `CLAUDE.md` that loads its `AGENTS.md`.** Copilot
+reads `AGENTS.md` itself. Claude Code reads `CLAUDE.md`, so a repository that
+has no `CLAUDE.md` yet gets one containing just:
 
 ```markdown
 @AGENTS.md
@@ -114,14 +136,17 @@ Ticket is done, triage) belongs in its own `AGENTS.md`;
 
 ## Where data lives
 
-All data is stored in a single SQLite file in the `data/` folder at the repo
-root. The folder is git-ignored, so your Tickets are never committed. To back
-up, copy the folder; to start fresh, stop the app and delete it.
+All data is stored in a single SQLite file. The installed `tandembike` command
+keeps it in `~/.tandembike/`. `npm run dev` and `npm run start` keep it in the
+`data/` folder at the repo root, unless `TANDEMBIKE_DATA_DIR` names another
+folder. Both are outside git, so your Tickets are never committed. To back up,
+copy the folder; to start fresh, stop the app and delete it.
 
 ## Available commands
 
 | Command               | Description                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run setup`       | Install, build and link the global `tandembike` command                                   |
 | `npm run dev`         | Start the local development server on `localhost:4747`                                    |
 | `npm run build`       | Create a production build                                                                 |
 | `npm run start`       | Serve the production build on `localhost:4747`                                            |

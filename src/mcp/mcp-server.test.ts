@@ -1,15 +1,22 @@
 // @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { handleMcpRequest, maxInstructionsLength } from './mcp-server';
+import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('MCP server and Project agent settings', () => {
   it('offers no tool for them and never shows the repository path', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: '/tmp',
+      checkCommand: 'npm run check',
+    });
     const client = await connectMcpClient(tickets);
 
     const { tools } = await client.listTools();
@@ -21,7 +28,7 @@ describe('MCP server and Project agent settings', () => {
       /repository|agent_setting|parallel|agent_mode/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|npm run check|\/tmp/,
     );
     await client.close();
   });
@@ -254,8 +261,8 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
     const archive = tools.find((tool) => tool.name === 'archive_ticket');
 
-    // Which Project: the repository's own instructions name it (ADR 0014).
-    expect(instructions).toMatch(/repository's instructions name a Project/);
+    // Which Project: the caller's folder names it (ADR 0036).
+    expect(instructions).toMatch(/folder/);
     // General rules that used to live only in one repository's docs.
     expect(instructions).toMatch(/never as a checklist in the description/);
     expect(instructions).toMatch(/one level deep/);
@@ -3817,3 +3824,163 @@ function openObjects(schema: unknown, path: string): string[] {
     ),
   ];
 }
+
+describe("Project of the caller's folder", () => {
+  const folder = () => {
+    const path = realpathSync(mkdtempSync(join(tmpdir(), 'tandembike-mcp-')));
+    mkdirSync(join(path, '.git'));
+    return path;
+  };
+  const setup = () => {
+    const tickets = createTestTickets();
+    const root = folder();
+    const website = tickets.createProject({ name: 'Website' });
+    const blog = tickets.createProject({ name: 'Blog' });
+    tickets.setProjectAgentSettings(website.id, { repositoryPath: root });
+    return { tickets, root, website, blog };
+  };
+
+  it('creates a Ticket in the Project of the header folder', async () => {
+    const { tickets, root, website } = setup();
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const created = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { title: 'From a terminal' },
+      }),
+    ) as { number: number };
+
+    expect(tickets.getTicket(created.number).projectId).toBe(website.id);
+    await client.close();
+  });
+
+  it('lets an explicit projectName win over the folder', async () => {
+    const { tickets, root, blog } = setup();
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const created = resultJson(
+      await client.callTool({
+        name: 'create_ticket',
+        arguments: { title: 'Feedback', projectName: 'Blog' },
+      }),
+    ) as { number: number };
+
+    expect(tickets.getTicket(created.number).projectId).toBe(blog.id);
+    await client.close();
+  });
+
+  it('refuses an unknown folder, naming the Projects', async () => {
+    const { tickets } = setup();
+    const client = await connectMcpClient(tickets, { cwd: folder() });
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Lost' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(
+      /No Project has a repository containing .*Pass projectName: one of "Blog", "Website"/,
+    );
+    await client.close();
+  });
+
+  it('refuses a write from an archived Project folder as it does naming the Project', async () => {
+    const { tickets, root, website } = setup();
+    tickets.archiveProject(website.id);
+    const client = await connectMcpClient(tickets, { cwd: root });
+    const byName = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Named', projectName: 'Website' },
+    });
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'From the folder' },
+    });
+
+    expect(byName.isError).toBe(true);
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(resultText(byName));
+    await client.close();
+  });
+
+  it('names only unarchived Projects when the folder belongs to none', async () => {
+    const { tickets } = setup();
+    tickets.archiveProject(tickets.createProject({ name: 'Old site' }).id);
+    const client = await connectMcpClient(tickets, { cwd: folder() });
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Lost' },
+    });
+
+    expect(resultText(result)).toMatch(/one of "Blog", "Website"\./);
+    expect(resultText(result)).not.toMatch(/Old site/);
+    await client.close();
+  });
+
+  it('asks for a Project when the request carries no folder', async () => {
+    const { tickets } = setup();
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'create_ticket',
+      arguments: { title: 'Lost' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/Choose a Project/);
+    await client.close();
+  });
+
+  it("lists the folder's Project by default, and every Project with allProjects", async () => {
+    const { tickets, root, website, blog } = setup();
+    const mine = tickets.createTicket({ projectId: website.id, title: 'Mine' });
+    const theirs = tickets.createTicket({
+      projectId: blog.id,
+      title: 'Theirs',
+    });
+    const client = await connectMcpClient(tickets, { cwd: root });
+    const numbers = async (args: Record<string, unknown>) =>
+      (
+        resultJson(
+          await client.callTool({ name: 'list_tickets', arguments: args }),
+        ) as {
+          tickets: { number: number }[];
+        }
+      ).tickets.map((ticket) => ticket.number);
+
+    expect(await numbers({})).toEqual([mine.number]);
+    expect(await numbers({ allProjects: true })).toEqual([
+      mine.number,
+      theirs.number,
+    ]);
+    expect(await numbers({ projectName: 'Blog' })).toEqual([theirs.number]);
+    await client.close();
+  });
+
+  it("lists every Project's Tickets when the folder belongs to none", async () => {
+    const { tickets, website } = setup();
+    const only = tickets.createTicket({ projectId: website.id, title: 'Mine' });
+    const client = await connectMcpClient(tickets, { cwd: folder() });
+
+    const page = resultJson(
+      await client.callTool({ name: 'list_tickets', arguments: {} }),
+    ) as { tickets: { number: number }[] };
+
+    expect(page.tickets.map((ticket) => ticket.number)).toEqual([only.number]);
+    await client.close();
+  });
+
+  it('says in the instructions that the Project defaults from the folder', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const text = client.getInstructions() ?? '';
+
+    expect(text).toMatch(/folder/);
+    expect(text).not.toMatch(/repository's instructions name a Project/);
+    await client.close();
+  });
+});

@@ -14,10 +14,14 @@ import {
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { setProjectAgentSettings } from '../../app/projects/actions';
+import {
+  detectProjectRepository,
+  setProjectAgentSettings,
+} from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { AgentRunMode } from '../../tickets/agent-run-mode';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
+import { CheckCommandField } from '../check-command-field/check-command-field';
 import { FieldError } from '../field-error/field-error';
 import { ProjectSetup, type SetupOffer } from '../project-setup/project-setup';
 
@@ -31,6 +35,7 @@ export type AgentSettingsFormProps = {
 
 type AgentSettingsValues = {
   repositoryPath: string;
+  checkCommand: string;
   parallelRuns: boolean;
   maxConcurrentRuns: number;
   agentMode: boolean;
@@ -43,6 +48,7 @@ type AgentSettingsValues = {
 /** The form field each field of a refusal names. */
 const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   repositoryPath: 'repositoryPath',
+  checkCommand: 'checkCommand',
   maxConcurrentRuns: 'maxConcurrentRuns',
   agentMode: 'agentMode',
   runMode: 'runMode',
@@ -65,6 +71,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     parallelRuns: settings.parallelRuns,
   });
   const [offer, setOffer] = useState<SetupOffer | null>(null);
+  const [candidates, setCandidates] = useState<string[] | null>(null);
+  const [detecting, setDetecting] = useState(false);
   const pathId = useId();
   const parallelId = useId();
   const modeId = useId();
@@ -79,12 +87,17 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const runModelErrorId = useId();
   const {
     formState: { errors, isSubmitting },
+    clearErrors,
+    getValues,
     handleSubmit,
     register,
     setError,
+    setValue,
+    watch,
   } = useForm<AgentSettingsValues>({
     defaultValues: {
       repositoryPath: settings.repositoryPath ?? '',
+      checkCommand: settings.checkCommand ?? '',
       parallelRuns: settings.parallelRuns,
       maxConcurrentRuns: settings.maxConcurrentRuns,
       agentMode: settings.agentMode,
@@ -99,6 +112,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   });
   const hasPath = settings.repositoryPath !== null;
   const pathError = errors.repositoryPath?.message;
+  const checkError = errors.checkCommand?.message;
   const capError = errors.maxConcurrentRuns?.message;
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
@@ -109,10 +123,31 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const autopilotId = useId();
   const serverError = errors.root?.server?.message;
 
+  /** Re-runs detection for the path in the field and offers its candidates. */
+  const detect = async () => {
+    setDetecting(true);
+    try {
+      const result = await detectProjectRepository({
+        path: getValues('repositoryPath'),
+      });
+      if (result.ok) {
+        clearErrors('repositoryPath');
+        setCandidates(result.repository.checkCommands);
+      } else {
+        setCandidates(null);
+        setError('repositoryPath', { type: 'server', message: result.error });
+      }
+    } finally {
+      setDetecting(false);
+    }
+  };
+
   const submit = handleSubmit(async (values) => {
     const result = await setProjectAgentSettings({
       projectId,
       repositoryPath: values.repositoryPath,
+      checkCommand:
+        values.checkCommand.trim() === '' ? null : values.checkCommand,
       parallelRuns: values.parallelRuns,
       maxConcurrentRuns: Number(values.maxConcurrentRuns),
       agentMode: values.agentMode,
@@ -170,7 +205,31 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={pathError ? pathErrorId : undefined}
             />
             <FieldError id={pathErrorId} reason={pathError} />
+            <div>
+              <Button
+                type="button"
+                size="small"
+                variant="ghost"
+                loading={detecting}
+                onClick={detect}
+              >
+                Detect
+              </Button>
+            </div>
           </Stack>
+          <CheckCommandField
+            registration={register('checkCommand')}
+            value={watch('checkCommand')}
+            error={checkError}
+            candidates={candidates}
+            onUse={(candidate) => setValue('checkCommand', candidate)}
+          >
+            <Text tag="p" fontSize="small" color="muted">
+              The command that defines green for the repository. Start runs must
+              see it pass before they open a pull request; leave empty to follow
+              the repository's own instructions.
+            </Text>
+          </CheckCommandField>
           {hasPath && (
             <>
               <Inline gap={2} alignY="center">
