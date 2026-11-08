@@ -641,25 +641,52 @@ describe('Cockpit', () => {
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=7');
   });
 
-  it('keeps Your work, Queued and Done closed with their counts, and opens them on click', async () => {
+  it('shows its sections in the order Needs you, Queued, In flight, Your work, Done, Archived', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit();
+
+    const boardSections = [
+      'Needs you',
+      'Queued',
+      'In flight',
+      'Your work',
+      'Done',
+      'Archived',
+    ];
+    expect(
+      screen
+        .getAllByRole('region')
+        .map((region) => region.getAttribute('aria-label'))
+        .filter((name) => name !== null && boardSections.includes(name)),
+    ).toEqual(boardSections);
+  });
+
+  it('starts Queued open, keeps Your work and Done closed with their counts, and opens them on click', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
     renderCockpit();
 
     const queued = section('Queued');
-    expect(queued.querySelector('details')).not.toHaveAttribute('open');
-    expect(within(queued).getByText('1')).toBeVisible();
-    expect(within(section('Your work')).getByText('1')).toBeVisible();
-    expect(within(section('Done')).getByText('1')).toBeVisible();
-
-    await userEvent.click(within(queued).getByText('Queued'));
-
     expect(queued.querySelector('details')).toHaveAttribute('open');
+    expect(within(queued).getByText('1')).toBeVisible();
     const [row] = within(queued).getAllByRole('listitem');
     expect(row).toHaveTextContent('Cache the Board');
     expect(row).toHaveTextContent('Queued #1 · blocked by T7');
     expect(within(row).getByText('Blocked')).toBeVisible();
+
+    const yourWork = section('Your work');
+    expect(yourWork.querySelector('details')).not.toHaveAttribute('open');
+    expect(within(yourWork).getByText('1')).toBeVisible();
+    const done = section('Done');
+    expect(done.querySelector('details')).not.toHaveAttribute('open');
+    expect(within(done).getByText('1')).toBeVisible();
+
+    await userEvent.click(within(yourWork).getAllByText('Your work')[0]);
+
+    expect(yourWork.querySelector('details')).toHaveAttribute('open');
   });
 
   it("follows a run's Conversation as it changes", async () => {
@@ -1202,8 +1229,10 @@ describe('Cockpit drag', () => {
       screen.getByRole('checkbox', { name: 'Select T2 Second queued' }),
     );
 
-    // Dropped on the third row, the pair lands after it.
-    await keyboardDrag(rowOf(1), '{ArrowDown}{ArrowDown}');
+    // Dragged by its second row onto the third, the pair lands after it in
+    // Board order. One step keeps the drop inside Queued, which Your work
+    // follows.
+    await keyboardDrag(rowOf(2), '{ArrowDown}');
 
     await vi.waitFor(() =>
       expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({

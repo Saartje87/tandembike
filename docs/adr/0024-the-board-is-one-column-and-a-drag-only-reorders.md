@@ -1,5 +1,7 @@
 # The Board is one column, and a drag only reorders
 
+Superseded in part by [ADR 0026](0026-queued-follows-needs-you.md): the Board's sections now come in the order Needs you, Queued, In flight, Your work, Done, with the Archived Tickets at the bottom. The rest stands.
+
 The Project had two views of the same Tickets: the five-Lane Board (ADR 0023) and the one-column Cockpit of the Active Cycle. The Cockpit grouped the Lanes by what the User needs to do first, and the User preferred it. So every Board (the Active Cycle's, each Prepared Cycle's and the Backlog's) is now that one column, the Cockpit tab and the five-Lane Board code are gone, and the view keeps the name Board.
 
 The Board shows these sections, each a grouping of the Lanes that `laneOf` derives: Needs you (Action needed, Review and Intake), In flight (Running), Your work, Queued and Done, with the Archived Tickets at the bottom. Two Lanes are renamed to what the Board shows: Todo is Queued and For human is Your work. The derivation in ADR 0023 stands with the new names. Status, triage labels and `sort_lane` behave as before.
