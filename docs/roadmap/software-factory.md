@@ -1,6 +1,6 @@
 # Roadmap: Tandembike as a local software factory
 
-Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the one-column Board (Epic T1102), grilled and prototyped (T1103). Each phase is specced into its placeholder Epic, named next to it below, with `/to-spec` and `/to-tickets` when its turn comes, by "Publishing a spec" in `docs/agents/issue-tracker.md`; no new Epic is created for it. Decisions here can be revisited; when one changes, update this file in the same PR.
+Status: agreed on 2026-11-06 in a grilling session (T1058); amended on 2026-11-07 after a review of the roadmap, grilled in the same way, which closed the gaps marked "(2026-11-07)" below; amended again on 2026-11-07 with the one-column Board (Epic T1102), grilled and prototyped (T1103). Each phase still to spec is specced into the placeholder Epic named in its section, with `/to-spec` and `/to-tickets` when its turn comes, by "Publishing a spec" in `docs/agents/issue-tracker.md`. Decisions here can be revisited; when one changes, update this file in the same PR.
 
 ## Goal
 
@@ -168,7 +168,7 @@ Decision records: ADR "Autopilot dispatches the Active Cycle's ready work", reco
 
 ### Phase 4: Cycle end
 
-Placeholder Epic: T1092, not specced yet.
+Placeholder Epic: T1092.
 
 Goal: a Cycle closes on purpose.
 
@@ -179,7 +179,7 @@ Decision records: ADR 0010 consequence noted; Glossary: Retro if it becomes an i
 
 ### Phase 5: independent Review stage
 
-Placeholder Epic: T1093, not specced yet.
+Placeholder Epic: T1093.
 
 Goal: a second pair of eyes on every PR without the User reading every diff.
 
