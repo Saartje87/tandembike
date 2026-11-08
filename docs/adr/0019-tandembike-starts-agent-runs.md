@@ -1,5 +1,7 @@
 # Tandembike starts Agent runs, and leaves their process to the repository
 
+Amended by [ADR 0032](0032-tandembike-ships-a-default-playbook.md): Tandembike ships a default Playbook that a repository's Agent commands override; and by [ADR 0033](0033-tandembike-creates-run-worktrees.md): Tandembike creates and removes each run's worktree.
+
 Amended by [ADR 0031](0031-a-reply-is-never-refused-by-the-start-run-limit.md): a reply sent by the User is never refused by the Start run cap; only new Starts and Autopilot's replies are.
 
 Until now Agents only connected to Tandembike; the User started them in a terminal. To let the User start, triage and talk to an Agent from a Ticket or a Board, the server now launches headless Claude Code runs itself, through the Claude Agent SDK, in the Project's repository path. Each run is a Conversation shown in the UI: the User replies into it, and every permission prompt the run would have shown in a terminal comes to the User as an Allow or Deny in the Conversation. The run reaches the tracker the way every Agent does, as an MCP client of the server (ADR 0002), so Claims, Activity and live updates need no new path.

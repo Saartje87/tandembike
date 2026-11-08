@@ -111,6 +111,8 @@ When every Ticket in the Active Cycle is Done, dispatch stops and the Cycle Boar
 
 ### Independent Review stage
 
+Rejected on 2026-11-08; see phase 5.
+
 Later and off by default: each factory PR gets a separate review run in a fresh Conversation (intent Review) running `code-review` on the branch and posting findings, before the Ticket counts as Review. A fresh run reviews without being anchored on its own work. Measure first whether the `implement` skill's inline review is enough.
 
 ## Phases
@@ -178,6 +180,8 @@ Goal: a Cycle closes on purpose.
 Decision records: ADR 0010 consequence noted; Glossary: Retro if it becomes an intent.
 
 ### Phase 5: independent Review stage
+
+Rejected on 2026-11-08 (T1093): its measurement found no real miss, and roadmap 2 makes the User the Merge gate. See [`.out-of-scope/independent-review-runs.md`](../../.out-of-scope/independent-review-runs.md) and [`software-factory-2.md`](software-factory-2.md).
 
 Placeholder Epic: T1093.
 
