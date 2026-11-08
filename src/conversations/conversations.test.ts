@@ -11,6 +11,9 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { maxToolInputLength } from './conversations';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function setup() {
   const world = createTestConversations();
