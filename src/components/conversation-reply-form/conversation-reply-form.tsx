@@ -17,6 +17,10 @@ export type ConversationReplyFormProps = {
   /** The Conversation's Project, whose Skills show as chips. */
   projectId: number;
   control?: Ref<ReplyControl>;
+  /** The text to start with, such as an unsent reply kept across a switch of tab. */
+  initialText?: string;
+  /** Called as the text changes, and with `''` once it is sent. */
+  onTextChange?: (text: string) => void;
 };
 
 /**
@@ -28,6 +32,8 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
   conversationId,
   projectId,
   control,
+  initialText,
+  onTextChange,
 }) => {
   const skills = useProjectSkills({ projectId });
   return (
@@ -37,6 +43,8 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
       placeholder="Reply (Enter sends, Shift+Enter adds a line)"
       rows={2}
       {...(control ? { control } : {})}
+      {...(initialText === undefined ? {} : { initialText })}
+      {...(onTextChange ? { onTextChange } : {})}
       onSend={async (text) => {
         const result = await replyToConversation({ conversationId, text });
         return result.ok

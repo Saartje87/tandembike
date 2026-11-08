@@ -27,6 +27,7 @@ import type {
 import { ConversationDialog } from '../conversation-dialog/conversation-dialog';
 import type { DraftInput } from '../conversation-draft/conversation-draft';
 import { useConversationRevision } from '../live-updates/live-updates';
+import { createKeptConversations } from './kept-conversations';
 import { nextNeighbour } from './next-neighbour';
 import { useDrafts } from './use-drafts';
 
@@ -107,6 +108,9 @@ export type ConversationDialogProviderProps = {
  * every Conversation change `LiveUpdates` hears of, and which tab is shown,
  * which `?conversation=<id>` holds on any page, next to `?ticket=`. Hiding the
  * dialog removes the parameter and keeps every tab; it never opens by itself.
+ * Only the shown tab is mounted, so it also keeps, per open Conversation, what
+ * a switch would lose: the unsent reply and answers, and the last loaded
+ * transcript (T1100). A closed tab's go with it.
  * Mount it once, inside `LiveUpdates`, around everything that opens it.
  */
 export const ConversationDialogProvider: FC<
@@ -118,7 +122,13 @@ export const ConversationDialogProvider: FC<
   const [url, setUrl] = useState<UrlState>({ id: undefined, href: '' });
   const [error, setError] = useState<string>();
   const drafts = useDrafts();
+  const [kept] = useState(createKeptConversations);
   const lastShown = useRef<number | undefined>(undefined);
+
+  // A closed tab's kept reply, answers and transcript go with it.
+  useEffect(() => {
+    kept.keepOnly(conversations.map(({ conversation }) => conversation.id));
+  }, [conversations, kept]);
 
   const load = useCallback(async () => {
     try {
@@ -297,6 +307,7 @@ export const ConversationDialogProvider: FC<
         }}
         onClose={close}
         error={error}
+        kept={kept}
       />
     </ConversationDialogContext>
   );

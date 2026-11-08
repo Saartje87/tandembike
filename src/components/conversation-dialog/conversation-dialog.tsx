@@ -10,11 +10,15 @@ import type {
 } from '../../conversations/conversations';
 import { ConversationChat } from '../conversation-chat/conversation-chat';
 import {
+  type KeptConversation,
+  KeptConversationProvider,
+  type KeptConversations,
+} from '../conversation-dialog-provider/kept-conversations';
+import {
   ConversationDraft,
   type Draft,
   draftLabel,
 } from '../conversation-draft/conversation-draft';
-import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import { ConversationTabs } from '../conversation-tabs/conversation-tabs';
 import { Icon } from '../icon/icon';
 import { useConversationRevision } from '../live-updates/live-updates';
@@ -47,25 +51,40 @@ export type ConversationDialogProps = {
   onClose: (conversationId: number) => void;
   /** Why the last close was refused, if it was. */
   error?: string | undefined;
+  /** What is kept of each open Conversation while its tab is not shown (T1100). */
+  kept: KeptConversations;
 };
 
-type ConversationPanelProps = { open: OpenConversation };
+type ConversationPanelProps = {
+  open: OpenConversation;
+  /** What the dialog keeps of this Conversation while its tab is not shown. */
+  kept: KeptConversation;
+};
 
 /**
  * The shown tab's content: the Conversation's chat, loaded when it
- * shows and again on every Conversation change `LiveUpdates` hears of.
+ * shows and again on every Conversation change `LiveUpdates` hears of. It
+ * starts from the transcript loaded last time, if any, so a switch of tab
+ * never shows it empty (T1100). A failed load keeps that transcript and shows
+ * the reason above it.
  */
-const ConversationPanel: FC<ConversationPanelProps> = ({ open }) => {
+const ConversationPanel: FC<ConversationPanelProps> = ({ open, kept }) => {
   const conversationId = open.conversation.id;
   const revision = useConversationRevision();
-  const [item, setItem] = useState<ConversationWithTranscript>();
+  const [item, setItem] = useState(kept.loaded);
   const [error, setError] = useState<string>();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `revision` is the trigger to load again.
   useEffect(() => {
     let current = true;
+    const before = kept.loaded;
     loadConversation({ conversationId })
       .then((result) => {
+        // Kept even when the tab was switched away meanwhile, unless a later
+        // load has kept a newer one.
+        if (result.ok && (current || kept.loaded === before)) {
+          kept.loaded = result;
+        }
         if (!current) {
           return;
         }
@@ -82,21 +101,24 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open }) => {
     return () => {
       current = false;
     };
-  }, [conversationId, revision]);
+  }, [conversationId, revision, kept]);
 
-  if (error) {
-    return <Alert intent="danger">{error}</Alert>;
+  if (!item) {
+    return error ? <Alert intent="danger">{error}</Alert> : null;
   }
-  return item ? (
-    <ConversationChat
-      item={item}
-      title={
-        open.conversation.ticketNumber === null
-          ? open.projectName
-          : `T${open.conversation.ticketNumber} ${open.ticketTitle ?? ''}`.trim()
-      }
-    />
-  ) : null;
+  return (
+    <KeptConversationProvider value={kept}>
+      <ConversationChat
+        item={item}
+        error={error}
+        title={
+          open.conversation.ticketNumber === null
+            ? open.projectName
+            : `T${open.conversation.ticketNumber} ${open.ticketTitle ?? ''}`.trim()
+        }
+      />
+    </KeptConversationProvider>
+  );
 };
 
 /**
@@ -114,6 +136,7 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
   onHide,
   onClose,
   error,
+  kept,
 }) => {
   const titleId = useId();
   const selected = tabs.find((tab) => tab.conversation.id === selectedId);
@@ -167,7 +190,11 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
             }}
             notice={error && <Alert intent="danger">{error}</Alert>}
             renderConversation={(open) => (
-              <ConversationPanel key={open.conversation.id} open={open} />
+              <ConversationPanel
+                key={open.conversation.id}
+                open={open}
+                kept={kept.of(open.conversation.id)}
+              />
             )}
             renderDraft={(draft) => (
               <ConversationDraft
