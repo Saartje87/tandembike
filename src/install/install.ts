@@ -74,3 +74,78 @@ export function markOffersMade(folder: string, offer: string): void {
     `${JSON.stringify({ offersMade: [...made, offer] }, null, 2)}\n`,
   );
 }
+
+const mcpUrl = 'http://localhost:4747/api/mcp';
+const cwdHeader = 'X-Tandembike-Cwd';
+
+export type McpRegistration = 'none' | 'outdated' | 'current';
+
+export type McpOfferPlan = {
+  action: 'ask' | 'print' | 'skip';
+  /** `claude` arguments to run, in order, after a yes. */
+  steps: string[][];
+  /** The exact command line(s) to show, one per step. */
+  text: string;
+};
+
+/** Whether to make the MCP registration offer: once, or when asked for. */
+export function shouldOfferMcp(made: string[], explicit: boolean): boolean {
+  return explicit || !made.includes('mcp');
+}
+
+/**
+ * What `~/.claude.json` holds for `tandembike` at user scope: `current` when
+ * it sends the folder header, `outdated` when it is there without it (it
+ * must be removed first, `claude mcp add` refuses duplicates).
+ */
+export function mcpRegistration(claudeJson: unknown): McpRegistration {
+  const servers = (
+    claudeJson as { mcpServers?: Record<string, unknown> } | null
+  )?.mcpServers;
+  const entry = servers?.tandembike as
+    | { headers?: Record<string, unknown> }
+    | undefined;
+  if (!entry || typeof entry !== 'object') return 'none';
+  return entry.headers && cwdHeader in entry.headers ? 'current' : 'outdated';
+}
+
+const removeStep = ['mcp', 'remove', '--scope', 'user', 'tandembike'];
+// ${PWD} stays literal: Claude Code expands it to the session's folder.
+const addStep = [
+  'mcp',
+  'add',
+  '--scope',
+  'user',
+  '--transport',
+  'http',
+  'tandembike',
+  mcpUrl,
+  '--header',
+  `${cwdHeader}: \${PWD}`,
+];
+
+function quote(arg: string): string {
+  return /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, "'\\''")}'`;
+}
+
+/** The shell text of `claude` steps, one command per line. */
+export function mcpCommandText(steps: string[][]): string {
+  return steps.map((s) => ['claude', ...s].map(quote).join(' ')).join('\n');
+}
+
+/** Decides what the offer does; the script only prompts and runs. */
+export function planMcpOffer(state: {
+  claudeOnPath: boolean;
+  registration: McpRegistration;
+}): McpOfferPlan {
+  if (state.registration === 'current') {
+    return { action: 'skip', steps: [], text: '' };
+  }
+  const steps =
+    state.registration === 'outdated' ? [removeStep, addStep] : [addStep];
+  return {
+    action: state.claudeOnPath ? 'ask' : 'print',
+    steps,
+    text: mcpCommandText(steps),
+  };
+}

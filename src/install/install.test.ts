@@ -6,8 +6,12 @@ import {
   copyFirstRunDatabase,
   dataFolder,
   markOffersMade,
+  mcpCommandText,
+  mcpRegistration,
   offersMade,
   planFirstRunCopy,
+  planMcpOffer,
+  shouldOfferMcp,
 } from './install';
 import {
   existsSync,
@@ -142,5 +146,108 @@ describe('offers made', () => {
     writeFileSync(join(folder, 'config.json'), 'not json');
 
     expect(offersMade(folder)).toEqual([]);
+  });
+});
+
+const addText =
+  "claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'";
+const removeText = 'claude mcp remove --scope user tandembike';
+
+describe('shouldOfferMcp', () => {
+  it('offers on the first start only', () => {
+    expect(shouldOfferMcp([], false)).toBe(true);
+    expect(shouldOfferMcp(['mcp'], false)).toBe(false);
+  });
+
+  it('offers again when asked with tandembike mcp', () => {
+    expect(shouldOfferMcp(['mcp'], true)).toBe(true);
+  });
+});
+
+describe('mcpRegistration', () => {
+  it('is none without a tandembike server', () => {
+    expect(mcpRegistration({})).toBe('none');
+    expect(mcpRegistration({ mcpServers: {} })).toBe('none');
+    expect(mcpRegistration(null)).toBe('none');
+  });
+
+  it('is outdated for a registration without the folder header', () => {
+    expect(
+      mcpRegistration({
+        mcpServers: {
+          tandembike: { type: 'http', url: 'http://localhost:4747/api/mcp' },
+        },
+      }),
+    ).toBe('outdated');
+  });
+
+  it('is current with the folder header', () => {
+    expect(
+      mcpRegistration({
+        mcpServers: {
+          tandembike: {
+            type: 'http',
+            url: 'http://localhost:4747/api/mcp',
+            headers: { 'X-Tandembike-Cwd': '${PWD}' },
+          },
+        },
+      }),
+    ).toBe('current');
+  });
+});
+
+describe('planMcpOffer', () => {
+  it('asks to add when nothing is registered', () => {
+    const plan = planMcpOffer({ claudeOnPath: true, registration: 'none' });
+    expect(plan.action).toBe('ask');
+    expect(plan.text).toBe(addText);
+    expect(plan.steps).toEqual([
+      [
+        'mcp',
+        'add',
+        '--scope',
+        'user',
+        '--transport',
+        'http',
+        'tandembike',
+        'http://localhost:4747/api/mcp',
+        '--header',
+        'X-Tandembike-Cwd: ${PWD}',
+      ],
+    ]);
+  });
+
+  it('asks to replace an outdated registration: remove, then add', () => {
+    const plan = planMcpOffer({ claudeOnPath: true, registration: 'outdated' });
+    expect(plan.action).toBe('ask');
+    expect(plan.text).toBe(`${removeText}\n${addText}`);
+    expect(plan.steps.map((s) => s[1])).toEqual(['remove', 'add']);
+  });
+
+  it('only prints the command when claude is not on the PATH', () => {
+    const plan = planMcpOffer({ claudeOnPath: false, registration: 'none' });
+    expect(plan.action).toBe('print');
+    expect(plan.text).toBe(addText);
+  });
+
+  it('prints the replacing commands when claude is missing and one exists', () => {
+    const plan = planMcpOffer({
+      claudeOnPath: false,
+      registration: 'outdated',
+    });
+    expect(plan.action).toBe('print');
+    expect(plan.text).toBe(`${removeText}\n${addText}`);
+  });
+
+  it('does nothing when the current registration exists', () => {
+    expect(
+      planMcpOffer({ claudeOnPath: true, registration: 'current' }).action,
+    ).toBe('skip');
+  });
+});
+
+describe('mcpCommandText', () => {
+  it('quotes arguments with spaces', () => {
+    expect(mcpCommandText([['mcp', 'x', 'a b']])).toBe("claude mcp x 'a b'");
   });
 });
