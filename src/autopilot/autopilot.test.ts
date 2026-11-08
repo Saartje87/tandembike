@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
 import { createChangeChannel } from '../tickets/changes';
@@ -38,7 +38,35 @@ function setup(options: { autopilot?: boolean; parallel?: number } = {}) {
   return { ...world, changes, project, cycle, autopilot, ready, started };
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('Autopilot dispatch', () => {
+  it('never retries: a Ticket with a stopped Start Conversation waits for the User, until the Conversation is closed', async () => {
+    const {
+      tickets,
+      conversations,
+      project,
+      cycle,
+      autopilot,
+      ready,
+      started,
+    } = setup({ parallel: 9 });
+    const a = ready('A');
+    tickets.startCycle(cycle.id);
+    await autopilot.evaluate(project.id);
+    const id = conversations.list({ ticketNumber: a.number })[0].id;
+
+    await conversations.stop(id);
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number]);
+
+    await conversations.close(id);
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([a.number, a.number]);
+  });
+
   it('starts Eligible work in Todo order, up to the free slots, as Autopilot with the Start message', async () => {
     const { tickets, conversations, project, cycle, autopilot, ready, runner } =
       setup({ parallel: 2 });
@@ -62,6 +90,37 @@ describe('Autopilot dispatch', () => {
     expect(runner.runs[0].options.prompt).toBe(
       `/mattpocock-skills:implement T${c.number}`,
     );
+  });
+
+  it('starts an Epic again once it is sent Back to Todo', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const {
+      tickets,
+      conversations,
+      project,
+      cycle,
+      autopilot,
+      ready,
+      started,
+    } = setup();
+    const epic = ready('Spec', { type: 'Epic' });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Child',
+      epicNumber: epic.number,
+    });
+    tickets.startCycle(cycle.id);
+    await autopilot.evaluate(project.id);
+    await conversations.stop(
+      conversations.list({ ticketNumber: epic.number })[0].id,
+    );
+    tickets.updateTicket(child.number, { status: 'In progress' });
+    vi.setSystemTime(Date.now() + 1000);
+
+    tickets.backToTodo(epic.number);
+    await autopilot.evaluate(project.id);
+
+    expect(started()).toEqual([epic.number, epic.number]);
   });
 
   it('starts an Epic with the Epic command', async () => {
@@ -152,6 +211,7 @@ describe('Autopilot dispatch', () => {
   });
 
   it('dispatches on its own when the switch flips, a Cycle starts, a Blocker is done, a Ticket is sent Back to Todo or a slot frees', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
     const world = setup({ autopilot: false, parallel: 9 });
     const {
       tickets,
@@ -192,6 +252,7 @@ describe('Autopilot dispatch', () => {
     );
     tickets.updateTicket(a.number, { status: 'In progress' });
     await autopilot.idle();
+    vi.setSystemTime(Date.now() + 1000);
     tickets.backToTodo(a.number);
     await autopilot.idle();
     expect(started().filter((n) => n === a.number)).toHaveLength(2);
@@ -368,6 +429,7 @@ describe('Autopilot startup', () => {
       startedBy: 'autopilot',
       ticketNumber: mine.number,
       intent: 'start',
+      cycleId: cycle.id,
       prompt: 'Go',
     });
     await conversations.start({
@@ -419,6 +481,29 @@ describe('Autopilot startup', () => {
       `The server restarted. Continue T${mine.number} from where you left off`,
     );
     stop();
+  });
+
+  it("leaves Autopilot's interrupted Conversations interrupted when their Ticket is Done, archived or not in the Active Cycle", async () => {
+    const done = await restarted();
+    done.tickets.completeTicket(done.mine.number);
+    done.autopilot.start();
+    await done.autopilot.idle();
+    expect(done.stateOf(done.mine.number)).toBe('interrupted');
+
+    const archived = await restarted();
+    archived.tickets.archiveTicket(archived.mine.number);
+    archived.autopilot.start();
+    await archived.autopilot.idle();
+    expect(archived.stateOf(archived.mine.number)).toBe('interrupted');
+
+    const elsewhere = await restarted();
+    elsewhere.tickets.unplanTicket({
+      cycleId: elsewhere.cycle.id,
+      number: elsewhere.mine.number,
+    });
+    elsewhere.autopilot.start();
+    await elsewhere.autopilot.idle();
+    expect(elsewhere.stateOf(elsewhere.mine.number)).toBe('interrupted');
   });
 
   it('resumes before it dispatches new work, and never beyond the cap', async () => {
