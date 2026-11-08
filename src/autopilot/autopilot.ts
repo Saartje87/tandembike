@@ -18,6 +18,10 @@ export type AutopilotDeps = {
 
 const readyLabel = 'ready-for-agent';
 /** Its run is doing something, or waiting on an answer, and holds a slot. */
+/** How long a transient end waits before its one automatic resume. */
+const transientBackoffMs = 60_000;
+const transientResumeText =
+  'The last run ended on a transient error. Continue where you left off.';
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /**
@@ -25,8 +29,9 @@ const workingStates: ConversationState[] = ['running', 'waiting'];
  * Cycle, it starts a Start Conversation for each Eligible Ticket or Epic, in
  * the Cycle Board's Todo order, up to the Project's free Start run slots.
  * Evaluations run one at a time, so nothing is dispatched twice. It never
- * changes Status or labels, and never retries: a Ticket with a Start
- * Conversation that is not closed waits for the User.
+ * changes Status or labels, and retries only a transient end, once (ADR
+ * 0034): any other Ticket with a Start Conversation that is not closed waits
+ * for the User.
  */
 export function createAutopilot({
   tickets,
@@ -34,6 +39,8 @@ export function createAutopilot({
   changes,
 }: AutopilotDeps) {
   let queue: Promise<void> = Promise.resolve();
+  /** Backoff timers by Conversation; a restart drops them (startup resume covers it). */
+  const backoffs = new Map<number, ReturnType<typeof setTimeout>>();
   const pendingEvaluations = new Map<number, Promise<void>>();
 
   /** Runs `step` after the queued ones, logging a failure instead of losing it. */
@@ -207,6 +214,71 @@ export function createAutopilot({
     }
   };
 
+  /**
+   * ADR 0034: resumes each open Start Conversation of the Active Cycle whose
+   * latest Run outcome is `failed_transient` and a minute old, unless that run
+   * was itself an automatic resume (an Autopilot reply, so not the Conversation's
+   * first run; the User's reply starts the count again). One not yet old enough
+   * gets a timer that evaluates the Project when it is.
+   */
+  const resumeTransient = async (projectId: number) => {
+    const open = room(projectId);
+    if (!open) {
+      return;
+    }
+    let slots = open.slots;
+    for (const conversation of startConversations(projectId)) {
+      if (conversation.hidden || workingStates.includes(conversation.state)) {
+        continue;
+      }
+      const outcome = conversations.latestRunOutcome(conversation.id);
+      if (outcome?.result !== 'failed_transient') {
+        continue;
+      }
+      const resumed =
+        outcome.startedByAutopilot &&
+        conversations.runOutcomes(conversation.id).length > 1;
+      const ticket = tickets.getTicket(conversation.ticketNumber as number);
+      if (
+        resumed ||
+        ticket.cycle?.id !== open.cycleId ||
+        ticket.status === 'Done' ||
+        ticket.archived
+      ) {
+        continue;
+      }
+      const wait = outcome.endedAt.getTime() + transientBackoffMs - Date.now();
+      if (wait > 0) {
+        if (!backoffs.has(conversation.id)) {
+          backoffs.set(
+            conversation.id,
+            setTimeout(() => {
+              backoffs.delete(conversation.id);
+              void evaluate(projectId);
+            }, wait),
+          );
+        }
+        continue;
+      }
+      if (slots <= 0) {
+        break;
+      }
+      try {
+        await conversations.reply(
+          conversation.id,
+          transientResumeText,
+          'autopilot',
+        );
+        slots -= 1;
+      } catch (error) {
+        console.error(
+          `Autopilot could not resume T${conversation.ticketNumber}`,
+          error,
+        );
+      }
+    }
+  };
+
   const dispatch = async (projectId: number) => {
     const open = room(projectId);
     if (!open) {
@@ -261,6 +333,7 @@ export function createAutopilot({
     }
     const run = enqueue(async () => {
       pendingEvaluations.delete(projectId);
+      await resumeTransient(projectId);
       await dispatch(projectId);
     });
     pendingEvaluations.set(projectId, run);
@@ -271,6 +344,7 @@ export function createAutopilot({
   const startup = (projectId: number): Promise<void> =>
     enqueue(async () => {
       await resume(projectId);
+      await resumeTransient(projectId);
       await dispatch(projectId);
     });
 
@@ -305,7 +379,13 @@ export function createAutopilot({
       for (const project of tickets.listProjects()) {
         void startup(project.id);
       }
-      return unsubscribe;
+      return () => {
+        unsubscribe();
+        for (const timer of backoffs.values()) {
+          clearTimeout(timer);
+        }
+        backoffs.clear();
+      };
     },
   };
 }
