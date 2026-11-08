@@ -14,6 +14,7 @@ const commands = {
   triageCommand: '/mattpocock-skills:triage',
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: null,
+  retroCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
@@ -21,7 +22,7 @@ describe('AgentCommandsForm', () => {
     vi.mocked(setProjectAgentCommands).mockReset();
   });
 
-  it('shows the three commands, blank for none, and saves the edited ones', async () => {
+  it('shows the four commands, blank for none, and saves the edited ones', async () => {
     const user = userEvent.setup();
     vi.mocked(setProjectAgentCommands).mockResolvedValue({
       ok: true,
@@ -29,6 +30,7 @@ describe('AgentCommandsForm', () => {
         triageCommand: '/triage',
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
+        retroCommand: '/retro',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -37,6 +39,8 @@ describe('AgentCommandsForm', () => {
     const startEpic = screen.getByRole('textbox', {
       name: 'Start command for Epics',
     });
+    const retro = screen.getByRole('textbox', { name: 'Retro command' });
+    expect(retro).toHaveValue('');
     expect(triage).toHaveValue('/mattpocock-skills:triage');
     expect(start).toHaveValue('/mattpocock-skills:implement');
     expect(startEpic).toHaveValue('');
@@ -44,6 +48,7 @@ describe('AgentCommandsForm', () => {
     await user.clear(triage);
     await user.type(triage, 'triage');
     await user.type(startEpic, 'implement-spec');
+    await user.type(retro, 'retro');
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(setProjectAgentCommands).toHaveBeenCalledWith({
@@ -51,9 +56,11 @@ describe('AgentCommandsForm', () => {
       triageCommand: 'triage',
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: 'implement-spec',
+      retroCommand: 'retro',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');
+    expect(retro).toHaveValue('/retro');
   });
 
   it('shows a refusal under the field it names and keeps the text', async () => {

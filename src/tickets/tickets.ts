@@ -212,6 +212,7 @@ const agentCommandColumns = {
   triageCommand: projects.triageCommand,
   startCommand: projects.startCommand,
   startEpicCommand: projects.startEpicCommand,
+  retroCommand: projects.retroCommand,
 };
 
 const agentSettingsColumns = {
@@ -1508,7 +1509,7 @@ export function createTickets(
     },
 
     /**
-     * Project `id`'s agent commands: what its Triage and Start buttons send
+     * Project `id`'s agent commands: what its Triage, Start and Retro buttons send
      * before the Ticket number. Like its Skills, only the User sets them.
      */
     getProjectAgentCommands(id: number): ProjectAgentCommands {

@@ -9,7 +9,7 @@ const fieldErrors = (run: () => unknown) =>
   (errorFrom(run) as ValidationError).fieldErrors;
 
 describe("A Project's agent commands", () => {
-  it('start with the mattpocock-skills triage, implement and implement-spec commands', () => {
+  it('start with the mattpocock-skills triage, implement, implement-spec and retro commands', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
@@ -17,6 +17,7 @@ describe("A Project's agent commands", () => {
       triageCommand: '/mattpocock-skills:triage',
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: '/mattpocock-skills:implement-spec',
+      retroCommand: '/mattpocock-skills:retro',
     });
   });
 
@@ -28,12 +29,14 @@ describe("A Project's agent commands", () => {
       triageCommand: ' triage ',
       startCommand: '/implement',
       startEpicCommand: '   ',
+      retroCommand: ' retro ',
     });
 
     expect(saved).toEqual({
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: null,
+      retroCommand: '/retro',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -49,6 +52,7 @@ describe("A Project's agent commands", () => {
           triageCommand: '/triage T1',
           startCommand: '/implement',
           startEpicCommand: `/${'a'.repeat(100)}`,
+          retroCommand: '/retro',
         }),
       ),
     ).toEqual({
@@ -69,6 +73,7 @@ describe("A Project's agent commands", () => {
           triageCommand: '',
           startCommand: '',
           startEpicCommand: '',
+          retroCommand: '',
         }),
       ),
     ).toBeInstanceOf(NotAllowedError);

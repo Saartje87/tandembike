@@ -155,7 +155,7 @@ A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project off
 _Avoid_: Command chip, preset, slash command (for the setting)
 
 **Agent command**:
-A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
+A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, or a Cycle's Retro sends with the Cycle, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. It also has a **Retro command**, which a Retro starts with, followed by the Cycle's title and id (`/mattpocock-skills:retro "Factory p2" (Cycle 44)`); a blank one sends the plain `Retro on Cycle "Factory p2"`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
 _Avoid_: Triage skill, Start skill, preset
 
 **Activity**:

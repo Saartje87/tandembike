@@ -214,12 +214,14 @@ describe('Skill actions', () => {
       triageCommand: 'triage',
       startCommand: '/implement',
       startEpicCommand: '',
+      retroCommand: '',
     });
 
     const commands = {
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: null,
+      retroCommand: null,
     };
     expect(result).toEqual({ ok: true, commands });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
@@ -236,6 +238,7 @@ describe('Skill actions', () => {
       triageCommand: '',
       startCommand: '/implement T1',
       startEpicCommand: '',
+      retroCommand: '',
     });
 
     expect(result).toMatchObject({

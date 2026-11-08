@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `retro_command` text DEFAULT '/mattpocock-skills:retro';

@@ -20,16 +20,18 @@ const fields: { name: keyof ProjectAgentCommands; label: string }[] = [
   { name: 'triageCommand', label: 'Triage command' },
   { name: 'startCommand', label: 'Start command' },
   { name: 'startEpicCommand', label: 'Start command for Epics' },
+  { name: 'retroCommand', label: 'Retro command' },
 ];
 
 const valuesOf = (commands: ProjectAgentCommands): AgentCommandsFormValues => ({
   triageCommand: commands.triageCommand ?? '',
   startCommand: commands.startCommand ?? '',
   startEpicCommand: commands.startEpicCommand ?? '',
+  retroCommand: commands.retroCommand ?? '',
 });
 
 /**
- * A Project's Triage, Start and Start-for-Epics commands (T621), each a
+ * A Project's Triage, Start, Start-for-Epics and Retro commands (T621), each a
  * single line, blank for none. Save shows them as stored; a refusal shows
  * under the field it names and keeps the text.
  */

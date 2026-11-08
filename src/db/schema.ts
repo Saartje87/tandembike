@@ -79,6 +79,10 @@ export const projects = sqliteTable('projects', {
   startEpicCommand: text('start_epic_command').default(
     defaultAgentCommands.startEpicCommand,
   ),
+  /** The command a Retro sends before the Cycle reference; null for none. */
+  retroCommand: text('retro_command').default(
+    defaultAgentCommands.retroCommand,
+  ),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

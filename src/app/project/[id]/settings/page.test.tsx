@@ -137,6 +137,7 @@ describe('SettingsPage', () => {
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: '',
+      retroCommand: '',
     });
     vi.mocked(appTickets).mockReturnValue(tickets);
 

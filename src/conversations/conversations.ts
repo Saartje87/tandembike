@@ -762,7 +762,10 @@ export function createConversations({
         startedBy: 'user',
         projectId: cycle.projectId,
         intent: 'retro',
-        prompt: retroPrompt(cycle),
+        prompt: retroPrompt(
+          cycle,
+          tickets.getProjectAgentCommands(cycle.projectId).retroCommand,
+        ),
         retroCycleId: cycle.id,
       });
     },

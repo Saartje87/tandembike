@@ -136,6 +136,7 @@ describe('BoardTicketDrawer', () => {
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: '',
+      retroCommand: '',
     });
 
     renderWithTheme(
@@ -158,6 +159,7 @@ describe('BoardTicketDrawer', () => {
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: null,
+      retroCommand: null,
     });
   });
 

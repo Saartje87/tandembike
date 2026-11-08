@@ -1807,8 +1807,14 @@ describe('Autopilot spend', () => {
 });
 
 describe('A Retro Conversation', () => {
-  it('records its Cycle and the User, and sends the plain prompt', async () => {
+  it('records its Cycle and the User, and sends the plain prompt when the Retro command is blank', async () => {
     const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentCommands(project.id, {
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: '',
+    });
     const cycle = tickets.createCycle({
       projectId: project.id,
       title: 'Launch the beta',
@@ -1831,6 +1837,28 @@ describe('A Retro Conversation', () => {
     );
     expect(conversations.transcript(retro.id)).toMatchObject([
       { role: 'user', text: 'Retro on Cycle "Launch the beta"' },
+    ]);
+  });
+
+  it('sends the Retro command with the Cycle’s title and id when it is set', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentCommands(project.id, {
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: 'retro',
+    });
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Launch the beta',
+    });
+
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    const message = `/retro "Launch the beta" (Cycle ${cycle.id})`;
+    expect(runner.runs[0].options.prompt).toBe(message);
+    expect(conversations.transcript(retro.id)).toMatchObject([
+      { role: 'user', text: message },
     ]);
   });
 
