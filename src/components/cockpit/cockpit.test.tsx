@@ -684,7 +684,9 @@ describe('Cockpit', () => {
     expect(done.querySelector('details')).not.toHaveAttribute('open');
     expect(within(done).getByText('1')).toBeVisible();
 
-    await userEvent.click(within(yourWork).getAllByText('Your work')[0]);
+    await userEvent.click(
+      within(yourWork).getByText('Your work', { selector: 'summary span' }),
+    );
 
     expect(yourWork.querySelector('details')).toHaveAttribute('open');
   });

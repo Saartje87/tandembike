@@ -662,8 +662,8 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * working; Needs you shows what waits on the User on this Board (Action
  * needed, Review, then Intake), in groups that start open,
  * longest waiting first; Queued, open, shows what runs next; In flight
- * shows each Running Ticket with what its run is doing; Your work and Done
- * stay closed until opened (ADR 0026).
+ * shows each Running Ticket with what its run is doing; Your work, on the
+ * Active Cycle's Board, and Done stay closed until opened (ADR 0026).
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Cockpit. The browser tab's title carries the Needs you
  * count. It follows live Conversations as the Board does.
