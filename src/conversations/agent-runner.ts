@@ -7,8 +7,11 @@ import type { PermissionAnswer } from './conversation-state';
 
 /** What a run reports while it works. */
 export type RunEvent =
-  /** The run's SDK session, which a later reply resumes. */
-  | { type: 'session'; sessionId: string }
+  /**
+   * The run's SDK session, which a later reply resumes, and the model it
+   * runs on, from the SDK's init message.
+   */
+  | { type: 'session'; sessionId: string; model?: string }
   /** Something the Agent said. */
   | { type: 'agent'; text: string }
   /**

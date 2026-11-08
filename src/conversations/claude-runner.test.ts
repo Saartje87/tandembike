@@ -524,4 +524,17 @@ describe('The Claude runner', () => {
       ).toEqual([]);
     });
   });
+
+  it('reports the model of the SDK init message with the session', () => {
+    expect(
+      eventsOf({
+        type: 'system',
+        subtype: 'init',
+        session_id: 'sess-1',
+        model: 'claude-opus-5',
+      } as never),
+    ).toEqual([
+      { type: 'session', sessionId: 'sess-1', model: 'claude-opus-5' },
+    ]);
+  });
 });

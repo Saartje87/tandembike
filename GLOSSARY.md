@@ -138,6 +138,10 @@ _Avoid_: Ready (that is the label), startable
 Who started a Conversation: the **User**, or **Autopilot**. Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
 _Avoid_: Owner, author, initiator
 
+**Run outcome**:
+The record a Conversation's run leaves when it ends: a turn result, an exit or the User's stop. It holds the Conversation, Project and Ticket, the Stage (the Conversation's intent), the result, when the run started and ended, what it cost, the model, the command its first message started with and whether Autopilot started it. The result is the first that matches: `stopped` (the User stopped it), `failed_transient` or `failed` (the end carries an error; transient means an API overload, rate limit, 5xx or network error, everything else is substantive), `completed` (the Ticket is Done), `pr_open` (the Ticket has a PR reference), `abandoned` (a Start whose Ticket is Todo), else `needs_reply`. Only the Conversations module writes and reads Run outcomes, never an MCP tool, so no Agent can shape its own statistics; they stay when a Conversation is closed. The Stats page shows them per Project and Stage over the last 30 days.
+_Avoid_: Run result, run log
+
 **Spend ceiling**:
 A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
 _Avoid_: Budget, cap (that is the run cap), limit

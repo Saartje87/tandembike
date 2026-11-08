@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 
 import { renderWithTheme } from '../../test/render';
 import type { ProjectStats, Stats } from '../../tickets/stats';
-import { StatsOverview } from './stats-overview';
+import { type RunStatsByProject, StatsOverview } from './stats-overview';
 
-const renderStats = (stats: Stats) =>
+const renderStats = (stats: Stats, runStats: RunStatsByProject = {}) =>
   act(async () => {
-    renderWithTheme(<StatsOverview stats={Promise.resolve(stats)} />);
+    renderWithTheme(
+      <StatsOverview
+        stats={Promise.resolve(stats)}
+        runStats={Promise.resolve(runStats)}
+      />,
+    );
   });
 
 const projectStats = (
@@ -122,5 +127,51 @@ describe('StatsOverview', () => {
 
     expect(screen.getByText('No Projects yet.')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it("shows each Stage's runs, results, cost and duration under its Project", async () => {
+    await renderStats(stats, {
+      1: [
+        {
+          stage: 'start',
+          runs: 4,
+          results: {
+            completed: 2,
+            pr_open: 1,
+            needs_reply: 0,
+            abandoned: 0,
+            stopped: 0,
+            failed_transient: 1,
+            failed: 0,
+          },
+          totalCostUsd: 10,
+          meanCostUsd: 2.5,
+          meanDurationMs: 200_000,
+        },
+      ],
+    });
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: /Website/ }),
+    ).toBeInTheDocument();
+    expect(cellsOf('Start')).toEqual([
+      '4',
+      '2',
+      '1',
+      '0',
+      '0',
+      '0',
+      '1',
+      '0',
+      '$10.00',
+      '$2.50',
+      '3m 20s',
+    ]);
+  });
+
+  it('shows no run table for a Project without runs', async () => {
+    await renderStats(stats, { 2: [] });
+
+    expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
   });
 });

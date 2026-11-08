@@ -1,13 +1,14 @@
-import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, max, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
-import { conversationEntries, conversations } from '../db/schema';
+import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
   NotFoundError,
   ValidationError,
 } from '../tickets/errors';
+import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
 import type {
@@ -32,6 +33,7 @@ import {
 } from './conversation-state';
 import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
+import { type RunResult, runResultOf, runResults } from './run-outcome';
 
 /** Who sends a reply: the User, or Autopilot in their place. */
 export type ConversationSender = ConversationStarter;
@@ -56,6 +58,41 @@ export type Conversation = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+/** One run end of a Conversation (GLOSSARY: Run outcome). */
+export type RunOutcome = {
+  id: number;
+  conversationId: number;
+  projectId: number;
+  ticketNumber: number | null;
+  /** The Conversation's intent. */
+  stage: ConversationIntent;
+  result: RunResult;
+  startedAt: Date;
+  endedAt: Date;
+  /** What this run cost in USD, not the Conversation's total. */
+  costUsd: number;
+  model: string | null;
+  /** The `/command` the run's first message started with; null for none. */
+  command: string | null;
+  startedByAutopilot: boolean;
+};
+
+/** How one Stage of a Project ended over the last 30 days. */
+export type StageRunStats = {
+  stage: ConversationIntent;
+  runs: number;
+  results: Record<RunResult, number>;
+  totalCostUsd: number;
+  meanCostUsd: number;
+  meanDurationMs: number;
+};
+
+const runStatsWindowMs = 30 * 24 * 60 * 60 * 1000;
+
+/** The `/command` a message starts with, such as `/implement`; null for none. */
+const commandOf = (message: string): string | null =>
+  /^\/[\w:-]+/.exec(message.trim())?.[0] ?? null;
 
 /** The longest tool input, as JSON, that is stored whole; a longer one is not stored. */
 export const maxToolInputLength = 4096;
@@ -129,10 +166,26 @@ type LiveRun = {
   costBefore: number;
   /** Set when the User stopped the run; it still reports its last cost. */
   stopped?: boolean;
+  /** The model the run reported in its init message. */
+  model: string | null;
+  /**
+   * The message the run is working on, until it ends (a turn, an exit or a
+   * stop): what its Run outcome is recorded from. Null between runs.
+   */
+  pending: PendingRun | null;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
   /** Questions waiting for the User, by transcript entry id. */
   questioning: Map<number, (answers: QuestionAnswers) => void>;
+};
+
+/** A run's start, recorded when its message goes in. */
+type PendingRun = {
+  startedAt: Date;
+  /** The Conversation's cost when the run began. */
+  costAtStart: number;
+  command: string | null;
+  startedByAutopilot: boolean;
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -186,6 +239,53 @@ export function createConversations({
     db.update(conversations)
       .set({ ...values, updatedAt: new Date() })
       .where(eq(conversations.id, id))
+      .run();
+  };
+
+  /**
+   * Records the Run outcome of the run `handle` is working on, if it is
+   * still working: a turn result, an exit or a stop each end it, once.
+   * `cost` is the Conversation's cost now.
+   */
+  const recordOutcome = (
+    id: number,
+    handle: LiveRun,
+    end: { stopped?: boolean; error?: string; cost: number },
+  ) => {
+    const pending = handle.pending;
+    if (!pending) {
+      return;
+    }
+    handle.pending = null;
+    const conversation = get(id);
+    const ticket =
+      conversation.ticketNumber === null
+        ? null
+        : tickets.getTicket(conversation.ticketNumber);
+    const result = runResultOf({
+      stopped: end.stopped ?? false,
+      error: end.error,
+      ticketStatus: ticket?.status ?? null,
+      hasPullRequest:
+        ticket !== null &&
+        (ticket.externalReferences.some(isPullRequestReference) ||
+          ticket.epic?.hasPullRequest === true),
+      intent: conversation.intent,
+    });
+    db.insert(runOutcomes)
+      .values({
+        conversationId: id,
+        projectId: conversation.projectId,
+        ticketNumber: conversation.ticketNumber,
+        stage: conversation.intent,
+        result,
+        startedAt: pending.startedAt,
+        endedAt: new Date(),
+        costUsd: Math.max(0, end.cost - pending.costAtStart),
+        model: handle.model,
+        command: pending.command,
+        startedByAutopilot: pending.startedByAutopilot,
+      })
       .run();
   };
 
@@ -322,6 +422,7 @@ export function createConversations({
     }
     switch (event.type) {
       case 'session':
+        handle.model = event.model ?? handle.model;
         update(id, { sdkSessionId: event.sessionId });
         break;
       case 'agent':
@@ -352,6 +453,10 @@ export function createConversations({
           state: 'idle',
           costUsd: handle.costBefore + event.costUsd,
         });
+        recordOutcome(id, handle, {
+          error: event.error,
+          cost: handle.costBefore + event.costUsd,
+        });
         break;
       case 'waiting':
         update(id, { state: event.waiting ? 'waiting' : 'running' });
@@ -366,6 +471,10 @@ export function createConversations({
         // A run that ends is interrupted, even between turns: a reply
         // resumes it, but nothing waits on the User (T587).
         update(id, { state: 'interrupted' });
+        recordOutcome(id, handle, {
+          error: event.error,
+          cost: get(id).costUsd,
+        });
         break;
       }
     }
@@ -427,6 +536,7 @@ export function createConversations({
     prompt: string,
     resume?: string,
     limited = true,
+    sentBy: ConversationSender = 'user',
   ) => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
@@ -449,6 +559,13 @@ export function createConversations({
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,
+      model: null,
+      pending: {
+        startedAt: new Date(),
+        costAtStart: conversation.costUsd,
+        command: commandOf(prompt),
+        startedByAutopilot: sentBy === 'autopilot',
+      },
       asking: new Map(),
       questioning: new Map(),
     };
@@ -585,7 +702,7 @@ export function createConversations({
       .get();
     append(created.id, input.startedBy, prompt);
     try {
-      startRun(created.id, prompt);
+      startRun(created.id, prompt, undefined, true, input.startedBy);
     } catch (error) {
       update(created.id, { state: 'interrupted' });
       append(created.id, 'error', 'The Agent could not be started.');
@@ -620,6 +737,80 @@ export function createConversations({
         )
         .get();
       return row?.total ?? 0;
+    },
+
+    /**
+     * The Run outcomes of a Conversation, oldest first. Only this module
+     * reads them, never MCP (GLOSSARY: Run outcome); they stay when the
+     * Conversation is closed.
+     */
+    runOutcomes(id: number): RunOutcome[] {
+      return db
+        .select()
+        .from(runOutcomes)
+        .where(eq(runOutcomes.conversationId, id))
+        .orderBy(runOutcomes.id)
+        .all();
+    },
+
+    /**
+     * The Conversation's latest Run outcome, for Autopilot to see how its
+     * last run ended and whether Autopilot started it; null before any run
+     * ended.
+     */
+    latestRunOutcome(id: number): RunOutcome | null {
+      return (
+        db
+          .select()
+          .from(runOutcomes)
+          .where(eq(runOutcomes.conversationId, id))
+          .orderBy(desc(runOutcomes.id))
+          .limit(1)
+          .get() ?? null
+      );
+    },
+
+    /**
+     * How each Stage of a Project did over the last 30 days: runs, count per
+     * result, total and mean cost, mean duration. Stages with no run in the
+     * window are left out.
+     */
+    runStats(projectId: number): StageRunStats[] {
+      const since = new Date(Date.now() - runStatsWindowMs);
+      const rows = db
+        .select()
+        .from(runOutcomes)
+        .where(
+          and(
+            eq(runOutcomes.projectId, projectId),
+            gte(runOutcomes.endedAt, since),
+          ),
+        )
+        .orderBy(runOutcomes.id)
+        .all();
+      const byStage = new Map<ConversationIntent, StageRunStats>();
+      for (const row of rows) {
+        const stats = byStage.get(row.stage) ?? {
+          stage: row.stage,
+          runs: 0,
+          results: Object.fromEntries(
+            runResults.map((result) => [result, 0]),
+          ) as Record<RunResult, number>,
+          totalCostUsd: 0,
+          meanCostUsd: 0,
+          meanDurationMs: 0,
+        };
+        stats.runs += 1;
+        stats.results[row.result] += 1;
+        stats.totalCostUsd += row.costUsd;
+        stats.meanDurationMs += row.endedAt.getTime() - row.startedAt.getTime();
+        byStage.set(row.stage, stats);
+      }
+      return [...byStage.values()].map((stats) => ({
+        ...stats,
+        meanCostUsd: stats.totalCostUsd / stats.runs,
+        meanDurationMs: stats.meanDurationMs / stats.runs,
+      }));
     },
 
     /** Conversations of a Project and/or Ticket, newest first. */
@@ -808,9 +999,21 @@ export function createConversations({
         }
         append(id, sentBy, message);
         update(id, { state: 'running' });
+        handle.pending ??= {
+          startedAt: new Date(),
+          costAtStart: conversation.costUsd,
+          command: commandOf(message),
+          startedByAutopilot: sentBy === 'autopilot',
+        };
         handle.run.send(message);
       } else {
-        startRun(id, message, conversation.sdkSessionId ?? undefined, limited);
+        startRun(
+          id,
+          message,
+          conversation.sdkSessionId ?? undefined,
+          limited,
+          sentBy,
+        );
         append(id, sentBy, message);
         update(id, { state: 'running' });
       }
@@ -827,6 +1030,10 @@ export function createConversations({
       const handle = live.get(id);
       live.delete(id);
       if (handle) {
+        recordOutcome(id, handle, {
+          stopped: true,
+          cost: conversation.costUsd,
+        });
         handle.stopped = true;
         expireAsking(handle);
         expireQuestioning(handle);
