@@ -9,6 +9,7 @@ import {
   formatCost,
   hasRun,
   intentNames,
+  starterNames,
   stateNames,
 } from '../conversation-labels/conversation-labels';
 
@@ -38,6 +39,9 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
           <Text fontWeight="strong">{title}</Text>
           <Text fontSize="small" color="muted">
             {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}, ${formatCost(conversation.costUsd)}`}
+          </Text>
+          <Text fontSize="small" color="muted">
+            {`Started by ${starterNames[conversation.startedBy]}`}
           </Text>
         </Stack>
         {hasRun(conversation.state) && (

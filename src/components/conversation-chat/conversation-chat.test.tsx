@@ -37,6 +37,7 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   ticketNumber: 4,
   intent: 'start',
   state: 'idle',
+  startedBy: 'user',
   sdkSessionId: null,
   costUsd: 0,
   hidden: false,
@@ -116,6 +117,40 @@ describe('ConversationChat', () => {
 
     expect(screen.getByText('T4 A Ticket')).toBeInTheDocument();
     expect(screen.getByText('Triage, working, $0.50')).toBeInTheDocument();
+  });
+
+  it('shows who started the Conversation in the header', () => {
+    const { rerender } = renderWithTheme(
+      <ConversationChat title="T4 A Ticket" item={one({})} />,
+    );
+    expect(screen.getByText('Started by you')).toBeInTheDocument();
+
+    rerender(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ startedBy: 'autopilot' })}
+      />,
+    );
+    expect(screen.getByText('Started by Autopilot')).toBeInTheDocument();
+  });
+
+  it("shows an Autopilot message apart from the User's", () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({}, [
+          entry({ id: 1, role: 'user', text: 'Hi' }),
+          entry({ id: 2, role: 'autopilot', text: 'The server restarted.' }),
+        ])}
+      />,
+    );
+
+    const lines = within(
+      screen.getByRole('list', { name: 'Transcript' }),
+    ).getAllByRole('listitem');
+    expect(within(lines[1]).getByText('Autopilot')).toBeInTheDocument();
+    expect(within(lines[1]).getByText('The server restarted.')).toBeVisible();
+    expect(lines[1]).not.toHaveAttribute('data-side', 'end');
   });
 
   it('sends a reply with Enter and clears the field', async () => {

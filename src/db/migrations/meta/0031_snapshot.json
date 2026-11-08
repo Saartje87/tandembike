@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "10a6487a-18cd-4a00-963d-ba34a0ccabb7",
+  "id": "ca573888-fd22-4996-907e-edc7ddd0c505",
   "prevId": "ca952076-3170-46b4-9aa1-e58a83aebf6c",
   "tables": {
     "conversation_entries": {
@@ -137,6 +137,14 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "started_by": {
+          "name": "started_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'user'"
         },
         "sdk_session_id": {
           "name": "sdk_session_id",
@@ -437,21 +445,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
-        },
-        "run_mode": {
-          "name": "run_mode",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'default'"
-        },
-        "run_model": {
-          "name": "run_model",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         },
         "skills": {
           "name": "skills",
