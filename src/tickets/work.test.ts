@@ -187,6 +187,23 @@ describe('startWork', () => {
     expect(tickets.getTicket(ticket.number).claim).toBeNull();
   });
 
+  it('names the Claim holder before the Blockers when both apply', () => {
+    const { tickets, project, make } = setup();
+    const blocker = tickets.createTicket({
+      projectId: project.id,
+      title: 'First',
+    });
+    const ticket = make('Build it');
+    tickets.addBlocker({ blocker: blocker.number, blocked: ticket.number });
+    tickets.claimTicket(ticket.number, { agentRunId: 'run-9' });
+
+    expect(errorFrom(() => tickets.startWork(ticket.number, 'run-1'))).toEqual(
+      new NotAllowedError(
+        `Ticket T${ticket.number} is already claimed by Agent run run-9.`,
+      ),
+    );
+  });
+
   it('only claims an In progress Ticket', () => {
     const { tickets, make } = setup();
     const ticket = make('Review me', { status: 'In progress' });
@@ -288,5 +305,74 @@ describe('abandonWork', () => {
       errorFrom(() => tickets.abandonWork(ticket.number, 'run-1', '  ')),
     ).toBeInstanceOf(ValidationError);
     expect(tickets.getTicket(ticket.number).claim).not.toBeNull();
+  });
+});
+
+describe('abandonWork without a Claim of the run', () => {
+  it('refuses an unclaimed Ticket and writes no comment', () => {
+    const { tickets, make } = setup();
+    const ticket = make('Build it', { status: 'In progress' });
+
+    expect(
+      errorFrom(() => tickets.abandonWork(ticket.number, 'run-1', 'Nope')),
+    ).toBeInstanceOf(NotAllowedError);
+    expect(tickets.listComments(ticket.number)).toEqual([]);
+    expect(tickets.getTicket(ticket.number).status).toBe('In progress');
+  });
+});
+
+describe('linkPullRequest', () => {
+  it('adds the reference and releases the run Claim together', () => {
+    const { tickets, make } = setup();
+    const ticket = make('Build it');
+    tickets.startWork(ticket.number, 'run-1');
+
+    const result = tickets.linkPullRequest(
+      ticket.number,
+      'https://github.com/o/r/pull/3',
+      'run-1',
+    );
+
+    expect(result.claim).toBeNull();
+    expect(result.externalReferences).toHaveLength(1);
+  });
+
+  it('adds no reference when another run holds the Claim', () => {
+    const { tickets, make } = setup();
+    const ticket = make('Build it');
+    tickets.startWork(ticket.number, 'run-1');
+
+    expect(
+      errorFrom(() =>
+        tickets.linkPullRequest(
+          ticket.number,
+          'https://github.com/o/r/pull/3',
+          'run-2',
+        ),
+      ),
+    ).toBeInstanceOf(NotAllowedError);
+    expect(tickets.getTicket(ticket.number).externalReferences).toEqual([]);
+  });
+});
+
+describe('nextWork for an Epic planned elsewhere', () => {
+  it('returns the Epic whose child is planned in the Active Cycle', () => {
+    const { tickets, project, cycle, make } = setup();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Epic',
+      type: 'Epic',
+      labels: ['ready-for-agent'],
+    });
+    const child = make('Child');
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [child.number],
+    });
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.nextWork({ projectId: project.id }).ticket?.number).toBe(
+      epic.number,
+    );
   });
 });

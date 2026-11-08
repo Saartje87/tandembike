@@ -1339,6 +1339,11 @@ export function createTickets(
   changes: ChangeChannel = createChangeChannel(),
 ) {
   const core = {
+    /**
+     * Runs `run` all or nothing: the module's functions nest in it, and a
+     * thrown refusal undoes every write made inside.
+     */
+    transaction: <T>(run: () => T): T => db.transaction(run),
     ...createCycles(db, changes),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
@@ -3054,7 +3059,12 @@ export function createTickets(
       }
     },
   };
-  return { ...core, ...createWork(core) };
+  return {
+    ...core,
+    ...createWork({
+      ...core,
+    }),
+  };
 
   /**
    * Announces Ticket `number`'s change, together with that of each of the

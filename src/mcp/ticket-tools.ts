@@ -54,9 +54,10 @@ type TicketUpdate = Omit<UpdateTicketInput, 'projectId'> & {
 };
 
 /**
- * One Ticket's update_ticket change: the core fields in one atomic update,
- * then Epic, Blockers, Cycle and archive, in that order. Each step is refused
- * with the message of the single-purpose rule it applies.
+ * One Ticket's update_ticket change: the core fields, then Epic,
+ * Blockers, Cycle and archive, in that order, all in one transaction. Each
+ * step is refused with the message of the single-purpose rule it applies, and
+ * a refusal leaves the Ticket unchanged.
  */
 const applyTicketUpdate = (
   tickets: Tickets,
@@ -69,45 +70,46 @@ const applyTicketUpdate = (
     archived,
     ...core
   }: TicketUpdate,
-): Ticket => {
-  const hasCore = Object.values(core).some((value) => value !== undefined);
-  const hasSteps =
-    epicNumber !== undefined ||
-    addBlockers.length > 0 ||
-    removeBlockers.length > 0 ||
-    cycleId !== undefined ||
-    archived !== undefined;
-  // With nothing to change, updateTicket gives its own refusal.
-  if (hasCore || !hasSteps) {
-    tickets.updateTicket(number, core);
-  }
-  if (epicNumber === null) {
-    tickets.detachFromEpic(number);
-  } else if (epicNumber !== undefined) {
-    tickets.attachTicketsToEpic({ epic: epicNumber, children: [number] });
-  }
-  for (const blocker of addBlockers) {
-    tickets.addBlocker({ blocker, blocked: number });
-  }
-  for (const blocker of removeBlockers) {
-    tickets.removeBlocker({ blocker, blocked: number });
-  }
-  if (cycleId !== undefined) {
-    const { failed } = tickets.moveTicketsToCycle({
-      cycleId,
-      ticketNumbers: [number],
-    });
-    if (failed.length > 0) {
-      throw new TicketsError(withMoveHint(failed[0].error));
+): Ticket =>
+  tickets.transaction(() => {
+    const hasCore = Object.values(core).some((value) => value !== undefined);
+    const hasSteps =
+      epicNumber !== undefined ||
+      addBlockers.length > 0 ||
+      removeBlockers.length > 0 ||
+      cycleId !== undefined ||
+      archived !== undefined;
+    // With nothing to change, updateTicket gives its own refusal.
+    if (hasCore || !hasSteps) {
+      tickets.updateTicket(number, core);
     }
-  }
-  if (archived === true) {
-    tickets.archiveTicket(number);
-  } else if (archived === false) {
-    tickets.restoreTicket(number);
-  }
-  return tickets.getTicket(number);
-};
+    if (epicNumber === null) {
+      tickets.detachFromEpic(number);
+    } else if (epicNumber !== undefined) {
+      tickets.attachTicketsToEpic({ epic: epicNumber, children: [number] });
+    }
+    for (const blocker of addBlockers) {
+      tickets.addBlocker({ blocker, blocked: number });
+    }
+    for (const blocker of removeBlockers) {
+      tickets.removeBlocker({ blocker, blocked: number });
+    }
+    if (cycleId !== undefined) {
+      const { failed } = tickets.moveTicketsToCycle({
+        cycleId,
+        ticketNumbers: [number],
+      });
+      if (failed.length > 0) {
+        throw new TicketsError(withMoveHint(failed[0].error));
+      }
+    }
+    if (archived === true) {
+      tickets.archiveTicket(number);
+    } else if (archived === false) {
+      tickets.restoreTicket(number);
+    }
+    return tickets.getTicket(number);
+  });
 
 export const registerTicketTools = ({
   tickets,
@@ -398,7 +400,7 @@ export const registerTicketTools = ({
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog) and archived (true archives, false restores). Fields left out stay as they are. The core fields change atomically; the Epic, Blockers, Cycle and archived steps then follow in that order, and a refusal stops there, leaving earlier steps done. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
       inputSchema: {
         number: z
           .union([ticketNumber, batchTicketNumbers])

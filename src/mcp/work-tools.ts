@@ -131,13 +131,12 @@ export const registerWorkTools = ({
     ({ number, url, handOff, agentRunId, detail }) =>
       respondTicket(
         detail,
-        () => {
-          const run = handOff ? requireRunId(agentRunId, runId) : undefined;
-          const linked = tickets.addExternalReferences(number, [url]);
-          return run === undefined
-            ? linked
-            : tickets.releaseTicketClaim(number, { agentRunId: run });
-        },
+        () =>
+          tickets.linkPullRequest(
+            number,
+            url,
+            handOff ? requireRunId(agentRunId, runId) : undefined,
+          ),
         ({ externalReferences, claim }) => ({ externalReferences, claim }),
       ),
   );

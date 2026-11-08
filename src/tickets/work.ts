@@ -65,6 +65,9 @@ export type WorkDeps = {
   listComments: (number: number) => Comment[];
   addComment: (number: number, input: AddCommentInput) => Comment;
   getProjectAgentSettings: (id: number) => ProjectAgentSettings;
+  addExternalReferences: (number: number, references: string[]) => Ticket;
+  /** Runs `run` all or nothing: a thrown refusal undoes every write in it. */
+  transaction: <T>(run: () => T) => T;
 };
 
 const readyLabel = 'ready-for-agent';
@@ -114,22 +117,47 @@ export function createWork(deps: WorkDeps) {
       if (!active) {
         return { ticket: null, reason: 'no-active-cycle' };
       }
-      const ready: Ticket[] = [];
-      let cursor: number | undefined;
-      do {
-        const page = deps.findTickets({
-          projectId,
-          cycleId: active.id,
-          status: 'Todo',
-          labels: [readyLabel],
-          sort: 'position',
-          detail: 'full',
-          limit: 200,
-          cursor,
-        });
-        ready.push(...(page.tickets as Ticket[]));
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor !== undefined);
+      const listAll = (extra: Partial<FindTicketsInput>): Ticket[] => {
+        const found: Ticket[] = [];
+        let cursor: number | undefined;
+        do {
+          const page = deps.findTickets({
+            projectId,
+            sort: 'position',
+            detail: 'full',
+            limit: 200,
+            cursor,
+            ...extra,
+          });
+          found.push(...(page.tickets as Ticket[]));
+          cursor = page.nextCursor ?? undefined;
+        } while (cursor !== undefined);
+        return found;
+      };
+      const ready = listAll({
+        cycleId: active.id,
+        status: 'Todo',
+        labels: [readyLabel],
+      });
+      // An Epic planned elsewhere joins this Board as the row holding its
+      // children planned here (ADR 0025): it follows the Cycle's own rows.
+      const here = new Set(ready.map(({ number }) => number));
+      const elsewhere = new Set(
+        listAll({ cycleId: active.id })
+          .map(({ epic }) => epic?.number)
+          .filter((n): n is number => n !== undefined && !here.has(n)),
+      );
+      for (const number of elsewhere) {
+        const epic = deps.getTicket(number);
+        if (
+          !epic.archived &&
+          epic.type === 'Epic' &&
+          epic.status === 'Todo' &&
+          epic.labels.includes(readyLabel)
+        ) {
+          ready.push(epic);
+        }
+      }
 
       const candidates = ready.filter(
         (ticket) =>
@@ -157,6 +185,18 @@ export function createWork(deps: WorkDeps) {
      */
     startWork(number: number, runId: string): WorkBundle {
       const before = deps.getTicket(number);
+      const epicClaim =
+        before.epic === null
+          ? null
+          : deps.getTicket(before.epic.number).claim?.agentRunId;
+      // The Claim holder is named before the Blockers (stories 8, 9).
+      if (
+        epicClaim !== runId &&
+        before.claim &&
+        before.claim.agentRunId !== runId
+      ) {
+        deps.claimTicket(number, { agentRunId: runId });
+      }
       if (before.blocked) {
         const unresolved = deps
           .listBlockers(number)
@@ -166,16 +206,14 @@ export function createWork(deps: WorkDeps) {
           `Ticket T${number} is blocked by ${unresolved.join(', ')}. Finish ${unresolved.length === 1 ? 'it' : 'them'} first.`,
         );
       }
-      const epicClaim =
-        before.epic === null
-          ? null
-          : deps.getTicket(before.epic.number).claim?.agentRunId;
-      if (epicClaim !== runId) {
-        deps.claimTicket(number, { agentRunId: runId });
-      }
-      if (before.type === 'Ticket' && before.status === 'Todo') {
-        deps.updateTicket(number, { status: 'In progress' });
-      }
+      deps.transaction(() => {
+        if (epicClaim !== runId) {
+          deps.claimTicket(number, { agentRunId: runId });
+        }
+        if (before.type === 'Ticket' && before.status === 'Todo') {
+          deps.updateTicket(number, { status: 'In progress' });
+        }
+      });
       const ticket = deps.getTicket(number);
       return {
         ticket,
@@ -195,16 +233,37 @@ export function createWork(deps: WorkDeps) {
      */
     abandonWork(number: number, runId: string, reason: string): Ticket {
       const ticket = deps.getTicket(number);
-      if (ticket.claim && ticket.claim.agentRunId !== runId) {
-        // Refused before anything is written.
-        deps.releaseTicketClaim(number, { agentRunId: runId });
+      if (ticket.claim?.agentRunId !== runId) {
+        if (ticket.claim) {
+          // Another run's Claim: the release refuses, naming the holder.
+          deps.releaseTicketClaim(number, { agentRunId: runId });
+        }
+        throw new NotAllowedError(
+          `Ticket T${number} has no Claim of Agent run ${runId} to abandon.`,
+        );
       }
-      deps.addComment(number, { body: reason, author: 'agent' });
-      deps.releaseTicketClaim(number, { agentRunId: runId });
-      return ticket.status === 'In progress' &&
-        !ticket.externalReferences.some(isPullRequestReference)
-        ? deps.backToTodo(number)
-        : deps.getTicket(number);
+      return deps.transaction(() => {
+        deps.addComment(number, { body: reason, author: 'agent' });
+        deps.releaseTicketClaim(number, { agentRunId: runId });
+        return ticket.status === 'In progress' &&
+          !ticket.externalReferences.some(isPullRequestReference)
+          ? deps.backToTodo(number)
+          : deps.getTicket(number);
+      });
+    },
+
+    /**
+     * Adds `url` to Ticket `number`'s External references and, for a hand-off
+     * by `runId`, releases that run's Claim in the same transaction, so a
+     * refused release (another run holds it) leaves no reference behind.
+     */
+    linkPullRequest(number: number, url: string, runId?: string): Ticket {
+      return deps.transaction(() => {
+        const linked = deps.addExternalReferences(number, [url]);
+        return runId === undefined
+          ? linked
+          : deps.releaseTicketClaim(number, { agentRunId: runId });
+      });
     },
   };
 }

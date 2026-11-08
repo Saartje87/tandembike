@@ -190,6 +190,26 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 
+  it('update_ticket leaves a Ticket unchanged when a later step is refused', async () => {
+    const { tickets, project, client } = await setup();
+    const a = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const b = tickets.createTicket({ projectId: project.id, title: 'B' });
+    tickets.addBlocker({ blocker: a.number, blocked: b.number });
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: {
+        number: a.number,
+        title: 'Renamed',
+        addBlockers: [b.number],
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(tickets.getTicket(a.number).title).toBe('A');
+    await client.close();
+  });
+
   it('update_ticket applies one change to several numbers and lists the failures', async () => {
     const { tickets, project, client } = await setup();
     const a = tickets.createTicket({ projectId: project.id, title: 'A' });

@@ -386,7 +386,7 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
 
     expect(maxInstructionsLength).toBe(3500);
-    expect(instructions.length).toBeLessThanOrEqual(maxInstructionsLength);
+    expect(instructions.length).toBeLessThan(maxInstructionsLength);
     for (const tool of tools) {
       expect(tool.description?.length, tool.name).toBeLessThanOrEqual(
         maxInstructionsLength,
