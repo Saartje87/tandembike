@@ -1768,11 +1768,20 @@ export function createTickets(
       };
     },
 
-    /** Every label on any Ticket, archived ones included, sorted. */
-    listLabels(): string[] {
+    /**
+     * Every label on any Ticket, archived ones included, sorted; with
+     * `projectId`, only those on that Project's Tickets.
+     */
+    listLabels({ projectId }: { projectId?: number } = {}): string[] {
       return db
         .selectDistinct({ label: ticketLabels.label })
         .from(ticketLabels)
+        .innerJoin(tickets, eq(tickets.number, ticketLabels.ticketNumber))
+        .where(
+          projectId === undefined
+            ? undefined
+            : eq(tickets.projectId, projectId),
+        )
         .orderBy(asc(ticketLabels.label))
         .all()
         .map(({ label }) => label);
