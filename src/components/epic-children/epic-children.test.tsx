@@ -46,15 +46,37 @@ describe('EpicChildren', () => {
     vi.mocked(detachTicketFromEpic).mockReset();
   });
 
-  it('links each child with its Status, and says when it is blocked', () => {
+  it('links each child by its title with its Status, and says when it is blocked', () => {
     renderWithTheme(<EpicChildren epic={epic} items={[card, invoice]} />);
 
     const items = within(childList()).getAllByRole('listitem');
     expect(
-      within(items[0]).getByRole('link', { name: 'T5 Pay by card' }),
+      within(items[0]).getByRole('link', { name: 'Pay by card' }),
     ).toHaveAttribute('href', '/ticket/5');
+    expect(items[0]).toHaveTextContent('T5');
     expect(items[0]).toHaveTextContent('In progress');
     expect(items[1]).toHaveTextContent('Todo · Blocked');
+  });
+
+  it('opens a child on the Board below over that Board, keeping its filter, and one elsewhere over its own', () => {
+    renderWithTheme(
+      <EpicChildren
+        epic={epic}
+        items={[card, invoice]}
+        board={{
+          path: '/project/1/cycle/2',
+          filter: { query: 'pay', labels: ['bug'] },
+          onBoard: [5],
+        }}
+      />,
+    );
+
+    expect(
+      within(childList()).getByRole('link', { name: 'Pay by card' }),
+    ).toHaveAttribute('href', '/project/1/cycle/2?q=pay&label=bug&ticket=5');
+    expect(
+      within(childList()).getByRole('link', { name: 'Send the invoice' }),
+    ).toHaveAttribute('href', '/ticket/6');
   });
 
   it('says when the Epic has no children', () => {
@@ -139,7 +161,7 @@ describe('EpicChildren', () => {
     // The refusal and the rolled-back child can commit in separate renders.
     await waitFor(() =>
       expect(
-        within(childList()).getByRole('link', { name: 'T5 Pay by card' }),
+        within(childList()).getByRole('link', { name: 'Pay by card' }),
       ).toBeInTheDocument(),
     );
   });
@@ -157,7 +179,7 @@ describe('EpicChildren', () => {
       within(childList())
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['T6 Send the invoice']);
+    ).toEqual(['Send the invoice']);
     await act(async () => resolve({ ok: true }));
   });
 });

@@ -490,6 +490,8 @@ type EpicChildListProps = {
   row: Pick<EpicRow, 'children' | 'childrenElsewhere'>;
   /** Whose Board it is, to say where its children are not. */
   board: BoardKind;
+  /** Where a child opens in its drawer over this Board. */
+  hrefOf: (number: number) => string;
 };
 
 /** What an Epic's row says when none of its children are on this Board. */
@@ -501,10 +503,10 @@ const noChildrenText = (childrenElsewhere: number, board: BoardKind) => {
 };
 
 /**
- * An opened Epic row: each child on this Board with where it stands, or
- * where they are when none is.
+ * An opened Epic row: each child on this Board with where it stands, its
+ * title opening it over this Board, or where they are when none is.
  */
-const EpicChildList: FC<EpicChildListProps> = ({ row, board }) =>
+const EpicChildList: FC<EpicChildListProps> = ({ row, board, hrefOf }) =>
   row.children.length === 0 ? (
     <Box paddingBlockStart={2} paddingInlineStart={6}>
       <Text fontSize="small" color="muted">
@@ -528,7 +530,15 @@ const EpicChildList: FC<EpicChildListProps> = ({ row, board }) =>
               <Text fontSize="small" fontFamily="mono" color="muted">
                 T{child.number}
               </Text>
-              <Text fontSize="small">{child.title}</Text>
+              <Text fontSize="small">
+                <AppLink
+                  href={hrefOf(child.number)}
+                  scroll={false}
+                  intent="inherit"
+                >
+                  {child.title}
+                </AppLink>
+              </Text>
               <Text fontSize="small" color="muted">
                 {childStateLabel[child.state]}
               </Text>
@@ -543,7 +553,11 @@ const EpicChildList: FC<EpicChildListProps> = ({ row, board }) =>
  * What an Epic's row adds to a Ticket's row: its children bar beside the
  * title, and its children listed when opened. Nothing for a normal Ticket.
  */
-const epicParts = (row: CockpitTicket, board: BoardKind) =>
+const epicParts = (
+  row: CockpitTicket,
+  board: BoardKind,
+  hrefOf: (number: number) => string,
+) =>
   row.children
     ? {
         beside: <ChildrenBar row={{ children: row.children }} />,
@@ -554,6 +568,7 @@ const epicParts = (row: CockpitTicket, board: BoardKind) =>
               childrenElsewhere: row.childrenElsewhere ?? 0,
             }}
             board={board}
+            hrefOf={hrefOf}
           />
         ),
       }
@@ -865,7 +880,7 @@ export const Cockpit: FC<CockpitProps> = ({
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
-        {...epicParts(row, board)}
+        {...epicParts(row, board, hrefOf)}
         selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
@@ -995,7 +1010,13 @@ export const Cockpit: FC<CockpitProps> = ({
                             </Tag>
                           </Inline>
                         }
-                        details={<EpicChildList row={row} board={board} />}
+                        details={
+                          <EpicChildList
+                            row={row}
+                            board={board}
+                            hrefOf={hrefOf}
+                          />
+                        }
                       />
                     ))}
                     {cockpit.inFlight.map((row) => (
@@ -1039,7 +1060,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon={row.children ? 'queue-list' : 'user'}
-                  {...epicParts(row, board)}
+                  {...epicParts(row, board, hrefOf)}
                   selection={
                     row.children
                       ? undefined
@@ -1065,7 +1086,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon={row.children ? 'queue-list' : 'clock'}
-                  {...epicParts(row, board)}
+                  {...epicParts(row, board, hrefOf)}
                   selection={
                     row.children ? undefined : selectable(row.number, 'queued')
                   }
@@ -1092,7 +1113,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   ticket={row}
                   href={hrefOf(row.number)}
                   icon="check-circle"
-                  {...epicParts(row, board)}
+                  {...epicParts(row, board, hrefOf)}
                   selection={
                     row.children ? undefined : selectable(row.number, 'done')
                   }

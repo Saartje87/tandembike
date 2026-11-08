@@ -52,7 +52,10 @@ import {
   type ChildDeletion,
   DeleteTicketDialog,
 } from '../delete-ticket-dialog/delete-ticket-dialog';
-import { EpicChildren } from '../epic-children/epic-children';
+import {
+  type ChildrenBoard,
+  EpicChildren,
+} from '../epic-children/epic-children';
 import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
 import { ExternalReferenceEditor } from '../external-reference-editor/external-reference-editor';
 import { FieldError } from '../field-error/field-error';
@@ -106,6 +109,11 @@ export type TicketDrawerProps = {
    * Defaults to none, which sends the plain "Triage T42" and "Start T42".
    */
   agentCommands?: ProjectAgentCommands;
+  /**
+   * The Board the drawer opens over, where an Epic's children on it open.
+   * Defaults to none: each child opens over its own Board.
+   */
+  board?: ChildrenBoard;
 };
 
 /** The fields the drawer saves one at a time. */
@@ -207,6 +215,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   referenceTemplates,
   conversations = [],
   agentCommands = noAgentCommands,
+  board,
 }) => {
   const { titleId, close } = useTicketDrawer();
   const statusId = useId();
@@ -453,7 +462,11 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         </Detail>
       </Stack>
       {ticket.type === 'Epic' && (
-        <EpicChildren epic={{ ...ticket, archived }} items={ticket.children} />
+        <EpicChildren
+          epic={{ ...ticket, archived }}
+          items={ticket.children}
+          board={board}
+        />
       )}
       {ticket.splitOff.length > 0 && (
         <SplitOffTickets items={ticket.splitOff} />

@@ -50,7 +50,12 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   // and only its contents stream in (T333).
   const drawer = openTicket !== undefined && (
     <TicketDrawerShell number={openTicket} boardPath={boardPath}>
-      <BoardTicketDrawer projectId={project.id} number={openTicket} />
+      <BoardTicketDrawer
+        projectId={project.id}
+        cycleId={tab === 'backlog' ? null : tab.id}
+        filter={filter}
+        number={openTicket}
+      />
     </TicketDrawerShell>
   );
   const board = (
