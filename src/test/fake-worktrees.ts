@@ -1,5 +1,6 @@
 import type {
   CreateWorktreeInput,
+  ListedWorktree,
   PrepareResult,
   WorktreeState,
   Worktrees,
@@ -10,6 +11,10 @@ export type FakeWorktrees = Worktrees & {
   created: CreateWorktreeInput[];
   /** What `state` reports, by path; a created worktree starts `clean`. */
   states: Map<string, WorktreeState>;
+  /** Every `remove`, oldest first; it deletes the state, so the worktree reads `missing`. */
+  removed: string[];
+  /** What `list` reports. */
+  listed: ListedWorktree[];
   /** Makes the next `create` fail with this message. */
   failCreateWith: string | null;
   /** Every Prepare command run, oldest first. */
@@ -23,6 +28,8 @@ export function createFakeWorktrees(): FakeWorktrees {
   const fake: FakeWorktrees = {
     created: [],
     states: new Map(),
+    removed: [],
+    listed: [],
     failCreateWith: null,
     prepared: [],
     prepareResult: { exitCode: 0, output: '' },
@@ -41,6 +48,19 @@ export function createFakeWorktrees(): FakeWorktrees {
     async runPrepare(path, command) {
       fake.prepared.push({ path, command });
       return fake.prepareResult;
+    },
+    async remove(_repositoryPath, path) {
+      const state = fake.states.get(path);
+      if (state === 'dirty' || state === 'unpushed') {
+        throw new Error(
+          `fatal: '${path}' contains modified or untracked files`,
+        );
+      }
+      fake.states.delete(path);
+      fake.removed.push(path);
+    },
+    async list() {
+      return fake.listed;
     },
   };
   return fake;

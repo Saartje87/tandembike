@@ -18,6 +18,8 @@ const conversation = (values: Partial<Conversation>): Conversation => ({
   defaultEpicNumber: null,
   defaultType: null,
   worktreePath: null,
+  worktreeKept: null,
+  worktreeRemoved: false,
   createdAt: new Date('2026-03-01T09:00:00Z'),
   updatedAt: new Date('2026-03-01T09:00:00Z'),
   ...values,

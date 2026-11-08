@@ -396,6 +396,12 @@ export const conversations = sqliteTable(
      */
     worktreePath: text('worktree_path'),
     worktreeBase: text('worktree_base'),
+    /** Why Tandembike kept the worktree at close or Done: it holds `dirty` or `unpushed` work. */
+    worktreeKept: text('worktree_kept', { enum: ['dirty', 'unpushed'] }),
+    /** Tandembike removed the worktree; `worktreePath` stays as the record of where it was. */
+    worktreeRemoved: integer('worktree_removed', { mode: 'boolean' })
+      .notNull()
+      .default(false),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },

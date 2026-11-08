@@ -11,6 +11,7 @@ import {
   currentConversationActivity,
   listOpenConversations,
   loadConversation,
+  removeConversationWorktree,
   reopenConversation,
   replyToConversation,
   startConversation,
@@ -215,6 +216,36 @@ describe('Conversation actions', () => {
       conversation: { state: 'stopped', hidden: true },
     });
     expect(runner.runs[0].interrupted).toBe(true);
+  });
+
+  it('refuses to remove a worktree that still holds changes, naming the state', async () => {
+    const { project, tickets, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    if (!started.ok) {
+      throw new Error('Expected a start.');
+    }
+    const path = started.conversation.worktreePath as string;
+    worktrees.states.set(path, 'dirty');
+
+    const refused = await removeConversationWorktree({
+      conversationId: started.conversation.id,
+    });
+    worktrees.states.set(path, 'clean');
+    const removed = await removeConversationWorktree({
+      conversationId: started.conversation.id,
+    });
+
+    expect(refused).toMatchObject({ ok: false });
+    expect(refused.ok === false && refused.error).toContain('uncommitted');
+    expect(removed).toMatchObject({
+      ok: true,
+      conversation: { worktreeRemoved: true },
+    });
   });
 
   it('reopen a closed Conversation and list the open ones with a transcript to show', async () => {
