@@ -85,6 +85,8 @@ export type RunOptions = {
   askQuestion(questions: Question[]): Promise<QuestionAnswers>;
   /** The Project's repository path. */
   cwd: string;
+  /** The run's Agent-run ID (its Conversation id), sent as `X-Tandembike-Run`. */
+  agentRunId: string;
   /** The Tandembike MCP server the run connects to. */
   mcpUrl: string;
   /** Appended to the Agent's own system prompt: only its situation. */

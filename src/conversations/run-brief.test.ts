@@ -20,8 +20,8 @@ describe('runBrief for a Retro', () => {
     expect(brief).toContain('"Factory p2" (Cycle 44)');
   });
 
-  it('points at list_tickets with cycleId and at Feedback as Tickets', () => {
-    expect(brief).toContain('list_tickets');
+  it('points at find_tickets with cycleId and at Feedback as Tickets', () => {
+    expect(brief).toContain('find_tickets');
     expect(brief).toContain('cycleId');
     expect(brief).toContain('"Feedback as Tickets"');
   });

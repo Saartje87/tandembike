@@ -37,6 +37,7 @@ describe('The Claude runner', () => {
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://localhost:4747/api/mcp',
       systemPrompt: 'Your situation.',
       prompt: 'Hi',
@@ -56,7 +57,10 @@ describe('The Claude runner', () => {
         tandembike: {
           type: 'http',
           url: 'http://localhost:4747/api/mcp',
-          headers: { 'X-Tandembike-Cwd': '/repo' },
+          headers: {
+            'X-Tandembike-Cwd': '/repo',
+            'X-Tandembike-Run': 'conv-1',
+          },
         },
       },
       systemPrompt: {
@@ -75,6 +79,7 @@ describe('The Claude runner', () => {
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://localhost:4747/api/mcp',
       systemPrompt: 'Your situation.',
       prompt: 'Hi',
@@ -100,6 +105,7 @@ describe('The Claude runner', () => {
     const start = (model?: string) =>
       createClaudeRunner().start({
         cwd: '/repo',
+        agentRunId: 'conv-1',
         mcpUrl: 'http://localhost:4747/api/mcp',
         systemPrompt: 'Your situation.',
         prompt: 'Hi',
@@ -122,6 +128,7 @@ describe('The Claude runner', () => {
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://localhost:4747/api/mcp',
       systemPrompt: '',
       prompt: 'Hi',
@@ -138,6 +145,7 @@ describe('The Claude runner', () => {
     query.mockReturnValue(fakeQuery([]));
     const run = createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'First',
@@ -188,6 +196,7 @@ describe('The Claude runner', () => {
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
@@ -217,7 +226,7 @@ describe('The Claude runner', () => {
     ]);
   });
 
-  it('reports the Tickets the Agent created from the results of create_ticket and create_tickets', async () => {
+  it('reports the Tickets the Agent created from the results of file_tickets', async () => {
     const toolUse = (id: string, name: string) => ({
       type: 'assistant',
       message: { content: [{ type: 'tool_use', id, name, input: {} }] },
@@ -237,20 +246,23 @@ describe('The Claude runner', () => {
     });
     query.mockReturnValue(
       fakeQuery([
-        toolUse('a', 'mcp__tandembike__create_ticket'),
+        toolUse('a', 'mcp__tandembike__file_tickets'),
         toolResult('a', JSON.stringify({ number: 41, title: 'X' })),
-        toolUse('b', 'mcp__tandembike__create_tickets'),
+        toolUse('b', 'mcp__tandembike__file_tickets'),
         toolResult('b', JSON.stringify({ numbers: [42, 43] })),
         toolUse('c', 'mcp__tandembike__get_ticket'),
         toolResult('c', JSON.stringify({ number: 7 })),
-        toolUse('d', 'mcp__tandembike__create_ticket'),
+        toolUse('d', 'mcp__tandembike__file_tickets'),
         toolResult('d', 'Refused.', true),
+        toolUse('e', 'mcp__tandembike__file_tickets'),
+        toolResult('e', JSON.stringify({ numbers: [44] })),
       ]),
     );
     const events: RunEvent[] = [];
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
@@ -263,6 +275,7 @@ describe('The Claude runner', () => {
     expect(events.filter((event) => event.type === 'created')).toEqual([
       { type: 'created', numbers: [41] },
       { type: 'created', numbers: [42, 43] },
+      { type: 'created', numbers: [44] },
     ]);
   });
 
@@ -280,6 +293,7 @@ describe('The Claude runner', () => {
 
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
@@ -296,6 +310,7 @@ describe('The Claude runner', () => {
     query.mockReturnValue(fakeQuery([]));
     const run = createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
@@ -319,6 +334,7 @@ describe('The Claude runner', () => {
       .mockResolvedValueOnce('deny');
     createClaudeRunner().start({
       cwd: '/repo',
+      agentRunId: 'conv-1',
       mcpUrl: 'http://x',
       systemPrompt: '',
       prompt: 'Hi',
@@ -356,6 +372,7 @@ describe('The Claude runner', () => {
       const askPermission = vi.fn().mockResolvedValue(answer);
       createClaudeRunner().start({
         cwd: '/repo',
+        agentRunId: 'conv-1',
         mcpUrl: 'http://x',
         systemPrompt: '',
         prompt: 'Hi',
@@ -471,6 +488,7 @@ describe('The Claude runner', () => {
       const askPermission = vi.fn();
       createClaudeRunner().start({
         cwd: '/repo',
+        agentRunId: 'conv-1',
         mcpUrl: 'http://x',
         systemPrompt: '',
         prompt: 'Hi',

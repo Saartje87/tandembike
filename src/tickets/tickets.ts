@@ -148,6 +148,7 @@ import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
+import { createWork } from './work';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
 
@@ -680,7 +681,7 @@ export type TicketSummary = Pick<
   Partial<Pick<Ticket, 'projectId'>>;
 
 /**
- * A `TicketSummary` as `list_tickets` lists it: always with its type and
+ * A `TicketSummary` as `find_tickets` lists it: always with its type and
  * updated time, and with `epicNumber`, the Epic it is a child of, or `null`.
  */
 export type ListedTicketSummary = TicketSummary &
@@ -1337,7 +1338,12 @@ export function createTickets(
   actor: Actor,
   changes: ChangeChannel = createChangeChannel(),
 ) {
-  return {
+  const core = {
+    /**
+     * Runs `run` all or nothing: the module's functions nest in it, and a
+     * thrown refusal undoes every write made inside.
+     */
+    transaction: <T>(run: () => T): T => db.transaction(run),
     ...createCycles(db, changes),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
@@ -1767,11 +1773,20 @@ export function createTickets(
       };
     },
 
-    /** Every label on any Ticket, archived ones included, sorted. */
-    listLabels(): string[] {
+    /**
+     * Every label on any Ticket, archived ones included, sorted; with
+     * `projectId`, only those on that Project's Tickets.
+     */
+    listLabels({ projectId }: { projectId?: number } = {}): string[] {
       return db
         .selectDistinct({ label: ticketLabels.label })
         .from(ticketLabels)
+        .innerJoin(tickets, eq(tickets.number, ticketLabels.ticketNumber))
+        .where(
+          projectId === undefined
+            ? undefined
+            : eq(tickets.projectId, projectId),
+        )
         .orderBy(asc(ticketLabels.label))
         .all()
         .map(({ label }) => label);
@@ -3043,6 +3058,12 @@ export function createTickets(
         changes.publish({ type: 'cycle', id });
       }
     },
+  };
+  return {
+    ...core,
+    ...createWork({
+      ...core,
+    }),
   };
 
   /**

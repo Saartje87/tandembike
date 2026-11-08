@@ -638,6 +638,7 @@ export function createConversations({
     try {
       handle.run = runner.start({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
+        agentRunId: String(id),
         mcpUrl,
         systemPrompt: runBrief({
           conversationId: id,
@@ -869,7 +870,7 @@ export function createConversations({
   /** Releases quietly: a failure leaves the worktree for the User's button. */
   const tryRelease = (id: number) => releaseWorktree(id).catch(() => undefined);
 
-  // A Ticket reaching Done, by `complete_ticket` or the Merged button, frees
+  // A Ticket reaching Done, by `finish_work` or the Merged button, frees
   // the worktrees of its Conversations.
   changes?.subscribe((change) => {
     if (change.type !== 'ticket' && change.type !== 'tickets') {

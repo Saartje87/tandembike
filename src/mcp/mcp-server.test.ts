@@ -1,5 +1,7 @@
 // @vitest-environment node
 
+import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
@@ -8,6 +10,45 @@ import { handleMcpRequest, maxInstructionsLength } from './mcp-server';
 import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+/**
+ * Files one Ticket with file_tickets and answers with what get_ticket returns
+ * for it, or the refusal. The batch fields (project, Epic, Origin, Cycle) go
+ * beside `tickets`; the rest describe the Ticket.
+ */
+async function fileTicket(
+  client: Client,
+  args: Record<string, unknown>,
+): Promise<CallToolResult> {
+  const {
+    projectId,
+    projectName,
+    epicNumber,
+    originNumber,
+    cycleId,
+    detail: _detail,
+    ...rest
+  } = args;
+  const filed = await client.callTool({
+    name: 'file_tickets',
+    arguments: {
+      projectId,
+      projectName,
+      epicNumber,
+      originNumber,
+      cycleId,
+      tickets: [rest],
+    },
+  });
+  if (filed.isError) {
+    return filed as CallToolResult;
+  }
+  const { numbers } = resultJson(filed) as { numbers: number[] };
+  return (await client.callTool({
+    name: 'get_ticket',
+    arguments: { number: numbers[0] },
+  })) as CallToolResult;
+}
 
 describe('MCP server and Project agent settings', () => {
   it('offers no tool for them and never shows the repository path', async () => {
@@ -22,7 +63,10 @@ describe('MCP server and Project agent settings', () => {
 
     const { tools } = await client.listTools();
     const listed = resultText(
-      await client.callTool({ name: 'list_projects', arguments: {} }),
+      await client.callTool({
+        name: 'get_project',
+        arguments: { allProjects: true },
+      }),
     );
 
     expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
@@ -59,13 +103,7 @@ describe('MCP server', () => {
         .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual([
-      'add_comment',
-      'claim_ticket',
-      'get_ticket',
-      'list_comments',
-      'update_ticket',
-    ]);
+    ).toEqual(['add_note', 'get_ticket', 'start_work', 'update_ticket']);
     expect(
       tools
         .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] !== true)
@@ -80,48 +118,21 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
 
     expect(tools.map((tool) => tool.name).sort()).toEqual([
-      'add_attachment',
-      'add_blocker',
-      'add_comment',
-      'add_ticket_labels',
-      'archive_cycle',
-      'archive_ticket',
-      'attach_to_epic',
-      'claim_ticket',
-      'complete_ticket',
+      'abandon_work',
+      'add_note',
+      'attach',
+      'check_criterion',
       'create_cycle',
-      'create_project',
-      'create_ticket',
-      'create_tickets',
-      'detach_from_epic',
-      'edit_comment',
-      'get_attachment',
+      'file_tickets',
+      'find_tickets',
+      'finish_work',
+      'get_project',
       'get_ticket',
-      'list_activity',
-      'list_blockers',
-      'list_comments',
-      'list_cycles',
-      'list_labels',
-      'list_projects',
-      'list_tickets',
-      'move_tickets',
-      'plan_ticket',
-      'plan_tickets',
-      'release_ticket_claim',
-      'remove_attachment',
-      'remove_blocker',
-      'remove_comment',
-      'remove_ticket_labels',
-      'rename_cycle',
-      'rename_project',
-      'restore_ticket',
-      'set_acceptance_criteria_checked',
-      'sort_lane',
-      'start_cycle',
-      'unplan_ticket',
-      'unplan_tickets',
+      'next_work',
+      'open_pr',
+      'read_attachment',
+      'start_work',
       'update_ticket',
-      'update_tickets',
     ]);
     for (const tool of tools) {
       expect(tool.description, tool.name).toMatch(/\w{3,}/);
@@ -135,8 +146,12 @@ describe('MCP server', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { projectId: project.id, title: 'Typo', lables: ['bug'] },
+      name: 'file_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [{ title: 'Typo' }],
+        lables: ['bug'],
+      },
     });
 
     expect(result.isError).toBe(true);
@@ -149,7 +164,7 @@ describe('MCP server', () => {
     const client = await connectMcpClient(createTestTickets());
 
     const result = await client.callTool({
-      name: 'list_projects',
+      name: 'get_project',
       arguments: { includeArchived: true },
     });
 
@@ -158,13 +173,13 @@ describe('MCP server', () => {
     await client.close();
   });
 
-  it('refuses an unknown field on a create_tickets Ticket, naming it and its position', async () => {
+  it('refuses an unknown field on a file_tickets Ticket, naming it and its position', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Site' });
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         tickets: [{ title: 'Fine' }, { title: 'Typo', tpye: 'Epic' }],
@@ -185,11 +200,15 @@ describe('MCP server', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'create_ticket',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
-        title: 'Criteria',
-        acceptanceCriteria: [{ text: 'Works', chekced: true }],
+        tickets: [
+          {
+            title: 'Criteria',
+            acceptanceCriteria: [{ text: 'Works', chekced: true }],
+          },
+        ],
       },
     });
 
@@ -220,38 +239,21 @@ describe('MCP server', () => {
 
     expect(instructions).toMatch(/In progress/);
     expect(instructions).toMatch(/Done/);
-    expect(instructions).toMatch(/list_projects/);
     expect(instructions).toMatch(/like T42/);
     expect(instructions).not.toMatch(/#\d/);
-    expect(instructions).toMatch(/list_labels/);
-    expect(instructions).toMatch(/add_comment/);
-    expect(instructions).toMatch(/add_attachment/);
-    expect(instructions).toMatch(/list_activity/);
-    expect(instructions).toMatch(/add_blocker/);
-    expect(instructions).toMatch(/create_tickets/);
+    expect(instructions).toMatch(/Begin with start_work/);
+    expect(instructions).toMatch(/next_work/);
+    expect(instructions).toMatch(/End with finish_work/);
+    expect(instructions).toMatch(/abandon_work/);
+    expect(instructions).toMatch(/add_note/);
+    expect(instructions).toMatch(/file_tickets/);
     expect(instructions).toMatch(/Epic/);
-    expect(instructions).toMatch(/attach_to_epic/);
-    expect(instructions).toMatch(
-      /create_tickets[^\n]*an Epic and its children in the same call \(type: "Epic" plus epicPosition\)/,
-    );
-    expect(instructions).toMatch(
-      /Create a new Epic with its children in one create_tickets call; attach existing Tickets with attach_to_epic/,
-    );
-    expect(instructions).toMatch(
-      /planning a Cycle: list_cycles, create_cycle, create_tickets, plan_tickets, start_cycle/,
-    );
-    expect(instructions).toMatch(
-      /turning a spec into an Epic: create_tickets, attach_to_epic, add_blocker/,
-    );
-    expect(instructions).toMatch(/claim_ticket/);
-    expect(instructions).toMatch(/release_ticket_claim/);
-    expect(instructions).toMatch(/finish it with complete_ticket/);
-    expect(instructions).toMatch(/set_acceptance_criteria_checked/);
-    expect(instructions).toMatch(/list_cycles/);
-    expect(instructions).toMatch(/plan_tickets/);
-    expect(instructions).toMatch(/move_tickets/);
-    expect(instructions).toMatch(/sort_lane/);
-    expect(instructions).toMatch(/split.*originNumber/);
+    expect(instructions).toMatch(/update_ticket \(addBlockers\)/);
+    expect(instructions).toMatch(/check_criterion/);
+    expect(instructions).toMatch(/get_project/);
+    expect(instructions).toMatch(/create_cycle/);
+    expect(instructions).toMatch(/find_tickets/);
+    expect(instructions).toMatch(/originNumber/);
     await client.close();
   });
 
@@ -260,7 +262,8 @@ describe('MCP server', () => {
 
     const instructions = client.getInstructions() ?? '';
     const { tools } = await client.listTools();
-    const archive = tools.find((tool) => tool.name === 'archive_ticket');
+    const describe = (name: string) =>
+      JSON.stringify(tools.find((tool) => tool.name === name));
 
     // Which Project: the caller's folder names it (ADR 0036).
     expect(instructions).toMatch(/folder/);
@@ -276,32 +279,26 @@ describe('MCP server', () => {
     // Process belongs to each repository, and no client is assumed.
     expect(instructions).not.toMatch(/branch|pull request|\bPR\b/i);
     expect(instructions).not.toMatch(/Claude|Copilot/);
-    expect(archive?.description).toMatch(
+    expect(describe('update_ticket')).toMatch(
       /Agents cannot delete Tickets; the User can, from the app/,
     );
     // Facts that only one repository's docs used to state (T63).
-    const describe = (name: string) =>
-      JSON.stringify(tools.find((tool) => tool.name === name));
-    expect(archive?.description).toMatch(
+    expect(describe('update_ticket')).toMatch(
       /An Epic cannot be archived while any child is not archived/,
     );
-    expect(describe('add_blocker')).toMatch(
+    expect(describe('update_ticket')).toMatch(
       /Blockers between an Epic and its own children are refused/,
     );
     for (const name of [
-      'list_tickets',
-      'create_ticket',
-      'create_tickets',
+      'find_tickets',
+      'file_tickets',
       'update_ticket',
-      'list_cycles',
       'create_cycle',
     ]) {
       expect(describe(name), name).toMatch(
         /Giving both is refused unless they name the same Project/,
       );
     }
-    // The name there would read as the Project's new name (T105).
-    expect(describe('rename_project')).not.toMatch(/projectName/);
     expect(instructions).toMatch(/missing from your list may still exist/);
     await client.close();
   });
@@ -328,41 +325,17 @@ describe('MCP server', () => {
       JSON.stringify(tools.find((tool) => tool.name === name));
 
     const moved: [tool: string, rule: RegExp][] = [
-      ['create_project', /names must be unique, ignoring case/],
-      ['create_tickets', /All or nothing/],
-      ['create_tickets', /Only earlier positions can be named/],
-      ['create_tickets', /write \{\{T:n\}\}/],
-      [
-        'create_tickets',
-        /is replaced by the number of the Ticket at position n/,
-      ],
-      ['add_blocker', /must be resolved \(Done or archived\)/],
+      ['file_tickets', /All or nothing/],
+      ['file_tickets', /Only earlier positions can be named/],
+      ['file_tickets', /write \{\{T:n\}\}/],
+      ['update_ticket', /must be resolved \(Done or archived\)/],
       ['update_ticket', /To only check or uncheck criteria/],
-      [
-        'set_acceptance_criteria_checked',
-        /the Ticket's Status stay as they are/,
-      ],
-      ['edit_comment', /only edit comments written by an Agent/],
-      ['remove_comment', /only remove comments written by an Agent/],
-      ['remove_attachment', /only remove Attachments added by an Agent/],
+      ['check_criterion', /Status stay as they are/],
       ['get_ticket', /an Epic lists its children/],
-      ['attach_to_epic', /detach_from_epic it first/],
-      ['attach_to_epic', /All or nothing/],
-      ['detach_from_epic', /All or nothing/],
       ['update_ticket', /An Epic's follows its children and cannot be set/],
-      ['create_ticket', /Done when every child is Done or archived/],
-      ['list_cycles', /state \(Prepared, Active or Archived\), ticketNumbers/],
-      ['plan_ticket', /at most one Cycle that is not Archived/],
-      ['plan_ticket', /Done ones included/],
-      ['plan_ticket', /move_tickets moves it from its current one/],
-      ['plan_ticket', /a member that becomes Done or is archived stays in it/],
-      ['plan_tickets', /at most 50 per call/],
-      ['unplan_tickets', /at most 50 per call/],
-      ['move_tickets', /at most 50 per call/],
-      ['list_tickets', /with null, the Backlog/],
-      ['list_tickets', /only Tickets or only Epics \(type:/],
-      ['start_cycle', /refused, unless confirmArchiveActive is true/],
-      ['start_cycle', /Set it only once the User has agreed/],
+      ['get_project', /state \(Prepared, Active or Archived\), ticketNumbers/],
+      ['find_tickets', /with null, the Backlog/],
+      ['find_tickets', /only Tickets or only Epics \(type:/],
     ];
     for (const [tool, rule] of moved) {
       expect(describe(tool), tool).toMatch(rule);
@@ -370,79 +343,39 @@ describe('MCP server', () => {
     await client.close();
   });
 
-  it('points Agents to complete_ticket for finishing work, not by hand with removeLabels', async () => {
+  it('points Agents to finish_work for finishing work, not by hand with removeLabels', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
 
-    for (const name of ['update_ticket', 'update_tickets']) {
-      const description =
-        tools.find((tool) => tool.name === name)?.description ?? '';
-      expect(description, name).toMatch(/complete_ticket/);
-      expect(description, name).not.toMatch(/in the same call/);
-      expect(description, name).not.toMatch(
-        /needs-triage|needs-info|ready-for-agent|ready-for-human/,
-      );
-    }
-    await client.close();
-  });
-
-  it("calls a Status's order its Board order, never a lane, and keeps the name sort_lane", async () => {
-    const client = await connectMcpClient(createTestTickets());
-
-    const instructions = client.getInstructions() ?? '';
-    const { tools } = await client.listTools();
-    const sortLane = tools.find((tool) => tool.name === 'sort_lane');
-    const sort = JSON.stringify(
-      tools.find((tool) => tool.name === 'list_tickets')?.inputSchema.properties
-        ?.sort,
-    );
-
-    for (const [where, text] of [
-      ['instructions', instructions],
-      ['sort_lane', JSON.stringify(sortLane)],
-      ['sort', sort],
-    ] as const) {
-      expect(text, where).toMatch(/a Status's Board order/);
-      expect(text, where).toMatch(/Board Lane.*filtered by labels/);
-      expect(text.replaceAll('sort_lane', ''), where).not.toMatch(/\blanes?\b/);
-    }
-    expect(sortLane?.title).toBe("Sort a Status's Board order");
-    await client.close();
-  });
-
-  it('defines ready work as unblocked, unclaimed, ready-for-agent Todo Tickets', async () => {
-    const client = await connectMcpClient(createTestTickets());
-
-    expect(client.getInstructions()).toMatch(
-      /status: "Todo", labels: \["ready-for-agent"\], blocked: false, claimed: false/,
+    const description =
+      tools.find((tool) => tool.name === 'update_ticket')?.description ?? '';
+    expect(description).toMatch(/finish_work/);
+    expect(description).not.toMatch(/in the same call/);
+    expect(description).not.toMatch(
+      /needs-triage|needs-info|ready-for-agent|ready-for-human/,
     );
     await client.close();
   });
 
-  it('warns that releasing an In progress Ticket with no PR leaves it stalled', async () => {
+  it('sends Agents to next_work for ready work, not to a filter recipe', async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const instructions = client.getInstructions();
+
+    expect(instructions).toMatch(/next_work gives the top ready item/);
+    expect(instructions).not.toMatch(/blocked: false/);
+    await client.close();
+  });
+
+  it('warns that abandoning an In progress Ticket with a PR leaves it In progress', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
 
     expect(
-      tools.find((tool) => tool.name === 'release_ticket_claim')?.description,
-    ).toMatch(
-      /In progress Ticket with no PR reference.*stalled in Action needed.*back to Todo or say why in a comment/,
-    );
-    await client.close();
-  });
-
-  it("warns that releasing an Epic's Claim with no PR leaves its In progress children stalled too (T1143)", async () => {
-    const client = await connectMcpClient(createTestTickets());
-
-    const { tools } = await client.listTools();
-
-    expect(
-      tools.find((tool) => tool.name === 'release_ticket_claim')?.description,
-    ).toMatch(
-      /Releasing an Epic's claim with no PR reference leaves its In progress children stalled too/,
-    );
+      tools.find((tool) => tool.name === 'abandon_work')?.description,
+    ).toMatch(/PR/);
     await client.close();
   });
 
@@ -453,7 +386,7 @@ describe('MCP server', () => {
     const { tools } = await client.listTools();
 
     expect(maxInstructionsLength).toBe(3500);
-    expect(instructions.length).toBeLessThanOrEqual(maxInstructionsLength);
+    expect(instructions.length).toBeLessThan(maxInstructionsLength);
     for (const tool of tools) {
       expect(tool.description?.length, tool.name).toBeLessThanOrEqual(
         maxInstructionsLength,
@@ -494,31 +427,16 @@ describe('MCP server', () => {
 });
 
 describe('Project tools', () => {
-  it('lists Projects', async () => {
-    const tickets = createTestTickets();
-    const website = tickets.createProject({ name: 'Website' });
-    const client = await connectMcpClient(tickets);
-
-    const result = await client.callTool({ name: 'list_projects' });
-
-    expect(resultJson(result)).toEqual([
-      {
-        id: website.id,
-        name: 'Website',
-        archived: false,
-        createdAt: iso(website.createdAt),
-      },
-    ]);
-    await client.close();
-  });
-
   it('lists archived Projects too, flagged', async () => {
     const tickets = createTestTickets();
     const old = tickets.createProject({ name: 'Old site' });
     tickets.archiveProject(old.id);
     const client = await connectMcpClient(tickets);
 
-    const result = await client.callTool({ name: 'list_projects' });
+    const result = await client.callTool({
+      name: 'get_project',
+      arguments: { allProjects: true },
+    });
 
     expect(resultJson(result)).toEqual([
       expect.objectContaining({ name: 'Old site', archived: true }),
@@ -538,11 +456,11 @@ describe('Project tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { externalReferences: ['ABC-33'], includeArchived: true },
     });
     const { tools } = await client.listTools();
-    const listTickets = tools.find((tool) => tool.name === 'list_tickets');
+    const listTickets = tools.find((tool) => tool.name === 'find_tickets');
 
     expect(resultJson(result)).toMatchObject({
       tickets: [{ number: ticket.number }],
@@ -564,9 +482,9 @@ describe('Project tools', () => {
     tickets.archiveProject(old.id);
     const client = await connectMcpClient(tickets);
 
-    const all = await client.callTool({ name: 'list_tickets' });
+    const all = await client.callTool({ name: 'find_tickets' });
     const named = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectName: 'Old site' },
     });
 
@@ -595,90 +513,6 @@ describe('Project tools', () => {
     );
     await client.close();
   });
-
-  it('creates a Project', async () => {
-    const tickets = createTestTickets();
-    const client = await connectMcpClient(tickets);
-
-    const result = await client.callTool({
-      name: 'create_project',
-      arguments: { name: 'Website' },
-    });
-
-    expect(resultJson(result)).toMatchObject({ name: 'Website' });
-    // Colour and icon belong to the User's UI, not to Agents.
-    expect(Object.keys(resultJson(result) as object)).toEqual([
-      'id',
-      'name',
-      'archived',
-      'createdAt',
-    ]);
-    expect(tickets.listProjects().map(({ name }) => name)).toEqual(['Website']);
-    await client.close();
-  });
-
-  it("returns the module's message when a Project name is taken", async () => {
-    const tickets = createTestTickets();
-    tickets.createProject({ name: 'Website' });
-    const client = await connectMcpClient(tickets);
-
-    const result = await client.callTool({
-      name: 'create_project',
-      arguments: { name: 'website' },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe(
-      'A Project named "Website" already exists. Choose another name.',
-    );
-    await client.close();
-  });
-
-  it('renames a Project', async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    const client = await connectMcpClient(tickets);
-
-    const result = await client.callTool({
-      name: 'rename_project',
-      arguments: { id: project.id, name: 'Marketing site' },
-    });
-
-    expect(resultJson(result)).toEqual({
-      id: project.id,
-      name: 'Marketing site',
-      archived: false,
-      createdAt: project.createdAt.toISOString(),
-    });
-    expect(tickets.listProjects().map(({ name }) => name)).toEqual([
-      'Marketing site',
-    ]);
-    await client.close();
-  });
-
-  it("returns the module's message when a rename is refused", async () => {
-    const tickets = createTestTickets();
-    tickets.createProject({ name: 'Website' });
-    const app = tickets.createProject({ name: 'App' });
-    const client = await connectMcpClient(tickets);
-
-    const taken = await client.callTool({
-      name: 'rename_project',
-      arguments: { id: app.id, name: 'website' },
-    });
-    const missing = await client.callTool({
-      name: 'rename_project',
-      arguments: { id: 999, name: 'Docs' },
-    });
-
-    expect(taken.isError).toBe(true);
-    expect(resultText(taken)).toBe(
-      'A Project named "Website" already exists. Choose another name.',
-    );
-    expect(missing.isError).toBe(true);
-    expect(resultText(missing)).toBe('There is no Project with id 999.');
-    await client.close();
-  });
 });
 
 describe('Ticket tools', () => {
@@ -692,7 +526,7 @@ describe('Ticket tools', () => {
 
     const titles = async (args: Record<string, unknown>) => {
       const result = await client.callTool({
-        name: 'list_tickets',
+        name: 'find_tickets',
         arguments: args,
       });
       return (
@@ -724,7 +558,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: {
         projectId: website.id,
         status: 'In progress',
@@ -763,7 +597,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: project.id, type: 'Epic' },
     });
 
@@ -797,7 +631,7 @@ describe('Ticket tools', () => {
       arguments: { number: child.number },
     });
     const listed = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { epicNumber: epic.number, detail: 'full' },
     });
     const updated = await client.callTool({
@@ -831,7 +665,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { epicNumber: epic.number, status: 'Todo', blocked: false },
     });
 
@@ -893,7 +727,7 @@ describe('Ticket tools', () => {
       tools.find((tool) => tool.name === name)?.description;
 
     expect(describe('get_ticket')).toMatch(/description: false/);
-    expect(describe('list_tickets')).toMatch(/epicNumber/);
+    expect(describe('find_tickets')).toMatch(/epicNumber/);
     await client.close();
   });
 
@@ -921,7 +755,7 @@ describe('Ticket tools', () => {
 
       const listed = resultJson(
         await client.callTool({
-          name: 'list_tickets',
+          name: 'find_tickets',
           arguments: {
             projectName: 'Website',
             type: 'Epic',
@@ -951,7 +785,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(createTestTickets());
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { changedSince: 'last Tuesday' },
     });
 
@@ -963,7 +797,7 @@ describe('Ticket tools', () => {
   it('documents changedSince for checking what other sessions changed', async () => {
     const client = await connectMcpClient(createTestTickets());
     const { tools } = await client.listTools();
-    const listTickets = tools.find(({ name }) => name === 'list_tickets');
+    const listTickets = tools.find(({ name }) => name === 'find_tickets');
 
     expect(listTickets?.description).toMatch(/changedSince/);
     expect(listTickets?.description).toMatch(/updatedAt/);
@@ -985,15 +819,15 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const summary = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: {},
     });
     const full = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { detail: 'full' },
     });
     const { tools } = await client.listTools();
-    const listTickets = tools.find(({ name }) => name === 'list_tickets');
+    const listTickets = tools.find(({ name }) => name === 'find_tickets');
 
     expect(resultJson(summary)).toEqual({
       tickets: [
@@ -1056,7 +890,7 @@ describe('Ticket tools', () => {
     type Row = { description?: string; epicNumber: number | null };
     const list = async (args: Record<string, unknown>) =>
       resultJson(
-        await client.callTool({ name: 'list_tickets', arguments: args }),
+        await client.callTool({ name: 'find_tickets', arguments: args }),
       ) as { tickets: Row[] };
 
     const full = await list({ detail: 'full' });
@@ -1123,15 +957,15 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const open = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { status: ['Todo', 'In progress'] },
     });
     const empty = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { status: [] },
     });
     const unknown = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { status: ['Todo', 'Blocked'] },
     });
 
@@ -1164,7 +998,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { status: 'Todo', blocked: false, claimed: false },
     });
 
@@ -1200,7 +1034,7 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
-  it('lets an Agent claim and release a Ticket', async () => {
+  it('lets an Agent start a Ticket, refuses a second run, and abandon it', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -1209,33 +1043,40 @@ describe('Ticket tools', () => {
     });
     const client = await connectMcpClient(tickets);
 
-    const claimed = await client.callTool({
-      name: 'claim_ticket',
+    const started = await client.callTool({
+      name: 'start_work',
       arguments: {
         number: ticket.number,
         agentRunId: 'run-1',
-        agentName: 'Frontend Agent',
       },
     });
     const conflict = await client.callTool({
-      name: 'claim_ticket',
+      name: 'start_work',
       arguments: { number: ticket.number, agentRunId: 'run-2' },
     });
-    const released = await client.callTool({
-      name: 'release_ticket_claim',
-      arguments: { number: ticket.number, agentRunId: 'run-1' },
+    const abandoned = await client.callTool({
+      name: 'abandon_work',
+      arguments: {
+        number: ticket.number,
+        agentRunId: 'run-1',
+        reason: 'Not now.',
+      },
     });
 
-    expect(resultJson(claimed)).toMatchObject({
-      number: ticket.number,
-      claim: { agentRunId: 'run-1', agentName: 'Frontend Agent' },
+    expect(resultJson(started)).toMatchObject({
+      ticket: {
+        number: ticket.number,
+        status: 'In progress',
+        claim: { agentRunId: 'run-1' },
+      },
     });
     expect(conflict.isError).toBe(true);
     expect(resultText(conflict)).toBe(
-      `Ticket T${ticket.number} is already claimed by Frontend Agent (run-1).`,
+      `Ticket T${ticket.number} is already claimed by Agent run run-1.`,
     );
-    expect(resultJson(released)).toMatchObject({
-      number: ticket.number,
+    expect(abandoned.isError).toBeFalsy();
+    expect(tickets.getTicket(ticket.number)).toMatchObject({
+      status: 'Todo',
       claim: null,
     });
     await client.close();
@@ -1254,7 +1095,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'complete_ticket',
+      name: 'finish_work',
       arguments: { number: ticket.number },
     });
 
@@ -1283,7 +1124,7 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'complete_ticket',
+      name: 'finish_work',
       arguments: { number: epic.number, detail: 'full' },
     });
 
@@ -1312,11 +1153,11 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const done = await client.callTool({
-      name: 'complete_ticket',
+      name: 'finish_work',
       arguments: { number: ticket.number },
     });
     const missing = await client.callTool({
-      name: 'complete_ticket',
+      name: 'finish_work',
       arguments: { number: 99 },
     });
 
@@ -1331,7 +1172,7 @@ describe('Ticket tools', () => {
 
     const { tools } = await client.listTools();
     const description =
-      tools.find((tool) => tool.name === 'complete_ticket')?.description ?? '';
+      tools.find((tool) => tool.name === 'finish_work')?.description ?? '';
 
     expect(description).toMatch(/merged/);
     expect(description).toMatch(/CI/);
@@ -1359,14 +1200,11 @@ describe('Ticket tools', () => {
     const project = tickets.createProject({ name: 'Website' });
     const client = await connectMcpClient(tickets);
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Fix the header',
-        description: 'It overlaps the logo.',
-        status: 'In progress',
-      },
+    const result = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Fix the header',
+      description: 'It overlaps the logo.',
+      status: 'In progress',
     });
 
     expect(resultJson(result)).toMatchObject({
@@ -1386,30 +1224,24 @@ describe('Ticket tools', () => {
     tickets.createProject({ name: 'App' });
     const client = await connectMcpClient(tickets);
 
-    const created = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectName: 'website',
-        title: 'Fix the header',
-        detail: 'full',
-      },
+    const created = await fileTicket(client, {
+      projectName: 'website',
+      title: 'Fix the header',
+      detail: 'full',
     });
     const listed = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectName: 'WEBSITE' },
     });
-    const stale = await client.callTool({
-      name: 'create_ticket',
-      arguments: { projectName: 'Ticket', title: 'Lost' },
+    const stale = await fileTicket(client, {
+      projectName: 'Ticket',
+      title: 'Lost',
     });
     const mismatched = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: website.id, projectName: 'App' },
     });
-    const neither = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'Nowhere' },
-    });
+    const neither = await fileTicket(client, { title: 'Nowhere' });
 
     expect(resultJson(created)).toMatchObject({
       title: 'Fix the header',
@@ -1438,13 +1270,13 @@ describe('Ticket tools', () => {
     const project = tickets.createProject({ name: 'Website' });
     const client = await connectMcpClient(tickets);
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { projectId: project.id, title: '   ' },
+    const result = await fileTicket(client, {
+      projectId: project.id,
+      title: '   ',
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe('Enter a title.');
+    expect(resultText(result)).toBe('Ticket at position 0: Enter a title.');
     await client.close();
   });
 
@@ -1544,16 +1376,16 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const archived = await client.callTool({
-      name: 'archive_ticket',
-      arguments: { number: 1 },
+      name: 'update_ticket',
+      arguments: { number: 1, archived: true, detail: 'full' },
     });
 
     expect(resultJson(archived)).toMatchObject({ number: 1, archived: true });
     expect(tickets.listTickets()).toEqual([]);
 
     const restored = await client.callTool({
-      name: 'restore_ticket',
-      arguments: { number: 1 },
+      name: 'update_ticket',
+      arguments: { number: 1, archived: false, detail: 'full' },
     });
 
     expect(resultJson(restored)).toMatchObject({ number: 1, archived: false });
@@ -1579,8 +1411,8 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'archive_ticket',
-      arguments: { number: epic.number },
+      name: 'update_ticket',
+      arguments: { number: epic.number, archived: true },
     });
 
     expect(result.isError).toBe(true);
@@ -1595,9 +1427,9 @@ describe('Ticket tools', () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
-    const restore = tools.find((tool) => tool.name === 'restore_ticket');
+    const update = tools.find((tool) => tool.name === 'update_ticket');
 
-    expect(restore?.description).toMatch(
+    expect(JSON.stringify(update?.inputSchema)).toMatch(
       /Restoring an Epic also brings back the children archived with it/,
     );
     await client.close();
@@ -1606,11 +1438,16 @@ describe('Ticket tools', () => {
   it('says when the Ticket to archive or restore does not exist', async () => {
     const client = await connectMcpClient(createTestTickets());
 
-    for (const name of ['archive_ticket', 'restore_ticket']) {
-      const result = await client.callTool({ name, arguments: { number: 42 } });
+    for (const archived of [true, false]) {
+      const result = await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 42, archived },
+      });
 
-      expect(result.isError, name).toBe(true);
-      expect(resultText(result), name).toBe('There is no Ticket T42.');
+      expect(result.isError, String(archived)).toBe(true);
+      expect(resultText(result), String(archived)).toBe(
+        'There is no Ticket T42.',
+      );
     }
     await client.close();
   });
@@ -1622,13 +1459,10 @@ describe('Label tools', () => {
     const project = tickets.createProject({ name: 'Website' });
     const client = await connectMcpClient(tickets);
 
-    const created = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Fix the header',
-        labels: ['needs-triage', 'Bug'],
-      },
+    const created = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Fix the header',
+      labels: ['needs-triage', 'Bug'],
     });
     const fetched = await client.callTool({
       name: 'get_ticket',
@@ -1651,12 +1485,12 @@ describe('Label tools', () => {
     const client = await connectMcpClient(tickets);
 
     const added = await client.callTool({
-      name: 'add_ticket_labels',
-      arguments: { number: 1, labels: ['bug', 'needs-triage'] },
+      name: 'update_ticket',
+      arguments: { number: 1, addLabels: ['bug', 'needs-triage'] },
     });
     const removed = await client.callTool({
-      name: 'remove_ticket_labels',
-      arguments: { number: 1, labels: ['needs-triage'] },
+      name: 'update_ticket',
+      arguments: { number: 1, removeLabels: ['needs-triage'] },
     });
 
     expect(resultJson(added)).toMatchObject({
@@ -1675,12 +1509,12 @@ describe('Label tools', () => {
     const client = await connectMcpClient(tickets);
 
     const blank = await client.callTool({
-      name: 'add_ticket_labels',
-      arguments: { number: 1, labels: ['  '] },
+      name: 'update_ticket',
+      arguments: { number: 1, addLabels: ['  '] },
     });
     const missing = await client.callTool({
-      name: 'remove_ticket_labels',
-      arguments: { number: 42, labels: ['bug'] },
+      name: 'update_ticket',
+      arguments: { number: 42, removeLabels: ['bug'] },
     });
 
     expect(blank.isError).toBe(true);
@@ -1727,9 +1561,14 @@ describe('Label tools', () => {
     });
     const client = await connectMcpClient(tickets);
 
-    const result = await client.callTool({ name: 'list_labels' });
+    const result = await client.callTool({
+      name: 'get_project',
+      arguments: { projectId: project.id },
+    });
 
-    expect(resultJson(result)).toEqual(['bug', 'needs-triage']);
+    expect(resultJson(result)).toMatchObject({
+      labels: ['bug', 'needs-triage'],
+    });
     await client.close();
   });
 
@@ -1749,7 +1588,7 @@ describe('Label tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { labels: ['bug', 'ready-for-agent'] },
     });
 
@@ -1779,7 +1618,7 @@ describe('Label tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: {
         query: 'header',
         limit: 1,
@@ -1815,15 +1654,15 @@ describe('Label tools', () => {
     const client = await connectMcpClient(tickets);
 
     const board = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: project.id, sort: 'position' },
     });
     const noProject = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { sort: 'position' },
     });
     const unknown = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: project.id, sort: 'updated' },
     });
 
@@ -1845,7 +1684,7 @@ describe('Label tools', () => {
     const client = await connectMcpClient(createTestTickets());
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { limit: 500 },
     });
 
@@ -1866,16 +1705,13 @@ describe('External reference tools', () => {
     const project = tickets.createProject({ name: 'Website' });
     const client = await connectMcpClient(tickets);
 
-    await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Fix the header',
-        externalReferences: ['#55', 'https://github.com/acme/web/pull/87'],
-      },
+    await fileTicket(client, {
+      projectId: project.id,
+      title: 'Fix the header',
+      externalReferences: ['#55', 'https://github.com/acme/web/pull/87'],
     });
     await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         tickets: [{ title: 'Fix the footer', externalReferences: ['ABC-33'] }],
@@ -1957,7 +1793,7 @@ describe('External reference tools', () => {
     const describe = (name: string) =>
       JSON.stringify(tools.find((tool) => tool.name === name));
 
-    for (const name of ['create_ticket', 'create_tickets', 'update_ticket']) {
+    for (const name of ['file_tickets', 'update_ticket']) {
       expect(describe(name), name).toMatch(/http\(s\) URL/);
       expect(describe(name), name).toMatch(/at most 50/);
     }
@@ -1969,7 +1805,7 @@ describe('External reference tools', () => {
 });
 
 describe('Batch tools', () => {
-  it('changes several Tickets in one update_tickets call', async () => {
+  it('changes several Tickets in one update_ticket call', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     for (const title of ['A', 'B']) {
@@ -1982,9 +1818,9 @@ describe('Batch tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'update_tickets',
+      name: 'update_ticket',
       arguments: {
-        ticketNumbers: [1, 2],
+        number: [1, 2],
         status: 'Done',
         removeLabels: ['needs-triage'],
         addLabels: ['wontfix'],
@@ -2012,8 +1848,8 @@ describe('Batch tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'update_tickets',
-      arguments: { ticketNumbers: [1, 42], status: 'Done' },
+      name: 'update_ticket',
+      arguments: { number: [1, 42], status: 'Done' },
     });
 
     expect(result.isError).toBe(true);
@@ -2028,9 +1864,9 @@ describe('Batch tools', () => {
     const client = await connectMcpClient(createTestTickets());
 
     const result = await client.callTool({
-      name: 'update_tickets',
+      name: 'update_ticket',
       arguments: {
-        ticketNumbers: Array.from({ length: 51 }, (_, index) => index + 1),
+        number: Array.from({ length: 51 }, (_, index) => index + 1),
         status: 'Done',
       },
     });
@@ -2039,8 +1875,8 @@ describe('Batch tools', () => {
     expect(result.isError).toBe(true);
     expect(resultText(result)).toBe('Choose at most 50 Tickets at a time.');
     expect(
-      tools.find((tool) => tool.name === 'update_tickets')?.description,
-    ).toMatch(/at most 50/);
+      tools.find((tool) => tool.name === 'update_ticket')?.description,
+    ).toMatch(/up to 50 numbers/);
     await client.close();
   });
 });
@@ -2053,7 +1889,7 @@ describe('Batch create tool', () => {
     const client = await connectMcpClient(tickets);
     const call = (args: Record<string, unknown>) =>
       client.callTool({
-        name: 'create_tickets',
+        name: 'file_tickets',
         arguments: { ...args, tickets: [{ title: 'One' }, { title: 'Two' }] },
       });
 
@@ -2089,7 +1925,7 @@ describe('Batch create tool', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         tickets: [
@@ -2120,7 +1956,7 @@ describe('Batch create tool', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         tickets: [{ title: 'Design' }, { title: '' }],
@@ -2141,26 +1977,20 @@ describe('Epic tools', () => {
     const client = await connectMcpClient(tickets);
 
     const epic = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: {
-          projectId: project.id,
-          title: 'Checkout',
-          type: 'Epic',
-          color: 'teal',
-          detail: 'full',
-        },
+      await fileTicket(client, {
+        projectId: project.id,
+        title: 'Checkout',
+        type: 'Epic',
+        color: 'teal',
+        detail: 'full',
       }),
     );
     const other = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: {
-          projectId: project.id,
-          title: 'Search',
-          type: 'Epic',
-          detail: 'full',
-        },
+      await fileTicket(client, {
+        projectId: project.id,
+        title: 'Search',
+        type: 'Epic',
+        detail: 'full',
       }),
     );
     const recoloured = resultJson(
@@ -2171,12 +2001,12 @@ describe('Epic tools', () => {
     );
     tickets.createTicket({ projectId: project.id, title: 'Fix it' });
     const batch = await client.callTool({
-      name: 'update_tickets',
-      arguments: { ticketNumbers: [2, 3], color: 'blue' },
+      name: 'update_ticket',
+      arguments: { number: [2, 3], color: 'blue' },
     });
     const listed = resultJson(
       await client.callTool({
-        name: 'list_tickets',
+        name: 'find_tickets',
         arguments: { projectId: project.id, detail: 'full' },
       }),
     ) as { tickets: { number: number; color: string | null }[] };
@@ -2208,14 +2038,14 @@ describe('Epic tools', () => {
     const describe = (name: string) =>
       JSON.stringify(tools.find((tool) => tool.name === name));
 
-    for (const name of ['create_ticket', 'update_ticket', 'update_tickets']) {
+    for (const name of ['file_tickets', 'update_ticket']) {
       expect(describe(name), name).toMatch(
         /fewest live Epics|Only an Epic has a colour/,
       );
       expect(describe(name), name).toMatch(/"color"/);
     }
     expect(describe('get_ticket')).toMatch(/color/);
-    expect(describe('list_tickets')).toMatch(/color/);
+    expect(describe('find_tickets')).toMatch(/color/);
     await client.close();
   });
 
@@ -2225,30 +2055,24 @@ describe('Epic tools', () => {
     const client = await connectMcpClient(tickets);
 
     const epic = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: {
-          projectId: project.id,
-          title: 'Checkout',
-          description: 'Shared context.',
-          type: 'Epic',
-          detail: 'full',
-        },
+      await fileTicket(client, {
+        projectId: project.id,
+        title: 'Checkout',
+        description: 'Shared context.',
+        type: 'Epic',
+        detail: 'full',
       }),
     );
     const first = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: {
-          projectId: project.id,
-          title: 'Pay',
-          epicNumber: 1,
-          detail: 'full',
-        },
+      await fileTicket(client, {
+        projectId: project.id,
+        title: 'Pay',
+        epicNumber: 1,
+        detail: 'full',
       }),
     );
     await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         epicNumber: 1,
@@ -2297,7 +2121,7 @@ describe('Epic tools', () => {
     await client.close();
   });
 
-  it('attaches and detaches several Tickets, answering with a summary of each in order', async () => {
+  it('attaches and detaches several Tickets with update_ticket, answering with a summary of each in order', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const epic = tickets.createTicket({
@@ -2311,45 +2135,35 @@ describe('Epic tools', () => {
       title: 'Refund',
     });
     const client = await connectMcpClient(tickets);
-    const summary = (
-      number: number,
-      title: string,
-      epicNumber: number | null,
-    ) => ({
-      number,
-      title,
-      status: 'Todo',
-      labels: [],
-      blocked: false,
-      epicNumber,
-    });
 
     const attached = await client.callTool({
-      name: 'attach_to_epic',
+      name: 'update_ticket',
       arguments: {
-        epic: epic.number,
-        ticketNumbers: [refund.number, pay.number],
+        number: [refund.number, pay.number],
+        epicNumber: epic.number,
       },
     });
-    expect(resultJson(attached)).toEqual({
-      tickets: [
-        summary(refund.number, 'Refund', epic.number),
-        summary(pay.number, 'Pay', epic.number),
+    expect(resultJson(attached)).toMatchObject({
+      updated: [
+        { number: refund.number, title: 'Refund' },
+        { number: pay.number, title: 'Pay' },
       ],
+      failed: [],
     });
+    expect(tickets.getTicket(pay.number).epic?.number).toBe(epic.number);
 
     const detached = await client.callTool({
-      name: 'detach_from_epic',
-      arguments: { ticketNumbers: [pay.number], detail: 'full' },
+      name: 'update_ticket',
+      arguments: { number: pay.number, epicNumber: null, detail: 'full' },
     });
-    expect(resultJson(detached)).toEqual({
-      tickets: [JSON.parse(JSON.stringify(tickets.getTicket(pay.number)))],
-    });
+    expect(resultJson(detached)).toEqual(
+      JSON.parse(JSON.stringify(tickets.getTicket(pay.number))),
+    );
     expect(tickets.getTicket(pay.number).epic).toBeNull();
     await client.close();
   });
 
-  it('refuses attach_to_epic as a whole, naming every Ticket that cannot join', async () => {
+  it('refuses an Epic attachment, naming every Ticket that cannot join', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const epic = tickets.createTicket({
@@ -2371,35 +2185,43 @@ describe('Epic tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'attach_to_epic',
+      name: 'update_ticket',
       arguments: {
-        epic: epic.number,
-        ticketNumbers: [free.number, grouped.number, other.number],
+        number: [free.number, grouped.number, other.number],
+        epicNumber: epic.number,
       },
     });
 
     expect(result.isError).toBe(true);
-    expect(resultText(result)).toBe(
-      `Ticket T${grouped.number} is already in Epic T${other.number}. Detach it from that Epic first. Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
-    );
-    expect(tickets.getTicket(free.number).epic).toBeNull();
+    expect(JSON.parse(resultText(result))).toMatchObject({
+      failed: [
+        {
+          number: grouped.number,
+          error: `Ticket T${grouped.number} is already in Epic T${other.number}. Detach it from that Epic first.`,
+        },
+        {
+          number: other.number,
+          error: `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
+        },
+      ],
+    });
     await client.close();
   });
 
-  it('refuses the singular field and an empty list on attach_to_epic and detach_from_epic', async () => {
+  it('refuses the old singular field and an empty list on update_ticket', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const singular = await client.callTool({
-      name: 'attach_to_epic',
-      arguments: { epic: 1, ticket: 2 },
+      name: 'update_ticket',
+      arguments: { number: 2, epic: 1 },
     });
     const empty = await client.callTool({
-      name: 'detach_from_epic',
-      arguments: { ticketNumbers: [] },
+      name: 'update_ticket',
+      arguments: { number: [], epicNumber: null },
     });
 
     expect(singular.isError).toBe(true);
-    expect(resultText(singular)).toMatch(/"ticket"/);
+    expect(resultText(singular)).toMatch(/"epic"/);
     expect(empty.isError).toBe(true);
     expect(resultText(empty)).toBe('Choose at least one Ticket.');
     await client.close();
@@ -2425,8 +2247,8 @@ describe('Epic tools', () => {
       arguments: { number: epic.number, status: 'Done' },
     });
     const attach = await client.callTool({
-      name: 'attach_to_epic',
-      arguments: { epic: epic.number, ticketNumbers: [other.number] },
+      name: 'update_ticket',
+      arguments: { number: other.number, epicNumber: epic.number },
     });
 
     expect(status.isError).toBe(true);
@@ -2476,18 +2298,15 @@ describe('Origin tools', () => {
     const client = await connectMcpClient(tickets);
 
     const first = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: {
-          projectId: project.id,
-          title: 'Pay',
-          originNumber: spec.number,
-          detail: 'full',
-        },
+      await fileTicket(client, {
+        projectId: project.id,
+        title: 'Pay',
+        originNumber: spec.number,
+        detail: 'full',
       }),
     );
     await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         originNumber: spec.number,
@@ -2558,7 +2377,7 @@ describe('Origin tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { originNumber: 1, status: 'Todo' },
     });
 
@@ -2610,7 +2429,7 @@ describe('Comment tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'add_comment',
+      name: 'add_note',
       arguments: { number: ticket.number, body: 'Started on it.' },
     });
 
@@ -2627,7 +2446,7 @@ describe('Comment tools', () => {
     await client.close();
   });
 
-  it("lists a Ticket's comments, oldest first", async () => {
+  it("returns a Ticket's comments with it, oldest first", async () => {
     const { tickets, ticket } = ticketsWithOne();
     tickets.addComment(ticket.number, {
       body: 'From the User',
@@ -2640,18 +2459,20 @@ describe('Comment tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'list_comments',
+      name: 'get_ticket',
       arguments: { number: ticket.number },
     });
 
-    expect(resultJson(result)).toMatchObject([
-      { author: 'user', body: 'From the User' },
-      { author: 'agent', body: 'From an Agent' },
-    ]);
+    expect(resultJson(result)).toMatchObject({
+      comments: [
+        { author: 'user', body: 'From the User' },
+        { author: 'agent', body: 'From an Agent' },
+      ],
+    });
     await client.close();
   });
 
-  it("lists a Ticket's whole Activity, oldest first", async () => {
+  it("includes a Ticket's whole Activity, oldest first, when asked", async () => {
     const tickets = createTestTickets(undefined, 'agent');
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -2660,91 +2481,45 @@ describe('Comment tools', () => {
     });
     const client = await connectMcpClient(tickets);
     await client.callTool({
-      name: 'claim_ticket',
+      name: 'start_work',
       arguments: { number: ticket.number, agentRunId: 'run-1' },
     });
 
     const result = await client.callTool({
-      name: 'list_activity',
-      arguments: { number: ticket.number },
+      name: 'get_ticket',
+      arguments: { number: ticket.number, include: ['activity'] },
     });
     const missing = await client.callTool({
-      name: 'list_activity',
-      arguments: { number: 99 },
+      name: 'get_ticket',
+      arguments: { number: 99, include: ['activity'] },
     });
 
-    expect(resultJson(result)).toEqual([
-      {
-        id: expect.any(Number),
-        actor: 'agent',
-        createdAt: expect.any(String),
-        changes: [{ type: 'created' }],
-      },
-      {
-        id: expect.any(Number),
-        actor: 'agent',
-        createdAt: expect.any(String),
-        changes: [{ type: 'claimTaken', agentRunId: 'run-1', agentName: null }],
-      },
-    ]);
+    const { activity } = resultJson(result) as {
+      activity: { actor: string; changes: unknown[] }[];
+    };
+    expect(activity[0]).toEqual({
+      id: expect.any(Number),
+      actor: 'agent',
+      createdAt: expect.any(String),
+      changes: [{ type: 'created' }],
+    });
+    expect(activity.flatMap(({ changes }) => changes)).toContainEqual({
+      type: 'claimTaken',
+      agentRunId: 'run-1',
+      agentName: null,
+    });
     expect(missing.isError).toBe(true);
     expect(resultText(missing)).toBe('There is no Ticket T99.');
     await client.close();
   });
 
-  it("edits and removes an Agent's comment", async () => {
-    const { tickets, ticket } = ticketsWithOne();
-    const comment = tickets.addComment(ticket.number, {
-      body: 'Started.',
-      author: 'agent',
-    });
-    const client = await connectMcpClient(tickets);
+  it('offers no tool to edit or remove a comment', async () => {
+    const client = await connectMcpClient(createTestTickets());
 
-    const edited = await client.callTool({
-      name: 'edit_comment',
-      arguments: { id: comment.id, body: 'Started on the header.' },
-    });
+    const { tools } = await client.listTools();
 
-    expect(resultJson(edited)).toMatchObject({
-      id: comment.id,
-      body: 'Started on the header.',
-      editedAt: expect.any(String),
-    });
-
-    const removed = await client.callTool({
-      name: 'remove_comment',
-      arguments: { id: comment.id },
-    });
-
-    expect(resultJson(removed)).toEqual({ removed: comment.id });
-    expect(tickets.listComments(ticket.number)).toEqual([]);
-    await client.close();
-  });
-
-  it("refuses to edit or remove the User's comment", async () => {
-    const { tickets, ticket } = ticketsWithOne();
-    const comment = tickets.addComment(ticket.number, {
-      body: 'By the User',
-      author: 'user',
-    });
-    const client = await connectMcpClient(tickets);
-
-    const edited = await client.callTool({
-      name: 'edit_comment',
-      arguments: { id: comment.id, body: 'Changed' },
-    });
-    const removed = await client.callTool({
-      name: 'remove_comment',
-      arguments: { id: comment.id },
-    });
-
-    for (const result of [edited, removed]) {
-      expect(result.isError).toBe(true);
-      expect(resultText(result)).toBe(
-        `Comment ${comment.id} was written by the User. Agents can only edit or remove comments written by an Agent.`,
-      );
-    }
-    expect(tickets.listComments(ticket.number)).toEqual([comment]);
+    expect(tools.map((tool) => tool.name)).not.toContain('edit_comment');
+    expect(tools.map((tool) => tool.name)).not.toContain('remove_comment');
     await client.close();
   });
 });
@@ -2759,21 +2534,21 @@ describe('Blocker tools', () => {
     return { tickets, project };
   }
 
-  it('adds, lists and removes a Blocker', async () => {
-    const { tickets, project } = ticketsWithThree();
+  it('adds and removes a Blocker with update_ticket, and reads it with get_ticket', async () => {
+    const { tickets } = ticketsWithThree();
     const client = await connectMcpClient(tickets);
 
     const added = await client.callTool({
-      name: 'add_blocker',
-      arguments: { blocker: 1, blocked: 2 },
+      name: 'update_ticket',
+      arguments: { number: 2, addBlockers: [1], detail: 'full' },
     });
-    const listed = await client.callTool({
-      name: 'list_blockers',
+    const read = await client.callTool({
+      name: 'get_ticket',
       arguments: { number: 2 },
     });
     const removed = await client.callTool({
-      name: 'remove_blocker',
-      arguments: { blocker: 1, blocked: 2 },
+      name: 'update_ticket',
+      arguments: { number: 2, removeBlockers: [1], detail: 'full' },
     });
 
     expect(resultJson(added)).toMatchObject({
@@ -2781,19 +2556,7 @@ describe('Blocker tools', () => {
       blockedBy: [1],
       blocked: true,
     });
-    expect(resultJson(listed)).toEqual({
-      blockedBy: [
-        {
-          number: 1,
-          title: 'Design',
-          status: 'Todo',
-          projectId: project.id,
-          archived: false,
-          resolved: false,
-        },
-      ],
-      blocks: [],
-    });
+    expect(resultJson(read)).toMatchObject({ blockedBy: [1], blocked: true });
     expect(resultJson(removed)).toMatchObject({
       number: 2,
       blockedBy: [],
@@ -2807,8 +2570,8 @@ describe('Blocker tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'remove_blocker',
-      arguments: { blocker: 9999, blocked: 1 },
+      name: 'update_ticket',
+      arguments: { number: 1, removeBlockers: [9999] },
     });
 
     expect(result.isError).toBe(true);
@@ -2823,7 +2586,7 @@ describe('Blocker tools', () => {
     const client = await connectMcpClient(tickets);
 
     const ready = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { status: 'Todo', blocked: false },
     });
 
@@ -2839,15 +2602,15 @@ describe('Blocker tools', () => {
     const client = await connectMcpClient(tickets);
 
     const self = await client.callTool({
-      name: 'add_blocker',
-      arguments: { blocker: 3, blocked: 3 },
+      name: 'update_ticket',
+      arguments: { number: 3, addBlockers: [3] },
     });
     const cycle = await client.callTool({
-      name: 'add_blocker',
-      arguments: { blocker: 2, blocked: 1 },
+      name: 'update_ticket',
+      arguments: { number: 1, addBlockers: [2] },
     });
     const missing = await client.callTool({
-      name: 'list_blockers',
+      name: 'get_ticket',
       arguments: { number: 42 },
     });
 
@@ -2869,17 +2632,14 @@ describe('Acceptance criteria tools', () => {
     const project = tickets.createProject({ name: 'Website' });
     const client = await connectMcpClient(tickets);
 
-    const created = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Fix the header',
-        acceptanceCriteria: [
-          { text: 'The logo is centred' },
-          { text: 'The menu collapses on phones', checked: true },
-        ],
-        detail: 'full',
-      },
+    const created = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Fix the header',
+      acceptanceCriteria: [
+        { text: 'The logo is centred' },
+        { text: 'The menu collapses on phones', checked: true },
+      ],
+      detail: 'full',
     });
     const got = await client.callTool({
       name: 'get_ticket',
@@ -2934,7 +2694,7 @@ describe('Acceptance criteria tools', () => {
     await client.close();
   });
 
-  it('checks and unchecks criteria with set_acceptance_criteria_checked', async () => {
+  it('checks and unchecks criteria with check_criterion', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -2948,15 +2708,13 @@ describe('Acceptance criteria tools', () => {
     const [logo, menu] = ticket.acceptanceCriteria;
     const client = await connectMcpClient(tickets);
 
+    await client.callTool({
+      name: 'check_criterion',
+      arguments: { number: ticket.number, ids: [logo.id], checked: false },
+    });
     const result = await client.callTool({
-      name: 'set_acceptance_criteria_checked',
-      arguments: {
-        number: ticket.number,
-        criteria: [
-          { id: logo.id, checked: false },
-          { id: menu.id, checked: true },
-        ],
-      },
+      name: 'check_criterion',
+      arguments: { number: ticket.number, ids: [menu.id], checked: true },
     });
 
     const expected = [
@@ -2965,7 +2723,7 @@ describe('Acceptance criteria tools', () => {
     ];
     expect(resultJson(result)).toMatchObject({
       status: 'Todo',
-      acceptanceCriteria: expected,
+      acceptanceCriteria: [expected[1]],
     });
     expect(tickets.getTicket(ticket.number).acceptanceCriteria).toEqual(
       expected,
@@ -2987,11 +2745,8 @@ describe('Acceptance criteria tools', () => {
       arguments: { number: ticket.number, acceptanceCriteria: [{ text: ' ' }] },
     });
     const unknown = await client.callTool({
-      name: 'set_acceptance_criteria_checked',
-      arguments: {
-        number: ticket.number,
-        criteria: [{ id: 7, checked: true }],
-      },
+      name: 'check_criterion',
+      arguments: { number: ticket.number, ids: [7], checked: true },
     });
 
     expect(empty.isError).toBe(true);
@@ -3016,44 +2771,41 @@ describe('Cycle tools', () => {
     return { tickets, project, client };
   }
 
-  it("creates, renames and lists a Project's Cycles with their Tickets", async () => {
+  it("creates a Cycle with Tickets planned in and lists a Project's Cycles with their Tickets", async () => {
     const { tickets, project, client } = await cycleSetup();
 
     const created = resultJson(
       await client.callTool({
         name: 'create_cycle',
-        arguments: { projectId: project.id, title: 'Beta' },
+        arguments: {
+          projectId: project.id,
+          title: 'Beta',
+          ticketNumbers: [2],
+        },
       }),
     ) as { id: number };
-    await client.callTool({
-      name: 'plan_ticket',
-      arguments: { cycleId: created.id, number: 2 },
-    });
-    await client.callTool({
-      name: 'rename_cycle',
-      arguments: { cycleId: created.id, title: 'Public beta' },
-    });
-    const listed = await client.callTool({
-      name: 'list_cycles',
+    const read = await client.callTool({
+      name: 'get_project',
       arguments: { projectId: project.id },
     });
 
     const cycle = tickets.getCycle(created.id);
-    expect(resultJson(listed)).toEqual([
-      {
-        id: created.id,
-        projectId: project.id,
-        title: 'Public beta',
-        state: 'Prepared',
-        ticketNumbers: [2],
-        createdAt: iso(cycle.createdAt),
-        archivedAt: null,
-      },
-    ]);
+    expect(resultJson(read)).toMatchObject({
+      cycles: [
+        {
+          id: created.id,
+          title: 'Beta',
+          state: 'Prepared',
+          ticketNumbers: [2],
+          createdAt: iso(cycle.createdAt),
+          archivedAt: null,
+        },
+      ],
+    });
     await client.close();
   });
 
-  it('creates and lists Cycles in a Project given by name', async () => {
+  it('creates and reads Cycles in a Project given by name', async () => {
     const { tickets, project, client } = await cycleSetup();
     tickets.createProject({ name: 'App' });
     const call = (name: string, args: Record<string, unknown>) =>
@@ -3063,49 +2815,33 @@ describe('Cycle tools', () => {
       projectName: 'website',
       title: 'Beta',
     });
-    const listed = await call('list_cycles', { projectName: 'Website' });
+    const listed = await call('get_project', { projectName: 'Website' });
     const stale = await call('create_cycle', {
       projectName: 'Ticket',
       title: 'Beta',
     });
-    const staleList = await call('list_cycles', { projectName: 'Ticket' });
+    const staleRead = await call('get_project', { projectName: 'Ticket' });
     const mismatched = await call('create_cycle', {
       projectId: project.id,
       projectName: 'App',
       title: 'Beta',
     });
-    const mismatchedList = await call('list_cycles', {
-      projectId: project.id,
-      projectName: 'App',
-    });
     const neither = await call('create_cycle', { title: 'Beta' });
-    const neitherList = await call('list_cycles', {});
 
     expect(resultJson(created)).toMatchObject({ projectId: project.id });
-    expect(resultJson(listed)).toMatchObject([{ title: 'Beta' }]);
-    for (const result of [stale, staleList]) {
+    expect(resultJson(listed)).toMatchObject({ cycles: [{ title: 'Beta' }] });
+    for (const result of [stale, staleRead]) {
       expect(resultText(result)).toBe(
         'There is no Project named "Ticket". The Projects are: "App", "Website".',
       );
     }
-    for (const result of [mismatched, mismatchedList]) {
-      expect(resultText(result)).toBe(
-        `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
-      );
-    }
-    for (const result of [neither, neitherList]) {
-      expect(resultText(result)).toBe(
-        'Choose a Project by projectId or projectName.',
-      );
-    }
-    for (const refused of [
-      stale,
-      staleList,
-      mismatched,
-      mismatchedList,
-      neither,
-      neitherList,
-    ]) {
+    expect(resultText(mismatched)).toBe(
+      `Project ${project.id} is "Website", not "App". Give projectId or projectName, or both for the same Project.`,
+    );
+    expect(resultText(neither)).toBe(
+      'Choose a Project by projectId or projectName.',
+    );
+    for (const refused of [stale, staleRead, mismatched, neither]) {
       expect(refused.isError).toBe(true);
     }
     expect(tickets.listCycles(project.id)).toHaveLength(1);
@@ -3121,7 +2857,7 @@ describe('Cycle tools', () => {
     tickets.archiveCycle(cycle.id);
 
     const listed = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: project.id, cycleId: null },
     });
     const { tools } = await client.listTools();
@@ -3133,7 +2869,7 @@ describe('Cycle tools', () => {
     ).toEqual([2, 3]);
     expect(
       JSON.stringify(
-        tools.find((tool) => tool.name === 'list_tickets')?.inputSchema,
+        tools.find((tool) => tool.name === 'find_tickets')?.inputSchema,
       ),
     ).toMatch(/Done Tickets of an Archived Cycle/);
     await client.close();
@@ -3144,14 +2880,11 @@ describe('Cycle tools', () => {
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     const link = { id: cycle.id, title: 'Beta', state: 'Prepared' };
 
-    const created = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Planned',
-        cycleId: cycle.id,
-        detail: 'full',
-      },
+    const created = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Planned',
+      cycleId: cycle.id,
+      detail: 'full',
     });
     const updated = await client.callTool({
       name: 'update_ticket',
@@ -3162,7 +2895,7 @@ describe('Cycle tools', () => {
       arguments: { number: (resultJson(created) as { number: number }).number },
     });
     const listed = await client.callTool({
-      name: 'list_tickets',
+      name: 'find_tickets',
       arguments: { projectId: project.id, cycleId: cycle.id, detail: 'full' },
     });
     const { tools } = await client.listTools();
@@ -3184,89 +2917,69 @@ describe('Cycle tools', () => {
     tickets.planTicket({ cycleId: cycle.id, number: 2 });
 
     const unplanned = await client.callTool({
-      name: 'unplan_ticket',
-      arguments: { cycleId: cycle.id, number: 2 },
+      name: 'update_ticket',
+      arguments: { number: 2, cycleId: null },
     });
     const numbers = async (cycleId: number | null) =>
       (
         resultJson(
           await client.callTool({
-            name: 'list_tickets',
+            name: 'find_tickets',
             arguments: { projectId: project.id, cycleId },
           }),
         ) as { tickets: { number: number }[] }
       ).tickets.map(({ number }) => number);
 
-    expect(resultJson(unplanned)).toMatchObject({ ticketNumbers: [1] });
+    expect(unplanned.isError).not.toBe(true);
     expect(await numbers(cycle.id)).toEqual([1]);
     expect(await numbers(null)).toEqual([2, 3]);
     await client.close();
   });
 
-  it('plans and unplans several Tickets in one call each', async () => {
+  it('plans several Tickets into a Cycle in one update_ticket call', async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
 
     const planned = await client.callTool({
-      name: 'plan_tickets',
-      arguments: { cycleId: cycle.id, ticketNumbers: [3, 1, 2] },
-    });
-    const unplanned = await client.callTool({
-      name: 'unplan_tickets',
-      arguments: { cycleId: cycle.id, ticketNumbers: [2] },
+      name: 'update_ticket',
+      arguments: { number: [3, 1, 2], cycleId: cycle.id },
     });
 
     expect(planned.isError).toBe(false);
     expect(resultJson(planned)).toMatchObject({
-      updated: [3, 1, 2],
+      updated: [{ number: 3 }, { number: 1 }, { number: 2 }],
       failed: [],
-      cycle: { id: cycle.id, ticketNumbers: [1, 2, 3] },
     });
-    expect(resultJson(unplanned)).toMatchObject({
-      updated: [2],
-      failed: [],
-      cycle: { id: cycle.id, ticketNumbers: [1, 3] },
-    });
+    expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([1, 2, 3]);
     await client.close();
   });
 
-  it('reports a partly failed plan_tickets or unplan_tickets call as an error', async () => {
+  it('reports a partly failed plan as an error, and refuses a bad Cycle', async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
 
     const planned = await client.callTool({
-      name: 'plan_tickets',
-      arguments: { cycleId: cycle.id, ticketNumbers: [1, 42] },
-    });
-    const unplanned = await client.callTool({
-      name: 'unplan_tickets',
-      arguments: { cycleId: cycle.id, ticketNumbers: [2, 1] },
+      name: 'update_ticket',
+      arguments: { number: [1, 42], cycleId: cycle.id },
     });
     const refused = await client.callTool({
-      name: 'plan_tickets',
-      arguments: { cycleId: 99, ticketNumbers: [1] },
+      name: 'update_ticket',
+      arguments: { number: [1], cycleId: 99 },
     });
 
     expect(planned.isError).toBe(true);
     expect(JSON.parse(resultText(planned))).toMatchObject({
-      updated: [1],
+      updated: [{ number: 1 }],
       failed: [{ number: 42, error: 'There is no Ticket T42.' }],
-      cycle: { ticketNumbers: [1] },
-    });
-    expect(unplanned.isError).toBe(true);
-    expect(JSON.parse(resultText(unplanned))).toMatchObject({
-      updated: [1],
-      failed: [
-        { number: 2, error: 'Ticket T2 is not planned into the Cycle "Beta".' },
-      ],
-      cycle: { ticketNumbers: [] },
     });
     expect(refused.isError).toBe(true);
-    expect(resultText(refused)).toBe('There is no Cycle with id 99.');
+    expect(JSON.parse(resultText(refused))).toMatchObject({
+      failed: [{ number: 1, error: 'There is no Cycle with id 99.' }],
+    });
     await client.close();
   });
 
-  it('moves Tickets between Cycles and to the Backlog with move_tickets', async () => {
+  it('moves Tickets between Cycles and to the Backlog with update_ticket', async () => {
     const { tickets, project, client } = await cycleSetup();
     const alpha = tickets.createCycle({
       projectId: project.id,
@@ -3276,105 +2989,22 @@ describe('Cycle tools', () => {
     tickets.planTickets({ cycleId: alpha.id, ticketNumbers: [1, 2] });
 
     const moved = await client.callTool({
-      name: 'move_tickets',
-      arguments: { cycleId: beta.id, ticketNumbers: [2, 3] },
+      name: 'update_ticket',
+      arguments: { number: [2, 3], cycleId: beta.id },
     });
     const toBacklog = await client.callTool({
-      name: 'move_tickets',
-      arguments: { cycleId: null, ticketNumbers: [1, 3] },
+      name: 'update_ticket',
+      arguments: { number: [1, 3], cycleId: null },
     });
 
     expect(moved.isError).toBe(false);
-    expect(resultJson(moved)).toMatchObject({
-      updated: [2, 3],
-      failed: [],
-      cycle: { id: beta.id, ticketNumbers: [2, 3] },
-    });
     expect(toBacklog.isError).toBe(false);
-    expect(resultJson(toBacklog)).toEqual({
-      updated: [1, 3],
-      failed: [],
-      cycle: null,
-    });
     expect(tickets.getCycle(alpha.id).ticketNumbers).toEqual([]);
     expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([2]);
     await client.close();
   });
 
-  it('reports a partly failed move_tickets call as an error, and refuses a bad Cycle', async () => {
-    const { tickets, project, client } = await cycleSetup();
-    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-
-    const partly = await client.callTool({
-      name: 'move_tickets',
-      arguments: { cycleId: beta.id, ticketNumbers: [1, 42] },
-    });
-    const refused = await client.callTool({
-      name: 'move_tickets',
-      arguments: { cycleId: 99, ticketNumbers: [1] },
-    });
-
-    expect(partly.isError).toBe(true);
-    expect(JSON.parse(resultText(partly))).toMatchObject({
-      updated: [1],
-      failed: [{ number: 42, error: 'There is no Ticket T42.' }],
-      cycle: { ticketNumbers: [1] },
-    });
-    expect(refused.isError).toBe(true);
-    expect(resultText(refused)).toBe('There is no Cycle with id 99.');
-    await client.close();
-  });
-
-  it("sorts a Cycle's Queued Lane with sort_lane, named by projectName, and returns its order", async () => {
-    const { tickets, project, client } = await cycleSetup();
-    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    tickets.planTickets({ cycleId: beta.id, ticketNumbers: [1, 3] });
-
-    const sorted = await client.callTool({
-      name: 'sort_lane',
-      arguments: {
-        projectName: project.name,
-        status: 'Todo',
-        cycleId: beta.id,
-        ticketNumbers: [3],
-      },
-    });
-    const listed = await client.callTool({
-      name: 'list_tickets',
-      arguments: { projectId: project.id, status: 'Todo', sort: 'position' },
-    });
-
-    expect(sorted.isError).not.toBe(true);
-    expect(resultJson(sorted)).toEqual({ ticketNumbers: [3, 1] });
-    expect(
-      (resultJson(listed) as { tickets: { number: number }[] }).tickets.map(
-        ({ number }) => number,
-      ),
-    ).toEqual([3, 2, 1]);
-    await client.close();
-  });
-
-  it('refuses a sort_lane call as a whole, naming the Ticket', async () => {
-    const { tickets, project, client } = await cycleSetup();
-    tickets.updateTicket(2, { status: 'Done' });
-
-    const refused = await client.callTool({
-      name: 'sort_lane',
-      arguments: {
-        projectId: project.id,
-        status: 'Todo',
-        ticketNumbers: [3, 2],
-      },
-    });
-
-    expect(refused.isError).toBe(true);
-    expect(resultText(refused)).toBe(
-      'Ticket T2 is Done, not Todo. Sorting a lane never changes a Status.',
-    );
-    await client.close();
-  });
-
-  it('points to move_tickets when plan_ticket or plan_tickets meets a Ticket planned elsewhere', async () => {
+  it('points to a move when update_ticket meets a Ticket planned elsewhere', async () => {
     const { tickets, project, client } = await cycleSetup();
     const alpha = tickets.createCycle({
       projectId: project.id,
@@ -3383,97 +3013,36 @@ describe('Cycle tools', () => {
     const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     tickets.planTicket({ cycleId: alpha.id, number: 1 });
 
-    const single = await client.callTool({
-      name: 'plan_ticket',
-      arguments: { cycleId: beta.id, number: 1 },
-    });
-    const batch = await client.callTool({
-      name: 'plan_tickets',
-      arguments: { cycleId: beta.id, ticketNumbers: [1, 2] },
-    });
-
-    const refusal =
-      'Ticket T1 is already planned into the Cycle "Alpha". Move it with move_tickets, or unplan it from that Cycle first.';
-    expect(single.isError).toBe(true);
-    expect(resultText(single)).toBe(refusal);
-    expect(JSON.parse(resultText(batch))).toMatchObject({
-      updated: [2],
-      failed: [{ number: 1, error: refusal }],
-    });
-    await client.close();
-  });
-
-  it('starts and archives a Cycle', async () => {
-    const { tickets, project, client } = await cycleSetup();
-    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-
-    const started = await client.callTool({
-      name: 'start_cycle',
-      arguments: { cycleId: cycle.id },
-    });
-    expect(resultJson(started)).toMatchObject({ state: 'Active' });
-
-    const archived = await client.callTool({
-      name: 'archive_cycle',
-      arguments: { cycleId: cycle.id },
-    });
-    expect(resultJson(archived)).toMatchObject({
-      state: 'Archived',
-      archivedAt: expect.any(String),
-    });
-    await client.close();
-  });
-
-  it('refuses a Cycle tool called with id in place of cycleId', async () => {
-    const { tickets, project, client } = await cycleSetup();
-    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-
-    for (const [name, args] of [
-      ['rename_cycle', { id: cycle.id, title: 'Launch' }],
-      ['start_cycle', { id: cycle.id }],
-      ['archive_cycle', { id: cycle.id }],
-    ] as const) {
-      const result = await client.callTool({ name, arguments: args });
-
-      expect(result.isError, name).toBe(true);
-      expect(resultText(result), name).toMatch(/Input validation error/);
-    }
-    expect(tickets.getCycle(cycle.id)).toMatchObject({
-      title: 'Beta',
-      state: 'Prepared',
-    });
-    await client.close();
-  });
-
-  it('archives the Active Cycle and rolls over only when the call confirms it', async () => {
-    const { tickets, project, client } = await cycleSetup();
-    const beta = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    tickets.planTicket({ cycleId: beta.id, number: 1 });
-    tickets.startCycle(beta.id);
-    const launch = tickets.createCycle({
-      projectId: project.id,
-      title: 'Launch',
+    const planned = await client.callTool({
+      name: 'create_cycle',
+      arguments: {
+        projectId: project.id,
+        title: 'Gamma',
+        ticketNumbers: [1, 2],
+      },
     });
 
-    const refused = await client.callTool({
-      name: 'start_cycle',
-      arguments: { cycleId: launch.id },
-    });
-    expect(refused.isError).toBe(true);
-    expect(resultText(refused)).toBe(
-      'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
+    expect(planned.isError).toBe(true);
+    expect(resultText(planned)).toMatch(
+      /Ticket T1 is already planned into the Cycle "Alpha"\. Move it with update_ticket cycleId, or unplan it from that Cycle first\./,
     );
-    expect(tickets.getCycle(beta.id).state).toBe('Active');
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+    await client.close();
+  });
 
-    const started = await client.callTool({
-      name: 'start_cycle',
-      arguments: { cycleId: launch.id, confirmArchiveActive: true },
-    });
-    expect(resultJson(started)).toMatchObject({
-      state: 'Active',
-      ticketNumbers: [1],
-    });
-    expect(tickets.getCycle(beta.id).state).toBe('Archived');
+  it('offers no tool to rename, start or archive a Cycle, or to sort a lane', async () => {
+    const { client } = await cycleSetup();
+
+    const { tools } = await client.listTools();
+
+    for (const name of [
+      'rename_cycle',
+      'start_cycle',
+      'archive_cycle',
+      'sort_lane',
+    ]) {
+      expect(tools.map((tool) => tool.name)).not.toContain(name);
+    }
     await client.close();
   });
 
@@ -3483,16 +3052,16 @@ describe('Cycle tools', () => {
     tickets.archiveTicket(3);
 
     const archived = await client.callTool({
-      name: 'plan_ticket',
-      arguments: { cycleId: cycle.id, number: 3 },
+      name: 'update_ticket',
+      arguments: { number: 3, cycleId: cycle.id },
     });
     const untitled = await client.callTool({
       name: 'create_cycle',
       arguments: { projectId: project.id, title: ' ' },
     });
     const missing = await client.callTool({
-      name: 'archive_cycle',
-      arguments: { cycleId: 99 },
+      name: 'create_cycle',
+      arguments: { projectId: project.id, title: 'Gone', ticketNumbers: [99] },
     });
 
     expect(
@@ -3502,20 +3071,21 @@ describe('Cycle tools', () => {
       'Ticket T3 is archived. Restore it before planning it into a Cycle.',
     );
     expect(resultText(untitled)).toBe('Enter a title.');
-    expect(resultText(missing)).toBe('There is no Cycle with id 99.');
+    expect(resultText(missing)).toMatch(/There is no Ticket T99/);
     await client.close();
   });
 
-  it('creates Tickets straight into a Cycle with create_ticket and create_tickets', async () => {
+  it('files Tickets straight into a Cycle with file_tickets', async () => {
     const { tickets, project, client } = await cycleSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
 
-    const one = await client.callTool({
-      name: 'create_ticket',
-      arguments: { projectId: project.id, title: 'Four', cycleId: cycle.id },
+    const one = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Four',
+      cycleId: cycle.id,
     });
     const batch = await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         cycleId: cycle.id,
@@ -3527,7 +3097,7 @@ describe('Cycle tools', () => {
     expect(resultJson(one)).toMatchObject({ number: 4 });
     expect(resultJson(batch)).toEqual({ numbers: [5, 6] });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([4, 5, 6]);
-    for (const name of ['create_ticket', 'create_tickets']) {
+    for (const name of ['file_tickets']) {
       expect(
         JSON.stringify(tools.find((tool) => tool.name === name)),
         name,
@@ -3536,7 +3106,7 @@ describe('Cycle tools', () => {
     await client.close();
   });
 
-  it('refuses a create_ticket or create_tickets call with an unusable Cycle, creating nothing', async () => {
+  it('refuses a file_tickets call with an unusable Cycle, creating nothing', async () => {
     const { tickets, project, client } = await cycleSetup();
     const other = tickets.createProject({ name: 'App' });
     const elsewhere = tickets.createCycle({
@@ -3544,12 +3114,13 @@ describe('Cycle tools', () => {
       title: 'App',
     });
 
-    const one = await client.callTool({
-      name: 'create_ticket',
-      arguments: { projectId: project.id, title: 'Four', cycleId: 99 },
+    const one = await fileTicket(client, {
+      projectId: project.id,
+      title: 'Four',
+      cycleId: 99,
     });
     const batch = await client.callTool({
-      name: 'create_tickets',
+      name: 'file_tickets',
       arguments: {
         projectId: project.id,
         cycleId: elsewhere.id,
@@ -3612,37 +3183,28 @@ describe('Write tool responses', () => {
     await client.close();
   });
 
-  it('answers create_ticket and the label tools with only a summary', async () => {
-    const { tickets, project } = ticketsWithOne();
+  it('answers the label changes of update_ticket with only a summary', async () => {
+    const { tickets } = ticketsWithOne();
     const client = await connectMcpClient(tickets);
-    const summary = (number: number, labels: string[]) => ({
-      number,
-      title: number === 1 ? 'Fix the header' : 'Fix the footer',
+    const summary = (labels: string[]) => ({
+      number: 1,
+      title: 'Fix the header',
       status: 'Todo',
       labels,
       blocked: false,
     });
 
-    const created = await client.callTool({
-      name: 'create_ticket',
-      arguments: {
-        projectId: project.id,
-        title: 'Fix the footer',
-        description: 'Long text.',
-      },
-    });
     const added = await client.callTool({
-      name: 'add_ticket_labels',
-      arguments: { number: 1, labels: ['ui'] },
+      name: 'update_ticket',
+      arguments: { number: 1, addLabels: ['ui'] },
     });
     const removed = await client.callTool({
-      name: 'remove_ticket_labels',
-      arguments: { number: 1, labels: ['bug'] },
+      name: 'update_ticket',
+      arguments: { number: 1, removeLabels: ['bug'] },
     });
 
-    expect(resultJson(created)).toEqual(summary(2, []));
-    expect(resultJson(added)).toEqual(summary(1, ['bug', 'ui']));
-    expect(resultJson(removed)).toEqual(summary(1, ['ui']));
+    expect(resultJson(added)).toEqual(summary(['bug', 'ui']));
+    expect(resultJson(removed)).toEqual(summary(['ui']));
     await client.close();
   });
 
@@ -3651,6 +3213,11 @@ describe('Write tool responses', () => {
     const blocker = tickets.createTicket({
       projectId: project.id,
       title: 'Design the logo',
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Site',
+      type: 'Epic',
     });
     const client = await connectMcpClient(tickets);
     const call = async (name: string, args: Record<string, unknown>) => {
@@ -3668,42 +3235,38 @@ describe('Write tool responses', () => {
     };
 
     expect(
-      await call('add_blocker', { blocker: blocker.number, blocked: 1 }),
+      await call('update_ticket', { number: 1, addBlockers: [blocker.number] }),
     ).toEqual({
       blocked: true,
       blockedBy: [blocker.number],
     });
     expect(
-      await call('remove_blocker', { blocker: blocker.number, blocked: 1 }),
+      await call('update_ticket', {
+        number: 1,
+        removeBlockers: [blocker.number],
+      }),
     ).toEqual({ blocked: false, blockedBy: [] });
     expect(
-      await call('claim_ticket', { number: 1, agentRunId: 'run-1' }),
-    ).toEqual({
-      blocked: false,
-      claim: { agentRunId: 'run-1', agentName: null },
-    });
-    expect(
-      await call('release_ticket_claim', { number: 1, agentRunId: 'run-1' }),
-    ).toEqual({ blocked: false, claim: null });
-    expect(await call('archive_ticket', { number: 1 })).toEqual({
+      await call('update_ticket', { number: 1, epicNumber: epic.number }),
+    ).toEqual({ blocked: false, epicNumber: epic.number });
+    expect(await call('update_ticket', { number: 1, archived: true })).toEqual({
       blocked: false,
       archived: true,
     });
-    expect(await call('restore_ticket', { number: 1 })).toEqual({
-      blocked: false,
-      archived: false,
-    });
+    expect(await call('update_ticket', { number: 1, archived: false })).toEqual(
+      { blocked: false, archived: false },
+    );
     await client.close();
   });
 
-  it('answers set_acceptance_criteria_checked with only the criteria it named', async () => {
+  it('answers check_criterion with only the criteria it named', async () => {
     const { tickets } = ticketsWithOne();
     const [first] = tickets.getTicket(1).acceptanceCriteria;
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'set_acceptance_criteria_checked',
-      arguments: { number: 1, criteria: [{ id: first.id, checked: true }] },
+      name: 'check_criterion',
+      arguments: { number: 1, ids: [first.id], checked: true },
     });
 
     expect(resultJson(result)).toEqual({
@@ -3719,18 +3282,18 @@ describe('Write tool responses', () => {
     await client.close();
   });
 
-  it('lists a summary per changed Ticket from update_tickets, or whole Tickets in full detail', async () => {
+  it('lists a summary per changed Ticket from a batch update_ticket, or whole Tickets in full detail', async () => {
     const { tickets, project } = ticketsWithOne();
     tickets.createTicket({ projectId: project.id, title: 'Fix the footer' });
     const client = await connectMcpClient(tickets);
 
     const summary = await client.callTool({
-      name: 'update_tickets',
-      arguments: { ticketNumbers: [1, 99], status: 'In progress' },
+      name: 'update_ticket',
+      arguments: { number: [1, 99], status: 'In progress' },
     });
     const full = await client.callTool({
-      name: 'update_tickets',
-      arguments: { ticketNumbers: [2], status: 'Done', detail: 'full' },
+      name: 'update_ticket',
+      arguments: { number: [2], status: 'Done', detail: 'full' },
     });
 
     expect(summary.isError).toBe(true);
@@ -3764,20 +3327,12 @@ describe('Write tool responses', () => {
       /Tools that change a Ticket return its summary; get_ticket reads the whole Ticket\./,
     );
     const extras: [tool: string, field: string][] = [
-      ['create_ticket', 'summary'],
       ['update_ticket', 'summary'],
-      ['update_tickets', 'summary'],
-      ['add_ticket_labels', 'summary'],
-      ['remove_ticket_labels', 'summary'],
-      ['claim_ticket', 'claim'],
-      ['release_ticket_claim', 'claim'],
-      ['attach_to_epic', 'epicNumber'],
-      ['detach_from_epic', 'epicNumber'],
-      ['add_blocker', 'blockedBy'],
-      ['remove_blocker', 'blockedBy'],
-      ['archive_ticket', 'archived'],
-      ['restore_ticket', 'archived'],
-      ['set_acceptance_criteria_checked', 'acceptanceCriteria'],
+      ['update_ticket', 'blockedBy'],
+      ['update_ticket', 'epicNumber'],
+      ['update_ticket', 'archived'],
+      ['abandon_work', 'claim'],
+      ['check_criterion', 'acceptanceCriteria'],
     ];
     for (const [tool, field] of extras) {
       expect(description(tool), tool).toMatch(/summary/);
@@ -3846,10 +3401,7 @@ describe("Project of the caller's folder", () => {
     const client = await connectMcpClient(tickets, { cwd: root });
 
     const created = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: { title: 'From a terminal' },
-      }),
+      await fileTicket(client, { title: 'From a terminal' }),
     ) as { number: number };
 
     expect(tickets.getTicket(created.number).projectId).toBe(website.id);
@@ -3861,10 +3413,7 @@ describe("Project of the caller's folder", () => {
     const client = await connectMcpClient(tickets, { cwd: root });
 
     const created = resultJson(
-      await client.callTool({
-        name: 'create_ticket',
-        arguments: { title: 'Feedback', projectName: 'Blog' },
-      }),
+      await fileTicket(client, { title: 'Feedback', projectName: 'Blog' }),
     ) as { number: number };
 
     expect(tickets.getTicket(created.number).projectId).toBe(blog.id);
@@ -3875,10 +3424,7 @@ describe("Project of the caller's folder", () => {
     const { tickets } = setup();
     const client = await connectMcpClient(tickets, { cwd: folder() });
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'Lost' },
-    });
+    const result = await fileTicket(client, { title: 'Lost' });
 
     expect(result.isError).toBe(true);
     expect(resultText(result)).toMatch(
@@ -3891,15 +3437,12 @@ describe("Project of the caller's folder", () => {
     const { tickets, root, website } = setup();
     tickets.archiveProject(website.id);
     const client = await connectMcpClient(tickets, { cwd: root });
-    const byName = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'Named', projectName: 'Website' },
+    const byName = await fileTicket(client, {
+      title: 'Named',
+      projectName: 'Website',
     });
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'From the folder' },
-    });
+    const result = await fileTicket(client, { title: 'From the folder' });
 
     expect(byName.isError).toBe(true);
     expect(result.isError).toBe(true);
@@ -3912,10 +3455,7 @@ describe("Project of the caller's folder", () => {
     tickets.archiveProject(tickets.createProject({ name: 'Old site' }).id);
     const client = await connectMcpClient(tickets, { cwd: folder() });
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'Lost' },
-    });
+    const result = await fileTicket(client, { title: 'Lost' });
 
     expect(resultText(result)).toMatch(/one of "Blog", "Website"\./);
     expect(resultText(result)).not.toMatch(/Old site/);
@@ -3926,10 +3466,7 @@ describe("Project of the caller's folder", () => {
     const { tickets } = setup();
     const client = await connectMcpClient(tickets);
 
-    const result = await client.callTool({
-      name: 'create_ticket',
-      arguments: { title: 'Lost' },
-    });
+    const result = await fileTicket(client, { title: 'Lost' });
 
     expect(result.isError).toBe(true);
     expect(resultText(result)).toMatch(/Choose a Project/);
@@ -3947,7 +3484,7 @@ describe("Project of the caller's folder", () => {
     const numbers = async (args: Record<string, unknown>) =>
       (
         resultJson(
-          await client.callTool({ name: 'list_tickets', arguments: args }),
+          await client.callTool({ name: 'find_tickets', arguments: args }),
         ) as {
           tickets: { number: number }[];
         }
@@ -3968,7 +3505,7 @@ describe("Project of the caller's folder", () => {
     const client = await connectMcpClient(tickets, { cwd: folder() });
 
     const page = resultJson(
-      await client.callTool({ name: 'list_tickets', arguments: {} }),
+      await client.callTool({ name: 'find_tickets', arguments: {} }),
     ) as { tickets: { number: number }[] };
 
     expect(page.tickets.map((ticket) => ticket.number)).toEqual([only.number]);

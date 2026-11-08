@@ -27,7 +27,7 @@ describe('Attachment tools', () => {
     const client = await connectMcpClient(tickets);
 
     const result = await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: {
         number: ticket.number,
         name: 'notes.txt',
@@ -57,7 +57,7 @@ describe('Attachment tools', () => {
     const client = await connectMcpClient(tickets);
 
     await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: {
         number: ticket.number,
         name: 'blob',
@@ -77,7 +77,7 @@ describe('Attachment tools', () => {
     const client = await connectMcpClient(tickets);
 
     const badBase64 = await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: {
         number: ticket.number,
         name: 'a.txt',
@@ -85,7 +85,7 @@ describe('Attachment tools', () => {
       },
     });
     const noName = await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: { number: ticket.number, name: '', content: base64('x') },
     });
 
@@ -94,7 +94,7 @@ describe('Attachment tools', () => {
     expect(noName.isError).toBe(true);
     expect(resultText(noName)).toBe('Enter a file name.');
     const badType = await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: {
         number: ticket.number,
         name: 'a.txt',
@@ -148,11 +148,11 @@ describe('Attachment tools', () => {
     const client = await connectMcpClient(tickets);
 
     const found = await client.callTool({
-      name: 'get_attachment',
+      name: 'read_attachment',
       arguments: { id: attachment.id },
     });
     const missing = await client.callTool({
-      name: 'get_attachment',
+      name: 'read_attachment',
       arguments: { id: 99 },
     });
 
@@ -171,11 +171,11 @@ describe('Attachment tools', () => {
     await client.close();
   });
 
-  it('shows the add in list_activity naming the file', async () => {
+  it('shows the add in the Activity of get_ticket naming the file', async () => {
     const { tickets, ticket } = ticketsWithOne();
     const client = await connectMcpClient(tickets);
     await client.callTool({
-      name: 'add_attachment',
+      name: 'attach',
       arguments: {
         number: ticket.number,
         name: 'notes.txt',
@@ -184,57 +184,26 @@ describe('Attachment tools', () => {
     });
 
     const result = await client.callTool({
-      name: 'list_activity',
-      arguments: { number: ticket.number },
+      name: 'get_ticket',
+      arguments: { number: ticket.number, include: ['activity'] },
     });
 
-    const entries = resultJson(result) as { changes: unknown[] }[];
-    expect(entries.at(-1)?.changes).toEqual([
+    const { activity } = resultJson(result) as {
+      activity: { changes: unknown[] }[];
+    };
+    expect(activity.at(-1)?.changes).toEqual([
       { type: 'attachmentAdded', name: 'notes.txt' },
     ]);
     await client.close();
   });
 
-  it("removes an Agent's Attachment by id, refuses the User's, and shows it in list_activity", async () => {
-    const { tickets, ticket } = ticketsWithOne();
-    const mine = tickets.addAttachment(ticket.number, {
-      name: 'mine.txt',
-      content: bytes('a'),
-      author: 'agent',
-    });
-    const theirs = tickets.addAttachment(ticket.number, {
-      name: 'theirs.txt',
-      content: bytes('b'),
-      author: 'user',
-    });
+  it('offers no tool to remove an Attachment', async () => {
+    const { tickets } = ticketsWithOne();
     const client = await connectMcpClient(tickets);
 
-    const removed = await client.callTool({
-      name: 'remove_attachment',
-      arguments: { id: mine.id },
-    });
-    const refused = await client.callTool({
-      name: 'remove_attachment',
-      arguments: { id: theirs.id },
-    });
-    const missing = await client.callTool({
-      name: 'remove_attachment',
-      arguments: { id: 99 },
-    });
+    const { tools } = await client.listTools();
 
-    expect(resultJson(removed)).toEqual({ removed: mine.id });
-    expect(refused.isError).toBe(true);
-    expect(resultText(refused)).toMatch(/added by the User/);
-    expect(missing.isError).toBe(true);
-    expect(tickets.getTicket(ticket.number).attachments).toEqual([theirs]);
-    const activity = await client.callTool({
-      name: 'list_activity',
-      arguments: { number: ticket.number },
-    });
-    const entries = resultJson(activity) as { changes: unknown[] }[];
-    expect(entries.at(-1)?.changes).toEqual([
-      { type: 'attachmentRemoved', name: 'mine.txt' },
-    ]);
+    expect(tools.map((tool) => tool.name)).not.toContain('remove_attachment');
     await client.close();
   });
 
@@ -252,7 +221,7 @@ describe('Attachment tools', () => {
       const { path } = tempFile('shot.png', bytes('png-bytes'));
 
       const result = await client.callTool({
-        name: 'add_attachment',
+        name: 'attach',
         arguments: { number: ticket.number, path },
       });
 
@@ -275,7 +244,7 @@ describe('Attachment tools', () => {
       const { path } = tempFile('tmp123', bytes('x'));
 
       await client.callTool({
-        name: 'add_attachment',
+        name: 'attach',
         arguments: { number: ticket.number, path, name: 'report.pdf' },
       });
 
@@ -292,7 +261,7 @@ describe('Attachment tools', () => {
       const { path } = tempFile('a.txt', 'x');
 
       const both = await client.callTool({
-        name: 'add_attachment',
+        name: 'attach',
         arguments: {
           number: ticket.number,
           path,
@@ -301,7 +270,7 @@ describe('Attachment tools', () => {
         },
       });
       const neither = await client.callTool({
-        name: 'add_attachment',
+        name: 'attach',
         arguments: { number: ticket.number, name: 'a.txt' },
       });
 
@@ -318,7 +287,7 @@ describe('Attachment tools', () => {
       const client = await connectMcpClient(tickets);
 
       const result = await client.callTool({
-        name: 'add_attachment',
+        name: 'attach',
         arguments: { number: ticket.number, content: base64('x') },
       });
 
@@ -333,7 +302,7 @@ describe('Attachment tools', () => {
       const { dir } = tempFile('a.txt', 'x');
       const add = (path: string) =>
         client.callTool({
-          name: 'add_attachment',
+          name: 'attach',
           arguments: { number: ticket.number, path },
         });
       mkdirSync(join(dir, 'folder'));
@@ -381,7 +350,7 @@ describe('Attachment tools', () => {
         const client = await connectMcpClient(tickets);
 
         const result = await client.callTool({
-          name: 'get_attachment',
+          name: 'read_attachment',
           arguments: { id: attachment.id },
         });
 
@@ -414,7 +383,7 @@ describe('Attachment tools', () => {
       const client = await connectMcpClient(tickets);
 
       const result = await client.callTool({
-        name: 'get_attachment',
+        name: 'read_attachment',
         arguments: { id: attachment.id },
       });
 
@@ -436,7 +405,7 @@ describe('Attachment tools', () => {
       const client = await connectMcpClient(tickets);
 
       const result = await client.callTool({
-        name: 'get_attachment',
+        name: 'read_attachment',
         arguments: { id: attachment.id },
       });
 

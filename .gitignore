@@ -49,3 +49,6 @@ next-env.d.ts
 
 # always-allowed permission rules (per-user)
 /.claude/settings.local.json
+
+# nested dependency and tool caches
+node_modules/

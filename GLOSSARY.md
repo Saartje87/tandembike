@@ -17,7 +17,7 @@ A named group of Tickets. Every Ticket belongs to exactly one Project. A Project
 _Avoid_: Workspace, sub-project
 
 **Cycle**:
-A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time. An Active Cycle is **complete** when it has at least one unarchived Ticket planned in it and every one is Done, an Epic by its derived Status; its Board then shows a banner offering to archive it, and archiving stays the User's click (ADR 0010).
+A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time. An Active Cycle is **complete** when it has at least one unarchived Ticket planned in it and every one is Done, an Epic by its derived Status; its Board then shows a banner offering to archive it, and archiving stays the User's click (ADR 0010). Starting and archiving a Cycle, like renaming one and ordering a Lane, are the User's, in the UI only; an Agent proposes a Prepared Cycle with `create_cycle` (ADR 0037).
 _Avoid_: Sprint
 
 **Backlog**:
@@ -49,7 +49,7 @@ The one line on an In progress card saying what its live Conversation is doing n
 _Avoid_: Progress line, activity line
 
 **Queued**:
-The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent can take. Its order is the Autopilot priority, set by dragging or by `sort_lane`. A `ready-for-agent` Epic not yet split is in Intake, not here: see **Intake**. Formerly called Todo.
+The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent can take. Its order is the Autopilot priority, set by dragging. A `ready-for-agent` Epic not yet split is in Intake, not here: see **Intake**. Formerly called Todo.
 _Avoid_: Todo Lane, Ready
 
 **Intake**:
@@ -97,11 +97,11 @@ A Project's rule that turns External reference keys starting with a given prefix
 _Avoid_: Link template, URL pattern
 
 **Comment**:
-A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent`.
+A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent` through `add_note`. Editing or removing a Comment is the User's, in the UI only (ADR 0037).
 _Avoid_: Note, reply, update
 
 **Attachment**:
-A file the User or an Agent adds to a Ticket, an Epic included, such as a screenshot or a log, kept with the Ticket. It belongs to the Ticket, not to a Comment or the description. Its author is `user` or `agent`, as for a Comment; its name and content never change once added, and two Attachments may share a name. Removing one destroys it for good: the User can remove any Attachment, an Agent only one an Agent added. Archiving a Ticket keeps its Attachments; deleting it destroys them.
+A file the User or an Agent adds to a Ticket, an Epic included, such as a screenshot or a log, kept with the Ticket. It belongs to the Ticket, not to a Comment or the description. Its author is `user` or `agent`, as for a Comment; its name and content never change once added, and two Attachments may share a name. Agents add (`attach`) and read (`read_attachment`) them; removing one destroys it for good and is the User's, in the UI only (ADR 0037). Archiving a Ticket keeps its Attachments; deleting it destroys them.
 _Avoid_: File, upload, asset
 
 **Blocker**:
@@ -109,11 +109,11 @@ A Ticket that must be resolved before another Ticket can start. A Blocker is res
 _Avoid_: Dependency, prerequisite, `Blocked by:` lines
 
 **Claim**:
-A cooperative marker on a Ticket identifying the Agent run working on it. Only one Agent run can hold a Ticket's Claim; that Agent run can release it, the User can clear it, and moving the Ticket to Done releases it. Claims are not an authorization boundary.
+A cooperative marker on a Ticket identifying the Agent run working on it. `start_work` takes it; only one Agent run can hold a Ticket's Claim. `abandon_work` or `open_pr` with `handOff: true` releases it, the User can clear it, and moving the Ticket to Done (`finish_work`) releases it. Claims are not an authorization boundary.
 _Avoid_: Lock, reservation
 
 **Agent-run ID**:
-A unique identifier for one Agent run, used to claim Tickets independently of its optional display name.
+A unique identifier for one Agent run, used to claim Tickets independently of its optional display name. Runs Tandembike starts send it in the `X-Tandembike-Run` header, so their tool calls need not pass it; a terminal session passes `agentRunId` itself (ADR 0037).
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
