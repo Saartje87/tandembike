@@ -14,7 +14,11 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { ticketByNumberPath } from '../../app/lib/paths';
+import {
+  type BoardFilter,
+  ticketByNumberPath,
+  ticketOnBoardPath,
+} from '../../app/lib/paths';
 import {
   parseTicketNumber,
   ticketNumberRule,
@@ -30,10 +34,25 @@ import { FieldError } from '../field-error/field-error';
 import { Icon } from '../icon/icon';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 
+/** The Board the Epic's drawer opens over, and its children on it. */
+export type ChildrenBoard = {
+  /** The Board's own URL, without its filter or `?ticket=`. */
+  path: string;
+  /** The Board's filter, which a child opened over it keeps. */
+  filter: BoardFilter;
+  /** The Epic's children on this Board, by Ticket number. */
+  onBoard: number[];
+};
+
 export type EpicChildrenProps = {
   epic: Pick<Ticket, 'number' | 'projectId' | 'archived'>;
   /** The Epic's children, by Ticket number. */
   items: EpicChild[];
+  /**
+   * The Board the drawer opens over. Without one, every child opens over
+   * its own Board.
+   */
+  board?: ChildrenBoard;
 };
 
 /** A child's Status, and whether it is blocked or archived, as shown. */
@@ -46,12 +65,26 @@ function describeChild(child: EpicChild): string {
 }
 
 /**
- * An Epic's child Tickets in its drawer (ADR 0011): each linked with its
- * Status and a button to detach it, which shows at once. Below, unless the
+ * Where child `number` opens: over `board` when it is on it, keeping the
+ * Board's scroll, else over its own Board.
+ */
+function childLink(number: number, board: ChildrenBoard | undefined) {
+  return board?.onBoard.includes(number)
+    ? {
+        href: ticketOnBoardPath(board.path, number, board.filter),
+        scroll: false,
+      }
+    : { href: ticketByNumberPath(number) };
+}
+
+/**
+ * An Epic's child Tickets in its drawer (ADR 0011): each with its title
+ * linked, over this Board when it is on it and else over its own (ADR 0013),
+ * its Status and a button to detach it, which shows at once. Below, unless the
  * Epic is archived, a field creates a child and Attach Ticket opens a field
  * for the number of an existing Ticket to attach, which shows once saved.
  */
-export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
+export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items, board }) => {
   const headingId = useId();
   const inputId = useId();
   const errorId = useId();
@@ -122,8 +155,11 @@ export const EpicChildren: FC<EpicChildrenProps> = ({ epic, items }) => {
             {shown.map((child) => (
               <li key={child.number}>
                 <Inline gap={2} alignY="center" flexWrap="wrap">
-                  <AppLink href={ticketByNumberPath(child.number)}>
-                    T{child.number} {child.title}
+                  <Text fontSize="small" fontFamily="mono" color="muted">
+                    T{child.number}
+                  </Text>
+                  <AppLink {...childLink(child.number, board)}>
+                    {child.title}
                   </AppLink>
                   <Text fontSize="xsmall" color="muted">
                     {describeChild(child)}

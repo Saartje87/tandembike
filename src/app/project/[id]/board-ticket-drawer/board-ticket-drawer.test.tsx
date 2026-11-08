@@ -23,6 +23,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     referenceTemplates,
     conversations,
     agentCommands,
+    board,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
@@ -32,6 +33,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     referenceTemplates: { prefix: string }[];
     conversations: unknown[];
     agentCommands: unknown;
+    board: unknown;
   }) => (
     <div
       role="dialog"
@@ -42,6 +44,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-epic-children={JSON.stringify(epicChildren)}
       data-conversations={conversations.length}
       data-agent-commands={JSON.stringify(agentCommands)}
+      data-board={JSON.stringify(board)}
     >
       {`Ticket drawer T${ticket.number} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
@@ -76,6 +79,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -110,6 +114,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: project.id,
             number: ticket.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -135,6 +140,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -148,6 +154,49 @@ describe('BoardTicketDrawer', () => {
       triageCommand: '/triage',
       startCommand: '/implement',
       startEpicCommand: null,
+    });
+  });
+
+  it("tells an Epic's drawer the Board below, with its filter and the Epic's children on it", async () => {
+    const { tickets, website } = setUp();
+    const epic = tickets.createTicket({
+      projectId: website.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const planned = tickets.createTicket({
+      projectId: website.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+    });
+    tickets.createTicket({
+      projectId: website.id,
+      title: 'Send the invoice',
+      epicNumber: epic.number,
+    });
+    const cycle = tickets.createCycle({ projectId: website.id, title: 'Beta' });
+    tickets.planTicket({ cycleId: cycle.id, number: planned.number });
+    const filter = { query: 'pay', labels: [] };
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: epic.number,
+            cycleId: cycle.id,
+            filter,
+          })
+        }
+      </div>,
+    );
+
+    expect(
+      JSON.parse(screen.getByRole('dialog').dataset.board ?? 'null'),
+    ).toEqual({
+      path: `/project/${website.id}/cycle/${cycle.id}`,
+      filter,
+      onBoard: [planned.number],
     });
   });
 
@@ -171,6 +220,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -199,6 +249,7 @@ describe('BoardTicketDrawer', () => {
             await BoardTicketDrawer({
               projectId,
               number: ticket.number,
+              cycleId: null,
             })
           }
         </div>,
@@ -223,6 +274,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: ticket.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -242,6 +294,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: elsewhere.number,
+            cycleId: null,
           })
         }
       </div>,
@@ -274,6 +327,7 @@ describe('BoardTicketDrawer', () => {
           await BoardTicketDrawer({
             projectId: website.id,
             number: epic.number,
+            cycleId: null,
           })
         }
       </div>,

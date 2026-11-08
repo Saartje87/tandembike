@@ -5,6 +5,7 @@ import { Activity, type FC } from 'react';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
+import { noBoardFilter } from '../../app/lib/paths';
 import {
   addTicketBlocker,
   addTicketLabel,
@@ -1194,13 +1195,28 @@ describe('TicketDrawer', () => {
       ],
     };
 
+    it("opens an Epic's children on the Board below over it", () => {
+      renderWithTheme(
+        <InShell
+          ticket={epic}
+          board={{ path: '/project/1', filter: noBoardFilter, onBoard: [9] }}
+        />,
+      );
+
+      expect(
+        within(
+          inDrawer().getByRole('list', { name: 'Child Tickets' }),
+        ).getByRole('link', { name: 'Pay by card' }),
+      ).toHaveAttribute('href', '/project/1?ticket=9');
+    });
+
     it("lists an Epic's child Tickets, with no Epic of its own", () => {
       renderDrawer(epic);
 
       expect(
         within(
           inDrawer().getByRole('list', { name: 'Child Tickets' }),
-        ).getByRole('link', { name: 'T9 Pay by card' }),
+        ).getByRole('link', { name: 'Pay by card' }),
       ).toBeInTheDocument();
       expect(
         inDrawer().queryByRole('button', { name: 'Detach from Epic' }),

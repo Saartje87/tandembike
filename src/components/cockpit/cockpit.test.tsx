@@ -131,6 +131,16 @@ const renderCockpit = (shown: Ticket[] = tickets, filter?: BoardFilter) =>
 
 const section = (name: string) => screen.getByRole('region', { name });
 
+/**
+ * The links of a section's own rows, leaving out those of the children an
+ * Epic row lists, which sit in a list item of their own inside the row's.
+ */
+const rowLinks = (region: HTMLElement) =>
+  within(region)
+    .getAllByRole('link')
+    .filter((link) => !link.closest('li')?.parentElement?.closest('li'))
+    .map((link) => link.textContent);
+
 const dialog = { open: vi.fn() };
 vi.mocked(useConversationDialog).mockReturnValue(
   dialog as unknown as ReturnType<typeof useConversationDialog>,
@@ -381,9 +391,7 @@ describe('Cockpit', () => {
     const summary = epicRow.querySelector('summary') as HTMLElement;
     expect(within(summary).getByText('needs you')).toBeVisible();
     expect(within(summary).getByText('Running')).toBeVisible();
-    expect(within(inFlight).queryByRole('link', { name: 'Child 31' })).toBe(
-      null,
-    );
+    expect(rowLinks(inFlight)).not.toContain('Child 31');
 
     await userEvent.click(
       within(epicRow).getByRole('img', { name: '1 of 3 children done' }),
@@ -399,9 +407,67 @@ describe('Cockpit', () => {
       'T31Child 31running',
       'T32Child 32needs you',
     ]);
+    const childList = within(epicRow).getByRole('list');
+    expect(
+      within(childList).getByRole('link', { name: 'Child 31' }),
+    ).toHaveAttribute('href', '/project/3/cycle/9?ticket=31');
+    // Only the title links; the number, pip and state stay plain text.
+    expect(
+      within(childList)
+        .getAllByRole('link')
+        .map((child) => child.textContent),
+    ).toEqual(['Child 30', 'Child 31', 'Child 32']);
     expect(
       within(section('Action needed')).getByRole('link', { name: 'Child 32' }),
     ).toBeVisible();
+  });
+
+  it("links an opened Epic row's children over this Board, keeping its filter", async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const link = { number: 50, title: 'Cockpit', color: 'teal' as const };
+    renderCockpit(
+      [
+        ticket({
+          number: 50,
+          title: 'Cockpit',
+          type: 'Epic',
+          color: 'teal',
+          labels: ['ready-for-agent'],
+          children: [
+            {
+              number: 30,
+              title: 'Child 30',
+              status: 'Todo',
+              archived: false,
+              blockedBy: [],
+              blocked: false,
+            },
+          ],
+        }),
+        ticket({
+          number: 30,
+          title: 'Child 30',
+          labels: ['ready-for-agent'],
+          epic: link,
+        }),
+      ],
+      { query: 'Child', labels: [] },
+    );
+
+    const epicRow = within(section('Queued'))
+      .getByRole('link', { name: 'Cockpit' })
+      .closest('li') as HTMLElement;
+    await userEvent.click(
+      within(epicRow).getByRole('img', { name: '0 of 1 children done' }),
+    );
+
+    expect(
+      within(within(epicRow).getByRole('list')).getByRole('link', {
+        name: 'Child 30',
+      }),
+    ).toHaveAttribute('href', '/project/3/cycle/9?q=Child&ticket=30');
   });
 
   it('puts an Epic in Review in Needs you, opening the Epic, with no Merged button', async () => {
@@ -471,7 +537,7 @@ describe('Cockpit', () => {
     const row = within(intake)
       .getByRole('link', { name: 'Big idea' })
       .closest('li') as HTMLElement;
-    expect(within(intake).getAllByRole('link')).toHaveLength(1);
+    expect(rowLinks(intake)).toEqual(['Big idea']);
     expect(within(row).queryAllByRole('checkbox')).toHaveLength(0);
     await userEvent.click(
       within(row).getByRole('img', { name: '0 of 1 children done' }),
@@ -697,7 +763,7 @@ describe('Cockpit', () => {
     ]);
 
     const queued = section('Queued');
-    expect(within(queued).getAllByRole('link')).toHaveLength(2);
+    expect(rowLinks(queued)).toHaveLength(2);
     expect(
       within(queued).getByRole('checkbox', { name: 'Select T70 Plain queued' }),
     ).toBeInTheDocument();
@@ -714,7 +780,7 @@ describe('Cockpit', () => {
     expect(
       within(done).getByRole('link', { name: 'Shipped' }),
     ).toBeInTheDocument();
-    expect(within(done).queryByRole('link', { name: 'Child 31' })).toBe(null);
+    expect(rowLinks(done)).not.toContain('Child 31');
   });
 
   describe('selecting rows', () => {
