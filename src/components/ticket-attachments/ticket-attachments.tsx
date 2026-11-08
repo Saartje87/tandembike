@@ -14,6 +14,8 @@ import {
 import {
   type DragEvent,
   type FC,
+  useEffect,
+  useEffectEvent,
   useId,
   useRef,
   useState,
@@ -29,6 +31,7 @@ import {
 } from '../../app/tickets/actions';
 import { formatSize, isPreviewable } from '../../tickets/attachment-preview';
 import type { Attachment } from '../../tickets/attachments';
+import { namePastedFile } from '../../tickets/pasted-file-name';
 import { actorNames } from '../activity-entry/activity-entry';
 import { DateTime } from '../date-time/date-time';
 import { FieldError } from '../field-error/field-error';
@@ -167,6 +170,38 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
   );
 };
 
+/** A paste here goes to the field, as the browser does by default. */
+const editableField =
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
+
+/**
+ * The files of a paste that the Ticket drawer around the section attaches,
+ * or none when the paste is left to the browser: when it lands in a text
+ * field or outside the drawer, when a dialog other than the drawer is open,
+ * such as one nested in it, or when the clipboard holds no files.
+ */
+const pastedFiles = (event: ClipboardEvent, drawer: Element): File[] => {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return [];
+  }
+  if (target !== document.body && !drawer.contains(target)) {
+    return [];
+  }
+  if (target.closest(editableField)) {
+    return [];
+  }
+  // Any open dialog but the drawer: one nested in it, or one over it such
+  // as the Conversation dialog.
+  const otherDialogOpen = Array.from(
+    document.querySelectorAll('dialog[open]'),
+  ).some((dialog) => dialog !== drawer);
+  if (otherDialogOpen) {
+    return [];
+  }
+  return Array.from(event.clipboardData?.files ?? []);
+};
+
 /**
  * A Ticket's Attachments, below its description, with a button to add files
  * and a drop target for them. A refusal shows on the section.
@@ -178,20 +213,25 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
   const headingId = useId();
   const errorId = useId();
   const input = useRef<HTMLInputElement>(null);
+  const section = useRef<HTMLElement>(null);
   const {
-    handleSubmit,
     setError,
     clearErrors,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm({ defaultValues: {} });
   const reason = errors.root?.server?.message;
+  // Adds may overlap, from the button, a drop or a paste, so the pending
+  // state is a count of adds, not one submit's `isSubmitting`. Next runs
+  // them one after another.
+  const [pending, setPending] = useState(0);
 
-  const add = (files: File[]) => {
-    if (files.length === 0 || isSubmitting) {
+  const add = async (files: File[]) => {
+    if (files.length === 0) {
       return;
     }
     clearErrors('root.server');
-    void handleSubmit(async () => {
+    setPending((count) => count + 1);
+    try {
       const form = new FormData();
       form.set('number', String(ticketNumber));
       for (const file of files) {
@@ -201,17 +241,51 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
       if (!result.ok) {
         setError('root.server', { message: result.error });
       }
-    })();
+    } finally {
+      setPending((count) => count - 1);
+    }
   };
+
+  const attachPasted = useEffectEvent(
+    (event: ClipboardEvent, drawer: Element) => {
+      const files = pastedFiles(event, drawer);
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      const now = new Date();
+      void add(files.map((file) => namePastedFile(file, now)));
+      const reduceMotion = matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      section.current?.scrollIntoView({
+        behavior: reduceMotion ? 'instant' : 'smooth',
+        block: 'nearest',
+      });
+    },
+  );
+
+  // A paste anywhere in the drawer the section is in attaches its files. A
+  // paste outside any field targets the body, so listen on the document.
+  useEffect(() => {
+    const drawer = section.current?.closest('dialog');
+    if (!drawer) {
+      return;
+    }
+    const listener = (event: ClipboardEvent) => attachPasted(event, drawer);
+    document.addEventListener('paste', listener);
+    return () => document.removeEventListener('paste', listener);
+  }, []);
 
   const drop = (event: DragEvent<HTMLElement>) => {
     event.preventDefault();
-    add(Array.from(event.dataTransfer.files));
+    void add(Array.from(event.dataTransfer.files));
   };
 
   return (
     <Stack gap={2} asChild>
       <section
+        ref={section}
         aria-labelledby={headingId}
         aria-describedby={reason ? errorId : undefined}
         // A drop only reaches onDrop when dragover stops the browser opening the file.
@@ -226,10 +300,9 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
             type="button"
             variant="ghost"
             size="small"
-            disabled={isSubmitting}
             onClick={() => input.current?.click()}
           >
-            {isSubmitting ? 'Adding...' : 'Add files'}
+            {pending > 0 ? 'Adding...' : 'Add files'}
           </Button>
           {/* Blocks has no file input, so a hidden native one sits behind the button (T404). */}
           <input
@@ -239,7 +312,7 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
             hidden
             aria-label="Files to attach"
             onChange={(event) => {
-              add(Array.from(event.target.files ?? []));
+              void add(Array.from(event.target.files ?? []));
               // So picking the same file again still fires a change.
               event.target.value = '';
             }}
@@ -248,7 +321,7 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
         <FieldError id={errorId} reason={reason} />
         {attachments.length === 0 ? (
           <Text tag="p" color="muted">
-            No Attachments
+            No Attachments. Drop or paste files here.
           </Text>
         ) : (
           <Stack gap={2} listStyle="none" role="list" asChild>
