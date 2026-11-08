@@ -16,6 +16,7 @@ import {
 import type { Ticket } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
+import { BlockedMarker } from '../blocked-marker/blocked-marker';
 import { isStalled } from '../board/board-lanes';
 import {
   useTicketActivity,
@@ -80,18 +81,6 @@ export const selectModeOf = (event: Event | MouseEvent): SelectMode =>
   'shiftKey' in event && event.shiftKey ? 'range' : 'toggle';
 
 type CriteriaProgressProps = Pick<Ticket, 'acceptanceCriteria'>;
-
-/** A pill that says the Ticket is blocked by an unresolved Blocker. */
-const BlockedMarker: FC = () => (
-  <Tag
-    intent="warning"
-    startSlot={<Icon name="lock-closed" size="small" />}
-    role="img"
-    aria-label="Blocked by an unresolved Ticket"
-  >
-    Blocked
-  </Tag>
-);
 
 type ConversationMarkersProps = { running: boolean; waiting: boolean };
 

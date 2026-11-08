@@ -2,6 +2,7 @@ import { Text } from '@blockle/blocks';
 import { connection } from 'next/server';
 import type { FC } from 'react';
 
+import { outsideBlockersOf } from '../../../../components/epic-order/epic-order-layout';
 import { TicketDrawer } from '../../../../components/ticket-drawer/ticket-drawer';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
@@ -62,6 +63,14 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   const tickets = appTickets('user');
   const conversations = appConversations();
   const cycles = tickets.listCycles(ticket.projectId);
+  const childBlockers = new Map(
+    ticket.children.map((child) => [
+      child.number,
+      tickets.listBlockers(child.number),
+    ]),
+  );
+  const blockersOf = (number: number) =>
+    childBlockers.get(number) ?? { blockedBy: [], blocks: [] };
   return (
     <TicketDrawer
       ticket={ticket}
@@ -82,8 +91,12 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         number: child.number,
         title: child.title,
         claim: tickets.getTicket(child.number).claim,
-        blocks: tickets.listBlockers(child.number).blocks,
+        blocks: blockersOf(child.number).blocks,
       }))}
+      outsideBlockers={outsideBlockersOf(
+        ticket.children,
+        (number) => blockersOf(number).blockedBy,
+      )}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
       conversations={conversations.list({ ticketNumber: ticket.number })}
       agentCommands={tickets.getProjectAgentCommands(ticket.projectId)}

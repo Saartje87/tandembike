@@ -52,11 +52,10 @@ import {
   type ChildDeletion,
   DeleteTicketDialog,
 } from '../delete-ticket-dialog/delete-ticket-dialog';
-import {
-  type ChildrenBoard,
-  EpicChildren,
-} from '../epic-children/epic-children';
+import type { ChildrenBoard } from '../epic-children/child-link';
+import { EpicChildren } from '../epic-children/epic-children';
 import { EpicColorPicker } from '../epic-color-picker/epic-color-picker';
+import type { OutsideBlocker } from '../epic-order/epic-order-layout';
 import { ExternalReferenceEditor } from '../external-reference-editor/external-reference-editor';
 import { FieldError } from '../field-error/field-error';
 import { InlineEdit } from '../inline-edit/inline-edit';
@@ -97,6 +96,11 @@ export type TicketDrawerProps = {
    * deleting or archiving them along with it. Defaults to none.
    */
   epicChildren?: ChildDeletion[];
+  /**
+   * The direct Blockers of an Epic's children from outside it, for its
+   * Order diagram. Defaults to none.
+   */
+  outsideBlockers?: OutsideBlocker[];
   /**
    * The Reference templates of the Ticket's Project, which link its
    * External reference keys. Defaults to none.
@@ -212,6 +216,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   epics,
   epicClaim = null,
   epicChildren,
+  outsideBlockers,
   referenceTemplates,
   conversations = [],
   agentCommands = noAgentCommands,
@@ -465,6 +470,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         <EpicChildren
           epic={{ ...ticket, archived }}
           items={ticket.children}
+          outside={outsideBlockers}
           board={board}
         />
       )}

@@ -182,4 +182,49 @@ describe('EpicChildren', () => {
     ).toEqual(['Send the invoice']);
     await act(async () => resolve({ ok: true }));
   });
+
+  it('shows the order of its children above them, with their outside Blockers', () => {
+    renderWithTheme(
+      <EpicChildren
+        epic={epic}
+        items={[card, invoice]}
+        outside={[
+          {
+            number: 40,
+            title: 'Set up the tax rules',
+            status: 'Todo',
+            projectId: 2,
+            blocks: [6],
+          },
+        ]}
+      />,
+    );
+
+    const order = screen.getByRole('region', { name: 'Order' });
+    expect(
+      within(order)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('href')),
+    ).toEqual(['/ticket/5', '/ticket/40', '/ticket/6']);
+    expect(
+      order.compareDocumentPosition(childList()) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('drops a detached child from the order at once', async () => {
+    const { promise, resolve } =
+      Promise.withResolvers<Awaited<ReturnType<typeof detachTicketFromEpic>>>();
+    vi.mocked(detachTicketFromEpic).mockReturnValue(promise);
+    renderWithTheme(<EpicChildren epic={epic} items={[card, invoice]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detach T5' }));
+
+    expect(
+      within(screen.getByRole('region', { name: 'Order' })).getAllByRole(
+        'listitem',
+      ),
+    ).toHaveLength(1);
+    await act(async () => resolve({ ok: true }));
+  });
 });
