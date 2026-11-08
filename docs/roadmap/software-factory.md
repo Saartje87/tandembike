@@ -150,6 +150,8 @@ Goal: nothing a run learns is lost in a reply. (Was phase 3; see phase 3.)
 
 Docs and skills only, no app change.
 
+Done on 2026-11-08 (T1090): "Feedback as Tickets" in `docs/agents/issue-tracker.md`; the `AGENTS.md` Blocks and process feedback rules point at it; the `implement` skill's hand-off step files the feedback. Sources are `from:agent-run` and `from:tandembike`.
+
 ### Phase 3: Autopilot
 
 Goal: the first hands-off Cycle. (Was phase 2; swapped with feedback as Tickets on 2026-11-07, so the first hands-off Cycle loses no feedback in replies nobody reads.)
