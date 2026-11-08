@@ -669,6 +669,31 @@ describe('ConversationDialogProvider', () => {
       ).not.toBeChecked();
     });
 
+    it('keeps a transcript whose load resolves after a switch away', async () => {
+      let resolveOne: (() => void) | undefined;
+      const loads = vi.mocked(loadConversation).getMockImplementation();
+      vi.mocked(loadConversation).mockImplementation(async (input) => {
+        if (input.conversationId === 1) {
+          await new Promise<void>((resolve) => {
+            resolveOne = resolve;
+          });
+        }
+        return loads ? loads(input) : { ok: false, error: 'No mock.' };
+      });
+      const switchTo = await showSwitching(1);
+      await waitFor(() => expect(resolveOne).toBeDefined());
+      switchTo(2);
+      await screen.findByText('Hello from 2');
+      await act(async () => resolveOne?.());
+
+      vi.mocked(loadConversation).mockReturnValue(new Promise(() => {}));
+      switchTo(1);
+
+      expect(
+        within(shownPanel()).getByText('Hello from 1'),
+      ).toBeInTheDocument();
+    });
+
     it('shows the last loaded transcript at once on a switch, and loads it again', async () => {
       const switchTo = await showSwitching(1);
       await screen.findByText('Hello from 1');

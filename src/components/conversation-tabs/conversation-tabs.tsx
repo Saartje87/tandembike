@@ -102,7 +102,7 @@ const StateMarker: FC<StateMarkerProps> = ({ state }) => {
  * tab keeps its panel, which it labels, but only the selected panel has
  * content: what a tab must keep across a switch, such as an unsent reply,
  * lives in the Conversation dialog's state (T1100). Blocks `TabPanel` has no
- * option to unmount hidden content, so it is left out here.
+ * option to unmount hidden content (T1187), so it is left out here.
  */
 export const ConversationTabs = <D extends DraftTab>({
   tabs,

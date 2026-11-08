@@ -77,13 +77,18 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open, kept }) => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: `revision` is the trigger to load again.
   useEffect(() => {
     let current = true;
+    const before = kept.loaded;
     loadConversation({ conversationId })
       .then((result) => {
+        // Kept even when the tab was switched away meanwhile, unless a later
+        // load has kept a newer one.
+        if (result.ok && (current || kept.loaded === before)) {
+          kept.loaded = result;
+        }
         if (!current) {
           return;
         }
         if (result.ok) {
-          kept.loaded = result;
           setItem(result);
           setError(undefined);
         } else {
