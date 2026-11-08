@@ -3501,19 +3501,19 @@ const changedSinceRule =
  * `null` when `text` is not one or names no real moment, such as 30 February.
  */
 function parseTimestamp(text: string): Date | null {
+  const trimmed = text.trim();
   const match =
-    /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.exec(
-      text.trim(),
+    /^\d{4}-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.exec(
+      trimmed,
     );
-  if (!match) {
+  const time = Date.parse(trimmed);
+  if (!match || Number.isNaN(time)) {
     return null;
   }
-  const [, year, month, day] = match.map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
-  const time = Date.parse(text.trim());
-  return date.getUTCMonth() === month - 1 &&
-    date.getUTCDate() === day &&
-    !Number.isNaN(time)
+  // Date.parse rolls 30 February over to 2 March; refuse it instead.
+  const day = new Date(trimmed.slice(0, 10));
+  return day.getUTCMonth() + 1 === Number(match[1]) &&
+    day.getUTCDate() === Number(match[2])
     ? new Date(time)
     : null;
 }
