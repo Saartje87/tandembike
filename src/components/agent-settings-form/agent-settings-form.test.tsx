@@ -20,6 +20,7 @@ vi.mock('../../app/projects/actions', () => ({
 const unset: ProjectAgentSettings = {
   repositoryPath: null,
   checkCommand: null,
+  prepareCommand: null,
   parallelRuns: false,
   maxConcurrentRuns: 3,
   agentMode: false,
@@ -122,6 +123,7 @@ describe('AgentSettingsForm', () => {
         projectId: 3,
         repositoryPath: '/repo',
         checkCommand: null,
+        prepareCommand: null,
         parallelRuns: false,
         maxConcurrentRuns: 3,
         agentMode: false,
@@ -172,6 +174,34 @@ describe('AgentSettingsForm', () => {
     );
   });
 
+  it('shows the saved Prepare command, saves an edit of it and saves a cleared one as null', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, prepareCommand: 'npm ci' }}
+      />,
+    );
+
+    const field = screen.getByLabelText('Prepare command');
+    expect(field).toHaveValue('npm ci');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'pnpm i');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ prepareCommand: 'pnpm i' }),
+      ),
+    );
+
+    await userEvent.clear(field);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ prepareCommand: null }),
+      ),
+    );
+  });
+
   it('saves Parallel runs, the cap and agent mode once a path is set', async () => {
     renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
 
@@ -189,6 +219,7 @@ describe('AgentSettingsForm', () => {
         projectId: 3,
         repositoryPath: '/repo',
         checkCommand: null,
+        prepareCommand: null,
         parallelRuns: true,
         maxConcurrentRuns: 5,
         agentMode: true,

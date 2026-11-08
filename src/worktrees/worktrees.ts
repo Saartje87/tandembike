@@ -19,6 +19,13 @@ export type CreatedWorktree = {
   base: string;
 };
 
+export type PrepareResult = {
+  /** The command's exit code; non-zero when it failed or could not run. */
+  exitCode: number;
+  /** What it printed (stdout, then stderr), its tail when long. */
+  output: string;
+};
+
 export type CreateWorktreeInput = {
   repositoryPath: string;
   projectId: number;
@@ -37,7 +44,20 @@ export type Worktrees = {
    */
   create(input: CreateWorktreeInput): Promise<CreatedWorktree>;
   state(path: string): Promise<WorktreeState>;
+  /**
+   * Runs the Project's Prepare command through the User's shell in the
+   * worktree. It never rejects: a failure is a non-zero exit code.
+   */
+  runPrepare(path: string, command: string): Promise<PrepareResult>;
 };
+
+/** The most output of a Prepare command kept: its tail, where errors are. */
+const maxPrepareOutput = 8000;
+
+const tail = (text: string): string =>
+  text.length <= maxPrepareOutput
+    ? text
+    : `[output truncated]\n${text.slice(-maxPrepareOutput)}`;
 
 /** The folder worktrees go in: `<data folder>/worktrees`, `~/.tandembike` by default. */
 export const worktreesRoot = (
@@ -85,6 +105,29 @@ export function createWorktrees({
       }
       const status = await git(path, ['status', '--porcelain']);
       return status.trim() === '' ? 'clean' : 'dirty';
+    },
+
+    async runPrepare(path, command) {
+      const shell = process.env.SHELL || '/bin/sh';
+      try {
+        const { stdout, stderr } = await run(shell, ['-c', command], {
+          cwd: path,
+          maxBuffer: 64 * 1024 * 1024,
+        });
+        return { exitCode: 0, output: tail(`${stdout}${stderr}`.trim()) };
+      } catch (error) {
+        const failure = error as {
+          code?: number | string;
+          stdout?: string;
+          stderr?: string;
+          message: string;
+        };
+        const printed = `${failure.stdout ?? ''}${failure.stderr ?? ''}`.trim();
+        return {
+          exitCode: typeof failure.code === 'number' ? failure.code : 1,
+          output: tail(printed === '' ? failure.message : printed),
+        };
+      }
     },
   };
 }

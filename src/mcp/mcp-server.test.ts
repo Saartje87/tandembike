@@ -16,6 +16,7 @@ describe('MCP server and Project agent settings', () => {
     tickets.setProjectAgentSettings(project.id, {
       repositoryPath: '/tmp',
       checkCommand: 'npm run check',
+      prepareCommand: 'npm ci',
     });
     const client = await connectMcpClient(tickets);
 
@@ -28,7 +29,7 @@ describe('MCP server and Project agent settings', () => {
       /repository|agent_setting|parallel|agent_mode/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|npm run check|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|prepareCommand|npm ci|npm run check|\/tmp/,
     );
     await client.close();
   });

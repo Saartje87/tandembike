@@ -4,7 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createWorktrees } from './worktrees';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -115,5 +121,57 @@ describe('worktrees.state', () => {
     expect(await worktrees.state(path)).toBe('dirty');
     rmSync(path, { recursive: true, force: true });
     expect(await worktrees.state(path)).toBe('missing');
+  });
+});
+
+describe('worktrees.runPrepare', () => {
+  it('runs the command in the worktree and returns its output', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+
+    const result = await worktrees.runPrepare(
+      path,
+      'pwd -P && echo ready > prepared.txt && echo warn >&2',
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('warn');
+    expect(result.output).toContain('c1');
+    expect(readFileSync(join(path, 'prepared.txt'), 'utf8')).toBe('ready\n');
+  });
+
+  it('returns a non-zero exit code with the output of a failing command', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+
+    const result = await worktrees.runPrepare(path, 'echo broken >&2; exit 3');
+
+    expect(result).toEqual({ exitCode: 3, output: 'broken' });
+  });
+
+  it('keeps the tail of very long output', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+
+    const result = await worktrees.runPrepare(
+      path,
+      'head -c 20000 /dev/zero | tr "\\0" a; echo; echo last-line',
+    );
+
+    expect(result.output.length).toBeLessThan(9000);
+    expect(result.output).toContain('truncated');
+    expect(result.output.endsWith('last-line')).toBe(true);
   });
 });

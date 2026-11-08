@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `prepare_command` text;

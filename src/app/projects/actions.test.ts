@@ -148,12 +148,14 @@ describe('setProjectAgentSettings', () => {
       runMode: 'auto',
       runModel: 'claude-opus-5-5',
       checkCommand: ' npm run check ',
+      prepareCommand: ' npm ci ',
     });
 
     expect(result).toEqual({ ok: true });
     expect(tickets.getProjectAgentSettings(project.id)).toEqual({
       repositoryPath: '/',
       checkCommand: 'npm run check',
+      prepareCommand: 'npm ci',
       parallelRuns: true,
       maxConcurrentRuns: 2,
       agentMode: true,

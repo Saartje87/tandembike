@@ -130,6 +130,10 @@ _Avoid_: Auto mode (that is the Agent run mode), scheduler
 A Project's command that defines green for its repository, such as `npm run check`. A Start run's brief names it as what must pass before the run opens a pull request; with none set, the brief tells the run to follow the repository's own instructions. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can redefine green for itself.
 _Avoid_: Test command, build command
 
+**Prepare command**:
+A Project's command, such as `npm ci`, that Tandembike runs through the User's shell in each new worktree before the run starts, so the run finds its dependencies ready. When it exits non-zero no run starts: its output goes into the transcript as an error entry and the Conversation is interrupted, so its Ticket shows in Action needed. With none set, the run starts right after the worktree is created. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can make Tandembike run a command of its choosing.
+_Avoid_: Setup command, install command
+
 **Eligible**:
 Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, labelled `ready-for-agent`, not blocked, unclaimed, not archived and not an Epic's child, an Epic only once it has a child, and with no open Start Conversation on it, whatever state its run is in, so a failed run waits for the User. A Start Conversation from before the Ticket's latest move to Todo, such as Back to Todo, no longer counts, unless its run is still working.
 _Avoid_: Ready (that is the label), startable

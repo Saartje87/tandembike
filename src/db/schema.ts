@@ -45,6 +45,7 @@ export const projects = sqliteTable('projects', {
   repositoryPath: text('repository_path'),
   /** The command that defines green for the repository; null while unset. */
   checkCommand: text('check_command'),
+  prepareCommand: text('prepare_command'),
   /** Whether Start runs of this Project may overlap, each in its own worktree. */
   parallelRuns: integer('parallel_runs', { mode: 'boolean' })
     .notNull()

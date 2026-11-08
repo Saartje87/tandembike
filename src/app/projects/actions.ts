@@ -151,6 +151,14 @@ export async function setProjectAgentSettings(
                 ? null
                 : String(settings.checkCommand),
           }),
+      ...(settings.prepareCommand === undefined
+        ? {}
+        : {
+            prepareCommand:
+              settings.prepareCommand === null
+                ? null
+                : String(settings.prepareCommand),
+          }),
       ...(settings.parallelRuns === undefined
         ? {}
         : { parallelRuns: Boolean(settings.parallelRuns) }),

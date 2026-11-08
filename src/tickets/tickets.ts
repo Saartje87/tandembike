@@ -189,6 +189,8 @@ export type ProjectAgentSettings = {
   repositoryPath: string | null;
   /** The command that defines green for the repository, or `null` while unset. */
   checkCommand: string | null;
+  /** The command run in each new worktree before its run starts, or `null` while unset. */
+  prepareCommand: string | null;
   /** Whether Start runs may overlap, each in a worktree of its own. */
   parallelRuns: boolean;
   /** The most Start runs running at once; at least 1. */
@@ -242,6 +244,7 @@ const agentCommandColumns = {
 const agentSettingsColumns = {
   repositoryPath: projects.repositoryPath,
   checkCommand: projects.checkCommand,
+  prepareCommand: projects.prepareCommand,
   parallelRuns: projects.parallelRuns,
   maxConcurrentRuns: projects.maxConcurrentRuns,
   agentMode: projects.agentMode,
@@ -1497,6 +1500,7 @@ export function createTickets(
       const {
         repositoryPath,
         checkCommand,
+        prepareCommand,
         parallelRuns,
         maxConcurrentRuns,
         agentMode,
@@ -1544,6 +1548,10 @@ export function createTickets(
             checkCommand === undefined
               ? before.checkCommand
               : trimmedOrNull(checkCommand),
+          prepareCommand:
+            prepareCommand === undefined
+              ? before.prepareCommand
+              : trimmedOrNull(prepareCommand),
           ...(parallelRuns === undefined ? {} : { parallelRuns }),
           ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
           agentMode:
