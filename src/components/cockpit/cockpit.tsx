@@ -283,6 +283,8 @@ const TicketRow: FC<TicketRowProps> = ({
 }) => {
   const color = ticket.epic?.color ?? ticket.color;
   const changed = useTicketChanged(ticket.number);
+  const mutedBackground = muted ? modeColors.sunken : modeColors.raised;
+  const background = changed ? modeColors.primarySubtle : mutedBackground;
   // Runs before the title link's own click, so it neither navigates nor opens a tab.
   const selectByClick = (event: MouseEvent<HTMLLIElement>) => {
     if (
@@ -350,13 +352,7 @@ const TicketRow: FC<TicketRowProps> = ({
       paddingBlock={2}
       paddingInline={3}
       borderRadius={2}
-      backgroundColor={
-        changed
-          ? modeColors.primarySubtle
-          : muted
-            ? modeColors.sunken
-            : modeColors.raised
-      }
+      backgroundColor={background}
       boxShadow={muted ? undefined : 1}
       transition="slow"
       className={color ? styles.epicEdge[color] : styles.edge}
