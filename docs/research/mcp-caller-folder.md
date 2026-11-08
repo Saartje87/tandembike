@@ -30,8 +30,8 @@ Stored under top-level `mcpServers`, unexpanded:
 
 `${PWD}` is expanded at session start, to the folder the session started in. Every request carried it: `server/discover`, `initialize`, `notifications/initialized`, the `GET` for the stream and `tools/list`.
 
-| Started in | `X-Tandembike-Cwd` received |
-| --- | --- |
+| Started in     | `X-Tandembike-Cwd` received     |
+| -------------- | ------------------------------- |
 | `/tmp/spike-a` | `/tmp/spike-a` (all 5 requests) |
 | `/tmp/spike-b` | `/tmp/spike-b` (all 5 requests) |
 
