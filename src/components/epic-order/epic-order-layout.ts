@@ -32,7 +32,10 @@ export type OrderLayout = {
   edges: OrderEdge[];
 };
 
-type Placing = { number: number; node: OrderNode['ticket']; outside: boolean };
+/** A node before it has its row and column. */
+type Placing =
+  | { outside: false; ticket: EpicChild }
+  | { outside: true; ticket: OutsideBlocker };
 
 /**
  * Lays out an Epic's children as a layered graph read top to bottom, to show
@@ -61,12 +64,20 @@ export function layoutEpicOrder(
       .filter((ticket) => ticket.blocks.length > 0)
       .map((ticket) => [ticket.number, ticket]),
   );
-  const childBlockersOf = (ticket: EpicChild) =>
-    ticket.blockedBy.filter((number) => byNumber.has(number));
-  const outsideBlockersOf = (ticket: EpicChild) =>
-    [...outsideOf.values()]
+  // A child's Blockers in the diagram: its fellow children, then those from
+  // outside the Epic.
+  const blockersOf = (ticket: EpicChild): OrderEdge[] => [
+    ...ticket.blockedBy
+      .filter((number) => byNumber.has(number))
+      .map((from) => ({ from, to: ticket.number, outside: false })),
+    ...[...outsideOf.values()]
       .filter((blocker) => blocker.blocks.includes(ticket.number))
-      .map((blocker) => blocker.number);
+      .map(({ number }) => ({
+        from: number,
+        to: ticket.number,
+        outside: true,
+      })),
+  ];
 
   const rowOf = new Map<number, number>();
   const placeRow = (ticket: EpicChild): number => {
@@ -75,51 +86,38 @@ export function layoutEpicOrder(
       return known;
     }
     const row = Math.max(
-      outsideBlockersOf(ticket).length > 0 ? 1 : 0,
-      ...childBlockersOf(ticket).map(
-        (number) => placeRow(byNumber.get(number) as EpicChild) + 1,
-      ),
+      0,
+      ...blockersOf(ticket).map(({ from, outside }) => {
+        const blocker = byNumber.get(from);
+        return outside || blocker === undefined ? 1 : placeRow(blocker) + 1;
+      }),
     );
     rowOf.set(ticket.number, row);
     return row;
   };
-  for (const ticket of children) {
-    placeRow(ticket);
-  }
 
   const rows: Placing[][] = [];
   const addToRow = (row: number, placing: Placing) => {
     rows[row] = [...(rows[row] ?? []), placing];
   };
   for (const ticket of children) {
-    addToRow(rowOf.get(ticket.number) as number, {
-      number: ticket.number,
-      node: ticket,
-      outside: false,
-    });
+    addToRow(placeRow(ticket), { outside: false, ticket });
   }
+  // Every child has its row by now, so each one an outside Blocker blocks.
   for (const ticket of outsideOf.values()) {
-    const row =
-      Math.min(...ticket.blocks.map((number) => rowOf.get(number) as number)) -
-      1;
-    addToRow(row, { number: ticket.number, node: ticket, outside: true });
+    const highest = Math.min(
+      ...ticket.blocks.map((number) => rowOf.get(number) ?? 1),
+    );
+    addToRow(highest - 1, { outside: true, ticket });
   }
-
-  const blockersOf = (placing: Placing) =>
-    placing.outside
-      ? []
-      : [
-          ...childBlockersOf(placing.node as EpicChild),
-          ...outsideBlockersOf(placing.node as EpicChild),
-        ];
 
   const columnOf = new Map<number, number>();
   const nodes: OrderNode[] = [];
   rows.forEach((placings, row) => {
     const keyed = placings.map((placing) => {
-      const columns = blockersOf(placing).map(
-        (number) => columnOf.get(number) as number,
-      );
+      const columns = placing.outside
+        ? []
+        : blockersOf(placing.ticket).map(({ from }) => columnOf.get(from) ?? 0);
       const center =
         columns.length > 0
           ? columns.reduce((sum, column) => sum + column, 0) / columns.length
@@ -129,38 +127,18 @@ export function layoutEpicOrder(
     keyed.sort(
       (a, b) =>
         compareCenters(a.center, b.center) ||
-        a.placing.number - b.placing.number,
+        a.placing.ticket.number - b.placing.ticket.number,
     );
     let column = -1;
     for (const { placing, center } of keyed) {
       column = Math.max(column + 1, Math.round(center ?? 0));
-      columnOf.set(placing.number, column);
-      nodes.push(
-        placing.outside
-          ? {
-              outside: true,
-              ticket: placing.node as OutsideBlocker,
-              row,
-              column,
-            }
-          : { outside: false, ticket: placing.node as EpicChild, row, column },
-      );
+      columnOf.set(placing.ticket.number, column);
+      nodes.push({ ...placing, row, column });
     }
   });
 
   const edges = children
-    .flatMap((ticket) => [
-      ...childBlockersOf(ticket).map((from) => ({
-        from,
-        to: ticket.number,
-        outside: false,
-      })),
-      ...outsideBlockersOf(ticket).map((from) => ({
-        from,
-        to: ticket.number,
-        outside: true,
-      })),
-    ])
+    .flatMap(blockersOf)
     .sort((a, b) => a.from - b.from || a.to - b.to);
   return {
     rows: rows.length,

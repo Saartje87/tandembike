@@ -76,10 +76,15 @@ export const node = styleVariants({
   ],
 });
 
-/** A Blocker from outside the Epic: faded, with a dashed edge. */
+/**
+ * A Blocker from outside the Epic: faded, with a dashed edge. Muted rather
+ * than see-through, so arrows behind it stay hidden.
+ */
 export const outside = style({
   borderStyle: 'dashed',
-  opacity: 0.6,
+  borderColor: vars.colorRole.border.default,
+  backgroundColor: vars.colorRole.surface.sunken,
+  color: vars.colorRole.text.muted,
 });
 
 /** The arrows, behind the rows. */
