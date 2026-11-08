@@ -1,5 +1,6 @@
 import { appDatabase, appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
+import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
 
@@ -32,6 +33,7 @@ export function appConversations(): Conversations {
       tickets: appTickets('user'),
       changes: appChangeChannel(),
       runner: createClaudeRunner(),
+      worktrees: createWorktrees(),
       mcpUrl,
     });
     conversations.interruptStale();
