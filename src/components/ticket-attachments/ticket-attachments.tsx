@@ -171,7 +171,7 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
 };
 
 /** A paste here goes to the field, as the browser does by default. */
-const editable =
+const editableField =
   'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 
 /**
@@ -188,9 +188,11 @@ const pastedFiles = (event: ClipboardEvent, drawer: Element): File[] => {
   if (target !== document.body && !drawer.contains(target)) {
     return [];
   }
-  if (target.closest(editable)) {
+  if (target.closest(editableField)) {
     return [];
   }
+  // Any open dialog but the drawer: one nested in it, or one over it such
+  // as the Conversation dialog.
   const otherDialogOpen = Array.from(
     document.querySelectorAll('dialog[open]'),
   ).some((dialog) => dialog !== drawer);
@@ -244,20 +246,24 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
     }
   };
 
-  const onPaste = useEffectEvent((event: ClipboardEvent, drawer: Element) => {
-    const files = pastedFiles(event, drawer);
-    if (files.length === 0) {
-      return;
-    }
-    event.preventDefault();
-    const now = new Date();
-    void add(files.map((file) => namePastedFile(file, () => now)));
-    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    section.current?.scrollIntoView({
-      behavior: reduceMotion ? 'instant' : 'smooth',
-      block: 'nearest',
-    });
-  });
+  const attachPasted = useEffectEvent(
+    (event: ClipboardEvent, drawer: Element) => {
+      const files = pastedFiles(event, drawer);
+      if (files.length === 0) {
+        return;
+      }
+      event.preventDefault();
+      const now = new Date();
+      void add(files.map((file) => namePastedFile(file, now)));
+      const reduceMotion = matchMedia(
+        '(prefers-reduced-motion: reduce)',
+      ).matches;
+      section.current?.scrollIntoView({
+        behavior: reduceMotion ? 'instant' : 'smooth',
+        block: 'nearest',
+      });
+    },
+  );
 
   // A paste anywhere in the drawer the section is in attaches its files. A
   // paste outside any field targets the body, so listen on the document.
@@ -266,7 +272,7 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
     if (!drawer) {
       return;
     }
-    const listener = (event: ClipboardEvent) => onPaste(event, drawer);
+    const listener = (event: ClipboardEvent) => attachPasted(event, drawer);
     document.addEventListener('paste', listener);
     return () => document.removeEventListener('paste', listener);
   }, []);

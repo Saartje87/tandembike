@@ -32,25 +32,28 @@ const attachment = (overrides: Partial<Attachment>): Attachment => ({
 const Harness: FC = () => {
   const [nested, setNested] = useState(false);
   return (
-    <Drawer open onRequestClose={() => {}} aria-label="Ticket T4">
-      <p>Description</p>
-      <textarea aria-label="Comment" />
-      <input aria-label="Title" />
-      <div contentEditable suppressContentEditableWarning>
-        Editable
-      </div>
-      <button type="button" onClick={() => setNested(true)}>
-        Open nested
-      </button>
-      <Dialog
-        open={nested}
-        onRequestClose={() => setNested(false)}
-        aria-label="Nested"
-      >
-        <p>Inside nested</p>
-      </Dialog>
-      <TicketAttachments ticketNumber={4} attachments={[]} />
-    </Drawer>
+    <>
+      <p>Outside</p>
+      <Drawer open onRequestClose={() => {}} aria-label="Ticket T4">
+        <p>Description</p>
+        <textarea aria-label="Comment" />
+        <input aria-label="Title" />
+        <div contentEditable suppressContentEditableWarning>
+          Editable
+        </div>
+        <button type="button" onClick={() => setNested(true)}>
+          Open nested
+        </button>
+        <Dialog
+          open={nested}
+          onRequestClose={() => setNested(false)}
+          aria-label="Nested"
+        >
+          <p>Inside nested</p>
+        </Dialog>
+        <TicketAttachments ticketNumber={4} attachments={[]} />
+      </Drawer>
+    </>
   );
 };
 
@@ -363,6 +366,7 @@ describe('TicketAttachments', () => {
     };
 
     const scrollIntoView = vi.fn();
+    const { scrollIntoView: originalScrollIntoView } = Element.prototype;
     let reducedMotion = false;
 
     beforeEach(() => {
@@ -377,6 +381,7 @@ describe('TicketAttachments', () => {
     });
 
     afterEach(() => {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
       vi.unstubAllGlobals();
       vi.useRealTimers();
     });
@@ -436,6 +441,18 @@ describe('TicketAttachments', () => {
       const files = [new File(['a'], 'a.txt')];
       expect(paste(screen.getByText('Inside nested'), { files })).toBe(false);
       expect(paste(document.body, { files })).toBe(false);
+
+      expect(addTicketAttachments).not.toHaveBeenCalled();
+    });
+
+    it('leaves a paste outside the drawer to the browser', () => {
+      renderWithTheme(<Harness />);
+
+      expect(
+        paste(screen.getByText('Outside'), {
+          files: [new File(['a'], 'a.txt')],
+        }),
+      ).toBe(false);
 
       expect(addTicketAttachments).not.toHaveBeenCalled();
     });

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { namePastedFile } from './pasted-file-name';
 
 // Local time, as the paste happens on the User's machine.
-const now = () => new Date(2026, 2, 7, 9, 5, 3);
+const now = new Date(2026, 2, 7, 9, 5, 3);
 
 describe('namePastedFile', () => {
   it('names a generic clipboard image from the local time of the paste', () => {
