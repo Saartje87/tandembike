@@ -9,13 +9,32 @@ import { isInReview, isStalled, laneOf } from './board-lanes';
 const placed = (
   status: Status,
   labels: string[] = [],
-  rest: Partial<Pick<Ticket, 'claim' | 'externalReferences'>> = {},
+  rest: Partial<
+    Pick<Ticket, 'claim' | 'externalReferences' | 'type' | 'children'>
+  > = {},
   live?: LiveConversation,
 ) =>
   laneOf(
-    { status, labels, claim: null, externalReferences: [], ...rest },
+    {
+      status,
+      labels,
+      claim: null,
+      externalReferences: [],
+      type: 'Ticket',
+      children: [],
+      ...rest,
+    },
     live,
   );
+
+const child = (number: number, archived = false) => ({
+  number,
+  title: `Child ${number}`,
+  status: 'Todo' as const,
+  archived,
+  blockedBy: [],
+  blocked: false,
+});
 
 const claim = { agentRunId: 'run-1', agentName: null };
 const pullRequest = 'https://github.com/owner/repo/pull/87';
@@ -36,6 +55,42 @@ describe('laneOf', () => {
 
   it('puts a Todo Ticket with ready-for-agent in Queued', () => {
     expect(placed('Todo', ['bug', 'ready-for-agent']).lane).toBe('Queued');
+  });
+
+  describe('an Epic without children (T1139)', () => {
+    const epic = (children: ReturnType<typeof child>[]) =>
+      ({ type: 'Epic', children }) as const;
+
+    it('puts a Todo ready-for-agent Epic with no children in Intake', () => {
+      expect(placed('Todo', ['ready-for-agent'], epic([])).lane).toBe('Intake');
+    });
+
+    it('does not count archived children', () => {
+      expect(
+        placed('Todo', ['ready-for-agent'], epic([child(1, true)])).lane,
+      ).toBe('Intake');
+    });
+
+    it('keeps an Epic with an unarchived child, on any Board, Queued', () => {
+      // Ticket.children lists every child, whichever Board it is on.
+      expect(
+        placed('Todo', ['ready-for-agent'], epic([child(1, true), child(2)]))
+          .lane,
+      ).toBe('Queued');
+    });
+
+    it('keeps an empty ready-for-human Epic in Your work', () => {
+      expect(placed('Todo', ['ready-for-human'], epic([])).lane).toBe(
+        'Your work',
+      );
+    });
+
+    it('leaves In progress and Done Epics in their own Lanes', () => {
+      expect(placed('In progress', ['ready-for-agent'], epic([])).lane).toBe(
+        'In progress',
+      );
+      expect(placed('Done', ['ready-for-agent'], epic([])).lane).toBe('Done');
+    });
   });
 
   it('puts a Todo Ticket with ready-for-human in Your work', () => {
@@ -150,6 +205,8 @@ describe('isStalled and isInReview', () => {
     labels: [],
     claim: null,
     externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
   };
   const live = liveConversation();
 

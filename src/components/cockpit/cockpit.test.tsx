@@ -335,6 +335,44 @@ describe('Cockpit', () => {
     expect(within(section('Needs you')).getAllByText('3')[0]).toBeVisible();
   });
 
+  it('says an Intake Epic without children is ready for an Agent once split (T1139)', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([
+      ticket({
+        number: 52,
+        title: 'Spec',
+        type: 'Epic',
+        color: 'teal',
+        labels: ['ready-for-agent'],
+      }),
+      ticket({
+        number: 53,
+        title: 'Hand-made',
+        type: 'Epic',
+        color: 'amber',
+        labels: ['needs-triage'],
+      }),
+    ]);
+
+    const intake = section('Intake');
+    expect(rowLinks(intake)).toEqual(['Spec', 'Hand-made']);
+    expect(
+      within(section('Queued')).queryByRole('link', { name: 'Spec' }),
+    ).toBeNull();
+    const [spec, handMade] = within(intake).getAllByRole('listitem');
+    await userEvent.click(within(spec).getByText('T52'));
+    await userEvent.click(within(handMade).getByText('T53'));
+
+    expect(
+      within(spec).getByText(
+        'Ready for an Agent once split: no children yet. Triage it to split it.',
+      ),
+    ).toBeVisible();
+    expect(within(handMade).getByText('No children yet')).toBeVisible();
+  });
+
   it("shows an In progress Epic In flight with its children's progress, opening to list them", async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({ cost: { 50: 1, 31: 0.5 } }),

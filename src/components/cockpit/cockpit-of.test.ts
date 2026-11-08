@@ -497,7 +497,7 @@ describe('cockpitOf', () => {
             status: 'Todo',
             claim: null,
             labels: ['ready-for-agent'],
-            children: [],
+            children: [child(9, 'Todo')],
           }),
         ],
         activity(),
@@ -506,9 +506,64 @@ describe('cockpitOf', () => {
       expect(cockpit.epics).toMatchObject([
         { number: 51, children: [], childrenElsewhere: 1 },
       ]);
+      // Its children on another Board count: it stays Queued (T1139).
       expect(cockpit.queued).toMatchObject([
-        { number: 52, children: [], childrenElsewhere: 0 },
+        { number: 52, children: [], childrenElsewhere: 1 },
       ]);
+    });
+
+    it('puts a ready-for-agent Epic without unarchived children in Needs you, counted (T1139)', () => {
+      const cockpit = cockpitOf(
+        [
+          epic({
+            number: 52,
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-agent'],
+            children: [{ ...child(9, 'Todo'), archived: true }],
+          }),
+          epic({
+            number: 53,
+            status: 'Todo',
+            claim: null,
+            labels: ['ready-for-human'],
+            children: [],
+          }),
+        ],
+        activity(),
+      );
+
+      expect(cockpit.queued).toEqual([]);
+      expect(cockpit.needsYou.intake).toMatchObject([
+        {
+          number: 52,
+          kind: 'intake',
+          triageLabel: 'ready-for-agent',
+          children: [],
+          childrenElsewhere: 0,
+        },
+      ]);
+      expect(cockpit.needsYou.count).toBe(1);
+      expect(cockpit.needsYou.total).toBe(1);
+      expect(numbers(cockpit.yourWork)).toEqual([53]);
+    });
+
+    it('labels such an Epic ready-for-agent in Intake whatever other state label it carries', () => {
+      const [row] = cockpitOf(
+        [
+          epic({
+            number: 52,
+            status: 'Todo',
+            claim: null,
+            labels: ['needs-info', 'ready-for-agent'],
+            children: [],
+          }),
+        ],
+        activity(),
+      ).needsYou.intake;
+
+      // As laneOf reads it: ready-for-agent decides first.
+      expect(row).toMatchObject({ number: 52, triageLabel: 'ready-for-agent' });
     });
 
     it("sums the Epic's own cost and its children's, and carries its live Conversation", () => {

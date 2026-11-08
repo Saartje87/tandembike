@@ -47,6 +47,7 @@ import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { BatchFailure } from '../../tickets/errors';
 import type { Ticket } from '../../tickets/tickets';
+import { readyForAgent } from '../../tickets/triage-labels';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
 import { AppLink } from '../app-link/app-link';
 import {
@@ -493,12 +494,22 @@ type EpicChildListProps = {
   board: BoardKind;
   /** Where a child opens in its drawer over this Board. */
   hrefOf: (number: number) => string;
+  /** Said in place of "No children yet", such as for an Epic still to split. */
+  emptyText?: string;
 };
 
+/** What an Intake row says of a ready-for-agent Epic without children (ADR 0027). */
+const notSplitText =
+  'Ready for an Agent once split: no children yet. Triage it to split it.';
+
 /** What an Epic's row says when none of its children are on this Board. */
-const noChildrenText = (childrenElsewhere: number, board: BoardKind) => {
+const noChildrenText = (
+  childrenElsewhere: number,
+  board: BoardKind,
+  emptyText = 'No children yet',
+) => {
   if (childrenElsewhere === 0) {
-    return 'No children yet';
+    return emptyText;
   }
   return `No children in ${boardName[board]} (${childrenElsewhere} elsewhere)`;
 };
@@ -507,11 +518,16 @@ const noChildrenText = (childrenElsewhere: number, board: BoardKind) => {
  * An opened Epic row: each child on this Board with where it stands, its
  * title opening it over this Board, or where they are when none is.
  */
-const EpicChildList: FC<EpicChildListProps> = ({ row, board, hrefOf }) =>
+const EpicChildList: FC<EpicChildListProps> = ({
+  row,
+  board,
+  hrefOf,
+  emptyText,
+}) =>
   row.children.length === 0 ? (
     <Box paddingBlockStart={2} paddingInlineStart={6}>
       <Text fontSize="small" color="muted">
-        {noChildrenText(row.childrenElsewhere, board)}
+        {noChildrenText(row.childrenElsewhere, board, emptyText)}
       </Text>
     </Box>
   ) : (
@@ -558,6 +574,7 @@ const epicParts = (
   row: CockpitTicket,
   board: BoardKind,
   hrefOf: (number: number) => string,
+  emptyText?: string,
 ) =>
   row.children
     ? {
@@ -570,6 +587,7 @@ const epicParts = (
             }}
             board={board}
             hrefOf={hrefOf}
+            emptyText={emptyText}
           />
         ),
       }
@@ -882,7 +900,15 @@ export const Cockpit: FC<CockpitProps> = ({
         href={hrefOf(row.number)}
         icon={needDisplay[row.kind].icon}
         line={needLine(row, age(row.since))}
-        {...epicParts(row, board, hrefOf)}
+        {...epicParts(
+          row,
+          board,
+          hrefOf,
+          // Only an Epic without children is in Intake with ready-for-agent.
+          row.kind === 'intake' && row.triageLabel === readyForAgent
+            ? notSplitText
+            : undefined,
+        )}
         selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
