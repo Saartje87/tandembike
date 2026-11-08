@@ -5,16 +5,30 @@ import {
 } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
+import { dataFolder } from '../install/install';
 import * as schema from './schema';
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 export type DatabaseConnection = BetterSQLite3Database<typeof schema>;
 
-/** Where the app keeps its data: a git-ignored folder at the repo root. */
-export const appDatabasePath = join(process.cwd(), 'data', 'ticket.db');
+/**
+ * The package's own folder: the checkout. The `tandembike` command sets
+ * `TANDEMBIKE_PACKAGE_DIR`; `npm run dev` and `npm start` run from the
+ * checkout, so the working directory is it.
+ */
+const packageFolder = process.env.TANDEMBIKE_PACKAGE_DIR || process.cwd();
 
-const migrationsFolder = join(process.cwd(), 'src', 'db', 'migrations');
+/**
+ * Where the app keeps its data: `TANDEMBIKE_DATA_DIR` (`~/.tandembike` for the
+ * command), else the git-ignored `data` folder in the checkout.
+ */
+export const appDatabasePath = join(
+  dataFolder(process.env, packageFolder),
+  'ticket.db',
+);
+
+const migrationsFolder = join(packageFolder, 'src', 'db', 'migrations');
 
 /**
  * Opens a SQLite database and applies any pending migrations. Pass a file

@@ -23,7 +23,26 @@ reach it (see `docs/adr/0022-local-only-enforced-in-four-layers.md`):
 Start the app with the npm scripts: running `next dev` or `next start`
 directly skips the first two guards.
 
-## Getting started
+## Install and start
+
+Tandembike installs from its checkout; nothing is published to npm. In a clone,
+run once:
+
+```bash
+npm run setup
+```
+
+This runs `npm ci`, `npm run build` and `npm link`, which adds a global
+`tandembike` command. From then on, `tandembike` in any folder serves the app
+on [http://localhost:4747](http://localhost:4747), with its database in
+`~/.tandembike/`. On the first run, when `~/.tandembike/ticket.db` is missing
+and the checkout has `data/ticket.db`, the command copies that database (with
+any `-wal` and `-shm` files) and says so. It never moves, deletes or
+overwrites a database. Pass `-p <port>` to use another port.
+
+See `docs/adr/0035-tandembike-installs-from-its-checkout.md`.
+
+## Getting started (development)
 
 Install dependencies and start the development server:
 
@@ -114,14 +133,17 @@ Ticket is done, triage) belongs in its own `AGENTS.md`;
 
 ## Where data lives
 
-All data is stored in a single SQLite file in the `data/` folder at the repo
-root. The folder is git-ignored, so your Tickets are never committed. To back
-up, copy the folder; to start fresh, stop the app and delete it.
+All data is stored in a single SQLite file. The installed `tandembike` command
+keeps it in `~/.tandembike/`. `npm run dev` and `npm run start` keep it in the
+`data/` folder at the repo root, unless `TANDEMBIKE_DATA_DIR` names another
+folder. Both are outside git, so your Tickets are never committed. To back up,
+copy the folder; to start fresh, stop the app and delete it.
 
 ## Available commands
 
 | Command               | Description                                                                               |
 | --------------------- | ----------------------------------------------------------------------------------------- |
+| `npm run setup`       | Install, build and link the global `tandembike` command                                   |
 | `npm run dev`         | Start the local development server on `localhost:4747`                                    |
 | `npm run build`       | Create a production build                                                                 |
 | `npm run start`       | Serve the production build on `localhost:4747`                                            |
