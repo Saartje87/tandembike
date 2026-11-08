@@ -794,6 +794,70 @@ describe('Cockpit', () => {
     );
   });
 
+  it('highlights the row of a changed Ticket for a moment, in every section', () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    FakeEventSource.instances = [];
+    vi.stubGlobal('EventSource', FakeEventSource);
+    vi.mocked(useRouter).mockReturnValue(mockRouter());
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    const shown = [
+      ...tickets,
+      ticket({ number: 12, title: 'Untriaged idea' }),
+      ticket({ number: 13, title: 'Mine', labels: ['ready-for-human'] }),
+    ];
+    const archived = [ticket({ number: 14, title: 'Gone', archived: true })];
+    renderWithTheme(
+      <LiveUpdates>
+        <ConversationActivityProvider>
+          <Cockpit
+            projectId={3}
+            cycle={{ id: 9, title: 'Factory Board' }}
+            tickets={shown}
+            archived={archived}
+            runSlots={{ used: 1, cap: 3 }}
+          />
+        </ConversationActivityProvider>
+      </LiveUpdates>,
+    );
+    const titles = [...shown, ...archived].map(({ title }) => title);
+    const row = (title: string) =>
+      screen.getByRole('link', { name: title, hidden: true }).closest('li');
+
+    act(() => {
+      FakeEventSource.instances[0]?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({ type: 'ticket', number: 9 }),
+        }),
+      );
+    });
+    expect(row('Pick a ceiling')).toHaveAttribute('data-changed');
+    expect(row('Old work')).not.toHaveAttribute('data-changed');
+
+    act(() => {
+      FakeEventSource.instances[0]?.onmessage?.(
+        new MessageEvent('message', {
+          data: JSON.stringify({
+            type: 'tickets',
+            numbers: [...shown, ...archived].map(({ number }) => number),
+          }),
+        }),
+      );
+    });
+    for (const title of titles) {
+      expect(row(title), title).toHaveAttribute('data-changed');
+    }
+
+    act(() => vi.advanceTimersByTime(2000));
+    for (const title of titles) {
+      expect(row(title), title).not.toHaveAttribute('data-changed');
+    }
+  });
+
   it('says when nothing is in flight', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,

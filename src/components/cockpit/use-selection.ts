@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { moveTicketsToCycle } from '../../app/cycles/actions';
 import { archiveTickets, moveTicketsToEpic } from '../../app/tickets/actions';
 import type { BatchFailure } from '../../tickets/errors';
-import type { SelectMode } from '../ticket-card/ticket-card';
+import type { SelectMode } from './select-click';
 
 /** The lists of the Board whose rows can be selected. */
 export type SelectionList =
