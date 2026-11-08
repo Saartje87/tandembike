@@ -13,9 +13,9 @@ import {
 import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
+import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
-import { archiveCycleConfirmation } from './archive-cycle-confirmation';
 
 export type CycleHeaderProps = {
   cycle: Cycle;

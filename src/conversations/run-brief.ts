@@ -1,5 +1,6 @@
 import type { TicketType } from '../tickets/ticket-type';
 import type { ConversationIntent } from './conversation-state';
+import { cycleReference, type RetroCycle } from './retro-prompt';
 
 /** Where a New Ticket Conversation's title field was: defaults for the Agent. */
 export type NewTicketDefaults = {
@@ -17,7 +18,7 @@ export type RunBrief = {
   projectName: string;
   intent: ConversationIntent;
   /** Retro only: the Cycle it looks back on. */
-  retroCycle?: { id: number; title: string } | null;
+  retroCycle?: RetroCycle | null;
   parallelRuns: boolean;
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
   runMode: 'default' | 'auto';
@@ -97,9 +98,8 @@ export function runBrief(brief: RunBrief): string {
     );
   }
   if (brief.intent === 'retro' && brief.retroCycle) {
-    const { id, title } = brief.retroCycle;
     lines.push(
-      `The Cycle to look back on is "${title}" (Cycle ${id}). Read its Tickets live with list_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
+      `The Cycle to look back on is ${cycleReference(brief.retroCycle)}. Read its Tickets live with list_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
     );
   }
   if (brief.intent === 'setup') {

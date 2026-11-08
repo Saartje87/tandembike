@@ -543,12 +543,12 @@ export function createConversations({
       }
       if (input.retroCycleId === undefined) {
         throw new ValidationError({
-          cycleId: 'Choose the Cycle to look back on.',
+          retroCycleId: 'Choose the Cycle to look back on.',
         });
       }
       if (tickets.getCycle(input.retroCycleId).projectId !== projectId) {
         throw new ValidationError({
-          cycleId: 'That Cycle belongs to another Project.',
+          retroCycleId: 'That Cycle belongs to another Project.',
         });
       }
       if (retroOf(input.retroCycleId) !== null) {

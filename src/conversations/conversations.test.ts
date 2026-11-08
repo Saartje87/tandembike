@@ -1868,27 +1868,31 @@ describe('A Retro Conversation', () => {
     const foreign = tickets.createCycle({ projectId: other.id, title: 'X' });
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
 
-    expect(
-      await failure(
-        conversations.start({
-          startedBy: 'user',
-          projectId: project.id,
-          intent: 'retro',
-          prompt: 'Retro',
-        }),
-      ),
-    ).toBeInstanceOf(ValidationError);
-    expect(
-      await failure(
-        conversations.start({
-          startedBy: 'user',
-          projectId: project.id,
-          intent: 'retro',
-          prompt: 'Retro',
-          retroCycleId: foreign.id,
-        }),
-      ),
-    ).toBeInstanceOf(ValidationError);
+    const missing = await failure(
+      conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'retro',
+        prompt: 'Retro',
+      }),
+    );
+    expect(missing).toBeInstanceOf(ValidationError);
+    expect(Object.keys((missing as ValidationError).fieldErrors)).toEqual([
+      'retroCycleId',
+    ]);
+    const wrongProject = await failure(
+      conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'retro',
+        prompt: 'Retro',
+        retroCycleId: foreign.id,
+      }),
+    );
+    expect(wrongProject).toBeInstanceOf(ValidationError);
+    expect(Object.keys((wrongProject as ValidationError).fieldErrors)).toEqual([
+      'retroCycleId',
+    ]);
     await conversations.startRetro({ cycleId: cycle.id });
     expect(
       await failure(conversations.startRetro({ cycleId: cycle.id })),
@@ -1908,6 +1912,19 @@ describe('A Retro Conversation', () => {
 
     expect(conversations.retroOf(cycle.id)?.id).toBe(retro.id);
     expect(conversations.retroOf(other.id)).toBeNull();
+  });
+
+  it('keeps its tab in the dialog after its Cycle is archived', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const retro = await conversations.startRetro({ cycleId: cycle.id });
+
+    tickets.startCycle(cycle.id);
+    tickets.archiveCycle(cycle.id);
+
+    expect(
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toContain(retro.id);
   });
 
   it('does not count in Autopilot’s spend', async () => {

@@ -9,8 +9,8 @@ import { archiveCycle } from '../../app/cycles/actions';
 import { projectPath } from '../../app/lib/paths';
 import type { Conversation } from '../../conversations/conversations';
 import type { Cycle } from '../../tickets/cycles';
+import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
-import { archiveCycleConfirmation } from '../cycle-header/archive-cycle-confirmation';
 
 export type CycleCompleteBannerProps = {
   cycle: Pick<Cycle, 'id' | 'projectId' | 'title'>;
@@ -44,32 +44,34 @@ export const CycleCompleteBanner: FC<CycleCompleteBannerProps> = ({
           conversation.retroCycleId === cycle.id,
       ) ?? loadedRetro;
 
-  const retroAction = () => {
+  // Runs one action as a transition; its returned reason, if any, is shown.
+  const run = (action: () => Promise<string | undefined>) => {
     setError(undefined);
     startTransition(async () => {
+      setError(await action());
+    });
+  };
+
+  const retroAction = () =>
+    run(async () => {
       if (retro) {
-        setError(await dialog.reopenAndOpen(retro));
-        return;
+        return dialog.reopenAndOpen(retro);
       }
       const result = await startRetro({ cycleId: cycle.id });
       if (!result.ok) {
-        setError(result.error);
-        return;
+        return result.error;
       }
       dialog.open(result.conversation.id);
     });
-  };
 
   const archive = () => {
     if (!window.confirm(archiveCycleConfirmation(cycle.title))) {
       return;
     }
-    setError(undefined);
-    startTransition(async () => {
+    run(async () => {
       const result = await archiveCycle({ cycleId: cycle.id });
       if (!result.ok) {
-        setError(result.error);
-        return;
+        return result.error;
       }
       router.push(projectPath(cycle.projectId));
     });
@@ -87,17 +89,17 @@ export const CycleCompleteBanner: FC<CycleCompleteBannerProps> = ({
               type="button"
               size="small"
               disabled={pending}
-              onClick={retroAction}
+              onClick={archive}
             >
-              {retro ? 'Open Retro' : 'Start Retro'}
+              Archive Cycle
             </Button>
             <Button
               type="button"
               size="small"
               disabled={pending}
-              onClick={archive}
+              onClick={retroAction}
             >
-              Archive Cycle
+              {retro ? 'Open Retro' : 'Start Retro'}
             </Button>
           </Inline>
         </Inline>

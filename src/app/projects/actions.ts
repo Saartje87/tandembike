@@ -204,7 +204,8 @@ export async function setProjectSkills(input: {
 /**
  * Replaces a Project's agent commands, the ones its Triage and Start buttons
  * send, and refreshes its pages; returns them as saved. A refusal names the
- * field at fault: `triageCommand`, `startCommand`, `startEpicCommand` or `retroCommand`.
+ * field at fault: `triageCommand`, `startCommand`, `startEpicCommand` or
+ * `retroCommand`.
  */
 export async function setProjectAgentCommands(input: {
   projectId: number;
