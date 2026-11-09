@@ -47,8 +47,8 @@ export const ColorModeMenu: FC = () => {
         intent="inherit"
         label="Colour mode"
       >
-        <Icon name="sun" color="white" className={styles.light} />
-        <Icon name="moon" color="white" className={styles.dark} />
+        <Icon name="sun" color="white" size="small" className={styles.light} />
+        <Icon name="moon" color="white" size="small" className={styles.dark} />
       </IconButton>
     </Menu>
   );
