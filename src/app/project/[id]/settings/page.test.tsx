@@ -138,6 +138,7 @@ describe('SettingsPage', () => {
       startCommand: '/implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
     });
     vi.mocked(appTickets).mockReturnValue(tickets);
 

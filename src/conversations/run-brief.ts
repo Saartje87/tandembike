@@ -40,6 +40,7 @@ const intentLines: Record<ConversationIntent, string> = {
     "The User started this Conversation to check that this Project's repository has what Tandembike's Agent runs rely on (Setup). Their first message asks for it.",
   retro:
     'The User started this Conversation for a retrospective (Retro) on a Cycle.',
+  spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
 };
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */

@@ -15,6 +15,7 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
@@ -31,6 +32,7 @@ describe('AgentCommandsForm', () => {
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
         retroCommand: '/retro',
+        specCommand: '/spec',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -49,6 +51,10 @@ describe('AgentCommandsForm', () => {
     await user.type(triage, 'triage');
     await user.type(startEpic, 'implement-spec');
     await user.type(retro, 'retro');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Spec command' }),
+      'my:spec',
+    );
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(setProjectAgentCommands).toHaveBeenCalledWith({
@@ -57,6 +63,7 @@ describe('AgentCommandsForm', () => {
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: 'implement-spec',
       retroCommand: 'retro',
+      specCommand: 'my:spec',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');

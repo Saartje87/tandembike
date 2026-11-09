@@ -48,7 +48,7 @@ import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptan
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
-import { isInReview, isParked } from '../board/board-lanes';
+import { canSpec, isInReview, isParked } from '../board/board-lanes';
 import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
@@ -544,6 +544,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         ticketType={ticket.type}
         commands={agentCommands}
+        canSpec={canSpec(ticket)}
         onStarted={dialog.open}
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })

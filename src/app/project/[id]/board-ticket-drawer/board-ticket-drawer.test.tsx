@@ -137,6 +137,7 @@ describe('BoardTicketDrawer', () => {
       startCommand: '/implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
     });
 
     renderWithTheme(
@@ -160,6 +161,7 @@ describe('BoardTicketDrawer', () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: null,
+      specCommand: null,
     });
   });
 

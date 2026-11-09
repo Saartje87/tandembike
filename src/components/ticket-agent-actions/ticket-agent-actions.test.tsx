@@ -16,6 +16,7 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: '/mattpocock-skills:implement-spec',
   retroCommand: '/retro',
+  specCommand: '/spec',
 };
 
 const none = {
@@ -23,6 +24,7 @@ const none = {
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
 };
 
 const started = {
@@ -129,6 +131,55 @@ describe('TicketAgentActions', () => {
       ticketNumber: 7,
       intent: 'triage',
       prompt: '/mattpocock-skills:triage T7',
+    });
+  });
+
+  it('shows Spec only when canSpec, and sends /tandembike:spec when blank', async () => {
+    vi.mocked(startConversation).mockResolvedValue(started);
+    const onStarted = vi.fn();
+    const { rerender } = renderWithTheme(
+      <TicketAgentActions
+        ticketNumber={5}
+        ticketType="Ticket"
+        commands={none}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Spec' })).toBeNull();
+
+    rerender(
+      <TicketAgentActions
+        ticketNumber={5}
+        ticketType="Ticket"
+        commands={none}
+        canSpec
+        onStarted={onStarted}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Spec' }));
+
+    expect(startConversation).toHaveBeenCalledWith({
+      ticketNumber: 5,
+      intent: 'spec',
+      prompt: '/tandembike:spec T5',
+    });
+    expect(onStarted).toHaveBeenCalledWith(9);
+  });
+
+  it('sends the Spec command override when set', async () => {
+    vi.mocked(startConversation).mockResolvedValue(started);
+    renderWithTheme(
+      <TicketAgentActions
+        ticketNumber={5}
+        ticketType="Epic"
+        commands={{ ...none, specCommand: '/my:spec' }}
+        canSpec
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Spec' }));
+    expect(startConversation).toHaveBeenCalledWith({
+      ticketNumber: 5,
+      intent: 'spec',
+      prompt: '/my:spec T5',
     });
   });
 

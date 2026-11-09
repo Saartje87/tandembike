@@ -21,6 +21,7 @@ export const intentNames: Record<ConversationIntent, string> = {
   new_ticket: 'New Ticket',
   setup: 'Setup',
   retro: 'Retro',
+  spec: 'Spec',
 };
 
 /** Who started a Conversation, as the header says it. */

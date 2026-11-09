@@ -40,6 +40,7 @@ const stageLabels = {
   new_ticket: 'New Ticket',
   setup: 'Setup',
   retro: 'Retro',
+  spec: 'Spec',
 } as const;
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;

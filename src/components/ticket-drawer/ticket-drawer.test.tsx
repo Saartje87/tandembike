@@ -307,6 +307,31 @@ describe('TicketDrawer', () => {
     expect(button('Ask')).toBeInTheDocument();
   });
 
+  it('offers Spec on a Todo Ticket in Intake and an Epic without children only (T1222)', () => {
+    const { unmount } = renderDrawer({ ...ticket, status: 'Todo', labels: [] });
+    expect(button('Spec')).toBeInTheDocument();
+    unmount();
+
+    const queued = renderDrawer({
+      ...ticket,
+      status: 'Todo',
+      labels: ['ready-for-agent'],
+    });
+    expect(screen.queryByRole('button', { name: 'Spec' })).toBeNull();
+    queued.unmount();
+
+    renderDrawer({
+      ...ticket,
+      status: 'Todo',
+      type: 'Epic',
+      children: [],
+      labels: [],
+    });
+    expect(button('Spec')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask' })).not.toBeNull();
+    expect(button('Spec')).toBeInTheDocument();
+  });
+
   it('links a Claim made with a Conversation’s id to that Conversation in the dialog', async () => {
     renderWithTheme(
       <InShell

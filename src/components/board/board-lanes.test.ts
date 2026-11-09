@@ -5,6 +5,7 @@ import { liveConversation } from '../../test/conversation-activity';
 import type { Status } from '../../tickets/status';
 import type { Ticket } from '../../tickets/tickets';
 import {
+  canSpec,
   inheritsSection,
   isInReview,
   isParked,
@@ -375,5 +376,51 @@ describe('a child of an Epic (T1143)', () => {
     expect(
       isInReview(childOf(epic(), { externalReferences: [pullRequest] })),
     ).toBe(true);
+  });
+});
+
+describe('canSpec (T1222)', () => {
+  const input = (
+    status: Status,
+    labels: string[],
+    rest: Partial<Pick<Ticket, 'type' | 'children'>> = {},
+  ) => ({
+    status,
+    labels,
+    claim: null,
+    externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
+    ...rest,
+  });
+
+  it('is true for a Todo Ticket in Intake', () => {
+    expect(canSpec(input('Todo', []))).toBe(true);
+    expect(canSpec(input('Todo', ['needs-triage']))).toBe(true);
+    expect(canSpec(input('Todo', ['needs-info']))).toBe(true);
+  });
+
+  it('is false for a Ticket in another Lane or Status', () => {
+    expect(canSpec(input('Todo', ['ready-for-agent']))).toBe(false);
+    expect(canSpec(input('Todo', ['ready-for-human']))).toBe(false);
+    expect(canSpec(input('In progress', []))).toBe(false);
+    expect(canSpec(input('Done', []))).toBe(false);
+  });
+
+  it('is true for a Todo Epic without children, whatever its label', () => {
+    expect(canSpec(input('Todo', [], { type: 'Epic' }))).toBe(true);
+    expect(canSpec(input('Todo', ['ready-for-human'], { type: 'Epic' }))).toBe(
+      true,
+    );
+    expect(
+      canSpec(input('Todo', [], { type: 'Epic', children: [child(1, true)] })),
+    ).toBe(true);
+  });
+
+  it('is false for an Epic with a child, or one that is not Todo', () => {
+    expect(
+      canSpec(input('Todo', [], { type: 'Epic', children: [child(1)] })),
+    ).toBe(false);
+    expect(canSpec(input('In progress', [], { type: 'Epic' }))).toBe(false);
   });
 });

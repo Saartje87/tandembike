@@ -19,7 +19,7 @@ import { join } from 'node:path';
  * The skills the Playbook ships so far. Each Stage's ticket adds its skill
  * here and to `playbook/skills/`.
  */
-const shippedStageSkills = ['implement'];
+const shippedStageSkills = ['implement', 'spec'];
 
 const frontmatterOf = (skill: string): Record<string, string> => {
   const text = readFileSync(
@@ -91,6 +91,28 @@ describe('The Playbook plugin', () => {
     }
     expect(text).toContain('handOff: true');
     expect(text).toContain('t<number>-<slug>');
+  });
+
+  it('has a spec skill that grills, checks seams and publishes only after approval (T1222)', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/spec/SKILL.md'),
+      'utf8',
+    );
+    for (const tool of [
+      'get_ticket',
+      'find_tickets',
+      'file_tickets',
+      'update_ticket',
+      'add_note',
+    ]) {
+      expect(text).toContain(tool);
+    }
+    expect(text).toContain('changedSince');
+    expect(text).toContain('originNumber');
+    expect(text).toContain('blockedByPositions');
+    expect(text).toContain('test seams');
+    expect(text).toContain('a round at a time');
+    expect(text).toMatch(/never apply the `ready-for-agent` label/);
   });
 });
 

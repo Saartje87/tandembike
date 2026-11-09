@@ -18,6 +18,7 @@ describe("A Project's agent commands", () => {
       startCommand: null,
       startEpicCommand: null,
       retroCommand: null,
+      specCommand: null,
     });
   });
 
@@ -29,6 +30,7 @@ describe("A Project's agent commands", () => {
       startCommand: 'implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
     });
     tickets.setProjectAgentSettings(first.id, { runMode: 'default' });
 
@@ -50,6 +52,7 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: '   ',
       retroCommand: ' retro ',
+      specCommand: '/spec',
     });
 
     expect(saved).toEqual({
@@ -57,6 +60,7 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: '/retro',
+      specCommand: '/spec',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -73,6 +77,7 @@ describe("A Project's agent commands", () => {
           startCommand: '/implement',
           startEpicCommand: `/${'a'.repeat(100)}`,
           retroCommand: '/retro',
+          specCommand: '/spec',
         }),
       ),
     ).toEqual({
@@ -94,11 +99,38 @@ describe("A Project's agent commands", () => {
           startCommand: '',
           startEpicCommand: '',
           retroCommand: '',
+          specCommand: '',
         }),
       ),
     ).toBeInstanceOf(NotAllowedError);
     expect(
       errorFrom(() => tickets.getProjectAgentCommands(999)),
     ).toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('The Spec command (T1222)', () => {
+  it('is saved, and a blank one sends the Playbook command', async () => {
+    const { agentCommandMessage } = await import('./agent-commands');
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const blank = tickets.getProjectAgentCommands(project.id);
+
+    expect(
+      agentCommandMessage('spec', { number: 42, type: 'Ticket' }, blank),
+    ).toBe('/tandembike:spec T42');
+
+    const saved = tickets.setProjectAgentCommands(project.id, {
+      ...blank,
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: '',
+      specCommand: 'my:spec',
+    });
+    expect(saved.specCommand).toBe('/my:spec');
+    expect(
+      agentCommandMessage('spec', { number: 42, type: 'Epic' }, saved),
+    ).toBe('/my:spec T42');
   });
 });

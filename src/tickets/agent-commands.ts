@@ -12,6 +12,8 @@ export type ProjectAgentCommands = {
   startEpicCommand: string | null;
   /** Retro on a Cycle, sent with the Cycle's title and id (T1171). */
   retroCommand: string | null;
+  /** Spec on a Ticket: turns an idea into an Epic of build Tickets (T1222). */
+  specCommand: string | null;
 };
 
 /**
@@ -52,6 +54,12 @@ export const agentStages = [
     skill: 'retro',
     label: 'Retro command',
   },
+  {
+    stage: 'spec',
+    field: 'specCommand',
+    skill: 'spec',
+    label: 'Spec command',
+  },
 ] as const satisfies readonly {
   stage: string;
   field: keyof ProjectAgentCommands;
@@ -87,10 +95,11 @@ export const noAgentCommands: ProjectAgentCommands = {
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
 };
 
 /** The buttons that send an agent command. */
-export type AgentCommandIntent = 'triage' | 'start';
+export type AgentCommandIntent = 'triage' | 'start' | 'spec';
 
 /**
  * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
@@ -151,8 +160,10 @@ export function agentCommandMessage(
   const stage: AgentStage =
     intent === 'triage'
       ? 'triage'
-      : ticket.type === 'Epic'
-        ? 'startEpic'
-        : 'start';
+      : intent === 'spec'
+        ? 'spec'
+        : ticket.type === 'Epic'
+          ? 'startEpic'
+          : 'start';
   return `${commandForStage(stage, commands)} T${ticket.number}`;
 }

@@ -729,6 +729,16 @@ export function createConversations({
         }
       }
     }
+    if (input.intent === 'spec') {
+      if (input.startedBy !== 'user') {
+        throw new NotAllowedError('Only the User starts a Spec.');
+      }
+      if (input.ticketNumber === undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Spec is about a Ticket.',
+        });
+      }
+    }
     if (input.intent === 'retro') {
       if (input.ticketNumber !== undefined) {
         throw new ValidationError({
