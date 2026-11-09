@@ -41,6 +41,8 @@ Give each ticket its **blocking edges**: the other tickets that must complete be
 
 **A structural edit to a shared file belongs to a blocker.** For each frontier, check from your exploration which files its tickets will change. Where two or more of them change the same file, look for a **structural edit**: one that reshapes the file instead of adding to it, such as wrapping JSX in a provider, splitting a component, extracting a hook or lifting state. It re-indents or moves the code the others add to, so every sibling's merge conflicts. Hand it to a ticket that already blocks all of them, and name it in that ticket's acceptance criteria (e.g. "wraps the Board in `DndProvider`"). When no shared blocker exists, add a small prefactor ticket that blocks them; like a wide refactor, it is exempt from "demoable on its own".
 
+Where two tickets in one frontier each add a database migration, name the sibling in each ticket's description, so its implementer follows "Migrations in parallel runs" in `docs/agents/issue-tracker.md`.
+
 ### 4. Quiz the user
 
 Present the proposed breakdown as a numbered list. For each ticket, show:
