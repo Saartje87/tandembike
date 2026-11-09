@@ -113,6 +113,115 @@ describe('Notices', () => {
       expect(kinds(world, 'merge')).toHaveLength(2);
     });
 
+    describe('auto_merged', () => {
+      /** A Ticket an Agent run claimed with Auto-merge on and opened a PR for. */
+      const autoMergeable = (
+        world: ReturnType<typeof setup>,
+        extra: { type?: 'Epic'; autoMerge?: boolean } = {},
+      ) => {
+        world.tickets.setProjectAgentSettings(world.project.id, {
+          autoMerge: extra.autoMerge ?? true,
+        });
+        const ticket = world.tickets.createTicket({
+          projectId: world.project.id,
+          title: 'Ship it',
+          ...(extra.type ? { type: extra.type } : {}),
+        });
+        if (extra.type === 'Epic') {
+          world.tickets.createTicket({
+            projectId: world.project.id,
+            title: 'Child',
+            epicNumber: ticket.number,
+          });
+        }
+        world.agentTickets.claimTicket(ticket.number, { agentRunId: 'r1' });
+        world.agentTickets.updateTicket(ticket.number, {
+          addExternalReferences: [pr(5)],
+        });
+        return ticket;
+      };
+
+      it('raises one naming the Ticket and its PR when an Agent completes it through an auto-merge', () => {
+        const world = setup();
+        const ticket = autoMergeable(world);
+        world.notices.start();
+
+        world.agentTickets.completeTicket(ticket.number);
+
+        const [notice] = kinds(world, 'auto_merged');
+        expect(kinds(world, 'auto_merged')).toHaveLength(1);
+        expect(notice).toMatchObject({
+          kind: 'auto_merged',
+          projectId: world.project.id,
+          ticketNumber: ticket.number,
+          conversationId: null,
+          title: `T${ticket.number} was merged by an Agent`,
+          body: `Ship it: ${pr(5)}`,
+          path: `/project/${world.project.id}?ticket=${ticket.number}`,
+        });
+        expect(notice.key).toMatch(`auto_merged:${ticket.number}:`);
+      });
+
+      it('raises one for an Epic, not for its children', () => {
+        const world = setup();
+        const epic = autoMergeable(world, { type: 'Epic' });
+        world.notices.start();
+
+        world.agentTickets.completeTicket(epic.number);
+
+        expect(
+          kinds(world, 'auto_merged').map(({ ticketNumber }) => ticketNumber),
+        ).toEqual([epic.number]);
+      });
+
+      it('raises none for the Merged button, even on a Claim taken with Auto-merge on', () => {
+        const world = setup();
+        const ticket = autoMergeable(world);
+        world.notices.start();
+
+        world.tickets.completeTicket(ticket.number);
+
+        expect(kinds(world, 'auto_merged')).toEqual([]);
+      });
+
+      it('raises none for Approve merge, which finishes a handed-off Ticket without a Claim', () => {
+        const world = setup();
+        const ticket = autoMergeable(world, { autoMerge: false });
+        world.agentTickets.releaseTicketClaim(ticket.number, {
+          agentRunId: 'r1',
+        });
+        world.notices.start();
+
+        world.agentTickets.completeTicket(ticket.number);
+
+        expect(kinds(world, 'auto_merged')).toEqual([]);
+      });
+
+      it('raises none for a Claim taken with Auto-merge off, even if it is on by the merge', () => {
+        const world = setup();
+        const ticket = autoMergeable(world, { autoMerge: false });
+        world.tickets.setProjectAgentSettings(world.project.id, {
+          autoMerge: true,
+        });
+        world.notices.start();
+
+        world.agentTickets.completeTicket(ticket.number);
+
+        expect(kinds(world, 'auto_merged')).toEqual([]);
+      });
+
+      it('raises none for an auto-merge before the server started', () => {
+        const world = setup();
+        const ticket = autoMergeable(world);
+        world.agentTickets.completeTicket(ticket.number);
+        world.notices.start();
+
+        world.changes.publish({ type: 'project', id: world.project.id });
+
+        expect(kinds(world, 'auto_merged')).toEqual([]);
+      });
+    });
+
     it('raises no merge for what is at the gate when the server starts,', () => {
       const world = setup();
       const gated = inProgress(world, 'Gated');

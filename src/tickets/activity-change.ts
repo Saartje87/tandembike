@@ -46,4 +46,9 @@ export type ActivityChange =
   /** A Triage run proposed a category and a state. */
   | { type: 'triageProposed'; category: string; state: string }
   | { type: 'triageApproved'; category: string; state: string }
-  | { type: 'triageRejected' };
+  | { type: 'triageRejected' }
+  /**
+   * An Agent completed it through an auto-merge (ADR 0043): its Claim was
+   * taken with Auto-merge on, and `pullRequest` is the PR it merged.
+   */
+  | { type: 'autoMerged'; pullRequest: string };

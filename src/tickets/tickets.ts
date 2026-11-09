@@ -39,7 +39,9 @@ import {
 import {
   type ActivityEntry,
   type Actor,
+  type AutoMerge,
   activityOf,
+  autoMergesSince,
   deleteActivity,
   recordActivity,
 } from './activity';
@@ -99,6 +101,7 @@ import {
   type UncheckedCriterion,
   ValidationError,
 } from './errors';
+import { isPullRequestReference } from './external-reference-display';
 import {
   checkExternalReferenceCount,
   checkExternalReferences,
@@ -2469,9 +2472,15 @@ export function createTickets(
       if (unchecked.length > 0 && override === undefined) {
         throw new UncheckedCriteriaError(unchecked);
       }
+      const pullRequest = autoMergedPullRequest(number);
       const recordOverride = () => {
         if (unchecked.length > 0 && override !== undefined) {
           insertComment(number, overrideComment(override, unchecked));
+        }
+        if (pullRequest !== null) {
+          recordActivity(db, number, actor, [
+            { type: 'autoMerged', pullRequest },
+          ]);
         }
       };
 
@@ -2490,6 +2499,14 @@ export function createTickets(
       });
       publishWith(number, changedEpic);
       return getTicket(number);
+    },
+
+    /**
+     * The auto-merges recorded at or after `since`, oldest first, for the
+     * Notices module's `auto_merged` kind (ADR 0043).
+     */
+    autoMergesSince(since: Date): AutoMerge[] {
+      return autoMergesSince(db, since);
     },
 
     /**
@@ -3382,6 +3399,33 @@ export function createTickets(
       numbers: [epic, ...selected.map((child) => child.number)],
     });
     return getTicket(epic);
+  }
+
+  /**
+   * The PR an Agent completing Ticket `number` now merged by Auto-merge
+   * (ADR 0043): its latest PR reference, when the actor is an Agent and its
+   * Claim was taken with `auto`; otherwise `null`. Approve merge finishes a
+   * handed-off Ticket, which has no Claim, and Merged is the User's.
+   */
+  function autoMergedPullRequest(number: number): string | null {
+    if (actor !== 'agent') {
+      return null;
+    }
+    const row = db
+      .select({
+        claimAgentRunId: tickets.claimAgentRunId,
+        claimMerge: tickets.claimMerge,
+      })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (row?.claimAgentRunId == null || row.claimMerge !== 'auto') {
+      return null;
+    }
+    return (
+      getTicket(number).externalReferences.findLast(isPullRequestReference) ??
+      null
+    );
   }
 
   /** The merge mode Ticket `number`'s Project gives a Claim taken now. */

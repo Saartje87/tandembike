@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, like } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { type commentAuthors, ticketActivity } from '../db/schema';
@@ -63,6 +63,40 @@ export function activityOf(
     .where(eq(ticketActivity.ticketNumber, number))
     .orderBy(asc(ticketActivity.id))
     .all();
+}
+
+/** One auto-merge an Activity entry records (ADR 0043). */
+export type AutoMerge = {
+  /** The Activity entry's id, which tells one auto-merge from another. */
+  id: number;
+  ticketNumber: number;
+  pullRequest: string;
+  createdAt: Date;
+};
+
+/** The auto-merges recorded at or after `since`, oldest first. */
+export function autoMergesSince(
+  db: DatabaseConnection,
+  since: Date,
+): AutoMerge[] {
+  return db
+    .select(activityColumns)
+    .from(ticketActivity)
+    .where(
+      and(
+        gte(ticketActivity.createdAt, since),
+        like(ticketActivity.changes, '%"autoMerged"%'),
+      ),
+    )
+    .orderBy(asc(ticketActivity.id))
+    .all()
+    .flatMap(({ id, ticketNumber, changes, createdAt }) =>
+      changes.flatMap((change) =>
+        change.type === 'autoMerged'
+          ? [{ id, ticketNumber, pullRequest: change.pullRequest, createdAt }]
+          : [],
+      ),
+    );
 }
 
 /** Deletes Ticket `number`'s Activity, for deleting the Ticket. */

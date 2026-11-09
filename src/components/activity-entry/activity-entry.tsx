@@ -75,6 +75,8 @@ function describeChange(change: ActivityChange): string {
       return `approved the triage proposal (${change.category}, ${change.state})`;
     case 'triageRejected':
       return 'rejected the triage proposal';
+    case 'autoMerged':
+      return `merged ${change.pullRequest} by Auto-merge`;
   }
 }
 
