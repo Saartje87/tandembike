@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
@@ -141,6 +141,8 @@ export function createWorktrees({
   root?: string;
   owner: string;
 }): Worktrees {
+  // The same data folder however it was written, relative or with a trailing slash.
+  const ownerFolder = resolve(owner);
   return {
     async create({ repositoryPath, projectId, conversationId }) {
       const detection = detectRepository(repositoryPath);
@@ -157,7 +159,7 @@ export function createWorktrees({
         base = `origin/${base}`;
       }
       await git(repositoryPath, ['worktree', 'add', '--detach', path, base]);
-      writeFileSync(ownerMark(path), owner);
+      writeFileSync(ownerMark(path), ownerFolder);
       return { path, base };
     },
 
@@ -225,7 +227,7 @@ export function createWorktrees({
               path,
               projectId: Number(project),
               conversationId: Number(match[1]),
-              owned: ownerOf(path) === owner,
+              owned: ownerOf(path) === ownerFolder,
             });
           }
         }

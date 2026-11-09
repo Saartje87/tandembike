@@ -335,6 +335,21 @@ describe('worktrees.list', () => {
     expect(listed).toHaveLength(2);
   });
 
+  it('knows its own worktrees however its data folder is written', async () => {
+    const { repo, root, worktrees } = repository({ remote: false });
+    const a = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+    });
+
+    expect(
+      await createWorktrees({ root, owner: '/data/this/' }).list(),
+    ).toEqual([
+      { path: a.path, projectId: 3, conversationId: 12, owned: true },
+    ]);
+  });
+
   it('forgets the owner once the worktree is removed', async () => {
     const { repo, worktrees } = repository({ remote: false });
     const a = await worktrees.create({
