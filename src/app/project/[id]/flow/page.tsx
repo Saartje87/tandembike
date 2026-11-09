@@ -3,12 +3,15 @@ import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
 import { appAutopilot } from '../../../../autopilot/app-autopilot';
+import { CycleLoop } from '../../../../components/cycle-loop/cycle-loop';
 import { FlowSection } from '../../../../components/flow-section/flow-section';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
 import { ProjectSwitch } from '../../../../components/project-switch/project-switch';
 import { TicketPath } from '../../../../components/ticket-path/ticket-path';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { openCyclesInOrder } from '../../../../tickets/cycle-state';
+import type { Cycle } from '../../../../tickets/cycles';
 import {
   cyclePath,
   projectPath,
@@ -38,6 +41,13 @@ async function flowTab(params: ProjectPageProps['params']) {
   const explanation = appAutopilot().explain(project.id);
   const settings = appTickets('user').getProjectAgentSettings(project.id);
   const path = ticketPathOf(project.id);
+  const cycleLink = (cycle: Cycle) => ({
+    id: cycle.id,
+    title: cycle.title,
+    path: cyclePath(project.id, cycle.id),
+  });
+  const cycles = openCyclesInOrder(appTickets('user').listCycles(project.id));
+  const active = cycles.find(({ state }) => state === 'Active');
   return (
     <Stack gap={6}>
       <Text tag="p">
@@ -67,7 +77,13 @@ async function flowTab(params: ProjectPageProps['params']) {
         title="Cycle loop"
         intro="How a Cycle is planned, started, worked by Autopilot and closed."
       >
-        {comingSoon}
+        <CycleLoop
+          backlogPath={projectPath(project.id)}
+          prepared={cycles
+            .filter(({ state }) => state === 'Prepared')
+            .map(cycleLink)}
+          active={active ? cycleLink(active) : null}
+        />
       </FlowSection>
       <FlowSection
         id="setup"

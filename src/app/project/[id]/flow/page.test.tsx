@@ -117,6 +117,22 @@ describe('FlowPage', () => {
     expect(link('In flight')).toHaveTextContent('0 Tickets');
   });
 
+  it("names the Project's Cycles in the Cycle loop", async () => {
+    await renderFlow('Website', (tickets, projectId) => {
+      const beta = tickets.createCycle({ projectId, title: 'Beta' });
+      tickets.createCycle({ projectId, title: 'Launch' });
+      tickets.startCycle(beta.id);
+    });
+
+    const loop = screen.getByRole('list', { name: 'Cycle loop' });
+    expect(
+      within(loop).getByRole('link', { name: 'Beta' }),
+    ).toBeInTheDocument();
+    expect(
+      within(loop).getByRole('link', { name: 'Launch' }),
+    ).toBeInTheDocument();
+  });
+
   it('says Autopilot and Auto-triage are running', async () => {
     await renderFlow();
 
