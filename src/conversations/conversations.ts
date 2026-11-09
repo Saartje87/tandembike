@@ -178,6 +178,12 @@ export type TerminalSession = {
   model: string | null;
 };
 
+/** What the CLI needs to resume a handed-over Conversation. */
+export type TerminalHandOff = Omit<TerminalSession, 'firstMessage'> & {
+  /** The SDK session `claude --resume` opens. */
+  sessionId: string;
+};
+
 export type StartTerminalInput = {
   ticketNumber: number;
   intent: TerminalIntent;
@@ -336,6 +342,7 @@ export function createConversations({
       Pick<
         Conversation,
         | 'state'
+        | 'startedBy'
         | 'sdkSessionId'
         | 'costUsd'
         | 'worktreePath'
@@ -1424,6 +1431,57 @@ export function createConversations({
     startTerminal,
 
     endTerminal,
+
+    /**
+     * Continue in terminal (ADR 0039): hands a UI Conversation with an SDK
+     * session over to `tandembike resume`. The live run stops as Stop does, so
+     * its Run outcome is recorded as stopped and its prompts expire; the
+     * Conversation then becomes a Terminal one, `running` until `endTerminal`.
+     * Cost and Cycle stay. Refused for a closed Conversation, one already
+     * Terminal, one without an SDK session or one whose worktree was removed.
+     */
+    async handOffToTerminal(id: number): Promise<TerminalHandOff> {
+      const conversation = get(id);
+      if (conversation.startedBy === 'terminal') {
+        throw new NotAllowedError(
+          'This Conversation already runs in a terminal.',
+        );
+      }
+      if (conversation.hidden) {
+        throw new NotAllowedError('This Conversation is closed.');
+      }
+      if (conversation.sdkSessionId === null) {
+        throw new NotAllowedError(
+          'This Conversation has no session to continue yet.',
+        );
+      }
+      if (conversation.worktreeRemoved) {
+        throw new NotAllowedError(
+          'The worktree of this Conversation was removed.',
+        );
+      }
+      const settings = tickets.getProjectAgentSettings(conversation.projectId);
+      if (settings.repositoryPath === null) {
+        throw new ValidationError(noRepositoryPath);
+      }
+      // The worktree is the terminal's now: stopping must not release it.
+      const handle = live.get(id);
+      if (handle) {
+        handle.releaseWhenEnded = false;
+      }
+      await this.stop(id);
+      append(id, 'session', 'Continued in terminal');
+      update(id, { startedBy: 'terminal', state: 'running' });
+      announce(id);
+      return {
+        conversationId: id,
+        sessionId: conversation.sdkSessionId,
+        cwd: conversation.worktreePath ?? settings.repositoryPath,
+        brief: briefOf(id),
+        runMode: settings.runMode,
+        model: settings.runModel,
+      };
+    },
 
     /**
      * Starts the Retro of a Cycle: a Conversation about its Project that looks

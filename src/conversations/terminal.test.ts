@@ -344,3 +344,149 @@ describe('Answering a Terminal Conversation', () => {
     expect(fresh.get(conversationId).state).toBe('running');
   });
 });
+
+describe('Handing a Conversation over to the terminal (T1241)', () => {
+  const startedAsk = async () => {
+    const world = setup();
+    const { id } = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'start',
+      ticketNumber: world.ticket.number,
+      prompt: 'Go',
+    });
+    const run = world.runner.runs[0];
+    run.emit({ type: 'session', sessionId: 'sess-1' });
+    run.emit({ type: 'turn', costUsd: 0.25 });
+    await world.conversations.reply(id, 'Go on', 'user');
+    return { ...world, id, run };
+  };
+
+  it('stops the live run, appends the entry and keeps cost and session', async () => {
+    const { conversations, id, run, repositoryDir } = await startedAsk();
+
+    const session = await conversations.handOffToTerminal(id);
+
+    expect(run.interrupted).toBe(true);
+    expect(run.closed).toBe(true);
+    expect(conversations.get(id)).toMatchObject({
+      startedBy: 'terminal',
+      state: 'running',
+      costUsd: 0.25,
+      sdkSessionId: 'sess-1',
+    });
+    expect(conversations.transcript(id).at(-1)).toMatchObject({
+      text: 'Continued in terminal',
+    });
+    expect(conversations.latestRunOutcome(id)?.result).toBe('stopped');
+    expect(session).toMatchObject({
+      conversationId: id,
+      sessionId: 'sess-1',
+      cwd: repositoryDir,
+    });
+    expect(session.brief).toContain(`Your Agent-run ID: ${id}`);
+  });
+
+  it('expires pending prompts', async () => {
+    const { conversations, id, run } = await startedAsk();
+    const answer = run.options.askPermission({
+      toolName: 'Bash',
+      input: { command: 'npm test' },
+      rules: [],
+    });
+    await Promise.resolve();
+
+    await conversations.handOffToTerminal(id);
+
+    expect(await answer).toBe('deny');
+  });
+
+  it('keeps the Conversation ending like a Terminal one', async () => {
+    const { conversations, id } = await startedAsk();
+    await conversations.handOffToTerminal(id);
+
+    await conversations.endTerminal(id, { exitCode: 0 });
+
+    expect(conversations.get(id).state).toBe('stopped');
+  });
+
+  it('refuses a Conversation that is closed', async () => {
+    const { conversations, id } = await startedAsk();
+    await conversations.close(id);
+
+    const error = await failure(conversations.handOffToTerminal(id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(error.message).toBe('This Conversation is closed.');
+  });
+
+  it('refuses a Conversation without an SDK session', async () => {
+    const world = setup();
+    const { id } = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+
+    const error = await failure(world.conversations.handOffToTerminal(id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(error.message).toBe(
+      'This Conversation has no session to continue yet.',
+    );
+  });
+
+  it('refuses a Conversation that already runs in a terminal', async () => {
+    const { conversations, ticket } = setup();
+    const { conversationId } = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'start',
+    });
+
+    const error = await failure(
+      conversations.handOffToTerminal(conversationId),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(error.message).toBe('This Conversation already runs in a terminal.');
+  });
+
+  it('refuses a Conversation whose worktree was removed', async () => {
+    const world = setup({ parallelRuns: true });
+    const { id } = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'start',
+      ticketNumber: world.ticket.number,
+      prompt: 'Go',
+    });
+    world.runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
+    await world.conversations.stop(id);
+    await world.conversations.removeWorktree(id);
+    expect(world.conversations.get(id).worktreeRemoved).toBe(true);
+
+    const error = await failure(world.conversations.handOffToTerminal(id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(error.message).toBe(
+      'The worktree of this Conversation was removed.',
+    );
+  });
+
+  it('hands over in the worktree when it has one', async () => {
+    const world = setup({ parallelRuns: true });
+    const { id } = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'start',
+      ticketNumber: world.ticket.number,
+      prompt: 'Go',
+    });
+    world.runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
+
+    const session = await world.conversations.handOffToTerminal(id);
+
+    expect(session.cwd).toBe(world.conversations.get(id).worktreePath);
+  });
+});
