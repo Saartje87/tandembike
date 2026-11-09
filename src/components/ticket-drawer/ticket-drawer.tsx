@@ -131,6 +131,11 @@ export type TicketDrawerProps = {
    * Defaults to none: each child opens over its own Board.
    */
   board?: ChildrenBoard;
+  /**
+   * "Why is this here?": one sentence under the Status on why a Ticket that
+   * is not Done is where it is (ADR 0044). Defaults to none.
+   */
+  why?: ReactNode;
 };
 
 /** The fields the drawer saves one at a time. */
@@ -235,6 +240,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   agentCommands = noAgentCommands,
   triageProposal = null,
   board,
+  why,
 }) => {
   const { titleId, close } = useTicketDrawer();
   const statusId = useId();
@@ -451,6 +457,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
           <Detail name={<DetailName>Status</DetailName>}>
             <Stack gap={2}>
               <Text>{ticket.status} · follows its child Tickets</Text>
+              {why}
               {statusActions}
             </Stack>
           </Detail>
@@ -472,6 +479,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                 aria-describedby={statusError ? statusErrorId : undefined}
               />
               <FieldError id={statusErrorId} reason={statusError} />
+              {why}
               {statusActions}
             </Stack>
           </Detail>

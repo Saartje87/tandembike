@@ -1487,3 +1487,349 @@ describe('Machine ceiling (ADR 0041)', () => {
     expect(total()).toBe(1);
   });
 });
+
+describe('explain (ADR 0044)', () => {
+  const reasonTypes = (
+    state:
+      | { state: 'running' }
+      | { state: 'paused'; reasons: { type: string }[] },
+  ) =>
+    state.state === 'running' ? 'running' : state.reasons.map((r) => r.type);
+
+  describe('Autopilot Pause reasons', () => {
+    it('is running with Eligible work and room, and dispatch then starts it', async () => {
+      const { tickets, cycle, autopilot, ready, started } = setup();
+      const a = ready('A');
+      tickets.startCycle(cycle.id);
+
+      expect(autopilot.explain(1).autopilot).toEqual({ state: 'running' });
+      await autopilot.evaluate();
+      expect(started()).toEqual([a.number]);
+    });
+
+    it('names the switch, the Spend ceiling and the Active Cycle', () => {
+      const { project, autopilot, ready } = setup({ autopilot: false });
+      ready('A');
+
+      expect(reasonTypes(autopilot.explain(project.id).autopilot)).toEqual([
+        'switchedOff',
+        'noActiveCycle',
+        'noSpendCeiling',
+      ]);
+    });
+
+    it('names no Eligible work, and dispatch starts nothing', async () => {
+      const { project, tickets, cycle, autopilot, started } = setup();
+      tickets.startCycle(cycle.id);
+
+      expect(reasonTypes(autopilot.explain(project.id).autopilot)).toEqual([
+        'noEligibleWork',
+      ]);
+      await autopilot.evaluate();
+      expect(started()).toEqual([]);
+    });
+
+    it('names a full Start run limit, and dispatch starts nothing more', async () => {
+      const { project, tickets, cycle, autopilot, ready, started } = setup();
+      const a = ready('A');
+      ready('B');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'noFreeStartRunSlot', limit: 1 }],
+      });
+      await autopilot.evaluate();
+      expect(started()).toEqual([a.number]);
+    });
+
+    it('names the Spend ceiling once the Cycle is over it', async () => {
+      const { project, tickets, runner, cycle, autopilot, ready } = setup({
+        parallel: 3,
+      });
+      tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
+      ready('A');
+      ready('B');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'overSpendCeiling', spendUsd: 1.5, ceilingUsd: 1 }],
+      });
+    });
+
+    it('names a full machine cap', async () => {
+      const { project, tickets, cycle, autopilot, ready } = setup({
+        parallel: 3,
+      });
+      tickets.setMachineSettings({ maxConcurrentRuns: 1 });
+      ready('A');
+      ready('B');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'machineCapFull', cap: 1 }],
+      });
+    });
+
+    it('names the machine ceiling once today is over it', async () => {
+      const { project, tickets, runner, cycle, autopilot, ready, started } =
+        setup({ parallel: 3 });
+      tickets.setMachineSettings({ dailySpendCeilingUsd: 1 });
+      const a = ready('A');
+      const b = ready('B');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+      runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+      ready('C');
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'overMachineCeiling', spendUsd: 2, ceilingUsd: 1 }],
+      });
+      await autopilot.evaluate();
+      expect(started()).toEqual([a.number, b.number]);
+    });
+  });
+
+  describe('Auto-triage Pause reasons', () => {
+    it('names the switch and the Triage ceiling while off', () => {
+      const { project, autopilot } = setup();
+
+      expect(reasonTypes(autopilot.explain(project.id).autoTriage)).toEqual([
+        'switchedOff',
+        'noTriageCeiling',
+      ]);
+    });
+
+    it('is running with Triage-eligible work, and names a working Triage run after it starts one', async () => {
+      const { project, tickets, conversations, autopilot } = setup();
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+      });
+      tickets.createTicket({ projectId: project.id, title: 'Idea' });
+      tickets.createTicket({ projectId: project.id, title: 'Other' });
+
+      expect(autopilot.explain(project.id).autoTriage).toEqual({
+        state: 'running',
+      });
+      await autopilot.evaluate();
+
+      const [triage] = conversations.list({ projectId: project.id });
+      expect(autopilot.explain(project.id).autoTriage).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'triageRunWorking', conversationId: triage.id }],
+      });
+    });
+
+    it('names the Triage ceiling once today is over it, and the machine cap', async () => {
+      const { project, tickets, conversations, runner, autopilot } = setup();
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: true,
+        triageCeilingUsd: 1,
+      });
+      tickets.createTicket({ projectId: project.id, title: 'Idea' });
+      tickets.createTicket({ projectId: project.id, title: 'Other' });
+      await autopilot.evaluate();
+      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+      tickets.setMachineSettings({ maxConcurrentRuns: 1 });
+      await conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        ticketNumber: tickets.createTicket({
+          projectId: project.id,
+          title: 'Build',
+        }).number,
+        intent: 'start',
+        prompt: 'Go',
+      });
+
+      expect(reasonTypes(autopilot.explain(project.id).autoTriage)).toEqual([
+        'overTriageCeiling',
+        'machineCapFull',
+      ]);
+    });
+  });
+
+  describe('per Ticket', () => {
+    const entry = (
+      explanation: ReturnType<ReturnType<typeof setup>['autopilot']['explain']>,
+      number: number,
+    ) => explanation.tickets.find((ticket) => ticket.number === number);
+
+    it('numbers Eligible work in Todo order and says what fits the free slots', () => {
+      const { project, tickets, cycle, autopilot, ready } = setup({
+        parallel: 2,
+      });
+      const a = ready('A');
+      const b = ready('B');
+      const c = ready('C');
+      tickets.sortLane({
+        projectId: project.id,
+        status: 'Todo',
+        cycleId: cycle.id,
+        ticketNumbers: [c.number, a.number, b.number],
+      });
+      tickets.startCycle(cycle.id);
+
+      const explanation = autopilot.explain(project.id);
+
+      expect(entry(explanation, c.number)?.build).toEqual({
+        eligible: true,
+        place: 1,
+        fitsFreeSlots: true,
+      });
+      expect(entry(explanation, a.number)?.build).toEqual({
+        eligible: true,
+        place: 2,
+        fitsFreeSlots: true,
+      });
+      expect(entry(explanation, b.number)?.build).toEqual({
+        eligible: true,
+        place: 3,
+        fitsFreeSlots: false,
+      });
+    });
+
+    it('gives every reason a Ticket is not Eligible', async () => {
+      const { project, tickets, conversations, cycle, autopilot, ready } =
+        setup({ parallel: 9 });
+      const backlog = tickets.createTicket({
+        projectId: project.id,
+        title: 'Not ready, not planned',
+      });
+      const blocker = tickets.createTicket({
+        projectId: project.id,
+        title: 'Blocker',
+      });
+      const blocked = ready('Blocked and claimed');
+      tickets.addBlocker({ blocker: blocker.number, blocked: blocked.number });
+      tickets.claimTicket(blocked.number, { agentRunId: 'x' });
+      const archived = ready('Archived');
+      tickets.archiveTicket(archived.number);
+      const emptyEpic = ready('Empty', { type: 'Epic' });
+      const epic = ready('Full', { type: 'Epic' });
+      const child = tickets.createTicket({
+        projectId: project.id,
+        title: 'Child',
+        epicNumber: epic.number,
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      const held = ready('Held');
+      const conversation = await conversations.start({
+        startedBy: 'user',
+        ticketNumber: held.number,
+        intent: 'start',
+        prompt: 'Go',
+      });
+      await conversations.stop(conversation.id);
+      tickets.startCycle(cycle.id);
+
+      const explanation = autopilot.explain(project.id);
+      const reasons = (number: number) => entry(explanation, number)?.build;
+
+      expect(reasons(backlog.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'notReady' }, { type: 'notInActiveCycle' }],
+      });
+      expect(reasons(blocked.number)).toEqual({
+        eligible: false,
+        reasons: [
+          { type: 'blocked', blockers: [blocker.number] },
+          { type: 'claimed' },
+        ],
+      });
+      expect(reasons(archived.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'archived' }],
+      });
+      expect(reasons(emptyEpic.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'epicWithoutChildren' }],
+      });
+      expect(reasons(child.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'epicChild', epicNumber: epic.number }],
+      });
+      expect(reasons(held.number)).toEqual({
+        eligible: false,
+        reasons: [
+          { type: 'heldByConversation', conversationId: conversation.id },
+        ],
+      });
+      expect(reasons(epic.number)).toMatchObject({ eligible: true, place: 1 });
+    });
+
+    it('gives Triage-eligibility oldest first, and every reason a Ticket is not', async () => {
+      const { project, tickets, conversations, autopilot } = setup();
+      const idea = tickets.createTicket({ projectId: project.id, title: 'A' });
+      const next = tickets.createTicket({
+        projectId: project.id,
+        title: 'B',
+        labels: ['needs-triage'],
+      });
+      const triaged = tickets.createTicket({
+        projectId: project.id,
+        title: 'C',
+        labels: ['ready-for-human'],
+      });
+      const feedback = tickets.createTicket({
+        projectId: project.id,
+        title: 'D',
+        labels: ['from:agent-run'],
+      });
+      const proposed = tickets.createTicket({
+        projectId: project.id,
+        title: 'E',
+      });
+      tickets.proposeTriage(proposed.number, {
+        category: 'bug',
+        state: 'ready-for-agent',
+        reasoning: 'Clear.',
+      });
+      const open = tickets.createTicket({ projectId: project.id, title: 'F' });
+      const conversation = await conversations.start({
+        startedBy: 'user',
+        ticketNumber: open.number,
+        intent: 'triage',
+        prompt: '/tandembike:triage',
+      });
+      await conversations.stop(conversation.id);
+
+      const explanation = autopilot.explain(project.id);
+      const triage = (number: number) => entry(explanation, number)?.triage;
+
+      expect(triage(idea.number)).toEqual({
+        eligible: true,
+        place: 1,
+        fitsFreeSlots: false,
+      });
+      expect(triage(next.number)).toMatchObject({ eligible: true, place: 2 });
+      expect(triage(triaged.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'triaged', label: 'ready-for-human' }],
+      });
+      expect(triage(feedback.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'feedback' }],
+      });
+      expect(triage(proposed.number)).toEqual({
+        eligible: false,
+        reasons: [{ type: 'proposed' }],
+      });
+      expect(triage(open.number)).toEqual({
+        eligible: false,
+        reasons: [
+          { type: 'underTriageConversation', conversationId: conversation.id },
+        ],
+      });
+    });
+  });
+});

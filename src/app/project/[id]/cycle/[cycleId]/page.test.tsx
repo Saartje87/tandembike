@@ -392,7 +392,7 @@ describe('CyclePage', () => {
           { name: 'Big idea' },
         ),
       ).toBeVisible();
-      expect(screen.getByText('Nothing in flight.')).toBeVisible();
+      expect(screen.getByText(/^Nothing in flight: /)).toBeVisible();
     });
 
     it("leaves out Epics with no Tickets on it, the Backlog's Intake Epic too", async () => {

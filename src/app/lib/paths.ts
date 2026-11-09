@@ -49,6 +49,63 @@ export function projectSettingsPath(projectId: number): string {
   return `${projectPath(projectId)}/settings`;
 }
 
+/** A Board section's anchor, which Flow links to. */
+export type BoardSection =
+  | 'needs-you'
+  | 'action-needed'
+  | 'review'
+  | 'intake'
+  | 'in-flight'
+  | 'your-work'
+  | 'queued'
+  | 'done'
+  | 'archived';
+
+/** Section `section` of the Board at `boardPath`, scrolled to by its anchor. */
+export function boardSectionPath(
+  boardPath: string,
+  section: BoardSection,
+): string {
+  return `${boardPath}#${section}`;
+}
+
+/** The fields of a Project's Settings that other pages link to, by their anchor. */
+export type SettingsField =
+  | 'repository-path'
+  | 'check-command'
+  | 'prepare-command'
+  | 'run-mode'
+  | 'run-model'
+  | 'autopilot'
+  | 'spend-ceiling'
+  | 'auto-triage'
+  | 'triage-ceiling'
+  | 'agent-commands'
+  | `${string}-command`;
+
+/**
+ * The anchor of a Stage's command field on Settings, from its field name in
+ * the agent commands, such as `start-epic-command` for `startEpicCommand`.
+ */
+export function settingsFieldOfStage(field: string): SettingsField {
+  return field
+    .replace(/Command$/, '-command')
+    .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`) as SettingsField;
+}
+
+/** One field of a Project's Settings, scrolled to by its anchor. */
+export function projectSettingsFieldPath(
+  projectId: number,
+  field: SettingsField,
+): string {
+  return `${projectSettingsPath(projectId)}#${field}`;
+}
+
+/** A Project's Flow: how its factory runs, and why work waits (ADR 0044). */
+export function projectFlowPath(projectId: number): string {
+  return `${projectPath(projectId)}/flow`;
+}
+
 /**
  * A Board filter (see `GLOSSARY.md`): a search text, kept as typed, and the
  * Labels a Ticket needs every one of, in the order picked.

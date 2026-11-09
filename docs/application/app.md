@@ -1,31 +1,41 @@
-# Ticket Application
+# Tandembike user guide
 
-## Functionality
+Tandembike is a local ticket tracker that also runs a small software factory: Agents build your Tickets in their own worktrees, and you decide what gets built and what gets merged. The words below are the glossary's (`GLOSSARY.md`); the decisions behind them are in `docs/adr/`.
 
-The Ticket Application allows users to manage and track tickets for various projects. Users can create, view, and update tickets, ensuring efficient project management and issue tracking.
+For how one Project's factory is set up right now, open its **Flow** tab. For why one Ticket is where it is, open it: its drawer says so in one sentence under the Status.
 
-## Features
+## Projects
 
-- Create new tickets for different projects.
-- View existing tickets and their details.
-- Update ticket status and information.
-- Record which tickets block others, and find tickets that are ready to start.
-- Plan tickets into Cycles: goal-led plans shown as tabs beside the Backlog, started one at a time and archived into a History.
-- Group tickets into Epics: one level of child tickets in the same project, handed off as one unit.
-- Track progress and manage project tasks effectively.
-- API integration for seamless data management.
+A Project holds the Tickets of one repository. Its tabs are the **Backlog**, its **Active Cycle** and each **Prepared** one, the **History** of archived Cycles, **Flow** and **Settings**. On Settings you set the repository path, the Check and Prepare commands, the Agent run mode and model, each Stage's command, and the switches and ceilings below. Only you change these; Agents cannot.
 
-## Usage
+## Tickets and the Board
 
-1. Navigate to the Ticket Application.
-2. Select a project to view its tickets.
-3. Create a new ticket by typing its title in the New Ticket field at the top of the Board and pressing Enter; it lands in Intake; add a description afterwards by editing it.
-4. Update the status or information of existing tickets as needed.
-5. Monitor the progress of tasks and manage project workflows efficiently.
+A Ticket has a Status: Todo, In progress or Done. An **Epic** groups child Tickets of the same Project and is built as one unit, in one run on one branch. A Ticket can be blocked by other Tickets until they are Done or archived.
 
-## Notes
+The Board shows a Backlog's or a Cycle's Tickets in sections:
 
-- Ensure that all ticket details are accurately filled out to maintain proper tracking.
-- Regularly update ticket statuses to reflect the current progress of tasks.
-- Use the application consistently to avoid missing any important updates or changes in project workflows.
-- Regularly review completed tickets to ensure that all tasks have been properly addressed and documented.
+- **Needs you**: what waits on you. **Action needed** holds runs that ask, stop or fail; **Review** holds Tickets whose run opened a pull request; **Intake** holds Tickets still to triage.
+- **In flight**: Tickets whose run is working.
+- **Your work**: Tickets triaged as `ready-for-human`, which Autopilot leaves to you.
+- **Queued**: Tickets triaged as `ready-for-agent`, in the order Autopilot takes them.
+- **Done**.
+
+An empty section says what belongs there and how work gets there, and **How this Project runs** at the top of the Board opens Flow.
+
+## Triage
+
+A new Ticket starts in Intake. Triage gives it a category (`bug` or `enhancement`) and a state: `ready-for-agent`, `ready-for-human`, `needs-info` or `wontfix`. You triage by hand, or press Triage to have an Agent propose it; with **Auto-triage** on, Autopilot starts those Triage runs itself, one at a time, within the Project's **Triage ceiling** per day. Every proposal waits for you to approve or reject it.
+
+## Cycles
+
+A Cycle is a goal-led plan of Tickets. You make one by hand, or a **Plan** run proposes a Prepared Cycle toward a goal; it never starts one. Only you start a Cycle, and a Project has at most one Active Cycle. When every Ticket is Done the Board says the Cycle is complete; you can hold a **Retro** on it, then archive it into the History.
+
+## Autopilot
+
+With **Autopilot** on and an Active Cycle, Tandembike starts a Start run for the Cycle's **Eligible** work by itself: Todo, `ready-for-agent`, unblocked and unclaimed, in the Queued order, up to the Project's free Start run slots. It needs a **Spend ceiling** per Cycle and pauses once the Cycle's Autopilot spend reaches it. The **Machine cap** and **Machine ceiling** on the machine Settings page limit runs and spend across all Projects.
+
+When Autopilot or Auto-triage starts nothing, Flow lists every **Pause reason**, such as no Active Cycle, switched off, over a ceiling or no free run slot. Flow also has both switches.
+
+## The Merge gate
+
+A run builds its Ticket in its own worktree and opens a pull request; the Ticket then waits in Review. By default a run never merges its own pull request: you approve each merge with **Approve merge**, and a Merge run merges it. With the Project's **Auto-merge** on, a run merges its own pull request once its checks, its review and every acceptance criterion pass, and hands it to you when they do not.

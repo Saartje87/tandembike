@@ -1,11 +1,14 @@
 import { screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appAutopilot } from '../../../../autopilot/app-autopilot';
+import { createAutopilot } from '../../../../autopilot/autopilot';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { createTestConversations } from '../../../../test/conversations';
 import { renderWithTheme } from '../../../../test/render';
-import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { createChangeChannel } from '../../../../tickets/changes';
 import { BoardTicketDrawer } from './board-ticket-drawer';
 
 vi.mock('next/server', () => ({ connection: vi.fn() }));
@@ -13,6 +16,9 @@ vi.mock('../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
+vi.mock('../../../../autopilot/app-autopilot', () => ({
+  appAutopilot: vi.fn(),
+}));
 vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
   TicketDrawer: ({
     ticket,
@@ -25,6 +31,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     conversations,
     agentCommands,
     board,
+    why,
   }: {
     ticket: { number: number };
     comments: { body: string }[];
@@ -36,6 +43,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     conversations: unknown[];
     agentCommands: unknown;
     board: unknown;
+    why: ReactNode;
   }) => (
     <div
       role="dialog"
@@ -49,6 +57,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-agent-commands={JSON.stringify(agentCommands)}
       data-board={JSON.stringify(board)}
     >
+      {why}
       {`Ticket drawer T${ticket.number} comments: ${comments.map(({ body }) => body).join(',')} activity: ${activity.flatMap(({ changes }) => changes.map(({ type }) => type)).join(',')}`}
     </div>
   ),
@@ -56,7 +65,8 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
 
 /** Tickets with a Project "Website" holding T1, and another holding T2. */
 function setUp() {
-  const tickets = createTestTickets();
+  const world = createTestConversations();
+  const { tickets } = world;
   const website = tickets.createProject({ name: 'Website' });
   const app = tickets.createProject({ name: 'App' });
   const ticket = tickets.createTicket({
@@ -66,13 +76,61 @@ function setUp() {
   const elsewhere = tickets.createTicket({ projectId: app.id, title: 'Other' });
   tickets.addComment(ticket.number, { body: 'Started.', author: 'agent' });
   vi.mocked(appTickets).mockReturnValue(tickets);
-  vi.mocked(appConversations).mockReturnValue(
-    createTestConversations().conversations,
-  );
+  vi.mocked(appConversations).mockReturnValue(world.conversations);
   return { tickets, website, ticket, elsewhere };
 }
 
 describe('BoardTicketDrawer', () => {
+  beforeEach(() => {
+    // Autopilot's answer over whatever Tickets and Conversations a test uses.
+    vi.mocked(appAutopilot).mockImplementation(() =>
+      createAutopilot({
+        tickets: vi.mocked(appTickets)('user'),
+        conversations: vi.mocked(appConversations)(),
+        changes: createChangeChannel(),
+      }),
+    );
+  });
+
+  it('says under the Status why a Ticket is where it is', async () => {
+    const { website, ticket } = setUp();
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: ticket.number,
+            cycleId: null,
+          })
+        }
+      </div>,
+    );
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(
+      /^In Intake: needs triage\. Auto-triage is off, no Triage ceiling is set\./,
+    );
+  });
+
+  it('says nothing for a Done Ticket', async () => {
+    const { tickets, website, ticket } = setUp();
+    tickets.completeTicket(ticket.number);
+
+    renderWithTheme(
+      <div>
+        {
+          await BoardTicketDrawer({
+            projectId: website.id,
+            number: ticket.number,
+            cycleId: null,
+          })
+        }
+      </div>,
+    );
+
+    expect(screen.getByRole('dialog')).toHaveTextContent(/^Ticket drawer/);
+  });
+
   it("renders a Ticket's drawer contents", async () => {
     const { website, ticket } = setUp();
 
