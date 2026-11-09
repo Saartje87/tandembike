@@ -15,6 +15,7 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
   mergeCommand: null,
 };
 
@@ -32,6 +33,7 @@ describe('AgentCommandsForm', () => {
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
         retroCommand: '/retro',
+        specCommand: '/spec',
         mergeCommand: '/merge',
       },
     });
@@ -51,6 +53,10 @@ describe('AgentCommandsForm', () => {
     await user.type(triage, 'triage');
     await user.type(startEpic, 'implement-spec');
     await user.type(retro, 'retro');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Spec command' }),
+      'my:spec',
+    );
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(setProjectAgentCommands).toHaveBeenCalledWith({
@@ -59,6 +65,7 @@ describe('AgentCommandsForm', () => {
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: 'implement-spec',
       retroCommand: 'retro',
+      specCommand: 'my:spec',
       mergeCommand: '',
     });
     expect(triage).toHaveValue('/triage');

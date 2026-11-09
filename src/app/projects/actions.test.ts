@@ -275,6 +275,7 @@ describe('Skill actions', () => {
       startCommand: '/implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
       mergeCommand: '',
     });
 
@@ -283,6 +284,7 @@ describe('Skill actions', () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: null,
+      specCommand: null,
       mergeCommand: null,
     };
     expect(result).toEqual({ ok: true, commands });
@@ -301,6 +303,7 @@ describe('Skill actions', () => {
       startCommand: '/implement T1',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
       mergeCommand: '',
     });
 

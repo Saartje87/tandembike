@@ -14,6 +14,8 @@ export type ProjectAgentCommands = {
   retroCommand: string | null;
   /** Merge on a Ticket or Epic in Review; blank is the Playbook's (T1221). */
   mergeCommand: string | null;
+  /** Spec on a Ticket: turns an idea into an Epic of build Tickets (T1222). */
+  specCommand: string | null;
 };
 
 /**
@@ -53,6 +55,12 @@ export const agentStages = [
     field: 'retroCommand',
     skill: 'retro',
     label: 'Retro command',
+  },
+  {
+    stage: 'spec',
+    field: 'specCommand',
+    skill: 'spec',
+    label: 'Spec command',
   },
   {
     stage: 'merge',
@@ -95,11 +103,12 @@ export const noAgentCommands: ProjectAgentCommands = {
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
   mergeCommand: null,
 };
 
 /** The buttons that send an agent command. */
-export type AgentCommandIntent = 'triage' | 'start' | 'merge';
+export type AgentCommandIntent = 'triage' | 'start' | 'spec' | 'merge';
 
 /**
  * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
@@ -160,10 +169,12 @@ export function agentCommandMessage(
   const stage: AgentStage =
     intent === 'triage'
       ? 'triage'
-      : intent === 'merge'
-        ? 'merge'
-        : ticket.type === 'Epic'
-          ? 'startEpic'
-          : 'start';
+      : intent === 'spec'
+        ? 'spec'
+        : intent === 'merge'
+          ? 'merge'
+          : ticket.type === 'Epic'
+            ? 'startEpic'
+            : 'start';
   return `${commandForStage(stage, commands)} T${ticket.number}`;
 }

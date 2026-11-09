@@ -97,6 +97,22 @@ function isEmptyEpic(ticket: Pick<Ticket, 'type' | 'children'>) {
 }
 
 /**
+ * Whether the Spec button shows on `ticket`: a Todo Ticket in Intake, or a
+ * Todo Epic without children, which Spec fills in itself (T1222). The Epic
+ * is tested directly, since an empty Epic labelled ready-for-human sits in
+ * Your work.
+ */
+export function canSpec(ticket: LaneInput): boolean {
+  if (ticket.status !== 'Todo') {
+    return false;
+  }
+  if (ticket.type === 'Epic') {
+    return isEmptyEpic(ticket);
+  }
+  return laneOf(ticket).lane === 'Intake';
+}
+
+/**
  * The Lane a Ticket sits in, derived from its Status and triage state label:
  * a Todo Ticket is in Intake (needs-triage, needs-info, or no state label),
  * Queued (ready-for-agent) or Your work (ready-for-human). A ready-for-agent

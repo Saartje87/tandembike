@@ -42,6 +42,7 @@ const intentLines: Record<ConversationIntent, string> = {
     'The User started this Conversation for a retrospective (Retro) on a Cycle.',
   merge:
     'The User approved the merge of the Ticket (Approve merge) and started this Conversation to merge its pull request.',
+  spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
 };
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */

@@ -2002,6 +2002,66 @@ describe('Autopilot spend', () => {
   });
 });
 
+describe('A Spec Conversation (T1222)', () => {
+  it('runs in the main checkout and is not counted against the Start run limit', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    const idea = tickets.createTicket({ projectId: project.id, title: 'Idea' });
+    const other = tickets.createTicket({ projectId: project.id, title: 'B' });
+
+    const spec = await conversations.start({
+      startedBy: 'user',
+      ticketNumber: idea.number,
+      intent: 'spec',
+      prompt: `/tandembike:spec T${idea.number}`,
+    });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: other.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+
+    expect(spec).toMatchObject({ intent: 'spec', worktreePath: null });
+    expect(runner.runs).toHaveLength(2);
+    expect(runner.runs[0].options.prompt).toBe(
+      `/tandembike:spec T${idea.number}`,
+    );
+    expect(runner.runs[0].options.systemPrompt).toContain('Spec');
+  });
+
+  it('is refused when Autopilot starts it', async () => {
+    const { conversations, tickets, project } = setup();
+    const idea = tickets.createTicket({ projectId: project.id, title: 'Idea' });
+
+    const error = await failure(
+      conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: idea.number,
+        intent: 'spec',
+        prompt: 'Go',
+      }),
+    );
+
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(conversations.list({ projectId: project.id })).toHaveLength(0);
+  });
+
+  it('is refused without a Ticket', async () => {
+    const { conversations, project } = setup();
+
+    const error = await failure(
+      conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'spec',
+        prompt: 'Go',
+      }),
+    );
+
+    expect(error).toBeInstanceOf(ValidationError);
+  });
+});
+
 describe('A Retro Conversation', () => {
   it('records its Cycle and the User, and sends the Playbook Retro command when the Retro command is blank', async () => {
     const { conversations, runner, tickets, project } = setup();
@@ -2010,6 +2070,7 @@ describe('A Retro Conversation', () => {
       startCommand: '',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
       mergeCommand: '',
     });
     const cycle = tickets.createCycle({
@@ -2047,6 +2108,7 @@ describe('A Retro Conversation', () => {
       startCommand: '',
       startEpicCommand: '',
       retroCommand: 'retro',
+      specCommand: '/spec',
       mergeCommand: 'merge',
     });
     const cycle = tickets.createCycle({

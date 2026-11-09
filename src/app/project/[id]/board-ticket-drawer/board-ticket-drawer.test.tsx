@@ -137,6 +137,7 @@ describe('BoardTicketDrawer', () => {
       startCommand: '/implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
       mergeCommand: '',
     });
 
@@ -161,6 +162,7 @@ describe('BoardTicketDrawer', () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: null,
+      specCommand: null,
       mergeCommand: null,
     });
   });

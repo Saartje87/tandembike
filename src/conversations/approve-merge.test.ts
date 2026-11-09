@@ -97,6 +97,7 @@ describe('Approve merge', () => {
       startCommand: '',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
       mergeCommand: '/ship',
     });
     const ticket = inReview();

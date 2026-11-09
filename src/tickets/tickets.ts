@@ -242,6 +242,7 @@ const agentCommandColumns = {
   startEpicCommand: projects.startEpicCommand,
   retroCommand: projects.retroCommand,
   mergeCommand: projects.mergeCommand,
+  specCommand: projects.specCommand,
 };
 
 const agentSettingsColumns = {
