@@ -73,6 +73,16 @@ describe('The Playbook plugin', () => {
     expect(frontmatter).not.toHaveProperty('disable-model-invocation');
   });
 
+  it('has a spec skill that asks its rounds with choice cards and its recommendation preselected (T1303)', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/spec/SKILL.md'),
+      'utf8',
+    );
+    expect(text).toContain('`ask_choice`');
+    expect(text).toContain('`recommended`');
+    expect(text).toMatch(/Ask in text only an open question/);
+  });
+
   it('has a plan skill that proposes a Prepared Cycle and never starts one (T1248)', () => {
     const text = readFileSync(
       join(playbookPath, 'skills/plan/SKILL.md'),
@@ -83,7 +93,7 @@ describe('The Playbook plugin', () => {
     }
     expect(text).toContain('ready-for-agent');
     expect(text).toContain('Blockers come first');
-    expect(text).toContain('AskUserQuestion');
+    expect(text).toContain('ask_choice');
     expect(text).toMatch(/never start a Cycle/);
     expect(text).not.toContain('propose_cycle');
   });
