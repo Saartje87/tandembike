@@ -91,4 +91,15 @@ describe('recordTerminalCall (T1238)', () => {
     expect(conversations.transcript(ui.id)).toHaveLength(uiBefore);
     expect(conversations.transcript(conversationId)).toHaveLength(ended);
   });
+
+  it('ignores a closed Terminal Conversation', async () => {
+    const { conversations, conversationId } = await setup();
+    await conversations.endTerminal(conversationId, { exitCode: 0 });
+    await conversations.close(conversationId);
+    const closed = conversations.transcript(conversationId).length;
+
+    conversations.recordTerminalCall(String(conversationId), 'get_ticket', {});
+
+    expect(conversations.transcript(conversationId)).toHaveLength(closed);
+  });
 });
