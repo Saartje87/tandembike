@@ -870,8 +870,11 @@ describe('Auto-triage', () => {
   it('triages a Ticket with no state label, planned in a Cycle too', async () => {
     const { tickets, project, autopilot, idea, triages } = triageSetup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
-    const a = idea('A');
-    tickets.updateTicket(a.number, { cycleId: cycle.id });
+    const a = tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+      cycleId: cycle.id,
+    });
 
     await autopilot.evaluate(project.id);
 
