@@ -2,7 +2,7 @@
 
 Amended by [ADR 0032](0032-tandembike-ships-a-default-playbook.md): Tandembike ships a default Playbook that a repository's Agent commands override; and by [ADR 0033](0033-tandembike-creates-run-worktrees.md): Tandembike creates and removes each run's worktree.
 
-Amended by [ADR 0038](0038-the-user-approves-each-merge.md): a Start run hands its PR off and the User approves each merge, so it no longer merges its own.
+Amended by [ADR 0038](0038-the-user-approves-each-merge.md): a Start run hands its PR off and the User approves each merge, so it no longer merges its own. [ADR 0043](0043-auto-merge-lets-an-agent-merge-its-own-pr.md) brings that back per Project: with Auto-merge on, the run merges its own PR.
 
 Amended by [ADR 0031](0031-a-reply-is-never-refused-by-the-start-run-limit.md): a reply sent by the User is never refused by the Start run cap; only new Starts and Autopilot's replies are.
 

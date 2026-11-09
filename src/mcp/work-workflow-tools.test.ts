@@ -85,6 +85,35 @@ describe('work tools', () => {
     await client.close();
   });
 
+  it("start_work returns the Project's merge mode", async () => {
+    const { tickets, ticket, client } = await setup('conv-7');
+    tickets.setProjectAgentSettings(ticket.projectId, { autoMerge: true });
+
+    const bundle = resultJson(
+      await client.callTool({
+        name: 'start_work',
+        arguments: { number: ticket.number },
+      }),
+    ) as { merge: string };
+
+    expect(bundle.merge).toBe('auto');
+    await client.close();
+  });
+
+  it('start_work returns approve with Auto-merge off', async () => {
+    const { ticket, client } = await setup('conv-7');
+
+    const bundle = resultJson(
+      await client.callTool({
+        name: 'start_work',
+        arguments: { number: ticket.number },
+      }),
+    ) as { merge: string };
+
+    expect(bundle.merge).toBe('approve');
+    await client.close();
+  });
+
   it('open_pr without handOff keeps the Claim', async () => {
     const { tickets, ticket, client } = await setup('conv-7');
     await client.callTool({

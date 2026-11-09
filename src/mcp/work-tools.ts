@@ -61,8 +61,7 @@ export const registerWorkTools = ({
     'start_work',
     {
       title: 'Start work',
-      description:
-        "Begin a Ticket or an Epic: claim it for this Agent run and, for a Todo Ticket, move it to In progress (an Epic's Status follows its children; an In progress Ticket is only claimed; a child under your own Epic Claim moves to In progress). Refused naming the holder when another run holds the Claim, and naming the unresolved Blockers when the Ticket is blocked (under your own Epic Claim, an In progress sibling is not one). Returns the bundle you need to begin: { ticket (description, acceptance criteria, labels, External references, Epic link), comments, blockers (with Statuses), epic (null, or the Epic with its children's Statuses and Blockers and nextChild, the next Todo child to work in Blocker order), cycle, checkCommand (what must pass before a PR, or null) }.",
+      description: `Begin a Ticket or an Epic: claim it for this Agent run and, for a Todo Ticket, move it to In progress (an Epic's Status follows its children; an In progress Ticket is only claimed; a child under your own Epic Claim moves to In progress). Refused naming the holder when another run holds the Claim, and naming the unresolved Blockers when the Ticket is blocked (under your own Epic Claim, an In progress sibling is not one). Returns the bundle you need to begin: { ticket (description, acceptance criteria, labels, External references, Epic link), comments, blockers (with Statuses), epic (null, or the Epic with its children's Statuses and Blockers and nextChild, the next Todo child to work in Blocker order), cycle, checkCommand (what must pass before a PR, or null), merge ("auto": merge your own PR once the Check command, your review, every acceptance criterion and CI pass, then finish_work, else add_note why and hand off; "approve": hand off with open_pr and handOff: true for the User to approve the merge) }. merge is the Project's Auto-merge setting when the Claim was taken, which only the User sets.`,
       inputSchema: { number: ticketNumber, agentRunId: runIdField },
       annotations: { idempotentHint: true },
     },
@@ -199,12 +198,26 @@ export const registerWorkTools = ({
     'finish_work',
     {
       title: 'Finish work',
-      description: `Finish a Ticket or an Epic by the completion rule, as the User's Merged button does: Done, its triage state label removed (never wontfix or a category label) and its Claim released. For an Epic, every child that is not archived is finished the same way, all or nothing. Before calling it, check that the PR is merged with CI green and the acceptance criteria are checked: the tool checks none of this. ${returnsSummary()}`,
-      inputSchema: { number: ticketNumber, detail },
+      description: `Finish a Ticket or an Epic by the completion rule, as the User's Merged button does: Done, its triage state label removed (never wontfix or a category label) and its Claim released. For an Epic, every child that is not archived is finished the same way, all or nothing. It is how an Agent moves any work to Done, with a PR or without a PR (a split spec, ready-for-human or research work), not update_ticket. Refused while any acceptance criterion is unchecked: the Ticket's own or, for an Epic, the Epic's and every unarchived child's; the refusal names each with its Ticket. To finish anyway, pass an override reason: it is posted as your comment naming the unchecked criteria. It checks nothing on GitHub: first check that the PR is merged with CI green. ${returnsSummary()}`,
+      inputSchema: {
+        number: ticketNumber,
+        override: z
+          .string()
+          .optional()
+          .describe(
+            'Why you finish with acceptance criteria unchecked, in Markdown. Posted as a comment naming them. Leave out unless the refusal named criteria you deliberately left unmet.',
+          ),
+        detail,
+      },
       annotations: { idempotentHint: true },
     },
-    ({ number, detail }) =>
-      respondTicket(detail, () => tickets.completeTicket(number)),
+    ({ number, override, detail }) =>
+      respondTicket(detail, () =>
+        tickets.completeTicket(
+          number,
+          override === undefined ? {} : { override },
+        ),
+      ),
   );
 
   registerTool(

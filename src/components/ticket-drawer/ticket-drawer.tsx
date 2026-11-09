@@ -38,6 +38,7 @@ import {
 } from '../../tickets/agent-commands';
 import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
+import type { UncheckedCriterion } from '../../tickets/errors';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
 import { canSpec, isInReview, isParked } from '../../tickets/ticket-lanes';
 import type {
@@ -331,6 +332,27 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     });
   };
 
+  // The criteria Merged returned unchecked, while it asks to confirm them.
+  const [mergedUnchecked, setMergedUnchecked] =
+    useState<UncheckedCriterion[]>();
+
+  const merge = (confirmed: boolean) => {
+    setActionError(undefined);
+    startAction(async () => {
+      const result = await completeTicket(
+        confirmed
+          ? { number: ticket.number, confirmed }
+          : { number: ticket.number },
+      );
+      if (result.ok) {
+        setMergedUnchecked(result.unchecked);
+      } else {
+        setMergedUnchecked(undefined);
+        setActionError(result.error);
+      }
+    });
+  };
+
   const approveThisMerge = () => {
     setActionError(undefined);
     startAction(async () => {
@@ -360,7 +382,9 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
           <MergedButton
             ticket={ticket}
             pending={actionPending}
-            onMerged={() => runAction(completeTicket)}
+            onMerged={merge}
+            unchecked={mergedUnchecked}
+            onCancel={() => setMergedUnchecked(undefined)}
           />
         )}
         {showBackToTodo && (

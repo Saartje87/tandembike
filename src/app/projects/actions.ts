@@ -189,6 +189,9 @@ export async function setProjectAgentSettings(
       ...(settings.autoTriage === undefined
         ? {}
         : { autoTriage: Boolean(settings.autoTriage) }),
+      ...(settings.autoMerge === undefined
+        ? {}
+        : { autoMerge: Boolean(settings.autoMerge) }),
       ...(settings.triageCeilingUsd === undefined
         ? {}
         : {

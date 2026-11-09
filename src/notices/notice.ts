@@ -9,6 +9,7 @@ export const noticeKinds = [
   'stalled',
   'triage',
   'ceiling',
+  'auto_merged',
 ] as const;
 export type NoticeKind = (typeof noticeKinds)[number];
 

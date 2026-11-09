@@ -2,7 +2,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
-import { NotAllowedError } from './errors';
+import {
+  NotAllowedError,
+  UncheckedCriteriaError,
+  ValidationError,
+} from './errors';
 
 const setup = () => {
   const tickets = createTestTickets();
@@ -124,5 +128,160 @@ describe('completing an Epic', () => {
       NotAllowedError,
     );
     expect(tickets.getTicket(a.number).status).toBe('Todo');
+  });
+});
+
+describe('the completion rule and acceptance criteria', () => {
+  const criteria = (...texts: [string, boolean][]) => ({
+    acceptanceCriteria: texts.map(([text, checked]) => ({ text, checked })),
+  });
+
+  it('refuses a Ticket with an unchecked criterion, naming it and the Ticket', () => {
+    const { tickets, create } = setup();
+    const ticket = create(
+      'Fix the header',
+      ['ready-for-agent'],
+      criteria(['Logo shows', true], ['Menu opens', false]),
+    );
+
+    const error = errorFrom(() =>
+      tickets.completeTicket(ticket.number),
+    ) as UncheckedCriteriaError;
+
+    expect(error).toBeInstanceOf(UncheckedCriteriaError);
+    expect(error.message).toContain(`T${ticket.number}`);
+    expect(error.message).toContain('Menu opens');
+    expect(error.message).not.toContain('Logo shows');
+    expect(tickets.getTicket(ticket.number).status).toBe('Todo');
+  });
+
+  it('completes a Ticket whose criteria are all checked, or which has none', () => {
+    const { tickets, create } = setup();
+    const checked = create('A', [], criteria(['Logo shows', true]));
+    const none = create('B');
+
+    expect(tickets.completeTicket(checked.number).status).toBe('Done');
+    expect(tickets.completeTicket(none.number).status).toBe('Done');
+  });
+
+  it("refuses an Epic while its own or an unarchived child's criterion is unchecked, naming each", () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', [], {
+      type: 'Epic',
+      ...criteria(['Docs updated', false]),
+    });
+    const a = create('A', [], {
+      epicNumber: epic.number,
+      ...criteria(['Form validates', false], ['Done already', true]),
+    });
+    const archived = create('C', [], {
+      epicNumber: epic.number,
+      ...criteria(['Never mind', false]),
+    });
+    tickets.archiveTicket(archived.number);
+
+    const error = errorFrom(() =>
+      tickets.completeTicket(epic.number),
+    ) as UncheckedCriteriaError;
+
+    expect(error).toBeInstanceOf(UncheckedCriteriaError);
+    expect(error.unchecked).toEqual([
+      { number: epic.number, text: 'Docs updated' },
+      { number: a.number, text: 'Form validates' },
+    ]);
+    expect(error.message).toContain(`T${epic.number}: Docs updated`);
+    expect(error.message).toContain(`T${a.number}: Form validates`);
+    expect(tickets.getTicket(a.number).status).toBe('Todo');
+  });
+
+  it('lists the unchecked criteria without completing', () => {
+    const { tickets, create } = setup();
+    const ticket = create('A', [], criteria(['Menu opens', false]));
+
+    expect(tickets.uncheckedCriteria(ticket.number)).toEqual([
+      { number: ticket.number, text: 'Menu opens' },
+    ]);
+    expect(tickets.getTicket(ticket.number).status).toBe('Todo');
+  });
+
+  it('completes with an override and posts the reason as a comment by the actor, naming the criteria', () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+      labels: ['ready-for-agent'],
+      ...criteria(['Menu opens', false]),
+    });
+
+    const done = tickets.completeTicket(ticket.number, {
+      override: 'Menu moved to T99.',
+    });
+
+    expect(done.status).toBe('Done');
+    expect(done.labels).toEqual([]);
+    const [comment] = tickets.listComments(ticket.number);
+    expect(comment.author).toBe('agent');
+    expect(comment.body).toContain('Menu moved to T99.');
+    expect(comment.body).toContain(`T${ticket.number}: Menu opens`);
+  });
+
+  it('completes an Epic with an override, posting the comment on the Epic', () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', [], { type: 'Epic' });
+    const a = create('A', [], {
+      epicNumber: epic.number,
+      ...criteria(['Form validates', false]),
+    });
+
+    tickets.completeTicket(epic.number, { override: 'Confirmed by hand.' });
+
+    expect(tickets.getTicket(a.number).status).toBe('Done');
+    const [comment] = tickets.listComments(epic.number);
+    expect(comment.author).toBe('user');
+    expect(comment.body).toContain(`T${a.number}: Form validates`);
+    expect(tickets.listComments(a.number)).toEqual([]);
+  });
+
+  it('posts no comment for an override when nothing is unchecked', () => {
+    const { tickets, create } = setup();
+    const ticket = create('A');
+
+    tickets.completeTicket(ticket.number, { override: 'Just in case.' });
+
+    expect(tickets.listComments(ticket.number)).toEqual([]);
+  });
+
+  it('finishes a Done Ticket again without refusing or a second comment', () => {
+    const { tickets, create } = setup();
+    const ticket = create('A', [], criteria(['Menu opens', false]));
+    tickets.completeTicket(ticket.number, { override: 'Moved to T99.' });
+
+    expect(tickets.completeTicket(ticket.number).status).toBe('Done');
+    tickets.completeTicket(ticket.number, { override: 'Again.' });
+    expect(tickets.listComments(ticket.number)).toHaveLength(1);
+  });
+
+  it("does not count a Done child's criteria against its Epic", () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', [], { type: 'Epic' });
+    const done = create('A', [], {
+      epicNumber: epic.number,
+      ...criteria(['Form validates', false]),
+    });
+    create('B', [], { epicNumber: epic.number });
+    tickets.completeTicket(done.number, { override: 'Covered by B.' });
+
+    expect(tickets.uncheckedCriteria(epic.number)).toEqual([]);
+    expect(tickets.completeTicket(epic.number).status).toBe('Done');
+  });
+
+  it('refuses a blank override', () => {
+    const { tickets, create } = setup();
+    const ticket = create('A', [], criteria(['Menu opens', false]));
+
+    expect(
+      errorFrom(() => tickets.completeTicket(ticket.number, { override: ' ' })),
+    ).toBeInstanceOf(ValidationError);
   });
 });

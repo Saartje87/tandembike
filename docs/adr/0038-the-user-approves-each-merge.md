@@ -2,6 +2,8 @@
 
 Decided on 2026-11-09 (T1221, phase 9 of [`software-factory-2.md`](../roadmap/software-factory-2.md)). Amends [ADR 0019](0019-tandembike-starts-agent-runs.md) on who merges: a Start run no longer merges its own PR.
 
+Amended by [ADR 0043](0043-auto-merge-lets-an-agent-merge-its-own-pr.md): with a Project's Auto-merge on, the run that opened the PR merges it, and the gate below applies when it is off or the run cannot meet the merge conditions. ADR 0043 also makes `finish_work` refuse unchecked acceptance criteria.
+
 The roadmap made the User the **Merge gate**: a PR whose work is reviewed and whose checks are green waits for the User. Until now the Start run merged its own PR once CI was green, and the only button was **Merged**, for a PR the User had merged elsewhere. Nothing let the User approve a merge from Tandembike.
 
 ## Decision
@@ -18,5 +20,7 @@ The roadmap made the User the **Merge gate**: a PR whose work is reviewed and wh
 Rejected: Tandembike calling `gh pr merge` itself (one host only, no conflict handling; ADR 0032's Playbook keeps the merge on the Agent's side), and the Start run asking in its Conversation whether to merge (the answer would be a free-text reply instead of one gate with a fixed meaning).
 
 ## Amendment: this repository keeps self-merge (2026-11-09, T1282)
+
+Superseded by [ADR 0043](0043-auto-merge-lets-an-agent-merge-its-own-pr.md): this repository's self-merge is now the Tandembike Project's Auto-merge setting being on, which every run reads from `start_work`'s `merge`, not an instructions override of the Playbook. The note below is kept as history.
 
 The decision above is the product default for every Project. Tandembike's own development deliberately does not follow it: a Start run on this repository merges its own PR with `gh pr merge --merge` once CI is green, its `review` is complete and every acceptance criterion is checked, then calls `finish_work`. It does not hand off with `handOff: true` for the User's Approve merge. The User decided this on 2026-11-09, triaging T1282 after the Cycle 48 retro: this codebase's runs already merged themselves by `docs/agents/start-run.md` (8 of 11 in Cycle 48), and the 3 that stopped to wait for a "merge" reply stalled their Tickets, so here the run's own `review` and CI are the gate. The override lives in this repository's instructions (`AGENTS.md` "Git workflow", "Playbook runs in this repository" in `docs/agents/start-run.md`), which the Playbook defers to; the Playbook's skills are unchanged. Approve merge and Merged still work here for a PR a run left open.

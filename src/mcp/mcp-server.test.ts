@@ -58,6 +58,7 @@ describe('MCP server and Project agent settings', () => {
       repositoryPath: '/tmp',
       checkCommand: 'npm run check',
       prepareCommand: 'npm ci',
+      autoMerge: true,
     });
     const client = await connectMcpClient(tickets);
 
@@ -70,10 +71,10 @@ describe('MCP server and Project agent settings', () => {
     );
 
     expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
-      /repository|agent_setting|parallel|agent_mode/,
+      /repository|agent_setting|parallel|agent_mode|auto_merge/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|prepareCommand|npm ci|npm run check|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|autoMerge|spendCeiling|checkCommand|prepareCommand|npm ci|npm run check|\/tmp/,
     );
     await client.close();
   });
@@ -1183,7 +1184,7 @@ describe('Ticket tools', () => {
     await client.close();
   });
 
-  it('tells Agents that complete_ticket checks no merge, CI or acceptance criteria', async () => {
+  it('tells Agents that finish_work checks no merge or CI, but refuses unchecked criteria without an override', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
@@ -1192,9 +1193,113 @@ describe('Ticket tools', () => {
 
     expect(description).toMatch(/merged/);
     expect(description).toMatch(/CI/);
-    expect(description).toMatch(/acceptance criteria/);
-    expect(description).toMatch(/checks none of this/);
+    expect(description).toMatch(/Refused while any acceptance criterion/);
+    expect(description).toMatch(/override/);
+    expect(description).toMatch(/without a PR/);
     expect(description).toMatch(/never wontfix/);
+    await client.close();
+  });
+
+  it('refuses finish_work while a criterion is unchecked, naming it and its Ticket', async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Login',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Form',
+      epicNumber: epic.number,
+      acceptanceCriteria: [{ text: 'Validates the email' }],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const ticketRefused = await client.callTool({
+      name: 'finish_work',
+      arguments: { number: child.number },
+    });
+    const epicRefused = await client.callTool({
+      name: 'finish_work',
+      arguments: { number: epic.number },
+    });
+
+    for (const refused of [ticketRefused, epicRefused]) {
+      expect(refused.isError).toBe(true);
+      expect(resultText(refused)).toContain(
+        `T${child.number}: Validates the email`,
+      );
+    }
+    expect(tickets.getTicket(child.number).status).toBe('Todo');
+    await client.close();
+  });
+
+  it("finishes with an override, posting the reason as the run's comment", async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Login',
+      type: 'Epic',
+      labels: ['ready-for-agent'],
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Form',
+      epicNumber: epic.number,
+      acceptanceCriteria: [{ text: 'Validates the email' }],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'finish_work',
+      arguments: { number: epic.number, override: 'Moved to T99.' },
+    });
+
+    expect(resultJson(result)).toMatchObject({ status: 'Done', labels: [] });
+    expect(tickets.getTicket(child.number).status).toBe('Done');
+    const [comment] = tickets.listComments(epic.number);
+    expect(comment).toMatchObject({ author: 'agent' });
+    expect(comment.body).toContain('Moved to T99.');
+    expect(comment.body).toContain(`T${child.number}: Validates the email`);
+    await client.close();
+  });
+
+  it('finishes work without a PR reference and removes its triage state label', async () => {
+    const tickets = createTestTickets(undefined, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Research the options',
+      labels: ['ready-for-human', 'enhancement'],
+      acceptanceCriteria: [{ text: 'Options listed', checked: true }],
+    });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'finish_work',
+      arguments: { number: ticket.number },
+    });
+
+    expect(resultJson(result)).toMatchObject({
+      status: 'Done',
+      labels: ['enhancement'],
+    });
+    expect(tickets.getTicket(ticket.number).externalReferences).toEqual([]);
+    await client.close();
+  });
+
+  it("documents start_work's merge field", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const description =
+      tools.find((tool) => tool.name === 'start_work')?.description ?? '';
+
+    expect(description).toMatch(/merge \("auto"/);
+    expect(description).toMatch(/"approve": hand off/);
+    expect(description).toMatch(/Auto-merge/);
     await client.close();
   });
 

@@ -31,6 +31,7 @@ const unset: ProjectAgentSettings = {
   spendCeilingUsd: null,
   autoTriage: false,
   triageCeilingUsd: null,
+  autoMerge: false,
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -137,6 +138,7 @@ describe('AgentSettingsForm', () => {
         spendCeilingUsd: null,
         autoTriage: false,
         triageCeilingUsd: null,
+        autoMerge: false,
       }),
     );
   });
@@ -236,6 +238,7 @@ describe('AgentSettingsForm', () => {
         spendCeilingUsd: null,
         autoTriage: false,
         triageCeilingUsd: null,
+        autoMerge: false,
       }),
     );
   });
@@ -302,6 +305,33 @@ describe('AgentSettingsForm', () => {
         expect.objectContaining({ autopilot: true, spendCeilingUsd: 25.5 }),
       ),
     );
+  });
+
+  it('shows Auto-merge and saves it on its own, without Autopilot', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(
+      screen.getByRole('switch', { name: 'Auto-merge' }),
+    ).not.toBeChecked();
+    await userEvent.click(screen.getByRole('switch', { name: 'Auto-merge' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autoMerge: true, autopilot: false }),
+      ),
+    );
+  });
+
+  it('shows Auto-merge on when the Project has it on', () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, autoMerge: true }}
+      />,
+    );
+
+    expect(screen.getByRole('switch', { name: 'Auto-merge' })).toBeChecked();
   });
 
   it('saves Auto-triage with its Triage ceiling in dollars', async () => {

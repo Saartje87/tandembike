@@ -358,6 +358,13 @@
       "when": 1794251810480,
       "tag": "0050_machine_ceiling",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "6",
+      "when": 1794260042789,
+      "tag": "0051_auto_merge",
+      "breakpoints": true
     }
   ]
 }

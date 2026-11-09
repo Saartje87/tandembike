@@ -447,6 +447,48 @@ describe('Ticket actions', () => {
     );
   });
 
+  it('completes nothing while criteria are unchecked, returning them for the User to confirm', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      acceptanceCriteria: [{ text: 'Menu opens' }],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await completeTicket({ number: ticket.number });
+
+    expect(result).toEqual({
+      ok: true,
+      projectId: project.id,
+      unchecked: [{ number: ticket.number, text: 'Menu opens' }],
+    });
+    expect(tickets.getTicket(ticket.number).status).toBe('Todo');
+  });
+
+  it("completes a confirmed Merged with unchecked criteria, recording the override as the User's comment", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the header',
+      acceptanceCriteria: [{ text: 'Menu opens' }],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await completeTicket({
+      number: ticket.number,
+      confirmed: true,
+    });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(ticket.number).status).toBe('Done');
+    const [comment] = tickets.listComments(ticket.number);
+    expect(comment.author).toBe('user');
+    expect(comment.body).toContain(`T${ticket.number}: Menu opens`);
+  });
+
   it('sends a Ticket Back to Todo as the User and refreshes its Boards', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

@@ -39,7 +39,9 @@ import {
 import {
   type ActivityEntry,
   type Actor,
+  type AutoMerge,
   activityOf,
+  autoMergesSince,
   deleteActivity,
   recordActivity,
 } from './activity';
@@ -95,8 +97,11 @@ import {
   NotAllowedError,
   NotFoundError,
   TicketsError,
+  UncheckedCriteriaError,
+  type UncheckedCriterion,
   ValidationError,
 } from './errors';
+import { isPullRequestReference } from './external-reference-display';
 import {
   checkExternalReferenceCount,
   checkExternalReferences,
@@ -126,6 +131,7 @@ import {
   writeLaneOrder,
 } from './lanes';
 import { createMachineSettings } from './machine-settings';
+import { type MergeMode, mergeModeOf } from './merge-mode';
 import {
   checkOrigin,
   type OriginLink,
@@ -225,6 +231,8 @@ export type ProjectAgentSettings = {
   autoTriage: boolean;
   /** What Auto-triage may spend per local calendar day, in dollars; `null` while unset. */
   triageCeilingUsd: number | null;
+  /** Whether the run that opened a PR merges it itself (ADR 0043). */
+  autoMerge: boolean;
 };
 
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
@@ -278,6 +286,7 @@ const agentSettingsColumns = {
   spendCeilingUsd: projects.spendCeilingUsd,
   autoTriage: projects.autoTriage,
   triageCeilingUsd: projects.triageCeilingUsd,
+  autoMerge: projects.autoMerge,
 };
 
 /** A trimmed text setting; blank reads as not set. */
@@ -545,6 +554,15 @@ export type BatchTicketInput = Pick<
    * split from. Not with the batch's `originNumber`.
    */
   originPosition?: number;
+};
+
+/** How `completeTicket` treats unchecked acceptance criteria (ADR 0043). */
+export type CompleteTicketOptions = {
+  /**
+   * Why to finish anyway: completes despite unchecked criteria and posts the
+   * reason, naming them, as a comment by the actor.
+   */
+  override?: string;
 };
 
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
@@ -840,6 +858,36 @@ function checkedCommentBody(rawBody: string): string {
           : undefined,
   });
   return body;
+}
+
+export const maxOverrideLength = 10_000;
+
+/** An override reason trimmed, or a `ValidationError` if blank or too long. */
+function checkedOverride(rawOverride: string): string {
+  const override = rawOverride.trim();
+  throwFieldErrors({
+    override:
+      override === ''
+        ? 'Give a reason for finishing with unchecked acceptance criteria.'
+        : override.length > maxOverrideLength
+          ? `Keep the override reason to ${maxOverrideLength.toLocaleString('en-US')} characters or fewer.`
+          : undefined,
+  });
+  return override;
+}
+
+/** The comment an override posts: the reason and the criteria it skipped. */
+function overrideComment(
+  override: string,
+  unchecked: UncheckedCriterion[],
+): string {
+  return [
+    'Finished with unchecked acceptance criteria:',
+    '',
+    ...unchecked.map(({ number, text }) => `- T${number}: ${text}`),
+    '',
+    `Reason: ${override}`,
+  ].join('\n');
 }
 
 function checkedAgentRunId(rawAgentRunId: string): string {
@@ -1665,6 +1713,7 @@ export function createTickets(
         spendCeilingUsd,
         autoTriage,
         triageCeilingUsd,
+        autoMerge,
       } = input;
       const nextTriageCeiling =
         triageCeilingUsd === undefined
@@ -1737,6 +1786,7 @@ export function createTickets(
           spendCeilingUsd: nextCeiling,
           autoTriage: nextAutoTriage,
           triageCeilingUsd: nextTriageCeiling,
+          ...(autoMerge === undefined ? {} : { autoMerge }),
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)
@@ -1983,6 +2033,8 @@ export function createTickets(
           .set({
             claimAgentRunId: agentRunId,
             claimAgentName: agentName,
+            // The mode is fixed when the Claim is taken (ADR 0043).
+            claimMerge: projectMergeMode(number),
             updatedAt: new Date(),
           })
           .where(
@@ -2404,11 +2456,33 @@ export function createTickets(
      * the same way, all or nothing, and the Epic loses its own state label;
      * its Status follows its children.
      */
-    completeTicket(number: number): Ticket {
+    completeTicket(
+      number: number,
+      options: CompleteTicketOptions = {},
+    ): Ticket {
+      const override =
+        options.override === undefined
+          ? undefined
+          : checkedOverride(options.override);
       const stateLabels = { removeLabels: [...triageStateLabels] };
       const done = checkTicketChanges({ status: 'Done', ...stateLabels });
       const { type, children } = getTicket(number);
       checkTicketWritable(db, number);
+      const unchecked = uncheckedCriteriaOf(number);
+      if (unchecked.length > 0 && override === undefined) {
+        throw new UncheckedCriteriaError(unchecked);
+      }
+      const pullRequest = autoMergedPullRequest(number);
+      const recordOverride = () => {
+        if (unchecked.length > 0 && override !== undefined) {
+          insertComment(number, overrideComment(override, unchecked));
+        }
+        if (pullRequest !== null) {
+          recordActivity(db, number, actor, [
+            { type: 'autoMerged', pullRequest },
+          ]);
+        }
+      };
 
       if (type === 'Epic') {
         return changeEpicChildren(
@@ -2416,13 +2490,53 @@ export function createTickets(
           children.filter((child) => !child.archived),
           done,
           checkTicketChanges(stateLabels),
+          recordOverride,
         );
       }
-      const { changedEpic } = db.transaction(() =>
-        applyTicketChanges(number, done),
-      );
+      const { changedEpic } = db.transaction(() => {
+        recordOverride();
+        return applyTicketChanges(number, done);
+      });
       publishWith(number, changedEpic);
       return getTicket(number);
+    },
+
+    /**
+     * The auto-merges recorded at or after `since`, oldest first, for the
+     * Notices module's `auto_merged` kind (ADR 0043).
+     */
+    autoMergesSince(since: Date): AutoMerge[] {
+      return autoMergesSince(db, since);
+    },
+
+    /**
+     * The merge mode Ticket `number`'s Claim was taken with (ADR 0043), or
+     * `null` while it has no Claim. A child under an Epic Claim has none of
+     * its own: read the Epic's.
+     */
+    claimMergeMode(number: number): MergeMode | null {
+      getTicket(number);
+      const row = db
+        .select({
+          claimAgentRunId: tickets.claimAgentRunId,
+          claimMerge: tickets.claimMerge,
+        })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      return row?.claimAgentRunId == null
+        ? null
+        : (row.claimMerge ?? 'approve');
+    },
+
+    /**
+     * The acceptance criteria the completion rule would refuse Ticket
+     * `number` for: its own unchecked ones and, for an Epic, those of every
+     * unarchived child, each with its Ticket. Empty when it may complete.
+     */
+    uncheckedCriteria(number: number): UncheckedCriterion[] {
+      getTicket(number);
+      return uncheckedCriteriaOf(number);
     },
 
     /**
@@ -3263,15 +3377,18 @@ export function createTickets(
    * released first, recorded on the Epic with `epicChange` (no change by
    * default), before the children's changes would clear it silently; then
    * `change` is applied to each of `selected`, all in one transaction. The
-   * Epic and the changed children are announced once.
+   * Epic and the changed children are announced once. `before` runs first in
+   * the same transaction.
    */
   function changeEpicChildren(
     epic: number,
     selected: { number: number }[],
     change: ReturnType<typeof checkTicketChanges>,
     epicChange = checkTicketChanges({}),
+    before: () => void = () => {},
   ): Ticket {
     db.transaction(() => {
+      before();
       applyTicketChanges(epic, epicChange, { releaseClaim: true });
       for (const child of selected) {
         applyTicketChanges(child.number, change);
@@ -3282,6 +3399,81 @@ export function createTickets(
       numbers: [epic, ...selected.map((child) => child.number)],
     });
     return getTicket(epic);
+  }
+
+  /**
+   * The PR an Agent completing Ticket `number` now merged by Auto-merge
+   * (ADR 0043): its latest PR reference, when the actor is an Agent and its
+   * Claim was taken with `auto`; otherwise `null`. Approve merge finishes a
+   * handed-off Ticket, which has no Claim, and Merged is the User's.
+   */
+  function autoMergedPullRequest(number: number): string | null {
+    if (actor !== 'agent') {
+      return null;
+    }
+    const row = db
+      .select({
+        claimAgentRunId: tickets.claimAgentRunId,
+        claimMerge: tickets.claimMerge,
+      })
+      .from(tickets)
+      .where(eq(tickets.number, number))
+      .get();
+    if (row?.claimAgentRunId == null || row.claimMerge !== 'auto') {
+      return null;
+    }
+    return (
+      getTicket(number).externalReferences.findLast(isPullRequestReference) ??
+      null
+    );
+  }
+
+  /** The merge mode Ticket `number`'s Project gives a Claim taken now. */
+  function projectMergeMode(number: number): MergeMode {
+    const row = db
+      .select({ autoMerge: projects.autoMerge })
+      .from(tickets)
+      .innerJoin(projects, eq(projects.id, tickets.projectId))
+      .where(eq(tickets.number, number))
+      .get();
+    return mergeModeOf(row?.autoMerge ?? false);
+  }
+
+  /**
+   * Ticket `number`'s unchecked criteria and its unarchived children's. A
+   * Ticket already Done is past the rule, so finishing it again is a no-op
+   * check, as `finish_work` is idempotent.
+   */
+  function uncheckedCriteriaOf(number: number): UncheckedCriterion[] {
+    const { acceptanceCriteria, children, status } = getTicket(number);
+    const own =
+      status === 'Done'
+        ? []
+        : acceptanceCriteria
+            .filter(({ checked }) => !checked)
+            .map(({ text }) => ({ number, text }));
+    return [
+      ...own,
+      ...children
+        .filter((child) => !child.archived && child.status !== 'Done')
+        .flatMap((child) =>
+          getTicket(child.number)
+            .acceptanceCriteria.filter(({ checked }) => !checked)
+            .map(({ text }) => ({ number: child.number, text })),
+        ),
+    ];
+  }
+
+  /** Adds a comment by the module's actor; run it in a transaction. */
+  function insertComment(number: number, body: string) {
+    db.insert(ticketComments)
+      .values({
+        ticketNumber: number,
+        author: actor,
+        body,
+        createdAt: new Date(),
+      })
+      .run();
   }
 
   function publishWith(number: number, ...related: (number | null)[]) {

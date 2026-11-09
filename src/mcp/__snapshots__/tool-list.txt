@@ -530,7 +530,7 @@
   {
     "name": "finish_work",
     "title": "Finish work",
-    "description": "Finish a Ticket or an Epic by the completion rule, as the User's Merged button does: Done, its triage state label removed (never wontfix or a category label) and its Claim released. For an Epic, every child that is not archived is finished the same way, all or nothing. Before calling it, check that the PR is merged with CI green and the acceptance criteria are checked: the tool checks none of this. Returns the Ticket's summary: number, title, status, labels and blocked. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "description": "Finish a Ticket or an Epic by the completion rule, as the User's Merged button does: Done, its triage state label removed (never wontfix or a category label) and its Claim released. For an Epic, every child that is not archived is finished the same way, all or nothing. It is how an Agent moves any work to Done, with a PR or without a PR (a split spec, ready-for-human or research work), not update_ticket. Refused while any acceptance criterion is unchecked: the Ticket's own or, for an Epic, the Epic's and every unarchived child's; the refusal names each with its Ticket. To finish anyway, pass an override reason: it is posted as your comment naming the unchecked criteria. It checks nothing on GitHub: first check that the PR is merged with CI green. Returns the Ticket's summary: number, title, status, labels and blocked. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -539,6 +539,10 @@
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "override": {
+          "description": "Why you finish with acceptance criteria unchecked, in Markdown. Posted as a comment naming them. Leave out unless the refusal named criteria you deliberately left unmet.",
+          "type": "string"
         },
         "detail": {
           "description": "How much of the Ticket to return. \"summary\", the default: the short answer this tool describes. \"full\": the whole Ticket, as get_ticket returns it.",
@@ -836,7 +840,7 @@
   {
     "name": "start_work",
     "title": "Start work",
-    "description": "Begin a Ticket or an Epic: claim it for this Agent run and, for a Todo Ticket, move it to In progress (an Epic's Status follows its children; an In progress Ticket is only claimed; a child under your own Epic Claim moves to In progress). Refused naming the holder when another run holds the Claim, and naming the unresolved Blockers when the Ticket is blocked (under your own Epic Claim, an In progress sibling is not one). Returns the bundle you need to begin: { ticket (description, acceptance criteria, labels, External references, Epic link), comments, blockers (with Statuses), epic (null, or the Epic with its children's Statuses and Blockers and nextChild, the next Todo child to work in Blocker order), cycle, checkCommand (what must pass before a PR, or null) }.",
+    "description": "Begin a Ticket or an Epic: claim it for this Agent run and, for a Todo Ticket, move it to In progress (an Epic's Status follows its children; an In progress Ticket is only claimed; a child under your own Epic Claim moves to In progress). Refused naming the holder when another run holds the Claim, and naming the unresolved Blockers when the Ticket is blocked (under your own Epic Claim, an In progress sibling is not one). Returns the bundle you need to begin: { ticket (description, acceptance criteria, labels, External references, Epic link), comments, blockers (with Statuses), epic (null, or the Epic with its children's Statuses and Blockers and nextChild, the next Todo child to work in Blocker order), cycle, checkCommand (what must pass before a PR, or null), merge (\"auto\": merge your own PR once the Check command, your review, every acceptance criterion and CI pass, then finish_work, else add_note why and hand off; \"approve\": hand off with open_pr and handOff: true for the User to approve the merge) }. merge is the Project's Auto-merge setting when the Claim was taken, which only the User sets.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -870,7 +874,7 @@
   {
     "name": "update_ticket",
     "title": "Update Ticket",
-    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to \"In progress\" when you start and to \"Done\" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
     "inputSchema": {
       "type": "object",
       "properties": {

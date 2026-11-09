@@ -278,6 +278,27 @@ const triage: NoticeDetector = ({ tickets }) =>
     }),
   );
 
+/** How long an auto-merge stays in the set: past it, its key drops out. */
+const autoMergeWindowMs = 24 * 60 * 60 * 1000;
+
+/**
+ * A Ticket or Epic an Agent completed through an auto-merge (ADR 0043),
+ * keyed by the Activity entry that records it. Only recent ones are read, so
+ * the set stays small; one older than the server start is in the baseline.
+ */
+const autoMerged: NoticeDetector = ({ tickets, now }) =>
+  tickets
+    .autoMergesSince(new Date(now().getTime() - autoMergeWindowMs))
+    .map(({ id, ticketNumber, pullRequest }) => {
+      const ticket = tickets.getTicket(ticketNumber);
+      return ticketNotice(ticket, {
+        kind: 'auto_merged',
+        key: `auto_merged:${ticketNumber}:${id}`,
+        title: `T${ticketNumber} was merged by an Agent`,
+        body: `${ticket.title}: ${pullRequest}`,
+      });
+    });
+
 /** The local calendar day of `now`, as the ceilings' days reset at midnight. */
 const dayOf = (now: Date): string =>
   [now.getFullYear(), now.getMonth() + 1, now.getDate()]
@@ -367,4 +388,5 @@ export const noticeDetectors: NoticeDetector[] = [
   stalled,
   triage,
   ceiling,
+  autoMerged,
 ];

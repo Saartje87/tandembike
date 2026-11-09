@@ -1,6 +1,7 @@
 import type { Cycle, CycleLink } from './cycles';
 import { NotAllowedError } from './errors';
 import { isPullRequestReference } from './external-reference-display';
+import { type MergeMode, mergeModeOf } from './merge-mode';
 import type {
   AddCommentInput,
   Blockers,
@@ -50,6 +51,12 @@ export type WorkBundle = {
   cycle: CycleLink | null;
   /** The Project's Check command, or `null` while unset. */
   checkCommand: string | null;
+  /**
+   * Whether to merge the PR yourself (`auto`) or hand off at the Merge gate
+   * (`approve`): the Project's Auto-merge when the Claim was taken, the
+   * Epic's Claim for a child under it (ADR 0043).
+   */
+  merge: MergeMode;
 };
 
 /** The Tickets module's public functions the work functions build on. */
@@ -69,6 +76,7 @@ export type WorkDeps = {
   listComments: (number: number) => Comment[];
   addComment: (number: number, input: AddCommentInput) => Comment;
   getProjectAgentSettings: (id: number) => ProjectAgentSettings;
+  claimMergeMode: (number: number) => MergeMode | null;
   addExternalReferences: (number: number, references: string[]) => Ticket;
   /** Runs `run` all or nothing: a thrown refusal undoes every write in it. */
   transaction: <T>(run: () => T) => T;
@@ -238,14 +246,18 @@ export function createWork(deps: WorkDeps) {
         }
       });
       const ticket = deps.getTicket(number);
+      const settings = deps.getProjectAgentSettings(ticket.projectId);
       return {
         ticket,
         comments: deps.listComments(number),
         blockers: deps.listBlockers(number).blockedBy,
         epic: epicBundle(ticket),
         cycle: ticket.cycle,
-        checkCommand: deps.getProjectAgentSettings(ticket.projectId)
-          .checkCommand,
+        checkCommand: settings.checkCommand,
+        merge:
+          deps.claimMergeMode(
+            epicClaim === runId && epic ? epic.number : number,
+          ) ?? mergeModeOf(settings.autoMerge),
       };
     },
 

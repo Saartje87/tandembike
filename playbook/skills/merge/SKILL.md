@@ -4,7 +4,7 @@ description: "Merge the pull request of one Tandembike Ticket or Epic the User a
 disable-model-invocation: true
 ---
 
-Merge the pull request of the Ticket or Epic the first message names, such as `T42`. The User approved this merge by clicking Approve merge, so you do not ask again. You work on your own: end with a short message saying what happened. Everything about the Ticket comes from the Tandembike tools; everything about the repository from its own instructions (`CLAUDE.md` or `AGENTS.md`, if it has them) and its host CLI. Where those instructions say something these steps say differently, the repository's instructions win.
+Merge the pull request of the Ticket or Epic the first message names, such as `T42`. The User approved this merge by clicking Approve merge, so you do not ask again. These are the same steps as the "Merge" section of `implement`, which a run with Auto-merge on uses to merge its own pull request. You work on your own: end with a short message saying what happened. Everything about the Ticket comes from the Tandembike tools; everything about the repository from its own instructions (`CLAUDE.md` or `AGENTS.md`, if it has them) and its host CLI. Where those instructions say something these steps say differently, the repository's instructions win.
 
 ## 1. Find the pull request
 
@@ -34,7 +34,7 @@ When a conflict is not one you can resolve with confidence, or the checks fail a
 
 Merge with the repository's host CLI (`gh pr merge <number> --merge` for GitHub, unless the repository's instructions name another merge method). When it refuses, read why and go back to step 3 or 4 once; otherwise go to "When you cannot merge".
 
-Then call `finish_work` with the Ticket number. It completes the Ticket and leaves cleanup of your worktree to Tandembike. End with one line: the merged pull request URL.
+Then call `finish_work` with the Ticket number. It completes the Ticket and leaves cleanup of your worktree to Tandembike. It refuses while an acceptance criterion is unchecked: pass `override` with the reason only when a note on the Ticket already explains the criterion was deliberately left unmet; otherwise go to "When you cannot merge". End with one line: the merged pull request URL.
 
 ## When you cannot merge
 
