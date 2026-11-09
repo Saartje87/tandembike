@@ -18,6 +18,7 @@ const commands = {
   retroCommand: '/retro',
   specCommand: '/spec',
   mergeCommand: '/merge',
+  planCommand: '',
 };
 
 const none = {
@@ -27,6 +28,7 @@ const none = {
   retroCommand: null,
   specCommand: null,
   mergeCommand: null,
+  planCommand: null,
 };
 
 const started = {

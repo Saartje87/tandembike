@@ -117,6 +117,8 @@ export const projects = sqliteTable('projects', {
   specCommand: text('spec_command'),
   /** The command a Merge Conversation sends before the Ticket number; null runs the Playbook's. */
   mergeCommand: text('merge_command'),
+  /** The command a Plan Conversation sends before the goal; null runs the Playbook's. */
+  planCommand: text('plan_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

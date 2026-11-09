@@ -86,6 +86,7 @@ describe('Starting a Terminal Conversation (T1237)', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
     const epic = tickets.createTicket({
       projectId: project.id,

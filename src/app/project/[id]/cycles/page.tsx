@@ -1,8 +1,10 @@
+import { Stack } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
 import { CycleHistory } from '../../../../components/cycle-history/cycle-history';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
+import { PlanButton } from '../../../../components/plan-button/plan-button';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { loadProject, type ProjectPageProps } from '../project-data';
 
@@ -15,7 +17,15 @@ export async function generateMetadata({
 
 async function historyTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
-  return <CycleHistory cycles={appTickets('user').listCycles(project.id)} />;
+  const tickets = appTickets('user');
+  return (
+    <Stack gap={3}>
+      {tickets.getProjectAgentSettings(project.id).repositoryPath !== null && (
+        <PlanButton projectId={project.id} />
+      )}
+      <CycleHistory cycles={tickets.listCycles(project.id)} />
+    </Stack>
+  );
 }
 
 /**

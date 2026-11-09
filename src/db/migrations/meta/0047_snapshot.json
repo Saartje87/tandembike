@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7dce4367-85aa-4e82-a66e-6e49b3b3feb3",
+  "id": "4123f2cd-0f7e-49c6-a3bc-a8310a73def2",
   "prevId": "42091fd8-0816-476f-b9a4-2283a714c7db",
   "tables": {
     "conversation_entries": {
@@ -540,21 +540,6 @@
           "notNull": false,
           "autoincrement": false
         },
-        "auto_triage": {
-          "name": "auto_triage",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": false
-        },
-        "triage_ceiling_usd": {
-          "name": "triage_ceiling_usd",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "skills": {
           "name": "skills",
           "type": "text",
@@ -604,6 +589,13 @@
         },
         "merge_command": {
           "name": "merge_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "plan_command": {
+          "name": "plan_command",
           "type": "text",
           "primaryKey": false,
           "notNull": false,

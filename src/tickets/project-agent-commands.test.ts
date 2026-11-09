@@ -20,6 +20,7 @@ describe("A Project's agent commands", () => {
       retroCommand: null,
       specCommand: null,
       mergeCommand: null,
+      planCommand: null,
     });
   });
 
@@ -33,6 +34,7 @@ describe("A Project's agent commands", () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
     tickets.setProjectAgentSettings(first.id, { runMode: 'default' });
 
@@ -56,6 +58,7 @@ describe("A Project's agent commands", () => {
       retroCommand: ' retro ',
       specCommand: '/spec',
       mergeCommand: ' merge ',
+      planCommand: '',
     });
 
     expect(saved).toEqual({
@@ -65,6 +68,7 @@ describe("A Project's agent commands", () => {
       retroCommand: '/retro',
       specCommand: '/spec',
       mergeCommand: '/merge',
+      planCommand: null,
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -83,6 +87,7 @@ describe("A Project's agent commands", () => {
           retroCommand: '/retro',
           specCommand: '/spec',
           mergeCommand: '/merge now',
+          planCommand: '',
         }),
       ),
     ).toEqual({
@@ -107,6 +112,7 @@ describe("A Project's agent commands", () => {
           retroCommand: '',
           specCommand: '',
           mergeCommand: '',
+          planCommand: '',
         }),
       ),
     ).toBeInstanceOf(NotAllowedError);
@@ -135,6 +141,7 @@ describe('The Spec command (T1222)', () => {
       retroCommand: '',
       specCommand: 'my:spec',
       mergeCommand: '',
+      planCommand: '',
     });
     expect(saved.specCommand).toBe('/my:spec');
     expect(

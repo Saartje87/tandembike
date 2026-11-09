@@ -282,6 +282,7 @@ describe('Skill actions', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
 
     const commands = {
@@ -291,6 +292,7 @@ describe('Skill actions', () => {
       retroCommand: null,
       specCommand: null,
       mergeCommand: null,
+      planCommand: null,
     };
     expect(result).toEqual({ ok: true, commands });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
@@ -310,6 +312,7 @@ describe('Skill actions', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
 
     expect(result).toMatchObject({

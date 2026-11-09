@@ -87,4 +87,33 @@ describe('TriageProposal', () => {
       'only a Todo Ticket',
     );
   });
+
+  it('shows a duplicate as a link to the Ticket', () => {
+    renderWithTheme(
+      <TriageProposal proposal={{ ...proposal, duplicateOf: 12 }} />,
+    );
+
+    expect(screen.getByRole('link', { name: 'T12' })).toHaveAttribute(
+      'href',
+      '/ticket/12',
+    );
+  });
+
+  it('shows splits with their titles and criteria', () => {
+    renderWithTheme(
+      <TriageProposal
+        proposal={{
+          ...proposal,
+          splits: [
+            { title: 'Part one', description: '', acceptanceCriteria: ['a1'] },
+            { title: 'Part two', description: '', acceptanceCriteria: [] },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Part one')).toBeInTheDocument();
+    expect(screen.getByText('a1')).toBeInTheDocument();
+    expect(screen.getByText('Part two')).toBeInTheDocument();
+  });
 });

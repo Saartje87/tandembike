@@ -8,6 +8,7 @@ export const conversationIntents = [
   'retro',
   'merge',
   'spec',
+  'plan',
 ] as const;
 export type ConversationIntent = (typeof conversationIntents)[number];
 

@@ -10,6 +10,7 @@ import { throwFieldErrors } from './rules';
 import type {
   AddCommentInput,
   Comment,
+  CreateTicketBatchInput,
   Ticket,
   UpdateTicketInput,
 } from './tickets';
@@ -47,9 +48,9 @@ export type ProposeTriageInput = {
   state: TriageState;
   reasoning: string;
   acceptanceCriteria?: string[];
-  /** Refused until duplicate proposals are supported. */
+  /** The Ticket this one duplicates; refused with `splits`, or for itself. */
   duplicateOf?: number;
-  /** Refused until split proposals are supported. */
+  /** Tickets to split this one into; refused with `duplicateOf`, or for an Epic. */
   splits?: TriageSplit[];
   /** The Agent run making the proposal. */
   runId?: string;
@@ -80,9 +81,20 @@ export type TriageDeps = {
   getTicket: (number: number) => Ticket;
   updateTicket: (number: number, input: UpdateTicketInput) => Ticket;
   addComment: (number: number, input: AddCommentInput) => Comment;
+  createTicketBatch: (input: CreateTicketBatchInput) => Ticket[];
+  archiveTicket: (number: number) => Ticket;
   checkCriteria: (texts: readonly string[]) => string | undefined;
   transaction: <T>(run: () => T) => T;
 };
+
+const trimSplits = (splits: readonly TriageSplit[]): TriageSplit[] =>
+  splits.map((split) => ({
+    title: split.title.trim(),
+    description: (split.description ?? '').trim(),
+    acceptanceCriteria: (split.acceptanceCriteria ?? [])
+      .map((text) => text.trim())
+      .filter((text) => text !== ''),
+  }));
 
 const isOneOf = <T extends string>(list: readonly T[], value: unknown) =>
   list.includes(value as T);
@@ -145,11 +157,63 @@ export function createTriageProposals(
     }
   }
 
+  /** Why `input`'s duplicate is refused, or undefined. */
+  function checkDuplicate(number: number, input: ProposeTriageInput) {
+    const target = input?.duplicateOf;
+    if (target === undefined) {
+      return undefined;
+    }
+    if (input.splits !== undefined) {
+      return 'Propose a duplicate or splits, not both.';
+    }
+    if (target === number) {
+      return `T${number} cannot be a duplicate of itself.`;
+    }
+    try {
+      deps.getTicket(target);
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        return `There is no Ticket T${target} to be a duplicate of.`;
+      }
+      throw error;
+    }
+    return undefined;
+  }
+
+  /** Why `input`'s splits are refused, or undefined. */
+  function checkSplits(number: number, input: ProposeTriageInput) {
+    const splits = input?.splits;
+    if (splits === undefined) {
+      return undefined;
+    }
+    if (input.duplicateOf !== undefined) {
+      return 'Propose a duplicate or splits, not both.';
+    }
+    if (splits.length === 0) {
+      return 'Give at least one split, or leave splits out.';
+    }
+    if (deps.getTicket(number).type === 'Epic') {
+      return `T${number} is an Epic; an Epic cannot be split.`;
+    }
+    for (const [position, split] of splits.entries()) {
+      if (String(split?.title ?? '').trim() === '') {
+        return `Split ${position + 1} needs a title.`;
+      }
+      const problem = deps.checkCriteria(
+        (split.acceptanceCriteria ?? []).map((text) => text.trim()),
+      );
+      if (problem) {
+        return `Split ${position + 1}: ${problem}`;
+      }
+    }
+    return undefined;
+  }
+
   return {
     /**
      * Records a pending triage proposal on Todo Ticket `number`, superseding
      * a pending one, and posts the reasoning as a comment starting with the
-     * AI disclaimer. Duplicate and split proposals are refused for now.
+     * AI disclaimer. It may name a duplicate or propose splits, not both.
      */
     proposeTriage(number: number, input: ProposeTriageInput): TriageProposal {
       const reasoning = String(input?.reasoning ?? '').trim();
@@ -163,14 +227,8 @@ export function createTriageProposals(
           : `Choose a state: ${triageStates.join(', ')}.`,
         reasoning: reasoning === '' ? 'Enter the reasoning.' : undefined,
         acceptanceCriteria: criteria && deps.checkCriteria(criteria),
-        duplicateOf:
-          input?.duplicateOf === undefined
-            ? undefined
-            : 'Duplicate proposals are not supported yet.',
-        splits:
-          input?.splits === undefined
-            ? undefined
-            : 'Split proposals are not supported yet.',
+        duplicateOf: checkDuplicate(number, input),
+        splits: checkSplits(number, input),
       });
       const made = deps.transaction(() => {
         checkTodo(number);
@@ -193,6 +251,8 @@ export function createTriageProposals(
             reasoning,
             acceptanceCriteria:
               criteria && criteria.length > 0 ? criteria : null,
+            duplicateOf: input.duplicateOf ?? null,
+            splits: input.splits ? trimSplits(input.splits) : null,
             createdAt: new Date(),
           })
           .returning(columns)
@@ -217,7 +277,11 @@ export function createTriageProposals(
     /**
      * Applies pending proposal `id` all or nothing: the category and state
      * (overridable) as labels, the old state label swapped out, and the
-     * proposed criteria replacing the Ticket's when it has some.
+     * proposed criteria replacing the Ticket's when it has some. A duplicate
+     * comments "Duplicate of T#", sets `wontfix` and archives the Ticket;
+     * splits are filed with the Ticket as Origin, in its Cycle, with the
+     * approved category and state, then "Split into T…" is commented and the
+     * Ticket archived.
      */
     approveTriage(id: number, input: ApproveTriageInput = {}): TriageProposal {
       throwFieldErrors({
@@ -236,9 +300,14 @@ export function createTriageProposals(
         const category = input.category ?? found.category;
         const state = input.state ?? found.state;
         const ticket = deps.getTicket(found.ticketNumber);
+        const isDuplicate = found.duplicateOf !== null;
         deps.updateTicket(found.ticketNumber, {
-          ...labelChanges(ticket.labels, category, state),
-          ...(found.acceptanceCriteria
+          ...labelChanges(
+            ticket.labels,
+            category,
+            isDuplicate ? wontfix : state,
+          ),
+          ...(found.acceptanceCriteria && !isDuplicate && !found.splits
             ? {
                 acceptanceCriteria: found.acceptanceCriteria.map((text) => ({
                   text,
@@ -246,6 +315,32 @@ export function createTriageProposals(
               }
             : {}),
         });
+        if (found.duplicateOf !== null) {
+          deps.addComment(found.ticketNumber, {
+            body: `Duplicate of T${found.duplicateOf}`,
+            author: 'user',
+          });
+          deps.archiveTicket(found.ticketNumber);
+        } else if (found.splits) {
+          const filed = deps.createTicketBatch({
+            projectId: ticket.projectId,
+            originNumber: found.ticketNumber,
+            ...(ticket.cycle ? { cycleId: ticket.cycle.id } : {}),
+            tickets: found.splits.map((split) => ({
+              title: split.title,
+              description: split.description,
+              labels: [category, state],
+              acceptanceCriteria: split.acceptanceCriteria.map((text) => ({
+                text,
+              })),
+            })),
+          });
+          deps.addComment(found.ticketNumber, {
+            body: `Split into ${filed.map(({ number }) => `T${number}`).join(', ')}`,
+            author: 'user',
+          });
+          deps.archiveTicket(found.ticketNumber);
+        }
         db.update(triageProposals)
           .set({ status: 'approved', decidedAt: new Date() })
           .where(eq(triageProposals.id, id))

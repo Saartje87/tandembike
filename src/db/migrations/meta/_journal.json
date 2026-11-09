@@ -334,8 +334,15 @@
     {
       "idx": 47,
       "version": "6",
-      "when": 1794246713501,
-      "tag": "0047_auto_triage",
+      "when": 1794246701998,
+      "tag": "0047_plan_command",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1794247024511,
+      "tag": "0048_auto_triage",
       "breakpoints": true
     }
   ]

@@ -16,12 +16,14 @@ import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { modeColors } from '../../app/lib/mode-colors';
+import { ticketByNumberPath } from '../../app/lib/paths';
 import { approveTriage, rejectTriage } from '../../app/tickets/actions';
 import {
   triageCategories,
   triageStates,
 } from '../../tickets/triage-proposal-state';
 import type { TriageProposal as Proposal } from '../../tickets/triage-proposals';
+import { AppLink } from '../app-link/app-link';
 import { DateTime } from '../date-time/date-time';
 import { Markdown } from '../markdown/markdown';
 
@@ -121,6 +123,45 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
               </Stack>
             </Inline>
             <Markdown headingLevel={4}>{proposal.reasoning}</Markdown>
+            {proposal.duplicateOf !== null && (
+              <Text>
+                Duplicate of{' '}
+                <AppLink href={ticketByNumberPath(proposal.duplicateOf)}>
+                  T{proposal.duplicateOf}
+                </AppLink>
+                . Approving comments, labels it wontfix and archives it.
+              </Text>
+            )}
+            {proposal.splits && (
+              <Stack gap={2}>
+                <Text fontSize="small" color="muted">
+                  Proposed splits (filed in this Ticket's Cycle, then this
+                  Ticket is archived)
+                </Text>
+                <Box asChild>
+                  <ol>
+                    {proposal.splits.map((split) => (
+                      <li key={split.title}>
+                        <Stack gap={1}>
+                          <Text fontWeight="bold">{split.title}</Text>
+                          {split.acceptanceCriteria.length > 0 && (
+                            <Box asChild>
+                              <ul>
+                                {split.acceptanceCriteria.map((text) => (
+                                  <li key={text}>
+                                    <Text>{text}</Text>
+                                  </li>
+                                ))}
+                              </ul>
+                            </Box>
+                          )}
+                        </Stack>
+                      </li>
+                    ))}
+                  </ol>
+                </Box>
+              </Stack>
+            )}
             {proposal.acceptanceCriteria && (
               <Stack gap={1}>
                 <Text fontSize="small" color="muted">

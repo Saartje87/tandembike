@@ -753,13 +753,13 @@
           }
         },
         "duplicateOf": {
-          "description": "Not supported yet: refused.",
+          "description": "The Ticket this one duplicates. On approval it is commented \"Duplicate of T#\", labelled wontfix and archived. Not with splits, and not itself.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
         },
         "splits": {
-          "description": "Not supported yet: refused.",
+          "description": "Tickets to split this one into. On approval they are filed with this Ticket as Origin, in its Cycle, with the approved category and state, and this Ticket is archived. Not with duplicateOf, and not for an Epic.",
           "type": "array",
           "items": {
             "type": "object",
