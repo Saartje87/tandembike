@@ -120,6 +120,10 @@ export type StageRunStats = {
   meanDurationMs: number;
 };
 
+/** How many Start Conversations the Estimate reads, and how few it needs. */
+const startEstimateSample = 20;
+const startEstimateMinimum = 5;
+
 const runStatsWindowMs = 30 * 24 * 60 * 60 * 1000;
 
 /** The `/command` a message starts with, such as `/implement`; null for none. */
@@ -1438,6 +1442,53 @@ export function createConversations({
         meanCostUsd: stats.totalCostUsd / stats.runs,
         meanDurationMs: stats.meanDurationMs / stats.runs,
       }));
+    },
+
+    /**
+     * The median cost of the Project's last 20 Start Conversations, by when
+     * their latest run ended, that reached `completed` or `pr_open`, however
+     * old; each Conversation's cost sums its runs. Null with fewer than 5
+     * such Conversations. Only this module reads Run outcomes, so the
+     * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
+     */
+    startCostEstimate(projectId: number): number | null {
+      const rows = db
+        .select()
+        .from(runOutcomes)
+        .where(
+          and(
+            eq(runOutcomes.projectId, projectId),
+            eq(runOutcomes.stage, 'start'),
+          ),
+        )
+        .orderBy(runOutcomes.id)
+        .all();
+      const byConversation = new Map<
+        number,
+        { costUsd: number; endedAt: number; result: RunResult }
+      >();
+      for (const row of rows) {
+        byConversation.set(row.conversationId, {
+          costUsd:
+            (byConversation.get(row.conversationId)?.costUsd ?? 0) +
+            row.costUsd,
+          endedAt: row.endedAt.getTime(),
+          result: row.result,
+        });
+      }
+      const costs = [...byConversation.values()]
+        .filter(({ result }) => result === 'completed' || result === 'pr_open')
+        .sort((a, b) => b.endedAt - a.endedAt)
+        .slice(0, startEstimateSample)
+        .map(({ costUsd }) => costUsd)
+        .sort((a, b) => a - b);
+      if (costs.length < startEstimateMinimum) {
+        return null;
+      }
+      const middle = Math.floor(costs.length / 2);
+      return costs.length % 2 === 1
+        ? costs[middle]
+        : (costs[middle - 1] + costs[middle]) / 2;
     },
 
     /** Conversations of a Project and/or Ticket, newest first. */

@@ -21,6 +21,11 @@ export type CycleHeaderProps = {
   cycle: Cycle;
   /** The Project's Active Cycle, which starting a Prepared one archives. */
   activeCycle?: Cycle;
+  /**
+   * A Prepared Cycle's Estimate (GLOSSARY: Estimate): the per-Ticket cost, or
+   * null without enough Run outcomes, and the units of work planned.
+   */
+  estimate?: { costUsd: number | null; units: number };
 };
 
 type CycleTitleProps = {
@@ -55,7 +60,11 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
  * Discarding or archiving goes back to the Backlog; an Archived Cycle is
  * read-only.
  */
-export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
+export const CycleHeader: FC<CycleHeaderProps> = ({
+  cycle,
+  activeCycle,
+  estimate,
+}) => {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -162,6 +171,13 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
           </Button>
         )}
       </Inline>
+      {cycle.state === 'Prepared' && estimate && (
+        <Text fontSize="small" color="muted">
+          {estimate.costUsd === null
+            ? 'Not enough runs to estimate'
+            : `Estimated ≈ $${(estimate.costUsd * estimate.units).toFixed(2)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
+        </Text>
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );
