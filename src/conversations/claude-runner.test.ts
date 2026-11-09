@@ -656,6 +656,34 @@ describe('The Claude runner', () => {
       });
     });
 
+    it.each([
+      [
+        'ask_rank',
+        { prompt: 'Order', items: ['A', 'B'] },
+        { kind: 'rank', prompt: 'Order', items: ['A', 'B'] },
+      ],
+      [
+        'ask_scale',
+        { prompt: 'How much?', items: ['A'], min: 1, max: 5, maxLabel: 'Lots' },
+        {
+          kind: 'scale',
+          prompt: 'How much?',
+          items: ['A'],
+          min: 1,
+          max: 5,
+          maxLabel: 'Lots',
+        },
+      ],
+    ])('serves %s, asking its Widget', async (name, input, widget) => {
+      const askWidget = vi.fn(async () => ({ skipped: true }));
+      const tool = startWith(askWidget)(name);
+
+      const result = await tool.handler(input);
+
+      expect(askWidget).toHaveBeenCalledWith(widget);
+      expect(result.content[0].text).toBe('{"skipped":true}');
+    });
+
     it('reports no tool line for a Widget tool call', () => {
       expect(
         eventsOf({

@@ -1,9 +1,16 @@
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { answerConversationWidget } from '../../app/conversations/actions';
-import type { ChoiceWidget, WidgetEntry } from '../../conversations/widget';
+import type {
+  ChoiceWidget,
+  RankWidget,
+  ScaleWidget,
+  Widget,
+  WidgetEntry,
+} from '../../conversations/widget';
+import { keyboardDrag, stubDragAndDrop } from '../../test/drag-and-drop';
 import { renderWithTheme } from '../../test/render';
 import { ConversationWidget } from './conversation-widget';
 
@@ -22,6 +29,8 @@ const choice: ChoiceWidget = {
   multiSelect: false,
   recommended: ['Beta'],
 };
+
+stubDragAndDrop();
 
 const renderWidget = (entry: Partial<WidgetEntry> = {}) =>
   renderWithTheme(
@@ -123,7 +132,127 @@ describe('A choice Widget', () => {
   });
 });
 
+const rank: RankWidget = {
+  kind: 'rank',
+  prompt: 'Order these',
+  items: ['One', 'Two', 'Three'],
+};
+
+const scale: ScaleWidget = {
+  kind: 'scale',
+  prompt: 'How much?',
+  items: ['Speed', 'Cost'],
+  min: 1,
+  max: 5,
+  minLabel: 'None',
+  maxLabel: 'Lots',
+};
+
+const renderKind = (widget: Widget) => renderWidget({ widget });
+
+const orderShown = () =>
+  within(screen.getByRole('list', { name: 'Order' }))
+    .getAllByRole('listitem')
+    .map((item) => item.textContent?.replace(/^\d+\./, ''));
+
+describe('A rank Widget', () => {
+  it('starts in the given order and sends it reordered by move buttons', async () => {
+    renderKind(rank);
+    expect(orderShown()).toEqual(['One', 'Two', 'Three']);
+    expect(screen.getByRole('button', { name: 'Move One up' })).toBeDisabled();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Move Three up' }),
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Move One down' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    expect(sent()?.answer).toEqual({ order: ['Three', 'One', 'Two'] });
+  });
+
+  it('reorders by keyboard drag', async () => {
+    renderKind(rank);
+    const items = within(
+      screen.getByRole('list', { name: 'Order' }),
+    ).getAllByRole('listitem');
+    const rects = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        const index = items.indexOf(this as HTMLLIElement);
+        return index < 0
+          ? new DOMRect(0, 0, 800, 700)
+          : new DOMRect(0, index * 50, 300, 40);
+      });
+    onTestFinished(() => rects.mockRestore());
+
+    await keyboardDrag(
+      screen.getByRole('button', { name: 'Drag One' }),
+      '{ArrowDown}',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    expect(sent()?.answer).toEqual({ order: ['Two', 'One', 'Three'] });
+  });
+
+  it('offers Skip', async () => {
+    renderKind(rank);
+    await userEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(sent()?.answer).toEqual({ skipped: true });
+  });
+});
+
+describe('A scale Widget', () => {
+  it('shows a labelled slider per item with the min and max labels, and sends the values set by keyboard', async () => {
+    renderKind(scale);
+    expect(screen.getByText('1: None')).toBeInTheDocument();
+    expect(screen.getByText('5: Lots')).toBeInTheDocument();
+
+    screen.getByRole('slider', { name: 'Speed' }).focus();
+    await userEvent.keyboard('{End}');
+    screen.getByRole('slider', { name: 'Cost' }).focus();
+    await userEvent.keyboard('{ArrowLeft}');
+    await userEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    expect(sent()?.answer).toEqual({
+      values: [
+        { item: 'Speed', value: 5 },
+        { item: 'Cost', value: 2 },
+      ],
+    });
+  });
+
+  it('offers Other…', async () => {
+    renderKind(scale);
+    await userEvent.click(screen.getByRole('button', { name: 'Other…' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Other answer to How much?' }),
+      'Depends',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+    expect(sent()?.answer).toEqual({ other: 'Depends' });
+  });
+});
+
 describe('A settled Widget', () => {
+  it('shows a rank and a scale answer read-only', () => {
+    const { unmount } = renderWidget({
+      widget: rank,
+      answer: { order: ['Two', 'One', 'Three'] },
+    });
+    expect(screen.getByText('1. Two')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+    unmount();
+
+    renderWidget({
+      widget: scale,
+      answer: { values: [{ item: 'Speed', value: 4 }] },
+    });
+    expect(screen.getByText('Speed: 4 of 5')).toBeInTheDocument();
+    expect(screen.queryByRole('slider')).toBeNull();
+  });
+
   it.each([
     [{ selected: ['Alpha', 'Gamma'] }, ['Alpha', 'Gamma']],
     [{ other: 'Delta' }, ['Other: Delta']],

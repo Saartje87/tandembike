@@ -65,6 +65,40 @@ export function createWidgetServer(
             }),
           ),
       ),
+      tool(
+        'ask_rank',
+        `Ask the User to drag items into order in the chat, most important first, and wait for the answer. Returns { "order": [items] }. ${otherAndSkip}`,
+        {
+          prompt: z.string().min(1).describe('The question, in one line.'),
+          items: z.array(z.string().min(1)).min(2).max(12),
+        },
+        async ({ prompt, items }) =>
+          answerResult(await askWidget({ kind: 'rank', prompt, items })),
+      ),
+      tool(
+        'ask_scale',
+        `Ask the User to set a slider per item between min and max in the chat, to say how much rather than which, and wait for the answer. Returns { "values": [{ "item", "value" }] }. ${otherAndSkip}`,
+        {
+          prompt: z.string().min(1).describe('The question, in one line.'),
+          items: z.array(z.string().min(1)).min(1).max(12),
+          min: z.number().int(),
+          max: z.number().int(),
+          minLabel: z.string().optional().describe('What min means.'),
+          maxLabel: z.string().optional().describe('What max means.'),
+        },
+        async ({ prompt, items, min, max, minLabel, maxLabel }) =>
+          answerResult(
+            await askWidget({
+              kind: 'scale',
+              prompt,
+              items,
+              min,
+              max,
+              ...(minLabel === undefined ? {} : { minLabel }),
+              ...(maxLabel === undefined ? {} : { maxLabel }),
+            }),
+          ),
+      ),
     ],
   });
 }

@@ -1370,6 +1370,34 @@ describe('Widgets of the Agent', () => {
     });
   });
 
+  it.each([
+    [
+      { kind: 'rank' as const, prompt: 'Order', items: ['A', 'B'] },
+      { order: ['B', 'A'] },
+    ],
+    [
+      {
+        kind: 'scale' as const,
+        prompt: 'How much?',
+        items: ['A'],
+        min: 0,
+        max: 10,
+      },
+      { values: [{ item: 'A', value: 7 }] },
+    ],
+  ])(
+    'answers a %s Widget with its own kind of answer',
+    async (asked, given) => {
+      const { conversations, conversation, run } = await started();
+      const pending = run.options.askWidget(asked);
+      const entry = lastEntry(conversations, conversation.id);
+
+      await conversations.answerWidget(conversation.id, entry?.id ?? 0, given);
+
+      expect(await pending).toEqual(given);
+    },
+  );
+
   it('refuses an answer of the wrong kind and keeps waiting', async () => {
     const { conversations, conversation, run } = await started();
     void run.options.askWidget(widget);

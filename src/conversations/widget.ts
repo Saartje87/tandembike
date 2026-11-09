@@ -19,7 +19,21 @@ export type ChoiceWidget = {
   recommended?: string[];
 };
 
-export type Widget = ChoiceWidget;
+/** Items the User drags into order, most important first. */
+export type RankWidget = { kind: 'rank'; prompt: string; items: string[] };
+
+/** A slider per item from `min` to `max`, its ends optionally labelled. */
+export type ScaleWidget = {
+  kind: 'scale';
+  prompt: string;
+  items: string[];
+  min: number;
+  max: number;
+  minLabel?: string;
+  maxLabel?: string;
+};
+
+export type Widget = ChoiceWidget | RankWidget | ScaleWidget;
 export type WidgetKind = Widget['kind'];
 
 /** What the User gave besides the Widget's own answer: free text, a Skip, or nothing because the run ended. */
@@ -28,10 +42,14 @@ export type SkippedAnswer = { skipped: true };
 export type ExpiredAnswer = { expired: true };
 
 export type ChoiceAnswer = { selected: string[] };
+export type RankAnswer = { order: string[] };
+export type ScaleAnswer = { values: { item: string; value: number }[] };
 
 /** A Widget's answer as the Agent gets it back. */
 export type WidgetAnswer =
   | ChoiceAnswer
+  | RankAnswer
+  | ScaleAnswer
   | OtherAnswer
   | SkippedAnswer
   | ExpiredAnswer;
@@ -80,6 +98,51 @@ const checkChoice = (
   return { selected: unique };
 };
 
+const checkRank = (widget: RankWidget, order: string[]): RankAnswer => {
+  const sorted = (items: string[]) => [...items].sort().join('\n');
+  if (
+    order.length !== widget.items.length ||
+    sorted(order) !== sorted(widget.items)
+  ) {
+    throw new ValidationError({ order: 'Put every item in order once.' });
+  }
+  return { order };
+};
+
+const checkScale = (widget: ScaleWidget, values: unknown[]): ScaleAnswer => {
+  const byItem = new Map<string, number>();
+  for (const entry of values) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.item !== 'string' ||
+      typeof entry.value !== 'number' ||
+      !Number.isFinite(entry.value)
+    ) {
+      throw new ValidationError({ values: 'Give each item a number.' });
+    }
+    if (!widget.items.includes(entry.item)) {
+      throw new ValidationError({
+        values: `"${entry.item}" is not one of the items.`,
+      });
+    }
+    if (entry.value < widget.min || entry.value > widget.max) {
+      throw new ValidationError({
+        values: `Each value is from ${widget.min} to ${widget.max}.`,
+      });
+    }
+    byItem.set(entry.item, entry.value);
+  }
+  if (byItem.size !== widget.items.length) {
+    throw new ValidationError({ values: 'Give every item a value.' });
+  }
+  return {
+    values: widget.items.map((item) => ({
+      item,
+      value: byItem.get(item) as number,
+    })),
+  };
+};
+
 /**
  * The User's answer to `widget`, checked and tidied: the Widget's own kind of
  * answer, Other with its text, or Skip. Refused with a ValidationError when it
@@ -110,6 +173,19 @@ export function checkWidgetAnswer(
       }
       return checkChoice(widget, selected);
     }
+    case 'rank': {
+      const order = stringsOf(answer.order);
+      if (order === null) {
+        break;
+      }
+      return checkRank(widget, order);
+    }
+    case 'scale': {
+      if (!Array.isArray(answer.values)) {
+        break;
+      }
+      return checkScale(widget, answer.values);
+    }
   }
   throw unfit(widget.kind);
 }
@@ -129,6 +205,13 @@ export function tidyWidget(widget: Widget): Widget {
         ...widget,
         recommended: widget.multiSelect ? recommended : recommended.slice(0, 1),
       };
+    }
+    case 'rank':
+      return { ...widget, items: [...new Set(widget.items)] };
+    case 'scale': {
+      const min = Math.min(widget.min, widget.max);
+      const max = Math.max(widget.min, widget.max);
+      return { ...widget, items: [...new Set(widget.items)], min, max };
     }
   }
 }

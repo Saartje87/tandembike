@@ -80,3 +80,88 @@ describe('Tidying a Widget', () => {
     ).toMatchObject({ recommended: ['B', 'A'] });
   });
 });
+
+describe('Checking a rank answer', () => {
+  const rank: Widget = {
+    kind: 'rank',
+    prompt: 'Order these',
+    items: ['A', 'B', 'C'],
+  };
+
+  it('takes an order of every item once', () => {
+    expect(checkWidgetAnswer(rank, { order: ['C', 'A', 'B'] })).toEqual({
+      order: ['C', 'A', 'B'],
+    });
+  });
+
+  it('refuses an order missing, repeating or adding an item', () => {
+    for (const order of [
+      ['A', 'B'],
+      ['A', 'A', 'B'],
+      ['A', 'B', 'C', 'D'],
+    ]) {
+      expect(
+        errorFrom(() => checkWidgetAnswer(rank, { order })),
+      ).toBeInstanceOf(ValidationError);
+    }
+  });
+
+  it('refuses a choice answer', () => {
+    expect(
+      (
+        errorFrom(() =>
+          checkWidgetAnswer(rank, { selected: ['A'] }),
+        ) as ValidationError
+      ).fieldErrors,
+    ).toEqual({ answer: 'This answer does not fit a rank Widget.' });
+  });
+});
+
+describe('Checking a scale answer', () => {
+  const scale: Widget = {
+    kind: 'scale',
+    prompt: 'How much?',
+    items: ['A', 'B'],
+    min: 1,
+    max: 5,
+  };
+
+  it('takes a value per item within min and max, in the order of the items', () => {
+    expect(
+      checkWidgetAnswer(scale, {
+        values: [
+          { item: 'B', value: 5 },
+          { item: 'A', value: 1 },
+        ],
+      }),
+    ).toEqual({
+      values: [
+        { item: 'A', value: 1 },
+        { item: 'B', value: 5 },
+      ],
+    });
+  });
+
+  it('refuses a value out of range, a missing item, or an unknown one', () => {
+    for (const values of [
+      [
+        { item: 'A', value: 0 },
+        { item: 'B', value: 3 },
+      ],
+      [{ item: 'A', value: 3 }],
+      [
+        { item: 'A', value: 3 },
+        { item: 'B', value: 3 },
+        { item: 'C', value: 3 },
+      ],
+      [
+        { item: 'A', value: 'high' },
+        { item: 'B', value: 3 },
+      ],
+    ]) {
+      expect(
+        errorFrom(() => checkWidgetAnswer(scale, { values })),
+      ).toBeInstanceOf(ValidationError);
+    }
+  });
+});

@@ -10,6 +10,8 @@ import type {
 } from '../../conversations/widget';
 import { ChoiceWidget } from '../choice-widget/choice-widget';
 import { useKeptConversation } from '../conversation-dialog-provider/kept-conversations';
+import { RankWidget } from '../rank-widget/rank-widget';
+import { ScaleWidget } from '../scale-widget/scale-widget';
 
 export type ConversationWidgetProps = {
   conversationId: number;
@@ -28,10 +30,18 @@ const answerLines = (widget: Widget, answer: WidgetAnswer): string[] => {
   if ('other' in answer) {
     return [`Other: ${answer.other}`];
   }
-  switch (widget.kind) {
-    case 'choice':
-      return 'selected' in answer ? answer.selected : [];
+  if ('selected' in answer) {
+    return answer.selected;
   }
+  if ('order' in answer) {
+    return answer.order.map((item, index) => `${index + 1}. ${item}`);
+  }
+  if ('values' in answer && widget.kind === 'scale') {
+    return answer.values.map(
+      ({ item, value }) => `${item}: ${value} of ${widget.max}`,
+    );
+  }
+  return [];
 };
 
 /**
@@ -82,6 +92,22 @@ export const ConversationWidget: FC<ConversationWidgetProps> = ({
     case 'choice':
       return (
         <ChoiceWidget
+          conversationId={conversationId}
+          entryId={entryId}
+          widget={widget}
+        />
+      );
+    case 'rank':
+      return (
+        <RankWidget
+          conversationId={conversationId}
+          entryId={entryId}
+          widget={widget}
+        />
+      );
+    case 'scale':
+      return (
+        <ScaleWidget
           conversationId={conversationId}
           entryId={entryId}
           widget={widget}
