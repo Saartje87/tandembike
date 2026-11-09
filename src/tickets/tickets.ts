@@ -3998,7 +3998,7 @@ const changedSinceRule =
  * An ISO 8601 date-time with a time zone (`Z` or an offset), as a Date, or
  * `null` when `text` is not one or names no real moment, such as 30 February.
  */
-function parseTimestamp(text: string): Date | null {
+export function parseTimestamp(text: string): Date | null {
   const trimmed = text.trim();
   const match =
     /^\d{4}-(\d{2})-(\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.exec(

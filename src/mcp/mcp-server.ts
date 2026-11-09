@@ -1,9 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 
+import type { ConversationReader } from '../conversations/conversation-reader';
 import { isAllowedHost } from '../http/allowed-host';
 import type { Tickets } from '../tickets/tickets';
 import { registerAttachmentTools } from './attachment-tools';
+import { registerConversationTools } from './conversation-tools';
 import { registerProjectTools } from './project-tools';
 import { registerTicketTools } from './ticket-tools';
 import { type ToolContext, toolRegistrar } from './tool-shared';
@@ -26,11 +28,11 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Share progress and findings with add_note, not by editing the description. End a Triage run with propose_triage. get_ticket returns the comments; include: ["activity"] adds what changed, when and by whom.
 - Create new work with file_tickets: one or many Tickets in one call, with an Epic and its children (type: "Epic" plus epicPosition), Blockers between them by position (blockedByPositions), originPosition or originNumber when you split a Ticket into others, labels, acceptanceCriteria and a Cycle.
 - Blockers are native: add them with update_ticket (addBlockers), never in the description. An ordered checklist belongs in acceptanceCriteria, never as a checklist in the description or a comment; check each off with check_criterion as you verify it.
-- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Call start_work on the Epic once: it covers its children and returns them with their Statuses and Blockers and the next one to work; then start_work each child in Blocker order.
+- An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. Call start_work on the Epic once: it covers its children and returns the next one to work; then start_work each child in Blocker order.
 - A Cycle is a goal-led plan of Tickets in one Project: Prepared, Active (one per Project at most) or Archived; get_project lists them with their Tickets. create_cycle proposes a Prepared Cycle with Tickets; update_ticket (cycleId) plans, moves or unplans a Ticket. withChildren: true takes an Epic's children too.
 - find_tickets searches by text, Status, labels, type, Epic, Origin, External references, Cycle, Blocked, Claimed and changed-since. update_ticket changes one or several Tickets: fields, labels, Epic, Blockers, Cycle, archive and restore. Reuse the labels get_project lists.
 - Attach files with attach, not comments; read_attachment reads them.
-- Work with Tickets through these tools, not direct database access. Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
+- Work with Tickets through these tools, not direct database access; get_conversations reads run transcripts. Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a T, like T42.
 - Your client keeps the tools and these instructions from when it connected: when the app's MCP tools change, ask the User to start a new session, as reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket is finished; follow them where they say more.`;
@@ -46,13 +48,23 @@ export type ToolCallHook = (
   input: Record<string, unknown>,
 ) => void;
 
-/** An MCP server whose tools call the Tickets module `tickets` only. */
+/** What the app gives the MCP server besides the Tickets module. */
+export type McpServerOptions = {
+  onToolCall?: ToolCallHook;
+  /** Read-only Conversations for get_conversations; without it that tool refuses. */
+  conversations?: ConversationReader;
+};
+
+/**
+ * An MCP server whose tools call the Tickets module `tickets`, and read
+ * Conversations through `conversations` only.
+ */
 export function createMcpServer(
   tickets: Tickets,
   origin = 'http://localhost:4747',
   cwd?: string,
   runId?: string,
-  onToolCall?: ToolCallHook,
+  { onToolCall, conversations }: McpServerOptions = {},
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -76,6 +88,7 @@ export function createMcpServer(
   registerWorkTools(context);
   registerProjectTools(context);
   registerAttachmentTools(context);
+  registerConversationTools(context, conversations);
 
   return server;
 }
@@ -90,7 +103,7 @@ export function createMcpServer(
 export async function handleMcpRequest(
   request: Request,
   tickets: Tickets,
-  onToolCall?: ToolCallHook,
+  options: McpServerOptions = {},
 ): Promise<Response> {
   const host = request.headers.get('host') ?? new URL(request.url).host;
   if (!isAllowedHost(host)) {
@@ -110,7 +123,7 @@ export async function handleMcpRequest(
     new URL(request.url).origin,
     cwd,
     runId,
-    onToolCall,
+    options,
   );
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

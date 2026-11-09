@@ -11,6 +11,7 @@ Fifteen tools replace the 42, in one change, with no compatibility layer. Each d
 - **Work:** `next_work` (the top Eligible-shaped item of the Active Cycle, or why there is none), `start_work` (claim, Todo to In progress, and the whole bundle: Ticket, comments, Blockers, Epic, Cycle, Check command), `add_note`, `check_criterion`, `open_pr` (`handOff: true` also releases the Claim), `finish_work` (the completion rule), `abandon_work` (comment, release, back to Todo unless a PR exists).
 - **Tickets:** `file_tickets`, `find_tickets`, `get_ticket` (with comments; `include: ["activity"]`), `update_ticket` (one or several numbers; every field, Blockers, Epic, Cycle and archive state), `attach`, `read_attachment`.
 - **Project:** `get_project` (Cycles and labels in use; `allProjects`) and `create_cycle` (a Prepared Cycle with Tickets planned in).
+- **Conversations** (added by T1265): `get_conversations`, read-only, lists a Ticket's Conversations and pages through one transcript, newest first, with text trimmed unless `full`. It reads them through `createConversationReader`, not the live Conversations module, and shows no cost or Run outcome; starting, replying to and stopping a run stay the User's.
 
 Every refusal keeps today's message: the rules live in the Tickets module and the tools only route to them.
 

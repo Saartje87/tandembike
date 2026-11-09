@@ -81,14 +81,16 @@ describe('MCP server and Project agent settings', () => {
 });
 
 describe('MCP server and Conversations', () => {
-  it('offers no tool to start, reply to or stop an Agent run', async () => {
+  it('offers no tool to start, reply to or stop an Agent run, only a read-only one to read them', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
 
-    expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
-      /conversation|agent_run|reply|stop|send/,
+    const touching = tools.filter((tool) =>
+      /conversation|agent_run|reply|stop|send/.test(tool.name),
     );
+    expect(touching.map((tool) => tool.name)).toEqual(['get_conversations']);
+    expect(touching[0].annotations).toMatchObject({ readOnlyHint: true });
     await client.close();
   });
 });
@@ -133,6 +135,7 @@ describe('MCP server', () => {
       'file_tickets',
       'find_tickets',
       'finish_work',
+      'get_conversations',
       'get_project',
       'get_ticket',
       'next_work',

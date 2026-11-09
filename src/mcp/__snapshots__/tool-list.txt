@@ -567,6 +567,63 @@
     }
   },
   {
+    "name": "get_conversations",
+    "title": "Get Conversations",
+    "description": "Read a Ticket's Conversations, the Agent runs Tandembike started about it. Without conversationId, returns { conversations }, newest first, each with id, intent (start, triage, ask, merge, spec…), state (running, waiting, idle, interrupted or stopped), startedBy (user, autopilot or terminal), entryCount, createdAt and updatedAt. With conversationId, returns { conversation, entries, nextBefore }: a page of its transcript, newest first, each entry with id, role (user, autopilot, agent, tool, error, permission, question, created or session), toolName, text, permission, question and createdAt, leaving out fields that do not apply. text is cut to 500 characters, with truncated: true, unless full is set, which also adds each tool entry's toolInput. Page back by passing nextBefore as before; it is null on the last page. Read-only.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "conversationId": {
+          "description": "The Conversation whose entries to read, one of this Ticket's. Leave out to list the Conversations.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "before": {
+          "description": "Only entries older than this entry id: the previous page’s nextBefore.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "since": {
+          "description": "Only entries written at or after this ISO 8601 date-time with a time zone, such as 2026-11-09T10:00:00Z.",
+          "type": "string"
+        },
+        "until": {
+          "description": "Only entries written at or before this ISO 8601 date-time.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "The most entries to return, at most 200. Defaults to 50.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "full": {
+          "description": "true returns each entry's whole text and a tool entry's input. Defaults to false: transcripts can be large.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "number"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "get_project",
     "title": "Get Project",
     "description": "Read a Project, by default the one of your working folder's repository, or the one given by projectId or projectName. Returns { id, name, archived, createdAt, activeCycleId, cycles, labels }: activeCycleId is the id of the Active Cycle, or null when none is; cycles lists every Cycle oldest first, each with id, title (its goal), state (Prepared, Active or Archived), ticketNumbers (the Tickets planned into it; an Archived Cycle's are its final membership), createdAt and archivedAt; labels are the labels in use on its Tickets, archived ones included, sorted: reuse one before inventing another. With allProjects: true it instead lists every Project, oldest first, each with id, name, archived and createdAt; give no projectId or projectName then. An archived Project is read-only until the User restores it.",
