@@ -559,4 +559,6 @@ export const machineSettings = sqliteTable('machine_settings', {
   id: integer('id').primaryKey(),
   /** The most working runs across all Projects at once. */
   maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
+  /** Autopilot's most spend per local day across all Projects; null is none. */
+  dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
 });

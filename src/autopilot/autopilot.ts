@@ -502,6 +502,32 @@ export function createAutopilot({
     }
   };
 
+  /** The timer that queues a pass when the paused day ends. */
+  let dayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Today's Machine ceiling budget (ADR 0041), or null with no ceiling. While
+   * it is paused the pass starts and resumes nothing anywhere; running runs
+   * finish. Notices read the pause state here.
+   */
+  const machineBudget = () => conversations.machineBudget(now());
+
+  /** Queues a pass at the next local midnight, once, when the day resets the spend. */
+  const wakeNextDay = () => {
+    if (dayTimer) {
+      return;
+    }
+    const next = new Date(now());
+    next.setHours(24, 0, 0, 0);
+    dayTimer = setTimeout(
+      () => {
+        dayTimer = null;
+        void evaluate();
+      },
+      Math.max(1, next.getTime() - now().getTime()),
+    );
+  };
+
   /**
    * One machine-wide pass (ADR 0041): the resumes of every Project first,
    * then the round-robin of builds and triages, all within the machine's free
@@ -509,6 +535,10 @@ export function createAutopilot({
    * step, so a run another step started is counted.
    */
   const runPass = async (startupResume: boolean) => {
+    if (machineBudget()?.paused) {
+      wakeNextDay();
+      return;
+    }
     const ids = projectIds();
     if (startupResume) {
       for (const id of ids) {
@@ -543,6 +573,12 @@ export function createAutopilot({
      */
     evaluate,
 
+    /**
+     * The Machine ceiling's budget now, or null with no ceiling set; `paused`
+     * is true at or over it. The one place that says so (ADR 0041).
+     */
+    machineBudget,
+
     /** Resolves once every queued pass has finished. */
     async idle(): Promise<void> {
       let seen: Promise<void>;
@@ -571,6 +607,10 @@ export function createAutopilot({
           clearTimeout(timer);
         }
         backoffs.clear();
+        if (dayTimer) {
+          clearTimeout(dayTimer);
+          dayTimer = null;
+        }
       };
     },
   };

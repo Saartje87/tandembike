@@ -1495,8 +1495,58 @@ export function createConversations({
     return (ended?.total ?? 0) + working;
   };
 
+  /**
+   * What Autopilot's runs have cost since `dayStart` across all Projects
+   * (ADR 0041): the Run outcomes of runs it started that ended then or later,
+   * plus the cost so far of its runs still working. An approved merge and the
+   * User's own runs are left out.
+   */
+  const autopilotSpendToday = (dayStart: Date): number => {
+    const ended = db
+      .select({
+        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+      })
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.startedByAutopilot, true),
+          ne(runOutcomes.stage, 'merge'),
+          gte(runOutcomes.endedAt, dayStart),
+        ),
+      )
+      .get();
+    let working = 0;
+    for (const id of live.keys()) {
+      const pending = live.get(id)?.pending;
+      if (pending?.startedByAutopilot && pending.stage !== 'merge') {
+        working += Math.max(0, get(id).costUsd - pending.costAtStart);
+      }
+    }
+    return (ended?.total ?? 0) + working;
+  };
+
   return {
     get,
+
+    autopilotSpendToday,
+
+    /**
+     * Today's Machine ceiling budget (ADR 0041), the one place that decides
+     * "paused": Autopilot's spend since the start of `now`'s local day against
+     * the machine's daily ceiling. Null while no ceiling is set.
+     */
+    machineBudget(
+      now: Date = new Date(),
+    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const ceilingUsd = tickets.getMachineSettings().dailySpendCeilingUsd;
+      if (ceilingUsd === null) {
+        return null;
+      }
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const spendUsd = autopilotSpendToday(dayStart);
+      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+    },
 
     /**
      * How many working runs hold a machine slot, across all Projects (ADR

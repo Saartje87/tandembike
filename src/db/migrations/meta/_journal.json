@@ -351,6 +351,13 @@
       "when": 1794250956267,
       "tag": "0049_machine_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1794251810480,
+      "tag": "0050_machine_ceiling",
+      "breakpoints": true
     }
   ]
 }
