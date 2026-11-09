@@ -166,7 +166,7 @@
   {
     "name": "create_cycle",
     "title": "Create Cycle",
-    "description": "Create a Prepared Cycle in a Project, by default the one of your working folder, or the one given by projectId or projectName, plan the Tickets in ticketNumbers into it, and return it with its ticketNumbers. It never starts the Cycle: the User does. Planning: any non-archived Ticket of the Project can be planned, Done ones included, and a Ticket is in at most one Cycle that is not Archived. All or nothing: when any Ticket cannot be planned, no Cycle is created and the error names each Ticket and why. A Project can have several Prepared Cycles.",
+    "description": "Create a Prepared Cycle in a Project, by default the one of your working folder, or the one given by projectId or projectName, plan the Tickets in ticketNumbers into it, and return it with its ticketNumbers. It never starts the Cycle: the User does. Planning: any non-archived Ticket of the Project can be planned, Done ones included, and a Ticket is in at most one Cycle that is not Archived. With withChildren: true, each Epic in ticketNumbers takes its unarchived children along, Done ones included, moving them out of any other Cycle that is not Archived; the result's childrenPlanned names the children it planned. All or nothing: when any Ticket cannot be planned, no Cycle is created, nothing moves, and the error names each Ticket and why. A Project can have several Prepared Cycles.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -193,6 +193,10 @@
             "maximum": 9007199254740991,
             "description": "The Ticket number, e.g. 42 for T42."
           }
+        },
+        "withChildren": {
+          "description": "Plan each Epic in ticketNumbers together with its unarchived children, Done ones included, moving them out of any other Cycle that is not Archived. Defaults to false: only the Tickets named are planned. Every Ticket in ticketNumbers must then be an Epic.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -866,7 +870,7 @@
   {
     "name": "update_ticket",
     "title": "Update Ticket",
-    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to \"In progress\" when you start and to \"Done\" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to \"In progress\" when you start and to \"Done\" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1027,6 +1031,10 @@
               "type": "null"
             }
           ]
+        },
+        "withChildren": {
+          "description": "With cycleId, take an Epic's unarchived children along, Done ones included: into a Cycle, every child joins it, leaving any other Cycle that is not Archived; with null, the children in the Epic's Cycle return to the Backlog with it. The result's childrenMoved names the children it moved. Refused on a Ticket that is not an Epic, and without cycleId. Defaults to false: only the Ticket moves.",
+          "type": "boolean"
         },
         "archived": {
           "description": "true archives the Ticket: it leaves the Board and find_tickets (unless includeArchived is set) but keeps everything; false restores it. Restoring an Epic also brings back the children archived with it. An Epic cannot be archived while any child is not archived. Agents cannot delete Tickets; the User can, from the app.",

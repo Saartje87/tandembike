@@ -426,3 +426,168 @@ describe('file_tickets feedback cap and dedupe', () => {
     await client.close();
   });
 });
+
+describe('update_ticket cycleId withChildren', () => {
+  const withEpic = async () => {
+    const s = await setup();
+    const epic = s.tickets.createTicket({
+      projectId: s.project.id,
+      title: 'Epic',
+      type: 'Epic',
+    });
+    const beta = s.tickets.createCycle({
+      projectId: s.project.id,
+      title: 'Beta',
+    });
+    const gamma = s.tickets.createCycle({
+      projectId: s.project.id,
+      title: 'Gamma',
+    });
+    const child = (cycleId?: number) =>
+      s.tickets.createTicket({
+        projectId: s.project.id,
+        title: 'Child',
+        epicNumber: epic.number,
+        cycleId,
+      });
+    return { ...s, epic, beta, gamma, child };
+  };
+
+  it('moves the Epic and its children into the Cycle, out of any other, and names them', async () => {
+    const { tickets, client, epic, beta, gamma, child } = await withEpic();
+    const a = child(gamma.id);
+    const b = child();
+    const archived = child();
+    tickets.archiveTicket(archived.number);
+
+    const result = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: {
+          number: epic.number,
+          cycleId: beta.id,
+          withChildren: true,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      number: epic.number,
+      childrenMoved: [a.number, b.number],
+    });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([
+      epic.number,
+      a.number,
+      b.number,
+    ]);
+    expect(tickets.getCycle(gamma.id).ticketNumbers).toEqual([]);
+    expect(tickets.getTicket(archived.number).cycle).toBeNull();
+    await client.close();
+  });
+
+  it('returns the Epic and its children in that Cycle to the Backlog with cycleId null', async () => {
+    const { tickets, client, epic, beta, gamma, child } = await withEpic();
+    tickets.planTicket({ cycleId: beta.id, number: epic.number });
+    const a = child(beta.id);
+    const elsewhere = child(gamma.id);
+
+    const result = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: epic.number, cycleId: null, withChildren: true },
+      }),
+    );
+
+    expect(result).toMatchObject({ childrenMoved: [a.number] });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+    expect(tickets.getCycle(gamma.id).ticketNumbers).toEqual([
+      elsewhere.number,
+    ]);
+    await client.close();
+  });
+
+  it('moves only the Epic without the flag', async () => {
+    const { tickets, client, epic, beta, child } = await withEpic();
+    const a = child();
+
+    const result = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: epic.number, cycleId: beta.id },
+      }),
+    );
+
+    expect(result).not.toHaveProperty('childrenMoved');
+    expect(tickets.getTicket(a.number).cycle).toBeNull();
+    await client.close();
+  });
+
+  it('names the children of each Epic in a batch', async () => {
+    const { tickets, project, client, epic, beta, child } = await withEpic();
+    const a = child();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Other',
+      type: 'Epic',
+    });
+
+    const result = resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: {
+          number: [epic.number, other.number],
+          cycleId: beta.id,
+          withChildren: true,
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({
+      updated: [
+        { number: epic.number, childrenMoved: [a.number] },
+        { number: other.number, childrenMoved: [] },
+      ],
+      failed: [],
+    });
+    await client.close();
+  });
+
+  it('refuses withChildren on a Ticket that is not an Epic, and leaves it unchanged', async () => {
+    const { tickets, project, client, beta } = await withEpic();
+    const plain = tickets.createTicket({ projectId: project.id, title: 'P' });
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: {
+        number: plain.number,
+        title: 'Renamed',
+        cycleId: beta.id,
+        withChildren: true,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(
+      `Ticket T${plain.number} is not an Epic. Only an Epic has children to take along.`,
+    );
+    expect(tickets.getTicket(plain.number)).toMatchObject({
+      title: 'P',
+      cycle: null,
+    });
+    await client.close();
+  });
+
+  it('refuses withChildren without cycleId', async () => {
+    const { tickets, client, epic } = await withEpic();
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: epic.number, title: 'Renamed', withChildren: true },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/withChildren.*cycleId/);
+    expect(tickets.getTicket(epic.number).title).toBe('Epic');
+    await client.close();
+  });
+});

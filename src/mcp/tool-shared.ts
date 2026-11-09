@@ -194,6 +194,8 @@ export const cycleId = z
   .positive()
   .describe('The id of a Cycle, as returned by get_project or create_cycle.');
 
+export const withChildren = z.boolean().optional();
+
 export const batchTicketNumbers = z
   .array(ticketNumber)
   .describe(

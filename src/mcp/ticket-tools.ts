@@ -34,11 +34,11 @@ import {
   removeLabels,
   respond,
   respondBatch,
-  respondTicket,
   returnsSummary,
   status,
   type ToolContext,
   ticketNumber,
+  withChildren,
   withMoveHint,
   withoutDescription,
   withPlaceholderNote,
@@ -50,8 +50,15 @@ type TicketUpdate = Omit<UpdateTicketInput, 'projectId'> & {
   addBlockers?: number[];
   removeBlockers?: number[];
   cycleId?: number | null;
+  withChildren?: boolean;
   archived?: boolean;
 };
+
+/**
+ * One Ticket's update_ticket change: the Ticket after it, and with
+ * `withChildren` the children whose Cycle changed with it.
+ */
+type TicketUpdateResult = { ticket: Ticket; childrenMoved?: number[] };
 
 /**
  * One Ticket's update_ticket change: the core fields, then Epic,
@@ -67,11 +74,18 @@ const applyTicketUpdate = (
     addBlockers = [],
     removeBlockers = [],
     cycleId,
+    withChildren,
     archived,
     ...core
   }: TicketUpdate,
-): Ticket =>
+): TicketUpdateResult =>
   tickets.transaction(() => {
+    if (withChildren && cycleId === undefined) {
+      throw new TicketsError(
+        "withChildren takes an Epic's children along to a Cycle, so give cycleId with it.",
+      );
+    }
+    let childrenMoved: number[] | undefined;
     const hasCore = Object.values(core).some((value) => value !== undefined);
     const hasSteps =
       epicNumber !== undefined ||
@@ -95,20 +109,23 @@ const applyTicketUpdate = (
       tickets.removeBlocker({ blocker, blocked: number });
     }
     if (cycleId !== undefined) {
-      const { failed } = tickets.moveTicketsToCycle({
+      const moved = tickets.moveTicketsToCycle({
         cycleId,
         ticketNumbers: [number],
+        withChildren,
       });
-      if (failed.length > 0) {
-        throw new TicketsError(withMoveHint(failed[0].error));
+      if (moved.failed.length > 0) {
+        throw new TicketsError(withMoveHint(moved.failed[0].error));
       }
+      childrenMoved = moved.children;
     }
     if (archived === true) {
       tickets.archiveTicket(number);
     } else if (archived === false) {
       tickets.restoreTicket(number);
     }
-    return tickets.getTicket(number);
+    const ticket = tickets.getTicket(number);
+    return childrenMoved ? { ticket, childrenMoved } : { ticket };
   });
 
 export const registerTicketTools = ({
@@ -402,7 +419,7 @@ export const registerTicketTools = ({
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. The core fields change first, then the Epic, Blockers, Cycle and archived steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to move a Ticket to "In progress" when you start and to "Done" when you finish, and to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic once its work is merged, use finish_work, which applies the whole completion rule; setting Done here leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
       inputSchema: {
         number: z
           .union([ticketNumber, batchTicketNumbers])
@@ -474,6 +491,9 @@ export const registerTicketTools = ({
           .describe(
             'Plan the Ticket into this Prepared or Active Cycle of its Project, moving it out of the Cycle it is in, or with null take it out of its Cycle, back to the Backlog.',
           ),
+        withChildren: withChildren.describe(
+          "With cycleId, take an Epic's unarchived children along, Done ones included: into a Cycle, every child joins it, leaving any other Cycle that is not Archived; with null, the children in the Epic's Cycle return to the Backlog with it. The result's childrenMoved names the children it moved. Refused on a Ticket that is not an Epic, and without cycleId. Defaults to false: only the Ticket moves.",
+        ),
         archived: z
           .boolean()
           .optional()
@@ -507,12 +527,22 @@ export const registerTicketTools = ({
           : { projectId: resolveProjectId({ projectId, projectName }) };
       const apply = (target: number) =>
         applyTicketUpdate(tickets, target, { ...changes, ...project });
+      /** The Ticket as the result shows it, with the children it moved. */
+      const shown = (
+        { ticket, childrenMoved }: TicketUpdateResult,
+        // The summary leaves out the fields these steps change.
+        changed: Partial<Ticket> = {},
+      ) => ({
+        ...(detail === 'full'
+          ? ticket
+          : { ...ticketSummary(ticket), ...changed }),
+        ...(childrenMoved ? { childrenMoved } : {}),
+      });
       if (typeof number === 'number') {
-        return respondTicket(
-          detail,
-          () => apply(number),
-          // The summary leaves out the fields these steps change.
-          ({ blockedBy, epic, archived }) => ({
+        return respond(() => {
+          const result = apply(number);
+          const { blockedBy, epic, archived } = result.ticket;
+          return shown(result, {
             ...(changes.addBlockers || changes.removeBlockers
               ? { blockedBy }
               : {}),
@@ -520,15 +550,15 @@ export const registerTicketTools = ({
               ? {}
               : { epicNumber: epic?.number ?? null }),
             ...(changes.archived === undefined ? {} : { archived }),
-          }),
-        );
+          });
+        });
       }
       return respondBatch(() => {
         const refusal = checkBatchNumbers(number);
         if (refusal) {
           throw new TicketsError(refusal);
         }
-        const updated: Ticket[] = [];
+        const updated: TicketUpdateResult[] = [];
         const failed: { number: number; error: string }[] = [];
         for (const target of number) {
           try {
@@ -540,12 +570,7 @@ export const registerTicketTools = ({
             failed.push({ number: target, error: error.message });
           }
         }
-        return {
-          updated: updated.map((ticket) =>
-            detail === 'full' ? ticket : ticketSummary(ticket),
-          ),
-          failed,
-        };
+        return { updated: updated.map((result) => shown(result)), failed };
       });
     },
   );
