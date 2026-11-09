@@ -407,6 +407,52 @@ describe('Terminal Spec (T1240)', () => {
   });
 });
 
+describe('Terminal Plan (T1249)', () => {
+  it('records a Terminal Plan in the main checkout with the Plan command, the goal and the brief', async () => {
+    const { conversations, project, repositoryDir } = setup({
+      runModel: 'sonnet',
+    });
+
+    const session = await conversations.startTerminalPlan({
+      folder: repositoryDir,
+      goal: ' Ship the blog ',
+    });
+
+    expect(session.cwd).toBe(repositoryDir);
+    expect(session.firstMessage).toBe('/tandembike:plan Ship the blog');
+    expect(session.brief).toContain('terminal');
+    expect(session.model).toBe('sonnet');
+    expect(conversations.get(session.conversationId)).toMatchObject({
+      intent: 'plan',
+      startedBy: 'terminal',
+      state: 'running',
+      projectId: project.id,
+      ticketNumber: null,
+    });
+  });
+
+  it('refuses a blank goal', async () => {
+    const { conversations, repositoryDir } = setup();
+    const error = await failure(
+      conversations.startTerminalPlan({ folder: repositoryDir, goal: ' ' }),
+    );
+    expect(error.message).toContain('goal');
+  });
+
+  it('refuses a folder in no Project’s repository, naming the known Projects', async () => {
+    const { conversations, tickets } = setup();
+    tickets.createProject({ name: 'Blog' });
+
+    const error = await failure(
+      conversations.startTerminalPlan({ folder: '/nowhere', goal: 'Ship' }),
+    );
+
+    expect(error.message).toContain('/nowhere');
+    expect(error.message).toContain('"Website"');
+    expect(error.message).toContain('"Blog"');
+  });
+});
+
 describe('Terminal next (T1240)', () => {
   const nextSetup = () => {
     const world = setup();
