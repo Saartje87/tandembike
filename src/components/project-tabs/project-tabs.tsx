@@ -27,6 +27,7 @@ import {
   projectFlowPath,
   projectPath,
   projectSettingsPath,
+  sparsPath,
 } from '../../app/lib/paths';
 import { openCyclesInOrder } from '../../tickets/cycle-state';
 import type { Cycle, OpenTicketCounts } from '../../tickets/cycles';
@@ -52,10 +53,16 @@ export type ProjectTabsProps = {
 };
 
 /**
- * A tab of the Project: the Backlog, a Cycle by id, the History, Flow
- * or Settings.
+ * A tab of the Project: the Backlog, a Cycle by id, the History, Spars,
+ * Flow or Settings.
  */
-type CurrentTab = 'backlog' | 'history' | 'flow' | 'settings' | number;
+type CurrentTab =
+  | 'backlog'
+  | 'history'
+  | 'spars'
+  | 'flow'
+  | 'settings'
+  | number;
 
 /**
  * The tab on screen, from the URL's `segments` below the Project: an
@@ -74,6 +81,10 @@ function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
   }
   if (segment === 'flow') {
     return 'flow';
+  }
+  // A Spar's page belongs to the Spars tab.
+  if (segment === 'spars' || segment === 'spar') {
+    return 'spars';
   }
   const cycle =
     segment === 'cycle'
@@ -268,6 +279,9 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           current={current === 'history'}
         >
           History
+        </ProjectTab>
+        <ProjectTab href={sparsPath(projectId)} current={current === 'spars'}>
+          Spars
         </ProjectTab>
         <ProjectTab
           href={projectFlowPath(projectId)}

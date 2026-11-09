@@ -302,6 +302,28 @@ const autopilotTriageDisallowedTools = [
   'mcp__tandembike__file_tickets',
 ];
 
+/**
+ * What a Spar run may not use, whatever the Agent run mode (ADR 0046): file
+ * edits and every Tandembike tool that creates or changes Tickets or Cycles.
+ * Reading, the Widget tools and the Spar tools stay.
+ */
+export const sparDisallowedTools = [
+  'Edit',
+  'Write',
+  'NotebookEdit',
+  'mcp__tandembike__file_tickets',
+  'mcp__tandembike__update_ticket',
+  'mcp__tandembike__start_work',
+  'mcp__tandembike__finish_work',
+  'mcp__tandembike__abandon_work',
+  'mcp__tandembike__open_pr',
+  'mcp__tandembike__add_note',
+  'mcp__tandembike__check_criterion',
+  'mcp__tandembike__attach',
+  'mcp__tandembike__propose_triage',
+  'mcp__tandembike__create_cycle',
+];
+
 /** A Start and a Merge are the intents that count as Start runs (T1221). */
 const isStartRunIntent = (intent: ConversationIntent) =>
   intent === 'start' || intent === 'merge';
@@ -915,11 +937,15 @@ export function createConversations({
         plugins: [{ type: 'local', path: playbookPath }],
         systemPrompt: briefOf(id),
         prompt,
-        runMode: settings.runMode,
+        // A Spar is read-only whatever the Project's run mode (ADR 0046).
+        runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
         ...(runModel === null ? {} : { model: runModel }),
         ...(conversation.intent === 'triage' &&
         conversation.startedBy === 'autopilot'
           ? { disallowedTools: autopilotTriageDisallowedTools }
+          : {}),
+        ...(conversation.intent === 'spar'
+          ? { disallowedTools: sparDisallowedTools }
           : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
@@ -1032,6 +1058,9 @@ export function createConversations({
           ticketNumber: 'A Spec is about a Ticket.',
         });
       }
+    }
+    if (input.intent === 'spar' && input.startedBy !== 'user') {
+      throw new NotAllowedError('Only the User starts a Spar.');
     }
     if (input.intent === 'plan') {
       if (input.startedBy !== 'user') {

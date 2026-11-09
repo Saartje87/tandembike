@@ -51,6 +51,7 @@ const intentLines: Record<ConversationIntent, string> = {
     'The User approved the merge of the Ticket (Approve merge) and started this Conversation to merge its pull request.',
   spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
   plan: 'The User started this Conversation to plan a Cycle toward a goal (Plan). Their first message names the goal.',
+  spar: 'The User started this Conversation to think an idea through with you on a Spar page (Spar). Their first message gives the topic and the focus Ticket, if any. This run is read-only (ADR 0046): you may read and search the code and read Tickets, but not edit files or create or change Tickets; any command you run asks the User first. Prefer Widgets to questions in text.',
 };
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;

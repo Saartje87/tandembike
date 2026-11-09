@@ -4,6 +4,7 @@ import {
   conversationOnPath,
   projectPath,
   settingsPath,
+  sparPath,
   ticketOnBoardPath,
 } from '../app/lib/paths';
 import { conversationActivity } from '../conversations/conversation-activity';
@@ -37,11 +38,14 @@ const subject = (open: OpenConversation): string =>
     ? open.projectName
     : `T${open.conversation.ticketNumber}`;
 
+/** Where a Notice opens its Conversation: in the dialog, or a Spar's own page. */
 const conversationPath = (open: OpenConversation): string =>
-  conversationOnPath(
-    projectPath(open.conversation.projectId),
-    open.conversation.id,
-  );
+  open.conversation.intent === 'spar'
+    ? sparPath(open.conversation.projectId, open.conversation.id)
+    : conversationOnPath(
+        projectPath(open.conversation.projectId),
+        open.conversation.id,
+      );
 
 /** `body` after the Ticket's title, when it has one. */
 const bodyOf = (open: OpenConversation, detail?: string): string =>

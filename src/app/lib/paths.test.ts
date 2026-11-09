@@ -17,6 +17,8 @@ import {
   projectPath,
   projectSettingsPath,
   projectsPath,
+  sparPath,
+  sparsPath,
   statsPath,
   ticketByNumberPath,
   ticketOnBoardPath,
@@ -33,6 +35,11 @@ describe('paths', () => {
 
   it('puts the archived Projects under the Projects list', () => {
     expect(archivedProjectsPath()).toBe('/projects/archived');
+  });
+
+  it("puts a Project's Spars under a plural segment and a Spar under a singular one", () => {
+    expect(sparsPath(3)).toBe('/project/3/spars');
+    expect(sparPath(3, 12)).toBe('/project/3/spar/12');
   });
 
   it("puts a Project's Board under a singular segment", () => {

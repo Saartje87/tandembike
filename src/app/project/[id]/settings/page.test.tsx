@@ -141,6 +141,7 @@ describe('SettingsPage', () => {
       specCommand: '',
       mergeCommand: '',
       planCommand: '',
+      sparCommand: '',
     });
     vi.mocked(appTickets).mockReturnValue(tickets);
 

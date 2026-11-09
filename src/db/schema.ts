@@ -136,6 +136,8 @@ export const projects = sqliteTable('projects', {
   mergeCommand: text('merge_command'),
   /** The command a Plan Conversation sends before the goal; null runs the Playbook's. */
   planCommand: text('plan_command'),
+  /** The command a Spar sends before its topic and focus; null runs the Playbook's. */
+  sparCommand: text('spar_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -585,4 +587,27 @@ export const machineSettings = sqliteTable('machine_settings', {
   maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
   /** Autopilot's most spend per local day across all Projects; null is none. */
   dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
+});
+
+/**
+ * A Spar (GLOSSARY): the User thinks an idea through with an Agent on its own
+ * page. One-to-one with its Conversation of intent `spar`, whose id is the
+ * Spar's id; the Conversation holds the run, cost, transcript and focus
+ * Ticket. Only the Spars module reads or writes it.
+ */
+export const spars = sqliteTable('spars', {
+  id: integer('id')
+    .primaryKey()
+    .references(() => conversations.id),
+  projectId: integer('project_id')
+    .notNull()
+    .references(() => projects.id),
+  /** The one-line topic the User gave; null for none. */
+  topic: text('topic'),
+  /** Closed by the User: read-only until reopened. */
+  closed: integer('closed', { mode: 'boolean' }).notNull().default(false),
+  /** The Ticket its Hand-off filed; null before. */
+  outcomeTicketNumber: integer('outcome_ticket_number'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

@@ -51,6 +51,7 @@ describe('SetupPanel', () => {
       "Start on an Epic/tandembike:implement-epic Playbook's",
       "Spec/tandembike:spec Playbook's",
       "Plan/tandembike:plan Playbook's",
+      "Spar/tandembike:spar Playbook's",
       "Retro/tandembike:retro Playbook's",
       "Merge/tandembike:merge Playbook's",
     ]);

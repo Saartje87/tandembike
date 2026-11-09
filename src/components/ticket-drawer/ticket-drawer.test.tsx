@@ -9,6 +9,7 @@ import {
   startConversation,
 } from '../../app/conversations/actions';
 import { noBoardFilter } from '../../app/lib/paths';
+import { startSpar } from '../../app/spars/actions';
 import {
   addTicketBlocker,
   addTicketLabel,
@@ -50,6 +51,7 @@ vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
+vi.mock('../../app/spars/actions', () => ({ startSpar: vi.fn() }));
 vi.mock('../../app/cycles/actions', () => ({
   planTicket: vi.fn(),
   unplanTicket: vi.fn(),
@@ -230,6 +232,24 @@ describe('TicketDrawer', () => {
     dialog.open.mockReset();
     dialog.reopenAndOpen.mockReset().mockResolvedValue(undefined);
     dialog.openDraft.mockReset();
+  });
+
+  it("starts a Spar about the Ticket from 'Spar about this' and opens its page", async () => {
+    vi.mocked(startSpar).mockResolvedValue({
+      ok: true,
+      spar: { id: 21 } as never,
+    });
+    renderDrawer();
+
+    await userEvent.click(button('Spar about this'));
+    await userEvent.click(button('Start sparring'));
+
+    expect(startSpar).toHaveBeenCalledWith({
+      projectId: 1,
+      focusTicketNumber: 4,
+      topic: '',
+    });
+    expect(router.push).toHaveBeenCalledWith('/project/1/spar/21');
   });
 
   it('shows a pending triage proposal in its own section, and none without one', () => {

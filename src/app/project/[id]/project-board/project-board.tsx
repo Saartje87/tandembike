@@ -1,3 +1,4 @@
+import { Inline } from '@blockle/blocks';
 import type { FC } from 'react';
 
 import { Cockpit } from '../../../../components/cockpit/cockpit';
@@ -6,6 +7,7 @@ import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
 import { PlanButton } from '../../../../components/plan-button/plan-button';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
+import { SparButton } from '../../../../components/spar-button/spar-button';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
 import { TriageSpend } from '../../../../components/triage-spend/triage-spend';
 import { appConversations } from '../../../../conversations/app-conversations';
@@ -68,7 +70,10 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   const board = (
     <>
       {tab === 'backlog' && settings.repositoryPath !== null && (
-        <PlanButton projectId={project.id} />
+        <Inline gap={2} alignY="start">
+          <PlanButton projectId={project.id} />
+          <SparButton projectId={project.id} />
+        </Inline>
       )}
       <BoardTab
         project={project}

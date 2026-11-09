@@ -270,6 +270,7 @@ const agentCommandColumns = {
   mergeCommand: projects.mergeCommand,
   specCommand: projects.specCommand,
   planCommand: projects.planCommand,
+  sparCommand: projects.sparCommand,
 };
 
 const agentSettingsColumns = {

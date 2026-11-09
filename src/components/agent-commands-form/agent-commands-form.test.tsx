@@ -18,6 +18,7 @@ const commands = {
   specCommand: null,
   mergeCommand: null,
   planCommand: null,
+  sparCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
@@ -45,6 +46,26 @@ describe('AgentCommandsForm', () => {
     );
   });
 
+  it('shows the Spar command, blank by default, and the Playbook command it replaces (T1304)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(setProjectAgentCommands).mockResolvedValue({
+      ok: true,
+      commands: { ...commands, sparCommand: '/my:spar' },
+    });
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+    const spar = screen.getByRole('textbox', { name: 'Spar command' });
+
+    expect(spar).toHaveValue('');
+    expect(screen.getByText('Blank runs /tandembike:spar')).toBeInTheDocument();
+
+    await user.type(spar, 'my:spar');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(setProjectAgentCommands).toHaveBeenCalledWith(
+      expect.objectContaining({ sparCommand: 'my:spar' }),
+    );
+  });
+
   it('shows the four commands, blank for none, and saves the edited ones', async () => {
     const user = userEvent.setup();
     vi.mocked(setProjectAgentCommands).mockResolvedValue({
@@ -57,6 +78,7 @@ describe('AgentCommandsForm', () => {
         specCommand: '/spec',
         mergeCommand: '/merge',
         planCommand: '',
+        sparCommand: '',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -90,6 +112,7 @@ describe('AgentCommandsForm', () => {
       specCommand: 'my:spec',
       mergeCommand: '',
       planCommand: '',
+      sparCommand: '',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');

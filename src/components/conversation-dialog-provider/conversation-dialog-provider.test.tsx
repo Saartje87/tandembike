@@ -218,6 +218,49 @@ describe('ConversationDialogProvider', () => {
     vi.mocked(reopenConversation).mockReset();
   });
 
+  describe('a Spar (GLOSSARY: Spar)', () => {
+    const withSpar = [
+      ...tabs,
+      tab({ id: 12, ticketNumber: 42, intent: 'spar', state: 'waiting' }),
+    ];
+
+    it('gets no tab, and opening it opens its own page', async () => {
+      vi.mocked(listOpenConversations).mockResolvedValue(withSpar);
+      at$('/project/3', 'conversation=2');
+      show();
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Conversations',
+      });
+      expect(within(dialog).getAllByRole('tab')).toHaveLength(3);
+
+      opener?.open(12);
+
+      expect(router.push).toHaveBeenCalledWith('/project/3/spar/12');
+    });
+
+    it('opens its page from reopenAndOpen, without reopening it', async () => {
+      show();
+      await waitFor(() => expect(listOpenConversations).toHaveBeenCalled());
+
+      await opener?.reopenAndOpen(
+        conversation({ id: 12, intent: 'spar', hidden: true }),
+      );
+
+      expect(router.push).toHaveBeenCalledWith('/project/3/spar/12');
+      expect(reopenConversation).not.toHaveBeenCalled();
+    });
+
+    it('turns a ?conversation= naming it into its page', async () => {
+      vi.mocked(listOpenConversations).mockResolvedValue(withSpar);
+      at$('/project/3', 'conversation=12');
+      show();
+
+      await waitFor(() =>
+        expect(router.replace).toHaveBeenCalledWith('/project/3/spar/12'),
+      );
+    });
+  });
+
   it('never opens by itself, even when a Conversation needs the User', async () => {
     show();
 

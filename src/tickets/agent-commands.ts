@@ -18,6 +18,8 @@ export type ProjectAgentCommands = {
   specCommand: string | null;
   /** Plan on a goal: proposes a Prepared Cycle from the Backlog (T1248). */
   planCommand: string | null;
+  /** Spar on an idea: thinks it through with the User, read-only (ADR 0046). */
+  sparCommand: string | null;
 };
 
 /**
@@ -71,6 +73,12 @@ export const agentStages = [
     label: 'Plan command',
   },
   {
+    stage: 'spar',
+    field: 'sparCommand',
+    skill: 'spar',
+    label: 'Spar command',
+  },
+  {
     stage: 'merge',
     field: 'mergeCommand',
     skill: 'merge',
@@ -115,6 +123,7 @@ export const noAgentCommands: ProjectAgentCommands = {
   specCommand: null,
   mergeCommand: null,
   planCommand: null,
+  sparCommand: null,
 };
 
 /** The buttons that send an agent command. */
@@ -191,4 +200,24 @@ export function planCommandMessage(
   commands: ProjectAgentCommands,
 ): string {
   return `${commandForStage('plan', commands)} ${goal.trim()}`;
+}
+
+/**
+ * The first message of a Spar, the one place it is built: the command of the
+ * Spar Stage (the Project's, or the Playbook's), then the topic in quotes
+ * when there is one, then the focus Ticket, such as
+ * `/tandembike:spar "Faster triage" T42`.
+ */
+export function sparCommandMessage(
+  topic: string | null,
+  focusTicketNumber: number | null,
+  commands: ProjectAgentCommands,
+): string {
+  return [
+    commandForStage('spar', commands),
+    topic === null ? null : JSON.stringify(topic),
+    focusTicketNumber === null ? null : `T${focusTicketNumber}`,
+  ]
+    .filter((part) => part !== null)
+    .join(' ');
 }

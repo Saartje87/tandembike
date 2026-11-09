@@ -58,6 +58,7 @@ describe('A Plan Conversation (T1248)', () => {
       specCommand: '',
       mergeCommand: '',
       planCommand: 'my:plan',
+      sparCommand: '',
     });
 
     await conversations.startPlan({ projectId: project.id, goal: 'Ship it' });

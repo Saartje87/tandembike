@@ -43,6 +43,7 @@ const stageLabels = {
   merge: 'Merge',
   spec: 'Spec',
   plan: 'Plan',
+  spar: 'Spar',
 } as const;
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;
