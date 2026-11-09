@@ -77,7 +77,10 @@ id. You answer permission prompts and questions in the terminal.
 The other Stages work the same way: `tandembike triage T42` opens a Triage
 session and `tandembike spec T42` a Spec session, both in the main checkout
 with the Stage's command. Spec is refused unless the Ticket is an idea in
-Intake or an Epic without children. `tandembike next` takes the Project whose
+Intake or an Epic without children. `tandembike plan "<goal>"` takes the Project whose repository holds the
+current folder and opens a Plan session in its main checkout, with the Plan
+command and the goal as the first message; from a folder in no Project's
+repository it names the known Projects. `tandembike next` takes the Project whose
 repository holds the current folder and starts a Terminal Start on the top
 Eligible item of its Active Cycle, the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
@@ -121,7 +124,7 @@ claude plugin install tandembike@tandembike --scope user
 `claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
 again at any time. Afterwards `/tandembike:implement T42` and the other
 Playbook commands work in a bare `claude` session in any repository. The
-session subcommands (`start`, `triage`, `spec`, `next`, `resume`) never make
+session subcommands (`start`, `triage`, `spec`, `plan`, `next`, `resume`) never make
 the offer: they load the bundled Playbook themselves, so they do not depend on
 this install.
 

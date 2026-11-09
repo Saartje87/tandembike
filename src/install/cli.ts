@@ -59,6 +59,15 @@ async function main(): Promise<void> {
       }),
     );
   }
+  if (parsed.command === 'plan') {
+    return process.exit(
+      await startSession({
+        action: 'plan',
+        folder: process.cwd(),
+        goal: parsed.goal,
+      }),
+    );
+  }
   if (parsed.command === 'next') {
     return process.exit(await startNext());
   }

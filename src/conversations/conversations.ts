@@ -1148,7 +1148,8 @@ export function createConversations({
    * item of the Active Cycle of the Project whose repository holds `folder`,
    * by the `next_work` rule. With no work it returns `next_work`'s reason.
    */
-  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+  /** The Project whose repository holds `folder`, else a refusal naming the known ones. */
+  const projectIdOfFolder = (folder: string): number => {
     const projectId = tickets.findProjectIdOfFolder(folder);
     if (projectId === undefined) {
       const names = tickets
@@ -1163,6 +1164,59 @@ export function createConversations({
         }`,
       });
     }
+    return projectId;
+  };
+
+  /**
+   * `tandembike plan "<goal>"` (T1249): a Terminal Plan on the Project whose
+   * repository holds `folder`, in the main checkout, with the Plan command and
+   * the goal as the first message. Like `startPlan`, it holds no slot and
+   * records no Cycle.
+   */
+  const startTerminalPlan = async (input: {
+    folder: string;
+    goal: string;
+  }): Promise<TerminalSession> => {
+    const goal = input.goal.trim();
+    if (goal === '') {
+      throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+    }
+    const projectId = projectIdOfFolder(input.folder);
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    const firstMessage = planCommandMessage(
+      goal,
+      tickets.getProjectAgentCommands(projectId),
+    );
+    const now = new Date();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId,
+        intent: 'plan',
+        startedBy: 'terminal',
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, 'user', firstMessage);
+    announce(created.id);
+    return {
+      conversationId: created.id,
+      cwd: settings.repositoryPath,
+      firstMessage,
+      brief: briefOf(created.id),
+      runMode: settings.runMode,
+      model: modelFor('plan', settings),
+    };
+  };
+
+  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+    const projectId = projectIdOfFolder(folder);
     const next = tickets.nextWork({ projectId });
     if (next.ticket === null) {
       return { started: false, reason: next.reason };
@@ -1697,6 +1751,7 @@ export function createConversations({
 
     startTerminal,
     startTerminalNext,
+    startTerminalPlan,
 
     endTerminal,
     heartbeatTerminal,
