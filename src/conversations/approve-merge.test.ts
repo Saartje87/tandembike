@@ -287,6 +287,30 @@ describe('Approve merge', () => {
     ).toBeCloseTo(2);
   });
 
+  it('leaves the cost of the User’s other replies on an Autopilot Start in the Spend', async () => {
+    const { conversations, runner, tickets, project, inReview } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const ticket = inReview('Fix it', cycle.id);
+    const start = await conversations.start({
+      startedBy: 'autopilot',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+      cycleId: cycle.id,
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+
+    await conversations.reply(start.id, 'Also fix the typo', 'user');
+    runner.runs[0].emit({ type: 'turn', costUsd: 5 });
+
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBeCloseTo(5);
+  });
+
   it('stays outside the Spend ceiling as a Merge Conversation', async () => {
     const { conversations, runner, tickets, project, inReview } = setup();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });

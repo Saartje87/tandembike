@@ -97,10 +97,11 @@ export function runBrief(brief: RunBrief): string {
       );
     }
   }
-  if (
-    brief.worktree &&
-    (brief.intent === 'start' || brief.intent === 'merge')
-  ) {
+  if (brief.worktree && brief.intent === 'merge') {
+    lines.push(
+      `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. It is not on the pull request's branch: the merge skill checks that branch out here. Do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
+    );
+  } else if (brief.worktree && brief.intent === 'start') {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );

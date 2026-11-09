@@ -81,6 +81,10 @@ export type AgentStage = (typeof agentStages)[number]['stage'];
 export const playbookCommand = (skill: string): string =>
   `/${playbookPluginName}:${skill}`;
 
+const stageEntry = Object.fromEntries(
+  agentStages.map((entry) => [entry.stage, entry]),
+) as { [S in AgentStage]: Extract<(typeof agentStages)[number], { stage: S }> };
+
 /**
  * The command a Stage sends: the Project's own when it set one, otherwise
  * the Playbook's. Each Stage resolves on its own; a blank command for
@@ -90,10 +94,7 @@ export function commandForStage(
   stage: AgentStage,
   commands: ProjectAgentCommands,
 ): string {
-  const entry = agentStages.find((candidate) => candidate.stage === stage);
-  if (!entry) {
-    throw new Error(`There is no Stage "${stage}".`);
-  }
+  const entry = stageEntry[stage];
   return commands[entry.field] ?? playbookCommand(entry.skill);
 }
 
@@ -167,14 +168,6 @@ export function agentCommandMessage(
   commands: ProjectAgentCommands,
 ): string {
   const stage: AgentStage =
-    intent === 'triage'
-      ? 'triage'
-      : intent === 'spec'
-        ? 'spec'
-        : intent === 'merge'
-          ? 'merge'
-          : ticket.type === 'Epic'
-            ? 'startEpic'
-            : 'start';
+    intent === 'start' && ticket.type === 'Epic' ? 'startEpic' : intent;
   return `${commandForStage(stage, commands)} T${ticket.number}`;
 }

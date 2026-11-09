@@ -93,6 +93,18 @@ describe('runBrief and the worktree', () => {
     expect(brief).not.toContain('Other runs may work in this repository');
   });
 
+  it('tells a Merge its worktree is detached, not that it creates a branch', () => {
+    const brief = runBrief({
+      ...base,
+      intent: 'merge',
+      worktree: { path: '/w/1/c5', base: 'origin/main' },
+    });
+
+    expect(brief).toContain('at /w/1/c5, detached at origin/main');
+    expect(brief).toContain('checks that branch out here');
+    expect(brief).not.toContain('Create your branch here');
+  });
+
   it('keeps the Parallel runs line without a worktree', () => {
     const brief = runBrief({ ...base, worktree: null });
 

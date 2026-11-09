@@ -17,8 +17,11 @@ export type TicketAgentActionsProps = {
   ticketType: TicketType;
   /** The commands of the Ticket's Project that Triage and Start send. */
   commands: ProjectAgentCommands;
-  /** Whether to show Spec: an Intake Ticket or an Epic without children (T1222). */
-  canSpec?: boolean;
+  /**
+   * Whether to show Spec: an Intake Ticket or an Epic without children
+   * (T1222).
+   */
+  specAvailable?: boolean;
   /** Called with the id of the Conversation a click started. */
   onStarted?: (conversationId: number) => void;
   /** Called when Ask is clicked: the caller opens a draft (T611). */
@@ -26,17 +29,18 @@ export type TicketAgentActionsProps = {
 };
 
 /**
- * Start, Triage, Spec and Ask on a Ticket (ADR 0019). Spec shows when `canSpec`. Start and Triage begin a
- * Conversation at once with the command of their Stage and the Ticket
- * number: the Project's own, or the Playbook's ("/tandembike:implement T42")
- * when it has none (T621, T1218); Ask opens a draft tab for the User's own question, through
+ * Start, Triage, Spec and Ask on a Ticket (ADR 0019). Spec shows when
+ * `specAvailable`. Start, Triage and Spec begin a Conversation at once with
+ * the command of their Stage and the Ticket number: the Project's own, or
+ * the Playbook's ("/tandembike:implement T42") when it has none (T621,
+ * T1218). Ask opens a draft tab for the User's own question, through
  * `onAsk`. A refusal, such as the Start run limit, shows its reason.
  */
 export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
   ticketNumber,
   ticketType,
   commands,
-  canSpec = false,
+  specAvailable = false,
   onStarted,
   onAsk,
 }) => {
@@ -80,7 +84,7 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
         >
           Triage
         </Button>
-        {canSpec && (
+        {specAvailable && (
           <Button
             type="button"
             size="small"

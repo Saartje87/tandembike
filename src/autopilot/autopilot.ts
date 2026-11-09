@@ -2,6 +2,7 @@ import type { ConversationState } from '../conversations/conversation-state';
 import {
   type Conversation,
   type Conversations,
+  holdsStartRunSlot,
   startRunLimit,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
@@ -170,12 +171,7 @@ export function createAutopilot({
     // A Merge the User approved holds a run slot like a Start (T1221).
     const working = conversations
       .list({ projectId })
-      .filter(
-        (conversation) =>
-          (conversation.intent === 'start' ||
-            conversation.intent === 'merge') &&
-          workingStates.includes(conversation.state),
-      ).length;
+      .filter(holdsStartRunSlot).length;
     const slots = startRunLimit(settings) - working;
     return slots > 0 ? { cycleId: cycle.id, slots } : null;
   };

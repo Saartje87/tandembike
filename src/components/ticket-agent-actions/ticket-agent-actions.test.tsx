@@ -136,7 +136,7 @@ describe('TicketAgentActions', () => {
     });
   });
 
-  it('shows Spec only when canSpec, and sends /tandembike:spec when blank', async () => {
+  it('shows Spec only when specAvailable, and sends /tandembike:spec when blank', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     const onStarted = vi.fn();
     const { rerender } = renderWithTheme(
@@ -153,7 +153,7 @@ describe('TicketAgentActions', () => {
         ticketNumber={5}
         ticketType="Ticket"
         commands={none}
-        canSpec
+        specAvailable
         onStarted={onStarted}
       />,
     );
@@ -174,7 +174,7 @@ describe('TicketAgentActions', () => {
         ticketNumber={5}
         ticketType="Epic"
         commands={{ ...none, specCommand: '/my:spec' }}
-        canSpec
+        specAvailable
       />,
     );
     await userEvent.click(screen.getByRole('button', { name: 'Spec' }));

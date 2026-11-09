@@ -565,7 +565,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         ticketType={ticket.type}
         commands={agentCommands}
-        canSpec={canSpec(ticket)}
+        specAvailable={canSpec(ticket)}
         onStarted={dialog.open}
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })

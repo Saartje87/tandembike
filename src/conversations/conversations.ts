@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm';
 
+import { isInReview } from '../components/board/board-lanes';
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import { playbookPath } from '../playbook/playbook';
@@ -207,6 +208,11 @@ type PendingRun = {
   command: string | null;
   startedByAutopilot: boolean;
   transientResume: boolean;
+  /**
+   * The Stage this run is, when it is not the Conversation's intent: the
+   * resume of Approve merge is a `merge` run in a Start Conversation (ADR 0038).
+   */
+  stage?: ConversationIntent;
 };
 
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -215,6 +221,37 @@ const noRepositoryPath = {
   repositoryPath:
     'This Project has no repository path. Set one in the Project settings first.',
 };
+
+/** A Start and a Merge are the intents that count as Start runs (T1221). */
+const isStartRunIntent = (intent: ConversationIntent) =>
+  intent === 'start' || intent === 'merge';
+
+/**
+ * Whether a Conversation holds one of its Project's Start run slots: a Start
+ * or a Merge whose run is working, running or waiting on a permission. An
+ * idle one waits for a reply and holds none (ADR 0019).
+ */
+export const holdsStartRunSlot = (conversation: {
+  intent: ConversationIntent;
+  state: ConversationState;
+}): boolean =>
+  isStartRunIntent(conversation.intent) &&
+  (conversation.state === 'running' || conversation.state === 'waiting');
+
+/**
+ * Whether a Start Conversation is open for Approve merge to resume: not
+ * closed, and its run idle after handing off or interrupted. A stopped one
+ * takes no replies, and a working one is refused before this is asked
+ * (ADR 0038).
+ */
+const isOpenForMergeResume = (conversation: {
+  intent: ConversationIntent;
+  state: ConversationState;
+  hidden: boolean;
+}): boolean =>
+  conversation.intent === 'start' &&
+  !conversation.hidden &&
+  (conversation.state === 'idle' || conversation.state === 'interrupted');
 
 /** How many Start runs a Project allows at once (T588 settings). */
 export const startRunLimit = (settings: {
@@ -318,7 +355,7 @@ export function createConversations({
         conversationId: id,
         projectId: conversation.projectId,
         ticketNumber: conversation.ticketNumber,
-        stage: conversation.intent,
+        stage: pending.stage ?? conversation.intent,
         result,
         startedAt: pending.startedAt,
         endedAt: new Date(),
@@ -542,17 +579,12 @@ export function createConversations({
     announce(id);
   };
 
-  /** A Start and a Merge each hold one of the Project's run slots (T1221). */
-  const countsAsStartRun = (intent: ConversationIntent) =>
-    intent === 'start' || intent === 'merge';
-
   /**
    * Refuses a Start run beyond the Project's limit: a Start is not queued
-   * (ADR 0019). A Merge counts like a Start. Triage and Ask are never limited, and do not count. Only
-   * Starts that are working count, running or waiting on a permission: an
-   * idle Start waits for a reply and holds no slot. `exceptId` is the
-   * Conversation about to work, not counted against itself. The User's
-   * reply skips this check (ADR 0031).
+   * (ADR 0019). A Merge counts like a Start; Triage and Ask are never
+   * limited, and do not count. Slots are counted by `holdsStartRunSlot`.
+   * `exceptId` is the Conversation about to work, not counted against
+   * itself. The User's reply skips this check (ADR 0031).
    */
   const checkStartLimit = (
     projectId: number,
@@ -560,7 +592,7 @@ export function createConversations({
     settings: { parallelRuns: boolean; maxConcurrentRuns: number },
     exceptId?: number,
   ) => {
-    if (!countsAsStartRun(intent)) {
+    if (!isStartRunIntent(intent)) {
       return;
     }
     const limit = startRunLimit(settings);
@@ -570,8 +602,7 @@ export function createConversations({
       if (
         id !== exceptId &&
         other.projectId === projectId &&
-        countsAsStartRun(other.intent) &&
-        (other.state === 'running' || other.state === 'waiting')
+        holdsStartRunSlot(other)
       ) {
         running += 1;
       }
@@ -610,6 +641,7 @@ export function createConversations({
     limited = true,
     sentBy: ConversationSender = 'user',
     transientResume = false,
+    stage?: ConversationIntent,
   ) => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
@@ -639,6 +671,7 @@ export function createConversations({
         command: commandOf(prompt),
         startedByAutopilot: sentBy === 'autopilot',
         transientResume,
+        stage,
       },
       asking: new Map(),
       questioning: new Map(),
@@ -994,9 +1027,9 @@ export function createConversations({
                 ),
               )
               .get();
-      // What the User's replies cost on a Conversation Autopilot started,
-      // such as the reply of Approve merge, is not Autopilot's spend (T1221).
-      const userTurns = db
+      // The merge the User approved on a Conversation Autopilot started is a
+      // `merge` run there, and is not Autopilot's spend (ADR 0038).
+      const approvedMerges = db
         .select({
           total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
         })
@@ -1008,14 +1041,15 @@ export function createConversations({
         .where(
           and(
             eq(runOutcomes.projectId, input.projectId),
-            eq(runOutcomes.startedByAutopilot, false),
+            eq(runOutcomes.stage, 'merge'),
+            eq(conversations.intent, 'start'),
             eq(conversations.startedBy, 'autopilot'),
             eq(conversations.autopilotCycleId, input.cycleId),
           ),
         )
         .get();
       return (
-        Math.max(0, (started?.total ?? 0) - (userTurns?.total ?? 0)) +
+        Math.max(0, (started?.total ?? 0) - (approvedMerges?.total ?? 0)) +
         (replies?.total ?? 0)
       );
     },
@@ -1255,14 +1289,17 @@ export function createConversations({
      * can always answer their Conversations; Autopilot's is (ADR 0031).
      * `transientResume` marks Autopilot's automatic resume of a transient end
      * (ADR 0034), recorded on the run's outcome so it is resumed only once.
+     * `stage` records the run's outcome under another Stage than the
+     * Conversation's intent, for the merge of Approve merge (ADR 0038).
      */
     async reply(
       id: number,
       text: string,
       sentBy: ConversationSender,
-      options: { transientResume?: boolean } = {},
+      options: { transientResume?: boolean; stage?: ConversationIntent } = {},
     ): Promise<Conversation> {
       const transientResume = options.transientResume ?? false;
+      const { stage } = options;
       const message = (text ?? '').trim();
       if (message === '') {
         throw new ValidationError({ text: 'Write a reply first.' });
@@ -1302,6 +1339,7 @@ export function createConversations({
           command: commandOf(message),
           startedByAutopilot: sentBy === 'autopilot',
           transientResume,
+          stage,
         };
         handle.run.send(message);
       } else {
@@ -1312,6 +1350,7 @@ export function createConversations({
           limited,
           sentBy,
           transientResume,
+          stage,
         );
         append(id, sentBy, message);
         update(id, { state: 'running' });
@@ -1333,14 +1372,11 @@ export function createConversations({
       if (ticket.status === 'Done') {
         throw new NotAllowedError(`${label} is already Done.`);
       }
-      if (ticket.status !== 'In progress') {
+      if (!isInReview(ticket)) {
         throw new NotAllowedError(
-          `${label} is not in Review: only a Ticket whose work is handed off can be approved for a merge.`,
-        );
-      }
-      if (!ticket.externalReferences.some(isPullRequestReference)) {
-        throw new NotAllowedError(
-          `${label} has no pull request to merge. Add its reference first.`,
+          ticket.status !== 'In progress'
+            ? `${label} is not in Review: only a Ticket whose work is handed off can be approved for a merge.`
+            : `${label} has no pull request to merge. Add its reference first.`,
         );
       }
       if (ticket.claim !== null) {
@@ -1362,14 +1398,12 @@ export function createConversations({
         );
       }
       const startRow = own.find((row) => row.intent === 'start' && !row.hidden);
-      if (
-        startRow &&
-        (startRow.state === 'idle' || startRow.state === 'interrupted')
-      ) {
+      if (startRow && isOpenForMergeResume(startRow)) {
         return this.reply(
           startRow.id,
           `Approved: merge ${label} now by the Playbook's merge steps, then finish_work.`,
           'user',
+          { stage: 'merge' },
         );
       }
       return start({
