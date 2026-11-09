@@ -1,13 +1,18 @@
 import { terminalApiPath } from '../app/lib/paths';
+import { playbookVersion } from '../playbook/playbook';
 import {
   copyFirstRunDatabase,
   decideMcpOffer,
   firstRunCopyBlocker,
+  type McpOfferPlan,
   markOffersMade,
   mcpRegistration,
   offersMade,
   planMcpOffer,
+  planPluginOffer,
+  pluginInstallState,
   shouldOfferMcp,
+  shouldOfferPlugin,
 } from './install';
 import {
   parseCommand,
@@ -24,7 +29,8 @@ import { createInterface } from 'node:readline/promises';
  * The `tandembike` command (bin/tandembike.mjs runs it from the checkout).
  * `parseCommand` picks the subcommand: none runs the first-run steps and then
  * the production server with its data in `~/.tandembike`; `mcp` offers the MCP
- * registration; `start` opens a terminal session on a Ticket (ADR 0039). The
+ * registration; `plugin` offers the Playbook plugin (first run and when the
+ * install is older too); `start` opens a terminal session on a Ticket (ADR 0039). The
  * decisions live in `install.ts` and `session.ts`; this only does the I/O.
  */
 
@@ -59,8 +65,16 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  if (parsed.command === 'plugin') {
+    if (await offerPlugin()) markOffersMade(home, 'plugin');
+    process.exit(0);
+  }
+
   if (shouldOfferMcp(offersMade(home), false)) {
     if (await offerMcp()) markOffersMade(home, 'mcp');
+  }
+  if (shouldOfferPlugin(offersMade(home), installedPluginState(), false)) {
+    if (await offerPlugin()) markOffersMade(home, 'plugin');
   }
 
   startServer(parsed.args);
@@ -153,31 +167,75 @@ function readClaudeJson(): unknown {
   }
 }
 
-/** Runs the offer; returns whether it counts as made. */
-async function offerMcp(): Promise<boolean> {
-  const claudeOnPath = spawnSync('claude', ['--version']).status === 0;
-  const plan = planMcpOffer({
-    claudeOnPath,
-    registration: mcpRegistration(readClaudeJson()),
-  });
+function readInstalledPlugins(): unknown {
+  try {
+    return JSON.parse(
+      readFileSync(
+        join(homedir(), '.claude', 'plugins', 'installed_plugins.json'),
+        'utf8',
+      ),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function installedPluginState() {
+  return pluginInstallState(readInstalledPlugins(), playbookVersion());
+}
+
+const claudeOnPath = () => spawnSync('claude', ['--version']).status === 0;
+
+/** Runs the MCP offer; returns whether it counts as made. */
+function offerMcp(): Promise<boolean> {
+  return runOffer(
+    planMcpOffer({
+      claudeOnPath: claudeOnPath(),
+      registration: mcpRegistration(readClaudeJson()),
+    }),
+    {
+      done: 'Tandembike is already registered in Claude Code.',
+      intro:
+        'To reach Tandembike from Claude Code in every repository, register its MCP server at user scope:',
+      again: 'tandembike mcp',
+    },
+  );
+}
+
+/** Runs the Playbook plugin offer; returns whether it counts as made. */
+function offerPlugin(): Promise<boolean> {
+  return runOffer(
+    planPluginOffer({
+      claudeOnPath: claudeOnPath(),
+      state: installedPluginState(),
+      checkout,
+    }),
+    {
+      done: 'The Playbook plugin is already installed in Claude Code.',
+      intro:
+        'To use /tandembike:implement and the other Playbook commands in every repository, install the Playbook plugin at user scope:',
+      again: 'tandembike plugin',
+    },
+  );
+}
+
+async function runOffer(
+  plan: McpOfferPlan,
+  words: { done: string; intro: string; again: string },
+): Promise<boolean> {
   const decision = decideMcpOffer(plan, Boolean(process.stdin.isTTY));
   if (decision.mode === 'skip') {
-    console.log('Tandembike is already registered in Claude Code.');
+    console.log(words.done);
     return decision.markMade;
   }
-  const intro =
-    'To reach Tandembike from Claude Code in every repository, register its MCP server at user scope:';
-  if (decision.mode === 'print') {
-    console.log(`${intro}\n\n${plan.text}\n`);
-    return decision.markMade;
-  }
-  console.log(`${intro}\n\n${plan.text}\n`);
+  console.log(`${words.intro}\n\n${plan.text}\n`);
+  if (decision.mode === 'print') return decision.markMade;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   // Ctrl+D or Ctrl+C at the prompt rejects the question: treat it as a no.
   const answer = await rl.question('Run it now? [y/N] ').catch(() => '');
   rl.close();
   if (!/^y(es)?$/i.test(answer.trim())) {
-    console.log('Skipped. Run `tandembike mcp` to be asked again.');
+    console.log(`Skipped. Run \`${words.again}\` to be asked again.`);
     return true;
   }
   for (const step of plan.steps) {

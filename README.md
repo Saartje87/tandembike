@@ -81,6 +81,26 @@ not start a second run on its Ticket. It ends when `claude` exits, and
 running, it says so and exits 1. See
 `docs/adr/0039-terminal-conversations.md`.
 
+## Install the Playbook plugin
+
+The checkout is also a Claude Code marketplace named `tandembike`
+(`.claude-plugin/marketplace.json`) whose one plugin is the bundled Playbook
+(`./playbook`), so installing needs no network. On its first start, and on any
+later start where the installed plugin is older than the bundled Playbook, the
+`tandembike` command offers to run:
+
+```bash
+claude plugin marketplace add <this checkout>
+claude plugin install tandembike@tandembike --scope user
+```
+
+(or, for an older install, `claude plugin marketplace update tandembike` and
+`claude plugin update tandembike@tandembike`). You confirm each offer; with no
+`claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
+again. Afterwards `/tandembike:implement T42` and the other Playbook commands
+work in a bare `claude` session in any repository. `tandembike start` sessions
+always load the bundled Playbook, so they do not depend on this install.
+
 ## Connect an Agent
 
 The MCP server is served by the running app at

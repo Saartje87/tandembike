@@ -18,6 +18,14 @@ describe('parseCommand', () => {
     });
   });
 
+  it('knows plugin', () => {
+    expect(parseCommand(['plugin'])).toEqual({ command: 'plugin' });
+    expect(parseCommand(['plugin', 'x'])).toEqual({
+      command: 'usage',
+      text: usageText,
+    });
+  });
+
   it('knows mcp', () => {
     expect(parseCommand(['mcp'])).toEqual({ command: 'mcp' });
   });

@@ -10,11 +10,13 @@ export const usageText = [
   '  tandembike                    start the server',
   '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
   '  tandembike mcp                register the MCP server with Claude Code',
+  '  tandembike plugin             install the Playbook plugin in Claude Code',
 ].join('\n');
 
 export type ParsedCommand =
   | { command: 'server'; args: string[] }
   | { command: 'mcp' }
+  | { command: 'plugin' }
   | { command: 'start'; ticketNumber: number }
   | { command: 'usage'; text: string };
 
@@ -39,6 +41,9 @@ export function parseCommand(argv: string[]): ParsedCommand {
   }
   if (first === 'mcp') {
     return rest.length === 0 ? { command: 'mcp' } : usage;
+  }
+  if (first === 'plugin') {
+    return rest.length === 0 ? { command: 'plugin' } : usage;
   }
   if (first === 'start') {
     const ticketNumber = ticketNumberOf(rest[0]);

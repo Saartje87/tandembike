@@ -173,3 +173,85 @@ export function decideMcpOffer(
   if (plan.action === 'ask' && isTTY) return { mode: 'ask', markMade: true };
   return { mode: 'print', markMade: plan.action !== 'ask' };
 }
+
+export type PluginInstallState = 'none' | 'older' | 'current';
+
+const pluginName = 'tandembike@tandembike';
+
+/** -1, 0 or 1 for `a` against `b`; a pre-release sorts below its release. */
+function compareVersions(a: string, b: string): number {
+  const [coreA, preA] = a.split('-', 2);
+  const [coreB, preB] = b.split('-', 2);
+  const partsA = coreA.split('.').map(Number);
+  const partsB = coreB.split('.').map(Number);
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const diff = (partsA[i] || 0) - (partsB[i] || 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  if (preA !== undefined && preB === undefined) return -1;
+  if (preA === undefined && preB !== undefined) return 1;
+  return 0;
+}
+
+/**
+ * The user-scope install of the Playbook in Claude Code's
+ * `installed_plugins.json`, against the bundled Playbook's version: `older`
+ * when its version is below (or unreadable), `current` otherwise.
+ */
+export function pluginInstallState(
+  installedPlugins: unknown,
+  bundledVersion: string,
+): PluginInstallState {
+  const entries = (
+    installedPlugins as { plugins?: Record<string, unknown> } | null
+  )?.plugins?.[pluginName];
+  const entry = Array.isArray(entries)
+    ? (entries.find((e) => e?.scope === 'user') as
+        | { version?: unknown }
+        | undefined)
+    : undefined;
+  if (!entry) return 'none';
+  return typeof entry.version === 'string' &&
+    compareVersions(entry.version, bundledVersion) >= 0
+    ? 'current'
+    : 'older';
+}
+
+/** Whether to make the plugin offer: once, when older, or when asked for. */
+export function shouldOfferPlugin(
+  made: string[],
+  state: PluginInstallState,
+  explicit: boolean,
+): boolean {
+  return explicit || !made.includes('plugin') || state === 'older';
+}
+
+/**
+ * Decides what the plugin offer does. The checkout carries a marketplace
+ * manifest named `tandembike` whose one plugin is `./playbook`, so adding it
+ * needs no network. Same shape as `planMcpOffer`, so `decideMcpOffer` runs it.
+ */
+export function planPluginOffer(state: {
+  claudeOnPath: boolean;
+  state: PluginInstallState;
+  checkout: string;
+}): McpOfferPlan {
+  if (state.state === 'current') {
+    return { action: 'skip', steps: [], text: '' };
+  }
+  const steps =
+    state.state === 'older'
+      ? [
+          ['plugin', 'marketplace', 'update', 'tandembike'],
+          ['plugin', 'update', pluginName],
+        ]
+      : [
+          ['plugin', 'marketplace', 'add', state.checkout],
+          ['plugin', 'install', pluginName, '--scope', 'user'],
+        ];
+  return {
+    action: state.claudeOnPath ? 'ask' : 'print',
+    steps,
+    text: mcpCommandText(steps),
+  };
+}
