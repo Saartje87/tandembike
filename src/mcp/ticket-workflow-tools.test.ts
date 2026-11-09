@@ -308,6 +308,41 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 
+  it('propose_triage records a duplicate and splits, and refuses malformed ones', async () => {
+    const { tickets, project, client } = await setup();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix it',
+      labels: ['needs-triage'],
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Big',
+      type: 'Epic',
+    });
+    const base = { category: 'bug', state: 'wontfix', reasoning: 'See other.' };
+    const split = { title: 'A', description: 'd', acceptanceCriteria: ['x'] };
+    const call = (number: number, extra: object) =>
+      client.callTool({
+        name: 'propose_triage',
+        arguments: { number, ...base, ...extra },
+      });
+
+    const duplicate = await call(ticket.number, { duplicateOf: epic.number });
+    expect(resultJson(duplicate)).toMatchObject({ duplicateOf: epic.number });
+    const splitProposal = await call(ticket.number, { splits: [split] });
+    expect(resultJson(splitProposal)).toMatchObject({ splits: [split] });
+
+    for (const refused of [
+      await call(ticket.number, { duplicateOf: epic.number, splits: [split] }),
+      await call(ticket.number, { duplicateOf: ticket.number }),
+      await call(epic.number, { splits: [split] }),
+    ]) {
+      expect(refused.isError).toBe(true);
+    }
+    await client.close();
+  });
+
   it('propose_triage refuses a Ticket that is not Todo', async () => {
     const { tickets, project, client } = await setup();
     const ticket = tickets.createTicket({
