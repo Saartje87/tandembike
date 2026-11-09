@@ -83,22 +83,26 @@ export const projects = sqliteTable('projects', {
     .$type<string[]>()
     .notNull()
     .default(defaultSkills),
-  /** The command Triage sends before the Ticket number; null for none. */
+  /** The command Triage sends before the Ticket number; null runs the Playbook's. */
   triageCommand: text('triage_command').default(
     legacyAgentCommandDefaults.triageCommand,
   ),
-  /** The command Start sends before the Ticket number; null for none. */
+  /** The command Start sends before the Ticket number; null runs the Playbook's. */
   startCommand: text('start_command').default(
     legacyAgentCommandDefaults.startCommand,
   ),
-  /** The command Start sends for an Epic; null falls back to startCommand. */
+  /** The command Start sends for an Epic; null runs the Playbook's. */
   startEpicCommand: text('start_epic_command').default(
     legacyAgentCommandDefaults.startEpicCommand,
   ),
-  /** The command a Retro sends before the Cycle reference; null for none. */
+  /** The command a Retro sends before the Cycle reference; null runs the Playbook's. */
   retroCommand: text('retro_command').default(
     legacyAgentCommandDefaults.retroCommand,
   ),
+  /** The command a Spec Conversation sends before the Ticket number; null runs the Playbook's. */
+  specCommand: text('spec_command'),
+  /** The command a Merge Conversation sends before the Ticket number; null runs the Playbook's. */
+  mergeCommand: text('merge_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
