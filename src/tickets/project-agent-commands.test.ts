@@ -68,7 +68,7 @@ describe("A Project's agent commands", () => {
       retroCommand: '/retro',
       specCommand: '/spec',
       mergeCommand: '/merge',
-      planCommand: '',
+      planCommand: null,
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -94,7 +94,6 @@ describe("A Project's agent commands", () => {
       triageCommand: '"/triage T1" has a space. Enter one command.',
       startEpicCommand: `"/${'a'.repeat(100)}" is longer than 100 characters.`,
       mergeCommand: '"/merge now" has a space. Enter one command.',
-      planCommand: '',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(before);
   });
