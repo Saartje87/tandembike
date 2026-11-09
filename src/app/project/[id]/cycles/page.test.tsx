@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -19,6 +19,7 @@ const { notFound } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
+vi.mock('../../../conversations/actions', () => ({ startPlan: vi.fn() }));
 
 describe('CyclesPage', () => {
   beforeEach(() => {
@@ -46,6 +47,21 @@ describe('CyclesPage', () => {
     await expect(generateMetadata({ params })).resolves.toEqual({
       title: 'History · Website',
     });
+  });
+
+  it('offers Plan once the Project has a repository (T1248)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await CyclesPage({ params })}</main>);
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull();
+    cleanup();
+
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    await renderPage(<main>{await CyclesPage({ params })}</main>);
+
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
   });
 
   it('shows the loading state until the Project loads', async () => {

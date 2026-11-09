@@ -2106,6 +2106,7 @@ describe('A Retro Conversation', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
     const cycle = tickets.createCycle({
       projectId: project.id,
@@ -2144,6 +2145,7 @@ describe('A Retro Conversation', () => {
       retroCommand: 'retro',
       specCommand: '/spec',
       mergeCommand: 'merge',
+      planCommand: '',
     });
     const cycle = tickets.createCycle({
       projectId: project.id,

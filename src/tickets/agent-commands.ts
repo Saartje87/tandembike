@@ -16,6 +16,8 @@ export type ProjectAgentCommands = {
   mergeCommand: string | null;
   /** Spec on a Ticket: turns an idea into an Epic of build Tickets (T1222). */
   specCommand: string | null;
+  /** Plan on a goal: proposes a Prepared Cycle from the Backlog (T1248). */
+  planCommand: string | null;
 };
 
 /**
@@ -63,6 +65,12 @@ export const agentStages = [
     label: 'Spec command',
   },
   {
+    stage: 'plan',
+    field: 'planCommand',
+    skill: 'plan',
+    label: 'Plan command',
+  },
+  {
     stage: 'merge',
     field: 'mergeCommand',
     skill: 'merge',
@@ -106,6 +114,7 @@ export const noAgentCommands: ProjectAgentCommands = {
   retroCommand: null,
   specCommand: null,
   mergeCommand: null,
+  planCommand: null,
 };
 
 /** The buttons that send an agent command. */
@@ -170,4 +179,16 @@ export function agentCommandMessage(
   const stage: AgentStage =
     intent === 'start' && ticket.type === 'Epic' ? 'startEpic' : intent;
   return `${commandForStage(stage, commands)} T${ticket.number}`;
+}
+
+/**
+ * The first message of a Plan Conversation, the one place it is built: the
+ * command of the Plan Stage (the Project's, or the Playbook's) followed by
+ * the User's goal. T1249's `tandembike plan` sends the same message.
+ */
+export function planCommandMessage(
+  goal: string,
+  commands: ProjectAgentCommands,
+): string {
+  return `${commandForStage('plan', commands)} ${goal.trim()}`;
 }

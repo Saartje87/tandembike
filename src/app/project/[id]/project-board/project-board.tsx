@@ -4,6 +4,7 @@ import { Cockpit } from '../../../../components/cockpit/cockpit';
 import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
+import { PlanButton } from '../../../../components/plan-button/plan-button';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
 import { appConversations } from '../../../../conversations/app-conversations';
@@ -65,6 +66,9 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   );
   const board = (
     <>
+      {tab === 'backlog' && settings.repositoryPath !== null && (
+        <PlanButton projectId={project.id} />
+      )}
       <BoardTab
         project={project}
         tab={tab}

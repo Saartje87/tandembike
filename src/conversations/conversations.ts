@@ -16,6 +16,7 @@ import { playbookPath } from '../playbook/playbook';
 import {
   agentCommandMessage,
   commandForStage,
+  planCommandMessage,
 } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
@@ -698,6 +699,52 @@ export function createConversations({
       .run();
   };
 
+  /**
+   * The median cost of the Project's last 20 Start Conversations, by when
+   * their latest run ended, that reached `completed` or `pr_open`, however
+   * old; each Conversation's cost sums its runs. Null with fewer than 5
+   * such Conversations. Only this module reads Run outcomes, so the
+   * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
+   */
+  const startCostEstimate = (projectId: number): number | null => {
+    const rows = db
+      .select()
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.projectId, projectId),
+          eq(runOutcomes.stage, 'start'),
+        ),
+      )
+      .orderBy(runOutcomes.id)
+      .all();
+    const byConversation = new Map<
+      number,
+      { costUsd: number; endedAt: number; result: RunResult }
+    >();
+    for (const row of rows) {
+      byConversation.set(row.conversationId, {
+        costUsd:
+          (byConversation.get(row.conversationId)?.costUsd ?? 0) + row.costUsd,
+        endedAt: row.endedAt.getTime(),
+        result: row.result,
+      });
+    }
+    const costs = [...byConversation.values()]
+      .filter(({ result }) => result === 'completed' || result === 'pr_open')
+      .sort((a, b) => b.endedAt - a.endedAt)
+      .slice(0, startEstimateSample)
+      .map(({ costUsd }) => costUsd)
+      .sort((a, b) => a - b);
+    if (costs.length < startEstimateMinimum) {
+      return null;
+    }
+    const middle = Math.floor(costs.length / 2);
+    return costs.length % 2 === 1
+      ? costs[middle]
+      : (costs[middle - 1] + costs[middle]) / 2;
+  };
+
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
   const briefOf = (id: number): string => {
     const conversation = get(id);
@@ -728,6 +775,9 @@ export function createConversations({
       checkCommand: settings.checkCommand,
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
+      ...(conversation.intent === 'plan'
+        ? { planEstimateUsd: startCostEstimate(conversation.projectId) }
+        : {}),
       defaults: {
         cycleId: conversation.defaultCycleId,
         epicNumber: conversation.defaultEpicNumber,
@@ -898,6 +948,16 @@ export function createConversations({
       if (input.ticketNumber === undefined) {
         throw new ValidationError({
           ticketNumber: 'A Spec is about a Ticket.',
+        });
+      }
+    }
+    if (input.intent === 'plan') {
+      if (input.startedBy !== 'user') {
+        throw new NotAllowedError('Only the User starts a Plan.');
+      }
+      if (input.ticketNumber !== undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Plan is about a Project, not a Ticket.',
         });
       }
     }
@@ -1444,52 +1504,7 @@ export function createConversations({
       }));
     },
 
-    /**
-     * The median cost of the Project's last 20 Start Conversations, by when
-     * their latest run ended, that reached `completed` or `pr_open`, however
-     * old; each Conversation's cost sums its runs. Null with fewer than 5
-     * such Conversations. Only this module reads Run outcomes, so the
-     * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
-     */
-    startCostEstimate(projectId: number): number | null {
-      const rows = db
-        .select()
-        .from(runOutcomes)
-        .where(
-          and(
-            eq(runOutcomes.projectId, projectId),
-            eq(runOutcomes.stage, 'start'),
-          ),
-        )
-        .orderBy(runOutcomes.id)
-        .all();
-      const byConversation = new Map<
-        number,
-        { costUsd: number; endedAt: number; result: RunResult }
-      >();
-      for (const row of rows) {
-        byConversation.set(row.conversationId, {
-          costUsd:
-            (byConversation.get(row.conversationId)?.costUsd ?? 0) +
-            row.costUsd,
-          endedAt: row.endedAt.getTime(),
-          result: row.result,
-        });
-      }
-      const costs = [...byConversation.values()]
-        .filter(({ result }) => result === 'completed' || result === 'pr_open')
-        .sort((a, b) => b.endedAt - a.endedAt)
-        .slice(0, startEstimateSample)
-        .map(({ costUsd }) => costUsd)
-        .sort((a, b) => a - b);
-      if (costs.length < startEstimateMinimum) {
-        return null;
-      }
-      const middle = Math.floor(costs.length / 2);
-      return costs.length % 2 === 1
-        ? costs[middle]
-        : (costs[middle - 1] + costs[middle]) / 2;
-    },
+    startCostEstimate,
 
     /** Conversations of a Project and/or Ticket, newest first. */
     list(filter: ListConversationsFilter = {}): Conversation[] {
@@ -1712,6 +1727,31 @@ export function createConversations({
           ),
         ),
         retroCycleId: cycle.id,
+      });
+    },
+
+    /**
+     * Starts a Plan: a Conversation about a Project that proposes a Prepared
+     * Cycle toward `goal` (T1248). Only the User starts it, never Autopilot. It
+     * runs in the main checkout, outside the Start run limit, and records no
+     * Cycle, so it stays out of the Spend ceiling. `tandembike plan` reuses it.
+     */
+    async startPlan(input: {
+      projectId: number;
+      goal: string;
+    }): Promise<Conversation> {
+      const goal = input.goal.trim();
+      if (goal === '') {
+        throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+      }
+      return start({
+        startedBy: 'user',
+        projectId: input.projectId,
+        intent: 'plan',
+        prompt: planCommandMessage(
+          goal,
+          tickets.getProjectAgentCommands(input.projectId),
+        ),
       });
     },
 

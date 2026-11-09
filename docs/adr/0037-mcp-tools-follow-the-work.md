@@ -29,5 +29,5 @@ The Conversations module sends `X-Tandembike-Run: <Agent-run ID>` next to the cw
 ## Consequences
 
 - A client keeps the tool list it connected with: after the merge the User must start new Claude Code sessions.
-- Phase 9's Playbook skills and phase 11's `propose_triage` and `propose_cycle` are written against this set.
+- Phase 9's Playbook skills and phase 11's `propose_triage` (and `create_cycle`, which Plan uses in place of a `propose_cycle`) are written against this set.
 - A change to the tool set updates the guard test's list, the snapshot in `src/mcp/__snapshots__/` and this record in the same change.

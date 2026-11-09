@@ -17,11 +17,32 @@ const commands = {
   retroCommand: null,
   specCommand: null,
   mergeCommand: null,
+  planCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
   beforeEach(() => {
     vi.mocked(setProjectAgentCommands).mockReset();
+  });
+
+  it('shows the Plan command override and the Playbook command it replaces (T1248)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(setProjectAgentCommands).mockResolvedValue({
+      ok: true,
+      commands: { ...commands, planCommand: '/my:plan' },
+    });
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+    const plan = screen.getByRole('textbox', { name: 'Plan command' });
+
+    expect(plan).toHaveValue('');
+    expect(screen.getByText('Blank runs /tandembike:plan')).toBeInTheDocument();
+
+    await user.type(plan, 'my:plan');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(setProjectAgentCommands).toHaveBeenCalledWith(
+      expect.objectContaining({ planCommand: 'my:plan' }),
+    );
   });
 
   it('shows the four commands, blank for none, and saves the edited ones', async () => {
@@ -35,6 +56,7 @@ describe('AgentCommandsForm', () => {
         retroCommand: '/retro',
         specCommand: '/spec',
         mergeCommand: '/merge',
+        planCommand: '',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -67,6 +89,7 @@ describe('AgentCommandsForm', () => {
       retroCommand: 'retro',
       specCommand: 'my:spec',
       mergeCommand: '',
+      planCommand: '',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');
