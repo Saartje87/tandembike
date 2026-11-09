@@ -167,6 +167,14 @@ export async function setProjectAgentSettings(
             runModel:
               settings.runModel === null ? null : String(settings.runModel),
           }),
+      ...(settings.triageModel === undefined
+        ? {}
+        : {
+            triageModel:
+              settings.triageModel === null
+                ? null
+                : String(settings.triageModel),
+          }),
       ...(settings.autopilot === undefined
         ? {}
         : { autopilot: Boolean(settings.autopilot) }),

@@ -80,6 +80,8 @@ export const projects = sqliteTable('projects', {
     .default('default'),
   /** The model its runs start on; null is the User's default model. */
   runModel: text('run_model'),
+  /** The model Triage runs start on; null uses the run model. */
+  triageModel: text('triage_model'),
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "81c15432-2ee3-4ec0-8450-44e26afc6d5f",
+  "id": "0ee33b71-e100-4f9f-8c0b-3db17cdb620b",
   "prevId": "f64b076a-9f50-475f-9127-4333bac059c4",
   "tables": {
     "conversation_entries": {
@@ -513,6 +513,13 @@
         },
         "run_model": {
           "name": "run_model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "triage_model": {
+          "name": "triage_model",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
