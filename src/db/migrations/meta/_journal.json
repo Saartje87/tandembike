@@ -327,8 +327,15 @@
     {
       "idx": 46,
       "version": "6",
-      "when": 1794246440654,
-      "tag": "0046_plan_command",
+      "when": 1794246409599,
+      "tag": "0046_triage_proposals",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1794246701998,
+      "tag": "0047_plan_command",
       "breakpoints": true
     }
   ]

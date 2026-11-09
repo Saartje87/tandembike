@@ -29,6 +29,7 @@ import {
   ticketComments,
   ticketLabels,
   tickets,
+  triageProposals,
 } from '../db/schema';
 import {
   canonicalFolder,
@@ -157,6 +158,7 @@ import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
+import { createTriageProposals } from './triage-proposals';
 import { createWork } from './work';
 import { statSync } from 'node:fs';
 import { isAbsolute } from 'node:path';
@@ -3174,6 +3176,13 @@ export function createTickets(
   };
   return {
     ...core,
+    ...createTriageProposals(db, actor, changes, {
+      getTicket: core.getTicket,
+      updateTicket: core.updateTicket.bind(core),
+      addComment: core.addComment.bind(core),
+      checkCriteria: checkAcceptanceCriteria,
+      transaction: core.transaction,
+    }),
     ...createWork({
       ...core,
     }),
@@ -3890,6 +3899,9 @@ function removeTicket(db: DatabaseConnection, number: number) {
   deleteActivity(db, number);
   db.delete(ticketComments)
     .where(eq(ticketComments.ticketNumber, number))
+    .run();
+  db.delete(triageProposals)
+    .where(eq(triageProposals.ticketNumber, number))
     .run();
   deleteAttachments(db, number);
   db.delete(ticketAcceptanceCriteria)

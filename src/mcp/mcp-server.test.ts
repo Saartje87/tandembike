@@ -103,7 +103,13 @@ describe('MCP server', () => {
         .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] === true)
         .map((tool) => tool.name)
         .sort(),
-    ).toEqual(['add_note', 'get_ticket', 'start_work', 'update_ticket']);
+    ).toEqual([
+      'add_note',
+      'get_ticket',
+      'propose_triage',
+      'start_work',
+      'update_ticket',
+    ]);
     expect(
       tools
         .filter((tool) => tool._meta?.['anthropic/alwaysLoad'] !== true)
@@ -130,6 +136,7 @@ describe('MCP server', () => {
       'get_ticket',
       'next_work',
       'open_pr',
+      'propose_triage',
       'read_attachment',
       'start_work',
       'update_ticket',

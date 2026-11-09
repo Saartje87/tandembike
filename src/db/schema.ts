@@ -28,6 +28,12 @@ import { projectIcons } from '../tickets/project-icons';
 import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
+import {
+  type TriageSplit,
+  triageCategories,
+  triageProposalStatuses,
+  triageStates,
+} from '../tickets/triage-proposal-state';
 
 /**
  * What the agent command and run mode columns defaulted to before the
@@ -504,4 +510,37 @@ export const runOutcomes = sqliteTable(
     index('run_outcomes_conversation_id').on(table.conversationId),
     index('run_outcomes_project_ended').on(table.projectId, table.endedAt),
   ],
+);
+
+/**
+ * Triage proposals: what a Triage run recommends for a Ticket, kept as a
+ * record after the User decides. Proposals are never deleted, except along
+ * with their Ticket.
+ */
+export const triageProposals = sqliteTable(
+  'triage_proposals',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+    /** The Agent run that made it, when it said so. */
+    runId: text('run_id'),
+    category: text('category', { enum: triageCategories }).notNull(),
+    state: text('state', { enum: triageStates }).notNull(),
+    reasoning: text('reasoning').notNull(),
+    /** The criteria that replace the Ticket's on Approve; null leaves them. */
+    acceptanceCriteria: text('acceptance_criteria', {
+      mode: 'json',
+    }).$type<string[] | null>(),
+    /** The Ticket this one duplicates, or null. */
+    duplicateOf: integer('duplicate_of'),
+    splits: text('splits', { mode: 'json' }).$type<TriageSplit[] | null>(),
+    status: text('status', { enum: triageProposalStatuses })
+      .notNull()
+      .default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    decidedAt: integer('decided_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [index('triage_proposals_ticket_number').on(table.ticketNumber)],
 );

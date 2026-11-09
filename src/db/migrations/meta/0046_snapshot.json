@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "ccb319ce-7dcf-4826-85d2-43e916c56eac",
+  "id": "42091fd8-0816-476f-b9a4-2283a714c7db",
   "prevId": "9b7bc54e-9137-4c04-81db-11b927697993",
   "tables": {
     "conversation_entries": {
@@ -589,13 +589,6 @@
         },
         "merge_command": {
           "name": "merge_command",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "plan_command": {
-          "name": "plan_command",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -1406,6 +1399,117 @@
           "tableTo": "projects",
           "columnsFrom": ["project_id"],
           "columnsTo": ["id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "triage_proposals": {
+      "name": "triage_proposals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "ticket_number": {
+          "name": "ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reasoning": {
+          "name": "reasoning",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "acceptance_criteria": {
+          "name": "acceptance_criteria",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "duplicate_of": {
+          "name": "duplicate_of",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "splits": {
+          "name": "splits",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "decided_at": {
+          "name": "decided_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "triage_proposals_ticket_number": {
+          "name": "triage_proposals_ticket_number",
+          "columns": ["ticket_number"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "triage_proposals_ticket_number_tickets_number_fk": {
+          "name": "triage_proposals_ticket_number_tickets_number_fk",
+          "tableFrom": "triage_proposals",
+          "tableTo": "tickets",
+          "columnsFrom": ["ticket_number"],
+          "columnsTo": ["number"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

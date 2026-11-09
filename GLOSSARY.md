@@ -53,7 +53,7 @@ The Lane for Todo Tickets and Epics labelled `ready-for-agent`: work an Agent ca
 _Avoid_: Todo Lane, Ready
 
 **Intake**:
-The Lane for Todo Tickets and Epics still to triage: labelled `needs-triage` or `needs-info`, or with no triage state label. A Todo Epic labelled `ready-for-agent` with no unarchived children, on any Board, is in Intake, not Queued, until it is split (ADR 0027). It is the last group of Needs you, and a Ticket created on the Board starts there.
+The Lane for Todo Tickets and Epics still to triage: labelled `needs-triage` or `needs-info`, or with no triage state label. A Todo Epic labelled `ready-for-agent` with no unarchived children, on any Board, is in Intake, not Queued, until it is split (ADR 0027). It is the last group of Needs you, and a Ticket created on the Board starts there. A Ticket with a pending triage proposal shows a "Triage proposed" marker there.
 _Avoid_: Inbox, Untriaged
 
 **Your work**:
@@ -95,6 +95,10 @@ _Avoid_: External link, external ID, URL, link
 **Reference template**:
 A Project's rule that turns External reference keys starting with a given prefix, such as `#` or `ABC-`, into a URL, so they open as links. A Project can have several; the first whose prefix matches applies. Only the User manages them. A key keeps its text, and is linked by the templates of whichever Project its Ticket is in.
 _Avoid_: Link template, URL pattern
+
+**Triage proposal**:
+What a Triage run recommends for a Todo Ticket, made with `propose_triage`: a category (`bug` or `enhancement`), a state (`ready-for-agent`, `ready-for-human`, `needs-info` or `wontfix`), the reasoning in Markdown, optional acceptance criteria and the run that made it. It is pending until the User decides in the Ticket drawer. Approve sets the category and state labels, swapping the old state label (the User may change either first), and replaces the acceptance criteria when the proposal has some; Reject adds an optional reason as a comment. A newer proposal supersedes a pending one, and decided proposals are kept as a record. Proposing posts the reasoning as a Comment starting with the AI disclaimer. Only the User approves or rejects, in the UI; an Agent never applies the proposal itself. Duplicate and split proposals are refused for now.
+_Avoid_: Triage recommendation, triage comment
 
 **Comment**:
 A Markdown note on a Ticket that shares progress or context without changing its description. Its author is `user` or `agent`: the UI writes `user`, MCP writes `agent` through `add_note`. Editing or removing a Comment is the User's, in the UI only (ADR 0037).

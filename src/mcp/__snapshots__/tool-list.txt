@@ -711,6 +711,98 @@
     }
   },
   {
+    "name": "propose_triage",
+    "title": "Propose triage",
+    "description": "End a Triage run: propose a category and a state for a Todo Ticket, with your reasoning. The reasoning is posted as the Ticket's triage comment, starting with the AI disclaimer, so do not also call add_note. Nothing is applied: the User approves or rejects the proposal in the Ticket drawer, and only an approval sets the labels and replaces the acceptance criteria (when you give some). A newer proposal replaces a pending one. Refused for a Ticket that is not Todo. Returns the proposal.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket number, e.g. 42 for T42."
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "bug",
+            "enhancement"
+          ],
+          "description": "bug or enhancement."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready-for-agent",
+            "ready-for-human",
+            "needs-info",
+            "wontfix"
+          ],
+          "description": "The state you recommend: ready-for-agent, ready-for-human, needs-info or wontfix."
+        },
+        "reasoning": {
+          "type": "string",
+          "description": "Why, in Markdown: what you checked and found. It becomes the triage comment."
+        },
+        "acceptanceCriteria": {
+          "description": "Proposed acceptance criteria, one line each. On approval they replace the Ticket's; leave out to keep its own.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "duplicateOf": {
+          "description": "Not supported yet: refused.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "splits": {
+          "description": "Not supported yet: refused.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "acceptanceCriteria": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "title",
+              "description",
+              "acceptanceCriteria"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "number",
+        "category",
+        "state",
+        "reasoning"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    }
+  },
+  {
     "name": "read_attachment",
     "title": "Read attachment",
     "description": "Get an Attachment by its id, as returned by get_ticket or attach. The first content is its metadata (id, ticketNumber, name, mediaType, size, author, createdAt, url) as JSON. A PNG, JPEG, GIF or WebP follows as image content you can look at, and a text type (text/*, JSON, XML, YAML, JavaScript) as text. Any other type is metadata only; its url is where the app serves it on localhost.",

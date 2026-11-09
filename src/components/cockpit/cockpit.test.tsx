@@ -320,6 +320,32 @@ describe('Cockpit', () => {
     ).toBe(null);
   });
 
+  it('marks an Intake row with a pending triage proposal', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderWithTheme(
+      <ConversationActivityProvider>
+        <Cockpit
+          projectId={3}
+          cycle={null}
+          tickets={[
+            ticket({ number: 20, title: 'Proposed', labels: ['needs-triage'] }),
+            ticket({ number: 21, title: 'Plain', labels: ['needs-triage'] }),
+          ]}
+          proposedTriage={[20]}
+          planning
+        />
+      </ConversationActivityProvider>,
+    );
+
+    const [proposed, plain] = within(section('Intake')).getAllByRole(
+      'listitem',
+    );
+    expect(within(proposed).getByText('Triage proposed')).toBeVisible();
+    expect(within(plain).queryByText('Triage proposed')).toBeNull();
+  });
+
   it("shows the Cycle's Intake after Review, with each Ticket's triage label", async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,

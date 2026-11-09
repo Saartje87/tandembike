@@ -122,6 +122,8 @@ export type CockpitProps = {
   epics?: Pick<Ticket, 'number' | 'title'>[];
   /** The Board filter in the URL as the Board loads. */
   filter?: BoardFilter;
+  /** The numbers of Tickets with a pending triage proposal. Defaults to none. */
+  proposedTriage?: number[];
 };
 
 const sectionIntent = {
@@ -725,6 +727,7 @@ export const Cockpit: FC<CockpitProps> = ({
   cycles = [],
   epics = [],
   filter: initialFilter,
+  proposedTriage = [],
 }) => {
   const live = useLiveConversations();
   const cost = useTicketCosts();
@@ -935,6 +938,9 @@ export const Cockpit: FC<CockpitProps> = ({
         selection={row.children ? undefined : selectable(row.number, list)}
         end={
           <Inline gap={2} alignY="center" flexWrap="nowrap">
+            {proposedTriage.includes(row.number) && (
+              <Tag intent="info">Triage proposed</Tag>
+            )}
             {row.kind === 'intake' && (
               <Tag>{row.triageLabel ?? 'no triage label'}</Tag>
             )}

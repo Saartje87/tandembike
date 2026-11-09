@@ -64,7 +64,14 @@ The User may reply to this Conversation with `Approved: merge T42 now by the Pla
 
 ## 8. Feedback
 
-If you hit friction that is worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most a few with `file_tickets` before you hand off, each with a clear problem and how to reproduce it. Search with `find_tickets` first so you do not duplicate one. File nothing when there was no friction.
+If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
+
+- has a clear problem and how to reproduce it;
+- is labelled `needs-triage` and `from:agent-run`;
+- sits outside any Cycle and Epic (leave both out);
+- names the Ticket you worked as its Origin (`originNumber`), so the Retro can find it.
+
+File nothing when there was no friction.
 
 ## When you cannot finish
 

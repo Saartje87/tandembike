@@ -42,4 +42,8 @@ export type ActivityChange =
   | { type: 'criterionChecked'; text: string }
   | { type: 'criterionUnchecked'; text: string }
   /** The whole list was replaced: no diff is kept. */
-  | { type: 'criteriaEdited' };
+  | { type: 'criteriaEdited' }
+  /** A Triage run proposed a category and a state. */
+  | { type: 'triageProposed'; category: string; state: string }
+  | { type: 'triageApproved'; category: string; state: string }
+  | { type: 'triageRejected' };
