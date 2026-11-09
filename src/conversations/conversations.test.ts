@@ -540,6 +540,42 @@ describe('A running Conversation', () => {
     expect(conversations.get(id).costUsd).toBeCloseTo(0.6);
   });
 
+  it('works again when the Agent acts after its turn ended, as when a background task wakes it (T1261)', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.25 });
+    expect(conversations.get(id).state).toBe('idle');
+
+    runner.runs[0].emit({ type: 'tool', text: 'Bash git status' });
+    expect(conversations.get(id).state).toBe('running');
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.5 });
+    runner.runs[0].emit({ type: 'agent', text: 'The subagent is done.' });
+    expect(conversations.get(id).state).toBe('running');
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 0.75 });
+    expect(conversations.get(id).state).toBe('idle');
+  });
+
+  it('keeps waiting for the User while a background task reports (T1261)', async () => {
+    const { conversations, runner, project } = setup();
+    const { id } = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    runner.runs[0].emit({ type: 'waiting', waiting: true });
+
+    runner.runs[0].emit({ type: 'tool', text: 'Read README.md' });
+    expect(conversations.get(id).state).toBe('waiting');
+  });
+
   it('waits for the User when the run says so, and works again after', async () => {
     const { conversations, runner, project } = setup();
     const { id } = await conversations.start({
