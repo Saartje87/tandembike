@@ -29,6 +29,8 @@ const unset: ProjectAgentSettings = {
   triageModel: null,
   autopilot: false,
   spendCeilingUsd: null,
+  autoTriage: false,
+  triageCeilingUsd: null,
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -133,6 +135,8 @@ describe('AgentSettingsForm', () => {
         triageModel: null,
         autopilot: false,
         spendCeilingUsd: null,
+        autoTriage: false,
+        triageCeilingUsd: null,
       }),
     );
   });
@@ -230,6 +234,8 @@ describe('AgentSettingsForm', () => {
         triageModel: null,
         autopilot: false,
         spendCeilingUsd: null,
+        autoTriage: false,
+        triageCeilingUsd: null,
       }),
     );
   });
@@ -295,6 +301,46 @@ describe('AgentSettingsForm', () => {
       expect(setProjectAgentSettings).toHaveBeenCalledWith(
         expect.objectContaining({ autopilot: true, spendCeilingUsd: 25.5 }),
       ),
+    );
+  });
+
+  it('saves Auto-triage with its Triage ceiling in dollars', async () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(
+      screen.getByRole('switch', { name: 'Auto-triage' }),
+    ).not.toBeChecked();
+    await userEvent.type(screen.getByLabelText('Triage ceiling (USD)'), '4.5');
+    await userEvent.click(screen.getByRole('switch', { name: 'Auto-triage' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ autoTriage: true, triageCeilingUsd: 4.5 }),
+      ),
+    );
+  });
+
+  it('shows the Triage ceiling refusal on its field', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Set a Triage ceiling before turning on Auto-triage.',
+      fieldErrors: {
+        triageCeilingUsd: 'Set a Triage ceiling before turning on Auto-triage.',
+      },
+    });
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Auto-triage' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText(
+        'Set a Triage ceiling before turning on Auto-triage.',
+      ),
+    ).toBeInTheDocument();
+    expect(setProjectAgentSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ autoTriage: true, triageCeilingUsd: null }),
     );
   });
 

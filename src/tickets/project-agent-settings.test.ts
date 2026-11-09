@@ -27,6 +27,8 @@ describe("A Project's agent settings", () => {
       triageModel: null,
       autopilot: false,
       spendCeilingUsd: null,
+      autoTriage: false,
+      triageCeilingUsd: null,
     });
   });
 
@@ -108,6 +110,54 @@ describe("A Project's agent settings", () => {
         spendCeilingUsd: null,
       }),
     ).toMatchObject({ autopilot: false, spendCeilingUsd: null });
+  });
+
+  it('turn on Auto-triage only with a Triage ceiling, and refuse clearing it while on', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    const refused = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { autoTriage: true }),
+    );
+    expect(refused).toBeInstanceOf(ValidationError);
+    expect((refused as ValidationError).fieldErrors).toHaveProperty(
+      'triageCeilingUsd',
+    );
+    expect(tickets.getProjectAgentSettings(project.id).autoTriage).toBe(false);
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: true,
+        triageCeilingUsd: 2.5,
+      }),
+    ).toMatchObject({
+      autoTriage: true,
+      triageCeilingUsd: 2.5,
+      autopilot: false,
+    });
+
+    const cleared = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { triageCeilingUsd: null }),
+    );
+    expect((cleared as ValidationError).fieldErrors).toHaveProperty(
+      'triageCeilingUsd',
+    );
+
+    for (const triageCeilingUsd of [0, -1, Number.NaN]) {
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, { triageCeilingUsd }),
+      );
+      expect((error as ValidationError).fieldErrors).toHaveProperty(
+        'triageCeilingUsd',
+      );
+    }
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: false,
+        triageCeilingUsd: null,
+      }),
+    ).toMatchObject({ autoTriage: false, triageCeilingUsd: null });
   });
 
   it('refuse a Spend ceiling that is not a positive number', () => {

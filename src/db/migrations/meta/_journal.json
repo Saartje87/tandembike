@@ -330,6 +330,13 @@
       "when": 1794246409599,
       "tag": "0046_triage_proposals",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1794246713501,
+      "tag": "0047_auto_triage",
+      "breakpoints": true
     }
   ]
 }

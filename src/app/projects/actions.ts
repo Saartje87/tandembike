@@ -186,6 +186,17 @@ export async function setProjectAgentSettings(
                 ? null
                 : Number(settings.spendCeilingUsd),
           }),
+      ...(settings.autoTriage === undefined
+        ? {}
+        : { autoTriage: Boolean(settings.autoTriage) }),
+      ...(settings.triageCeilingUsd === undefined
+        ? {}
+        : {
+            triageCeilingUsd:
+              settings.triageCeilingUsd === null
+                ? null
+                : Number(settings.triageCeilingUsd),
+          }),
     });
     revalidatePath(boardRoute, 'layout');
     return {};

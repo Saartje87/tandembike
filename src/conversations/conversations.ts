@@ -286,6 +286,12 @@ const modelFor = (
     ? settings.triageModel
     : settings.runModel;
 
+/** What an Autopilot Triage run may not use: its only writes are a proposal and a note (ADR 0040). */
+const autopilotTriageDisallowedTools = [
+  'mcp__tandembike__update_ticket',
+  'mcp__tandembike__file_tickets',
+];
+
 /** A Start and a Merge are the intents that count as Start runs (T1221). */
 const isStartRunIntent = (intent: ConversationIntent) =>
   intent === 'start' || intent === 'merge';
@@ -789,6 +795,10 @@ export function createConversations({
         prompt,
         runMode: settings.runMode,
         ...(runModel === null ? {} : { model: runModel }),
+        ...(conversation.intent === 'triage' &&
+        conversation.startedBy === 'autopilot'
+          ? { disallowedTools: autopilotTriageDisallowedTools }
+          : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
         askQuestion: (questions) => askQuestion(id, handle, questions),
@@ -1368,6 +1378,43 @@ export function createConversations({
         Math.max(0, (started?.total ?? 0) - (approvedMerges?.total ?? 0)) +
         (replies?.total ?? 0)
       );
+    },
+
+    /**
+     * What Autopilot's Triage runs spent since `dayStart` in USD (ADR 0040):
+     * the cost of the runs it started that ended then or later, from Run
+     * outcomes, plus the cost so far of an Autopilot Triage run still working.
+     */
+    autopilotTriageSpend(projectId: number, dayStart: Date): number {
+      const ended = db
+        .select({
+          total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        })
+        .from(runOutcomes)
+        .where(
+          and(
+            eq(runOutcomes.projectId, projectId),
+            eq(runOutcomes.stage, 'triage'),
+            eq(runOutcomes.startedByAutopilot, true),
+            gte(runOutcomes.endedAt, dayStart),
+          ),
+        )
+        .get();
+      let working = 0;
+      for (const id of live.keys()) {
+        const conversation = get(id);
+        const pending = live.get(id)?.pending;
+        if (
+          pending &&
+          conversation.projectId === projectId &&
+          conversation.intent === 'triage' &&
+          conversation.startedBy === 'autopilot'
+        ) {
+          // The run's own cost so far: the Conversation's total less its earlier runs.
+          working += Math.max(0, conversation.costUsd - pending.costAtStart);
+        }
+      }
+      return (ended?.total ?? 0) + working;
     },
 
     /**

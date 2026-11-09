@@ -45,6 +45,8 @@ type AgentSettingsValues = {
   triageModel: string;
   autopilot: boolean;
   spendCeiling: string;
+  autoTriage: boolean;
+  triageCeiling: string;
 };
 
 /** The form field each field of a refusal names. */
@@ -58,6 +60,7 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   runModel: 'runModel',
   triageModel: 'triageModel',
   spendCeilingUsd: 'spendCeiling',
+  triageCeilingUsd: 'triageCeiling',
 };
 
 /**
@@ -114,6 +117,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
         settings.spendCeilingUsd === null
           ? ''
           : String(settings.spendCeilingUsd),
+      autoTriage: settings.autoTriage,
+      triageCeiling:
+        settings.triageCeilingUsd === null
+          ? ''
+          : String(settings.triageCeilingUsd),
     },
   });
   const hasPath = settings.repositoryPath !== null;
@@ -133,6 +141,10 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const ceilingId = useId();
   const ceilingErrorId = useId();
   const autopilotId = useId();
+  const autoTriageId = useId();
+  const triageCeilingId = useId();
+  const triageCeilingErrorId = useId();
+  const triageCeilingError = errors.triageCeiling?.message;
   const serverError = errors.root?.server?.message;
 
   /** Re-runs detection for the path in the field and offers its candidates. */
@@ -172,6 +184,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       autopilot: values.autopilot,
       spendCeilingUsd:
         values.spendCeiling.trim() === '' ? null : Number(values.spendCeiling),
+      autoTriage: values.autoTriage,
+      triageCeilingUsd:
+        values.triageCeiling.trim() === ''
+          ? null
+          : Number(values.triageCeiling),
     });
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
@@ -380,6 +397,39 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={ceilingError ? ceilingErrorId : undefined}
             />
             <FieldError id={ceilingErrorId} reason={ceilingError} />
+          </Stack>
+          <Stack gap={1}>
+            <Inline gap={2} alignY="center">
+              <Switch {...register('autoTriage')} id={autoTriageId} />
+              <Label htmlFor={autoTriageId}>Auto-triage</Label>
+            </Inline>
+            <Text tag="p" fontSize="small" color="muted">
+              While on, Tandembike starts one Triage run at a time on Intake
+              work in the Backlog and every Cycle, oldest first, with or without
+              an Active Cycle. Each ends in a proposal for you to approve.
+              Turning it off leaves a running Triage run alone.
+            </Text>
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={triageCeilingId}>Triage ceiling (USD)</Label>
+            <TextInput
+              {...register('triageCeiling')}
+              id={triageCeilingId}
+              type="number"
+              min={0}
+              step="any"
+              inputMode="decimal"
+              placeholder="No ceiling"
+              aria-invalid={triageCeilingError ? true : undefined}
+              aria-describedby={
+                triageCeilingError ? triageCeilingErrorId : undefined
+              }
+            />
+            <Text tag="p" fontSize="small" color="muted">
+              The most Auto-triage may spend per day. Triage pauses once today's
+              spend reaches it and starts again tomorrow.
+            </Text>
+            <FieldError id={triageCeilingErrorId} reason={triageCeilingError} />
           </Stack>
           {serverError && <Alert intent="danger">{serverError}</Alert>}
           <div>

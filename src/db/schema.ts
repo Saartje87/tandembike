@@ -86,6 +86,12 @@ export const projects = sqliteTable('projects', {
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
   spendCeilingUsd: real('spend_ceiling_usd'),
+  /** Whether Autopilot starts Triage runs on Triage-eligible Tickets (ADR 0040). */
+  autoTriage: integer('auto_triage', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** What Auto-triage may spend per local calendar day, in dollars; null while unset. */
+  triageCeilingUsd: real('triage_ceiling_usd'),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()
