@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAutopilot } from '../autopilot/autopilot';
 import { createTestConversations } from '../test/conversations';
 import { type Change, createChangeChannel } from '../tickets/changes';
+import type { Notice } from './notice';
 import { createNotices } from './notices';
 
 const request = {
@@ -383,6 +384,96 @@ describe('Notices', () => {
     void run.options.askPermission(request);
 
     expect(world.raised).not.toHaveBeenCalled();
+  });
+});
+
+describe('ceiling Notices', () => {
+  const ofKind = (world: { raised: { mock: { calls: unknown[][] } } }) =>
+    world.raised.mock.calls
+      .map(([notice]) => notice as Notice)
+      .filter((notice) => notice.kind === 'ceiling');
+  const poke = (world: ReturnType<typeof setup>) =>
+    world.tickets.createTicket({ projectId: world.project.id, title: 'Poke' });
+
+  it('raises once a day when the machine ceiling pauses Autopilot, opening Settings', () => {
+    const world = setup();
+    world.notices.start();
+    vi.spyOn(world.conversations, 'machineBudget').mockReturnValue({
+      spendUsd: 5,
+      ceilingUsd: 4,
+      paused: true,
+    });
+
+    poke(world);
+    poke(world);
+
+    expect(ofKind(world)).toEqual([
+      expect.objectContaining({
+        path: '/settings',
+        projectId: null,
+        body: '$5.00 spent today of $4.00',
+      }),
+    ]);
+
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 60 * 1000));
+    poke(world);
+    vi.useRealTimers();
+    expect(ofKind(world)).toHaveLength(2);
+  });
+
+  it('raises for the triage ceiling and opens the Project Board', () => {
+    const world = setup();
+    world.notices.start();
+    vi.spyOn(world.conversations, 'triageBudget').mockReturnValue({
+      spendUsd: 3,
+      ceilingUsd: 2,
+      paused: true,
+    });
+
+    poke(world);
+    poke(world);
+
+    expect(ofKind(world)).toEqual([
+      expect.objectContaining({
+        projectId: world.project.id,
+        path: `/project/${world.project.id}`,
+        body: '$3.00 spent today of $2.00',
+      }),
+    ]);
+  });
+
+  it("raises for a Project's Spend ceiling on its Active Cycle", () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      autopilot: true,
+      spendCeilingUsd: 1,
+    });
+    const cycle = world.tickets.createCycle({
+      projectId: world.project.id,
+      title: 'Sprint',
+    });
+    world.tickets.startCycle(cycle.id);
+    world.notices.start();
+    vi.spyOn(world.conversations, 'autopilotSpend').mockReturnValue(1.5);
+
+    poke(world);
+    poke(world);
+
+    expect(ofKind(world)).toEqual([
+      expect.objectContaining({
+        projectId: world.project.id,
+        path: `/project/${world.project.id}`,
+        body: '$1.50 spent of $1.00 on Sprint',
+      }),
+    ]);
+  });
+
+  it('raises nothing under the ceilings', () => {
+    const world = setup();
+    world.notices.start();
+    poke(world);
+    expect(ofKind(world)).toEqual([]);
   });
 });
 

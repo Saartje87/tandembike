@@ -2,8 +2,10 @@ import {
   boardPathOf,
   conversationOnPath,
   projectPath,
+  settingsPath,
   ticketOnBoardPath,
 } from '../app/lib/paths';
+import { formatCost } from '../components/conversation-labels/conversation-labels';
 import { conversationActivity } from '../conversations/conversation-activity';
 import { isTerminal } from '../conversations/conversation-state';
 import type {
@@ -253,6 +255,76 @@ const triage: NoticeDetector = ({ tickets }) =>
     }),
   );
 
+/** The local calendar day of `now`, as the ceilings' days reset at midnight. */
+const dayOf = (now: Date): string =>
+  [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('-');
+
+/**
+ * Autopilot paused on a ceiling: a Project's Spend ceiling on its Active
+ * Cycle, a Project's triage ceiling or the machine ceiling. Keyed by the
+ * ceiling, its Project or Cycle and the day, so each pause notifies once a day.
+ */
+const ceiling: NoticeDetector = ({ tickets, conversations }) => {
+  const day = dayOf(new Date());
+  const found: Notice[] = [];
+  const machine = conversations.machineBudget();
+  if (machine?.paused) {
+    found.push({
+      kind: 'ceiling',
+      key: `ceiling:machine:${day}`,
+      projectId: null,
+      ticketNumber: null,
+      conversationId: null,
+      title: 'Autopilot paused on the machine ceiling',
+      body: `${formatCost(machine.spendUsd)} spent today of ${formatCost(machine.ceilingUsd)}`,
+      path: settingsPath(),
+    });
+  }
+  for (const project of tickets.listProjects()) {
+    if (project.archived) {
+      continue;
+    }
+    const settings = tickets.getProjectAgentSettings(project.id);
+    const cycle = tickets
+      .listCycles(project.id)
+      .find((candidate) => candidate.state === 'Active');
+    if (settings.autopilot && cycle && settings.spendCeilingUsd !== null) {
+      const spendUsd = conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      });
+      if (spendUsd >= settings.spendCeilingUsd) {
+        found.push({
+          kind: 'ceiling',
+          key: `ceiling:spend:${cycle.id}:${day}`,
+          projectId: project.id,
+          ticketNumber: null,
+          conversationId: null,
+          title: `Autopilot paused on ${project.name}'s Spend ceiling`,
+          body: `${formatCost(spendUsd)} spent of ${formatCost(settings.spendCeilingUsd)} on ${cycle.title}`,
+          path: projectPath(project.id),
+        });
+      }
+    }
+    const triageBudget = conversations.triageBudget(project.id);
+    if (triageBudget?.paused) {
+      found.push({
+        kind: 'ceiling',
+        key: `ceiling:triage:${project.id}:${day}`,
+        projectId: project.id,
+        ticketNumber: null,
+        conversationId: null,
+        title: `Auto-triage paused on ${project.name}'s triage ceiling`,
+        body: `${formatCost(triageBudget.spendUsd)} spent today of ${formatCost(triageBudget.ceilingUsd)}`,
+        path: projectPath(project.id),
+      });
+    }
+  }
+  return found;
+};
+
 /** Every kind's detector. A new kind adds one entry. */
 export const noticeDetectors: NoticeDetector[] = [
   waiting,
@@ -260,4 +332,5 @@ export const noticeDetectors: NoticeDetector[] = [
   merge,
   stalled,
   triage,
+  ceiling,
 ];

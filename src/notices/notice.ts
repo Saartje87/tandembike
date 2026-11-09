@@ -8,6 +8,7 @@ export const noticeKinds = [
   'merge',
   'stalled',
   'triage',
+  'ceiling',
 ] as const;
 export type NoticeKind = (typeof noticeKinds)[number];
 
@@ -20,7 +21,8 @@ export type Notice = {
   kind: NoticeKind;
   /** Identifies this occurrence, such as the Conversation and its pending entry. */
   key: string;
-  projectId: number;
+  /** The Notice's Project, or null for one about the whole machine. */
+  projectId: number | null;
   ticketNumber: number | null;
   conversationId: number | null;
   title: string;
