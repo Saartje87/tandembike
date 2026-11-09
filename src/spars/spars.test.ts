@@ -474,3 +474,116 @@ describe('Closing and reopening a Spar', () => {
     expect(runner.runs[1].options.resume).toBe('sess-1');
   });
 });
+
+describe('The Hand-off of a Spar', () => {
+  async function started(focus = false) {
+    const world = createTestSpars();
+    const idea = world.tickets.createTicket({
+      projectId: world.project.id,
+      title: 'Faster triage',
+    });
+    const spar = await world.spars.startSpar({
+      projectId: world.project.id,
+      topic: 'Speed',
+      ...(focus ? { focusTicketNumber: idea.number } : {}),
+    });
+    return { ...world, spar, idea };
+  }
+
+  const draft = {
+    title: 'Cache triage results',
+    description: '## Decisions\n- Cache',
+    path: 'spec' as const,
+  };
+
+  it("keeps the Agent's draft until the User approves it", async () => {
+    const { spars, spar } = await started();
+
+    spars.proposeHandOff(spar.id, draft);
+
+    expect(spars.getSpar(spar.id).handOffDraft).toEqual(draft);
+  });
+
+  it('refuses a draft without a title or path', async () => {
+    const { spars, spar } = await started();
+
+    expect(() =>
+      spars.proposeHandOff(spar.id, { ...draft, title: ' ' }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      spars.proposeHandOff(spar.id, { ...draft, path: 'later' as never }),
+    ).toThrow(ValidationError);
+  });
+
+  it('files the idea Ticket in Intake with a link back, and records it as the outcome', async () => {
+    const { spars, spar, tickets, runner, project } = await started();
+    spars.proposeHandOff(spar.id, draft);
+
+    const result = await spars.handOff(spar.id, {
+      title: 'Cache the results',
+      description: 'Edited by me',
+      path: 'ticket',
+    });
+
+    const ticket = tickets.getTicket(result.ticketNumber);
+    expect(ticket).toMatchObject({
+      projectId: project.id,
+      title: 'Cache the results',
+      status: 'Todo',
+      labels: [],
+      origin: null,
+      cycle: null,
+    });
+    expect(ticket.description).toBe(
+      `Edited by me\n\nFrom the Spar [Speed](/project/${project.id}/spar/${spar.id}).`,
+    );
+    expect(result.conversation).toBeNull();
+    expect(runner.runs).toHaveLength(1);
+    expect(spars.getSpar(spar.id)).toMatchObject({
+      outcomeTicketNumber: ticket.number,
+      handOffDraft: null,
+    });
+    expect(spars.listSpars(project.id)[0]).toMatchObject({
+      outcomeTicketNumber: ticket.number,
+      outcomeTitle: 'Cache the results',
+    });
+  });
+
+  it('gives the new Ticket the focus Ticket as its Origin, and with Spec it starts a Spec on it', async () => {
+    const { spars, spar, tickets, runner, idea } = await started(true);
+
+    const result = await spars.handOff(spar.id, draft);
+
+    expect(tickets.getTicket(result.ticketNumber).origin).toMatchObject({
+      number: idea.number,
+    });
+    expect(result.conversation).toMatchObject({
+      intent: 'spec',
+      ticketNumber: result.ticketNumber,
+      startedBy: 'user',
+    });
+    expect(runner.runs.at(-1)?.options.prompt).toBe(
+      `/tandembike:spec T${result.ticketNumber}`,
+    );
+  });
+
+  it('refuses a second Hand-off, and one on a closed Spar', async () => {
+    const { spars, spar, runner } = await started();
+    await spars.handOff(spar.id, { ...draft, path: 'ticket' });
+
+    await expect(spars.handOff(spar.id, draft)).rejects.toThrow(
+      /already handed off/,
+    );
+    expect(() => spars.proposeHandOff(spar.id, draft)).toThrow(
+      /already handed off/,
+    );
+
+    const other = await started();
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await other.spars.closeSpar(other.spar.id);
+    other.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await expect(other.spars.handOff(other.spar.id, draft)).rejects.toThrow(
+      NotAllowedError,
+    );
+  });
+});

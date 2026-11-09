@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, notInArray } from 'drizzle-orm';
 
+import { sparPath } from '../app/lib/paths';
 import type { ConversationState } from '../conversations/conversation-state';
 import type {
   Conversation,
@@ -7,7 +8,10 @@ import type {
 } from '../conversations/conversations';
 import type { DatabaseConnection } from '../db/connection';
 import { sparColumns, sparStickies, spars } from '../db/schema';
-import { sparCommandMessage } from '../tickets/agent-commands';
+import {
+  agentCommandMessage,
+  sparCommandMessage,
+} from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -24,7 +28,12 @@ import {
   type Sticky,
   type StickyAuthor,
 } from './canvas';
-import { summariseMessage } from './spar-moves';
+import {
+  type HandOffDraft,
+  type HandOffPath,
+  handOffPaths,
+  summariseMessage,
+} from './spar-moves';
 
 /** A Spar's Write-up (GLOSSARY): three Markdown sections, empty for none. */
 export type WriteUp = {
@@ -56,6 +65,8 @@ export type Spar = {
   /** The Ticket its Hand-off filed; null before. */
   outcomeTicketNumber: number | null;
   writeUp: WriteUp;
+  /** The Agent's Hand-off draft, until the User approves it; null for none. */
+  handOffDraft: HandOffDraft | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -63,6 +74,8 @@ export type Spar = {
 /** A Spar as the Project's Spars list shows it. */
 export type SparListing = Spar & {
   focusTitle: string | null;
+  /** The title of the Ticket its Hand-off filed; null before. */
+  outcomeTitle: string | null;
   /** Its Conversation's state. */
   state: ConversationState;
   costUsd: number;
@@ -86,6 +99,40 @@ export type SparsDeps = {
 };
 
 const maxTopicLength = 200;
+const maxDescriptionLength = 50_000;
+
+/** What the User approved: the draft as edited, and the path chosen. */
+export type HandOffInput = {
+  title: string;
+  description: string;
+  path: HandOffPath;
+};
+
+/** A draft as stored: a one-line title, a description and a known path. */
+const draftOf = (input: Partial<HandOffDraft>): HandOffDraft => {
+  const title = String(input?.title ?? '').trim();
+  if (title === '' || /[\r\n]/.test(title)) {
+    throw new ValidationError({
+      title: 'Give the idea Ticket a one-line title.',
+    });
+  }
+  if (title.length > maxTopicLength) {
+    throw new ValidationError({
+      title: `Keep the title to ${maxTopicLength} characters.`,
+    });
+  }
+  const description = String(input?.description ?? '').trim();
+  if (description.length > maxDescriptionLength) {
+    throw new ValidationError({
+      description: `Keep the description to ${maxDescriptionLength} characters.`,
+    });
+  }
+  const path = input?.path;
+  if (!handOffPaths.includes(path as HandOffPath)) {
+    throw new ValidationError({ path: 'Choose File as Ticket or Spec it.' });
+  }
+  return { title, description, path: path as HandOffPath };
+};
 
 type SparRow = typeof spars.$inferSelect;
 
@@ -133,6 +180,7 @@ export function createSpars({
       openQuestions: row.openQuestions,
       nextSteps: row.nextSteps,
     },
+    handOffDraft: row.handOffDraft,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -595,6 +643,88 @@ export function createSpars({
       return getSpar(id);
     },
 
+    /**
+     * The Agent's Hand-off draft for Spar `id`: an idea Ticket's title and
+     * description, and its recommended path. It replaces any earlier draft
+     * and waits for the User. Refused on a closed Spar, or once handed off.
+     */
+    proposeHandOff(id: number, draft: Partial<HandOffDraft>): HandOffDraft {
+      checkOpen(id);
+      const row = rowOf(id);
+      if (row.outcomeTicketNumber !== null) {
+        throw new NotAllowedError(
+          `This Spar was already handed off as T${row.outcomeTicketNumber}.`,
+        );
+      }
+      const handOffDraft = draftOf(draft);
+      db.update(spars)
+        .set({ handOffDraft, updatedAt: new Date() })
+        .where(eq(spars.id, id))
+        .run();
+      announce(id);
+      return handOffDraft;
+    },
+
+    /**
+     * The User's approval of a Hand-off (GLOSSARY: Hand-off), from a Server
+     * Action only, so a Spar's Agent never files a Ticket. It files the idea
+     * Ticket in the Project's Backlog with no triage label (Intake), its
+     * description ending with a link back to the Spar and its Origin the
+     * focus Ticket, if any, and records it as the Spar's outcome. With
+     * `spec`, it then starts a Spec Conversation on it. Refused on a closed
+     * Spar, or once handed off.
+     */
+    async handOff(
+      id: number,
+      input: HandOffInput,
+    ): Promise<{
+      spar: Spar;
+      ticketNumber: number;
+      conversation: Conversation | null;
+    }> {
+      checkOpen(id);
+      const spar = getSpar(id);
+      if (spar.outcomeTicketNumber !== null) {
+        throw new NotAllowedError(
+          `This Spar was already handed off as T${spar.outcomeTicketNumber}.`,
+        );
+      }
+      const draft = draftOf(input);
+      const link = `From the Spar [${spar.topic ?? `Spar ${id}`}](${sparPath(spar.projectId, id)}).`;
+      const ticket = tickets.createTicket({
+        projectId: spar.projectId,
+        title: draft.title,
+        description:
+          draft.description === '' ? link : `${draft.description}\n\n${link}`,
+        ...(spar.focusTicketNumber === null
+          ? {}
+          : { originNumber: spar.focusTicketNumber }),
+      });
+      db.update(spars)
+        .set({
+          outcomeTicketNumber: ticket.number,
+          handOffDraft: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(spars.id, id))
+        .run();
+      announce(id);
+      const conversation =
+        draft.path === 'spec'
+          ? await conversations.start({
+              startedBy: 'user',
+              ticketNumber: ticket.number,
+              intent: 'spec',
+              prompt: agentCommandMessage(
+                'spec',
+                ticket,
+                tickets.getProjectAgentCommands(spar.projectId),
+              ),
+            })
+          : null;
+      return { spar: getSpar(id), ticketNumber: ticket.number, conversation };
+    },
+
     /** Reopens closed Spar `id`: editable again; the next reply resumes its run. */
     reopenSpar(id: number): Spar {
       rowOf(id);
@@ -623,6 +753,10 @@ export function createSpars({
               spar.focusTicketNumber === null
                 ? null
                 : tickets.getTicket(spar.focusTicketNumber).title,
+            outcomeTitle:
+              spar.outcomeTicketNumber === null
+                ? null
+                : tickets.getTicket(spar.outcomeTicketNumber).title,
             state: conversation.state,
             costUsd: conversation.costUsd,
             lastActivity: new Date(

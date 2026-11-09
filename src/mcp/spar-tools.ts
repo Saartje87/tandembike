@@ -8,11 +8,16 @@ import { respond, type ToolContext } from './tool-shared';
 /** What the Spar tools call of the Spars module. */
 export type SparTools = Pick<
   Spars,
-  'getSpar' | 'getCanvas' | 'editCanvas' | 'updateWriteUp'
+  'getSpar' | 'getCanvas' | 'editCanvas' | 'updateWriteUp' | 'proposeHandOff'
 >;
 
 /** The tools of a Spar run, which change only its own Spar (ADR 0046). */
-export const sparToolNames = ['get_canvas', 'edit_canvas', 'update_write_up'];
+export const sparToolNames = [
+  'get_canvas',
+  'edit_canvas',
+  'update_write_up',
+  'propose_hand_off',
+];
 
 const notInSpar = 'This tool works only in a Spar run.';
 
@@ -143,5 +148,28 @@ export const registerSparTools = (
       respond(() =>
         spars?.updateWriteUp(sparOfRun(spars, runId), input, 'agent'),
       ),
+  );
+
+  registerTool(
+    'propose_hand_off',
+    {
+      title: 'Propose Hand-off',
+      description:
+        "Propose the Hand-off of your Spar when you and the User agree: an idea Ticket's title and description, and the path you recommend, ticket (filed for normal triage) or spec (filed and specced at once, for a bigger idea). Build the description from the Write-up: what the idea is, the Decisions and the Open questions; Tandembike adds a link back to the Spar. It files nothing: the User edits the draft on the Spar page and approves it, which files the Ticket. A new proposal replaces the last. Only in a Spar run; refused on a closed Spar or once it was handed off.",
+      inputSchema: {
+        title: z.string().describe('A one-line title, at most 200 characters.'),
+        description: z
+          .string()
+          .max(50_000)
+          .describe("The idea Ticket's description in Markdown."),
+        path: z
+          .enum(['ticket', 'spec'])
+          .describe(
+            'Your recommendation: ticket for triage, spec to spec it now.',
+          ),
+      },
+    },
+    (draft) =>
+      respond(() => spars?.proposeHandOff(sparOfRun(spars, runId), draft)),
   );
 };

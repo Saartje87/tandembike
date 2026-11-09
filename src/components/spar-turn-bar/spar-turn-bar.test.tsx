@@ -31,6 +31,7 @@ describe('SparTurnBar', () => {
     ['Diverge', /^Diverge: /],
     ['Converge', /^Converge: /],
     ['Summarise', /^Summarise: update the Write-up/],
+    ['We agree', /^We agree\. Propose the Hand-off with propose_hand_off/],
   ])('sends %s as a message', async (name, message) => {
     renderWithTheme(<SparTurnBar sparId={4} />);
 

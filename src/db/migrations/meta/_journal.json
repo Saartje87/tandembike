@@ -400,6 +400,13 @@
       "when": 1794268032209,
       "tag": "0056_spar_write_up",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "6",
+      "when": 1794268297104,
+      "tag": "0057_spar_hand_off",
+      "breakpoints": true
     }
   ]
 }

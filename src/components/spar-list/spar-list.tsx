@@ -37,6 +37,16 @@ export const SparList: FC<SparListProps> = ({ spars }) => (
                 <Tag intent={spar.closed ? 'neutral' : 'primary'}>
                   {spar.closed ? 'closed' : stateNames[spar.state]}
                 </Tag>
+                {spar.outcomeTicketNumber !== null && (
+                  <Text fontSize="small">
+                    Handed off as{' '}
+                    <AppLink
+                      href={ticketByNumberPath(spar.outcomeTicketNumber)}
+                    >
+                      T{spar.outcomeTicketNumber} {spar.outcomeTitle}
+                    </AppLink>
+                  </Text>
+                )}
                 <Text fontSize="small" color="muted">
                   Last activity <RelativeTime date={spar.lastActivity} />
                 </Text>

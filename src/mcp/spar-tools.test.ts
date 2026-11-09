@@ -92,6 +92,27 @@ describe('The Spar tools', () => {
     await client.close();
   });
 
+  it('propose_hand_off puts a draft on the Spar and files nothing', async () => {
+    const { client, spars, spar, tickets, project } = await sparRun();
+    const before = tickets.listTickets({ projectId: project.id }).length;
+
+    const draft = resultJson(
+      await client.callTool({
+        name: 'propose_hand_off',
+        arguments: { title: 'Cache it', description: 'Why', path: 'ticket' },
+      }),
+    );
+
+    expect(draft).toEqual({
+      title: 'Cache it',
+      description: 'Why',
+      path: 'ticket',
+    });
+    expect(spars.getSpar(spar.id).handOffDraft).toEqual(draft);
+    expect(tickets.listTickets({ projectId: project.id })).toHaveLength(before);
+    await client.close();
+  });
+
   it('are refused on a closed Spar', async () => {
     const { client, spars, spar, runner } = await sparRun();
     await spars.closeSpar(spar.id);

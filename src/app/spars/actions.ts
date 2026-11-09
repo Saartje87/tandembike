@@ -3,6 +3,7 @@
 import type { Conversation } from '../../conversations/conversations';
 import { appSpars } from '../../spars/app-spars';
 import type { Canvas, CanvasOp } from '../../spars/canvas';
+import type { HandOffPath } from '../../spars/spar-moves';
 import type { Spar, WriteUp } from '../../spars/spars';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
@@ -121,4 +122,30 @@ export async function reopenSpar(input: {
   return sparResult(async () => ({
     spar: appSpars().reopenSpar(Number(input?.sparId)),
   }));
+}
+
+/**
+ * The User's approval of a Spar's Hand-off: files the idea Ticket as edited,
+ * and with `spec` starts a Spec Conversation on it. Only the User approves,
+ * by this action; a Spar's Agent can only draft it.
+ */
+export async function handOffSpar(input: {
+  sparId: number;
+  title: string;
+  description: string;
+  path: HandOffPath;
+}): Promise<
+  ActionResult<{
+    spar: Spar;
+    ticketNumber: number;
+    conversation: Conversation | null;
+  }>
+> {
+  return sparResult(() =>
+    appSpars().handOff(Number(input?.sparId), {
+      title: String(input?.title ?? ''),
+      description: String(input?.description ?? ''),
+      path: input?.path,
+    }),
+  );
 }

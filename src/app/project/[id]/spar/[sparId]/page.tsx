@@ -1,11 +1,13 @@
-import { Heading, Inline, Stack } from '@blockle/blocks';
+import { Heading, Inline, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { type FC, Suspense } from 'react';
 
+import { AppLink } from '../../../../../components/app-link/app-link';
 import { PageLoading } from '../../../../../components/page-loading/page-loading';
 import { SparCanvas } from '../../../../../components/spar-canvas/spar-canvas';
 import { SparCloseButton } from '../../../../../components/spar-close-button/spar-close-button';
+import { SparHandOffCard } from '../../../../../components/spar-hand-off-card/spar-hand-off-card';
 import { SparView } from '../../../../../components/spar-view/spar-view';
 import { SparWriteUp } from '../../../../../components/spar-write-up/spar-write-up';
 import { appConversations } from '../../../../../conversations/app-conversations';
@@ -13,6 +15,7 @@ import { appSpars } from '../../../../../spars/app-spars';
 import type { Spar } from '../../../../../spars/spars';
 import { appTickets } from '../../../../../tickets/app-tickets';
 import { NotFoundError } from '../../../../../tickets/errors';
+import { ticketByNumberPath } from '../../../../lib/paths';
 import { loadProject } from '../../project-data';
 
 type SparPageProps = {
@@ -64,6 +67,10 @@ async function sparPage(params: SparPageProps['params']) {
   const { spar } = await loadSpar(params);
   const conversations = appConversations();
   const title = sparTitle(spar);
+  const outcome =
+    spar.outcomeTicketNumber === null
+      ? null
+      : appTickets('user').getTicket(spar.outcomeTicketNumber);
   return (
     <Stack gap={3}>
       <Inline gap={2} alignY="center" alignX="between">
@@ -74,6 +81,17 @@ async function sparPage(params: SparPageProps['params']) {
           closing={spar.closing}
         />
       </Inline>
+      {outcome && (
+        <Text tag="p">
+          Handed off as{' '}
+          <AppLink href={ticketByNumberPath(outcome.number)}>
+            T{outcome.number} {outcome.title}
+          </AppLink>
+        </Text>
+      )}
+      {spar.handOffDraft && !spar.closed && (
+        <SparHandOffCard sparId={spar.id} draft={spar.handOffDraft} />
+      )}
       <SparView
         sparId={spar.id}
         closed={spar.closed}

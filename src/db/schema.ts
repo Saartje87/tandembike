@@ -22,6 +22,7 @@ import {
 import { runResults } from '../conversations/run-outcome';
 import type { WidgetEntry } from '../conversations/widget';
 import { type Canvas, stickyAuthors } from '../spars/canvas';
+import type { HandOffDraft } from '../spars/spar-moves';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
@@ -620,6 +621,8 @@ export const spars = sqliteTable('spars', {
   decisions: text('decisions').notNull().default(''),
   openQuestions: text('open_questions').notNull().default(''),
   nextSteps: text('next_steps').notNull().default(''),
+  /** The Agent's Hand-off draft, until the User approves it; null for none. */
+  handOffDraft: text('hand_off_draft', { mode: 'json' }).$type<HandOffDraft>(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

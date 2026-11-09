@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../../../../conversations/app-conversations';
@@ -28,6 +28,7 @@ vi.mock('../../../../spars/actions', () => ({
   updateSparWriteUp: vi.fn(),
   closeSpar: vi.fn(),
   reopenSpar: vi.fn(),
+  handOffSpar: vi.fn(),
 }));
 vi.mock('../../../../projects/actions', () => ({
   loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
@@ -99,6 +100,35 @@ describe('SparPage', () => {
         'textbox',
       ),
     ).toBeNull();
+  });
+
+  it("shows Claude's Hand-off draft, and once handed off, the outcome Ticket", async () => {
+    const test = await world();
+    const spar = await test.spars.startSpar({ projectId: test.project.id });
+    test.spars.proposeHandOff(spar.id, {
+      title: 'Cache it',
+      description: 'Why',
+      path: 'ticket',
+    });
+    const params = Promise.resolve({
+      id: String(test.project.id),
+      sparId: String(spar.id),
+    });
+    await renderPage(<main>{await SparPage({ params })}</main>);
+    expect(screen.getByRole('form', { name: 'Hand-off' })).toBeInTheDocument();
+    cleanup();
+
+    const { ticketNumber } = await test.spars.handOff(spar.id, {
+      title: 'Cache it',
+      description: 'Why',
+      path: 'ticket',
+    });
+    await renderPage(<main>{await SparPage({ params })}</main>);
+
+    expect(screen.queryByRole('form', { name: 'Hand-off' })).toBeNull();
+    expect(
+      screen.getByRole('link', { name: `T${ticketNumber} Cache it` }),
+    ).toHaveAttribute('href', `/ticket/${ticketNumber}`);
   });
 
   it('returns not-found for a Spar of another Project or none', async () => {

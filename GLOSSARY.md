@@ -150,6 +150,10 @@ _Avoid_: Card (a card is a Ticket on the Board), note
 The outcome of a Spar, beside its Canvas: three Markdown sections, **Decisions**, **Open questions** and **Next steps**, that build up as the Spar goes. The Agent updates it with `update_write_up`, and does so on Summarise and on Close; the User edits it in place.
 _Avoid_: Summary, notes, minutes
 
+**Hand-off**:
+How an agreed Spar becomes work: **We agree** asks the Agent for a draft idea Ticket (title, a description built from the Write-up, and a recommended path), which it gives with `propose_hand_off`; it may also propose one unprompted. The draft shows as the Hand-off card on the Spar page, where the User edits it and approves **File as Ticket** (into the Backlog's Intake, triaged as usual) or **Spec it** (filed, then a Spec Conversation starts on it). The new Ticket's description ends with a link back to the Spar, its Origin is the Spar's focus Ticket when it has one, and the Spar records it as its outcome. Only the User's approval files it; a Spar's Agent never creates a Ticket.
+_Avoid_: Export, conversion
+
 **Widget**:
 A typed question an Agent asks the User through a tool, which the chat shows as a control of its kind and which blocks the run until the User answers: **choice** cards (one or several, the Agent's recommendation preselected), a **rank** list, a 2×2 **matrix** and **scale** sliders. Every Widget also takes **Other…** with free text and **Skip**; a run that ends first expires it. A waiting Widget makes its Conversation `waiting` and raises the `waiting` Notice, as a permission request does. Widgets work in every Conversation the server runs; AskUserQuestion shows as choice cards too (ADR 0045).
 _Avoid_: Form, prompt, question (for the typed control)
