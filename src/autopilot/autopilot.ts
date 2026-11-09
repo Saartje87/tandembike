@@ -300,31 +300,38 @@ export function createAutopilot({
     }
   };
 
-  const dispatch = async (projectId: number) => {
+  /**
+   * One turn's build (ADR 0041): starts the Project's first Eligible Ticket
+   * when it has room, and says whether it did. A refusal, such as a missing
+   * repository path, starts nothing; the Ticket has no Conversation, so the
+   * next change tries it again.
+   */
+  const dispatchOne = async (projectId: number): Promise<boolean> => {
     const open = room(projectId);
-    if (!open) {
-      return;
+    if (!open || machineFree() === 0) {
+      return false;
     }
-    const { cycleId, slots } = open;
-    const commands = tickets.getProjectAgentCommands(projectId);
-    for (const ticket of eligible(projectId, cycleId).slice(0, slots)) {
-      if (machineFree() === 0) {
-        return;
-      }
-      try {
-        await conversations.start({
-          startedBy: 'autopilot',
-          ticketNumber: ticket.number,
-          intent: 'start',
-          cycleId,
-          prompt: agentCommandMessage('start', ticket, commands),
-        });
-      } catch (error) {
-        // A refusal, such as a missing repository path, ends this dispatch;
-        // the Ticket has no Conversation, so the next change tries it again.
-        console.error(`Autopilot could not start T${ticket.number}`, error);
-        return;
-      }
+    const { cycleId } = open;
+    const [ticket] = eligible(projectId, cycleId);
+    if (!ticket) {
+      return false;
+    }
+    try {
+      await conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        cycleId,
+        prompt: agentCommandMessage(
+          'start',
+          ticket,
+          tickets.getProjectAgentCommands(projectId),
+        ),
+      });
+      return true;
+    } catch (error) {
+      console.error(`Autopilot could not start T${ticket.number}`, error);
+      return false;
     }
   };
 
@@ -396,7 +403,7 @@ export function createAutopilot({
    * Conversation on the oldest Triage-eligible Ticket. It needs no Active
    * Cycle, records none and takes no Start run slot.
    */
-  const triage = async (projectId: number) => {
+  const triageOne = async (projectId: number): Promise<boolean> => {
     const settings = tickets.getProjectAgentSettings(projectId);
     if (
       tickets.getProject(projectId).archived ||
@@ -404,7 +411,7 @@ export function createAutopilot({
       settings.triageCeilingUsd === null ||
       machineFree() === 0
     ) {
-      return;
+      return false;
     }
     if (
       conversations
@@ -415,14 +422,14 @@ export function createAutopilot({
             workingStates.includes(conversation.state),
         )
     ) {
-      return;
+      return false;
     }
     if (conversations.triageBudget(projectId, now())?.paused !== false) {
-      return;
+      return false;
     }
     const [ticket] = triageEligible(projectId);
     if (!ticket) {
-      return;
+      return false;
     }
     try {
       await conversations.start({
@@ -435,8 +442,10 @@ export function createAutopilot({
           tickets.getProjectAgentCommands(projectId),
         ),
       });
+      return true;
     } catch (error) {
       console.error(`Autopilot could not triage T${ticket.number}`, error);
+      return false;
     }
   };
 
@@ -459,9 +468,43 @@ export function createAutopilot({
     }
   };
 
+  /** The Project served last by any pass; in memory, so a restart begins at the lowest id. */
+  let lastServed: number | null = null;
+
+  /**
+   * Round-robin (ADR 0041): offers each Project one run per turn, its next
+   * Eligible build when it has room, else its next Triage-eligible Ticket,
+   * starting after the Project served last. Turns go on until the machine's
+   * slots run out or no Project took a run; a Project that took none leaves
+   * the rest of the pass.
+   */
+  const roundRobin = async (ids: number[]) => {
+    const after = ids.filter((id) => lastServed !== null && id > lastServed);
+    let active = [...after, ...ids.filter((id) => !after.includes(id))];
+    while (active.length > 0 && machineFree() > 0) {
+      const next: number[] = [];
+      for (const id of active) {
+        if (machineFree() === 0) {
+          return;
+        }
+        let started = false;
+        try {
+          started = (await dispatchOne(id)) || (await triageOne(id));
+        } catch (error) {
+          console.error(`Autopilot step failed in Project ${id}`, error);
+        }
+        if (started) {
+          lastServed = id;
+          next.push(id);
+        }
+      }
+      active = next;
+    }
+  };
+
   /**
    * One machine-wide pass (ADR 0041): the resumes of every Project first,
-   * then each Project's dispatch and triage, all within the machine's free
+   * then the round-robin of builds and triages, all within the machine's free
    * slots and every Project's own limits. The world is read afresh at each
    * step, so a run another step started is counted.
    */
@@ -475,10 +518,7 @@ export function createAutopilot({
     for (const id of ids) {
       await forProject(id, resumeTransient);
     }
-    for (const id of ids) {
-      await forProject(id, dispatch);
-      await forProject(id, triage);
-    }
+    await roundRobin(ids);
   };
 
   const evaluate = (): Promise<void> => {

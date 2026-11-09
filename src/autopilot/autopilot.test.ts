@@ -1195,6 +1195,109 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(startedIn(projects[0])).toEqual([]);
   });
 
+  describe('round-robin (ADR 0041)', () => {
+    it('gives two different Projects a run when 3 have ready work and 2 slots are free', async () => {
+      const { projects, ready, autopilot, startedIn } = machineSetup(2, {
+        projects: 3,
+      });
+      for (const project of projects) {
+        ready(project, 'A');
+        ready(project, 'B');
+      }
+
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(1);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(startedIn(projects[2])).toEqual([]);
+    });
+
+    it('starts the next pass after the Project served last', async () => {
+      const { projects, ready, autopilot, startedIn, runner } = machineSetup(
+        1,
+        { projects: 3 },
+      );
+      for (const project of projects) {
+        ready(project, 'A');
+        ready(project, 'B');
+      }
+
+      await autopilot.evaluate();
+      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+      runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+      runner.runs[2].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(2);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(startedIn(projects[2])).toHaveLength(1);
+    });
+
+    it('gives a Project one run per turn, a build before a triage, and keeps going round', async () => {
+      const { projects, ready, autopilot, startedIn, conversations, tickets } =
+        machineSetup(4);
+      tickets.setProjectAgentSettings(projects[0].id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea',
+        labels: ['needs-triage'],
+      });
+      ready(projects[0], 'A');
+      ready(projects[0], 'B');
+      ready(projects[1], 'C');
+
+      await autopilot.evaluate();
+
+      const intents = conversations
+        .list({ projectId: projects[0].id })
+        .reverse()
+        .map((conversation) => conversation.intent);
+      // Turn 1: P1 and P2 each build. Turn 2: P1 builds, P2 has nothing.
+      // Turn 3: P1 has no build left, so it triages.
+      expect(intents).toEqual(['start', 'start', 'triage']);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(conversations.machineSlotsInUse()).toBe(4);
+    });
+
+    it("keeps each Project's own Start run limit and one Triage run at a time", async () => {
+      const { projects, ready, autopilot, startedIn, conversations, tickets } =
+        machineSetup(9, { parallel: 1 });
+      tickets.setProjectAgentSettings(projects[0].id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea 1',
+        labels: ['needs-triage'],
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea 2',
+        labels: ['needs-triage'],
+      });
+      ready(projects[0], 'A');
+      ready(projects[0], 'B');
+      ready(projects[1], 'C');
+
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(2);
+      expect(
+        conversations
+          .list({ projectId: projects[0].id })
+          .map((conversation) => conversation.intent)
+          .sort(),
+      ).toEqual(['start', 'triage']);
+      expect(startedIn(projects[1])).toHaveLength(1);
+    });
+  });
+
   it('takes a machine slot for each startup resume', async () => {
     const world = machineSetup(2);
     const { tickets, conversations, projects, ready, changes } = world;
