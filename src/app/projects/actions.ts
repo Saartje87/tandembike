@@ -167,6 +167,14 @@ export async function setProjectAgentSettings(
             runModel:
               settings.runModel === null ? null : String(settings.runModel),
           }),
+      ...(settings.triageModel === undefined
+        ? {}
+        : {
+            triageModel:
+              settings.triageModel === null
+                ? null
+                : String(settings.triageModel),
+          }),
       ...(settings.autopilot === undefined
         ? {}
         : { autopilot: Boolean(settings.autopilot) }),
@@ -177,6 +185,17 @@ export async function setProjectAgentSettings(
               settings.spendCeilingUsd === null
                 ? null
                 : Number(settings.spendCeilingUsd),
+          }),
+      ...(settings.autoTriage === undefined
+        ? {}
+        : { autoTriage: Boolean(settings.autoTriage) }),
+      ...(settings.triageCeilingUsd === undefined
+        ? {}
+        : {
+            triageCeilingUsd:
+              settings.triageCeilingUsd === null
+                ? null
+                : Number(settings.triageCeilingUsd),
           }),
     });
     revalidatePath(boardRoute, 'layout');
@@ -254,7 +273,7 @@ export async function setProjectSkills(input: {
  * Replaces a Project's agent commands, the ones its Triage and Start buttons
  * send, and refreshes its pages; returns them as saved. A refusal names the
  * field at fault: `triageCommand`, `startCommand`, `startEpicCommand` or
- * `retroCommand`, `mergeCommand` or `specCommand`.
+ * `retroCommand`, `mergeCommand`, `specCommand` or `planCommand`.
  */
 export async function setProjectAgentCommands(input: {
   projectId: number;
@@ -264,6 +283,7 @@ export async function setProjectAgentCommands(input: {
   retroCommand: string;
   mergeCommand: string;
   specCommand: string;
+  planCommand: string;
 }): Promise<ActionResult<{ commands: ProjectAgentCommands }>> {
   return actionResult(() => {
     const commands = appTickets('user').setProjectAgentCommands(
@@ -275,6 +295,7 @@ export async function setProjectAgentCommands(input: {
         retroCommand: String(input?.retroCommand ?? ''),
         mergeCommand: String(input?.mergeCommand ?? ''),
         specCommand: String(input?.specCommand ?? ''),
+        planCommand: String(input?.planCommand ?? ''),
       },
     );
     revalidatePath(boardRoute, 'layout');

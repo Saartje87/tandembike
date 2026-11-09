@@ -77,6 +77,8 @@ vi.mock('../../app/tickets/actions', () => ({
   checkTicketAcceptanceCriterion: vi.fn(),
   setTicketAcceptanceCriteria: vi.fn(),
   setTicketOrigin: vi.fn(),
+  approveTriage: vi.fn(),
+  rejectTriage: vi.fn(),
 }));
 
 const ticket: Ticket = {
@@ -228,6 +230,35 @@ describe('TicketDrawer', () => {
     dialog.open.mockReset();
     dialog.reopenAndOpen.mockReset().mockResolvedValue(undefined);
     dialog.openDraft.mockReset();
+  });
+
+  it('shows a pending triage proposal in its own section, and none without one', () => {
+    const { unmount } = renderWithTheme(<InShell ticket={ticket} />);
+    expect(inDrawer().queryByText('Triage proposal')).toBeNull();
+    unmount();
+
+    renderWithTheme(
+      <InShell
+        ticket={ticket}
+        triageProposal={{
+          id: 1,
+          ticketNumber: ticket.number,
+          runId: null,
+          category: 'bug',
+          state: 'ready-for-agent',
+          reasoning: 'Reproduced.',
+          acceptanceCriteria: null,
+          duplicateOf: null,
+          splits: null,
+          status: 'pending',
+          createdAt: new Date('2026-03-03T09:00:00Z'),
+          decidedAt: null,
+        }}
+      />,
+    );
+
+    expect(inDrawer().getByText('Triage proposal')).toBeVisible();
+    expect(inDrawer().getByText('Reproduced.')).toBeVisible();
   });
 
   it('is named after the Ticket and shows its number, with no form-wide Save', () => {

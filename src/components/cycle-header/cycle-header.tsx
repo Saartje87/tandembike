@@ -14,6 +14,7 @@ import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
 
@@ -21,6 +22,11 @@ export type CycleHeaderProps = {
   cycle: Cycle;
   /** The Project's Active Cycle, which starting a Prepared one archives. */
   activeCycle?: Cycle;
+  /**
+   * A Prepared Cycle's Estimate (GLOSSARY: Estimate): the per-Ticket cost, or
+   * null without enough Run outcomes, and the units of work planned.
+   */
+  estimate?: { totalUsd: number | null; units: number };
 };
 
 type CycleTitleProps = {
@@ -55,7 +61,11 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
  * Discarding or archiving goes back to the Backlog; an Archived Cycle is
  * read-only.
  */
-export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
+export const CycleHeader: FC<CycleHeaderProps> = ({
+  cycle,
+  activeCycle,
+  estimate,
+}) => {
   const router = useRouter();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
@@ -162,6 +172,13 @@ export const CycleHeader: FC<CycleHeaderProps> = ({ cycle, activeCycle }) => {
           </Button>
         )}
       </Inline>
+      {cycle.state === 'Prepared' && estimate && (
+        <Text fontSize="small" color="muted">
+          {estimate.totalUsd === null
+            ? 'Not enough runs to estimate'
+            : `Estimated ≈ ${formatCost(estimate.totalUsd)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
+        </Text>
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

@@ -99,6 +99,7 @@ describe('Approve merge', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '/ship',
+      planCommand: '',
     });
     const ticket = inReview();
 

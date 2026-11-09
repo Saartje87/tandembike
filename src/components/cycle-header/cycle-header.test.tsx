@@ -310,4 +310,53 @@ describe('CycleHeader', () => {
       expect(startCycle).not.toHaveBeenCalled();
     });
   });
+
+  describe('estimate', () => {
+    it('shows the Estimate on a Prepared Cycle', () => {
+      renderWithTheme(
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ totalUsd: 12.6, units: 3 }}
+        />,
+      );
+
+      expect(
+        screen.getByText('Estimated ≈ $12.60 for 3 Tickets'),
+      ).toBeInTheDocument();
+    });
+
+    it('counts one Ticket in the singular', () => {
+      renderWithTheme(
+        <CycleHeader cycle={prepared} estimate={{ totalUsd: 4, units: 1 }} />,
+      );
+
+      expect(
+        screen.getByText('Estimated ≈ $4.00 for 1 Ticket'),
+      ).toBeInTheDocument();
+    });
+
+    it('says when there are too few runs to estimate', () => {
+      renderWithTheme(
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ totalUsd: null, units: 3 }}
+        />,
+      );
+
+      expect(
+        screen.getByText('Not enough runs to estimate'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows none on an Active Cycle', () => {
+      renderWithTheme(
+        <CycleHeader
+          cycle={{ ...prepared, state: 'Active' }}
+          estimate={{ totalUsd: 4, units: 1 }}
+        />,
+      );
+
+      expect(screen.queryByText(/Estimated/)).not.toBeInTheDocument();
+    });
+  });
 });

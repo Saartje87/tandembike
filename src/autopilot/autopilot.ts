@@ -7,7 +7,9 @@ import {
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
 import type { Change, ChangeChannel } from '../tickets/changes';
+import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
+import { triageStateLabels } from '../tickets/triage-labels';
 
 export type AutopilotDeps = {
   /** Where Projects, Cycles and Tickets are read; Autopilot never writes them. */
@@ -15,6 +17,8 @@ export type AutopilotDeps = {
   /** Where the Start Conversations are started, only through its public interface. */
   conversations: Conversations;
   changes: ChangeChannel;
+  /** The clock the triage day is read from; the system clock when left out. */
+  now?: () => Date;
 };
 
 const readyLabel = 'ready-for-agent';
@@ -38,6 +42,7 @@ export function createAutopilot({
   tickets,
   conversations,
   changes,
+  now = () => new Date(),
 }: AutopilotDeps) {
   let queue: Promise<void> = Promise.resolve();
   /** Backoff timers by Conversation; a restart drops them (startup resume covers it). */
@@ -306,6 +311,117 @@ export function createAutopilot({
     }
   };
 
+  /**
+   * Whether Ticket `number` was proposed on since its latest change into its
+   * current state: a triage proposal after the last Activity entry that
+   * created it, sent it Back to Todo or added or removed a state label.
+   */
+  const proposedSinceStateChange = (number: number): boolean => {
+    let proposed = false;
+    for (const entry of tickets.listActivity(number)) {
+      for (const change of entry.changes) {
+        if (change.type === 'triageProposed') {
+          proposed = true;
+        } else if (
+          change.type === 'created' ||
+          (change.type === 'status' && change.to === 'Todo') ||
+          ((change.type === 'labelAdded' || change.type === 'labelRemoved') &&
+            (triageStateLabels as readonly string[]).includes(change.label))
+        ) {
+          proposed = false;
+        }
+      }
+    }
+    return proposed;
+  };
+
+  /** The Project's Triage-eligible work, oldest first (GLOSSARY: Triage-eligible). */
+  const triageEligible = (projectId: number): Ticket[] => {
+    const open = new Set(
+      conversations
+        .list({ projectId })
+        .filter(
+          (conversation) =>
+            conversation.intent === 'triage' && !conversation.hidden,
+        )
+        .map((conversation) => conversation.ticketNumber),
+    );
+    const found: Ticket[] = [];
+    let cursor: number | undefined;
+    do {
+      const page = tickets.findTickets({
+        projectId,
+        status: 'Todo',
+        detail: 'full',
+        limit: 200,
+        ...(cursor === undefined ? {} : { cursor }),
+      });
+      found.push(...(page.tickets as Ticket[]));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    return found.filter((ticket) => {
+      const states = ticket.labels.filter((label) =>
+        (triageStateLabels as readonly string[]).includes(label),
+      );
+      return (
+        !ticket.archived &&
+        (states.length === 0 || states[0] === 'needs-triage') &&
+        !isFeedback(ticket.labels) &&
+        !open.has(ticket.number) &&
+        !proposedSinceStateChange(ticket.number)
+      );
+    });
+  };
+
+  /**
+   * Auto-triage (ADR 0040): with the switch on, no Triage run working in the
+   * Project and today's triage spend under the ceiling, starts one Triage
+   * Conversation on the oldest Triage-eligible Ticket. It needs no Active
+   * Cycle, records none and takes no Start run slot.
+   */
+  const triage = async (projectId: number) => {
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (
+      tickets.getProject(projectId).archived ||
+      !settings.autoTriage ||
+      settings.triageCeilingUsd === null
+    ) {
+      return;
+    }
+    if (
+      conversations
+        .list({ projectId })
+        .some(
+          (conversation) =>
+            conversation.intent === 'triage' &&
+            workingStates.includes(conversation.state),
+        )
+    ) {
+      return;
+    }
+    if (conversations.triageBudget(projectId, now())?.paused !== false) {
+      return;
+    }
+    const [ticket] = triageEligible(projectId);
+    if (!ticket) {
+      return;
+    }
+    try {
+      await conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: ticket.number,
+        intent: 'triage',
+        prompt: agentCommandMessage(
+          'triage',
+          ticket,
+          tickets.getProjectAgentCommands(projectId),
+        ),
+      });
+    } catch (error) {
+      console.error(`Autopilot could not triage T${ticket.number}`, error);
+    }
+  };
+
   const projectOf = (change: Change): number | null => {
     try {
       switch (change.type) {
@@ -337,6 +453,7 @@ export function createAutopilot({
       pendingEvaluations.delete(projectId);
       await resumeTransient(projectId);
       await dispatch(projectId);
+      await triage(projectId);
     });
     pendingEvaluations.set(projectId, run);
     return run;
@@ -348,6 +465,7 @@ export function createAutopilot({
       await resume(projectId);
       await resumeTransient(projectId);
       await dispatch(projectId);
+      await triage(projectId);
     });
 
   return {

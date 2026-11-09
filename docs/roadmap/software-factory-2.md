@@ -68,7 +68,7 @@ Today's ~50 fine-grained tools and long server instructions cost context in ever
 | `abandon_work`    | Release with a reason, back to Todo or Stalled                                                                                        |
 | `file_tickets`    | Create Tickets with Epic, Blockers, Origin and labels in one call; also feedback and splits                                           |
 | `propose_triage`  | A triage proposal for the User to approve                                                                                             |
-| `propose_cycle`   | A proposed Prepared Cycle for a goal                                                                                                  |
+| `create_cycle`    | A proposed Prepared Cycle for a goal; it never starts it (phase 8 built it, so phase 11 adds no `propose_cycle`)                      |
 | `find_tickets`    | Search and filters                                                                                                                    |
 | `get_ticket`      | The whole Ticket                                                                                                                      |
 | `update_ticket`   | Edit fields                                                                                                                           |
@@ -122,7 +122,7 @@ The plugin at user scope, `tandembike start | triage | spec | next | resume`, an
 
 ### Phase 11: autonomous intake and planning (T1197)
 
-Triage dispatch with its ceiling and model, `propose_triage` approval, the Plan Conversation (and `tandembike plan "<goal>"`, which phase 10 leaves out), the feedback cap and Retro clustering. ADR: Autopilot triages, amending ADR 0030.
+Triage dispatch with its ceiling and model, `propose_triage` approval, the Plan Conversation (it proposes a Cycle with `create_cycle`; there is no `propose_cycle` tool) (and `tandembike plan "<goal>"`, which phase 10 leaves out), the feedback cap and Retro clustering. ADR: Autopilot triages, amending ADR 0030.
 
 ### Phase 12: machine-wide control and notifications (T1198)
 

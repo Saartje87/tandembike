@@ -38,4 +38,6 @@ Friction you hit while working a Ticket becomes a Ticket, because a reply nobody
 5. Make its first comment, with `add_note`, "Found while working T<number>", naming the Ticket you were on.
 6. Close your final message with one line per Ticket you filed or commented on, as a pointer to it, and nothing when there was none.
 
+`file_tickets` caps this: a run may file at most 3 feedback Tickets (those with a source label), and a batch that would exceed it is refused whole; add a note with `add_note` to one you filed already instead. It also refuses a feedback Ticket whose title has a word overlap (Jaccard) of 0.75 or more with a feedback Ticket in the Project that is neither Done nor archived, and names the match; add a note to that Ticket. Tickets without a source label are never capped or compared. Without the `X-Tandembike-Run` header nothing is capped.
+
 The factory leaves these Tickets alone, and only the User decides to label one `ready-for-agent`.

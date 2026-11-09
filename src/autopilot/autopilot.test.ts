@@ -788,3 +788,268 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     expect(resumes()).toHaveLength(2);
   });
 });
+
+describe('Auto-triage', () => {
+  function triageSetup(options: { on?: boolean; ceiling?: number } = {}) {
+    const changes = createChangeChannel();
+    const world = createTestConversations(changes);
+    const { tickets, conversations } = world;
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+      ...(options.on === false
+        ? {}
+        : { autoTriage: true, triageCeilingUsd: options.ceiling ?? 5 }),
+    });
+    let clock = new Date();
+    const autopilot = createAutopilot({
+      tickets,
+      conversations,
+      changes,
+      now: () => clock,
+    });
+    const idea = (title: string, labels: string[] = []) =>
+      tickets.createTicket({ projectId: project.id, title, labels });
+    const triages = () =>
+      conversations
+        .list({ projectId: project.id })
+        .filter((conversation) => conversation.intent === 'triage')
+        .reverse();
+    const finish = (index: number, costUsd = 0) =>
+      world.runner.runs[index].emit({ type: 'turn', costUsd });
+    return {
+      ...world,
+      changes,
+      project,
+      autopilot,
+      idea,
+      triages,
+      finish,
+      setClock: (next: Date) => {
+        clock = next;
+      },
+    };
+  }
+
+  const propose = (
+    tickets: ReturnType<typeof triageSetup>['tickets'],
+    number: number,
+  ) =>
+    tickets.proposeTriage(number, {
+      category: 'bug',
+      state: 'ready-for-agent',
+      reasoning: 'Clear enough.',
+    });
+
+  it('is off by default', async () => {
+    const { project, autopilot, idea, triages } = triageSetup({ on: false });
+    idea('A', ['needs-triage']);
+
+    await autopilot.evaluate(project.id);
+
+    expect(triages()).toEqual([]);
+  });
+
+  it('starts a Triage Conversation as Autopilot on Backlog Intake with no Active Cycle, with the triage message and no Cycle', async () => {
+    const { project, autopilot, idea, triages, runner } = triageSetup();
+    const a = idea('A', ['needs-triage']);
+
+    await autopilot.evaluate(project.id);
+
+    const [conversation] = triages();
+    expect(conversation).toMatchObject({
+      startedBy: 'autopilot',
+      ticketNumber: a.number,
+      intent: 'triage',
+    });
+    expect(runner.runs[0].options.prompt).toBe(
+      `/tandembike:triage T${a.number}`,
+    );
+  });
+
+  it('triages a Ticket with no state label, planned in a Cycle too', async () => {
+    const { tickets, project, autopilot, idea, triages } = triageSetup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const a = tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+      cycleId: cycle.id,
+    });
+
+    await autopilot.evaluate(project.id);
+
+    expect(triages().map((x) => x.ticketNumber)).toEqual([a.number]);
+  });
+
+  it('works one Triage run at a time, oldest first, and takes no Start run slot', async () => {
+    const { project, autopilot, idea, triages, finish, runner } = triageSetup();
+    const a = idea('A');
+    const b = idea('B');
+
+    await autopilot.evaluate(project.id);
+    await autopilot.evaluate(project.id);
+    expect(triages().map((x) => x.ticketNumber)).toEqual([a.number]);
+
+    finish(0);
+    await autopilot.evaluate(project.id);
+    // A has no proposal yet, but its Conversation is still open: B is next.
+    expect(triages().map((x) => x.ticketNumber)).toEqual([a.number, b.number]);
+    expect(runner.runs).toHaveLength(2);
+  });
+
+  it('skips needs-info, ready, source-labelled, archived and non-Todo Tickets', async () => {
+    const { tickets, project, autopilot, idea, triages } = triageSetup();
+    idea('Info', ['needs-info']);
+    idea('Ready', ['ready-for-agent']);
+    idea('Human', ['ready-for-human']);
+    idea('Agent feedback', ['needs-triage', 'from:agent-run']);
+    idea('App feedback', ['from:tandembike']);
+    const gone = idea('Gone');
+    tickets.archiveTicket(gone.number);
+    const busy = idea('Busy');
+    tickets.updateTicket(busy.number, { status: 'In progress' });
+    const wanted = idea('Wanted');
+
+    await autopilot.evaluate(project.id);
+
+    expect(triages().map((x) => x.ticketNumber)).toEqual([wanted.number]);
+  });
+
+  it('skips a Ticket under an open Triage Conversation, until it is closed', async () => {
+    const { tickets, conversations, project, autopilot, idea, triages } =
+      triageSetup();
+    const a = idea('A');
+    const mine = await conversations.start({
+      startedBy: 'user',
+      ticketNumber: a.number,
+      intent: 'triage',
+      prompt: '/tandembike:triage',
+    });
+    await conversations.stop(mine.id);
+
+    await autopilot.evaluate(project.id);
+    expect(triages()).toHaveLength(1);
+
+    await conversations.close(mine.id);
+    await autopilot.evaluate(project.id);
+    expect(triages()).toHaveLength(2);
+    expect(tickets.getTicket(a.number).status).toBe('Todo');
+  });
+
+  it('waits for the next Triage run while a User-started one works', async () => {
+    const { conversations, project, autopilot, idea, triages } = triageSetup();
+    const a = idea('A');
+    idea('B');
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: a.number,
+      intent: 'triage',
+      prompt: '/tandembike:triage',
+    });
+
+    await autopilot.evaluate(project.id);
+
+    expect(triages()).toHaveLength(1);
+  });
+
+  it('skips a Ticket proposed since it entered its state, until it is set back to needs-triage', async () => {
+    const { tickets, conversations, project, autopilot, idea, triages } =
+      triageSetup();
+    const a = idea('A', ['needs-triage']);
+    propose(tickets, a.number);
+    tickets.updateTicket(a.number, {
+      addLabels: ['needs-info'],
+      removeLabels: ['ready-for-agent'],
+    });
+    const rejected = idea('R', ['needs-triage']);
+    const proposal = propose(tickets, rejected.number);
+    tickets.rejectTriage(proposal.id, 'No');
+
+    await autopilot.evaluate(project.id);
+    expect(triages()).toEqual([]);
+
+    tickets.updateTicket(rejected.number, { removeLabels: ['needs-triage'] });
+    tickets.updateTicket(rejected.number, { addLabels: ['needs-triage'] });
+    await autopilot.evaluate(project.id);
+
+    expect(triages().map((x) => x.ticketNumber)).toEqual([rejected.number]);
+    expect(conversations.list({ ticketNumber: a.number })).toEqual([]);
+  });
+
+  describe('triage ceiling', () => {
+    it('stops dispatch once today is over the ceiling and starts again the next day', async () => {
+      const { project, autopilot, idea, triages, finish, setClock } =
+        triageSetup({ ceiling: 2 });
+      idea('A');
+      const b = idea('B');
+      await autopilot.evaluate(project.id);
+      finish(0, 2.5);
+
+      await autopilot.evaluate(project.id);
+      expect(triages()).toHaveLength(1);
+
+      setClock(new Date(Date.now() + 25 * 60 * 60 * 1000));
+      await autopilot.evaluate(project.id);
+      expect(triages().map((x) => x.ticketNumber)).toContain(b.number);
+    });
+
+    it('counts the cost so far of a running Triage run', async () => {
+      const { conversations, project, autopilot, idea, runner } = triageSetup({
+        ceiling: 2,
+      });
+      idea('A');
+      await autopilot.evaluate(project.id);
+      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      expect(conversations.autopilotTriageSpend(project.id, start)).toBe(1);
+      expect(conversations.triageBudget(project.id)).toEqual({
+        spendUsd: 1,
+        ceilingUsd: 2,
+        paused: false,
+      });
+    });
+  });
+
+  describe('run options', () => {
+    it('restricts an Autopilot Triage run to proposals, and leaves a User one free', async () => {
+      const { conversations, project, autopilot, idea, runner } = triageSetup();
+      const a = idea('A');
+      const b = idea('B');
+      await conversations.start({
+        startedBy: 'user',
+        ticketNumber: b.number,
+        intent: 'triage',
+        prompt: '/tandembike:triage',
+      });
+      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+      expect(runner.runs[0].options.disallowedTools).toBeUndefined();
+
+      await autopilot.evaluate(project.id);
+
+      expect(runner.runs[1].options.prompt).toContain(`T${a.number}`);
+      expect(runner.runs[1].options.disallowedTools).toEqual([
+        'mcp__tandembike__update_ticket',
+        'mcp__tandembike__file_tickets',
+      ]);
+    });
+  });
+
+  it('stops new Triage runs when switched off and leaves a running one alone', async () => {
+    const { tickets, conversations, project, autopilot, idea, triages } =
+      triageSetup();
+    idea('A');
+    idea('B');
+    await autopilot.evaluate(project.id);
+    tickets.setProjectAgentSettings(project.id, {
+      autoTriage: false,
+      triageCeilingUsd: null,
+    });
+
+    await autopilot.evaluate(project.id);
+
+    expect(triages()).toHaveLength(1);
+    expect(conversations.get(triages()[0].id).state).toBe('running');
+  });
+});

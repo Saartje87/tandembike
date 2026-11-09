@@ -16,6 +16,7 @@ import {
   reopenConversation,
   replyToConversation,
   startConversation,
+  startPlan,
   startRetro,
   startSetup,
   stopConversation,
@@ -137,6 +138,23 @@ describe('Conversation actions', () => {
     });
     expect(second).toMatchObject({ ok: false });
     expect(runner.runs).toHaveLength(1);
+  });
+
+  it('startPlan starts a Plan on the goal, and refuses a blank one (T1248)', async () => {
+    const { project, runner } = setup();
+
+    const blank = await startPlan({ projectId: project.id, goal: ' ' });
+    const started = await startPlan({ projectId: project.id, goal: 'Ship' });
+
+    expect(blank).toMatchObject({
+      ok: false,
+      fieldErrors: { goal: expect.any(String) },
+    });
+    expect(started).toMatchObject({
+      ok: true,
+      conversation: { intent: 'plan', startedBy: 'user' },
+    });
+    expect(runner.runs[0].options.prompt).toBe('/tandembike:plan Ship');
   });
 
   it('send a reply and stop the run', async () => {

@@ -24,8 +24,11 @@ describe("A Project's agent settings", () => {
       agentMode: false,
       runMode: 'auto',
       runModel: null,
+      triageModel: null,
       autopilot: false,
       spendCeilingUsd: null,
+      autoTriage: false,
+      triageCeilingUsd: null,
     });
   });
 
@@ -109,6 +112,54 @@ describe("A Project's agent settings", () => {
     ).toMatchObject({ autopilot: false, spendCeilingUsd: null });
   });
 
+  it('turn on Auto-triage only with a Triage ceiling, and refuse clearing it while on', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    const refused = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { autoTriage: true }),
+    );
+    expect(refused).toBeInstanceOf(ValidationError);
+    expect((refused as ValidationError).fieldErrors).toHaveProperty(
+      'triageCeilingUsd',
+    );
+    expect(tickets.getProjectAgentSettings(project.id).autoTriage).toBe(false);
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: true,
+        triageCeilingUsd: 2.5,
+      }),
+    ).toMatchObject({
+      autoTriage: true,
+      triageCeilingUsd: 2.5,
+      autopilot: false,
+    });
+
+    const cleared = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { triageCeilingUsd: null }),
+    );
+    expect((cleared as ValidationError).fieldErrors).toHaveProperty(
+      'triageCeilingUsd',
+    );
+
+    for (const triageCeilingUsd of [0, -1, Number.NaN]) {
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, { triageCeilingUsd }),
+      );
+      expect((error as ValidationError).fieldErrors).toHaveProperty(
+        'triageCeilingUsd',
+      );
+    }
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: false,
+        triageCeilingUsd: null,
+      }),
+    ).toMatchObject({ autoTriage: false, triageCeilingUsd: null });
+  });
+
   it('refuse a Spend ceiling that is not a positive number', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -154,6 +205,30 @@ describe("A Project's agent settings", () => {
     tickets.setProjectAgentSettings(project.id, { runModel: 'x' });
     tickets.setProjectAgentSettings(project.id, { runModel: '  ' });
     expect(tickets.getProjectAgentSettings(project.id).runModel).toBe(null);
+  });
+
+  it('set, trim and clear the triage model, and refuse one with spaces', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        triageModel: ' claude-haiku-5 ',
+      }).triageModel,
+    ).toBe('claude-haiku-5');
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(
+      'claude-haiku-5',
+    );
+    const error = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { triageModel: 'two words' }),
+    );
+    expect((error as ValidationError).fieldErrors).toHaveProperty(
+      'triageModel',
+    );
+    tickets.setProjectAgentSettings(project.id, { triageModel: null });
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
   });
 
   it('refuse an unknown run mode or a run model with spaces, naming the field', () => {

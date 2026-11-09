@@ -406,6 +406,7 @@ export type StrictInput<Shape extends z.ZodRawShape> = z.ZodObject<
 export const alwaysLoadedTools = new Set([
   'get_ticket',
   'add_note',
+  'propose_triage',
   'update_ticket',
   'start_work',
 ]);

@@ -4,8 +4,10 @@ import { Cockpit } from '../../../../components/cockpit/cockpit';
 import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
+import { PlanButton } from '../../../../components/plan-button/plan-button';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
+import { TriageSpend } from '../../../../components/triage-spend/triage-spend';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import type { Cycle } from '../../../../tickets/cycles';
@@ -19,6 +21,7 @@ import {
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
 import {
   autopilotOf,
+  cycleEstimate,
   cycleTicketsWithEpics,
   runSlotsOf,
 } from '../project-data';
@@ -64,6 +67,9 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
   );
   const board = (
     <>
+      {tab === 'backlog' && settings.repositoryPath !== null && (
+        <PlanButton projectId={project.id} />
+      )}
       <BoardTab
         project={project}
         tab={tab}
@@ -114,16 +120,24 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     cycles,
     epics,
     filter,
+    proposedTriage: tickets.pendingTriageNumbers(project.id),
   };
   if (tab === 'backlog') {
     // The Backlog is the whole scope of its Board: no progress, no runs.
+    const budget = appConversations().triageBudget(project.id);
     return (
-      <Cockpit
-        {...shared}
-        cycle={null}
-        tickets={tickets.listTickets({ projectId: project.id, cycleId: null })}
-        planning
-      />
+      <>
+        {budget && <TriageSpend {...budget} />}
+        <Cockpit
+          {...shared}
+          cycle={null}
+          tickets={tickets.listTickets({
+            projectId: project.id,
+            cycleId: null,
+          })}
+          planning
+        />
+      </>
     );
   }
   if (tab.state === 'Active') {
@@ -155,6 +169,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         key={tab.id}
         cycle={tab}
         activeCycle={cycles.find(({ state }) => state === 'Active')}
+        estimate={cycleEstimate(project.id, tab.id)}
       />
       <Cockpit
         {...shared}

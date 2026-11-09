@@ -1,7 +1,8 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../conversations/app-conversations';
 import {
   renderPage,
   renderPageError,
@@ -21,7 +22,7 @@ vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../conversations/app-conversations', () => ({
-  appConversations: vi.fn(() => ({ list: () => [] })),
+  appConversations: vi.fn(() => ({ list: () => [], triageBudget: () => null })),
 }));
 vi.mock('../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
@@ -53,6 +54,50 @@ const noSearch = Promise.resolve({});
 describe('ProjectPage', () => {
   beforeEach(() => {
     notFound.mockClear();
+  });
+
+  it("shows today's triage spend against the ceiling on the Backlog while Auto-triage is on, and the pause over it", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      autoTriage: true,
+      triageCeilingUsd: 2,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const stub = (spend: number) =>
+      vi.mocked(appConversations).mockReturnValue({
+        list: () => [],
+        triageBudget: () => ({
+          spendUsd: spend,
+          ceilingUsd: 2,
+          paused: spend >= 2,
+        }),
+      } as unknown as ReturnType<typeof appConversations>);
+    const params = Promise.resolve({ id: String(project.id) });
+
+    stub(0.5);
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+    expect(screen.getByText('Triage today: $0.50 of $2.00')).toBeVisible();
+    expect(screen.queryByText(/triage paused/)).not.toBeInTheDocument();
+  });
+
+  it('shows no triage spend while Auto-triage is off', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    vi.mocked(appConversations).mockReturnValue({
+      list: () => [],
+      triageBudget: () => null,
+    } as unknown as ReturnType<typeof appConversations>);
+    const params = Promise.resolve({ id: String(project.id) });
+
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.queryByText(/Triage today/)).not.toBeInTheDocument();
   });
 
   it("shows the Backlog's Tickets, those in no Cycle, under the layout's tabs", async () => {
@@ -89,6 +134,25 @@ describe('ProjectPage', () => {
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
     ).resolves.toEqual({ title: 'Website' });
+  });
+
+  it('offers Plan on the Backlog once the Project has a repository (T1248)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull();
+    cleanup();
+
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
   });
 
   it("lists only an Epic's children in the Backlog, saying when the rest are elsewhere", async () => {

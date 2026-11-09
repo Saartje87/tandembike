@@ -186,6 +186,7 @@ export function createClaudeRunner(): AgentRunner {
       plugins,
       runMode = 'default',
       model,
+      disallowedTools,
       askPermission,
       askQuestion,
       onEvent,
@@ -200,6 +201,7 @@ export function createClaudeRunner(): AgentRunner {
           plugins,
           ...(resume === undefined ? {} : { resume }),
           ...(model === undefined ? {} : { model }),
+          ...(disallowedTools === undefined ? {} : { disallowedTools }),
           // The Project's run mode, never the repository's or the user's
           // defaultMode, so bypassPermissions cannot skip the relay below;
           // calls the auto classifier cannot decide still reach canUseTool.

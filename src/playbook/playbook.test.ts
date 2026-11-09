@@ -66,6 +66,21 @@ describe('The Playbook plugin', () => {
     expect(frontmatter).not.toHaveProperty('disable-model-invocation');
   });
 
+  it('has a plan skill that proposes a Prepared Cycle and never starts one (T1248)', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/plan/SKILL.md'),
+      'utf8',
+    );
+    for (const tool of ['find_tickets', 'get_ticket', 'create_cycle']) {
+      expect(text).toContain(tool);
+    }
+    expect(text).toContain('ready-for-agent');
+    expect(text).toContain('Blockers come first');
+    expect(text).toContain('AskUserQuestion');
+    expect(text).toMatch(/never start a Cycle/);
+    expect(text).not.toContain('propose_cycle');
+  });
+
   it('names no MCP tool that was removed', () => {
     const mentions = findRemovedToolMentions(process.cwd(), ['playbook']);
     expect(

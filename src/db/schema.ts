@@ -28,6 +28,12 @@ import { projectIcons } from '../tickets/project-icons';
 import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
+import {
+  type TriageSplit,
+  triageCategories,
+  triageProposalStatuses,
+  triageStates,
+} from '../tickets/triage-proposal-state';
 
 /**
  * What the agent command and run mode columns defaulted to before the
@@ -74,10 +80,18 @@ export const projects = sqliteTable('projects', {
     .default('default'),
   /** The model its runs start on; null is the User's default model. */
   runModel: text('run_model'),
+  /** The model Triage runs start on; null uses the run model. */
+  triageModel: text('triage_model'),
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
   spendCeilingUsd: real('spend_ceiling_usd'),
+  /** Whether Autopilot starts Triage runs on Triage-eligible Tickets (ADR 0040). */
+  autoTriage: integer('auto_triage', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** What Auto-triage may spend per local calendar day, in dollars; null while unset. */
+  triageCeilingUsd: real('triage_ceiling_usd'),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()
@@ -103,6 +117,8 @@ export const projects = sqliteTable('projects', {
   specCommand: text('spec_command'),
   /** The command a Merge Conversation sends before the Ticket number; null runs the Playbook's. */
   mergeCommand: text('merge_command'),
+  /** The command a Plan Conversation sends before the goal; null runs the Playbook's. */
+  planCommand: text('plan_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -134,6 +150,8 @@ export const tickets = sqliteTable(
       .references(() => projects.id),
     claimAgentRunId: text('claim_agent_run_id'),
     claimAgentName: text('claim_agent_name'),
+    /** The Agent-run ID that filed this Ticket (`X-Tandembike-Run`), or null. */
+    filedByRun: text('filed_by_run'),
     position: integer('position').notNull().default(0),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
     /**
@@ -498,4 +516,37 @@ export const runOutcomes = sqliteTable(
     index('run_outcomes_conversation_id').on(table.conversationId),
     index('run_outcomes_project_ended').on(table.projectId, table.endedAt),
   ],
+);
+
+/**
+ * Triage proposals: what a Triage run recommends for a Ticket, kept as a
+ * record after the User decides. Proposals are never deleted, except along
+ * with their Ticket.
+ */
+export const triageProposals = sqliteTable(
+  'triage_proposals',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    ticketNumber: integer('ticket_number')
+      .notNull()
+      .references(() => tickets.number),
+    /** The Agent run that made it, when it said so. */
+    runId: text('run_id'),
+    category: text('category', { enum: triageCategories }).notNull(),
+    state: text('state', { enum: triageStates }).notNull(),
+    reasoning: text('reasoning').notNull(),
+    /** The criteria that replace the Ticket's on Approve; null leaves them. */
+    acceptanceCriteria: text('acceptance_criteria', {
+      mode: 'json',
+    }).$type<string[] | null>(),
+    /** The Ticket this one duplicates, or null. */
+    duplicateOf: integer('duplicate_of'),
+    splits: text('splits', { mode: 'json' }).$type<TriageSplit[] | null>(),
+    status: text('status', { enum: triageProposalStatuses })
+      .notNull()
+      .default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    decidedAt: integer('decided_at', { mode: 'timestamp_ms' }),
+  },
+  (table) => [index('triage_proposals_ticket_number').on(table.ticketNumber)],
 );

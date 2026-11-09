@@ -99,6 +99,11 @@ export type RunOptions = {
   runMode?: 'default' | 'auto';
   /** The model to start on; left out for the User's default model. */
   model?: string;
+  /**
+   * Tools the run may not use, passed to the SDK as `disallowedTools`; left
+   * out for none. An Autopilot Triage run cannot change Tickets (ADR 0040).
+   */
+  disallowedTools?: string[];
   /** The SDK session to continue, for a Conversation that was interrupted. */
   resume?: string;
   onEvent(event: RunEvent): void;

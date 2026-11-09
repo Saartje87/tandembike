@@ -15,6 +15,7 @@ export const usageText = [
   '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
+  '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
   '  tandembike next               start the next Eligible item of this Project',
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
@@ -27,6 +28,7 @@ export type ParsedCommand =
   | { command: 'plugin' }
   | { command: TerminalIntent; ticketNumber: number }
   | { command: 'next' }
+  | { command: 'plan'; goal: string }
   | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
 
@@ -57,6 +59,10 @@ export function parseCommand(argv: string[]): ParsedCommand {
   }
   if (first === 'next') {
     return rest.length === 0 ? { command: 'next' } : usage;
+  }
+  if (first === 'plan') {
+    const goal = rest.join(' ').trim();
+    return goal === '' ? usage : { command: 'plan', goal };
   }
   if (isTerminalIntent(first)) {
     const ticketNumber = ticketNumberOf(rest[0]);

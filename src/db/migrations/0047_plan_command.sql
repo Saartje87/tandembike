@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `plan_command` text;

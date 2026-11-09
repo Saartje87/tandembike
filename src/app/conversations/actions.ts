@@ -109,6 +109,22 @@ export async function startRetro(input: {
   );
 }
 
+/**
+ * Starts a Plan Conversation on a goal from the Plan button (T1248): it
+ * proposes a Prepared Cycle from the Backlog. Only the User starts one.
+ */
+export async function startPlan(input: {
+  projectId: number;
+  goal: string;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().startPlan({
+      projectId: Number(input?.projectId),
+      goal: String(input?.goal ?? ''),
+    }),
+  );
+}
+
 /** Sends the User's reply into a Conversation, resuming it if its run ended. */
 export async function replyToConversation(input: {
   conversationId: number;

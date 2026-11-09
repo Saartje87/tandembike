@@ -69,6 +69,12 @@ function describeChange(change: ActivityChange): string {
       return `unchecked “${change.text}”`;
     case 'criteriaEdited':
       return 'edited the acceptance criteria';
+    case 'triageProposed':
+      return `proposed ${change.category}, ${change.state} in triage`;
+    case 'triageApproved':
+      return `approved the triage proposal (${change.category}, ${change.state})`;
+    case 'triageRejected':
+      return 'rejected the triage proposal';
   }
 }
 

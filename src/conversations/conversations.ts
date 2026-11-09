@@ -16,6 +16,7 @@ import { playbookPath } from '../playbook/playbook';
 import {
   agentCommandMessage,
   commandForStage,
+  planCommandMessage,
 } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
@@ -119,6 +120,10 @@ export type StageRunStats = {
   meanCostUsd: number;
   meanDurationMs: number;
 };
+
+/** How many Start Conversations the Estimate reads, and how few it needs. */
+const startEstimateSample = 20;
+const startEstimateMinimum = 5;
 
 const runStatsWindowMs = 30 * 24 * 60 * 60 * 1000;
 
@@ -272,6 +277,21 @@ const noRepositoryPath = {
   repositoryPath:
     'This Project has no repository path. Set one in the Project settings first.',
 };
+
+/** The model a run of `intent` starts on: Triage's own when set, else the run model. */
+const modelFor = (
+  intent: ConversationIntent,
+  settings: { runModel: string | null; triageModel: string | null },
+) =>
+  intent === 'triage' && settings.triageModel !== null
+    ? settings.triageModel
+    : settings.runModel;
+
+/** What an Autopilot Triage run may not use: its only writes are a proposal and a note (ADR 0040). */
+const autopilotTriageDisallowedTools = [
+  'mcp__tandembike__update_ticket',
+  'mcp__tandembike__file_tickets',
+];
 
 /** A Start and a Merge are the intents that count as Start runs (T1221). */
 const isStartRunIntent = (intent: ConversationIntent) =>
@@ -685,6 +705,52 @@ export function createConversations({
       .run();
   };
 
+  /**
+   * The median cost of the Project's last 20 Start Conversations, by when
+   * their latest run ended, that reached `completed` or `pr_open`, however
+   * old; each Conversation's cost sums its runs. Null with fewer than 5
+   * such Conversations. Only this module reads Run outcomes, so the
+   * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
+   */
+  const startCostEstimate = (projectId: number): number | null => {
+    const rows = db
+      .select()
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.projectId, projectId),
+          eq(runOutcomes.stage, 'start'),
+        ),
+      )
+      .orderBy(runOutcomes.id)
+      .all();
+    const byConversation = new Map<
+      number,
+      { costUsd: number; endedAt: number; result: RunResult }
+    >();
+    for (const row of rows) {
+      byConversation.set(row.conversationId, {
+        costUsd:
+          (byConversation.get(row.conversationId)?.costUsd ?? 0) + row.costUsd,
+        endedAt: row.endedAt.getTime(),
+        result: row.result,
+      });
+    }
+    const costs = [...byConversation.values()]
+      .filter(({ result }) => result === 'completed' || result === 'pr_open')
+      .sort((a, b) => b.endedAt - a.endedAt)
+      .slice(0, startEstimateSample)
+      .map(({ costUsd }) => costUsd)
+      .sort((a, b) => a - b);
+    if (costs.length < startEstimateMinimum) {
+      return null;
+    }
+    const middle = Math.floor(costs.length / 2);
+    return costs.length % 2 === 1
+      ? costs[middle]
+      : (costs[middle - 1] + costs[middle]) / 2;
+  };
+
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
   const briefOf = (id: number): string => {
     const conversation = get(id);
@@ -715,6 +781,9 @@ export function createConversations({
       checkCommand: settings.checkCommand,
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
+      ...(conversation.intent === 'plan'
+        ? { planEstimateUsd: startCostEstimate(conversation.projectId) }
+        : {}),
       defaults: {
         cycleId: conversation.defaultCycleId,
         epicNumber: conversation.defaultEpicNumber,
@@ -749,6 +818,7 @@ export function createConversations({
         id,
       );
     }
+    const runModel = modelFor(conversation.intent, settings);
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,
@@ -774,7 +844,11 @@ export function createConversations({
         systemPrompt: briefOf(id),
         prompt,
         runMode: settings.runMode,
-        ...(settings.runModel === null ? {} : { model: settings.runModel }),
+        ...(runModel === null ? {} : { model: runModel }),
+        ...(conversation.intent === 'triage' &&
+        conversation.startedBy === 'autopilot'
+          ? { disallowedTools: autopilotTriageDisallowedTools }
+          : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
         askQuestion: (questions) => askQuestion(id, handle, questions),
@@ -884,6 +958,16 @@ export function createConversations({
       if (input.ticketNumber === undefined) {
         throw new ValidationError({
           ticketNumber: 'A Spec is about a Ticket.',
+        });
+      }
+    }
+    if (input.intent === 'plan') {
+      if (input.startedBy !== 'user') {
+        throw new NotAllowedError('Only the User starts a Plan.');
+      }
+      if (input.ticketNumber !== undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Plan is about a Project, not a Ticket.',
         });
       }
     }
@@ -1055,16 +1139,12 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: settings.runModel,
+      model: modelFor(input.intent, settings),
     };
   };
 
-  /**
-   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
-   * item of the Active Cycle of the Project whose repository holds `folder`,
-   * by the `next_work` rule. With no work it returns `next_work`'s reason.
-   */
-  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+  /** The Project whose repository holds `folder`, else a refusal naming the known ones. */
+  const projectIdOfFolder = (folder: string): number => {
     const projectId = tickets.findProjectIdOfFolder(folder);
     if (projectId === undefined) {
       const names = tickets
@@ -1079,6 +1159,64 @@ export function createConversations({
         }`,
       });
     }
+    return projectId;
+  };
+
+  /**
+   * `tandembike plan "<goal>"` (T1249): a Terminal Plan on the Project whose
+   * repository holds `folder`, in the main checkout, with the Plan command and
+   * the goal as the first message. Like `startPlan`, it holds no slot and
+   * records no Cycle.
+   */
+  const startTerminalPlan = async (input: {
+    folder: string;
+    goal: string;
+  }): Promise<TerminalSession> => {
+    const goal = input.goal.trim();
+    if (goal === '') {
+      throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+    }
+    const projectId = projectIdOfFolder(input.folder);
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    const firstMessage = planCommandMessage(
+      goal,
+      tickets.getProjectAgentCommands(projectId),
+    );
+    const now = new Date();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId,
+        intent: 'plan',
+        startedBy: 'terminal',
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, 'user', firstMessage);
+    announce(created.id);
+    return {
+      conversationId: created.id,
+      cwd: settings.repositoryPath,
+      firstMessage,
+      brief: briefOf(created.id),
+      runMode: settings.runMode,
+      model: modelFor('plan', settings),
+    };
+  };
+
+  /**
+   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * item of the Active Cycle of the Project whose repository holds `folder`,
+   * by the `next_work` rule. With no work it returns `next_work`'s reason.
+   */
+  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+    const projectId = projectIdOfFolder(folder);
     const next = tickets.nextWork({ projectId });
     if (next.ticket === null) {
       return { started: false, reason: next.reason };
@@ -1282,6 +1420,43 @@ export function createConversations({
     }
   });
 
+  /**
+   * What Autopilot's Triage runs spent since `dayStart` in USD (ADR 0040):
+   * the cost of the runs it started that ended then or later, from Run
+   * outcomes, plus the cost so far of an Autopilot Triage run still working.
+   */
+  const autopilotTriageSpend = (projectId: number, dayStart: Date): number => {
+    const ended = db
+      .select({
+        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+      })
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.projectId, projectId),
+          eq(runOutcomes.stage, 'triage'),
+          eq(runOutcomes.startedByAutopilot, true),
+          gte(runOutcomes.endedAt, dayStart),
+        ),
+      )
+      .get();
+    let working = 0;
+    for (const id of live.keys()) {
+      const conversation = get(id);
+      const pending = live.get(id)?.pending;
+      if (
+        pending &&
+        conversation.projectId === projectId &&
+        conversation.intent === 'triage' &&
+        conversation.startedBy === 'autopilot'
+      ) {
+        // The run's own cost so far: the Conversation's total less its earlier runs.
+        working += Math.max(0, conversation.costUsd - pending.costAtStart);
+      }
+    }
+    return (ended?.total ?? 0) + working;
+  };
+
   return {
     get,
 
@@ -1354,6 +1529,31 @@ export function createConversations({
         Math.max(0, (started?.total ?? 0) - (approvedMerges?.total ?? 0)) +
         (replies?.total ?? 0)
       );
+    },
+
+    autopilotTriageSpend,
+
+    /**
+     * Today's Auto-triage budget of a Project (ADR 0040), the one place that
+     * decides "paused": the spend since the start of `now`'s day against the
+     * Triage ceiling. Null while Auto-triage is off or has no ceiling.
+     */
+    triageBudget(
+      projectId: number,
+      now: Date = new Date(),
+    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const settings = tickets.getProjectAgentSettings(projectId);
+      if (!settings.autoTriage || settings.triageCeilingUsd === null) {
+        return null;
+      }
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const spendUsd = autopilotTriageSpend(projectId, dayStart);
+      return {
+        spendUsd,
+        ceilingUsd: settings.triageCeilingUsd,
+        paused: spendUsd >= settings.triageCeilingUsd,
+      };
     },
 
     /**
@@ -1429,6 +1629,8 @@ export function createConversations({
         meanDurationMs: stats.meanDurationMs / stats.runs,
       }));
     },
+
+    startCostEstimate,
 
     /** Conversations of a Project and/or Ticket, newest first. */
     list(filter: ListConversationsFilter = {}): Conversation[] {
@@ -1574,6 +1776,7 @@ export function createConversations({
 
     startTerminal,
     startTerminalNext,
+    startTerminalPlan,
 
     endTerminal,
     heartbeatTerminal,
@@ -1628,7 +1831,7 @@ export function createConversations({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         brief: briefOf(id),
         runMode: settings.runMode,
-        model: settings.runModel,
+        model: modelFor(conversation.intent, settings),
       };
     },
 
@@ -1651,6 +1854,31 @@ export function createConversations({
           ),
         ),
         retroCycleId: cycle.id,
+      });
+    },
+
+    /**
+     * Starts a Plan: a Conversation about a Project that proposes a Prepared
+     * Cycle toward `goal` (T1248). Only the User starts it, never Autopilot. It
+     * runs in the main checkout, outside the Start run limit, and records no
+     * Cycle, so it stays out of the Spend ceiling. `tandembike plan` reuses it.
+     */
+    async startPlan(input: {
+      projectId: number;
+      goal: string;
+    }): Promise<Conversation> {
+      const goal = input.goal.trim();
+      if (goal === '') {
+        throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+      }
+      return start({
+        startedBy: 'user',
+        projectId: input.projectId,
+        intent: 'plan',
+        prompt: planCommandMessage(
+          goal,
+          tickets.getProjectAgentCommands(input.projectId),
+        ),
       });
     },
 
