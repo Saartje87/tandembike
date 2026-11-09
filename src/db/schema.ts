@@ -25,7 +25,6 @@ import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
-import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
 import {
@@ -47,6 +46,18 @@ const legacyAgentCommandDefaults = {
   startEpicCommand: '/mattpocock-skills:implement-spec',
   retroCommand: '/mattpocock-skills:retro',
 };
+
+/**
+ * What the Skills column defaulted to before the Playbook's chips (T1229).
+ * Kept for the same reason; `createProject` sets the Skills explicitly.
+ */
+const legacyDefaultSkills = [
+  '/mattpocock-skills:grilling',
+  '/mattpocock-skills:grill-with-docs',
+  '/mattpocock-skills:retro',
+  '/mattpocock-skills:to-spec',
+  '/mattpocock-skills:to-tickets',
+];
 
 export const projects = sqliteTable('projects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -96,7 +107,7 @@ export const projects = sqliteTable('projects', {
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()
     .notNull()
-    .default(defaultSkills),
+    .default(legacyDefaultSkills),
   /** The command Triage sends before the Ticket number; null runs the Playbook's. */
   triageCommand: text('triage_command').default(
     legacyAgentCommandDefaults.triageCommand,

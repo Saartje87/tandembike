@@ -155,7 +155,7 @@ import {
   maxBatchSize,
   throwFieldErrors,
 } from './rules';
-import { normalizeSkills } from './skills';
+import { defaultSkills, normalizeSkills } from './skills';
 import { createStats } from './stats';
 import { isStatus, type Status, statuses, statusRule } from './status';
 import { isTicketType, type TicketType } from './ticket-type';
@@ -1535,10 +1535,11 @@ export function createTickets(
             nameKey,
             createdAt: new Date(),
             // New Projects run the Playbook's commands, in `auto` mode
-            // (T1218); the column defaults are the old ones, kept for the
-            // Projects already stored.
+            // (T1218), and offer its Skills as chips (T1229); the column
+            // defaults are the old ones, kept for the Projects already stored.
             ...noAgentCommands,
             runMode: 'auto',
+            skills: defaultSkills,
           })
           .returning(projectColumns)
           .get();

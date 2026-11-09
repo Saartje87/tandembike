@@ -7,12 +7,12 @@ import { loadProjectSkills } from '../../app/projects/actions';
 import * as styles from './conversation-skill-chips.css';
 
 export type ConversationSkillChipsProps = {
-  /** Skill commands, such as `/mattpocock-skills:grilling`, in order. */
+  /** Skill commands, such as `/tandembike:spec`, in order. */
   skills: string[];
   onChoose: (command: string) => void;
 };
 
-/** `grilling` for `/mattpocock-skills:grilling`, `plan` for `/plan`. */
+/** `spec` for `/tandembike:spec`, `plan` for `/plan`. */
 export const skillName = (command: string) =>
   command.slice(command.lastIndexOf(':') + 1).replace(/^\//, '');
 
