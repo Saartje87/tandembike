@@ -17,6 +17,7 @@ const usd = (amount: number): string => `$${amount.toFixed(2)}`;
  * every Conversation or machine settings change `LiveUpdates` hears of; until
  * the first load it shows nothing. With a Machine ceiling set it also shows
  * today's Autopilot spend against it, and "paused: machine ceiling" at it.
+ * Its text is white, as the header is primary-coloured in both Colour modes.
  */
 export const MachineRuns: FC = () => {
   const revision = useConversationRevision();
@@ -46,17 +47,19 @@ export const MachineRuns: FC = () => {
   return (
     <>
       <Text
+        color="white"
         fontSize="small"
         title="Working runs against the machine cap"
       >{`Runs ${runs.inUse}/${runs.cap}`}</Text>
       {budget && (
         <Text
+          color="white"
           fontSize="small"
           title="Autopilot's spend today against the machine ceiling"
         >{`Spend ${usd(budget.spendUsd)}/${usd(budget.ceilingUsd)}`}</Text>
       )}
       {budget?.paused && (
-        <Text fontSize="small" role="status">
+        <Text color="white" fontSize="small" role="status">
           paused: machine ceiling
         </Text>
       )}
