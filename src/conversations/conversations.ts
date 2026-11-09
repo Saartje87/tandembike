@@ -606,6 +606,16 @@ export function createConversations({
       }
       return;
     }
+    // The Agent acts again after its turn ended, as when a background task
+    // it started reports and wakes it: it works, not waits (T1261).
+    if (
+      (event.type === 'agent' ||
+        event.type === 'tool' ||
+        event.type === 'created') &&
+      get(id).state === 'idle'
+    ) {
+      update(id, { state: 'running' });
+    }
     switch (event.type) {
       case 'session':
         handle.model = event.model ?? handle.model;
