@@ -114,7 +114,7 @@ The tool set above, replacing the old one, and shorter server instructions (T645
 
 The bundled plugin, Agent commands as overrides, the Spec and Merge intents and Approve merge. ADR 0032, written with this roadmap. Glossary: Stage, Playbook, Merge gate.
 
-Built in steps. T1218: the plugin folder `playbook/` with its lock file, the runner's `plugins` option, one per-Stage command list that drives the first message and the agent commands form, new Projects blank and `auto`, and the `implement` skill. Each later step adds its Stage to that list and its skill to the plugin, and bumps the plugin's version and lock (`npm run playbook:lock`).
+Built in steps. T1218: the plugin folder `playbook/` with its lock file, the runner's `plugins` option, one per-Stage command list that drives the first message and the agent commands form, new Projects blank and `auto`, and the `implement` skill. T1219: `review` (model-invocable, run by `implement` before the PR) and `implement-epic`. T1220: `triage` and `retro`. T1221: the Merge gate, with the `merge` intent and command, Approve merge in the drawer, a Merge always in a worktree and counted against the Start run limit, the approved merge outside the Spend ceiling, and ADR 0038. T1222: the Spec Stage, with the `spec` intent and command, the Spec button for an Intake Ticket or an Epic without children, and the `spec` skill. Each step added its Stage to the list and its skill to the plugin, and bumped the plugin's version and lock (`npm run playbook:lock`). T1223 ran the factory end to end on a throwaway repository: [`factory-dry-run.md`](../research/factory-dry-run.md).
 
 ### Phase 10: CLI sessions (T1196)
 
