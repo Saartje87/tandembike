@@ -9,7 +9,8 @@ import { NotFoundError, TicketsError } from '../../../tickets/errors';
  */
 type TerminalAction =
   | { action: 'start'; ticketNumber: number; intent?: 'start' }
-  | { action: 'end'; conversationId: number; exitCode: number };
+  | { action: 'end'; conversationId: number; exitCode: number }
+  | { action: 'heartbeat'; conversationId: number };
 
 const text = (message: string, status: number) =>
   new Response(message, {
@@ -38,6 +39,9 @@ export const POST = async (request: Request): Promise<Response> => {
         await conversations.endTerminal(Number(body.conversationId), {
           exitCode: Number(body.exitCode),
         });
+        return Response.json({ ok: true });
+      case 'heartbeat':
+        conversations.heartbeatTerminal(Number(body.conversationId));
         return Response.json({ ok: true });
       default:
         return text('Unknown action.', 400);

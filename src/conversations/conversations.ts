@@ -183,6 +183,9 @@ export type StartTerminalInput = {
   intent: TerminalIntent;
 };
 
+/** How long a Terminal Conversation may be silent before the sweep ends it. */
+const terminalIdleMs = 5 * 60 * 1000;
+
 const terminalRefusal =
   'This Conversation runs in a terminal; answer it there.';
 
@@ -1062,6 +1065,50 @@ export function createConversations({
     return get(id);
   };
 
+  /**
+   * The CLI's heartbeat while `claude` runs: refreshes the last activity of a
+   * Terminal Conversation that is still open (ADR 0039). Ignored for others.
+   */
+  const heartbeatTerminal = (id: number, now: Date = new Date()) => {
+    db.update(conversations)
+      .set({ updatedAt: now })
+      .where(
+        and(
+          eq(conversations.id, id),
+          eq(conversations.startedBy, 'terminal'),
+          inArray(conversations.state, liveStates),
+        ),
+      )
+      .run();
+  };
+
+  /**
+   * Ends every open Terminal Conversation whose last activity, a heartbeat or
+   * an MCP call, is more than 5 minutes before `now`, as an exit does but with
+   * an entry saying it timed out. Returns how many it ended. The server calls
+   * it once a minute.
+   */
+  const endIdleTerminals = (now: Date = new Date()): number => {
+    const cutoff = now.getTime() - terminalIdleMs;
+    const idle = db
+      .select({ id: conversations.id, updatedAt: conversations.updatedAt })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.startedBy, 'terminal'),
+          inArray(conversations.state, liveStates),
+        ),
+      )
+      .all()
+      .filter((row) => row.updatedAt.getTime() < cutoff);
+    for (const { id } of idle) {
+      append(id, 'session', 'Session timed out (no activity for 5 minutes).');
+      update(id, { state: 'stopped' });
+      announce(id);
+    }
+    return idle.length;
+  };
+
   const repositoryPathOf = (projectId: number): string | null => {
     try {
       return tickets.getProjectAgentSettings(projectId).repositoryPath ?? null;
@@ -1424,6 +1471,8 @@ export function createConversations({
     startTerminal,
 
     endTerminal,
+    heartbeatTerminal,
+    endIdleTerminals,
 
     /**
      * Starts the Retro of a Cycle: a Conversation about its Project that looks
