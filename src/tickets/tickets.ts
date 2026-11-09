@@ -203,6 +203,8 @@ export type ProjectAgentSettings = {
   runMode: AgentRunMode;
   /** The model its runs start on, or `null` for the User's default model. */
   runModel: string | null;
+  /** The model Triage runs start on, or `null` for the run model. */
+  triageModel: string | null;
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: boolean;
   /** What Autopilot may spend on one Cycle, in dollars; `null` while unset. */
@@ -254,6 +256,7 @@ const agentSettingsColumns = {
   agentMode: projects.agentMode,
   runMode: projects.runMode,
   runModel: projects.runModel,
+  triageModel: projects.triageModel,
   autopilot: projects.autopilot,
   spendCeilingUsd: projects.spendCeilingUsd,
 };
@@ -1524,6 +1527,7 @@ export function createTickets(
         agentMode,
         runMode,
         runModel,
+        triageModel,
         autopilot,
         spendCeilingUsd,
       } = input;
@@ -1534,6 +1538,10 @@ export function createTickets(
       const nextAutopilot = autopilot ?? before.autopilot;
       const nextModel =
         runModel === undefined ? before.runModel : trimmedOrNull(runModel);
+      const nextTriageModel =
+        triageModel === undefined
+          ? before.triageModel
+          : trimmedOrNull(triageModel);
       const nextPath =
         repositoryPath === undefined
           ? before.repositoryPath
@@ -1556,6 +1564,10 @@ export function createTickets(
         runMode: runModeProblem(runMode),
         runModel:
           runModel === undefined ? undefined : runModelProblem(nextModel),
+        triageModel:
+          triageModel === undefined
+            ? undefined
+            : runModelProblem(nextTriageModel),
         spendCeilingUsd: spendCeilingProblem(nextCeiling, nextAutopilot),
       });
       const settings = db
@@ -1576,6 +1588,7 @@ export function createTickets(
             nextPath === null ? false : (agentMode ?? before.agentMode),
           ...(runMode === undefined ? {} : { runMode }),
           runModel: nextModel,
+          triageModel: nextTriageModel,
           autopilot: nextAutopilot,
           spendCeilingUsd: nextCeiling,
         })
