@@ -18,7 +18,9 @@ export type BreadcrumbsProps = {
 /**
  * Where the current page sits, on one line in the header: ancestor links,
  * then the current page, which is cut short with an ellipsis when it does
- * not fit. Colours follow the surrounding text.
+ * not fit. It sits on the header's primary colour, so its text is white in
+ * both Colour modes; links inherit it, and `Text` gets it set, since
+ * `Text` falls back to the theme's text colour otherwise (T1290).
  */
 export const Breadcrumbs: FC<BreadcrumbsProps> = ({
   ancestors = [],
@@ -36,7 +38,9 @@ export const Breadcrumbs: FC<BreadcrumbsProps> = ({
                 <AppLink href={href} intent="inherit">
                   {label}
                 </AppLink>
-                <Text aria-hidden="true">&gt;</Text>
+                <Text aria-hidden="true" color="white">
+                  &gt;
+                </Text>
               </Inline>
             </li>
           ))}
@@ -49,7 +53,12 @@ export const Breadcrumbs: FC<BreadcrumbsProps> = ({
                 minInlineSize={0}
               >
                 {currentIcon}
-                <Text aria-current="page" fontWeight="medium" truncate>
+                <Text
+                  aria-current="page"
+                  color="white"
+                  fontWeight="medium"
+                  truncate
+                >
                   {current}
                 </Text>
               </Inline>
