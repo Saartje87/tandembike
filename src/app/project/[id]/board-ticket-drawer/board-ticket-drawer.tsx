@@ -12,7 +12,7 @@ import { conversationActivity } from '../../../../conversations/conversation-act
 import { appTickets } from '../../../../tickets/app-tickets';
 import { boardCycleOf, type Cycle } from '../../../../tickets/cycles';
 import { epicLinkOf } from '../../../../tickets/epic-link';
-import { laneOf } from '../../../../tickets/ticket-lanes';
+import { inheritsSection, laneOf } from '../../../../tickets/ticket-lanes';
 import type { EpicChild, Ticket } from '../../../../tickets/tickets';
 import {
   type BoardFilter,
@@ -50,21 +50,20 @@ function whyHere(ticket: Ticket, projectId: number) {
   }
   const { live } = conversationActivity(appConversations().activityRows());
   const own = live[ticket.number];
-  const explanation = appAutopilot().explain(projectId);
+  const epicLive = ticket.epic ? live[ticket.epic.number] : undefined;
+  // The section comes from the Epic's run when the child inherits it (T1143).
+  const placedBy = inheritsSection(ticket, own) ? epicLive : own;
+  // Only a Todo Ticket has an entry in Autopilot's answer.
+  const explanation =
+    ticket.status === 'Todo' ? appAutopilot().explain(projectId) : null;
   return whyHereOf({
-    placement: laneOf(
-      ticket,
-      own,
-      ticket.epic ? live[ticket.epic.number] : undefined,
-    ),
-    hasLive:
-      own !== undefined ||
-      (ticket.epic !== null && live[ticket.epic.number] !== undefined),
+    placement: laneOf(ticket, own, epicLive),
+    hasLive: placedBy !== undefined,
     epicNumber: ticket.epic?.number ?? null,
-    autopilot: explanation.autopilot,
-    autoTriage: explanation.autoTriage,
+    autopilot: explanation?.autopilot ?? { state: 'running' },
+    autoTriage: explanation?.autoTriage ?? { state: 'running' },
     entry:
-      explanation.tickets.find(({ number }) => number === ticket.number) ??
+      explanation?.tickets.find(({ number }) => number === ticket.number) ??
       null,
   });
 }
