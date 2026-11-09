@@ -1,0 +1,78 @@
+import { Stack, Text } from '@blockle/blocks';
+import type { Metadata } from 'next';
+import { type FC, Suspense } from 'react';
+
+import { appAutopilot } from '../../../../autopilot/app-autopilot';
+import { FlowSection } from '../../../../components/flow-section/flow-section';
+import { PageLoading } from '../../../../components/page-loading/page-loading';
+import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
+import { loadProject, type ProjectPageProps } from '../project-data';
+
+export async function generateMetadata({
+  params,
+}: ProjectPageProps): Promise<Metadata> {
+  const project = await loadProject(params);
+  return { title: `Flow · ${project.name}` };
+}
+
+const comingSoon = (
+  <Text tag="p" color="muted">
+    Coming soon.
+  </Text>
+);
+
+async function flowTab(params: ProjectPageProps['params']) {
+  const project = await loadProject(params);
+  const explanation = appAutopilot().explain(project.id);
+  return (
+    <Stack gap={6}>
+      <Text tag="p">
+        How this Project's factory runs: the path a Ticket takes from idea to
+        Done, how a Cycle begins and ends, what this Project runs at each Stage,
+        and why Autopilot is starting work now or not.
+      </Text>
+      <FlowSection
+        id="ticket-path"
+        title="Ticket path"
+        intro="Every Ticket's route from New Ticket to Done, who acts at each step and how many Tickets are there now."
+      >
+        {comingSoon}
+      </FlowSection>
+      <FlowSection
+        id="cycle-loop"
+        title="Cycle loop"
+        intro="How a Cycle is planned, started, worked by Autopilot and closed."
+      >
+        {comingSoon}
+      </FlowSection>
+      <FlowSection
+        id="setup"
+        title="Setup"
+        intro="What this Project runs at each Stage, and its limits. Change them on Settings."
+      >
+        {comingSoon}
+      </FlowSection>
+      <FlowSection
+        id="switches"
+        title="Switches and Pause reasons"
+        intro="Whether Autopilot and Auto-triage start work now, and every reason they do not."
+      >
+        <PauseReasons
+          autopilot={explanation.autopilot}
+          autoTriage={explanation.autoTriage}
+        />
+      </FlowSection>
+    </Stack>
+  );
+}
+
+/**
+ * A Project's Flow tab (ADR 0044): how its factory runs, explained from the
+ * same rules that run it. It streams in behind its own boundary, and the
+ * page refreshes on every change, so it stays live.
+ */
+const FlowPage: FC<ProjectPageProps> = ({ params }) => (
+  <Suspense fallback={<PageLoading />}>{flowTab(params)}</Suspense>
+);
+
+export default FlowPage;

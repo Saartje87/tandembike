@@ -24,6 +24,7 @@ import {
   cyclePath,
   cyclesPath,
   filteredBoardPath,
+  projectFlowPath,
   projectPath,
   projectSettingsPath,
 } from '../../app/lib/paths';
@@ -51,10 +52,10 @@ export type ProjectTabsProps = {
 };
 
 /**
- * A tab of the Project: the Backlog, a Cycle by id, the History
+ * A tab of the Project: the Backlog, a Cycle by id, the History, Flow
  * or Settings.
  */
-type CurrentTab = 'backlog' | 'history' | 'settings' | number;
+type CurrentTab = 'backlog' | 'history' | 'flow' | 'settings' | number;
 
 /**
  * The tab on screen, from the URL's `segments` below the Project: an
@@ -70,6 +71,9 @@ function currentTab(segments: string[], cycles: Cycle[]): CurrentTab | null {
   }
   if (segment === 'settings') {
     return 'settings';
+  }
+  if (segment === 'flow') {
+    return 'flow';
   }
   const cycle =
     segment === 'cycle'
@@ -211,7 +215,7 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
 
 /**
  * A Project's views as tabs: its Backlog, its Active Cycle,
- * each Prepared one, the History of archived ones and its Settings, with a
+ * each Prepared one, the History of archived ones, its Flow and its Settings, with a
  * New Cycle button that adds one. The Backlog's and each Cycle's tab shows its open
  * Tickets in a badge, whatever the Board filter; the Active Cycle's shows what
  * needs the User instead, and the Backlog's turns to a warning with Intake. It marks the tab on screen
@@ -264,6 +268,12 @@ export const ProjectTabs: FC<ProjectTabsProps> = ({
           current={current === 'history'}
         >
           History
+        </ProjectTab>
+        <ProjectTab
+          href={projectFlowPath(projectId)}
+          current={current === 'flow'}
+        >
+          Flow
         </ProjectTab>
         <ProjectTab
           href={projectSettingsPath(projectId)}

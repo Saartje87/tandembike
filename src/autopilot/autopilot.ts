@@ -10,6 +10,15 @@ import type { ChangeChannel } from '../tickets/changes';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
+import type {
+  AutopilotExplanation,
+  AutopilotPauseReason,
+  AutoTriagePauseReason,
+  Eligibility,
+  EngineState,
+  NotEligibleReason,
+  NotTriageEligibleReason,
+} from './explanation';
 
 export type AutopilotDeps = {
   /** Where Projects, Cycles and Tickets are read; Autopilot never writes them. */
@@ -28,6 +37,13 @@ const transientResumeText =
   'The last run ended on a transient error. Continue where you left off.';
 /** Its run is doing something, or waiting on an answer, and holds a slot. */
 const workingStates: ConversationState[] = ['running', 'waiting'];
+
+/** Running without a reason, else paused with every one of them. */
+function stateOf<Reason>(reasons: Reason[]): EngineState<Reason> {
+  return reasons.length === 0
+    ? { state: 'running' }
+    : { state: 'paused', reasons };
+}
 
 /**
  * Autopilot (ADR 0030, ADR 0041): while a Project's switch is on and it has
@@ -110,18 +126,15 @@ export function createAutopilot({
     return !sentBack || sentBack.createdAt <= conversation.createdAt;
   };
 
-  /** The Active Cycle's Eligible work in Todo order (GLOSSARY: Eligible). */
-  const eligible = (projectId: number, cycleId: number): Ticket[] => {
+  /** Every Todo Ticket and Epic of the Project, archived ones too, in Board order. */
+  const todoTickets = (projectId: number): Ticket[] => {
     const todo: Ticket[] = [];
     let cursor: number | undefined;
     do {
       const page = tickets.findTickets({
         projectId,
-        cycleId,
         status: 'Todo',
-        labels: [readyLabel],
-        blocked: false,
-        claimed: false,
+        includeArchived: true,
         sort: 'position',
         detail: 'full',
         limit: 200,
@@ -130,20 +143,7 @@ export function createAutopilot({
       todo.push(...(page.tickets as Ticket[]));
       cursor = page.nextCursor ?? undefined;
     } while (cursor !== undefined);
-
-    const held = new Set(
-      startConversations(projectId)
-        .filter(holdsTicket)
-        .map((conversation) => conversation.ticketNumber),
-    );
-    return todo.filter(
-      (ticket) =>
-        !ticket.archived &&
-        ticket.epic === null &&
-        !held.has(ticket.number) &&
-        (ticket.type !== 'Epic' ||
-          ticket.children.some((child) => !child.archived)),
-    );
+    return todo;
   };
 
   /** How many machine slots are free now (ADR 0041); never below 0. */
@@ -154,37 +154,195 @@ export function createAutopilot({
         conversations.machineSlotsInUse(),
     );
 
+  /** The machine's own Pause reasons (ADR 0041), shared by builds and triage. */
+  const machineReasons = (): Extract<
+    AutopilotPauseReason,
+    { type: 'machineCapFull' | 'overMachineCeiling' }
+  >[] => {
+    const reasons: Extract<
+      AutopilotPauseReason,
+      { type: 'machineCapFull' | 'overMachineCeiling' }
+    >[] = [];
+    if (machineFree() === 0) {
+      reasons.push({
+        type: 'machineCapFull',
+        cap: tickets.getMachineSettings().maxConcurrentRuns,
+      });
+    }
+    const budget = machineBudget();
+    if (budget?.paused) {
+      reasons.push({
+        type: 'overMachineCeiling',
+        spendUsd: budget.spendUsd,
+        ceilingUsd: budget.ceilingUsd,
+      });
+    }
+    return reasons;
+  };
+
   /**
-   * The Active Cycle and free Start run slots Autopilot may use for the
-   * Project now, or null with the switch off, no Active Cycle, the Spend
-   * ceiling reached or no free slot. At or over the ceiling nothing new
-   * starts; the switch stays on and running runs finish. Raising the ceiling
-   * or starting the next Cycle (whose spend is zero) lets the next evaluation
-   * go on.
+   * The Project's own room for builds (ADR 0030): its Active Cycle, its free
+   * Start run slots, and every Project-level Pause reason. At or over the
+   * Spend ceiling nothing new starts; the switch stays on and running runs
+   * finish. Raising the ceiling or starting the next Cycle (whose spend is
+   * zero) lets the next evaluation go on.
    */
-  const room = (
+  const projectRoom = (
     projectId: number,
-  ): { cycleId: number; slots: number } | null => {
+  ): {
+    cycleId: number | null;
+    slots: number;
+    reasons: AutopilotPauseReason[];
+  } => {
+    const reasons: AutopilotPauseReason[] = [];
     const project = tickets.getProject(projectId);
     const settings = tickets.getProjectAgentSettings(projectId);
-    if (project.archived || !settings.autopilot) {
-      return null;
+    if (project.archived) {
+      reasons.push({ type: 'projectArchived' });
+    }
+    if (!settings.autopilot) {
+      reasons.push({ type: 'switchedOff' });
     }
     const cycle = tickets
       .listCycles(projectId)
       .find((candidate) => candidate.state === 'Active');
     if (!cycle) {
-      return null;
+      reasons.push({ type: 'noActiveCycle' });
     }
-    if (conversations.spendBudget({ projectId, cycleId: cycle.id })?.paused) {
-      return null;
+    if (settings.spendCeilingUsd === null) {
+      reasons.push({ type: 'noSpendCeiling' });
+    } else if (cycle) {
+      const budget = conversations.spendBudget({
+        projectId,
+        cycleId: cycle.id,
+      });
+      if (budget?.paused) {
+        reasons.push({
+          type: 'overSpendCeiling',
+          spendUsd: budget.spendUsd,
+          ceilingUsd: budget.ceilingUsd,
+        });
+      }
     }
     // A Merge the User approved holds a run slot like a Start (T1221).
     const working = conversations
       .list({ projectId })
       .filter(holdsStartRunSlot).length;
-    const slots = startRunLimit(settings) - working;
-    return slots > 0 ? { cycleId: cycle.id, slots } : null;
+    const limit = startRunLimit(settings);
+    const slots = Math.max(0, limit - working);
+    if (slots === 0) {
+      reasons.push({ type: 'noFreeStartRunSlot', limit });
+    }
+    return { cycleId: cycle?.id ?? null, slots, reasons };
+  };
+
+  /**
+   * The Active Cycle and free Start run slots Autopilot may use for the
+   * Project now, or null while any Project-level Pause reason holds. The
+   * resumes use it; they need no Eligible work.
+   */
+  const room = (
+    projectId: number,
+  ): { cycleId: number; slots: number } | null => {
+    const open = projectRoom(projectId);
+    return open.reasons.length === 0 && open.cycleId !== null
+      ? { cycleId: open.cycleId, slots: open.slots }
+      : null;
+  };
+
+  /**
+   * Why each of `todo` is or is not Eligible (GLOSSARY: Eligible), with the
+   * Eligible ones numbered in Todo order. `free` is how many could start now.
+   */
+  const buildEligibility = (
+    projectId: number,
+    todo: Ticket[],
+    cycleId: number | null,
+    free: number,
+  ): Map<number, Eligibility<NotEligibleReason>> => {
+    const held = new Map<number, number>();
+    for (const conversation of startConversations(projectId)) {
+      if (
+        !held.has(conversation.ticketNumber as number) &&
+        holdsTicket(conversation)
+      ) {
+        held.set(conversation.ticketNumber as number, conversation.id);
+      }
+    }
+    const result = new Map<number, Eligibility<NotEligibleReason>>();
+    let place = 0;
+    for (const ticket of todo) {
+      const reasons: NotEligibleReason[] = [];
+      if (!ticket.labels.includes(readyLabel)) {
+        reasons.push({ type: 'notReady' });
+      }
+      if (ticket.blocked) {
+        reasons.push({
+          type: 'blocked',
+          blockers: ticket.blockedBy.filter((number) => {
+            const blocker = tickets.getTicket(number);
+            return blocker.status !== 'Done' && !blocker.archived;
+          }),
+        });
+      }
+      if (ticket.claim !== null) {
+        reasons.push({ type: 'claimed' });
+      }
+      if (cycleId === null || ticket.cycle?.id !== cycleId) {
+        reasons.push({ type: 'notInActiveCycle' });
+      }
+      if (ticket.archived) {
+        reasons.push({ type: 'archived' });
+      }
+      if (
+        ticket.type === 'Epic' &&
+        !ticket.children.some((child) => !child.archived)
+      ) {
+        reasons.push({ type: 'epicWithoutChildren' });
+      }
+      if (ticket.epic !== null) {
+        reasons.push({ type: 'epicChild', epicNumber: ticket.epic.number });
+      }
+      const conversationId = held.get(ticket.number);
+      if (conversationId !== undefined) {
+        reasons.push({ type: 'heldByConversation', conversationId });
+      }
+      if (reasons.length > 0) {
+        result.set(ticket.number, { eligible: false, reasons });
+      } else {
+        place += 1;
+        result.set(ticket.number, {
+          eligible: true,
+          place,
+          fitsFreeSlots: place <= free,
+        });
+      }
+    }
+    return result;
+  };
+
+  /**
+   * Builds: every Pause reason, and why each Todo Ticket is or is not
+   * Eligible. The one rule dispatch acts on (ADR 0044).
+   */
+  const explainBuilds = (projectId: number, todo = todoTickets(projectId)) => {
+    const open = projectRoom(projectId);
+    const reasons = [...open.reasons, ...machineReasons()];
+    const free = reasons.length === 0 ? Math.min(open.slots, machineFree()) : 0;
+    const eligibility = buildEligibility(projectId, todo, open.cycleId, free);
+    const next = todo.find(
+      (ticket) => eligibility.get(ticket.number)?.eligible,
+    );
+    // Nothing to start is a reason only when nothing else stops it.
+    if (!next && reasons.length === 0) {
+      reasons.push({ type: 'noEligibleWork' });
+    }
+    return {
+      cycleId: open.cycleId,
+      state: stateOf(reasons),
+      eligibility,
+      next: next ?? null,
+    };
   };
 
   /**
@@ -295,21 +453,20 @@ export function createAutopilot({
       }
     }
   };
-
   /**
    * One turn's build (ADR 0041): starts the Project's first Eligible Ticket
-   * when it has room, and says whether it did. A refusal, such as a missing
-   * repository path, starts nothing; the Ticket has no Conversation, so the
-   * next change tries it again.
+   * when no Pause reason holds, and says whether it did. A refusal, such as a
+   * missing repository path, starts nothing; the Ticket has no Conversation,
+   * so the next change tries it again.
    */
   const dispatchOne = async (projectId: number): Promise<boolean> => {
-    const open = room(projectId);
-    if (!open || machineFree() === 0) {
+    // The Project-level reasons first, so a paused Project reads no Tickets.
+    if (room(projectId) === null) {
       return false;
     }
-    const { cycleId } = open;
-    const [ticket] = eligible(projectId, cycleId);
-    if (!ticket) {
+    const builds = explainBuilds(projectId);
+    const ticket = builds.next;
+    if (builds.state.state !== 'running' || !ticket) {
       return false;
     }
     try {
@@ -317,7 +474,7 @@ export function createAutopilot({
         startedBy: 'autopilot',
         ticketNumber: ticket.number,
         intent: 'start',
-        cycleId,
+        cycleId: builds.cycleId as number,
         prompt: agentCommandMessage(
           'start',
           ticket,
@@ -355,42 +512,122 @@ export function createAutopilot({
     return proposed;
   };
 
-  /** The Project's Triage-eligible work, oldest first (GLOSSARY: Triage-eligible). */
-  const triageEligible = (projectId: number): Ticket[] => {
-    const open = new Set(
-      conversations
-        .list({ projectId })
-        .filter(
-          (conversation) =>
-            conversation.intent === 'triage' && !conversation.hidden,
-        )
-        .map((conversation) => conversation.ticketNumber),
-    );
-    const found: Ticket[] = [];
-    let cursor: number | undefined;
-    do {
-      const page = tickets.findTickets({
-        projectId,
-        status: 'Todo',
-        detail: 'full',
-        limit: 200,
-        ...(cursor === undefined ? {} : { cursor }),
+  /** Auto-triage's Pause reasons other than "no Triage-eligible work" (ADR 0040). */
+  const triageRoomReasons = (projectId: number): AutoTriagePauseReason[] => {
+    const reasons: AutoTriagePauseReason[] = [];
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (tickets.getProject(projectId).archived) {
+      reasons.push({ type: 'projectArchived' });
+    }
+    if (!settings.autoTriage) {
+      reasons.push({ type: 'switchedOff' });
+    }
+    if (settings.triageCeilingUsd === null) {
+      reasons.push({ type: 'noTriageCeiling' });
+    }
+    const working = conversations
+      .list({ projectId })
+      .find(
+        (conversation) =>
+          conversation.intent === 'triage' &&
+          workingStates.includes(conversation.state),
+      );
+    if (working) {
+      reasons.push({ type: 'triageRunWorking', conversationId: working.id });
+    }
+    const budget = conversations.triageBudget(projectId, now());
+    if (budget?.paused) {
+      reasons.push({
+        type: 'overTriageCeiling',
+        spendUsd: budget.spendUsd,
+        ceilingUsd: budget.ceilingUsd,
       });
-      found.push(...(page.tickets as Ticket[]));
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor !== undefined);
-    return found.filter((ticket) => {
-      const states = ticket.labels.filter((label) =>
+    }
+    reasons.push(...machineReasons());
+    return reasons;
+  };
+
+  /**
+   * Why each of `todo` is or is not Triage-eligible (GLOSSARY:
+   * Triage-eligible), the Triage-eligible ones numbered oldest first.
+   */
+  const triageEligibility = (
+    projectId: number,
+    todo: Ticket[],
+    free: boolean,
+  ): Map<number, Eligibility<NotTriageEligibleReason>> => {
+    const open = new Map<number, number>();
+    for (const conversation of conversations.list({ projectId })) {
+      if (
+        conversation.intent === 'triage' &&
+        !conversation.hidden &&
+        conversation.ticketNumber !== null &&
+        !open.has(conversation.ticketNumber)
+      ) {
+        open.set(conversation.ticketNumber, conversation.id);
+      }
+    }
+    const oldestFirst = [...todo].sort(
+      (a, b) =>
+        a.createdAt.getTime() - b.createdAt.getTime() || a.number - b.number,
+    );
+    const result = new Map<number, Eligibility<NotTriageEligibleReason>>();
+    let place = 0;
+    for (const ticket of oldestFirst) {
+      const reasons: NotTriageEligibleReason[] = [];
+      if (ticket.archived) {
+        reasons.push({ type: 'archived' });
+      }
+      const [state] = ticket.labels.filter((label) =>
         (triageStateLabels as readonly string[]).includes(label),
       );
-      return (
-        !ticket.archived &&
-        (states.length === 0 || states[0] === 'needs-triage') &&
-        !isFeedback(ticket.labels) &&
-        !open.has(ticket.number) &&
-        !proposedSinceStateChange(ticket.number)
-      );
-    });
+      if (state !== undefined && state !== 'needs-triage') {
+        reasons.push({ type: 'triaged', label: state });
+      }
+      if (isFeedback(ticket.labels)) {
+        reasons.push({ type: 'feedback' });
+      }
+      const conversationId = open.get(ticket.number);
+      if (conversationId !== undefined) {
+        reasons.push({ type: 'underTriageConversation', conversationId });
+      }
+      if (reasons.length === 0 && proposedSinceStateChange(ticket.number)) {
+        reasons.push({ type: 'proposed' });
+      }
+      if (reasons.length > 0) {
+        result.set(ticket.number, { eligible: false, reasons });
+      } else {
+        place += 1;
+        result.set(ticket.number, {
+          eligible: true,
+          place,
+          fitsFreeSlots: free && place === 1,
+        });
+      }
+    }
+    return result;
+  };
+
+  /**
+   * Auto-triage: every Pause reason, and why each Todo Ticket is or is not
+   * Triage-eligible. The one rule triage acts on (ADR 0044).
+   */
+  const explainTriage = (projectId: number, todo = todoTickets(projectId)) => {
+    const reasons = triageRoomReasons(projectId);
+    const eligibility = triageEligibility(
+      projectId,
+      todo,
+      reasons.length === 0,
+    );
+    const next =
+      todo.find((ticket) => {
+        const entry = eligibility.get(ticket.number);
+        return entry?.eligible === true && entry.place === 1;
+      }) ?? null;
+    if (!next && reasons.length === 0) {
+      reasons.push({ type: 'noTriageEligibleWork' });
+    }
+    return { state: stateOf(reasons), eligibility, next };
   };
 
   /**
@@ -400,31 +637,13 @@ export function createAutopilot({
    * Cycle, records none and takes no Start run slot.
    */
   const triageOne = async (projectId: number): Promise<boolean> => {
-    const settings = tickets.getProjectAgentSettings(projectId);
-    if (
-      tickets.getProject(projectId).archived ||
-      !settings.autoTriage ||
-      settings.triageCeilingUsd === null ||
-      machineFree() === 0
-    ) {
+    // The Project-level reasons first, so a paused Project reads no Tickets.
+    if (triageRoomReasons(projectId).length > 0) {
       return false;
     }
-    if (
-      conversations
-        .list({ projectId })
-        .some(
-          (conversation) =>
-            conversation.intent === 'triage' &&
-            workingStates.includes(conversation.state),
-        )
-    ) {
-      return false;
-    }
-    if (conversations.triageBudget(projectId, now())?.paused !== false) {
-      return false;
-    }
-    const [ticket] = triageEligible(projectId);
-    if (!ticket) {
+    const triage = explainTriage(projectId);
+    const ticket = triage.next;
+    if (triage.state.state !== 'running' || !ticket) {
       return false;
     }
     try {
@@ -443,6 +662,30 @@ export function createAutopilot({
       console.error(`Autopilot could not triage T${ticket.number}`, error);
       return false;
     }
+  };
+
+  /**
+   * Why Autopilot and Auto-triage start nothing in Project `projectId` now,
+   * or that they are running, and for each Todo Ticket or Epic why it is or
+   * is not next (ADR 0044). Dispatch and triage act on this same rule.
+   */
+  const explain = (projectId: number): AutopilotExplanation => {
+    const todo = todoTickets(projectId);
+    const builds = explainBuilds(projectId, todo);
+    const triage = explainTriage(projectId, todo);
+    return {
+      autopilot: builds.state,
+      autoTriage: triage.state,
+      tickets: todo.map((ticket) => ({
+        number: ticket.number,
+        build: builds.eligibility.get(
+          ticket.number,
+        ) as Eligibility<NotEligibleReason>,
+        triage: triage.eligibility.get(
+          ticket.number,
+        ) as Eligibility<NotTriageEligibleReason>,
+      })),
+    };
   };
 
   /** The ids of the Projects a pass covers: the unarchived ones, lowest id first. */
@@ -563,6 +806,8 @@ export function createAutopilot({
   const startup = (): Promise<void> => enqueue(() => runPass(true));
 
   return {
+    explain,
+
     /**
      * Runs a pass over every Project now. Passes are queued, one finishing
      * before the next begins; one already waiting is shared.

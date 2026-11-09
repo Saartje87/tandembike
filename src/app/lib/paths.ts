@@ -49,6 +49,11 @@ export function projectSettingsPath(projectId: number): string {
   return `${projectPath(projectId)}/settings`;
 }
 
+/** A Project's Flow: how its factory runs, and why work waits (ADR 0044). */
+export function projectFlowPath(projectId: number): string {
+  return `${projectPath(projectId)}/flow`;
+}
+
 /**
  * A Board filter (see `GLOSSARY.md`): a search text, kept as typed, and the
  * Labels a Ticket needs every one of, in the order picked.

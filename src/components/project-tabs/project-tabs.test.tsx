@@ -91,6 +91,7 @@ describe('ProjectTabs', () => {
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
@@ -106,6 +107,7 @@ describe('ProjectTabs', () => {
       '/project/3?q=fix+it&label=bug&label=ui',
       '/project/3/cycle/7?q=fix+it&label=bug&label=ui',
       '/project/3/cycles',
+      '/project/3/flow',
       '/project/3/settings',
     ]);
   });
@@ -122,6 +124,7 @@ describe('ProjectTabs', () => {
       'Launch',
       'Beta',
       'History',
+      'Flow',
       'Settings',
     ]);
   });
@@ -132,6 +135,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
@@ -149,6 +153,7 @@ describe('ProjectTabs', () => {
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
@@ -159,7 +164,19 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: 'page' },
+    ]);
+  });
+
+  it('shows a Flow tab beside Settings and marks it current on the Flow', () => {
+    renderTabs([], ['flow']);
+
+    expect(tabs()).toEqual([
+      { name: 'Backlog', href: '/project/3', current: null },
+      { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Flow', href: '/project/3/flow', current: 'page' },
+      { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
 
@@ -169,6 +186,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
   });
@@ -196,6 +214,7 @@ describe('ProjectTabs', () => {
       { name: 'Launch', badge: null },
       { name: 'Beta', badge: '0 open Tickets' },
       { name: 'History', badge: null },
+      { name: 'Flow', badge: null },
       { name: 'Settings', badge: null },
     ]);
     expect(screen.getByRole('link', { name: /^Backlog/ })).toHaveTextContent(
