@@ -330,3 +330,64 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 });
+
+describe('file_tickets feedback cap and dedupe', () => {
+  const feedbackBatch = (...titles: string[]) => ({
+    projectName: 'Website',
+    tickets: titles.map((title) => ({
+      title,
+      labels: ['needs-triage', 'from:agent-run'],
+    })),
+  });
+
+  it('refuses a run fourth feedback Ticket and caps nothing without the header', async () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets, { runId: 'conv-9' });
+
+    const ok = await client.callTool({
+      name: 'file_tickets',
+      arguments: feedbackBatch('Alpha one', 'Beta two', 'Gamma three'),
+    });
+    expect(ok.isError).toBeFalsy();
+    const refused = await client.callTool({
+      name: 'file_tickets',
+      arguments: feedbackBatch('Delta four'),
+    });
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toContain('add a note');
+    await client.close();
+
+    const plain = await connectMcpClient(tickets);
+    const uncapped = await plain.callTool({
+      name: 'file_tickets',
+      arguments: feedbackBatch(
+        'Zeta six',
+        'Eta seven',
+        'Theta eight',
+        'Iota nine',
+      ),
+    });
+    expect(uncapped.isError).toBeFalsy();
+    await plain.close();
+  });
+
+  it('refuses a near-duplicate feedback Ticket naming the match', async () => {
+    const tickets = createTestTickets();
+    tickets.createProject({ name: 'Website' });
+    const client = await connectMcpClient(tickets, { runId: 'conv-9' });
+    await client.callTool({
+      name: 'file_tickets',
+      arguments: feedbackBatch('Sidebar closes on resize'),
+    });
+
+    const refused = await client.callTool({
+      name: 'file_tickets',
+      arguments: feedbackBatch('Sidebar closes on resize.'),
+    });
+
+    expect(refused.isError).toBe(true);
+    expect(resultText(refused)).toContain('T1');
+    await client.close();
+  });
+});

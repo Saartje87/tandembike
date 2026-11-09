@@ -8,6 +8,7 @@ import { ProjectAgentProvider } from '../../../../components/project-agent/proje
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { cycleUnitCount } from '../../../../tickets/cycle-units';
 import type { Cycle } from '../../../../tickets/cycles';
 import type { Project } from '../../../../tickets/tickets';
 import {
@@ -156,6 +157,12 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         key={tab.id}
         cycle={tab}
         activeCycle={cycles.find(({ state }) => state === 'Active')}
+        estimate={{
+          costUsd: appConversations().startCostEstimate(project.id),
+          units: cycleUnitCount(
+            tickets.listTickets({ projectId: project.id, cycleId: tab.id }),
+          ),
+        }}
       />
       <Cockpit
         {...shared}
