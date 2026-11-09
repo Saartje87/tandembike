@@ -9,13 +9,24 @@ This repository's process for one Agent run on one Ticket, from claim to merge. 
 - `start_work` takes your Agent-run ID from the run Tandembike started. A `tandembike start` session needs no `agentRunId`; in any other terminal session, pass `agentRunId`, a unique ID for the run, to `start_work` and to the other tools that name your run.
 - Branch and PR by "Git workflow" in `AGENTS.md`.
 
+## Playbook runs in this repository
+
+Start runs here run the Playbook's `/tandembike:implement`, or `/tandembike:implement-epic` for an Epic: the Project's Start commands are blank, and this repository has no `implement` skill of its own. The Playbook defers to the repository's instructions, so these steps add to it or override it:
+
+- **Worktree.** A run Tandembike started is already in its own worktree; create the branch there. Any other run works in a worktree of its own, by "Worktrees for parallel runs" in [`issue-tracker.md`](issue-tracker.md), so a parallel session in the same checkout cannot switch its branch.
+- **Branch.** Name it by "Git workflow" in `AGENTS.md` (`ticket-<number>-<slug>`), not the Playbook's `t<number>-<slug>`. Before each commit, check that `git branch --show-current` names it: the Git guardrail refuses a commit on `main` or a detached HEAD.
+- **Review.** Commit first, then call the Playbook's `review` skill (`tandembike:review`) on the diff against `main`, for every change, docs-only included. Do not use `code-review` for a run's review.
+- **Browser check.** When the change touches routing, navigation, a drawer or dialog, or a Server Action that navigates, also run a real-browser check by [`browser-checks.md`](browser-checks.md) after the review: jsdom cannot run Next's routing, so those bugs pass every test.
+- **Feedback.** File friction by "Feedback as Tickets" below; it says more than the Playbook's step (which Project, the category label, the first comment).
+- **Merge.** The run merges its own PR, by "The Claim, through merge" below. This deliberately overrides the Playbook's hand-off with `open_pr` `handOff: true` and the User's Approve merge (ADR 0038, and its amendment for this repository): the run does not stop after opening the PR to wait for the User.
+
 ## The PR reference
 
 Once you open the PR, add its URL to the Ticket with `open_pr`, which records it as an External reference, not as a comment. A PR closed and replaced: add the new URL beside the old one, since references are history, not status.
 
 ## The Claim, through merge
 
-A Claim covers one Agent run's work, through its merge.
+A Claim covers one Agent run's work, through its merge. In this repository the run merges its own PR; it does not hand off for the User's Approve merge as the Playbook does (see "Playbook runs in this repository").
 
 - The run that opens the PR waits for CI (`gh pr checks <number> --watch`). Green, with review complete and every acceptance criterion checked: merge with `gh pr merge <number> --merge`, then call `finish_work`. Red: fix the branch and wait again; when you cannot, comment on the Ticket why the PR stays open (`add_note`) and hand it off with `open_pr` and `handOff: true`, which releases the Claim. The Ticket stays `In progress`, and that plus the PR reference show it is taken.
 - A later run that works on the open PR, for example on review findings, claims the Ticket for that work with `start_work`, which leaves its Status as it is, and releases it with `open_pr` and `handOff: true` when done.
