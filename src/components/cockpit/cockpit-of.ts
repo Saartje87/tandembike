@@ -51,16 +51,18 @@ export type InFlightRow = CockpitTicket & {
 };
 
 /**
- * Where a child of an Epic stands, for its Epic's row. `built` is an In
- * progress child whose acceptance criteria are all checked: finished on the
- * Epic's branch, waiting for the Epic to merge (T1144).
+ * Where a child of an Epic stands, for its Epic's row: its own progress, not
+ * the section it takes from its Epic's run (T1263). `queued` is Todo;
+ * `started` is In progress and not built; `built` is an In progress child
+ * whose acceptance criteria are all checked: finished on the Epic's branch,
+ * waiting for the Epic to merge (T1144). `needs-you` is a child whose own
+ * Conversation needs the User; an Epic run's attention is on the Epic's row.
  */
 export type EpicChildState =
   | 'done'
   | 'built'
-  | 'running'
+  | 'started'
   | 'needs-you'
-  | 'review'
   | 'queued';
 
 /** A child of an Epic, as its Epic's row lists it. */
@@ -170,13 +172,6 @@ export const rowOf = (ticket: Ticket): CockpitTicket => ({
   color: ticket.type === 'Epic' ? epicColorOf(ticket) : null,
   labels: ticket.labels.filter(isRowLabel),
 });
-
-/** Where an In progress child on this Board stands, by its section. */
-const childStateBySection: Record<InProgressSection, EpicChildState> = {
-  Running: 'running',
-  Review: 'review',
-  'Action needed': 'needs-you',
-};
 
 /**
  * Whether an In progress child is finished on its Epic's branch: it has
@@ -370,16 +365,16 @@ export function cockpitOf(
     [...actionNeeded, ...review].map(({ number }) => number),
   );
   const childStateOf = (entry: (typeof placed)[number]): EpicChildState => {
-    // A child's own run outranks built: it is still being worked, or it needs
-    // the User. A section it only inherits from its Epic's run does not.
-    const ownRun =
-      !entry.inherited &&
-      (entry.section === 'Running' || entry.section === 'Action needed');
-    if (!ownRun && isBuilt(entry.ticket)) {
+    // Only the child's own Conversation needing the User outranks its
+    // progress; a section it takes from its Epic's run never does (T1263).
+    if (entry.live !== undefined && entry.section === 'Action needed') {
+      return 'needs-you';
+    }
+    if (isBuilt(entry.ticket)) {
       return 'built';
     }
-    if (entry.lane === 'In progress' && entry.section) {
-      return childStateBySection[entry.section];
+    if (entry.lane === 'In progress') {
+      return 'started';
     }
     return entry.lane === 'Done' ? 'done' : 'queued';
   };

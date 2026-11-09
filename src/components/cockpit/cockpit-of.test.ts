@@ -455,7 +455,7 @@ describe('cockpitOf', () => {
           childNeedsYou: false,
           children: [
             { number: 1, title: 'Child 1', state: 'done' },
-            { number: 2, title: 'Child 2', state: 'running' },
+            { number: 2, title: 'Child 2', state: 'started' },
             { number: 3, title: 'Child 3', state: 'queued' },
           ],
         },
@@ -488,13 +488,13 @@ describe('cockpitOf', () => {
         expect(cockpit.needsYou.review[0]).toMatchObject({
           childNeedsYou: false,
           children: [
-            { number: 2, state: 'review' },
-            { number: 5, state: 'review' },
+            { number: 2, state: 'started' },
+            { number: 5, state: 'started' },
           ],
         });
       });
 
-      it("shows children running while their Epic's run goes, with no rows of their own", () => {
+      it("shows children started while their Epic's run goes, with no rows of their own", () => {
         const cockpit = cockpitOf(
           [epic({ claim: null, children: twoStarted }), started(2), started(5)],
           activity({ live: { 50: liveConversation({ state: 'running' }) } }),
@@ -505,12 +505,12 @@ describe('cockpitOf', () => {
         expect(
           cockpit.epics[0].children.map(({ number, state }) => [number, state]),
         ).toEqual([
-          [2, 'running'],
-          [5, 'running'],
+          [2, 'started'],
+          [5, 'started'],
         ]);
       });
 
-      it("folds the children of a stalled Epic into the Epic's Action needed row", () => {
+      it("folds the children of a stalled Epic into the Epic's Action needed row, started, not needing you (T1263)", () => {
         const cockpit = cockpitOf(
           [epic({ claim: null, children: twoStarted }), started(2), started(5)],
           activity(),
@@ -518,6 +518,30 @@ describe('cockpitOf', () => {
 
         expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([50]);
         expect(cockpit.needsYou.count).toBe(1);
+        expect(cockpit.needsYou.actionNeeded[0]).toMatchObject({
+          childNeedsYou: false,
+          children: [
+            { number: 2, state: 'started' },
+            { number: 5, state: 'started' },
+          ],
+        });
+      });
+
+      it('shows children started under an Epic whose own Conversation waits on the User (T1263)', () => {
+        const cockpit = cockpitOf(
+          [epic({ claim: null, children: twoStarted }), started(2), started(5)],
+          activity({ live: { 50: liveConversation({ state: 'waiting' }) } }),
+        );
+
+        expect(cockpit.needsYou.actionNeeded[0]).toMatchObject({
+          number: 50,
+          kind: 'waiting',
+          childNeedsYou: false,
+          children: [
+            { number: 2, state: 'started' },
+            { number: 5, state: 'started' },
+          ],
+        });
       });
 
       it('keeps a Needs you row for a child whose own Conversation needs the User', () => {
@@ -532,6 +556,12 @@ describe('cockpitOf', () => {
 
         expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([5]);
         expect(cockpit.epics[0].childNeedsYou).toBe(true);
+        expect(
+          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+        ).toEqual([
+          [2, 'started'],
+          [5, 'needs-you'],
+        ]);
       });
 
       it('places a child whose Epic is on another Board by that Epic, in a row of its own', () => {
@@ -586,8 +616,8 @@ describe('cockpitOf', () => {
           row.children?.map(({ number, state }) => [number, state]),
         ).toEqual([
           [2, 'built'],
-          [5, 'review'],
-          [6, 'review'],
+          [5, 'started'],
+          [6, 'started'],
         ]);
       });
 
@@ -612,7 +642,7 @@ describe('cockpitOf', () => {
         expect(numbers(cockpit.done)).toEqual([]);
       });
 
-      it("lets a built child's own run outrank built: running, or needing the User", () => {
+      it("lets a built child's own Conversation outrank built only when it needs the User", () => {
         const cockpit = cockpitOf(
           [
             epic({
@@ -644,7 +674,7 @@ describe('cockpitOf', () => {
         expect(
           cockpit.epics[0].children.map(({ number, state }) => [number, state]),
         ).toEqual([
-          [2, 'running'],
+          [2, 'built'],
           [5, 'needs-you'],
         ]);
         expect(cockpit.epics[0].childNeedsYou).toBe(true);
@@ -677,7 +707,7 @@ describe('cockpitOf', () => {
       });
     });
 
-    it('marks a child that needs you or is in review', () => {
+    it("marks an In progress child started, whatever its own or its Epic's section (T1263)", () => {
       const [row] = cockpitOf(
         [
           epic({
@@ -701,11 +731,10 @@ describe('cockpitOf', () => {
       ).epics;
 
       expect(row.children.map(({ number, state }) => [number, state])).toEqual([
-        [2, 'running'],
-        [5, 'needs-you'],
-        [6, 'review'],
+        [2, 'started'],
+        [5, 'started'],
+        [6, 'started'],
       ]);
-      expect(row.childNeedsYou).toBe(true);
     });
 
     it('leaves out archived children', () => {

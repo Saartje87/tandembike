@@ -21,3 +21,4 @@ This amends ADR 0023's section derivation for children of an Epic. The rest of t
 
 - A child moves between sections whenever its Epic's run does, with no change to the child itself.
 - Releasing an Epic's Claim with no PR reference stalls the Epic and its started children together, all in the Epic's one Needs you row.
+- The section a child inherits places it, but its Epic's row does not label it by that section: the children bar shows each child's own progress, queued, started, built or done (T1263). A child shows "needs you" only when its own Conversation needs the User; while the Epic's run needs the User, its row says so, and its started children stay started.
