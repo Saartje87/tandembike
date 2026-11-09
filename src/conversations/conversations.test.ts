@@ -215,6 +215,38 @@ describe('Starting a Conversation', () => {
     });
   });
 
+  it('starts a Triage run on the triage model when set, and other runs on the run model', async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      runModel: 'claude-opus-5-5',
+      triageModel: 'claude-haiku-5',
+    });
+
+    await conversations.start({
+      projectId: project.id,
+      intent: 'triage',
+      prompt: 'Go.',
+      startedBy: 'user',
+    });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+      startedBy: 'user',
+    });
+    expect(runner.runs[0].options.model).toBe('claude-haiku-5');
+    expect(runner.runs[1].options.model).toBe('claude-opus-5-5');
+
+    tickets.setProjectAgentSettings(project.id, { triageModel: null });
+    await conversations.start({
+      projectId: project.id,
+      intent: 'triage',
+      prompt: 'Go.',
+      startedBy: 'user',
+    });
+    expect(runner.runs[2].options.model).toBe('claude-opus-5-5');
+  });
+
   it('starts a Start run with Parallel runs on in a worktree Tandembike made, and says so in the brief', async () => {
     const {
       conversations,

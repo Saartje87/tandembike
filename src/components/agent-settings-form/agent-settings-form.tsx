@@ -42,6 +42,7 @@ type AgentSettingsValues = {
   agentMode: boolean;
   runMode: AgentRunMode;
   runModel: string;
+  triageModel: string;
   autopilot: boolean;
   spendCeiling: string;
 };
@@ -55,6 +56,7 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   agentMode: 'agentMode',
   runMode: 'runMode',
   runModel: 'runModel',
+  triageModel: 'triageModel',
   spendCeilingUsd: 'spendCeiling',
 };
 
@@ -106,6 +108,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       agentMode: settings.agentMode,
       runMode: settings.runMode,
       runModel: settings.runModel ?? '',
+      triageModel: settings.triageModel ?? '',
       autopilot: settings.autopilot,
       spendCeiling:
         settings.spendCeilingUsd === null
@@ -123,6 +126,9 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
   const runModelError = errors.runModel?.message;
+  const triageModelId = useId();
+  const triageModelErrorId = useId();
+  const triageModelError = errors.triageModel?.message;
   const ceilingError = errors.spendCeiling?.message;
   const ceilingId = useId();
   const ceilingErrorId = useId();
@@ -161,6 +167,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       agentMode: values.agentMode,
       runMode: values.runMode,
       runModel: values.runModel.trim() === '' ? null : values.runModel.trim(),
+      triageModel:
+        values.triageModel.trim() === '' ? null : values.triageModel.trim(),
       autopilot: values.autopilot,
       spendCeilingUsd:
         values.spendCeiling.trim() === '' ? null : Number(values.spendCeiling),
@@ -329,6 +337,23 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               still change models itself.
             </Text>
             <FieldError id={runModelErrorId} reason={runModelError} />
+          </Stack>
+          <Stack gap={1}>
+            <Label htmlFor={triageModelId}>Triage model</Label>
+            <TextInput
+              {...register('triageModel')}
+              id={triageModelId}
+              placeholder="The run model"
+              autoComplete="off"
+              aria-invalid={triageModelError ? true : undefined}
+              aria-describedby={
+                triageModelError ? triageModelErrorId : undefined
+              }
+            />
+            <Text tag="p" fontSize="small" color="muted">
+              The model Triage runs start on; leave empty to use the run model.
+            </Text>
+            <FieldError id={triageModelErrorId} reason={triageModelError} />
           </Stack>
           <Stack gap={1}>
             <Inline gap={2} alignY="center">

@@ -26,6 +26,7 @@ const unset: ProjectAgentSettings = {
   agentMode: false,
   runMode: 'default',
   runModel: null,
+  triageModel: null,
   autopilot: false,
   spendCeilingUsd: null,
 };
@@ -129,6 +130,7 @@ describe('AgentSettingsForm', () => {
         agentMode: false,
         runMode: 'default',
         runModel: null,
+        triageModel: null,
         autopilot: false,
         spendCeilingUsd: null,
       }),
@@ -225,6 +227,7 @@ describe('AgentSettingsForm', () => {
         agentMode: true,
         runMode: 'default',
         runModel: null,
+        triageModel: null,
         autopilot: false,
         spendCeilingUsd: null,
       }),
@@ -250,6 +253,32 @@ describe('AgentSettingsForm', () => {
           runMode: 'auto',
           runModel: 'claude-opus-5-5',
         }),
+      ),
+    );
+  });
+
+  it('saves the triage model, blank as none', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{ ...set, triageModel: 'claude-haiku-5' }}
+      />,
+    );
+
+    const field = screen.getByLabelText('Triage model');
+    expect(field).toHaveValue('claude-haiku-5');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ triageModel: 'claude-haiku-5' }),
+      ),
+    );
+
+    await userEvent.clear(field);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenLastCalledWith(
+        expect.objectContaining({ triageModel: null }),
       ),
     );
   });

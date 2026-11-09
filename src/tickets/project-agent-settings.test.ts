@@ -24,6 +24,7 @@ describe("A Project's agent settings", () => {
       agentMode: false,
       runMode: 'auto',
       runModel: null,
+      triageModel: null,
       autopilot: false,
       spendCeilingUsd: null,
     });
@@ -154,6 +155,30 @@ describe("A Project's agent settings", () => {
     tickets.setProjectAgentSettings(project.id, { runModel: 'x' });
     tickets.setProjectAgentSettings(project.id, { runModel: '  ' });
     expect(tickets.getProjectAgentSettings(project.id).runModel).toBe(null);
+  });
+
+  it('set, trim and clear the triage model, and refuse one with spaces', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        triageModel: ' claude-haiku-5 ',
+      }).triageModel,
+    ).toBe('claude-haiku-5');
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(
+      'claude-haiku-5',
+    );
+    const error = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, { triageModel: 'two words' }),
+    );
+    expect((error as ValidationError).fieldErrors).toHaveProperty(
+      'triageModel',
+    );
+    tickets.setProjectAgentSettings(project.id, { triageModel: null });
+    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
   });
 
   it('refuse an unknown run mode or a run model with spaces, naming the field', () => {

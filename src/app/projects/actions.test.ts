@@ -161,6 +161,7 @@ describe('setProjectAgentSettings', () => {
       agentMode: true,
       runMode: 'auto',
       runModel: 'claude-opus-5-5',
+      triageModel: null,
       autopilot: false,
       spendCeilingUsd: null,
     });

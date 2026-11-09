@@ -273,6 +273,15 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
+/** The model a run of `intent` starts on: Triage's own when set, else the run model. */
+const modelFor = (
+  intent: ConversationIntent,
+  settings: { runModel: string | null; triageModel: string | null },
+) =>
+  intent === 'triage' && settings.triageModel !== null
+    ? settings.triageModel
+    : settings.runModel;
+
 /** A Start and a Merge are the intents that count as Start runs (T1221). */
 const isStartRunIntent = (intent: ConversationIntent) =>
   intent === 'start' || intent === 'merge';
@@ -749,6 +758,7 @@ export function createConversations({
         id,
       );
     }
+    const runModel = modelFor(conversation.intent, settings);
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,
@@ -774,7 +784,7 @@ export function createConversations({
         systemPrompt: briefOf(id),
         prompt,
         runMode: settings.runMode,
-        ...(settings.runModel === null ? {} : { model: settings.runModel }),
+        ...(runModel === null ? {} : { model: runModel }),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
         askQuestion: (questions) => askQuestion(id, handle, questions),
@@ -1055,7 +1065,7 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: settings.runModel,
+      model: modelFor(input.intent, settings),
     };
   };
 
@@ -1628,7 +1638,7 @@ export function createConversations({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         brief: briefOf(id),
         runMode: settings.runMode,
-        model: settings.runModel,
+        model: modelFor(conversation.intent, settings),
       };
     },
 
