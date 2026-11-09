@@ -6,14 +6,17 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+/**
+ * The checked-out branch: its name, null on a detached HEAD, or undefined
+ * when unknown, such as outside a repository.
+ */
+export type Branch = string | null | undefined;
+
 export type GuardrailContext = {
   /** The directory the command runs in. */
   cwd: string;
-  /**
-   * The checked-out branch in `dir`: null on a detached HEAD, undefined when
-   * unknown, such as outside a repository.
-   */
-  currentBranch: (dir: string) => string | null | undefined;
+  /** The checked-out branch in `dir`. */
+  currentBranch: (dir: string) => Branch;
 };
 
 const RULES = {
@@ -25,7 +28,7 @@ const RULES = {
   'no-branch-force-delete':
     'force-deleting a branch (git branch -D, --delete --force) is not allowed',
   'no-stash-drop': 'git stash drop and git stash clear are not allowed',
-  'no-commit-main':
+  'no-commit-off-branch':
     'committing on main or on a detached HEAD is not allowed; check `git branch --show-current` and commit on the Ticket branch',
 } as const;
 
@@ -297,10 +300,7 @@ const PUSH_OPTIONS_WITH_VALUE = new Set([
 const PUSH_ALL_BRANCHES = new Set(['--all', '--branches', '--mirror']);
 
 /** The branch a refspec writes to on the remote, without `refs/heads/`. */
-const pushTarget = (
-  refspec: string,
-  currentBranch: () => string | null | undefined,
-) => {
+const pushTarget = (refspec: string, currentBranch: () => Branch) => {
   const spec = refspec.replace(/^\+/, '');
   const colon = spec.indexOf(':');
   let target = colon === -1 ? spec : spec.slice(colon + 1);
@@ -312,7 +312,7 @@ const pushTarget = (
 
 const checkPush = (
   args: string[],
-  currentBranch: () => string | null | undefined,
+  currentBranch: () => Branch,
 ): Denial | null => {
   const positional: string[] = [];
   let force = false;
@@ -392,7 +392,7 @@ const checkGit = (args: string[], context: GuardrailContext): Denial | null => {
     case 'commit': {
       const branch = context.currentBranch(dir);
       return branch === 'main' || branch === null
-        ? deny('no-commit-main')
+        ? deny('no-commit-off-branch')
         : null;
     }
     case 'stash':
@@ -475,7 +475,7 @@ export const hookDecision = (
 };
 
 /** `git symbolic-ref -q` exits 1 on a detached HEAD, 128 outside a repository. */
-export const gitBranch = (dir: string): string | null | undefined => {
+export const gitBranch = (dir: string): Branch => {
   try {
     const branch = execFileSync(
       'git',

@@ -208,9 +208,9 @@ describe('checkCommand', () => {
   });
 
   it('denies a commit on main, naming the rule', () => {
-    expect(ruleOf('git commit -m x', 'main')).toBe('no-commit-main');
+    expect(ruleOf('git commit -m x', 'main')).toBe('no-commit-off-branch');
     expect(ruleOf('git add . && git commit -m x', 'main')).toBe(
-      'no-commit-main',
+      'no-commit-off-branch',
     );
     expect(checkCommand('git commit', onBranch('main'))?.reason).toMatch(
       /main/,
@@ -218,7 +218,7 @@ describe('checkCommand', () => {
   });
 
   it('denies a commit on a detached HEAD', () => {
-    expect(ruleOf('git commit -m x', null)).toBe('no-commit-main');
+    expect(ruleOf('git commit -m x', null)).toBe('no-commit-off-branch');
   });
 
   it('allows a commit when the branch is unknown', () => {
@@ -242,13 +242,13 @@ describe('checkCommand', () => {
     };
     const rule = (command: string) =>
       checkCommand(command, inDirs)?.rule ?? null;
-    expect(rule('git commit -m x')).toBe('no-commit-main');
+    expect(rule('git commit -m x')).toBe('no-commit-off-branch');
     expect(rule('git -C /other commit -m x')).toBeNull();
     expect(rule('git -C wt commit -m x')).toBeNull();
     expect(rule('cd wt && git commit -m x')).toBeNull();
     expect(rule('cd /other && git commit -m x')).toBeNull();
     expect(rule('cd /other && git -C /repo commit -m x')).toBe(
-      'no-commit-main',
+      'no-commit-off-branch',
     );
   });
 
