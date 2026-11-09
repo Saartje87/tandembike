@@ -61,7 +61,7 @@ export type Conversation = {
   ticketNumber: number | null;
   intent: ConversationIntent;
   state: ConversationState;
-  /** Who started it, the User or Autopilot. */
+  /** Who started it: the User, Autopilot or a Terminal session. */
   startedBy: ConversationStarter;
   sdkSessionId: string | null;
   costUsd: number;
@@ -301,7 +301,7 @@ export const startRunLimit = (settings: {
 /**
  * Conversations (ADR 0019): the User's exchanges with Agent runs that
  * Tandembike starts. Runs begin, receive replies and stop only through this
- * module, which only Server Actions call. Every change is stored and
+ * module, which only Server Actions and the terminal route call. Every change is stored and
  * announced as a `conversation` change over the events route (ADR 0005).
  */
 export function createConversations({

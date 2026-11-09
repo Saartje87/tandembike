@@ -23,7 +23,7 @@ const mcpUrl =
  * lives on `globalThis`, with the runs it holds, so Server Actions share it
  * and dev-mode reloads keep it. The first call marks the Conversations of
  * runs that died with the previous server as interrupted. Only Server
- * Actions call it (ADR 0019): no route handler or MCP tool may.
+ * Actions and the CLI's terminal route (ADR 0039) call it: no MCP tool may.
  */
 export function appConversations(): Conversations {
   const global = globalThis as GlobalWithConversations;

@@ -63,6 +63,24 @@ projects on the default 3000. To run it on another port once, pass it after
 is fixed: when you change the port, register the MCP server with the same
 port (`http://localhost:<port>/api/mcp`).
 
+## Work a Ticket in your terminal
+
+With Tandembike running, `tandembike start T42` (or `tandembike start 42`) in
+any folder opens interactive `claude` on that Ticket, whatever the folder is:
+the Ticket's Project says where. Tandembike makes the run's worktree and runs
+the Prepare command as for a Start from the UI (with Parallel runs on), then
+opens `claude` there with the Stage's command (`/tandembike:implement T42`
+unless the Project sets its own), the run brief, the bundled Playbook, the
+Project's run mode and model, and `TANDEMBIKE_RUN` set to the Conversation's
+id. You answer permission prompts and questions in the terminal.
+
+The Conversation shows on the Board as In flight, **Started by Terminal**. It
+holds no Start run slot and counts against no Spend ceiling, and Autopilot does
+not start a second run on its Ticket. It ends when `claude` exits, and
+`tandembike start` exits with `claude`'s exit code. If Tandembike is not
+running, it says so and exits 1. See
+`docs/adr/0039-terminal-conversations.md`.
+
 ## Connect an Agent
 
 The MCP server is served by the running app at

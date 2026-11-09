@@ -17,8 +17,9 @@ import type { ActionResult } from '../lib/action-result';
 
 /**
  * Runs start, receive replies and stop only through these Server Actions,
- * whose origin Next checks (ADR 0019). No route handler or MCP tool may call
- * the Conversations module. Progress reaches browsers as `conversation`
+ * whose origin Next checks (ADR 0019). No MCP tool may call the Conversations
+ * module, and the only route handler that does is the CLI's terminal route
+ * (ADR 0039). Progress reaches browsers as `conversation`
  * changes over the events route, so no path is revalidated here.
  */
 async function conversationResult(
