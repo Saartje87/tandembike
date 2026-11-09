@@ -106,7 +106,9 @@ export const registerWorkTools = ({
           ),
         duplicateOf: ticketNumber
           .optional()
-          .describe('Not supported yet: refused.'),
+          .describe(
+            'The Ticket this one duplicates. On approval it is commented "Duplicate of T#", labelled wontfix and archived. Not with splits, and not itself.',
+          ),
         splits: z
           .array(
             z.strictObject({
@@ -116,7 +118,9 @@ export const registerWorkTools = ({
             }),
           )
           .optional()
-          .describe('Not supported yet: refused.'),
+          .describe(
+            'Tickets to split this one into. On approval they are filed with this Ticket as Origin, in its Cycle, with the approved category and state, and this Ticket is archived. Not with duplicateOf, and not for an Epic.',
+          ),
       },
     },
     ({ number, ...proposal }) =>

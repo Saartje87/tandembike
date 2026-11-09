@@ -3179,6 +3179,8 @@ export function createTickets(
       getTicket: core.getTicket,
       updateTicket: core.updateTicket.bind(core),
       addComment: core.addComment.bind(core),
+      createTicketBatch: core.createTicketBatch.bind(core),
+      archiveTicket: core.archiveTicket.bind(core),
       checkCriteria: checkAcceptanceCriteria,
       transaction: core.transaction,
     }),

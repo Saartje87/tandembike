@@ -97,22 +97,64 @@ describe('proposeTriage', () => {
     expect(tickets.pendingTriage(ticket.number)).toBeNull();
   });
 
-  it('refuses a duplicate or splits for now', () => {
-    const { tickets, ticket } = setUp();
+  it('records a duplicate and splits', () => {
+    const { tickets, project, ticket } = setUp();
+    const other = tickets.createTicket({ projectId: project.id, title: 'Old' });
+    const dup = tickets.proposeTriage(ticket.number, {
+      ...proposal,
+      duplicateOf: other.number,
+    });
+    expect(dup.duplicateOf).toBe(other.number);
+    const split = tickets.proposeTriage(ticket.number, {
+      ...proposal,
+      splits: [{ title: ' A ', description: '', acceptanceCriteria: ['x'] }],
+    });
+    expect(split.splits).toEqual([
+      { title: 'A', description: '', acceptanceCriteria: ['x'] },
+    ]);
+  });
 
-    expect(
-      errorFrom(() =>
-        tickets.proposeTriage(ticket.number, { ...proposal, duplicateOf: 99 }),
-      ),
-    ).toBeInstanceOf(ValidationError);
-    expect(
-      errorFrom(() =>
+  it('refuses a duplicate together with splits, a duplicate of itself, an unknown duplicate and splits of an Epic', () => {
+    const { tickets, project, ticket } = setUp();
+    const other = tickets.createTicket({ projectId: project.id, title: 'Old' });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Big',
+      type: 'Epic',
+    });
+    const split = { title: 'A', description: '', acceptanceCriteria: [] };
+
+    const refusals = [
+      () =>
         tickets.proposeTriage(ticket.number, {
           ...proposal,
-          splits: [{ title: 'A', description: '', acceptanceCriteria: [] }],
+          duplicateOf: other.number,
+          splits: [split],
         }),
-      ),
-    ).toBeInstanceOf(ValidationError);
+      () =>
+        tickets.proposeTriage(ticket.number, {
+          ...proposal,
+          duplicateOf: ticket.number,
+        }),
+      () =>
+        tickets.proposeTriage(ticket.number, {
+          ...proposal,
+          duplicateOf: 9999,
+        }),
+      () =>
+        tickets.proposeTriage(epic.number, { ...proposal, splits: [split] }),
+      () => tickets.proposeTriage(ticket.number, { ...proposal, splits: [] }),
+      () =>
+        tickets.proposeTriage(ticket.number, {
+          ...proposal,
+          splits: [{ ...split, title: ' ' }],
+        }),
+    ];
+    for (const refusal of refusals) {
+      expect(errorFrom(refusal)).toBeInstanceOf(ValidationError);
+    }
+    expect(tickets.pendingTriage(ticket.number)).toBeNull();
+    expect(tickets.pendingTriage(epic.number)).toBeNull();
   });
 
   it('refuses an unknown category or state, and empty reasoning', () => {
@@ -273,5 +315,100 @@ describe('triage reads', () => {
     tickets.rejectTriage(done.id);
 
     expect(tickets.pendingTriageNumbers(project.id)).toEqual([ticket.number]);
+  });
+});
+
+describe('approveTriage on a duplicate', () => {
+  it('comments, labels wontfix and archives', () => {
+    const { tickets, project, ticket } = setUp();
+    const other = tickets.createTicket({ projectId: project.id, title: 'Old' });
+    const made = tickets.proposeTriage(ticket.number, {
+      ...proposal,
+      state: 'ready-for-agent',
+      acceptanceCriteria: ['Ignored'],
+      duplicateOf: other.number,
+    });
+
+    tickets.approveTriage(made.id);
+
+    const after = tickets.getTicket(ticket.number);
+    expect(after.archived).toBe(true);
+    expect([...after.labels].sort()).toEqual(['bug', 'wontfix']);
+    expect(after.acceptanceCriteria.map((c) => c.text)).toEqual([
+      'Old criterion',
+    ]);
+    expect(tickets.listComments(ticket.number).map((c) => c.body)).toContain(
+      `Duplicate of T${other.number}`,
+    );
+  });
+
+  it('changes nothing when it fails', () => {
+    const { tickets, project, ticket } = setUp();
+    const other = tickets.createTicket({ projectId: project.id, title: 'Old' });
+    const made = tickets.proposeTriage(ticket.number, {
+      ...proposal,
+      duplicateOf: other.number,
+    });
+    // Archiving the Ticket's Epic-less self fails once it is no longer Todo.
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+
+    expect(errorFrom(() => tickets.approveTriage(made.id))).toBeInstanceOf(
+      NotAllowedError,
+    );
+    const after = tickets.getTicket(ticket.number);
+    expect(after.archived).toBe(false);
+    expect(after.labels).toEqual(['needs-triage']);
+  });
+});
+
+describe('approveTriage on splits', () => {
+  const splits = [
+    { title: 'Part one', description: 'First.', acceptanceCriteria: ['a1'] },
+    { title: 'Part two', description: '', acceptanceCriteria: ['b1', 'b2'] },
+  ];
+
+  it('files the splits with Origin, Cycle and approved labels, comments and archives', () => {
+    const { tickets, project, ticket } = setUp();
+    const cycle = tickets.createCycle({
+      projectId: project.id,
+      title: 'Sprint',
+    });
+    tickets.planTicket({ cycleId: cycle.id, number: ticket.number });
+    const made = tickets.proposeTriage(ticket.number, { ...proposal, splits });
+
+    tickets.approveTriage(made.id, { state: 'ready-for-human' });
+
+    const original = tickets.getTicket(ticket.number);
+    expect(original.archived).toBe(true);
+    expect(original.splitOff).toHaveLength(2);
+    const children = original.splitOff.map(({ number }) =>
+      tickets.getTicket(number),
+    );
+    expect(children.map((c) => c.title)).toEqual(['Part one', 'Part two']);
+    for (const child of children) {
+      expect(child.origin?.number).toBe(ticket.number);
+      expect(child.cycle?.id).toBe(cycle.id);
+      expect([...child.labels].sort()).toEqual(['bug', 'ready-for-human']);
+    }
+    expect(children[1].acceptanceCriteria.map((c) => c.text)).toEqual([
+      'b1',
+      'b2',
+    ]);
+    expect(children[0].description).toBe('First.');
+    expect(tickets.listComments(ticket.number).map((c) => c.body)).toContain(
+      `Split into ${original.splitOff.map(({ number }) => `T${number}`).join(', ')}`,
+    );
+  });
+
+  it('files nothing when it fails', () => {
+    const { tickets, project, ticket } = setUp();
+    const made = tickets.proposeTriage(ticket.number, { ...proposal, splits });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+
+    expect(errorFrom(() => tickets.approveTriage(made.id))).toBeInstanceOf(
+      NotAllowedError,
+    );
+    expect(tickets.getTicket(ticket.number).splitOff).toEqual([]);
+    expect(tickets.listTickets({ projectId: project.id })).toHaveLength(1);
   });
 });
