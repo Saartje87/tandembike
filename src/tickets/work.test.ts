@@ -265,6 +265,82 @@ describe('startWork', () => {
   });
 });
 
+describe('startWork on an Epic child blocked by a sibling', () => {
+  const epicSetup = () => {
+    const { tickets, project, make } = setup();
+    const epic = make('Epic', { type: 'Epic' });
+    const first = make('First');
+    const second = make('Second');
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [first.number, second.number],
+    });
+    tickets.addBlocker({ blocker: first.number, blocked: second.number });
+    return { tickets, project, epic, first, second };
+  };
+
+  it("starts it under the run's Epic Claim once the sibling is In progress", () => {
+    const { tickets, epic, first, second } = epicSetup();
+    tickets.startWork(epic.number, 'run-1');
+    tickets.startWork(first.number, 'run-1');
+
+    const bundle = tickets.startWork(second.number, 'run-1');
+
+    expect(bundle.ticket.status).toBe('In progress');
+    expect(bundle.epic?.nextChild).toBeNull();
+  });
+
+  it('still refuses it while the sibling is Todo, naming the sibling', () => {
+    const { tickets, epic, first, second } = epicSetup();
+    tickets.startWork(epic.number, 'run-1');
+
+    expect(errorFrom(() => tickets.startWork(second.number, 'run-1'))).toEqual(
+      new NotAllowedError(
+        `Ticket T${second.number} is blocked by T${first.number} (Todo). Finish it first.`,
+      ),
+    );
+    expect(tickets.getTicket(second.number).status).toBe('Todo');
+  });
+
+  it('still refuses it for a Blocker outside the Epic that is not Done', () => {
+    const { tickets, project, epic, first, second } = epicSetup();
+    const outside = tickets.createTicket({
+      projectId: project.id,
+      title: 'Outside',
+      status: 'In progress',
+    });
+    tickets.addBlocker({ blocker: outside.number, blocked: second.number });
+    tickets.startWork(epic.number, 'run-1');
+    tickets.startWork(first.number, 'run-1');
+
+    expect(errorFrom(() => tickets.startWork(second.number, 'run-1'))).toEqual(
+      new NotAllowedError(
+        `Ticket T${second.number} is blocked by T${outside.number} (In progress). Finish it first.`,
+      ),
+    );
+  });
+
+  it('still refuses it without the Epic Claim', () => {
+    const { tickets, first, second } = epicSetup();
+    tickets.updateTicket(first.number, { status: 'In progress' });
+
+    expect(errorFrom(() => tickets.startWork(second.number, 'run-1'))).toEqual(
+      new NotAllowedError(
+        `Ticket T${second.number} is blocked by T${first.number} (In progress). Finish it first.`,
+      ),
+    );
+  });
+
+  it('moves nextChild past a started child to the one it unblocks', () => {
+    const { tickets, epic, first, second } = epicSetup();
+    tickets.startWork(epic.number, 'run-1');
+
+    const bundle = tickets.startWork(first.number, 'run-1');
+
+    expect(bundle.epic?.nextChild).toBe(second.number);
+  });
+});
+
 describe('abandonWork', () => {
   it('comments, releases the Claim and moves the Ticket back to Todo', () => {
     const { tickets, make } = setup();
