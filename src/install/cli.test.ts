@@ -4,8 +4,27 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+// Resolve tsx the way Node does, so a worktree without its own node_modules
+// finds the main checkout's install (T1224).
+const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
+
+// Runs the CLI from source in this checkout. Node runs tsx directly, so PATH
+// can leave out `claude` (and node).
+const runCli = (args: string[], env: Record<string, string> = {}) =>
+  spawnSync(
+    process.execPath,
+    [tsxCli, join('src', 'install', 'cli.ts'), ...args],
+    {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      input: '',
+      env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
+    },
+  );
 
 // Runs the real command the way bin/tandembike.mjs does, so a module-format
 // error (such as top-level await under tsx's CommonJS output) fails here.
@@ -21,28 +40,11 @@ describe('tandembike mcp', () => {
   });
 
   it('prints the registration command when not run in a terminal', () => {
-    const checkout = process.cwd();
-    // Node runs tsx directly, so PATH can leave out `claude` (and node).
-    const result = spawnSync(
-      process.execPath,
-      [
-        join(checkout, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-        join('src', 'install', 'cli.ts'),
-        'mcp',
-      ],
-      {
-        cwd: checkout,
-        encoding: 'utf8',
-        input: '',
-        env: {
-          NODE_ENV: 'test',
-          PATH: '/usr/bin:/bin',
-          HOME: home,
-          TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
-          TANDEMBIKE_PACKAGE_DIR: join(home, 'checkout'),
-        },
-      },
-    );
+    const result = runCli(['mcp'], {
+      HOME: home,
+      TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
+      TANDEMBIKE_PACKAGE_DIR: join(home, 'checkout'),
+    });
 
     expect(result.stderr).toBe('');
     expect(result.status).toBe(0);
@@ -53,24 +55,8 @@ describe('tandembike mcp', () => {
 });
 
 describe('tandembike start', () => {
-  const run = (args: string[], env: Record<string, string> = {}) =>
-    spawnSync(
-      process.execPath,
-      [
-        join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-        join('src', 'install', 'cli.ts'),
-        ...args,
-      ],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-        input: '',
-        env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
-      },
-    );
-
   it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = run(['start', 'T1'], {
+    const result = runCli(['start', 'T1'], {
       TANDEMBIKE_URL: 'http://127.0.0.1:1',
     });
 
@@ -81,7 +67,7 @@ describe('tandembike start', () => {
   }, 30_000);
 
   it('prints the usage and exits 1 for a start without a Ticket', () => {
-    const result = run(['start']);
+    const result = runCli(['start']);
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('tandembike start <ticket>');
@@ -89,24 +75,8 @@ describe('tandembike start', () => {
 });
 
 describe('tandembike resume (T1241)', () => {
-  const run = (args: string[], env: Record<string, string> = {}) =>
-    spawnSync(
-      process.execPath,
-      [
-        join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-        join('src', 'install', 'cli.ts'),
-        ...args,
-      ],
-      {
-        cwd: process.cwd(),
-        encoding: 'utf8',
-        input: '',
-        env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
-      },
-    );
-
   it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = run(['resume', '3'], {
+    const result = runCli(['resume', '3'], {
       TANDEMBIKE_URL: 'http://127.0.0.1:1',
     });
 
@@ -117,7 +87,7 @@ describe('tandembike resume (T1241)', () => {
   }, 30_000);
 
   it('prints the usage and exits 1 for a resume without a Conversation', () => {
-    const result = run(['resume']);
+    const result = runCli(['resume']);
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('tandembike resume <conversation>');
