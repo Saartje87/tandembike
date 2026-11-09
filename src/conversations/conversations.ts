@@ -54,6 +54,7 @@ import {
 import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 import { type RunResult, runResultOf, runResults } from './run-outcome';
+import { messageRoles, type StatusEntry } from './status-line';
 import {
   type TerminalIntent,
   terminalIdleMinutes,
@@ -1800,6 +1801,24 @@ export function createConversations({
       const latest = new Map(
         entriesOf(latestOf()).map((entry) => [entry.conversationId, entry]),
       );
+      const messages = new Map(
+        entriesOf(latestOf([...messageRoles])).map((entry) => [
+          entry.conversationId,
+          entry,
+        ]),
+      );
+      const statusEntryOf = (
+        entry: ReturnType<typeof entriesOf>[number] | undefined,
+      ): StatusEntry | null =>
+        entry
+          ? {
+              role: entry.role,
+              text: entry.text,
+              permissionRules: entry.permissionRules,
+              toolName: entry.toolName,
+              toolInput: entry.toolInput,
+            }
+          : null;
       // Every run starts with the User's message, so the latest one is the
       // run's start: no column of its own is needed.
       const started = new Map(
@@ -1831,7 +1850,6 @@ export function createConversations({
             createdAt,
             startedBy,
           }) => {
-            const entry = latest.get(id);
             return {
               id,
               ticketNumber,
@@ -1839,15 +1857,8 @@ export function createConversations({
               state,
               costUsd: costUsd ?? 0,
               startedBy,
-              latest: entry
-                ? {
-                    role: entry.role,
-                    text: entry.text,
-                    permissionRules: entry.permissionRules,
-                    toolName: entry.toolName,
-                    toolInput: entry.toolInput,
-                  }
-                : null,
+              latest: statusEntryOf(latest.get(id)),
+              message: statusEntryOf(messages.get(id)),
               startedAt: (started.get(id) ?? createdAt).toISOString(),
             };
           },

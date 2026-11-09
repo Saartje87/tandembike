@@ -867,6 +867,13 @@ describe('Activity rows', () => {
           toolName: null,
           toolInput: null,
         },
+        message: {
+          role: 'agent',
+          text: 'Hi',
+          permissionRules: null,
+          toolName: null,
+          toolInput: null,
+        },
         startedAt: '2026-11-07T10:05:00.000Z',
         costUsd: 0,
         startedBy: 'user',
@@ -877,6 +884,13 @@ describe('Activity rows', () => {
         projectId: project.id,
         state: 'interrupted',
         latest: {
+          role: 'error',
+          text: 'crashed',
+          permissionRules: null,
+          toolName: null,
+          toolInput: null,
+        },
+        message: {
           role: 'error',
           text: 'crashed',
           permissionRules: null,
@@ -917,6 +931,36 @@ describe('Activity rows', () => {
       toolName: null,
       toolInput: null,
     });
+  });
+
+  it('carries the latest message to the User apart from a later tool call', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'One',
+    });
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Two',
+    });
+    runner.runs[0].emit({ type: 'agent', text: 'Tests pass.' });
+    runner.runs[0].emit({ type: 'tool', text: 'Bash {"command":"ls"}' });
+
+    const [second, first] = conversations.activityRows();
+    expect(first.message).toEqual({
+      role: 'agent',
+      text: 'Tests pass.',
+      permissionRules: null,
+      toolName: null,
+      toolInput: null,
+    });
+    expect(first.latest).toMatchObject({ role: 'tool' });
+    expect(second.message).toBeNull();
   });
 
   it('carries the name and input of a tool entry', async () => {

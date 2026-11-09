@@ -356,7 +356,8 @@ describe('Conversation actions', () => {
           [asking.number]: liveConversation({
             conversationId: expect.any(Number),
             state: 'idle',
-            line: 'Starting',
+            // No message yet, and no tool call while not running (T1262).
+            line: '',
             since: expect.any(String),
             cost: 0.1,
           }),

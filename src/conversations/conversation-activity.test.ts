@@ -21,6 +21,7 @@ const row = (
   state,
   projectId,
   latest: { role, text, permissionRules: null },
+  message: role === 'tool' ? null : { role, text, permissionRules: null },
   startedAt: '2026-11-07T10:00:00.000Z',
   costUsd: 0,
   startedBy: 'user',
@@ -131,6 +132,48 @@ describe('conversationActivity', () => {
         terminal: false,
       });
       expect(live[5].line).toBe('Bash');
+    });
+
+    it("shows an idle Conversation's latest message, not its last tool call", () => {
+      const live = liveOf({
+        ...row(4, 'idle', 1, 'tool', 'Bash {"command":"npm test"}'),
+        message: {
+          role: 'agent',
+          text: 'Done.\n\nShould I open\nthe pull request?',
+          permissionRules: null,
+        },
+      });
+
+      expect(live[4].line).toBe('Done. Should I open the pull request?');
+    });
+
+    it('shows the question a waiting Conversation asks', () => {
+      const question = {
+        role: 'question' as const,
+        text: 'Which label?',
+        permissionRules: null,
+      };
+      expect(
+        liveOf({
+          ...row(4, 'waiting', 1, 'tool', 'Read {"file_path":"/a.ts"}'),
+          message: question,
+        })[4].line,
+      ).toBe('Which label?');
+    });
+
+    it('shows no tool call for a stopped Conversation without a message', () => {
+      expect(
+        liveOf({
+          ...row(4, 'interrupted', 1, 'tool', 'Bash {"command":"ls"}'),
+          message: null,
+        })[4].line,
+      ).toBe('');
+    });
+
+    it('shows the tool call of a running Conversation', () => {
+      expect(
+        liveOf(row(4, 'running', 1, 'tool', 'Bash {"command":"ls"}'))[4].line,
+      ).toBe('Running ls');
     });
 
     it("carries the Conversation's id, so the User can open it", () => {
