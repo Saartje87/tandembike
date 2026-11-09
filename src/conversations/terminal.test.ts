@@ -461,3 +461,86 @@ describe('Terminal next (T1240)', () => {
     expect(error.message).toContain('"Blog"');
   });
 });
+
+describe('Idle Terminal Conversations (T1239)', () => {
+  const minute = 60 * 1000;
+
+  async function started() {
+    const world = setup();
+    const { conversationId } = await world.conversations.startTerminal({
+      ticketNumber: world.ticket.number,
+      intent: 'start',
+    });
+    const activeAt = () =>
+      world.conversations.get(conversationId).updatedAt.getTime();
+    return { ...world, conversationId, activeAt };
+  }
+
+  it('a heartbeat refreshes its last activity', async () => {
+    const { conversations, conversationId, activeAt } = await started();
+    const before = activeAt();
+
+    conversations.heartbeatTerminal(conversationId, new Date(before + minute));
+
+    expect(activeAt()).toBe(before + minute);
+  });
+
+  it('ends only the ones idle for more than 5 minutes', async () => {
+    const { conversations, conversationId, activeAt } = await started();
+    const last = activeAt();
+
+    expect(conversations.endIdleTerminals(new Date(last + 5 * minute))).toBe(0);
+    expect(conversations.get(conversationId).state).toBe('running');
+
+    expect(
+      conversations.endIdleTerminals(new Date(last + 5 * minute + 1000)),
+    ).toBe(1);
+    expect(conversations.get(conversationId).state).toBe('stopped');
+  });
+
+  it('keeps one alive while heartbeats arrive', async () => {
+    const { conversations, conversationId, activeAt } = await started();
+    const last = activeAt();
+    conversations.heartbeatTerminal(
+      conversationId,
+      new Date(last + 4 * minute),
+    );
+
+    conversations.endIdleTerminals(new Date(last + 8 * minute));
+
+    expect(conversations.get(conversationId).state).toBe('running');
+  });
+
+  it('says in the transcript that it timed out, once', async () => {
+    const { conversations, conversationId, activeAt } = await started();
+    const later = new Date(activeAt() + 6 * minute);
+
+    conversations.endIdleTerminals(later);
+    conversations.endIdleTerminals(later);
+
+    const entries = conversations
+      .transcript(conversationId)
+      .filter((entry) => entry.role === 'session');
+    expect(entries.map((entry) => entry.text)).toEqual([
+      'Session timed out (no activity for 5 minutes).',
+    ]);
+  });
+
+  it('leaves other Conversations and ended ones alone', async () => {
+    const { conversations, ticket, conversationId, activeAt } = await started();
+    const ui = await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'triage',
+      prompt: 'Go',
+    });
+    await conversations.endTerminal(conversationId, { exitCode: 0 });
+
+    const count = conversations.endIdleTerminals(
+      new Date(activeAt() + 60 * minute),
+    );
+
+    expect(count).toBe(0);
+    expect(conversations.get(ui.id).state).toBe('running');
+  });
+});
