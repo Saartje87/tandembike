@@ -45,7 +45,14 @@ Then call `open_pr` on the Epic with the pull request's URL and `handOff: true`.
 
 ## 6. Feedback
 
-If you hit friction worth a Ticket of its own, file at most a few with `file_tickets` before you hand off, after a `find_tickets` search so you do not duplicate one. File nothing when there was none.
+If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
+
+- has a clear problem and how to reproduce it;
+- is labelled `needs-triage` and `from:agent-run`;
+- sits outside any Cycle and Epic (leave both out);
+- names the Epic you worked as its Origin (`originNumber`), so the Retro can find it.
+
+File nothing when there was no friction.
 
 ## When you cannot finish
 
