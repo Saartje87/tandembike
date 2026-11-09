@@ -1,5 +1,7 @@
 # Autopilot dispatches the Active Cycle's ready work
 
+Amended by [ADR 0040](0040-autopilot-triages.md): Autopilot's evaluation also starts Triage runs when a separate Auto-triage switch is on.
+
 Amended by [ADR 0034](0034-transient-run-ends-are-resumed-once.md): a run that ends on a transient error is resumed once.
 
 Amended by [ADR 0031](0031-a-reply-is-never-refused-by-the-start-run-limit.md): a User's reply can take a Project over its Start run limit, and Autopilot dispatches nothing until the working Start runs drop below it.

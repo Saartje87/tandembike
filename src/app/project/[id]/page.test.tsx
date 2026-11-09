@@ -2,6 +2,7 @@ import { cleanup, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appConversations } from '../../../conversations/app-conversations';
 import {
   renderPage,
   renderPageError,
@@ -53,6 +54,42 @@ const noSearch = Promise.resolve({});
 describe('ProjectPage', () => {
   beforeEach(() => {
     notFound.mockClear();
+  });
+
+  it("shows today's triage spend against the ceiling on the Backlog while Auto-triage is on, and the pause over it", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      autoTriage: true,
+      triageCeilingUsd: 2,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const stub = (spend: number) =>
+      vi.mocked(appConversations).mockReturnValue({
+        list: () => [],
+        autopilotTriageSpend: () => spend,
+      } as unknown as ReturnType<typeof appConversations>);
+    const params = Promise.resolve({ id: String(project.id) });
+
+    stub(0.5);
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+    expect(screen.getByText('Triage today: $0.50 of $2.00')).toBeVisible();
+    expect(screen.queryByText(/triage paused/)).not.toBeInTheDocument();
+  });
+
+  it('shows no triage spend while Auto-triage is off', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({ id: String(project.id) });
+
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.queryByText(/Triage today/)).not.toBeInTheDocument();
   });
 
   it("shows the Backlog's Tickets, those in no Cycle, under the layout's tabs", async () => {

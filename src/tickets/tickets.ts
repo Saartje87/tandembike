@@ -219,6 +219,10 @@ export type ProjectAgentSettings = {
   autopilot: boolean;
   /** What Autopilot may spend on one Cycle, in dollars; `null` while unset. */
   spendCeilingUsd: number | null;
+  /** Whether Autopilot starts Triage runs on Triage-eligible Tickets (ADR 0040). */
+  autoTriage: boolean;
+  /** What Auto-triage may spend per local calendar day, in dollars; `null` while unset. */
+  triageCeilingUsd: number | null;
 };
 
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
@@ -270,6 +274,8 @@ const agentSettingsColumns = {
   triageModel: projects.triageModel,
   autopilot: projects.autopilot,
   spendCeilingUsd: projects.spendCeilingUsd,
+  autoTriage: projects.autoTriage,
+  triageCeilingUsd: projects.triageCeilingUsd,
 };
 
 /** A trimmed text setting; blank reads as not set. */
@@ -291,6 +297,21 @@ function runModeProblem(
 function runModelProblem(model: string | null): string | undefined {
   return model !== null && /\s/.test(model)
     ? 'Enter a model name without spaces.'
+    : undefined;
+}
+
+/** Why the Triage ceiling and the Auto-triage switch disagree, or `undefined`. */
+function triageCeilingProblem(
+  ceiling: number | null,
+  autoTriage: boolean,
+): string | undefined {
+  if (ceiling !== null) {
+    return Number.isFinite(ceiling) && ceiling > 0
+      ? undefined
+      : 'Enter an amount in dollars above 0.';
+  }
+  return autoTriage
+    ? 'Set a Triage ceiling before turning on Auto-triage.'
     : undefined;
 }
 
@@ -1613,7 +1634,14 @@ export function createTickets(
         triageModel,
         autopilot,
         spendCeilingUsd,
+        autoTriage,
+        triageCeilingUsd,
       } = input;
+      const nextTriageCeiling =
+        triageCeilingUsd === undefined
+          ? before.triageCeilingUsd
+          : triageCeilingUsd;
+      const nextAutoTriage = autoTriage ?? before.autoTriage;
       const nextCeiling =
         spendCeilingUsd === undefined
           ? before.spendCeilingUsd
@@ -1652,6 +1680,10 @@ export function createTickets(
             ? undefined
             : runModelProblem(nextTriageModel),
         spendCeilingUsd: spendCeilingProblem(nextCeiling, nextAutopilot),
+        triageCeilingUsd: triageCeilingProblem(
+          nextTriageCeiling,
+          nextAutoTriage,
+        ),
       });
       const settings = db
         .update(projects)
@@ -1674,6 +1706,8 @@ export function createTickets(
           triageModel: nextTriageModel,
           autopilot: nextAutopilot,
           spendCeilingUsd: nextCeiling,
+          autoTriage: nextAutoTriage,
+          triageCeilingUsd: nextTriageCeiling,
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)

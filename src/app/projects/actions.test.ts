@@ -149,6 +149,8 @@ describe('setProjectAgentSettings', () => {
       runModel: 'claude-opus-5-5',
       checkCommand: ' npm run check ',
       prepareCommand: ' npm ci ',
+      autoTriage: true,
+      triageCeilingUsd: 3,
     });
 
     expect(result).toEqual({ ok: true });
@@ -164,6 +166,8 @@ describe('setProjectAgentSettings', () => {
       triageModel: null,
       autopilot: false,
       spendCeilingUsd: null,
+      autoTriage: true,
+      triageCeilingUsd: 3,
     });
     expect(revalidatePath).toHaveBeenCalled();
   });

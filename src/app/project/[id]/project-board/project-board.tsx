@@ -7,6 +7,7 @@ import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-
 import { PlanButton } from '../../../../components/plan-button/plan-button';
 import { ProjectAgentProvider } from '../../../../components/project-agent/project-agent';
 import { TicketDrawerShell } from '../../../../components/ticket-drawer-shell/ticket-drawer-shell';
+import { TriageSpend } from '../../../../components/triage-spend/triage-spend';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { cycleUnitCount } from '../../../../tickets/cycle-units';
@@ -123,13 +124,30 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
   };
   if (tab === 'backlog') {
     // The Backlog is the whole scope of its Board: no progress, no runs.
+    const settings = tickets.getProjectAgentSettings(project.id);
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
     return (
-      <Cockpit
-        {...shared}
-        cycle={null}
-        tickets={tickets.listTickets({ projectId: project.id, cycleId: null })}
-        planning
-      />
+      <>
+        {settings.autoTriage && settings.triageCeilingUsd !== null && (
+          <TriageSpend
+            spendUsd={appConversations().autopilotTriageSpend(
+              project.id,
+              dayStart,
+            )}
+            ceilingUsd={settings.triageCeilingUsd}
+          />
+        )}
+        <Cockpit
+          {...shared}
+          cycle={null}
+          tickets={tickets.listTickets({
+            projectId: project.id,
+            cycleId: null,
+          })}
+          planning
+        />
+      </>
     );
   }
   if (tab.state === 'Active') {

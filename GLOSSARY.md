@@ -127,8 +127,18 @@ The User can always reply: their reply is never refused by the Project's Start r
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
 **Autopilot**:
-A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. A User's reply can take the Project over its Start run limit; Autopilot then dispatches nothing until the working Start runs drop below it (ADR 0031). It resumes a Start Conversation once after a transient end (API overload, rate limit or network error), a minute later and within the run limit and Spend ceiling, and retries nothing else (ADR 0034); it never changes a Ticket's Status or labels. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030 and ADR 0034.
+A Project switch, off by default, that makes Tandembike start Start Conversations for the Active Cycle's **Eligible** work by itself, in the Cycle Board's Todo order, up to the Project's free Start run slots. It needs a Spend ceiling to be turned on, stays on across restarts, and is not turned on by starting a Cycle. Turning it off stops new dispatches and leaves running runs alone. A User's reply can take the Project over its Start run limit; Autopilot then dispatches nothing until the working Start runs drop below it (ADR 0031). It resumes a Start Conversation once after a transient end (API overload, rate limit or network error), a minute later and within the run limit and Spend ceiling, and retries nothing else (ADR 0034); it never changes a Ticket's Status or labels. The evaluation also starts Triage runs when **Auto-triage** is on, with or without an Active Cycle, which Autopilot's own switch does not control (ADR 0040). Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. See ADR 0030, ADR 0034 and ADR 0040.
 _Avoid_: Auto mode (that is the Agent run mode), scheduler
+
+**Auto-triage**:
+A Project switch, separate from **Autopilot** and off by default, that makes Autopilot's evaluation start a Triage Conversation, Started by Autopilot, on the oldest **Triage-eligible** Ticket. It needs no Active Cycle, covers the Backlog and every Cycle, and works one Triage run at a time per Project in the main checkout, outside the Start run limit. It needs a **Triage ceiling** to be turned on, starts the run on the Project's triage model when set, and stops starting runs when switched off, leaving a running one to finish. An Autopilot Triage run may not use `update_ticket` or `file_tickets`, so its only writes are a triage proposal and a note; the User approves every proposal. See ADR 0040.
+_Avoid_: Auto mode, auto-approve
+
+**Triage-eligible**:
+Work Auto-triage may triage: a Ticket or Epic that is Todo and not archived, labelled `needs-triage` or with no triage state label, with no source label (`from:agent-run`, `from:tandembike`), no open Triage Conversation (not closed by the User) and no triage proposal since its latest change into its current state. Setting a Ticket back to `needs-triage` makes it eligible again. Auto-triage takes them oldest first.
+
+**Triage ceiling**:
+A Project setting in dollars per local calendar day, with no default, that bounds Auto-triage; it cannot be turned on without one. Today's triage spend is the cost of the Triage runs Autopilot started that ended today, from Run outcomes, plus the cost so far of one still working. At or over the ceiling Auto-triage starts nothing, the switch stays on and a running run finishes; it starts again the next day or when the ceiling is raised. The Backlog Board's header shows the spend against the ceiling and "triage paused: over ceiling" while paused. Triage runs record no Cycle, so they never count against the **Spend ceiling**.
 
 **Check command**:
 A Project's command that defines green for its repository, such as `npm run check`. A Start run's brief names it as what must pass before the run opens a pull request; with none set, the brief tells the run to follow the repository's own instructions. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show, so no Agent can redefine green for itself.
@@ -143,7 +153,7 @@ Work Autopilot may start: a Ticket or Epic in the Active Cycle that is Todo, lab
 _Avoid_: Ready (that is the label), startable
 
 **Started by**:
-Who started a Conversation: the **User**, **Autopilot**, or **Terminal**, the User's `tandembike start` in a terminal (ADR 0039). Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
+Who started a Conversation: the **User**, **Autopilot**, or **Terminal**, the User's `tandembike start` in a terminal (ADR 0039). Autopilot starts Start Conversations and, with Auto-triage on, Triage Conversations (ADR 0040). Every Conversation records it and its header shows it; Conversations from before it was recorded read the User. A reply is sent by the User or by Autopilot too, and a transcript shows an Autopilot message as sent by Autopilot, apart from the User's.
 _Avoid_: Owner, author, initiator
 
 **Run outcome**:
@@ -159,7 +169,7 @@ What a Prepared Cycle should cost, worked out from Run outcomes and shown on its
 _Avoid_: Budget, forecast
 
 **Spend ceiling**:
-A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
+A Project setting in dollars, with no default, that bounds what Autopilot spends in one Cycle; Autopilot cannot be turned on without one. The spend is the total cost of the Conversations Autopilot started for that Cycle, resumes included; each Conversation records the Cycle it was started for, so it resets with each Cycle and hand-started runs do not count. It does not bound Auto-triage, which has its own **Triage ceiling**. At or over the ceiling Autopilot dispatches nothing new, the switch stays on and running runs finish; raising the ceiling or starting the next Cycle resumes dispatch. The Active Cycle's Board header shows the spend against the ceiling and "paused: over ceiling" with the amount while paused.
 _Avoid_: Budget, cap (that is the run cap), limit
 
 **Draft**:
