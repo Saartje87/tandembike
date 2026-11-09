@@ -95,6 +95,8 @@ import {
   NotAllowedError,
   NotFoundError,
   TicketsError,
+  UncheckedCriteriaError,
+  type UncheckedCriterion,
   ValidationError,
 } from './errors';
 import {
@@ -548,6 +550,15 @@ export type BatchTicketInput = Pick<
 };
 
 /** Any subset of a Ticket's editable fields; missing ones stay as they are. */
+/** How `completeTicket` treats unchecked acceptance criteria (ADR 0043). */
+export type CompleteTicketOptions = {
+  /**
+   * Why to finish anyway: completes despite unchecked criteria and posts the
+   * reason, naming them, as a comment by the actor.
+   */
+  override?: string;
+};
+
 export type UpdateTicketInput = {
   title?: string;
   description?: string;
@@ -840,6 +851,36 @@ function checkedCommentBody(rawBody: string): string {
           : undefined,
   });
   return body;
+}
+
+export const maxOverrideLength = 10_000;
+
+/** An override reason trimmed, or a `ValidationError` if blank or too long. */
+function checkedOverride(rawOverride: string): string {
+  const override = rawOverride.trim();
+  throwFieldErrors({
+    override:
+      override === ''
+        ? 'Give a reason for finishing with unchecked acceptance criteria.'
+        : override.length > maxOverrideLength
+          ? `Keep the override reason to ${maxOverrideLength.toLocaleString('en-US')} characters or fewer.`
+          : undefined,
+  });
+  return override;
+}
+
+/** The comment an override posts: the reason and the criteria it skipped. */
+function overrideComment(
+  override: string,
+  unchecked: UncheckedCriterion[],
+): string {
+  return [
+    'Finished with unchecked acceptance criteria:',
+    '',
+    ...unchecked.map(({ number, text }) => `- T${number}: ${text}`),
+    '',
+    `Reason: ${override}`,
+  ].join('\n');
 }
 
 function checkedAgentRunId(rawAgentRunId: string): string {
@@ -2404,11 +2445,27 @@ export function createTickets(
      * the same way, all or nothing, and the Epic loses its own state label;
      * its Status follows its children.
      */
-    completeTicket(number: number): Ticket {
+    completeTicket(
+      number: number,
+      options: CompleteTicketOptions = {},
+    ): Ticket {
+      const override =
+        options.override === undefined
+          ? undefined
+          : checkedOverride(options.override);
       const stateLabels = { removeLabels: [...triageStateLabels] };
       const done = checkTicketChanges({ status: 'Done', ...stateLabels });
       const { type, children } = getTicket(number);
       checkTicketWritable(db, number);
+      const unchecked = uncheckedCriteriaOf(number);
+      if (unchecked.length > 0 && override === undefined) {
+        throw new UncheckedCriteriaError(unchecked);
+      }
+      const recordOverride = () => {
+        if (unchecked.length > 0 && override !== undefined) {
+          insertComment(number, overrideComment(override, unchecked));
+        }
+      };
 
       if (type === 'Epic') {
         return changeEpicChildren(
@@ -2416,13 +2473,25 @@ export function createTickets(
           children.filter((child) => !child.archived),
           done,
           checkTicketChanges(stateLabels),
+          recordOverride,
         );
       }
-      const { changedEpic } = db.transaction(() =>
-        applyTicketChanges(number, done),
-      );
+      const { changedEpic } = db.transaction(() => {
+        recordOverride();
+        return applyTicketChanges(number, done);
+      });
       publishWith(number, changedEpic);
       return getTicket(number);
+    },
+
+    /**
+     * The acceptance criteria the completion rule would refuse Ticket
+     * `number` for: its own unchecked ones and, for an Epic, those of every
+     * unarchived child, each with its Ticket. Empty when it may complete.
+     */
+    uncheckedCriteria(number: number): UncheckedCriterion[] {
+      getTicket(number);
+      return uncheckedCriteriaOf(number);
     },
 
     /**
@@ -3263,15 +3332,18 @@ export function createTickets(
    * released first, recorded on the Epic with `epicChange` (no change by
    * default), before the children's changes would clear it silently; then
    * `change` is applied to each of `selected`, all in one transaction. The
-   * Epic and the changed children are announced once.
+   * Epic and the changed children are announced once. `before` runs first in
+   * the same transaction.
    */
   function changeEpicChildren(
     epic: number,
     selected: { number: number }[],
     change: ReturnType<typeof checkTicketChanges>,
     epicChange = checkTicketChanges({}),
+    before: () => void = () => {},
   ): Ticket {
     db.transaction(() => {
+      before();
       applyTicketChanges(epic, epicChange, { releaseClaim: true });
       for (const child of selected) {
         applyTicketChanges(child.number, change);
@@ -3282,6 +3354,36 @@ export function createTickets(
       numbers: [epic, ...selected.map((child) => child.number)],
     });
     return getTicket(epic);
+  }
+
+  /** Ticket `number`'s unchecked criteria and its unarchived children's. */
+  function uncheckedCriteriaOf(number: number): UncheckedCriterion[] {
+    const { acceptanceCriteria, children } = getTicket(number);
+    const own = acceptanceCriteria
+      .filter(({ checked }) => !checked)
+      .map(({ text }) => ({ number, text }));
+    return [
+      ...own,
+      ...children
+        .filter((child) => !child.archived)
+        .flatMap((child) =>
+          getTicket(child.number)
+            .acceptanceCriteria.filter(({ checked }) => !checked)
+            .map(({ text }) => ({ number: child.number, text })),
+        ),
+    ];
+  }
+
+  /** Adds a comment by the module's actor; run it in a transaction. */
+  function insertComment(number: number, body: string) {
+    db.insert(ticketComments)
+      .values({
+        ticketNumber: number,
+        author: actor,
+        body,
+        createdAt: new Date(),
+      })
+      .run();
   }
 
   function publishWith(number: number, ...related: (number | null)[]) {

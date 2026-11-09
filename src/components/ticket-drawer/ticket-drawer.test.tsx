@@ -522,6 +522,38 @@ describe('TicketDrawer', () => {
       expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
     });
 
+    it('asks to confirm unchecked criteria, then completes with confirmed', async () => {
+      vi.mocked(completeTicket)
+        .mockResolvedValueOnce({
+          ok: true,
+          projectId: 1,
+          unchecked: [{ number: 4, text: 'Menu opens' }],
+        })
+        .mockResolvedValueOnce({ ok: true, projectId: 1 });
+      renderDrawer(inReview);
+
+      await userEvent.click(button('Merged T4 Fix the header'));
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Merge T4 with unchecked criteria?',
+      });
+      expect(within(dialog).getByText('T4: Menu opens')).toBeInTheDocument();
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Merged anyway' }),
+      );
+
+      expect(completeTicket).toHaveBeenLastCalledWith({
+        number: 4,
+        confirmed: true,
+      });
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', {
+            name: 'Merge T4 with unchecked criteria?',
+          }),
+        ).toBeNull(),
+      );
+    });
+
     it('shows nothing while a Conversation is live', () => {
       vi.mocked(useTicketLiveConversation).mockReturnValue(
         liveConversation({ state: 'running' }),

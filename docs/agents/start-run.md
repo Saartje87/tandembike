@@ -36,7 +36,7 @@ A Claim covers one Agent run's work, through its merge. In this repository the r
 
 ## Completing
 
-`finish_work` applies the completion rule in [`triage-labels.md`](triage-labels.md) and releases the Claim, as the Merged button does. Neither checks GitHub, so first check the PR is merged into `main`, CI is green and every acceptance criterion is checked. A criterion deliberately left unmet: say why in a comment first. Until then the Ticket stays `In progress`.
+`finish_work` applies the completion rule in [`triage-labels.md`](triage-labels.md) and releases the Claim, as the Merged button does. It is how an Agent moves any Ticket to `Done`, with a PR or without one (a split spec, `ready-for-human` work, research); do not set `Done` with `update_ticket`. It refuses while an acceptance criterion is unchecked; a criterion deliberately left unmet goes in its `override` reason, which it posts as a comment. It checks nothing on GitHub, so with a PR first check it is merged into `main` with CI green. Until then the Ticket stays `In progress`.
 
 ## Feedback as Tickets
 

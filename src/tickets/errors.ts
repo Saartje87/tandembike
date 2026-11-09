@@ -77,6 +77,32 @@ export class NotFoundError extends TicketsError {
 
 /** The caller may not make this change, such as an Agent editing the User's comment. */
 export class NotAllowedError extends TicketsError {
-  static override readonly kind = 'NotAllowedError';
+  // Widened so a subclass, such as UncheckedCriteriaError, declares its own.
+  static override readonly kind: string = 'NotAllowedError';
   override name = 'NotAllowedError';
+}
+
+/** One acceptance criterion left unchecked, and the Ticket it belongs to. */
+export type UncheckedCriterion = { number: number; text: string };
+
+/**
+ * The completion rule refused: acceptance criteria are unchecked (ADR 0043).
+ * `unchecked` lists each with its Ticket, in Ticket order.
+ */
+export class UncheckedCriteriaError extends NotAllowedError {
+  static override readonly kind = 'UncheckedCriteriaError';
+  override name = 'UncheckedCriteriaError';
+  readonly unchecked: UncheckedCriterion[];
+
+  constructor(unchecked: UncheckedCriterion[]) {
+    super(
+      `Acceptance criteria are unchecked: ${formatUnchecked(unchecked)}. Check them with check_criterion, or give an override reason to finish anyway.`,
+    );
+    this.unchecked = unchecked;
+  }
+}
+
+/** `unchecked` as one line: `T42: text; T43: text`. */
+export function formatUnchecked(unchecked: UncheckedCriterion[]): string {
+  return unchecked.map(({ number, text }) => `T${number}: ${text}`).join('; ');
 }

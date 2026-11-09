@@ -4,7 +4,11 @@ import { revalidatePath } from 'next/cache';
 
 import { appTickets } from '../../tickets/app-tickets';
 import type { EpicChildInput, EpicChildrenInput } from '../../tickets/epics';
-import { TicketsError, ValidationError } from '../../tickets/errors';
+import {
+  TicketsError,
+  type UncheckedCriterion,
+  ValidationError,
+} from '../../tickets/errors';
 import { isStatus, statusRule } from '../../tickets/status';
 import type { TicketType } from '../../tickets/ticket-type';
 import type {
@@ -97,16 +101,42 @@ export async function updateTicket(
   });
 }
 
+/** The Merged button's result: `unchecked` when it needs the User to confirm. */
+export type CompleteTicketResult = ActionResult<{
+  projectId: number;
+  /** Present when nothing was completed: the criteria to confirm. */
+  unchecked?: UncheckedCriterion[];
+}>;
+
+/** The override a confirmed Merged records as the User's comment. */
+const confirmedMerged =
+  'The User confirmed Merged in the drawer with these criteria unchecked.';
+
 /**
  * Applies the completion rule to a Ticket, or to an Epic and its unarchived
  * children, as the User ("Merged" on the Board). There is no MCP tool for it
- * (ADR 0019) and it checks nothing outside the app, such as GitHub.
+ * (ADR 0019) and it checks nothing outside the app, such as GitHub. It is
+ * never refused for unchecked acceptance criteria (ADR 0043): without
+ * `confirmed` it completes nothing and returns them, and with it completes
+ * with an override recorded as the User's comment.
  */
 export async function completeTicket(input: {
   number: number;
-}): Promise<ActionResult<{ projectId: number }>> {
+  confirmed?: boolean;
+}): Promise<CompleteTicketResult> {
   return actionResult(() => {
-    const ticket = appTickets('user').completeTicket(Number(input?.number));
+    const tickets = appTickets('user');
+    const number = Number(input?.number);
+    if (input?.confirmed !== true) {
+      const unchecked = tickets.uncheckedCriteria(number);
+      if (unchecked.length > 0) {
+        return { projectId: tickets.getTicket(number).projectId, unchecked };
+      }
+    }
+    const ticket = tickets.completeTicket(
+      number,
+      input?.confirmed === true ? { override: confirmedMerged } : {},
+    );
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(boardRoute, 'page');
     revalidatePath(cycleRoute, 'page');
