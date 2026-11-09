@@ -126,7 +126,7 @@ Triage dispatch with its ceiling and model, `propose_triage` approval, the Plan 
 
 ### Phase 12: machine-wide control and notifications (T1198)
 
-The global cap and ceiling with round-robin dispatch, and notifications. ADR: machine-wide limits.
+The global cap and ceiling with round-robin dispatch, and notifications. ADR: machine-wide limits (ADR 0041). The cap landed first (T1252): Autopilot's evaluation became one machine-wide pass over every Project.
 
 ### Phase 13: Copilot runner (T596)
 

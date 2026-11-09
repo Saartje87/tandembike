@@ -1,5 +1,7 @@
 # Autopilot dispatches the Active Cycle's ready work
 
+Amended by [ADR 0041](0041-machine-wide-limits.md): the serialised evaluation is one machine-wide pass over every Project, within a machine cap.
+
 Amended by [ADR 0040](0040-autopilot-triages.md): Autopilot's evaluation also starts Triage runs when a separate Auto-triage switch is on.
 
 Amended by [ADR 0034](0034-transient-run-ends-are-resumed-once.md): a run that ends on a transient error is resumed once.

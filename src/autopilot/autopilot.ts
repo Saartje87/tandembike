@@ -6,7 +6,7 @@ import {
   startRunLimit,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
-import type { Change, ChangeChannel } from '../tickets/changes';
+import type { ChangeChannel } from '../tickets/changes';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
@@ -30,13 +30,14 @@ const transientResumeText =
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /**
- * Autopilot (ADR 0030): while a Project's switch is on and it has an Active
- * Cycle, it starts a Start Conversation for each Eligible Ticket or Epic, in
- * the Cycle Board's Todo order, up to the Project's free Start run slots.
- * Evaluations run one at a time, so nothing is dispatched twice. It never
- * changes Status or labels, and retries only a transient end, once (ADR
- * 0034): any other Ticket with a Start Conversation that is not closed waits
- * for the User.
+ * Autopilot (ADR 0030, ADR 0041): while a Project's switch is on and it has
+ * an Active Cycle, it starts a Start Conversation for each Eligible Ticket or
+ * Epic, in the Cycle Board's Todo order, up to the Project's free Start run
+ * slots and the machine's free slots. One pass covers every Project, and
+ * passes run one at a time, so nothing is dispatched twice. It never changes
+ * Status or labels, and retries only a transient end, once (ADR 0034): any
+ * other Ticket with a Start Conversation that is not closed waits for the
+ * User.
  */
 export function createAutopilot({
   tickets,
@@ -47,7 +48,8 @@ export function createAutopilot({
   let queue: Promise<void> = Promise.resolve();
   /** Backoff timers by Conversation; a restart drops them (startup resume covers it). */
   const backoffs = new Map<number, ReturnType<typeof setTimeout>>();
-  const pendingEvaluations = new Map<number, Promise<void>>();
+  /** The pass that is queued but has not begun; every request shares it. */
+  let pendingPass: Promise<void> | null = null;
 
   /** Runs `step` after the queued ones, logging a failure instead of losing it. */
   const enqueue = (step: () => Promise<void>): Promise<void> => {
@@ -144,6 +146,14 @@ export function createAutopilot({
     );
   };
 
+  /** How many machine slots are free now (ADR 0041); never below 0. */
+  const machineFree = (): number =>
+    Math.max(
+      0,
+      tickets.getMachineSettings().maxConcurrentRuns -
+        conversations.machineSlotsInUse(),
+    );
+
   /**
    * The Active Cycle and free Start run slots Autopilot may use for the
    * Project now, or null with the switch off, no Active Cycle, the Spend
@@ -207,6 +217,10 @@ export function createAutopilot({
         );
       });
     for (const conversation of interrupted.slice(0, open.slots)) {
+      // Read again for each: a resume takes a machine slot.
+      if (machineFree() === 0) {
+        return;
+      }
       try {
         await conversations.reply(
           conversation.id,
@@ -228,7 +242,7 @@ export function createAutopilot({
    * latest Run outcome is `failed_transient` and a minute old, unless that run
    * was itself an automatic resume (marked on its outcome; the startup resume
    * and the User's reply start the count again). One not yet old enough
-   * gets a timer that evaluates the Project when it is.
+   * gets a timer that queues a pass when it is.
    */
   const resumeTransient = async (projectId: number) => {
     const open = room(projectId);
@@ -260,14 +274,14 @@ export function createAutopilot({
             conversation.id,
             setTimeout(() => {
               backoffs.delete(conversation.id);
-              void evaluate(projectId);
+              void evaluate();
             }, wait),
           );
         }
         continue;
       }
       // Room is read again for each resume: the one before took a slot.
-      if (!room(projectId)) {
+      if (!room(projectId) || machineFree() === 0) {
         break;
       }
       try {
@@ -294,6 +308,9 @@ export function createAutopilot({
     const { cycleId, slots } = open;
     const commands = tickets.getProjectAgentCommands(projectId);
     for (const ticket of eligible(projectId, cycleId).slice(0, slots)) {
+      if (machineFree() === 0) {
+        return;
+      }
       try {
         await conversations.start({
           startedBy: 'autopilot',
@@ -384,7 +401,8 @@ export function createAutopilot({
     if (
       tickets.getProject(projectId).archived ||
       !settings.autoTriage ||
-      settings.triageCeilingUsd === null
+      settings.triageCeilingUsd === null ||
+      machineFree() === 0
     ) {
       return;
     }
@@ -422,60 +440,70 @@ export function createAutopilot({
     }
   };
 
-  const projectOf = (change: Change): number | null => {
+  /** The ids of the Projects a pass covers: the unarchived ones, lowest id first. */
+  const projectIds = (): number[] =>
+    tickets
+      .listProjects()
+      .filter((project) => !project.archived)
+      .map((project) => project.id);
+
+  /** Runs `step` for one Project, logging a failure so the others still go on. */
+  const forProject = async (
+    projectId: number,
+    step: (projectId: number) => Promise<void>,
+  ) => {
     try {
-      switch (change.type) {
-        case 'project':
-          return change.id;
-        case 'cycle':
-          return tickets.getCycle(change.id).projectId;
-        case 'ticket':
-          return tickets.getTicket(change.number).projectId;
-        case 'tickets':
-          return change.numbers.length === 0
-            ? null
-            : tickets.getTicket(change.numbers[0]).projectId;
-        case 'conversation':
-          return conversations.get(change.id).projectId;
-      }
+      await step(projectId);
     } catch (error) {
-      console.error('Autopilot could not place a change in a Project', error);
-      return null;
+      console.error(`Autopilot step failed in Project ${projectId}`, error);
     }
   };
 
-  const evaluate = (projectId: number): Promise<void> => {
-    const pending = pendingEvaluations.get(projectId);
-    if (pending) {
-      return pending;
+  /**
+   * One machine-wide pass (ADR 0041): the resumes of every Project first,
+   * then each Project's dispatch and triage, all within the machine's free
+   * slots and every Project's own limits. The world is read afresh at each
+   * step, so a run another step started is counted.
+   */
+  const runPass = async (startupResume: boolean) => {
+    const ids = projectIds();
+    if (startupResume) {
+      for (const id of ids) {
+        await forProject(id, resume);
+      }
+    }
+    for (const id of ids) {
+      await forProject(id, resumeTransient);
+    }
+    for (const id of ids) {
+      await forProject(id, dispatch);
+      await forProject(id, triage);
+    }
+  };
+
+  const evaluate = (): Promise<void> => {
+    if (pendingPass) {
+      return pendingPass;
     }
     const run = enqueue(async () => {
-      pendingEvaluations.delete(projectId);
-      await resumeTransient(projectId);
-      await dispatch(projectId);
-      await triage(projectId);
+      pendingPass = null;
+      await runPass(false);
     });
-    pendingEvaluations.set(projectId, run);
+    pendingPass = run;
     return run;
   };
 
-  /** Resumes first, then dispatches, as one queued step. */
-  const startup = (projectId: number): Promise<void> =>
-    enqueue(async () => {
-      await resume(projectId);
-      await resumeTransient(projectId);
-      await dispatch(projectId);
-      await triage(projectId);
-    });
+  /** Resumes first, then dispatches, as one queued pass. */
+  const startup = (): Promise<void> => enqueue(() => runPass(true));
 
   return {
     /**
-     * Dispatches the Project's Eligible work now. Evaluations are queued, one
-     * finishing before the next begins; one already waiting is shared.
+     * Runs a pass over every Project now. Passes are queued, one finishing
+     * before the next begins; one already waiting is shared.
      */
     evaluate,
 
-    /** Resolves once every queued evaluation has finished. */
+    /** Resolves once every queued pass has finished. */
     async idle(): Promise<void> {
       let seen: Promise<void>;
       do {
@@ -485,20 +513,15 @@ export function createAutopilot({
     },
 
     /**
-     * Re-evaluates the Project each change touches, and for every Project
-     * resumes Autopilot's interrupted Conversations, then dispatches, once
-     * now. Returns a function that stops listening.
+     * Queues a pass on every change, and runs one now that first resumes
+     * Autopilot's interrupted Conversations. Returns a function that stops
+     * listening.
      */
     start(): () => void {
-      const unsubscribe = changes.subscribe((change) => {
-        const projectId = projectOf(change);
-        if (projectId !== null) {
-          void evaluate(projectId);
-        }
+      const unsubscribe = changes.subscribe(() => {
+        void evaluate();
       });
-      for (const project of tickets.listProjects()) {
-        void startup(project.id);
-      }
+      void startup();
       return () => {
         unsubscribe();
         for (const timer of backoffs.values()) {

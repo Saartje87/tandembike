@@ -13,6 +13,9 @@ import { useConversationDialog } from '../conversation-dialog-provider/conversat
 import { AppHeader } from './app-header';
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
+vi.mock('../../app/settings/actions', () => ({
+  currentMachineRuns: vi.fn().mockResolvedValue({ inUse: 2, cap: 3 }),
+}));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
 }));
@@ -39,6 +42,16 @@ describe('AppHeader', () => {
       openDraft: vi.fn(),
       shown: false,
     });
+  });
+
+  it('shows the working runs against the cap and links to Settings', async () => {
+    renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+    const header = screen.getByRole('banner');
+    expect(await within(header).findByText('Runs 2/3')).toBeInTheDocument();
+    expect(
+      within(header).getByRole('link', { name: 'Settings' }),
+    ).toHaveAttribute('href', '/settings');
   });
 
   it('shows a menu button followed by the breadcrumbs, without an app name', () => {

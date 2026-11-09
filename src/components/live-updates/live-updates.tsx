@@ -23,7 +23,7 @@ export const useTicketChanged = (number: number): boolean =>
 
 const ConversationRevision = createContext(0);
 
-/** A number that goes up whenever a Conversation changes, to load again by. */
+/** A number that goes up whenever a Conversation or the machine settings change, to load again by. */
 export const useConversationRevision = (): number =>
   useContext(ConversationRevision);
 
@@ -73,7 +73,7 @@ export const LiveUpdates: FC<LiveUpdatesProps> = ({ children }) => {
     source.onmessage = (event: MessageEvent<string>) => {
       const change = JSON.parse(event.data) as Change;
       router.refresh();
-      if (change.type === 'conversation') {
+      if (change.type === 'conversation' || change.type === 'machine') {
         reloadConversations();
       } else if (change.type === 'ticket') {
         highlight(change.number);

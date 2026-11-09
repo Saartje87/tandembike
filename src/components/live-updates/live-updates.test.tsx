@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Change } from '../../tickets/changes';
-import { LiveUpdates, useTicketChanged } from './live-updates';
+import {
+  LiveUpdates,
+  useConversationRevision,
+  useTicketChanged,
+} from './live-updates';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 
@@ -53,6 +57,10 @@ const Row: FC<RowProps> = ({ number }) => (
   </li>
 );
 
+const Revision: FC = () => (
+  <output aria-label="Revision">{useConversationRevision()}</output>
+);
+
 const card = (number: number) =>
   screen.getByRole('link', { name: `Ticket ${number}` }).closest('li');
 
@@ -81,6 +89,22 @@ const renderBoardCards = () =>
   );
 
 describe('LiveUpdates', () => {
+  it('raises the revision on a Conversation or a machine settings change, but not a Project change', () => {
+    renderWithTheme(
+      <LiveUpdates>
+        <Revision />
+      </LiveUpdates>,
+    );
+    const revision = () => screen.getByLabelText('Revision').textContent;
+    expect(revision()).toBe('0');
+
+    source().announce({ type: 'conversation', id: 1 });
+    source().announce({ type: 'machine' });
+    source().announce({ type: 'project', id: 1 });
+
+    expect(revision()).toBe('2');
+  });
+
   it('listens to /api/events', () => {
     renderBoardCards();
 

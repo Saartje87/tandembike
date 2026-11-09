@@ -12,6 +12,11 @@ export function statsPath(): string {
   return '/stats';
 }
 
+/** The Settings page: the machine-wide limits (ADR 0041). */
+export function settingsPath(): string {
+  return '/settings';
+}
+
 /** The archived Projects, which can be restored from there. */
 export function archivedProjectsPath(): string {
   return `${projectsPath()}/archived`;

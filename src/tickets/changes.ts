@@ -8,7 +8,9 @@ export type Change =
   | { type: 'cycle'; id: number }
   | { type: 'ticket'; number: number }
   | { type: 'tickets'; numbers: number[] }
-  | { type: 'conversation'; id: number };
+  | { type: 'conversation'; id: number }
+  /** The machine settings changed (ADR 0041). */
+  | { type: 'machine' };
 
 export type ChangeListener = (change: Change) => void;
 
