@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { answerConversationPermission } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { PermissionAnswer } from '../../conversations/agent-runner';
 import type { PermissionStatus } from '../../conversations/conversation-state';
 
@@ -35,7 +36,10 @@ export const ConversationPermissionPrompt: FC<
   const answerWith = (answer: PermissionAnswer) => () => {
     setError(undefined);
     startAnswer(async () => {
-      const result = await answerConversationPermission({ entryId, answer });
+      const result = await callAction(
+        () => answerConversationPermission({ entryId, answer }),
+        'The answer could not be sent. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

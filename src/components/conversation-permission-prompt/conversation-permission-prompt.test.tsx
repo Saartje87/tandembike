@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { answerConversationPermission } from '../../app/conversations/actions';
 import type { PermissionStatus } from '../../conversations/conversation-state';
@@ -29,6 +29,22 @@ describe('ConversationPermissionPrompt', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
     vi.mocked(answerConversationPermission).mockResolvedValue(ok);
+  });
+
+  it('shows an answer whose action throws as a refusal (T1186)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(answerConversationPermission).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderPrompt('pending');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Allow' }));
+
+    expect(
+      await screen.findByText('The answer could not be sent. Try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled();
   });
 
   it('offers Allow and Deny, but not Always allow, without rules', async () => {

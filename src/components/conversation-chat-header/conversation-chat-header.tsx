@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { stopConversation } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import { formatCost } from '../../app/lib/format-cost';
 import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
@@ -89,9 +90,10 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
             onClick={() => {
               setError(undefined);
               startStop(async () => {
-                const result = await stopConversation({
-                  conversationId: conversation.id,
-                });
+                const result = await callAction(
+                  () => stopConversation({ conversationId: conversation.id }),
+                  'The run could not be stopped. Try again.',
+                );
                 if (!result.ok) {
                   setError(result.error);
                 }

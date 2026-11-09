@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   answerConversationPermission,
@@ -306,6 +306,27 @@ describe('ConversationChat', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
 
     expect(stopConversation).toHaveBeenCalledWith({ conversationId: 7 });
+  });
+
+  it('shows a Stop whose action throws as a refusal (T1186)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(stopConversation).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ id: 7, state: 'running' })}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Stop' }));
+
+    expect(
+      await screen.findByText('The run could not be stopped. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Stop' })).toBeEnabled(),
+    );
   });
 
   it('shows Allow and Deny for a pending permission request and sends the answer', async () => {
@@ -687,6 +708,41 @@ describe('ConversationChat', () => {
 
       expect(
         await screen.findByText('This question is no longer waiting.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows an answer whose action throws as a refusal and keeps the draft (T1186)', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(answerConversationQuestion).mockRejectedValue(
+        new Error('network down'),
+      );
+      renderQuestion({ questions: [library, features] });
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Alpha' }));
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
+
+      expect(
+        await screen.findByText('The answer could not be sent. Try again.'),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: 'Alpha' })).toBeChecked();
+      expect(screen.getByRole('checkbox', { name: 'Small' })).toBeChecked();
+      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
+    });
+
+    it('shows a one-click answer whose action throws as a refusal (T1186)', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(answerConversationQuestion).mockRejectedValue(
+        new Error('network down'),
+      );
+      renderQuestion({});
+
+      await userEvent.click(screen.getByRole('button', { name: 'Beta' }));
+
+      expect(
+        await screen.findByText('The answer could not be sent. Try again.'),
       ).toBeInTheDocument();
     });
 
