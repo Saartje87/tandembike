@@ -344,3 +344,120 @@ describe('Answering a Terminal Conversation', () => {
     expect(fresh.get(conversationId).state).toBe('running');
   });
 });
+
+describe('Terminal Spec (T1240)', () => {
+  it('opens Spec on an Intake idea and on an Epic without children, in the main checkout', async () => {
+    const { conversations, tickets, project, ticket, repositoryDir } = setup({
+      parallelRuns: true,
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Big',
+      type: 'Epic',
+    });
+
+    const idea = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'spec',
+    });
+    const empty = await conversations.startTerminal({
+      ticketNumber: epic.number,
+      intent: 'spec',
+    });
+
+    expect(idea.cwd).toBe(repositoryDir);
+    expect(idea.firstMessage).toBe(`/tandembike:spec T${ticket.number}`);
+    expect(empty.firstMessage).toBe(`/tandembike:spec T${epic.number}`);
+    expect(conversations.get(idea.conversationId)).toMatchObject({
+      intent: 'spec',
+      startedBy: 'terminal',
+    });
+  });
+
+  it('refuses a Ticket that is not an Intake idea or a childless Epic', async () => {
+    const { conversations, tickets, project, ticket } = setup();
+    const spec = (ticketNumber: number) =>
+      failure(conversations.startTerminal({ ticketNumber, intent: 'spec' }));
+    const queued = tickets.createTicket({
+      projectId: project.id,
+      title: 'Queued',
+      labels: ['ready-for-agent'],
+    });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Epic',
+      type: 'Epic',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Child',
+      epicNumber: epic.number,
+    });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+
+    for (const number of [ticket.number, queued.number, epic.number]) {
+      const error = await spec(number);
+      expect(error).toBeInstanceOf(NotAllowedError);
+      expect(error.message).toBe(
+        `T${number} is not an idea in Intake or an Epic without children, so it cannot be specced.`,
+      );
+    }
+    expect(conversations.list({ ticketNumber: queued.number })).toHaveLength(0);
+  });
+});
+
+describe('Terminal next (T1240)', () => {
+  const nextSetup = () => {
+    const world = setup();
+    const cycle = world.tickets.createCycle({
+      projectId: world.project.id,
+      title: 'Beta',
+    });
+    const ready = (title: string) =>
+      world.tickets.createTicket({
+        projectId: world.project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+    return { ...world, cycle, ready };
+  };
+
+  it('starts the top Eligible item of the Active Cycle of the Project that holds the folder', async () => {
+    const { conversations, tickets, cycle, ready, repositoryDir } = nextSetup();
+    const first = ready('First');
+    ready('Second');
+    tickets.startCycle(cycle.id);
+
+    const next = await conversations.startTerminalNext(repositoryDir);
+
+    expect(next).toMatchObject({
+      started: true,
+      session: { firstMessage: `/tandembike:implement T${first.number}` },
+    });
+  });
+
+  it('returns next_work’s reason when there is no work', async () => {
+    const { conversations, tickets, cycle, repositoryDir } = nextSetup();
+    expect(await conversations.startTerminalNext(repositoryDir)).toEqual({
+      started: false,
+      reason: 'no-active-cycle',
+    });
+    tickets.startCycle(cycle.id);
+    expect(await conversations.startTerminalNext(repositoryDir)).toEqual({
+      started: false,
+      reason: 'nothing-ready',
+    });
+  });
+
+  it('refuses a folder in no Project’s repository, naming the known Projects', async () => {
+    const { conversations, tickets } = nextSetup();
+    tickets.createProject({ name: 'Blog' });
+
+    const error = await failure(conversations.startTerminalNext('/nowhere'));
+
+    expect(error.message).toContain('/nowhere');
+    expect(error.message).toContain('"Website"');
+    expect(error.message).toContain('"Blog"');
+  });
+});

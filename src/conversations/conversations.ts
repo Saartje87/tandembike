@@ -10,7 +10,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import { isInReview } from '../components/board/board-lanes';
+import { canSpec, isInReview } from '../components/board/board-lanes';
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import { playbookPath } from '../playbook/playbook';
@@ -27,6 +27,7 @@ import {
 import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
+import type { NoWorkReason } from '../tickets/work';
 import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
@@ -177,6 +178,11 @@ export type TerminalSession = {
   /** The Project's run model; null for Claude Code's own default. */
   model: string | null;
 };
+
+/** What `tandembike next` gets: a session, or why there is no work. */
+export type TerminalNext =
+  | { started: true; session: TerminalSession }
+  | { started: false; reason: NoWorkReason };
 
 export type StartTerminalInput = {
   ticketNumber: number;
@@ -972,6 +978,11 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
+    if (input.intent === 'spec' && !canSpec(ticket)) {
+      throw new NotAllowedError(
+        `${label} is not an idea in Intake or an Epic without children, so it cannot be specced.`,
+      );
+    }
     if (input.intent === 'start') {
       const working = db
         .select({ id: conversations.id, state: conversations.state })
@@ -1035,6 +1046,39 @@ export function createConversations({
       brief: briefOf(created.id),
       runMode: settings.runMode,
       model: settings.runModel,
+    };
+  };
+
+  /**
+   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * item of the Active Cycle of the Project whose repository holds `folder`,
+   * by the `next_work` rule. With no work it returns `next_work`'s reason.
+   */
+  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+    const projectId = tickets.findProjectIdOfFolder(folder);
+    if (projectId === undefined) {
+      const names = tickets
+        .listProjects()
+        .filter(({ archived }) => !archived)
+        .map(({ name }) => `"${name}"`);
+      throw new ValidationError({
+        cwd: `No Project has a repository containing ${folder}. ${
+          names.length === 0
+            ? 'There are no Projects yet.'
+            : `Known Projects: ${names.join(', ')}.`
+        }`,
+      });
+    }
+    const next = tickets.nextWork({ projectId });
+    if (next.ticket === null) {
+      return { started: false, reason: next.reason };
+    }
+    return {
+      started: true,
+      session: await startTerminal({
+        ticketNumber: next.ticket.number,
+        intent: 'start',
+      }),
     };
   };
 
@@ -1422,6 +1466,7 @@ export function createConversations({
     start,
 
     startTerminal,
+    startTerminalNext,
 
     endTerminal,
 

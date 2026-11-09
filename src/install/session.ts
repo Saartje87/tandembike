@@ -9,6 +9,9 @@ export const usageText = [
   'Usage:',
   '  tandembike                    start the server',
   '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
+  '  tandembike triage <ticket>    triage a Ticket in this terminal',
+  '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
+  '  tandembike next               start the next Eligible item of this Project',
   '  tandembike mcp                register the MCP server with Claude Code',
 ].join('\n');
 
@@ -16,6 +19,9 @@ export type ParsedCommand =
   | { command: 'server'; args: string[] }
   | { command: 'mcp' }
   | { command: 'start'; ticketNumber: number }
+  | { command: 'triage'; ticketNumber: number }
+  | { command: 'spec'; ticketNumber: number }
+  | { command: 'next' }
   | { command: 'usage'; text: string };
 
 const usage: ParsedCommand = { command: 'usage', text: usageText };
@@ -40,13 +46,30 @@ export function parseCommand(argv: string[]): ParsedCommand {
   if (first === 'mcp') {
     return rest.length === 0 ? { command: 'mcp' } : usage;
   }
-  if (first === 'start') {
+  if (first === 'next') {
+    return rest.length === 0 ? { command: 'next' } : usage;
+  }
+  if (first === 'start' || first === 'triage' || first === 'spec') {
     const ticketNumber = ticketNumberOf(rest[0]);
     return rest.length === 1 && ticketNumber !== null
-      ? { command: 'start', ticketNumber }
+      ? ({ command: first, ticketNumber } as ParsedCommand)
       : usage;
   }
   return usage;
+}
+
+/** What `tandembike next` prints when `next_work` finds nothing (T1240). */
+export function noWorkMessage(
+  reason: 'no-active-cycle' | 'nothing-ready' | 'all-blocked-or-claimed',
+): string {
+  switch (reason) {
+    case 'no-active-cycle':
+      return 'There is no Active Cycle in this Project, so there is no work to start.';
+    case 'nothing-ready':
+      return 'Nothing in the Active Cycle is ready: a Todo Ticket labelled ready-for-agent, outside an Epic, is needed.';
+    case 'all-blocked-or-claimed':
+      return 'Every ready item in the Active Cycle is blocked or claimed.';
+  }
 }
 
 /** What the server returns for a started Terminal Conversation. */
