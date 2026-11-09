@@ -733,11 +733,6 @@ export function createConversations({
         id,
       );
     }
-    const ticket =
-      conversation.ticketNumber === null
-        ? null
-        : tickets.getTicket(conversation.ticketNumber);
-
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,

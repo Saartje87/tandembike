@@ -186,6 +186,18 @@ describe('Cockpit', () => {
     expect(within(running).getByText('Running')).toBeVisible();
   });
 
+  it('shows a Terminal run In flight with its elapsed time and no cost (T1237)', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      activity({ live: { 7: liveConversation({ line: 'Starting' }) } }),
+    );
+    renderCockpit();
+
+    const inFlight = section('In flight');
+    await vi.waitFor(() =>
+      expect(within(inFlight).getByText(/^Starting · [^$]+$/)).toBeVisible(),
+    );
+  });
+
   it('shows Action needed and Review under Needs you, open, saying what each waits on', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({

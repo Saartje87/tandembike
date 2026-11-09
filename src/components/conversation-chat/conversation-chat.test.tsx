@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   answerConversationPermission,
   answerConversationQuestion,
+  closeConversation,
   replyToConversation,
   stopConversation,
 } from '../../app/conversations/actions';
@@ -23,6 +24,7 @@ vi.mock('../../app/projects/actions', () => ({
 }));
 
 vi.mock('../../app/conversations/actions', () => ({
+  closeConversation: vi.fn(),
   answerConversationPermission: vi.fn(),
   answerConversationQuestion: vi.fn(),
   replyToConversation: vi.fn(),
@@ -702,5 +704,50 @@ describe('ConversationChat', () => {
       expect(screen.getByText('Not answered')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Alpha' })).toBeNull();
     });
+  });
+});
+
+describe('ConversationChat of a Terminal Conversation (T1237)', () => {
+  beforeEach(() => {
+    vi.mocked(closeConversation).mockReset();
+  });
+
+  it('shows Terminal under Started by, no cost, no Stop and no reply box while open', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ startedBy: 'terminal', state: 'running' })}
+      />,
+    );
+
+    expect(screen.getByText('Started by Terminal')).toBeInTheDocument();
+    expect(screen.getByText('Start, working')).toBeInTheDocument();
+    expect(screen.getByText('Running in a terminal')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  });
+
+  it('offers Close once the session has ended, and closes the Conversation', async () => {
+    vi.mocked(closeConversation).mockResolvedValue(ok('stopped'));
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ id: 9, startedBy: 'terminal', state: 'stopped' }, [
+          entry({
+            id: 1,
+            role: 'session',
+            text: 'Session ended (exit code 0).',
+          }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('Session ended (exit code 0).')).toBeVisible();
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByText(/Reply to resume it/)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(closeConversation).toHaveBeenCalledWith({ conversationId: 9 });
   });
 });

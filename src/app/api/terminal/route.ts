@@ -1,0 +1,51 @@
+import { appConversations } from '../../../conversations/app-conversations';
+import { NotFoundError, TicketsError } from '../../../tickets/errors';
+
+/**
+ * What the `tandembike` command calls to open and end Terminal Conversations
+ * (ADR 0039). A thin, local-only wrapper (ADR 0022): each action maps to one
+ * Conversations function, and a refusal returns its message as plain text.
+ * Later subcommands add actions here.
+ */
+type TerminalAction =
+  | { action: 'start'; ticketNumber: number; intent?: 'start' }
+  | { action: 'end'; conversationId: number; exitCode: number };
+
+const text = (message: string, status: number) =>
+  new Response(message, {
+    status,
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+
+export const POST = async (request: Request): Promise<Response> => {
+  let body: TerminalAction;
+  try {
+    body = await request.json();
+  } catch {
+    return text('The request is not JSON.', 400);
+  }
+  try {
+    const conversations = appConversations();
+    switch (body?.action) {
+      case 'start':
+        return Response.json(
+          await conversations.startTerminal({
+            ticketNumber: Number(body.ticketNumber),
+            intent: body.intent ?? 'start',
+          }),
+        );
+      case 'end':
+        await conversations.endTerminal(Number(body.conversationId), {
+          exitCode: Number(body.exitCode),
+        });
+        return Response.json({ ok: true });
+      default:
+        return text('Unknown action.', 400);
+    }
+  } catch (error) {
+    if (error instanceof TicketsError) {
+      return text(error.message, error instanceof NotFoundError ? 404 : 409);
+    }
+    throw error;
+  }
+};

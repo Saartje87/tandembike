@@ -18,6 +18,7 @@ import {
   type ReplyControl,
 } from '../conversation-reply-form/conversation-reply-form';
 import { ConversationReplyOptions } from '../conversation-reply-options/conversation-reply-options';
+import { ConversationTerminalNotice } from '../conversation-terminal-notice/conversation-terminal-notice';
 import * as styles from './conversation-chat.css';
 
 export type ConversationChatProps = {
@@ -53,6 +54,7 @@ export const ConversationChat: FC<ConversationChatProps> = ({
 }) => {
   const reply = useRef<ReplyControl>(null);
   const kept = useKeptConversation();
+  const terminal = conversation.startedBy === 'terminal';
   const questions = optionsToAnswer(
     waitsOnUser(conversation.state),
     transcript,
@@ -63,17 +65,17 @@ export const ConversationChat: FC<ConversationChatProps> = ({
       <ConversationChatHeader conversation={conversation} title={title} />
       {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
-      {conversation.state === 'interrupted' && (
+      {!terminal && conversation.state === 'interrupted' && (
         <Alert intent="warning">
           This Conversation was interrupted. Reply to resume it.
         </Alert>
       )}
-      {conversation.state === 'stopped' && (
+      {!terminal && conversation.state === 'stopped' && (
         <Alert intent="info">
           This Conversation was stopped. Reply to resume it.
         </Alert>
       )}
-      {questions && (
+      {!terminal && questions && (
         <ConversationReplyOptions
           questions={questions}
           onChoose={({ label }, { key }) =>
@@ -83,20 +85,24 @@ export const ConversationChat: FC<ConversationChatProps> = ({
           }
         />
       )}
-      <ConversationReplyForm
-        key={conversation.id}
-        conversationId={conversation.id}
-        projectId={conversation.projectId}
-        control={reply}
-        {...(kept
-          ? {
-              initialText: kept.reply,
-              onTextChange: (text: string) => {
-                kept.reply = text;
-              },
-            }
-          : {})}
-      />
+      {terminal ? (
+        <ConversationTerminalNotice conversation={conversation} />
+      ) : (
+        <ConversationReplyForm
+          key={conversation.id}
+          conversationId={conversation.id}
+          projectId={conversation.projectId}
+          control={reply}
+          {...(kept
+            ? {
+                initialText: kept.reply,
+                onTextChange: (text: string) => {
+                  kept.reply = text;
+                },
+              }
+            : {})}
+        />
+      )}
     </div>
   );
 };

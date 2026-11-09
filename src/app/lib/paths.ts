@@ -165,3 +165,11 @@ export function projectIdFromPath(pathname: string): number | undefined {
   const match = /^\/project\/(\d+)(?:\/|$)/.exec(pathname);
   return match ? Number(match[1]) : undefined;
 }
+
+/**
+ * The route the `tandembike` command calls for terminal sessions (ADR 0039).
+ * The CLI builds its URL from it, so it is here beside every other path.
+ */
+export function terminalApiPath(): string {
+  return '/api/terminal';
+}
