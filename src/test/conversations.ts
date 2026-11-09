@@ -34,6 +34,7 @@ export function createTestConversations(changes?: ChangeChannel) {
   return {
     conversations: create(),
     restart: create,
+    db,
     tickets,
     runner,
     worktrees,

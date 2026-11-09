@@ -58,18 +58,16 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
     if (result.ok) {
       return;
     }
-    const capMessage = result.fieldErrors?.maxConcurrentRuns;
-    const ceilingMessage = result.fieldErrors?.dailySpendCeilingUsd;
-    if (capMessage) {
-      setError('maxConcurrentRuns', { type: 'server', message: capMessage });
+    const refused = (
+      [
+        ['maxConcurrentRuns', result.fieldErrors?.maxConcurrentRuns],
+        ['dailySpendCeiling', result.fieldErrors?.dailySpendCeilingUsd],
+      ] as const
+    ).filter(([, message]) => message);
+    for (const [field, message] of refused) {
+      setError(field, { type: 'server', message });
     }
-    if (ceilingMessage) {
-      setError('dailySpendCeiling', {
-        type: 'server',
-        message: ceilingMessage,
-      });
-    }
-    if (!capMessage && !ceilingMessage) {
+    if (refused.length === 0) {
       setError('root.server', { message: result.error });
     }
   });

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAutopilot } from '../autopilot/autopilot';
 import { createTestConversations } from '../test/conversations';
 import { type Change, createChangeChannel } from '../tickets/changes';
+import { createTickets } from '../tickets/tickets';
 import type { Notice } from './notice';
 import { createNotices } from './notices';
 
@@ -14,17 +15,19 @@ const request = {
   rules: [] as string[],
 };
 
-function setup() {
+function setup(now?: () => Date) {
   const changes = createChangeChannel();
   const world = createTestConversations(changes);
   const { tickets, conversations } = world;
+  // The factory's own actions on Tickets, as the MCP route records them.
+  const agentTickets = createTickets(world.db, 'agent', changes);
   const project = tickets.createProject({ name: 'Website' });
   tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
     parallelRuns: true,
     maxConcurrentRuns: 5,
   });
-  const notices = createNotices({ conversations, tickets, changes });
+  const notices = createNotices({ conversations, tickets, changes, now });
   const raised = vi.fn();
   changes.subscribe((change) => {
     if (change.type === 'notice') {
@@ -49,7 +52,15 @@ function setup() {
       run: world.runner.runs[world.runner.runs.length - 1],
     };
   };
-  return { ...world, changes, project, notices, raised, startRun };
+  return {
+    ...world,
+    agentTickets,
+    changes,
+    project,
+    notices,
+    raised,
+    startRun,
+  };
 }
 
 const notStalled = (world: { raised: { mock: { calls: unknown[][] } } }) =>
@@ -65,7 +76,7 @@ describe('Notices', () => {
         projectId: world.project.id,
         title,
       });
-      world.tickets.updateTicket(ticket.number, { status: 'In progress' });
+      world.agentTickets.updateTicket(ticket.number, { status: 'In progress' });
       return ticket;
     };
     const kinds = (world: ReturnType<typeof setup>, kind: string) =>
@@ -122,7 +133,9 @@ describe('Notices', () => {
         world.notices.start();
 
         vi.advanceTimersByTime(5000);
-        world.tickets.releaseTicketClaim(ticket.number, { agentRunId: 'r1' });
+        world.agentTickets.releaseTicketClaim(ticket.number, {
+          agentRunId: 'r1',
+        });
         world.changes.publish({ type: 'project', id: world.project.id });
 
         const [notice] = kinds(world, 'stalled');
@@ -136,6 +149,48 @@ describe('Notices', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    it('raises no stalled when the User releases the claim, and again after the factory stalls it', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const world = setup();
+        const ticket = inProgress(world);
+        world.agentTickets.claimTicket(ticket.number, { agentRunId: 'r1' });
+        world.notices.start();
+
+        vi.advanceTimersByTime(5000);
+        world.tickets.releaseTicketClaim(ticket.number, { agentRunId: 'r1' });
+        world.changes.publish({ type: 'project', id: world.project.id });
+        expect(kinds(world, 'stalled')).toEqual([]);
+
+        vi.advanceTimersByTime(5000);
+        world.agentTickets.claimTicket(ticket.number, { agentRunId: 'r2' });
+        vi.advanceTimersByTime(5000);
+        world.agentTickets.releaseTicketClaim(ticket.number, {
+          agentRunId: 'r2',
+        });
+        expect(kinds(world, 'stalled')).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("raises no stalled when the User closes the Ticket's Conversation", async () => {
+      const world = setup();
+      const ticket = inProgress(world);
+      const conversation = await world.conversations.start({
+        startedBy: 'user',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        prompt: 'Go',
+      });
+      world.notices.start();
+
+      await world.conversations.close(conversation.id);
+      world.changes.publish({ type: 'project', id: world.project.id });
+
+      expect(kinds(world, 'stalled')).toEqual([]);
     });
 
     it('raises stalled for a Ticket whose PR is not Review, but not one with a PR', () => {
@@ -396,7 +451,8 @@ describe('ceiling Notices', () => {
     world.tickets.createTicket({ projectId: world.project.id, title: 'Poke' });
 
   it('raises once a day when the machine ceiling pauses Autopilot, opening Settings', () => {
-    const world = setup();
+    let clock = new Date(2026, 4, 10, 12);
+    const world = setup(() => clock);
     world.notices.start();
     vi.spyOn(world.conversations, 'machineBudget').mockReturnValue({
       spendUsd: 5,
@@ -409,17 +465,19 @@ describe('ceiling Notices', () => {
 
     expect(ofKind(world)).toEqual([
       expect.objectContaining({
+        key: 'ceiling:machine:2026-05-10',
         path: '/settings',
         projectId: null,
         body: '$5.00 spent today of $4.00',
       }),
     ]);
 
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 60 * 1000));
+    clock = new Date(2026, 4, 11, 0, 1);
     poke(world);
-    vi.useRealTimers();
-    expect(ofKind(world)).toHaveLength(2);
+    expect(ofKind(world).map((notice) => notice.key)).toEqual([
+      'ceiling:machine:2026-05-10',
+      'ceiling:machine:2026-05-11',
+    ]);
   });
 
   it('raises for the triage ceiling and opens the Project Board', () => {

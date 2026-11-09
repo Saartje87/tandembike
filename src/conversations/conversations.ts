@@ -1632,6 +1632,25 @@ export function createConversations({
     autopilotTriageSpend,
 
     /**
+     * A Cycle's Spend ceiling budget (the Project's setting), the one place
+     * that decides "paused": Autopilot's spend on the Cycle against the
+     * ceiling. Null while the Project has no Spend ceiling.
+     */
+    spendBudget(input: {
+      projectId: number;
+      cycleId: number;
+    }): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const ceilingUsd = tickets.getProjectAgentSettings(
+        input.projectId,
+      ).spendCeilingUsd;
+      if (ceilingUsd === null) {
+        return null;
+      }
+      const spendUsd = this.autopilotSpend(input);
+      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+    },
+
+    /**
      * Today's Auto-triage budget of a Project (ADR 0040), the one place that
      * decides "paused": the spend since the start of `now`'s day against the
      * Triage ceiling. Null while Auto-triage is off or has no ceiling.
@@ -2161,8 +2180,14 @@ export function createConversations({
      * takes it off the open Conversations. Its transcript stays.
      */
     async close(id: number): Promise<Conversation> {
-      await this.stop(id);
+      // Closed before it stops, so the stop's change already reads as the
+      // User's own and Notices raise nothing for it.
+      const conversation = get(id);
+      if (conversation.state !== 'stopped') {
+        refuseTerminal(conversation);
+      }
       setHidden(id, true);
+      await this.stop(id);
       announce(id);
       await tryRelease(id);
       return get(id);

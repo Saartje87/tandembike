@@ -2,8 +2,9 @@ import type { ChangeChannel } from '../tickets/changes';
 import type { Notice } from './notice';
 import { type NoticeWorld, noticeDetectors } from './notice-kinds';
 
-export type NoticesDeps = NoticeWorld & {
+export type NoticesDeps = Omit<NoticeWorld, 'now'> & {
   changes: ChangeChannel;
+  now?: () => Date;
 };
 
 /**
@@ -16,8 +17,9 @@ export function createNotices({
   conversations,
   tickets,
   changes,
+  now = () => new Date(),
 }: NoticesDeps) {
-  const world: NoticeWorld = { conversations, tickets };
+  const world: NoticeWorld = { conversations, tickets, now };
 
   const compute = (): Notice[] =>
     noticeDetectors.flatMap((detect) => detect(world));

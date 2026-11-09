@@ -9,6 +9,8 @@ import {
 } from '../../app/settings/actions';
 import { useConversationRevision } from '../live-updates/live-updates';
 
+const usd = (amount: number): string => `$${amount.toFixed(2)}`;
+
 /**
  * "Runs 2/3" for the app header (ADR 0041): the working runs holding a
  * machine slot against the machine cap. It loads when it mounts and again on
@@ -16,8 +18,6 @@ import { useConversationRevision } from '../live-updates/live-updates';
  * the first load it shows nothing. With a Machine ceiling set it also shows
  * today's Autopilot spend against it, and "paused: machine ceiling" at it.
  */
-const usd = (amount: number): string => `$${amount.toFixed(2)}`;
-
 export const MachineRuns: FC = () => {
   const revision = useConversationRevision();
   const [runs, setRuns] = useState<MachineRunsState | null>(null);

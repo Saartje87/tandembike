@@ -176,11 +176,7 @@ export function createAutopilot({
     if (!cycle) {
       return null;
     }
-    if (
-      settings.spendCeilingUsd !== null &&
-      conversations.autopilotSpend({ projectId, cycleId: cycle.id }) >=
-        settings.spendCeilingUsd
-    ) {
+    if (conversations.spendBudget({ projectId, cycleId: cycle.id })?.paused) {
       return null;
     }
     // A Merge the User approved holds a run slot like a Start (T1221).

@@ -9,7 +9,7 @@ import { appTickets } from '../../tickets/app-tickets';
 
 export const metadata: Metadata = { title: 'Settings' };
 
-const MachineSettings: FC = async () => {
+const MachineSettingsSection: FC = async () => {
   await connection();
   return (
     <MachineSettingsForm settings={appTickets('user').getMachineSettings()} />
@@ -28,7 +28,7 @@ const SettingsPage: FC = () => (
       </Text>
     </Stack>
     <Suspense fallback={<PageLoading />}>
-      <MachineSettings />
+      <MachineSettingsSection />
     </Suspense>
   </Stack>
 );

@@ -1,3 +1,4 @@
+import { formatCost } from '../app/lib/format-cost';
 import {
   boardPathOf,
   conversationOnPath,
@@ -5,7 +6,6 @@ import {
   settingsPath,
   ticketOnBoardPath,
 } from '../app/lib/paths';
-import { formatCost } from '../components/conversation-labels/conversation-labels';
 import { conversationActivity } from '../conversations/conversation-activity';
 import { isTerminal } from '../conversations/conversation-state';
 import type {
@@ -21,6 +21,8 @@ import type { Notice } from './notice';
 export type NoticeWorld = {
   conversations: Conversations;
   tickets: Tickets;
+  /** The clock, injected as Autopilot's is. */
+  now: () => Date;
 };
 
 /**
@@ -194,46 +196,67 @@ const stallingChanges = new Set([
 ]);
 
 /**
- * When `ticket` became Stalled: the latest of its own (and for a child
- * placed by its Epic, the Epic's) Activity that can cause it, and the
+ * What last made `ticket` Stalled, and when: the latest of its own (and for a
+ * child placed by its Epic, the Epic's) Activity that can cause it, and the
  * latest change of its Conversations, such as the User closing one.
+ * `byUser` says the User did it, which is no news to them.
  */
-function stalledSince(
+function stalledCause(
   { tickets, conversations }: NoticeWorld,
   ticket: Ticket,
-): number {
+): { at: number; byUser: boolean } {
   const numbers = [ticket.number, ...(ticket.epic ? [ticket.epic.number] : [])];
-  const times = [
-    ticket.createdAt.getTime(),
+  const causes = [
+    { at: ticket.createdAt.getTime(), byUser: false },
     ...numbers.flatMap((number) =>
       tickets
         .listActivity(number)
         .filter(({ changes }) =>
           changes.some(({ type }) => stallingChanges.has(type)),
         )
-        .map(({ createdAt }) => createdAt.getTime()),
+        .map(({ createdAt, actor }) => ({
+          at: createdAt.getTime(),
+          byUser: actor === 'user',
+        })),
     ),
+    // A closed Conversation's last change is the User closing it.
     ...numbers.flatMap((number) =>
       conversations
         .list({ ticketNumber: number })
-        .map(({ updatedAt }) => updatedAt.getTime()),
+        .map(({ updatedAt, hidden }) => ({
+          at: updatedAt.getTime(),
+          byUser: hidden,
+        })),
     ),
   ];
-  return Math.max(...times);
+  // On a tie the User's action wins: the quieter reading.
+  return causes.reduce((newest, cause) =>
+    cause.at > newest.at || (cause.at === newest.at && cause.byUser)
+      ? cause
+      : newest,
+  );
 }
 
-/** A Ticket or Epic that is Stalled by the Board's derivation, keyed by since when. */
+/**
+ * A Ticket or Epic that is Stalled by the Board's derivation, keyed by since
+ * when. A stall the User caused raises nothing.
+ */
 const stalled: NoticeDetector = (world) =>
   inProgress(world)
     .filter(({ ticket, own, epicLive }) => isStalled(ticket, own, epicLive))
-    .map(({ ticket }) =>
-      ticketNotice(ticket, {
-        kind: 'stalled',
-        key: `stalled:${ticket.number}:${stalledSince(world, ticket)}`,
-        title: `T${ticket.number} is stalled`,
-        body: ticket.title,
-      }),
-    );
+    .flatMap(({ ticket }) => {
+      const cause = stalledCause(world, ticket);
+      return cause.byUser
+        ? []
+        : [
+            ticketNotice(ticket, {
+              kind: 'stalled',
+              key: `stalled:${ticket.number}:${cause.at}`,
+              title: `T${ticket.number} is stalled`,
+              body: ticket.title,
+            }),
+          ];
+    });
 
 /** A Ticket with a pending triage proposal, keyed by the proposal. */
 const triage: NoticeDetector = ({ tickets }) =>
@@ -261,65 +284,76 @@ const dayOf = (now: Date): string =>
     .map((part) => String(part).padStart(2, '0'))
     .join('-');
 
+/** A Notice not about one Ticket or Conversation. */
+const projectNotice = (
+  projectId: number | null,
+  fields: Pick<Notice, 'kind' | 'key' | 'title' | 'body' | 'path'>,
+): Notice => ({
+  ...fields,
+  projectId,
+  ticketNumber: null,
+  conversationId: null,
+});
+
 /**
  * Autopilot paused on a ceiling: a Project's Spend ceiling on its Active
- * Cycle, a Project's triage ceiling or the machine ceiling. Keyed by the
- * ceiling, its Project or Cycle and the day, so each pause notifies once a day.
+ * Cycle, a Project's triage ceiling or the machine ceiling. Each reads the
+ * Conversations module's budget, the one place that decides "paused". Keyed
+ * by the ceiling, its Project or Cycle and the day, so each pause notifies
+ * once a day.
  */
-const ceiling: NoticeDetector = ({ tickets, conversations }) => {
-  const day = dayOf(new Date());
+const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
+  const at = now();
+  const day = dayOf(at);
   const found: Notice[] = [];
-  const machine = conversations.machineBudget();
+  const machine = conversations.machineBudget(at);
   if (machine?.paused) {
-    found.push({
-      kind: 'ceiling',
-      key: `ceiling:machine:${day}`,
-      projectId: null,
-      ticketNumber: null,
-      conversationId: null,
-      title: 'Autopilot paused on the machine ceiling',
-      body: `${formatCost(machine.spendUsd)} spent today of ${formatCost(machine.ceilingUsd)}`,
-      path: settingsPath(),
-    });
+    found.push(
+      projectNotice(null, {
+        kind: 'ceiling',
+        key: `ceiling:machine:${day}`,
+        title: 'Autopilot paused on the machine ceiling',
+        body: `${formatCost(machine.spendUsd)} spent today of ${formatCost(machine.ceilingUsd)}`,
+        path: settingsPath(),
+      }),
+    );
   }
   for (const project of tickets.listProjects()) {
     if (project.archived) {
       continue;
     }
-    const settings = tickets.getProjectAgentSettings(project.id);
     const cycle = tickets
       .listCycles(project.id)
       .find((candidate) => candidate.state === 'Active');
-    if (settings.autopilot && cycle && settings.spendCeilingUsd !== null) {
-      const spendUsd = conversations.autopilotSpend({
-        projectId: project.id,
-        cycleId: cycle.id,
-      });
-      if (spendUsd >= settings.spendCeilingUsd) {
-        found.push({
+    const spend =
+      tickets.getProjectAgentSettings(project.id).autopilot && cycle
+        ? conversations.spendBudget({
+            projectId: project.id,
+            cycleId: cycle.id,
+          })
+        : null;
+    if (cycle && spend?.paused) {
+      found.push(
+        projectNotice(project.id, {
           kind: 'ceiling',
           key: `ceiling:spend:${cycle.id}:${day}`,
-          projectId: project.id,
-          ticketNumber: null,
-          conversationId: null,
           title: `Autopilot paused on ${project.name}'s Spend ceiling`,
-          body: `${formatCost(spendUsd)} spent of ${formatCost(settings.spendCeilingUsd)} on ${cycle.title}`,
+          body: `${formatCost(spend.spendUsd)} spent of ${formatCost(spend.ceilingUsd)} on ${cycle.title}`,
           path: projectPath(project.id),
-        });
-      }
+        }),
+      );
     }
-    const triageBudget = conversations.triageBudget(project.id);
+    const triageBudget = conversations.triageBudget(project.id, at);
     if (triageBudget?.paused) {
-      found.push({
-        kind: 'ceiling',
-        key: `ceiling:triage:${project.id}:${day}`,
-        projectId: project.id,
-        ticketNumber: null,
-        conversationId: null,
-        title: `Auto-triage paused on ${project.name}'s triage ceiling`,
-        body: `${formatCost(triageBudget.spendUsd)} spent today of ${formatCost(triageBudget.ceilingUsd)}`,
-        path: projectPath(project.id),
-      });
+      found.push(
+        projectNotice(project.id, {
+          kind: 'ceiling',
+          key: `ceiling:triage:${project.id}:${day}`,
+          title: `Auto-triage paused on ${project.name}'s triage ceiling`,
+          body: `${formatCost(triageBudget.spendUsd)} spent today of ${formatCost(triageBudget.ceilingUsd)}`,
+          path: projectPath(project.id),
+        }),
+      );
     }
   }
   return found;

@@ -54,10 +54,6 @@ export const stateNames: Record<ConversationState, string> = {
   stopped: 'stopped',
 };
 
-/** A Conversation's cost so far, in US dollars; under a cent, to 4 places. */
-export const formatCost = (costUsd: number) =>
-  `$${costUsd > 0 && costUsd < 0.01 ? costUsd.toFixed(4) : costUsd.toFixed(2)}`;
-
 /** Whether a run of the Conversation is alive, so it can be stopped. */
 export const hasRun = (state: ConversationState) =>
   state === 'running' || state === 'waiting' || state === 'idle';
