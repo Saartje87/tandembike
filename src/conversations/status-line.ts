@@ -166,6 +166,7 @@ export function statusLine(entry: StatusEntry | null): string {
         entry.permissionRules?.[0] ?? entry.toolName ?? splitTool(entry.text)[0]
       );
     case 'question':
+    case 'widget':
     case 'error':
     case 'created':
       return firstLine(entry.text);
@@ -178,6 +179,7 @@ export function statusLine(entry: StatusEntry | null): string {
 export const messageRoles = [
   'agent',
   'question',
+  'widget',
   'permission',
   'error',
 ] as const satisfies readonly TranscriptRole[];

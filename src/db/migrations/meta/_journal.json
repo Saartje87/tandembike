@@ -365,6 +365,13 @@
       "when": 1794260042789,
       "tag": "0051_auto_merge",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "6",
+      "when": 1794265731209,
+      "tag": "0052_conversation_widget",
+      "breakpoints": true
     }
   ]
 }

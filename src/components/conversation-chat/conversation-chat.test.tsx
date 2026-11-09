@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   answerConversationPermission,
-  answerConversationQuestion,
+  answerConversationWidget,
   closeConversation,
   replyToConversation,
   stopConversation,
@@ -26,7 +26,7 @@ vi.mock('../../app/projects/actions', () => ({
 vi.mock('../../app/conversations/actions', () => ({
   closeConversation: vi.fn(),
   answerConversationPermission: vi.fn(),
-  answerConversationQuestion: vi.fn(),
+  answerConversationWidget: vi.fn(),
   replyToConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
@@ -65,6 +65,7 @@ const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   toolName: null,
   toolInput: null,
   question: null,
+  widget: null,
   createdAt: at,
   ...values,
 });
@@ -83,7 +84,7 @@ const ok = (state: Conversation['state'] = 'running') =>
 describe('ConversationChat', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
-    vi.mocked(answerConversationQuestion).mockReset();
+    vi.mocked(answerConversationWidget).mockReset();
     vi.mocked(replyToConversation).mockReset();
     vi.mocked(stopConversation).mockReset();
   });
@@ -588,7 +589,42 @@ describe('ConversationChat', () => {
     });
   });
 
-  describe('an Agent question', () => {
+  it('shows a waiting Widget of the Agent and answers it through its action', async () => {
+    vi.mocked(answerConversationWidget).mockResolvedValue(ok());
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ id: 1, state: 'waiting' }, [
+          entry({
+            id: 6,
+            role: 'widget',
+            text: 'Which library?',
+            widget: {
+              widget: {
+                kind: 'choice',
+                prompt: 'Which library?',
+                options: [{ label: 'Alpha' }, { label: 'Beta' }],
+                multiSelect: false,
+                recommended: ['Beta'],
+              },
+              answer: null,
+              expired: false,
+            },
+          }),
+        ])}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send answer' }));
+
+    expect(answerConversationWidget).toHaveBeenCalledWith({
+      conversationId: 1,
+      entryId: 6,
+      answer: { selected: ['Beta'] },
+    });
+  });
+
+  describe('an Agent question of an older run', () => {
     const library = {
       question: 'Which library?',
       header: 'Library',
@@ -598,16 +634,6 @@ describe('ConversationChat', () => {
         { label: 'Beta', description: 'The second' },
       ],
     };
-    const features = {
-      question: 'Which features?',
-      header: 'Features',
-      multiSelect: true,
-      options: [
-        { label: 'Fast', description: 'Quick' },
-        { label: 'Small', description: 'Tiny' },
-      ],
-    };
-
     const renderQuestion = (question: Partial<QuestionEntry>) =>
       renderWithTheme(
         <ConversationChat
@@ -627,124 +653,6 @@ describe('ConversationChat', () => {
           ])}
         />,
       );
-
-    it('answers a single single-choice question with one click on a choice', async () => {
-      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
-      renderQuestion({});
-
-      await userEvent.click(screen.getByRole('button', { name: 'Beta' }));
-
-      expect(answerConversationQuestion).toHaveBeenCalledWith({
-        entryId: 5,
-        answers: { 'Which library?': 'Beta' },
-      });
-    });
-
-    it('also takes an Other answer for a single question', async () => {
-      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
-      renderQuestion({});
-      const send = screen.getByRole('button', { name: 'Send answer' });
-      expect(send).toBeDisabled();
-
-      await userEvent.type(
-        screen.getByRole('textbox', { name: 'Other answer to Which library?' }),
-        'Gamma',
-      );
-      await userEvent.click(send);
-
-      expect(answerConversationQuestion).toHaveBeenCalledWith({
-        entryId: 5,
-        answers: { 'Which library?': 'Gamma' },
-      });
-    });
-
-    it('shows checkboxes for a multi-select question and sends the picked choices with Other', async () => {
-      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
-      renderQuestion({ questions: [features] });
-
-      await userEvent.click(screen.getByRole('checkbox', { name: 'Fast' }));
-      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
-      await userEvent.type(
-        screen.getByRole('textbox', {
-          name: 'Other answer to Which features?',
-        }),
-        'Cheap',
-      );
-      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
-
-      expect(answerConversationQuestion).toHaveBeenCalledWith({
-        entryId: 5,
-        answers: { 'Which features?': 'Fast, Small, Cheap' },
-      });
-    });
-
-    it('activates Submit only once every question has an answer, and sends all in one answer', async () => {
-      vi.mocked(answerConversationQuestion).mockResolvedValue(ok());
-      renderQuestion({ questions: [library, features] });
-      const submit = screen.getByRole('button', { name: 'Submit' });
-      expect(submit).toBeDisabled();
-
-      await userEvent.click(screen.getByRole('radio', { name: 'Alpha' }));
-      expect(submit).toBeDisabled();
-      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
-      expect(submit).toBeEnabled();
-      await userEvent.click(submit);
-
-      expect(answerConversationQuestion).toHaveBeenCalledTimes(1);
-      expect(answerConversationQuestion).toHaveBeenCalledWith({
-        entryId: 5,
-        answers: { 'Which library?': 'Alpha', 'Which features?': 'Small' },
-      });
-    });
-
-    it('shows a refusal', async () => {
-      vi.mocked(answerConversationQuestion).mockResolvedValue({
-        ok: false,
-        error: 'This question is no longer waiting.',
-      });
-      renderQuestion({});
-
-      await userEvent.click(screen.getByRole('button', { name: 'Alpha' }));
-
-      expect(
-        await screen.findByText('This question is no longer waiting.'),
-      ).toBeInTheDocument();
-    });
-
-    it('shows an answer whose action throws as a refusal and keeps the draft (T1186)', async () => {
-      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-      onTestFinished(() => log.mockRestore());
-      vi.mocked(answerConversationQuestion).mockRejectedValue(
-        new Error('network down'),
-      );
-      renderQuestion({ questions: [library, features] });
-
-      await userEvent.click(screen.getByRole('radio', { name: 'Alpha' }));
-      await userEvent.click(screen.getByRole('checkbox', { name: 'Small' }));
-      await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
-
-      expect(
-        await screen.findByText('The answer could not be sent. Try again.'),
-      ).toBeInTheDocument();
-      expect(screen.getByRole('radio', { name: 'Alpha' })).toBeChecked();
-      expect(screen.getByRole('checkbox', { name: 'Small' })).toBeChecked();
-      expect(screen.getByRole('button', { name: 'Submit' })).toBeEnabled();
-    });
-
-    it('shows a one-click answer whose action throws as a refusal (T1186)', async () => {
-      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-      onTestFinished(() => log.mockRestore());
-      vi.mocked(answerConversationQuestion).mockRejectedValue(
-        new Error('network down'),
-      );
-      renderQuestion({});
-
-      await userEvent.click(screen.getByRole('button', { name: 'Beta' }));
-
-      expect(
-        await screen.findByText('The answer could not be sent. Try again.'),
-      ).toBeInTheDocument();
-    });
 
     it('shows what was answered, without choices', () => {
       renderQuestion({ answers: { 'Which library?': 'Beta' } });

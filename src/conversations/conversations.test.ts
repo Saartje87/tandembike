@@ -87,7 +87,8 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options.agentRunId).toBe(String(conversation.id));
     expect(brief).toContain(`T${ticket.number}`);
     expect(brief).toContain('triage');
-    expect(brief).toContain('AskUserQuestion');
+    expect(brief).toContain('ask_choice');
+    expect(brief).toContain('instead of asking in text');
     expect(brief).not.toContain('ask your questions in your messages');
     expect(brief).not.toContain('worktree');
   });
@@ -1305,80 +1306,78 @@ describe('Permission requests', () => {
   });
 });
 
-describe('Questions of the Agent', () => {
-  const questions = [
-    {
-      question: 'Which library?',
-      header: 'Library',
-      multiSelect: false,
-      options: [
-        { label: 'A', description: 'The first' },
-        { label: 'B', description: 'The second' },
-      ],
-    },
-    {
-      question: 'Which features?',
-      header: 'Features',
-      multiSelect: true,
-      options: [
-        { label: 'X', description: 'Ex' },
-        { label: 'Y', description: 'Why' },
-      ],
-    },
-  ];
+describe('Widgets of the Agent', () => {
+  const widget = {
+    kind: 'choice' as const,
+    prompt: 'Which library?',
+    options: [
+      { label: 'A', description: 'The first' },
+      { label: 'B', description: 'The second' },
+    ],
+    multiSelect: false,
+    recommended: ['A'],
+  };
 
   async function started() {
     const world = setup();
     const conversation = await world.conversations.start({
       startedBy: 'user',
       projectId: world.project.id,
-      intent: 'start',
+      intent: 'ask',
       prompt: 'Go',
     });
     return { ...world, conversation, run: world.runner.runs[0] };
   }
 
-  it('records a question entry with its choices, marks the Conversation waiting and holds the run', async () => {
+  const lastEntry = (
+    conversations: ReturnType<typeof setup>['conversations'],
+    id: number,
+  ) => conversations.transcript(id).at(-1);
+
+  it('records a widget entry, marks the Conversation waiting and holds the run', async () => {
     const { conversations, conversation, run } = await started();
 
-    let answers: unknown;
-    void run.options.askQuestion(questions).then((result) => {
-      answers = result;
+    let answer: unknown;
+    void run.options.askWidget(widget).then((result) => {
+      answer = result;
     });
     await Promise.resolve();
 
     expect(conversations.get(conversation.id).state).toBe('waiting');
-    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
-      role: 'question',
-      question: { questions, answers: null, expired: false },
+    expect(lastEntry(conversations, conversation.id)).toMatchObject({
+      role: 'widget',
+      text: 'Which library?',
+      widget: { widget, answer: null, expired: false },
     });
-    expect(answers).toBeUndefined();
+    expect(answer).toBeUndefined();
   });
 
-  it('gives the run the answers and records them', async () => {
+  it.each([
+    [{ selected: ['B'] }, { selected: ['B'] }],
+    [{ other: ' Neither ' }, { other: 'Neither' }],
+    [{ skipped: true }, { skipped: true }],
+  ])('gives the run the answer %j and records it', async (given, expected) => {
     const { conversations, conversation, run } = await started();
-    const pending = run.options.askQuestion(questions);
-    const entry = conversations.transcript(conversation.id).at(-1);
-    const given = { 'Which library?': 'A', 'Which features?': 'X, Y' };
+    const pending = run.options.askWidget(widget);
+    const entry = lastEntry(conversations, conversation.id);
 
-    await conversations.answerQuestion(entry?.id ?? 0, given);
+    await conversations.answerWidget(conversation.id, entry?.id ?? 0, given);
 
-    expect(await pending).toEqual(given);
+    expect(await pending).toEqual(expected);
     expect(conversations.get(conversation.id).state).toBe('running');
-    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
-      question: { answers: given },
+    expect(lastEntry(conversations, conversation.id)).toMatchObject({
+      widget: { answer: expected, expired: false },
     });
   });
 
-  it('refuses an answer that leaves a question unanswered', async () => {
+  it('refuses an answer of the wrong kind and keeps waiting', async () => {
     const { conversations, conversation, run } = await started();
-    void run.options.askQuestion(questions);
-    const entry = conversations.transcript(conversation.id).at(-1);
+    void run.options.askWidget(widget);
+    const entry = lastEntry(conversations, conversation.id);
 
     const error = await failure(
-      conversations.answerQuestion(entry?.id ?? 0, {
-        'Which library?': 'A',
-        'Which features?': '  ',
+      conversations.answerWidget(conversation.id, entry?.id ?? 0, {
+        order: ['A', 'B'],
       }),
     );
 
@@ -1388,60 +1387,96 @@ describe('Questions of the Agent', () => {
 
   it('refuses a second answer', async () => {
     const { conversations, conversation, run } = await started();
-    void run.options.askQuestion(questions);
-    const entry = conversations.transcript(conversation.id).at(-1);
-    const given = { 'Which library?': 'A', 'Which features?': 'X' };
-    await conversations.answerQuestion(entry?.id ?? 0, given);
+    void run.options.askWidget(widget);
+    const entry = lastEntry(conversations, conversation.id);
+    await conversations.answerWidget(conversation.id, entry?.id ?? 0, {
+      selected: ['A'],
+    });
 
     const error = await failure(
-      conversations.answerQuestion(entry?.id ?? 0, given),
+      conversations.answerWidget(conversation.id, entry?.id ?? 0, {
+        selected: ['A'],
+      }),
     );
 
     expect(error).toBeInstanceOf(NotAllowedError);
-    expect((error as Error).message).toBe(
-      'This question was already answered.',
-    );
+    expect((error as Error).message).toBe('This Widget was already answered.');
   });
 
-  it('resolves empty and expires a pending question when the Conversation is stopped', async () => {
+  it('refuses a Widget of another Conversation, or an entry that is none', async () => {
     const { conversations, conversation, run } = await started();
-    const pending = run.options.askQuestion(questions);
+    void run.options.askWidget(widget);
+    const entry = lastEntry(conversations, conversation.id);
+    const first = conversations.transcript(conversation.id)[0];
 
-    await conversations.stop(conversation.id);
+    for (const [conversationId, entryId] of [
+      [conversation.id + 1, entry?.id ?? 0],
+      [conversation.id, first.id],
+    ]) {
+      expect(
+        await failure(
+          conversations.answerWidget(conversationId, entryId, {
+            selected: ['A'],
+          }),
+        ),
+      ).toBeInstanceOf(NotFoundError);
+    }
+  });
 
-    expect(await pending).toEqual({});
-    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
-      question: { answers: null, expired: true },
+  it('waits until every request is answered when a permission request also waits', async () => {
+    const { conversations, conversation, run } = await started();
+    void run.options.askWidget(widget);
+    const widgetEntry = lastEntry(conversations, conversation.id);
+    void run.options.askPermission({
+      toolName: 'Bash',
+      input: {},
+      rules: [],
+    });
+
+    await conversations.answerWidget(conversation.id, widgetEntry?.id ?? 0, {
+      skipped: true,
+    });
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+  });
+
+  it('expires a pending Widget and resolves { expired: true } when the run ends', async () => {
+    const { conversations, conversation, run } = await started();
+    const pending = run.options.askWidget(widget);
+
+    run.emit({ type: 'exit' });
+
+    expect(await pending).toEqual({ expired: true });
+    expect(lastEntry(conversations, conversation.id)).toMatchObject({
+      widget: { answer: null, expired: true },
     });
   });
 
-  it('resolves empty when the Conversation is closed', async () => {
+  it('expires it when the Conversation is stopped or closed', async () => {
     const { conversations, conversation, run } = await started();
-    const pending = run.options.askQuestion(questions);
+    const pending = run.options.askWidget(widget);
 
     await conversations.close(conversation.id);
 
-    expect(await pending).toEqual({});
+    expect(await pending).toEqual({ expired: true });
   });
 
-  it('refuses to answer once the run is gone, and expires pending questions when the server restarts', async () => {
+  it('refuses to answer once the run is gone, and expires pending Widgets when the server restarts', async () => {
     const { conversations, conversation, run, restart } = await started();
-    void run.options.askQuestion(questions);
-    const entry = conversations.transcript(conversation.id).at(-1);
+    void run.options.askWidget(widget);
+    const entry = lastEntry(conversations, conversation.id);
 
     const next = restart();
     next.interruptStale();
 
-    expect(next.transcript(conversation.id).at(-1)).toMatchObject({
-      question: { answers: null, expired: true },
+    expect(lastEntry(next, conversation.id)).toMatchObject({
+      widget: { answer: null, expired: true },
     });
     const error = await failure(
-      next.answerQuestion(entry?.id ?? 0, { 'Which library?': 'A' }),
+      next.answerWidget(conversation.id, entry?.id ?? 0, { selected: ['A'] }),
     );
     expect(error).toBeInstanceOf(NotAllowedError);
-    expect((error as Error).message).toBe(
-      'This question is no longer waiting.',
-    );
+    expect((error as Error).message).toBe('This Widget is no longer waiting.');
   });
 });
 

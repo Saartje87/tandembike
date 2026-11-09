@@ -46,7 +46,10 @@ export const transcriptRoles = [
   'tool',
   'error',
   'permission',
+  /** An AskUserQuestion of older runs; new ones are `widget` entries. */
   'question',
+  /** A Widget the Agent asks, such as choice cards (ADR 0045). */
+  'widget',
   /** Tickets the Agent created, as "Created T1, T2". */
   'created',
   /** Tandembike's own note on the session, such as "Session ended" (ADR 0039). */

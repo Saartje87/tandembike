@@ -12,6 +12,7 @@ import type {
   QuestionEntry,
   TranscriptRole,
 } from './conversation-state';
+import type { WidgetEntry } from './widget';
 
 /** A Conversation as an Agent reads it: no cost, worktree or SDK session. */
 export type ConversationListing = {
@@ -36,6 +37,7 @@ export type EntryListing = {
   toolInput?: Record<string, unknown>;
   permission?: PermissionStatus;
   question?: QuestionEntry;
+  widget?: WidgetEntry;
   createdAt: Date;
 };
 
@@ -177,6 +179,7 @@ export function createConversationReader(
               : {}),
             ...(row.permission === null ? {} : { permission: row.permission }),
             ...(row.question === null ? {} : { question: row.question }),
+            ...(row.widget === null ? {} : { widget: row.widget }),
             createdAt: row.createdAt,
           };
         }),

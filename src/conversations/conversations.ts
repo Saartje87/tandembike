@@ -34,8 +34,6 @@ import type {
   AgentRun,
   AgentRunner,
   PermissionRequest,
-  Question,
-  QuestionAnswers,
   RunEvent,
 } from './agent-runner';
 import type { ActivityRow } from './conversation-activity';
@@ -60,6 +58,14 @@ import {
   terminalIdleMinutes,
   terminalIdleMs,
 } from './terminal-shared';
+import {
+  checkWidgetAnswer,
+  tidyWidget,
+  type Widget,
+  type WidgetAnswer,
+  type WidgetEntry,
+  widgetText,
+} from './widget';
 
 /** Who sends a reply: the User, or Autopilot in their place. */
 export type ConversationSender = Exclude<ConversationStarter, 'terminal'>;
@@ -150,6 +156,8 @@ export type TranscriptEntry = {
   toolInput: Record<string, unknown> | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
+  /** For a Widget of the Agent, the Widget, its answer and expired; null for other entries. */
+  widget: WidgetEntry | null;
   createdAt: Date;
 };
 
@@ -253,8 +261,8 @@ type LiveRun = {
   pending: PendingRun | null;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
-  /** Questions waiting for the User, by transcript entry id. */
-  questioning: Map<number, (answers: QuestionAnswers) => void>;
+  /** Widgets waiting for the User, by transcript entry id. */
+  widgets: Map<number, (answer: WidgetAnswer) => void>;
 };
 
 /** A run's start, recorded when its message goes in. */
@@ -473,7 +481,7 @@ export function createConversations({
     text: string,
     extra: {
       permission?: PermissionStatus;
-      question?: QuestionEntry;
+      widget?: WidgetEntry;
       permissionRules?: string[] | null;
       tool?: { name: string; input?: Record<string, unknown> };
     } = {},
@@ -488,7 +496,7 @@ export function createConversations({
         permissionRules: extra.permissionRules ?? null,
         toolName: extra.tool?.name ?? null,
         toolInput: cappedInput(extra.tool?.input),
-        question: extra.question ?? null,
+        widget: extra.widget ?? null,
         createdAt: new Date(),
       })
       .returning({ id: conversationEntries.id })
@@ -524,36 +532,45 @@ export function createConversations({
       .where(eq(conversationEntries.id, entryId))
       .get();
 
-  /** Resolves empty the questions a run still waits on, as its Conversation ended. */
-  const expireQuestioning = (handle: LiveRun) => {
-    for (const [entryId, resolve] of handle.questioning) {
-      const question = getEntry(entryId)?.question;
-      if (question) {
-        setQuestion(entryId, { ...question, expired: true });
-      }
-      resolve({});
-    }
-    handle.questioning.clear();
+  const setWidget = (entryId: number, widget: WidgetEntry) => {
+    db.update(conversationEntries)
+      .set({ widget })
+      .where(eq(conversationEntries.id, entryId))
+      .run();
   };
 
-  const askQuestion = (
+  /** Expires the Widgets a run still waits on, as its Conversation ended. */
+  const expireWidgets = (handle: LiveRun) => {
+    for (const [entryId, resolve] of handle.widgets) {
+      const widget = getEntry(entryId)?.widget;
+      if (widget) {
+        setWidget(entryId, { ...widget, expired: true });
+      }
+      resolve({ expired: true });
+    }
+    handle.widgets.clear();
+  };
+
+  /** Whether a live run still waits on the User for anything. */
+  const waitsOnUser = (handle: LiveRun) =>
+    handle.asking.size > 0 || handle.widgets.size > 0;
+
+  const askWidget = (
     id: number,
     handle: LiveRun,
-    questions: Question[],
-  ): Promise<QuestionAnswers> => {
+    widget: Widget,
+  ): Promise<WidgetAnswer> => {
     if (live.get(id) !== handle) {
-      return Promise.resolve({});
+      return Promise.resolve({ expired: true });
     }
-    const entryId = append(
-      id,
-      'question',
-      questions.map((question) => question.question).join('\n'),
-      { question: { questions, answers: null, expired: false } },
-    );
+    const shown = tidyWidget(widget);
+    const entryId = append(id, 'widget', widgetText(shown), {
+      widget: { widget: shown, answer: null, expired: false },
+    });
     update(id, { state: 'waiting' });
     announce(id);
     return new Promise((resolve) => {
-      handle.questioning.set(entryId, resolve);
+      handle.widgets.set(entryId, resolve);
     });
   };
 
@@ -667,7 +684,7 @@ export function createConversations({
       case 'exit': {
         live.delete(id);
         expireAsking(handle);
-        expireQuestioning(handle);
+        expireWidgets(handle);
         if (event.error) {
           append(id, 'error', event.error);
         }
@@ -887,7 +904,7 @@ export function createConversations({
         stage,
       },
       asking: new Map(),
-      questioning: new Map(),
+      widgets: new Map(),
     };
     live.set(id, handle);
     try {
@@ -906,7 +923,7 @@ export function createConversations({
           : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
-        askQuestion: (questions) => askQuestion(id, handle, questions),
+        askWidget: (widget) => askWidget(id, handle, widget),
         onEvent: (event) => handleEvent(id, handle, event),
       });
     } catch (error) {
@@ -2185,7 +2202,7 @@ export function createConversations({
         }
         handle.stopped = true;
         expireAsking(handle);
-        expireQuestioning(handle);
+        expireWidgets(handle);
       }
       update(id, { state: 'stopped' });
       announce(id);
@@ -2333,7 +2350,7 @@ export function createConversations({
       }
       handle.asking.delete(entryId);
       setPermission(entryId, permissionStatusOf[answer]);
-      if (handle.asking.size === 0 && handle.questioning.size === 0) {
+      if (!waitsOnUser(handle)) {
         update(entry.conversationId, { state: 'running' });
       }
       announce(entry.conversationId);
@@ -2342,48 +2359,42 @@ export function createConversations({
     },
 
     /**
-     * The User's answers to an Agent's question, by question text; the waiting
-     * run goes on. Every question needs an answer. Refused once answered or
-     * when its run is gone, each with its own reason.
+     * The User's answer to a Widget of Conversation `conversationId` (ADR
+     * 0045): its own kind of answer, Other or Skip, checked against the
+     * Widget. The waiting run goes on with it. Refused when it does not fit,
+     * once answered, or when its run is gone, each with its own reason.
      */
-    async answerQuestion(
+    async answerWidget(
+      conversationId: number,
       entryId: number,
-      answers: QuestionAnswers,
+      answer: unknown,
     ): Promise<Conversation> {
       const entry = getEntry(entryId);
-      if (entry?.role !== 'question' || !entry.question) {
-        throw new NotFoundError(`There is no question ${entryId}.`);
+      if (
+        entry?.role !== 'widget' ||
+        !entry.widget ||
+        entry.conversationId !== conversationId
+      ) {
+        throw new NotFoundError(`There is no Widget ${entryId}.`);
       }
-      refuseTerminal(get(entry.conversationId));
-      if (entry.question.answers !== null) {
-        throw new NotAllowedError('This question was already answered.');
+      refuseTerminal(get(conversationId));
+      if (entry.widget.answer !== null) {
+        throw new NotAllowedError('This Widget was already answered.');
       }
-      const handle = live.get(entry.conversationId);
-      const resolve = handle?.questioning.get(entryId);
-      if (!handle || !resolve) {
-        throw new NotAllowedError('This question is no longer waiting.');
+      const handle = live.get(conversationId);
+      const resolve = handle?.widgets.get(entryId);
+      if (!handle || !resolve || entry.widget.expired) {
+        throw new NotAllowedError('This Widget is no longer waiting.');
       }
-      const given: QuestionAnswers = {};
-      const missing: Record<string, string> = {};
-      for (const { question } of entry.question.questions) {
-        const answer = String(answers?.[question] ?? '').trim();
-        if (answer === '') {
-          missing[question] = 'Answer this question.';
-        } else {
-          given[question] = answer;
-        }
+      const given = checkWidgetAnswer(entry.widget.widget, answer);
+      handle.widgets.delete(entryId);
+      setWidget(entryId, { ...entry.widget, answer: given });
+      if (!waitsOnUser(handle)) {
+        update(conversationId, { state: 'running' });
       }
-      if (Object.keys(missing).length > 0) {
-        throw new ValidationError(missing);
-      }
-      handle.questioning.delete(entryId);
-      setQuestion(entryId, { ...entry.question, answers: given });
-      if (handle.asking.size === 0 && handle.questioning.size === 0) {
-        update(entry.conversationId, { state: 'running' });
-      }
-      announce(entry.conversationId);
+      announce(conversationId);
       resolve(given);
-      return get(entry.conversationId);
+      return get(conversationId);
     },
 
     /**
@@ -2416,6 +2427,16 @@ export function createConversations({
       for (const { id, question } of questions) {
         if (question && question.answers === null && !question.expired) {
           setQuestion(id, { ...question, expired: true });
+        }
+      }
+      const widgets = db
+        .select()
+        .from(conversationEntries)
+        .where(eq(conversationEntries.role, 'widget'))
+        .all();
+      for (const { id, widget } of widgets) {
+        if (widget && widget.answer === null && !widget.expired) {
+          setWidget(id, { ...widget, expired: true });
         }
       }
       for (const { id } of stale) {

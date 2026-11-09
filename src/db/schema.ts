@@ -20,6 +20,7 @@ import {
   transcriptRoles,
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
+import type { WidgetEntry } from '../conversations/widget';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
@@ -490,6 +491,8 @@ export const conversationEntries = sqliteTable(
     >(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
+    /** For a Widget of the Agent: the Widget, the answer and expired; null for other entries. */
+    widget: text('widget', { mode: 'json' }).$type<WidgetEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [
