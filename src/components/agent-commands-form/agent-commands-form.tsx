@@ -4,6 +4,7 @@ import { Alert, Button, Label, Stack, Text, TextInput } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { settingsFieldOfStage } from '../../app/lib/paths';
 import { setProjectAgentCommands } from '../../app/projects/actions';
 import {
   agentStages,
@@ -74,7 +75,7 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
           const fieldError = errors[name]?.message;
           const blank = watch(name).trim() === '';
           return (
-            <Stack key={name} gap={1}>
+            <Stack key={name} gap={1} id={settingsFieldOfStage(name)}>
               <Label htmlFor={fieldId}>{label}</Label>
               <TextInput
                 {...register(name)}

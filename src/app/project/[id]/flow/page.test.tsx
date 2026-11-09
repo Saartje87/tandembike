@@ -68,6 +68,7 @@ describe('FlowPage', () => {
       list: () => [],
       activityRows: () => [],
       autopilotSpend: () => 0,
+      autopilotTriageSpend: () => 0.5,
       triageBudget: () => null,
       spendBudget: () => null,
     } as unknown as ReturnType<typeof appConversations>);
@@ -130,6 +131,25 @@ describe('FlowPage', () => {
     ).toBeInTheDocument();
     expect(
       within(loop).getByRole('link', { name: 'Launch' }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the Project's setup, linking each item to its field on Settings", async () => {
+    const { project } = await renderFlow('Website', (tickets, projectId) =>
+      tickets.setProjectAgentSettings(projectId, {
+        checkCommand: 'npm run check',
+      }),
+    );
+
+    const commands = screen.getByRole('list', { name: 'Commands' });
+    expect(within(commands).getByText('npm run check')).toBeInTheDocument();
+    expect(
+      within(commands).getByRole('link', { name: 'Check command' }),
+    ).toHaveAttribute('href', `/project/${project.id}/settings#check-command`);
+    expect(
+      within(screen.getByRole('list', { name: 'Ceilings' })).getByText(
+        'None set · $0.50 spent today',
+      ),
     ).toBeInTheDocument();
   });
 

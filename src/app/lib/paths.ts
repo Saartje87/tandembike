@@ -80,7 +80,18 @@ export type SettingsField =
   | 'spend-ceiling'
   | 'auto-triage'
   | 'triage-ceiling'
-  | 'agent-commands';
+  | 'agent-commands'
+  | `${string}-command`;
+
+/**
+ * The anchor of a Stage's command field on Settings, from its field name in
+ * the agent commands, such as `start-epic-command` for `startEpicCommand`.
+ */
+export function settingsFieldOfStage(field: string): SettingsField {
+  return field
+    .replace(/Command$/, '-command')
+    .replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`) as SettingsField;
+}
 
 /** One field of a Project's Settings, scrolled to by its anchor. */
 export function projectSettingsFieldPath(

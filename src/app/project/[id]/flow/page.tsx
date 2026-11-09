@@ -8,7 +8,9 @@ import { FlowSection } from '../../../../components/flow-section/flow-section';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
 import { ProjectSwitch } from '../../../../components/project-switch/project-switch';
+import { SetupPanel } from '../../../../components/setup-panel/setup-panel';
 import { TicketPath } from '../../../../components/ticket-path/ticket-path';
+import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { openCyclesInOrder } from '../../../../tickets/cycle-state';
 import type { Cycle } from '../../../../tickets/cycles';
@@ -30,11 +32,12 @@ export async function generateMetadata({
   return { title: `Flow · ${project.name}` };
 }
 
-const comingSoon = (
-  <Text tag="p" color="muted">
-    Coming soon.
-  </Text>
-);
+/** The start of today, local time: the Triage ceiling's day (ADR 0040). */
+function startOfToday(): Date {
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  return day;
+}
 
 async function flowTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
@@ -90,7 +93,23 @@ async function flowTab(params: ProjectPageProps['params']) {
         title="Setup"
         intro="What this Project runs at each Stage, and its limits. Change them on Settings."
       >
-        {comingSoon}
+        <SetupPanel
+          projectId={project.id}
+          settings={settings}
+          commands={appTickets('user').getProjectAgentCommands(project.id)}
+          cycleSpendUsd={
+            active
+              ? appConversations().autopilotSpend({
+                  projectId: project.id,
+                  cycleId: active.id,
+                })
+              : null
+          }
+          triageSpendUsd={appConversations().autopilotTriageSpend(
+            project.id,
+            startOfToday(),
+          )}
+        />
       </FlowSection>
       <FlowSection
         id="switches"
