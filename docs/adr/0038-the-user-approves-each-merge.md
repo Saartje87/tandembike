@@ -16,3 +16,7 @@ The roadmap made the User the **Merge gate**: a PR whose work is reviewed and wh
 - **Merged stays** for a PR the User merged by hand; both paths finish a Ticket.
 
 Rejected: Tandembike calling `gh pr merge` itself (one host only, no conflict handling; ADR 0032's Playbook keeps the merge on the Agent's side), and the Start run asking in its Conversation whether to merge (the answer would be a free-text reply instead of one gate with a fixed meaning).
+
+## Amendment: this repository keeps self-merge (2026-11-09, T1282)
+
+The decision above is the product default for every Project. Tandembike's own development deliberately does not follow it: a Start run on this repository merges its own PR with `gh pr merge --merge` once CI is green, its `review` is complete and every acceptance criterion is checked, then calls `finish_work`. It does not hand off with `handOff: true` for the User's Approve merge. The User decided this on 2026-11-09, triaging T1282 after the Cycle 48 retro: this codebase's runs already merged themselves by `docs/agents/start-run.md` (8 of 11 in Cycle 48), and the 3 that stopped to wait for a "merge" reply stalled their Tickets, so here the run's own `review` and CI are the gate. The override lives in this repository's instructions (`AGENTS.md` "Git workflow", "Playbook runs in this repository" in `docs/agents/start-run.md`), which the Playbook defers to; the Playbook's skills are unchanged. Approve merge and Merged still work here for a PR a run left open.
