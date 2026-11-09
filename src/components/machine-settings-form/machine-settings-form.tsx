@@ -15,6 +15,7 @@ export type MachineSettingsFormProps = {
 
 type MachineSettingsValues = {
   maxConcurrentRuns: number;
+  dailySpendCeiling: string;
 };
 
 /**
@@ -26,28 +27,49 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
 }) => {
   const capId = useId();
   const capErrorId = useId();
+  const ceilingId = useId();
+  const ceilingErrorId = useId();
   const {
     formState: { errors, isSubmitting, isSubmitSuccessful },
     handleSubmit,
     register,
     setError,
   } = useForm<MachineSettingsValues>({
-    defaultValues: { maxConcurrentRuns: settings.maxConcurrentRuns },
+    defaultValues: {
+      maxConcurrentRuns: settings.maxConcurrentRuns,
+      dailySpendCeiling:
+        settings.dailySpendCeilingUsd === null
+          ? ''
+          : String(settings.dailySpendCeilingUsd),
+    },
   });
   const capError = errors.maxConcurrentRuns?.message;
+  const ceilingError = errors.dailySpendCeiling?.message;
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
     const result = await saveMachineSettings({
       maxConcurrentRuns: Number(values.maxConcurrentRuns),
+      dailySpendCeilingUsd:
+        values.dailySpendCeiling.trim() === ''
+          ? null
+          : Number(values.dailySpendCeiling),
     });
     if (result.ok) {
       return;
     }
-    const message = result.fieldErrors?.maxConcurrentRuns;
-    if (message) {
-      setError('maxConcurrentRuns', { type: 'server', message });
-    } else {
+    const capMessage = result.fieldErrors?.maxConcurrentRuns;
+    const ceilingMessage = result.fieldErrors?.dailySpendCeilingUsd;
+    if (capMessage) {
+      setError('maxConcurrentRuns', { type: 'server', message: capMessage });
+    }
+    if (ceilingMessage) {
+      setError('dailySpendCeiling', {
+        type: 'server',
+        message: ceilingMessage,
+      });
+    }
+    if (!capMessage && !ceilingMessage) {
       setError('root.server', { message: result.error });
     }
   });
@@ -73,8 +95,29 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
           </Text>
           <FieldError id={capErrorId} reason={capError} />
         </Stack>
+        <Stack gap={1}>
+          <Label htmlFor={ceilingId}>Daily spend ceiling (USD)</Label>
+          <TextInput
+            {...register('dailySpendCeiling')}
+            id={ceilingId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            placeholder="No ceiling"
+            aria-invalid={ceilingError ? true : undefined}
+            aria-describedby={ceilingError ? ceilingErrorId : undefined}
+          />
+          <Text tag="p" fontSize="small" color="muted">
+            The most Autopilot may spend per day across all Projects. At it,
+            Autopilot starts and resumes nothing anywhere, running runs finish,
+            and it goes on the next day or when you raise the ceiling. Merges
+            you approve and your own runs are not counted.
+          </Text>
+          <FieldError id={ceilingErrorId} reason={ceilingError} />
+        </Stack>
         {serverError && <Alert intent="danger">{serverError}</Alert>}
-        {isSubmitSuccessful && !serverError && !capError && (
+        {isSubmitSuccessful && !serverError && !capError && !ceilingError && (
           <Text tag="p" fontSize="small" color="muted" role="status">
             Saved.
           </Text>

@@ -1,0 +1,1 @@
+ALTER TABLE `machine_settings` ADD `daily_spend_ceiling_usd` real;

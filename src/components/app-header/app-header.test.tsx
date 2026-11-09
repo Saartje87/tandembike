@@ -14,7 +14,9 @@ import { AppHeader } from './app-header';
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
 vi.mock('../../app/settings/actions', () => ({
-  currentMachineRuns: vi.fn().mockResolvedValue({ inUse: 2, cap: 3 }),
+  currentMachineRuns: vi
+    .fn()
+    .mockResolvedValue({ inUse: 2, cap: 3, budget: null }),
 }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),

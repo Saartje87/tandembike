@@ -1256,3 +1256,131 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(conversations.machineSlotsInUse()).toBe(1);
   });
 });
+
+describe('Machine ceiling (ADR 0041)', () => {
+  function ceilingSetup(ceiling: number | null) {
+    const changes = createChangeChannel();
+    const world = createTestConversations(changes);
+    const { tickets, conversations } = world;
+    tickets.setMachineSettings({ dailySpendCeilingUsd: ceiling });
+    const projects = [0, 1].map((i) => {
+      const project = tickets.createProject({ name: `Project ${i + 1}` });
+      tickets.setProjectAgentSettings(project.id, {
+        repositoryPath:
+          i === 0
+            ? world.repositoryDir
+            : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
+        autopilot: true,
+        spendCeilingUsd: 500,
+        parallelRuns: true,
+        maxConcurrentRuns: 9,
+      });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Beta',
+      });
+      tickets.startCycle(cycle.id);
+      return { ...project, cycleId: cycle.id };
+    });
+    const ready = (project: (typeof projects)[number], title: string) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: project.cycleId,
+      });
+    let clock = new Date();
+    const autopilot = createAutopilot({
+      tickets,
+      conversations,
+      changes,
+      now: () => clock,
+    });
+    const total = () =>
+      projects.reduce(
+        (sum, project) =>
+          sum + conversations.list({ projectId: project.id }).length,
+        0,
+      );
+    return {
+      ...world,
+      projects,
+      ready,
+      autopilot,
+      total,
+      setClock: (next: Date) => {
+        clock = next;
+      },
+    };
+  }
+
+  it('starts nothing in any Project at the ceiling, leaves running runs and resets the next day', async () => {
+    const {
+      projects,
+      ready,
+      autopilot,
+      runner,
+      total,
+      setClock,
+      conversations,
+    } = ceilingSetup(2);
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 2.5 });
+    ready(projects[0], 'B');
+    ready(projects[1], 'C');
+
+    await autopilot.evaluate();
+
+    expect(total()).toBe(1);
+    expect(autopilot.machineBudget()).toMatchObject({
+      ceilingUsd: 2,
+      paused: true,
+    });
+    expect(conversations.machineBudget()?.spendUsd).toBeGreaterThanOrEqual(2.5);
+
+    setClock(new Date(Date.now() + 25 * 60 * 60 * 1000));
+    expect(autopilot.machineBudget()?.paused).toBe(false);
+    await autopilot.evaluate();
+    expect(total()).toBe(3);
+  });
+
+  it('resumes nothing while paused and goes on when the ceiling is raised', async () => {
+    const { projects, ready, autopilot, runner, total, tickets } =
+      ceilingSetup(2);
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+    ready(projects[1], 'C');
+    await autopilot.evaluate();
+    expect(total()).toBe(1);
+
+    tickets.setMachineSettings({ dailySpendCeilingUsd: 10 });
+    await autopilot.evaluate();
+
+    expect(total()).toBe(2);
+  });
+
+  it('has no budget without a ceiling', async () => {
+    const { autopilot } = ceilingSetup(null);
+
+    expect(autopilot.machineBudget()).toBeNull();
+  });
+
+  it('queues a pass at the next local midnight while paused, and drops it on stop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { projects, ready, autopilot, runner, total } = ceilingSetup(1);
+    const baseline = vi.getTimerCount();
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    const paused = vi.getTimerCount();
+    expect(paused).toBeGreaterThan(baseline);
+    stop();
+    expect(vi.getTimerCount()).toBe(paused - 1);
+    expect(total()).toBe(1);
+  });
+});
