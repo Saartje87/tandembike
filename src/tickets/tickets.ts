@@ -382,7 +382,7 @@ export type Ticket = {
   cycle: CycleLink | null;
   projectId: number;
   /** The Agent-run ID that filed it through `file_tickets`, or `null`. */
-  filedByRun: string | null;
+  filedByRun?: string | null;
   position: number;
   archived: boolean;
   /** Trimmed, lower-cased and sorted; empty when the Ticket has none. */

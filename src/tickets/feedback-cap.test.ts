@@ -1,8 +1,10 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { createTestTickets, errorFrom } from '../test/tickets';
+import { createTestTickets, errorFrom as rawErrorFrom } from '../test/tickets';
 import { jaccardSimilarity } from './feedback';
+
+const errorFrom = (fn: () => unknown) => rawErrorFrom(fn) as Error;
 
 const setUp = () => {
   const tickets = createTestTickets();
