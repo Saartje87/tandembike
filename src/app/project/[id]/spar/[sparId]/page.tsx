@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { type FC, Suspense } from 'react';
 
 import { PageLoading } from '../../../../../components/page-loading/page-loading';
+import { SparCanvas } from '../../../../../components/spar-canvas/spar-canvas';
 import { SparView } from '../../../../../components/spar-view/spar-view';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import { appSpars } from '../../../../../spars/app-spars';
@@ -71,9 +72,11 @@ async function sparPage(params: SparPageProps['params']) {
           transcript: conversations.transcript(spar.id),
         }}
         canvas={
-          <Text tag="p" color="muted">
-            The Canvas
-          </Text>
+          <SparCanvas
+            sparId={spar.id}
+            canvas={appSpars().getCanvas(spar.id)}
+            readOnly={spar.closed}
+          />
         }
         writeUp={
           <Text tag="p" color="muted">

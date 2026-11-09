@@ -1,6 +1,7 @@
 'use server';
 
 import { appSpars } from '../../spars/app-spars';
+import type { Canvas, CanvasOp } from '../../spars/canvas';
 import type { Spar } from '../../spars/spars';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
@@ -49,5 +50,23 @@ export async function startSpar(input: {
           : Number(input.focusTicketNumber),
       topic: String(input?.topic ?? ''),
     }),
+  }));
+}
+
+/**
+ * The User's edits of a Spar's Canvas, authored by the User, all or
+ * nothing. Returns the Canvas as saved; a refusal, such as a closed Spar or
+ * a Column that still holds Stickies, says why.
+ */
+export async function editSparCanvas(input: {
+  sparId: number;
+  ops: CanvasOp[];
+}): Promise<ActionResult<{ canvas: Canvas }>> {
+  return sparResult(async () => ({
+    canvas: appSpars().editCanvas(
+      Number(input?.sparId),
+      Array.isArray(input?.ops) ? input.ops : [],
+      'user',
+    ),
   }));
 }

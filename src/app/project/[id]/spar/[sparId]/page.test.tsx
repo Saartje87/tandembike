@@ -22,6 +22,7 @@ vi.mock('../../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
 vi.mock('../../../../conversations/actions', () => ({}));
+vi.mock('../../../../spars/actions', () => ({ editSparCanvas: vi.fn() }));
 vi.mock('../../../../projects/actions', () => ({
   loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
 }));
@@ -55,7 +56,10 @@ describe('SparPage', () => {
 
     const chat = screen.getByRole('region', { name: 'Chat' });
     expect(within(chat).getByText('What kind of Spar?')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Canvas' })).toBeInTheDocument();
+    const canvas = screen.getByRole('region', { name: 'Canvas' });
+    expect(
+      within(canvas).getByRole('region', { name: /^Ideas/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('region', { name: 'Write-up' }),
     ).toBeInTheDocument();

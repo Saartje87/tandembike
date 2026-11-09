@@ -142,3 +142,142 @@ describe('Listing Spars', () => {
     expect(() => spars.getSpar(99)).toThrow('There is no Spar 99.');
   });
 });
+
+describe('The Canvas of a Spar', () => {
+  async function started() {
+    const world = createTestSpars();
+    const spar = await world.spars.startSpar({ projectId: world.project.id });
+    world.published.length = 0;
+    return { ...world, spar };
+  }
+
+  const titles = (canvas: { columns: { title: string }[] }) =>
+    canvas.columns.map(({ title }) => title);
+
+  it('starts with the Columns Ideas, Explore, Keep and Park', async () => {
+    const { spars, spar } = await started();
+
+    expect(titles(spars.getCanvas(spar.id))).toEqual([
+      'Ideas',
+      'Explore',
+      'Keep',
+      'Park',
+    ]);
+  });
+
+  it('adds, renames, moves and removes Columns, saved', async () => {
+    const { spars, spar } = await started();
+    const [ideas, , , park] = spars.getCanvas(spar.id).columns;
+
+    spars.addColumn(spar.id, { title: 'Risks', index: 1 }, 'user');
+    spars.renameColumn(spar.id, ideas.id, 'Options', 'user');
+    spars.moveColumn(spar.id, ideas.id, 3, 'user');
+    spars.removeColumn(spar.id, park.id, 'user');
+
+    expect(titles(spars.getCanvas(spar.id))).toEqual([
+      'Risks',
+      'Explore',
+      'Keep',
+      'Options',
+    ]);
+  });
+
+  it('adds Stickies with their author and Ticket, edits, moves and removes them', async () => {
+    const { spars, spar, tickets, project } = await started();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'X' });
+    const [ideas, explore] = spars.getCanvas(spar.id).columns;
+
+    spars.addSticky(spar.id, { columnId: ideas.id, title: 'Mine' }, 'user');
+    let canvas = spars.addSticky(
+      spar.id,
+      {
+        columnId: ideas.id,
+        title: 'Yours',
+        note: 'Because',
+        ticketNumber: ticket.number,
+      },
+      'agent',
+    );
+    const [mine, yours] = canvas.columns[0].stickies;
+    expect(yours).toMatchObject({
+      title: 'Yours',
+      note: 'Because',
+      author: 'agent',
+      ticketNumber: ticket.number,
+    });
+    expect(mine.author).toBe('user');
+
+    spars.editSticky(spar.id, mine.id, { title: 'Mine, edited' }, 'user');
+    spars.moveSticky(spar.id, mine.id, { columnId: explore.id }, 'user');
+    canvas = spars.moveSticky(
+      spar.id,
+      yours.id,
+      { columnId: explore.id, index: 0 },
+      'user',
+    );
+    expect(canvas.columns[1].stickies.map(({ title }) => title)).toEqual([
+      'Yours',
+      'Mine, edited',
+    ]);
+
+    canvas = spars.removeSticky(spar.id, yours.id, 'user');
+    expect(canvas.columns[1].stickies.map(({ id }) => id)).toEqual([mine.id]);
+    expect(spars.getCanvas(spar.id)).toEqual(canvas);
+  });
+
+  it('refuses to remove a Column that holds Stickies, and changes nothing', async () => {
+    const { spars, spar } = await started();
+    const [ideas] = spars.getCanvas(spar.id).columns;
+    spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user');
+    const before = spars.getCanvas(spar.id);
+
+    expect(() => spars.removeColumn(spar.id, ideas.id, 'user')).toThrow(
+      NotAllowedError,
+    );
+    expect(spars.getCanvas(spar.id)).toEqual(before);
+  });
+
+  it('applies a batch all or nothing', async () => {
+    const { spars, spar } = await started();
+    const [ideas] = spars.getCanvas(spar.id).columns;
+    const before = spars.getCanvas(spar.id);
+
+    expect(() =>
+      spars.editCanvas(
+        spar.id,
+        [
+          { op: 'addSticky', columnId: ideas.id, title: 'A' },
+          { op: 'removeColumn', columnId: ideas.id },
+        ],
+        'agent',
+      ),
+    ).toThrow(NotAllowedError);
+    expect(spars.getCanvas(spar.id)).toEqual(before);
+  });
+
+  it('refuses a link to a Ticket that does not exist', async () => {
+    const { spars, spar } = await started();
+    const [ideas] = spars.getCanvas(spar.id).columns;
+
+    expect(() =>
+      spars.addSticky(
+        spar.id,
+        { columnId: ideas.id, title: 'A', ticketNumber: 999 },
+        'user',
+      ),
+    ).toThrow('There is no Ticket T999.');
+  });
+
+  it('announces a spar change per edit', async () => {
+    const { spars, spar, published } = await started();
+    const [ideas] = spars.getCanvas(spar.id).columns;
+
+    spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user');
+    spars.renameColumn(spar.id, ideas.id, 'B', 'user');
+
+    expect(published).toEqual([
+      { type: 'spar', id: spar.id },
+      { type: 'spar', id: spar.id },
+    ]);
+  });
+});

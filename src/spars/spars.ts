@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, notInArray } from 'drizzle-orm';
 
 import type { ConversationState } from '../conversations/conversation-state';
 import type {
@@ -6,7 +6,7 @@ import type {
   Conversations,
 } from '../conversations/conversations';
 import type { DatabaseConnection } from '../db/connection';
-import { spars } from '../db/schema';
+import { sparColumns, sparStickies, spars } from '../db/schema';
 import { sparCommandMessage } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
@@ -15,6 +15,14 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import type { Tickets } from '../tickets/tickets';
+import {
+  applyCanvasOps,
+  type Canvas,
+  type CanvasOp,
+  defaultColumnTitles,
+  type Sticky,
+  type StickyAuthor,
+} from './canvas';
 
 /** A Spar (GLOSSARY): its id is its Conversation's. */
 export type Spar = {
@@ -114,6 +122,173 @@ export function createSpars({
   const getSpar = (id: number): Spar =>
     sparOf(rowOf(id), conversations.get(id));
 
+  /** The Canvas of Spar `id` as stored. */
+  const canvasOf = (id: number): Canvas => {
+    const stickies = db
+      .select()
+      .from(sparStickies)
+      .where(eq(sparStickies.sparId, id))
+      .orderBy(asc(sparStickies.position), asc(sparStickies.id))
+      .all();
+    return {
+      columns: db
+        .select()
+        .from(sparColumns)
+        .where(eq(sparColumns.sparId, id))
+        .orderBy(asc(sparColumns.position), asc(sparColumns.id))
+        .all()
+        .map((column) => ({
+          id: column.id,
+          title: column.title,
+          stickies: stickies
+            .filter(({ columnId }) => columnId === column.id)
+            .map(
+              ({
+                id: stickyId,
+                title,
+                note,
+                author,
+                ticketNumber,
+              }): Sticky => ({
+                id: stickyId,
+                title,
+                note,
+                author,
+                ticketNumber,
+              }),
+            ),
+        })),
+    };
+  };
+
+  /** Stores `next` as Spar `id`'s Canvas: new items (negative ids) are inserted, gone ones deleted. */
+  const saveCanvas = (id: number, next: Canvas) => {
+    const columnIds = new Map<number, number>();
+    next.columns.forEach((column, position) => {
+      if (column.id < 0) {
+        const inserted = db
+          .insert(sparColumns)
+          .values({ sparId: id, position, title: column.title })
+          .returning({ id: sparColumns.id })
+          .get();
+        columnIds.set(column.id, inserted.id);
+      } else {
+        columnIds.set(column.id, column.id);
+        db.update(sparColumns)
+          .set({ position, title: column.title })
+          .where(and(eq(sparColumns.id, column.id), eq(sparColumns.sparId, id)))
+          .run();
+      }
+    });
+    const keptStickies: number[] = [];
+    for (const column of next.columns) {
+      const columnId = columnIds.get(column.id) as number;
+      column.stickies.forEach((sticky, position) => {
+        const values = {
+          columnId,
+          position,
+          title: sticky.title,
+          note: sticky.note,
+          ticketNumber: sticky.ticketNumber,
+        };
+        if (sticky.id < 0) {
+          keptStickies.push(
+            db
+              .insert(sparStickies)
+              .values({ ...values, sparId: id, author: sticky.author })
+              .returning({ id: sparStickies.id })
+              .get().id,
+          );
+        } else {
+          keptStickies.push(sticky.id);
+          db.update(sparStickies)
+            .set(values)
+            .where(
+              and(eq(sparStickies.id, sticky.id), eq(sparStickies.sparId, id)),
+            )
+            .run();
+        }
+      });
+    }
+    db.delete(sparStickies)
+      .where(
+        and(
+          eq(sparStickies.sparId, id),
+          notInArray(sparStickies.id, keptStickies),
+        ),
+      )
+      .run();
+    db.delete(sparColumns)
+      .where(
+        and(
+          eq(sparColumns.sparId, id),
+          notInArray(sparColumns.id, [...columnIds.values()]),
+        ),
+      )
+      .run();
+  };
+
+  const touch = (id: number) => {
+    db.update(spars)
+      .set({ updatedAt: new Date() })
+      .where(eq(spars.id, id))
+      .run();
+  };
+
+  /** Refuses an edit of a closed Spar, naming why. */
+  const checkOpen = (id: number) => {
+    if (rowOf(id).closed) {
+      throw new NotAllowedError('This Spar is closed. Reopen it to change it.');
+    }
+  };
+
+  /** Refuses a Sticky linked to a Ticket that does not exist. */
+  const checkTickets = (ops: readonly CanvasOp[]) => {
+    for (const op of ops) {
+      const number =
+        op.op === 'addSticky' || op.op === 'editSticky'
+          ? op.ticketNumber
+          : undefined;
+      if (typeof number === 'number') {
+        try {
+          tickets.getTicket(number);
+        } catch (error) {
+          if (error instanceof NotFoundError) {
+            throw new ValidationError({
+              ticketNumber: `There is no Ticket T${number}.`,
+            });
+          }
+          throw error;
+        }
+      }
+    }
+  };
+
+  /**
+   * Applies `ops` to Spar `id`'s Canvas by `author`, all or nothing, and
+   * returns the Canvas. Refused on a closed Spar, and for any op the Canvas
+   * refuses (see `applyCanvasOp`).
+   */
+  const editCanvas = (
+    id: number,
+    ops: readonly CanvasOp[],
+    author: StickyAuthor,
+  ): Canvas => {
+    checkOpen(id);
+    if (!Array.isArray(ops) || ops.length === 0) {
+      throw new ValidationError({ ops: 'Give at least one Canvas edit.' });
+    }
+    checkTickets(ops);
+    let temporary = 0;
+    const next = applyCanvasOps(canvasOf(id), ops, author, () => --temporary);
+    db.transaction(() => {
+      saveCanvas(id, next);
+      touch(id);
+    });
+    announce(id);
+    return canvasOf(id);
+  };
+
   return {
     getSpar,
 
@@ -156,9 +331,68 @@ export function createSpars({
           updatedAt: now,
         })
         .run();
+      defaultColumnTitles.forEach((title, position) => {
+        db.insert(sparColumns)
+          .values({ sparId: conversation.id, position, title })
+          .run();
+      });
       announce(conversation.id);
       return getSpar(conversation.id);
     },
+
+    /** Spar `id`'s Canvas: its Columns in order, each with its Stickies in order. */
+    getCanvas(id: number): Canvas {
+      rowOf(id);
+      return canvasOf(id);
+    },
+
+    editCanvas,
+
+    addColumn: (
+      id: number,
+      input: { title: string; index?: number },
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'addColumn', ...input }], author),
+
+    renameColumn: (
+      id: number,
+      columnId: number,
+      title: string,
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'renameColumn', columnId, title }], author),
+
+    moveColumn: (
+      id: number,
+      columnId: number,
+      index: number,
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'moveColumn', columnId, index }], author),
+
+    removeColumn: (id: number, columnId: number, author: StickyAuthor) =>
+      editCanvas(id, [{ op: 'removeColumn', columnId }], author),
+
+    addSticky: (
+      id: number,
+      input: Omit<Extract<CanvasOp, { op: 'addSticky' }>, 'op'>,
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'addSticky', ...input }], author),
+
+    editSticky: (
+      id: number,
+      stickyId: number,
+      input: Omit<Extract<CanvasOp, { op: 'editSticky' }>, 'op' | 'stickyId'>,
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'editSticky', stickyId, ...input }], author),
+
+    moveSticky: (
+      id: number,
+      stickyId: number,
+      to: { columnId: number; index?: number },
+      author: StickyAuthor,
+    ) => editCanvas(id, [{ op: 'moveSticky', stickyId, ...to }], author),
+
+    removeSticky: (id: number, stickyId: number, author: StickyAuthor) =>
+      editCanvas(id, [{ op: 'removeSticky', stickyId }], author),
 
     /** A Project's Spars, newest first. */
     listSpars(projectId: number): SparListing[] {

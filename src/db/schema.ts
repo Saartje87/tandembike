@@ -21,6 +21,7 @@ import {
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
 import type { WidgetEntry } from '../conversations/widget';
+import { stickyAuthors } from '../spars/canvas';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
@@ -611,3 +612,40 @@ export const spars = sqliteTable('spars', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+/** A Column of a Spar's Canvas (GLOSSARY: Column), in order. */
+export const sparColumns = sqliteTable(
+  'spar_columns',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sparId: integer('spar_id')
+      .notNull()
+      .references(() => spars.id),
+    /** Its place on the Canvas, from 0. */
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+  },
+  (table) => [index('spar_columns_spar_id').on(table.sparId)],
+);
+
+/** A Sticky on a Spar's Canvas (GLOSSARY: Sticky), in its Column's order. */
+export const sparStickies = sqliteTable(
+  'spar_stickies',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sparId: integer('spar_id')
+      .notNull()
+      .references(() => spars.id),
+    columnId: integer('column_id')
+      .notNull()
+      .references(() => sparColumns.id),
+    /** Its place in its Column, from 0. */
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    note: text('note'),
+    author: text('author', { enum: stickyAuthors }).notNull(),
+    /** A Ticket the idea already has work in; null for none. */
+    ticketNumber: integer('ticket_number'),
+  },
+  (table) => [index('spar_stickies_spar_id').on(table.sparId)],
+);

@@ -379,6 +379,13 @@
       "when": 1794266636443,
       "tag": "0053_spars",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "6",
+      "when": 1794267379280,
+      "tag": "0054_spar_canvas",
+      "breakpoints": true
     }
   ]
 }

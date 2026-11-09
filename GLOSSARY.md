@@ -134,6 +134,18 @@ _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycl
 A Project-scoped Conversation, optionally about one Ticket or Epic (its focus), in which the User thinks a half-formed idea through with an Agent on the Spar's own page (`/project/<id>/spar/<sparId>`), not in the Conversation dialog. Only the User starts one, from the Spar button or "Spar about this" in the Ticket drawer, with an optional one-line topic; never Autopilot or `tandembike start`. A Spar's id is its Conversation's, and its focus is the Conversation's Ticket, so it is listed among that Ticket's Conversations. It runs read-only whatever the Agent run mode: it reads code and Tickets, asks through Widgets and changes nothing; any command reaches the User as a permission request (ADR 0046). It runs in the main checkout, holds no Machine slot and is never refused a reply, like an Ask. Its Notices and bells open its page.
 _Avoid_: Brainstorm, session, chat
 
+**Canvas**:
+A Spar's shared board of ideas, beside its chat: **Columns** of **Stickies** that the User and the Agent both edit. A new Spar's Canvas starts with the Columns Ideas, Explore, Keep and Park. The User's edits show at once and are saved, but send the Agent nothing; the next message tells it what changed. A refused edit, such as on a closed Spar, puts the Canvas back and says why.
+_Avoid_: Board (the Board is the Project's Tickets), whiteboard
+
+**Column**:
+An ordered, titled list of Stickies on a Canvas, such as Ideas or Risks. The User or the Agent adds, renames, reorders and removes Columns; one that still holds Stickies cannot be removed until they are moved or removed.
+_Avoid_: Lane (a Lane is a Board situation), list
+
+**Sticky**:
+One idea on a Canvas: a title, an optional Markdown note, who wrote it (the User or the Agent, shown as a badge), and optionally the Ticket it already has work in. It is dragged within and between Columns, by pointer or keyboard, or moved with its "Move to" menu.
+_Avoid_: Card (a card is a Ticket on the Board), note
+
 **Widget**:
 A typed question an Agent asks the User through a tool, which the chat shows as a control of its kind and which blocks the run until the User answers: **choice** cards (one or several, the Agent's recommendation preselected), a **rank** list, a 2×2 **matrix** and **scale** sliders. Every Widget also takes **Other…** with free text and **Skip**; a run that ends first expires it. A waiting Widget makes its Conversation `waiting` and raises the `waiting` Notice, as a permission request does. Widgets work in every Conversation the server runs; AskUserQuestion shows as choice cards too (ADR 0045).
 _Avoid_: Form, prompt, question (for the typed control)
