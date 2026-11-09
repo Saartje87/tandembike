@@ -97,6 +97,101 @@ describe('Worktree cleanup', () => {
     expect(conversations.get(conversation.id).worktreeRemoved).toBe(true);
   });
 
+  it('removes a clean worktree when the turn that reached Done ends, while the run stays alive', async () => {
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+
+    // The run calls finish_work mid-turn, then its turn ends; it stays alive.
+    tickets.completeTicket(ticket.number);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(worktrees.removed).toEqual([]);
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+    expect(conversations.get(conversation.id)).toMatchObject({
+      worktreeRemoved: true,
+      worktreeKept: null,
+    });
+  });
+
+  it.each(['dirty', 'unpushed'] as const)(
+    'keeps a %s worktree when the turn that reached Done ends',
+    async (state) => {
+      const {
+        conversations,
+        tickets,
+        worktrees,
+        runner,
+        conversation,
+        ticket,
+        path,
+      } = await setup();
+      worktrees.states.set(path, state);
+
+      tickets.completeTicket(ticket.number);
+      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+      await vi.waitFor(() =>
+        expect(conversations.get(conversation.id).worktreeKept).toBe(state),
+      );
+      expect(worktrees.removed).toEqual([]);
+      expect(conversations.get(conversation.id).worktreeRemoved).toBe(false);
+    },
+  );
+
+  it('releases once when the Ticket reaches Done while the run is idle', async () => {
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+    const stateChecks = vi.spyOn(worktrees, 'state');
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    tickets.completeTicket(ticket.number);
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+
+    // A later turn end, exit and close find nothing more to release.
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'exit' });
+    await conversations.close(conversation.id);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(worktrees.removed).toEqual([path]);
+    expect(stateChecks).toHaveBeenCalledTimes(1);
+  });
+
+  it('never releases when an unrelated Ticket reaches Done', async () => {
+    const { conversations, tickets, worktrees, runner, conversation, project } =
+      await setup();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Something else',
+    });
+
+    tickets.completeTicket(other.number);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(worktrees.removed).toEqual([]);
+    expect(conversations.get(conversation.id)).toMatchObject({
+      worktreeRemoved: false,
+      worktreeKept: null,
+    });
+  });
+
   it('keeps a dirty worktree when its Ticket reaches Done', async () => {
     const {
       conversations,

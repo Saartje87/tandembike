@@ -643,6 +643,12 @@ export function createConversations({
           errorSubtype: event.errorSubtype,
           cost: handle.costBefore + event.costUsd,
         });
+        // The run stays alive for replies, but no longer works in the
+        // worktree of a Ticket that reached Done during the turn (T1232).
+        if (handle.releaseWhenEnded) {
+          handle.releaseWhenEnded = false;
+          void tryRelease(id);
+        }
         break;
       case 'waiting':
         update(id, { state: event.waiting ? 'waiting' : 'running' });
@@ -1448,8 +1454,8 @@ export function createConversations({
         .all();
       for (const { id } of open) {
         const handle = live.get(id);
-        if (handle?.run) {
-          // The run still works in the worktree, so it is released at its end.
+        if (handle?.run && handle.pending) {
+          // The run is mid-turn in the worktree: released when the turn ends.
           handle.releaseWhenEnded = true;
         } else {
           void tryRelease(id);
