@@ -6,7 +6,7 @@ This repository's process for one Agent run on one Ticket, from claim to merge. 
 
 - Given a Ticket reference, begin with `start_work`: it claims the Ticket, moves a `Todo` one to `In progress` and returns the whole Ticket, with its description, its `acceptanceCriteria` (the definition of done), comments, Blockers, Epic, Cycle and this Project's Check command. A refusal names who holds the Claim or which Blockers are unresolved: tell the User. Working several Tickets, `start_work` each as it starts. An Epic: "Working an Epic".
 - Without a reference, `next_work` returns the top ready item of the Active Cycle in Board order, or says why there is none (no Active Cycle, nothing ready, everything blocked or claimed): tell the User then. It does not see Conversations, so it can return a Ticket the User has a Start Conversation open for; ask when unsure. Then `start_work` it. Several could match: ask which. None clearly does: do the request without creating a Ticket unless asked.
-- `start_work` takes your Agent-run ID from the run Tandembike started. In a terminal session, pass `agentRunId`, a unique ID for the run, to `start_work` and to the other tools that name your run.
+- `start_work` takes your Agent-run ID from the run Tandembike started. A `tandembike start` session needs no `agentRunId`; in any other terminal session, pass `agentRunId`, a unique ID for the run, to `start_work` and to the other tools that name your run.
 - Branch and PR by "Git workflow" in `AGENTS.md`.
 
 ## The PR reference

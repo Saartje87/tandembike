@@ -86,6 +86,10 @@ export function markOffersMade(folder: string, offer: string): void {
 
 const mcpUrl = 'http://localhost:4747/api/mcp';
 const cwdHeader = 'X-Tandembike-Cwd';
+const runHeader = 'X-Tandembike-Run';
+
+/** Offer keys in `config.json`: both are recorded when the offer is made. */
+export const mcpOfferKeys = ['mcp', 'mcp-run-header'];
 
 export type McpRegistration = 'none' | 'outdated' | 'current';
 
@@ -97,15 +101,27 @@ export type McpOfferPlan = {
   text: string;
 };
 
-/** Whether to make the MCP registration offer: once, or when asked for. */
-export function shouldOfferMcp(made: string[], explicit: boolean): boolean {
-  return explicit || !made.includes('mcp');
+/**
+ * Whether to make the MCP registration offer: once, or when asked for. A
+ * registration that predates the run header (T1238) is offered the update
+ * once more, under its own key.
+ */
+export function shouldOfferMcp(
+  made: string[],
+  explicit: boolean,
+  registration: McpRegistration = 'none',
+): boolean {
+  return (
+    explicit ||
+    !made.includes('mcp') ||
+    (registration === 'outdated' && !made.includes('mcp-run-header'))
+  );
 }
 
 /**
  * What `~/.claude.json` holds for `tandembike` at user scope: `current` when
- * it sends the folder header, `outdated` when it is there without it (it
- * must be removed first, `claude mcp add` refuses duplicates).
+ * it sends the folder and run headers, `outdated` when it is there without
+ * both (it must be removed first, `claude mcp add` refuses duplicates).
  */
 export function mcpRegistration(claudeJson: unknown): McpRegistration {
   const servers = (
@@ -115,11 +131,15 @@ export function mcpRegistration(claudeJson: unknown): McpRegistration {
     | { headers?: Record<string, unknown> }
     | undefined;
   if (!entry || typeof entry !== 'object') return 'none';
-  return entry.headers && cwdHeader in entry.headers ? 'current' : 'outdated';
+  return entry.headers &&
+    cwdHeader in entry.headers &&
+    runHeader in entry.headers
+    ? 'current'
+    : 'outdated';
 }
 
 const removeStep = ['mcp', 'remove', '--scope', 'user', 'tandembike'];
-// ${PWD} stays literal: Claude Code expands it to the session's folder.
+// ${PWD} and ${TANDEMBIKE_RUN:-} stay literal: Claude Code expands them.
 const addStep = [
   'mcp',
   'add',
@@ -131,6 +151,9 @@ const addStep = [
   mcpUrl,
   '--header',
   `${cwdHeader}: \${PWD}`,
+  '--header',
+  // Empty in a bare `claude` session, which the server treats as no run.
+  `${runHeader}: \${TANDEMBIKE_RUN:-}`,
 ];
 
 function quote(arg: string): string {

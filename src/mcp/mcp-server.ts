@@ -22,7 +22,7 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Tools default to the Project of your working folder's repository, worktrees too; projectName or projectId picks another, and find_tickets and get_project take allProjects. Only the User creates, renames, archives and restores Projects, and starts or archives Cycles; an archived Project is read-only until restored.
 - Begin with start_work: it claims the Ticket, moves a Todo Ticket to In progress and returns everything you need to begin. next_work gives the top ready item of the Active Cycle, or says why there is none; tell the User then.
 - End with finish_work once the work is merged, or abandon_work with a reason when you give up, so nothing stays Stalled. Claims coordinate; they do not authenticate.
-- Your Agent-run ID comes from the run Tandembike started. In a terminal session, pass agentRunId, a unique ID for your run, to the tools that name it.
+- Your Agent-run ID comes from the run Tandembike started. A \`tandembike start\` session needs no agentRunId; in any other terminal session, pass agentRunId, a unique ID for your run, to the tools that name it.
 - Share progress, findings and triage notes with add_note, not by editing the description. get_ticket returns the comments, and its include: ["activity"] adds what changed, when and by whom.
 - Create new work with file_tickets: one or many Tickets in one call, with an Epic and its children (type: "Epic" plus epicPosition), Blockers between them by position (blockedByPositions), originPosition or originNumber when you split a Ticket into others, labels, acceptanceCriteria and a Cycle.
 - Blockers are native: add them with update_ticket (addBlockers), never in the description. An ordered checklist belongs in acceptanceCriteria, never as a checklist in the description or a comment; check each off with check_criterion as you verify it.
@@ -35,12 +35,24 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Your client keeps the tools and these instructions from when it connected: when the app's MCP tools change, ask the User to start a new session, as reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket is finished; follow them where they say more.`;
 
+/**
+ * Called after each tool call of a request that sent `X-Tandembike-Run`, with
+ * that run id, the tool's name and its input (T1238). The app wires it to the
+ * Conversations module; the server itself knows nothing of Conversations.
+ */
+export type ToolCallHook = (
+  runId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+) => void;
+
 /** An MCP server whose tools call the Tickets module `tickets` only. */
 export function createMcpServer(
   tickets: Tickets,
   origin = 'http://localhost:4747',
   cwd?: string,
   runId?: string,
+  onToolCall?: ToolCallHook,
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -52,7 +64,12 @@ export function createMcpServer(
     cwd,
     runId,
     resolveProjectId: (ref) => tickets.resolveProjectId({ ...ref, cwd }),
-    registerTool: toolRegistrar(server),
+    registerTool: toolRegistrar(
+      server,
+      runId && onToolCall
+        ? (name, input) => onToolCall(runId, name, input)
+        : undefined,
+    ),
   };
 
   registerTicketTools(context);
@@ -73,6 +90,7 @@ export function createMcpServer(
 export async function handleMcpRequest(
   request: Request,
   tickets: Tickets,
+  onToolCall?: ToolCallHook,
 ): Promise<Response> {
   const host = request.headers.get('host') ?? new URL(request.url).host;
   if (!isAllowedHost(host)) {
@@ -92,6 +110,7 @@ export async function handleMcpRequest(
     new URL(request.url).origin,
     cwd,
     runId,
+    onToolCall,
   );
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,

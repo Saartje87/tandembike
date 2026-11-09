@@ -1110,6 +1110,41 @@ export function createConversations({
   };
 
   /**
+   * A Tandembike MCP call of a `claude` session, attributed by its
+   * `X-Tandembike-Run` header (T1238): becomes the Conversation's latest
+   * `tool` entry, which the Status line reads, and refreshes its last
+   * activity. Anything but an open Terminal Conversation's id is ignored.
+   */
+  const recordTerminalCall = (
+    runId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+  ): void => {
+    if (!/^\d+$/.test(runId)) {
+      return;
+    }
+    const id = Number(runId);
+    const conversation = db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id))
+      .get();
+    if (
+      !conversation ||
+      conversation.startedBy !== 'terminal' ||
+      conversation.state === 'stopped'
+    ) {
+      return;
+    }
+    const name = `mcp__tandembike__${toolName}`;
+    append(id, 'tool', `${name} ${JSON.stringify(input)}`.slice(0, 300), {
+      tool: { name, input },
+    });
+    update(id, {});
+    announce(id);
+  };
+
+  /**
    * The CLI's heartbeat while `claude` runs: refreshes the last activity of a
    * Terminal Conversation that is still open (ADR 0039). Ignored for others.
    */
@@ -1518,6 +1553,8 @@ export function createConversations({
     endTerminal,
     heartbeatTerminal,
     endIdleTerminals,
+
+    recordTerminalCall,
 
     /**
      * Starts the Retro of a Cycle: a Conversation about its Project that looks

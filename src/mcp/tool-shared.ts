@@ -430,6 +430,12 @@ export type RegisterTool = <Shape extends z.ZodRawShape>(
   handler: ToolCallback<StrictInput<Shape>>,
 ) => ReturnType<McpServer['registerTool']>;
 
+/** Called after each tool call of one request, with the tool's name and input. */
+export type AfterToolCall = (
+  name: string,
+  input: Record<string, unknown>,
+) => void;
+
 /**
  * Makes the `registerTool` of `server`: a tool whose input refuses any field
  * it does not list, naming it, instead of dropping it (T417). Register every
@@ -437,7 +443,7 @@ export type RegisterTool = <Shape extends z.ZodRawShape>(
  * It also marks the tools in `alwaysLoadedTools` to load up front.
  */
 export const toolRegistrar =
-  (server: McpServer): RegisterTool =>
+  (server: McpServer, onToolCall?: AfterToolCall): RegisterTool =>
   (name, { inputSchema, ...config }, handler) =>
     server.registerTool<z.ZodRawShape, StrictInput<z.ZodRawShape>>(
       name,
@@ -448,7 +454,19 @@ export const toolRegistrar =
           _meta: { 'anthropic/alwaysLoad': true },
         }),
       },
-      handler as never,
+      (onToolCall
+        ? async (...args: unknown[]) => {
+            try {
+              return await (handler as (...a: unknown[]) => unknown)(...args);
+            } finally {
+              try {
+                onToolCall(name, (args[0] ?? {}) as Record<string, unknown>);
+              } catch {
+                // Bookkeeping must never fail the tool call.
+              }
+            }
+          }
+        : handler) as never,
     );
 
 /** What every tool group registers its tools with. */

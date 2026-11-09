@@ -6,6 +6,7 @@ import {
   firstRunCopyBlocker,
   type McpOfferPlan,
   markOffersMade,
+  mcpOfferKeys,
   mcpRegistration,
   offersMade,
   planMcpOffer,
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
   console.log(`Tandembike data: ${home}`);
 
   if (parsed.command === 'mcp') {
-    if (await offerMcp()) markOffersMade(home, 'mcp');
+    if (await offerMcp()) markMcpOffered();
     process.exit(0);
   }
 
@@ -84,8 +85,9 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  if (shouldOfferMcp(offersMade(home), false)) {
-    if (await offerMcp()) markOffersMade(home, 'mcp');
+  const registration = mcpRegistration(readClaudeJson());
+  if (shouldOfferMcp(offersMade(home), false, registration)) {
+    if (await offerMcp()) markMcpOffered();
   }
   if (shouldOfferPlugin(offersMade(home), installedPluginState(), false)) {
     if (await offerPlugin()) markOffersMade(home, 'plugin');
@@ -203,6 +205,10 @@ async function runSession(started: TerminalStartResult): Promise<number> {
     );
   }
   return exitCode;
+}
+
+function markMcpOffered(): void {
+  for (const key of mcpOfferKeys) markOffersMade(home, key);
 }
 
 function readClaudeJson(): unknown {

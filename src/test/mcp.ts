@@ -1,7 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-import { handleMcpRequest } from '../mcp/mcp-server';
+import { handleMcpRequest, type ToolCallHook } from '../mcp/mcp-server';
 import type { Tickets } from '../tickets/tickets';
 
 /**
@@ -11,7 +11,11 @@ import type { Tickets } from '../tickets/tickets';
  */
 export async function connectMcpClient(
   tickets: Tickets,
-  { cwd, runId }: { cwd?: string; runId?: string } = {},
+  {
+    cwd,
+    runId,
+    onToolCall,
+  }: { cwd?: string; runId?: string; onToolCall?: ToolCallHook } = {},
 ): Promise<Client> {
   const client = new Client({ name: 'test-agent', version: '0.0.0' });
   const transport = new StreamableHTTPClientTransport(
@@ -23,7 +27,8 @@ export async function connectMcpClient(
           ...(runId === undefined ? {} : { 'X-Tandembike-Run': runId }),
         },
       },
-      fetch: (url, init) => handleMcpRequest(new Request(url, init), tickets),
+      fetch: (url, init) =>
+        handleMcpRequest(new Request(url, init), tickets, onToolCall),
     },
   );
   await client.connect(transport);
