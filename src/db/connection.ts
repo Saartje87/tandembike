@@ -23,10 +23,10 @@ const packageFolder = process.env.TANDEMBIKE_PACKAGE_DIR || process.cwd();
  * Where the app keeps its data: `TANDEMBIKE_DATA_DIR` (`~/.tandembike` for the
  * command), else the git-ignored `data` folder in the checkout.
  */
-export const appDatabasePath = join(
-  dataFolder(process.env, packageFolder),
-  'ticket.db',
-);
+export const appDataFolder = dataFolder(process.env, packageFolder);
+
+/** The app's database file, in its data folder. */
+export const appDatabasePath = join(appDataFolder, 'ticket.db');
 
 const migrationsFolder = join(packageFolder, 'src', 'db', 'migrations');
 

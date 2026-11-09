@@ -2224,8 +2224,9 @@ export function createConversations({
 
     /**
      * For the server to call once on start: removes the clean worktrees of
-     * closed Conversations, and of Conversations that no longer exist, so a
-     * crash mid-removal leaks no folders. Dirty ones stay.
+     * closed Conversations, and of Conversations that no longer exist whose
+     * worktree this server's data folder made, so a crash mid-removal leaks
+     * no folders. Dirty and unpushed ones stay.
      */
     async cleanupWorktrees(): Promise<void> {
       const closed = db
@@ -2248,7 +2249,10 @@ export function createConversations({
           .from(conversations)
           .where(eq(conversations.id, found.conversationId))
           .get();
-        if (exists) {
+        // A server with another data folder, such as a throwaway dev server,
+        // shares the worktrees folder: its database lacks this server's
+        // Conversations, so it only sweeps worktrees it made (T1279).
+        if (exists || !found.owned) {
           continue;
         }
         // The Project may be gone or have no path; the worktree knows its repository.

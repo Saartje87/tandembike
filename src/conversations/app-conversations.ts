@@ -1,3 +1,4 @@
+import { appDataFolder } from '../db/connection';
 import { appDatabase, appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
 import { createWorktrees } from '../worktrees/worktrees';
@@ -34,7 +35,7 @@ export function appConversations(): Conversations {
       tickets: appTickets('user'),
       changes: appChangeChannel(),
       runner: createClaudeRunner(),
-      worktrees: createWorktrees(),
+      worktrees: createWorktrees({ owner: appDataFolder }),
       mcpUrl,
     });
     conversations.interruptStale();

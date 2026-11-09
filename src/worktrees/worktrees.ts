@@ -1,6 +1,12 @@
 import { detectRepository } from '../repository/detect-repository';
 import { execFile } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -65,7 +71,11 @@ export type Worktrees = {
    * null when the folder is gone or is not a linked worktree.
    */
   repositoryOf(path: string): Promise<string | null>;
-  /** The worktrees in the worktrees folder, found by their `<project id>/c<conversation id>` path. */
+  /**
+   * The worktrees in the worktrees folder, found by their
+   * `<project id>/c<conversation id>` path, with whether this module's owner
+   * made them.
+   */
   list(): Promise<ListedWorktree[]>;
 };
 
@@ -73,6 +83,11 @@ export type ListedWorktree = {
   path: string;
   projectId: number;
   conversationId: number;
+  /**
+   * Whether this module's owner made it: false for one another data folder's
+   * server made in the shared worktrees folder, or one without an owner mark.
+   */
+  owned: boolean;
 };
 
 /** The most output of a Prepare command kept: its tail, where errors are. */
@@ -89,6 +104,21 @@ export const worktreesRoot = (
 ): string =>
   join(env.TANDEMBIKE_DATA_DIR || join(homedir(), '.tandembike'), 'worktrees');
 
+/**
+ * The owner mark beside a worktree, `<project id>/c<id>.owner`, holding the
+ * data folder of the server that made it. It sits outside the worktree, so it
+ * never makes the worktree dirty.
+ */
+const ownerMark = (path: string): string => `${path}.owner`;
+
+function ownerOf(path: string): string | null {
+  try {
+    return readFileSync(ownerMark(path), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 async function git(cwd: string, args: string[]): Promise<string> {
   try {
     const { stdout } = await run('git', args, { cwd });
@@ -99,11 +129,18 @@ async function git(cwd: string, args: string[]): Promise<string> {
   }
 }
 
+/**
+ * The worktrees module. `owner` names the data folder of the server using it:
+ * servers with different data folders share the worktrees folder, so `list`
+ * tells each its own worktrees by the owner mark `create` writes (T1279).
+ */
 export function createWorktrees({
   root = worktreesRoot(),
+  owner,
 }: {
   root?: string;
-} = {}): Worktrees {
+  owner: string;
+}): Worktrees {
   return {
     async create({ repositoryPath, projectId, conversationId }) {
       const detection = detectRepository(repositoryPath);
@@ -120,6 +157,7 @@ export function createWorktrees({
         base = `origin/${base}`;
       }
       await git(repositoryPath, ['worktree', 'add', '--detach', path, base]);
+      writeFileSync(ownerMark(path), owner);
       return { path, base };
     },
 
@@ -144,6 +182,7 @@ export function createWorktrees({
 
     async remove(repositoryPath, path) {
       await git(repositoryPath, ['worktree', 'remove', path]);
+      rmSync(ownerMark(path), { force: true });
       await git(repositoryPath, ['worktree', 'prune']);
     },
 
@@ -181,10 +220,12 @@ export function createWorktrees({
         for (const folder of readdirSync(join(root, project))) {
           const match = /^c(\d+)$/.exec(folder);
           if (match) {
+            const path = join(root, project, folder);
             found.push({
-              path: join(root, project, folder),
+              path,
               projectId: Number(project),
               conversationId: Number(match[1]),
+              owned: ownerOf(path) === owner,
             });
           }
         }

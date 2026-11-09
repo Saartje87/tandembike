@@ -247,15 +247,23 @@ describe('Worktree cleanup', () => {
     expect(worktrees.removed).toEqual([path]);
   });
 
-  it('removes the clean worktrees of Conversations that no longer exist at server start', async () => {
+  it('removes the clean worktrees this data folder made for Conversations that no longer exist at server start, and keeps dirty and unpushed ones', async () => {
     const { restart, worktrees, project } = await setup();
     const orphan = `/fake/worktrees/${project.id}/c999`;
     const dirty = `/fake/worktrees/${project.id}/c998`;
     worktrees.states.set(orphan, 'clean');
+    const unpushed = `/fake/worktrees/${project.id}/c997`;
     worktrees.states.set(dirty, 'dirty');
+    worktrees.states.set(unpushed, 'unpushed');
     worktrees.listed = [
-      { path: orphan, projectId: project.id, conversationId: 999 },
-      { path: dirty, projectId: project.id, conversationId: 998 },
+      { path: orphan, projectId: project.id, conversationId: 999, owned: true },
+      { path: dirty, projectId: project.id, conversationId: 998, owned: true },
+      {
+        path: unpushed,
+        projectId: project.id,
+        conversationId: 997,
+        owned: true,
+      },
     ];
 
     await restart().cleanupWorktrees();
@@ -270,12 +278,30 @@ describe('Worktree cleanup', () => {
     worktrees.states.set(orphan, 'clean');
     worktrees.repositories.set(orphan, '/fake/repo');
     worktrees.listed = [
-      { path: orphan, projectId: project.id, conversationId: 999 },
+      { path: orphan, projectId: project.id, conversationId: 999, owned: true },
     ];
 
     await restart().cleanupWorktrees();
 
     expect(worktrees.removed).toEqual([orphan]);
+  });
+
+  it('leaves a clean worktree another data folder made at server start, though this database lacks its Conversation', async () => {
+    const { restart, worktrees, project } = await setup();
+    const theirs = `/fake/worktrees/${project.id}/c999`;
+    worktrees.states.set(theirs, 'clean');
+    worktrees.listed = [
+      {
+        path: theirs,
+        projectId: project.id,
+        conversationId: 999,
+        owned: false,
+      },
+    ];
+
+    await restart().cleanupWorktrees();
+
+    expect(worktrees.removed).toEqual([]);
   });
 
   it('leaves the worktree of an open Conversation alone at server start', async () => {
@@ -285,6 +311,7 @@ describe('Worktree cleanup', () => {
         path: conversation.worktreePath as string,
         projectId: project.id,
         conversationId: conversation.id,
+        owned: true,
       },
     ];
 
