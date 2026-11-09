@@ -116,7 +116,7 @@ export type TicketDrawerProps = {
   conversations?: Conversation[];
   /**
    * The commands of the Ticket's Project that Triage and Start send.
-   * Defaults to none, which sends the plain "Triage T42" and "Start T42".
+   * Defaults to none, which sends the Playbook's commands.
    */
   agentCommands?: ProjectAgentCommands;
   /**

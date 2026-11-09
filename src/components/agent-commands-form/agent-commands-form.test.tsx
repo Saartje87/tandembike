@@ -63,6 +63,25 @@ describe('AgentCommandsForm', () => {
     expect(retro).toHaveValue('/retro');
   });
 
+  it('shows the Playbook command each blank field runs, and none for a set one', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+
+    expect(
+      screen.getByText('Blank runs /tandembike:implement-epic'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Blank runs /tandembike:retro'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Blank runs /tandembike:implement')).toBeNull();
+    expect(screen.queryByText('Blank runs /tandembike:triage')).toBeNull();
+
+    await user.clear(screen.getByRole('textbox', { name: 'Start command' }));
+    expect(
+      screen.getByText('Blank runs /tandembike:implement'),
+    ).toBeInTheDocument();
+  });
+
   it('shows a refusal under the field it names and keeps the text', async () => {
     const user = userEvent.setup();
     vi.mocked(setProjectAgentCommands).mockResolvedValue({

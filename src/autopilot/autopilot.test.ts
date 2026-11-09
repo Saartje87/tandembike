@@ -88,7 +88,7 @@ describe('Autopilot dispatch', () => {
     expect(list.every((x) => x.startedBy === 'autopilot')).toBe(true);
     expect(list.every((x) => x.intent === 'start')).toBe(true);
     expect(runner.runs[0].options.prompt).toBe(
-      `/mattpocock-skills:implement T${c.number}`,
+      `/tandembike:implement T${c.number}`,
     );
   });
 
@@ -136,7 +136,7 @@ describe('Autopilot dispatch', () => {
     await autopilot.evaluate(project.id);
 
     expect(runner.runs[0].options.prompt).toBe(
-      `/mattpocock-skills:implement-spec T${epic.number}`,
+      `/tandembike:implement-epic T${epic.number}`,
     );
   });
 

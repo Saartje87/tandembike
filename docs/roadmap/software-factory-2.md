@@ -89,7 +89,7 @@ Autopilot also dispatches Triage runs for Intake, Backlog included, on a Project
 
 ### CLI sessions (Q27 to Q30)
 
-- The Playbook plugin registers at user scope, so `/tandembike:start T42` and the other Stages work in any repository's terminal session. A repository's overrides still apply.
+- The Playbook plugin registers at user scope, so `/tandembike:implement T42` and the other Stages work in any repository's terminal session. A repository's overrides still apply.
 - `tandembike start T42` (and `triage`, `plan "<goal>"`, `next`) resolves the Project from the cwd and creates the worktree as for a UI run. It records a Conversation Started by Terminal and execs interactive `claude` there, with the Stage's command, brief and Agent-run ID. This is the main way to work from a terminal. A bare `claude` session that only calls MCP still works, as an untracked Agent.
 - On the Board a Terminal Conversation is In flight, with a Status line from its latest MCP call, since Tandembike has no transcript of an interactive session. It has no permission relay, because the User answers prompts in the terminal. It counts against no run cap or spend, and its Ticket is not Eligible while it is open. It ends when the CLI reports that `claude` exited, or after an idle timeout. A session that exits before `finish_work` leaves its Ticket Stalled, as today.
 - **Continue in terminal** on a UI Conversation copies `tandembike resume <conversation>`. That command stops the UI run and runs `claude --resume <session id>` in its worktree, and the Conversation becomes Terminal. The reverse waits.
@@ -113,6 +113,8 @@ The tool set above, replacing the old one, and shorter server instructions (T645
 ### Phase 9: default Playbook, Spec and Merge Stages, Merge gate (T1195)
 
 The bundled plugin, Agent commands as overrides, the Spec and Merge intents and Approve merge. ADR 0032, written with this roadmap. Glossary: Stage, Playbook, Merge gate.
+
+Built in steps. T1218: the plugin folder `playbook/` with its lock file, the runner's `plugins` option, one per-Stage command list that drives the first message and the agent commands form, new Projects blank and `auto`, and the `implement` skill. Each later step adds its Stage to that list and its skill to the plugin, and bumps the plugin's version and lock (`npm run playbook:lock`).
 
 ### Phase 10: CLI sessions (T1196)
 

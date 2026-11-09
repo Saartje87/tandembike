@@ -54,7 +54,7 @@ describe('TicketAgentActions', () => {
     });
   });
 
-  it('sends the Start command for Epics on an Epic, falling back to the Start command', async () => {
+  it('sends the Start command for Epics on an Epic, and the Playbook one when it is blank', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     const { rerender } = renderWithTheme(
       <TicketAgentActions
@@ -82,7 +82,7 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenLastCalledWith({
       ticketNumber: 7,
       intent: 'start',
-      prompt: '/mattpocock-skills:implement T7',
+      prompt: '/tandembike:implement-epic T7',
     });
 
     rerender(
@@ -96,7 +96,7 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenLastCalledWith({
       ticketNumber: 7,
       intent: 'start',
-      prompt: 'Start T7',
+      prompt: '/tandembike:implement-epic T7',
     });
   });
 
@@ -132,7 +132,7 @@ describe('TicketAgentActions', () => {
     });
   });
 
-  it('starts a Start Conversation with "Start T42" when the Project has no command', async () => {
+  it('starts a Start Conversation with /tandembike:implement when the Project has no command', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     const onStarted = vi.fn();
     renderWithTheme(
@@ -149,12 +149,12 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenCalledWith({
       ticketNumber: 42,
       intent: 'start',
-      prompt: 'Start T42',
+      prompt: '/tandembike:implement T42',
     });
     expect(onStarted).toHaveBeenCalledWith(9);
   });
 
-  it('starts a Triage Conversation with "Triage T42" when the Project has no command', async () => {
+  it('starts a Triage Conversation with /tandembike:triage when the Project has no command', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     renderWithTheme(
       <TicketAgentActions
@@ -169,7 +169,7 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenCalledWith({
       ticketNumber: 42,
       intent: 'triage',
-      prompt: 'Triage T42',
+      prompt: '/tandembike:triage T42',
     });
   });
 

@@ -69,12 +69,12 @@ async function settingsTab(params: ProjectPageProps['params']) {
               Agent commands
             </Heading>
             <Text tag="p" fontSize="small" color="muted">
-              The Claude Code commands a Ticket's Triage and Start buttons send
-              before its number, such as /mattpocock-skills:implement T42. Start
-              on an Epic uses the Epic command, or the Start command when that
-              is blank. Blank sends a plain "Triage T42" or "Start T42". The
-              Retro command starts a Retro on a Cycle, followed by the Cycle's
-              title and id; blank sends a plain "Retro on Cycle".
+              The Claude Code commands a Stage sends before the Ticket number,
+              such as /tandembike:implement T42. A blank field runs the command
+              of Tandembike's Playbook shown under it; a command you set
+              replaces it for that Stage only. Start on an Epic does not fall
+              back to the Start command. The Retro command is followed by the
+              Cycle's title and id.
             </Text>
           </Stack>
           <AgentCommandsForm

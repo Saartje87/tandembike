@@ -2,6 +2,8 @@ import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
+import { playbookPath } from '../playbook/playbook';
+import { commandForStage } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -640,6 +642,7 @@ export function createConversations({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         agentRunId: String(id),
         mcpUrl,
+        plugins: [{ type: 'local', path: playbookPath }],
         systemPrompt: runBrief({
           conversationId: id,
           ticketNumber: ticket?.number ?? null,
@@ -1177,7 +1180,10 @@ export function createConversations({
         intent: 'retro',
         prompt: retroPrompt(
           cycle,
-          tickets.getProjectAgentCommands(cycle.projectId).retroCommand,
+          commandForStage(
+            'retro',
+            tickets.getProjectAgentCommands(cycle.projectId),
+          ),
         ),
         retroCycleId: cycle.id,
       });

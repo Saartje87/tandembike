@@ -11,7 +11,7 @@ import { join } from 'node:path';
 const directory = () => mkdtempSync(join(tmpdir(), 'tandembike-repo-'));
 
 describe("A Project's agent settings", () => {
-  it('start with no repository path, Parallel runs off, a cap of 3 and agent mode off', () => {
+  it('start with no repository path, Parallel runs off, a cap of 3, agent mode off and auto run mode', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
@@ -22,7 +22,7 @@ describe("A Project's agent settings", () => {
       parallelRuns: false,
       maxConcurrentRuns: 3,
       agentMode: false,
-      runMode: 'default',
+      runMode: 'auto',
       runModel: null,
       autopilot: false,
       spendCeilingUsd: null,
@@ -171,7 +171,7 @@ describe("A Project's agent settings", () => {
     );
     expect((model as ValidationError).fieldErrors).toHaveProperty('runModel');
     expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
-      runMode: 'default',
+      runMode: 'auto',
       runModel: null,
     });
   });

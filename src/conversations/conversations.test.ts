@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { playbookPath } from '../playbook/playbook';
 import { createTestConversations } from '../test/conversations';
 import { errorFrom } from '../test/tickets';
 import { createChangeChannel } from '../tickets/changes';
@@ -167,6 +168,25 @@ describe('Starting a Conversation', () => {
     expect(brief).not.toContain('overlaps the drawer');
   });
 
+  it('starts every run with the Playbook plugin, loaded by its local path', async () => {
+    const { conversations, runner, project } = setup();
+
+    for (const intent of ['start', 'triage'] as const) {
+      await conversations.start({
+        projectId: project.id,
+        intent,
+        prompt: 'Go.',
+        startedBy: 'user',
+      });
+    }
+
+    for (const run of runner.runs) {
+      expect(run.options.plugins).toEqual([
+        { type: 'local', path: playbookPath },
+      ]);
+    }
+  });
+
   it("starts every run with the Project's run mode and model", async () => {
     const { conversations, runner, tickets, project } = setup();
 
@@ -176,11 +196,11 @@ describe('Starting a Conversation', () => {
       prompt: 'Go.',
       startedBy: 'user',
     });
-    expect(runner.runs[0].options).toMatchObject({ runMode: 'default' });
+    expect(runner.runs[0].options).toMatchObject({ runMode: 'auto' });
     expect(runner.runs[0].options.model).toBeUndefined();
 
     tickets.setProjectAgentSettings(project.id, {
-      runMode: 'auto',
+      runMode: 'default',
       runModel: 'claude-opus-5-5',
     });
     await conversations.start({
@@ -190,7 +210,7 @@ describe('Starting a Conversation', () => {
       startedBy: 'user',
     });
     expect(runner.runs[1].options).toMatchObject({
-      runMode: 'auto',
+      runMode: 'default',
       model: 'claude-opus-5-5',
     });
   });
@@ -1755,7 +1775,8 @@ describe('Setup', () => {
   });
 
   it("reports the Project's run mode and a git-blocking hook as advisory items, without suggesting auto", async () => {
-    const { conversations, runner, project } = setup();
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, { runMode: 'default' });
     await startSetup(conversations, project.id);
 
     const brief = runner.runs[0].options.systemPrompt;
@@ -1982,7 +2003,7 @@ describe('Autopilot spend', () => {
 });
 
 describe('A Retro Conversation', () => {
-  it('records its Cycle and the User, and sends the plain prompt when the Retro command is blank', async () => {
+  it('records its Cycle and the User, and sends the Playbook Retro command when the Retro command is blank', async () => {
     const { conversations, runner, tickets, project } = setup();
     tickets.setProjectAgentCommands(project.id, {
       triageCommand: '',
@@ -2005,13 +2026,16 @@ describe('A Retro Conversation', () => {
       retroCycleId: cycle.id,
     });
     expect(runner.runs[0].options.prompt).toBe(
-      'Retro on Cycle "Launch the beta"',
+      `/tandembike:retro "Launch the beta" (Cycle ${cycle.id})`,
     );
     expect(runner.runs[0].options.systemPrompt).toContain(
       `"Launch the beta" (Cycle ${cycle.id})`,
     );
     expect(conversations.transcript(retro.id)).toMatchObject([
-      { role: 'user', text: 'Retro on Cycle "Launch the beta"' },
+      {
+        role: 'user',
+        text: `/tandembike:retro "Launch the beta" (Cycle ${cycle.id})`,
+      },
     ]);
   });
 

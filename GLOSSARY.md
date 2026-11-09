@@ -159,15 +159,23 @@ A Conversation about a Project in which the Agent checks that the Project's repo
 _Avoid_: First-time setup, onboarding, readiness check
 
 **Agent run mode**:
-A Project setting, `default` or `auto`, that every run the Project starts uses as its permission mode, whoever starts it. `default` asks the User about every call the repository has not allowed; `auto` lets the SDK's classifier decide and asks only for calls it cannot. New and existing Projects are `default`. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. The Project also has a run model, the model its runs start on, unset for the User's default. See ADR 0029.
+A Project setting, `default` or `auto`, that every run the Project starts uses as its permission mode, whoever starts it. `default` asks the User about every call the repository has not allowed; `auto` lets the SDK's classifier decide and asks only for calls it cannot. New Projects are `auto`; existing Projects keep their mode. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. The Project also has a run model, the model its runs start on, unset for the User's default. See ADR 0029.
 _Avoid_: Permission level, trust mode
 
 **Skill**:
 A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
 _Avoid_: Command chip, preset, slash command (for the setting)
 
+**Playbook**:
+Tandembike's own Claude Code plugin, named `tandembike`, bundled with the app and loaded into every run. It has one skill per **Stage**, written to work in any repository and to use only Tandembike's workflow tools. It keeps the MIT notice of `mattpocock-skills`, which its skills are adapted from, and has a `version` that is bumped whenever its files change. A Project's **Agent command** overrides it for one Stage. See ADR 0032.
+_Avoid_: Default skills, process, built-in prompts
+
+**Stage**:
+One step of the flow that a Playbook skill, and an Agent command, run: Triage, Start (`implement`), Start on an Epic (`implement-epic`) and Retro, with more to come. Each Stage has one Agent command field and one skill; its command is the Project's when set, otherwise `/tandembike:<skill>`, and no Stage falls back to another's command.
+_Avoid_: Step, phase, workflow
+
 **Agent command**:
-A Claude Code command that a Ticket's Triage or Start button sends with the Ticket number, or a Cycle's Retro sends with the Cycle, such as `/mattpocock-skills:implement T42`. A Project has a **Triage command**, a **Start command** and a **Start command for Epics**, which Start on an Epic uses in place of the Start command when set. A blank one sends the plain `Triage T42` or `Start T42`. It also has a **Retro command**, which a Retro starts with, followed by the Cycle's title and id (`/mattpocock-skills:retro "Factory p2" (Cycle 44)`); a blank one sends the plain `Retro on Cycle "Factory p2"`. Only the User sets them, on the Project's Settings; Tandembike does not check that the Agent has them.
+A Claude Code command that a Stage sends as the first message of a run, followed by the Ticket number, or by the Cycle for a Retro, such as `/tandembike:implement T42`. A Project has a **Triage command**, a **Start command**, a **Start command for Epics** and a **Retro command**. A blank one sends the Playbook's command for its Stage, always namespaced, so a new Project works without settings; one the User sets replaces it for that Stage only, so a repository keeps its own skills. The Retro command is followed by the Cycle's title and id (`/tandembike:retro "Factory p2" (Cycle 44)`). Only the User sets them, on the Project's Settings, where each blank field shows the Playbook command it runs; Tandembike does not check that an override's skill exists.
 _Avoid_: Triage skill, Start skill, preset
 
 **Activity**:

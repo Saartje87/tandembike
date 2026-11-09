@@ -12,13 +12,8 @@ export const cycleReference = (cycle: RetroCycle): string =>
 
 /**
  * The User's first message of a Retro, the one place it is built: the
- * Project's Retro command followed by the Cycle reference, or the plain
- * prompt naming the Cycle when the Project has no Retro command.
+ * command of the Retro Stage (the Project's, or the Playbook's) followed by
+ * the Cycle reference.
  */
-export const retroPrompt = (
-  cycle: RetroCycle,
-  command: string | null,
-): string =>
-  command === null
-    ? `Retro on Cycle "${cycle.title}"`
-    : `${command} ${cycleReference(cycle)}`;
+export const retroPrompt = (cycle: RetroCycle, command: string): string =>
+  `${command} ${cycleReference(cycle)}`;

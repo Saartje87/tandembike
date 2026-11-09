@@ -42,6 +42,7 @@ import {
 } from './activity';
 import type { ActivityChange } from './activity-change';
 import {
+  noAgentCommands,
   normalizeAgentCommands,
   type ProjectAgentCommands,
 } from './agent-commands';
@@ -1399,7 +1400,16 @@ export function createTickets(
       const project = db.transaction(() => {
         const created = db
           .insert(projects)
-          .values({ name, nameKey, createdAt: new Date() })
+          .values({
+            name,
+            nameKey,
+            createdAt: new Date(),
+            // New Projects run the Playbook's commands, in `auto` mode
+            // (T1218); the column defaults are the old ones, kept for the
+            // Projects already stored.
+            ...noAgentCommands,
+            runMode: 'auto',
+          })
           .returning(projectColumns)
           .get();
         if (repositoryPath !== undefined || checkCommand !== undefined) {

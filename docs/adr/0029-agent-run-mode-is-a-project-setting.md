@@ -1,8 +1,10 @@
 # Agent run mode is a Project setting
 
+Amended by [ADR 0032](0032-tandembike-ships-a-default-playbook.md) (T1218): new Projects start in `auto`, so the Playbook's runs do not idle on every unlisted call. Existing Projects keep their mode.
+
 ADR 0021 pinned every run to the SDK's `default` permission mode, so no repository's `defaultMode` could skip the relay of Allow and Deny to the User. That holds a factory back: each unlisted call idles a run until the User returns. The spike in `docs/research/auto-permission-mode.md` found that the SDK's `auto` mode asks `canUseTool` only for calls its classifier cannot decide, so the relay keeps working there.
 
-Each Project has an **Agent run mode**, `default` or `auto`, and every run the Project starts uses it, by hand or by Autopilot. Existing and new Projects are `default`; nothing becomes more permissive without the User's choice. The User sets it on the Project settings page, with the trade-off next to `auto`: in the spike the classifier allowed a hard reset, a file written outside the repository, an outbound POST and a push without asking. It is a Project agent setting, set only through a Server Action and kept out of the MCP-visible `Project` (ADR 0019), so no Agent can loosen its own permissions.
+Each Project has an **Agent run mode**, `default` or `auto`, and every run the Project starts uses it, by hand or by Autopilot. Every Project was `default` at first, so nothing became more permissive without the User's choice. New Projects now start in `auto`, and existing Projects keep the mode they have; the User can switch either way. The User sets it on the Project settings page, with the trade-off next to `auto`: in the spike the classifier allowed a hard reset, a file written outside the repository, an outbound POST and a push without asking. It is a Project agent setting, set only through a Server Action and kept out of the MCP-visible `Project` (ADR 0019), so no Agent can loosen its own permissions.
 
 The runner still pre-allows exactly the `mcp__tandembike` server it injects (ADR 0021) and still relays through `canUseTool`. `bypassPermissions` and `acceptEdits` are never used. Setup reports the mode and whether a hook in the repository blocks destructive git commands, advisory only (ADR 0020), and never suggests `auto`.
 

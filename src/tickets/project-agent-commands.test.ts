@@ -9,16 +9,36 @@ const fieldErrors = (run: () => unknown) =>
   (errorFrom(run) as ValidationError).fieldErrors;
 
 describe("A Project's agent commands", () => {
-  it('start with the mattpocock-skills triage, implement, implement-spec and retro commands', () => {
+  it('start blank, so every Stage runs the Playbook', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
     expect(tickets.getProjectAgentCommands(project.id)).toEqual({
-      triageCommand: '/mattpocock-skills:triage',
-      startCommand: '/mattpocock-skills:implement',
-      startEpicCommand: '/mattpocock-skills:implement-spec',
-      retroCommand: '/mattpocock-skills:retro',
+      triageCommand: null,
+      startCommand: null,
+      startEpicCommand: null,
+      retroCommand: null,
     });
+  });
+
+  it('are kept as set when more Projects are created', () => {
+    const tickets = createTestTickets();
+    const first = tickets.createProject({ name: 'First' });
+    tickets.setProjectAgentCommands(first.id, {
+      triageCommand: 'triage',
+      startCommand: 'implement',
+      startEpicCommand: '',
+      retroCommand: '',
+    });
+    tickets.setProjectAgentSettings(first.id, { runMode: 'default' });
+
+    tickets.createProject({ name: 'Second' });
+
+    expect(tickets.getProjectAgentCommands(first.id)).toMatchObject({
+      triageCommand: '/triage',
+      startCommand: '/implement',
+    });
+    expect(tickets.getProjectAgentSettings(first.id).runMode).toBe('default');
   });
 
   it('are replaced trimmed, with a missing slash added, and blank clears one', () => {

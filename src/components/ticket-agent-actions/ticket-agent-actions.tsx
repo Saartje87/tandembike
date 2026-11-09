@@ -25,9 +25,9 @@ export type TicketAgentActionsProps = {
 
 /**
  * Start, Triage and Ask on a Ticket (ADR 0019). Start and Triage begin a
- * Conversation at once with the Project's command and the Ticket number
- * ("/mattpocock-skills:implement T42"), or a plain "Start T42" when it has
- * none (T621); Ask opens a draft tab for the User's own question, through
+ * Conversation at once with the command of their Stage and the Ticket
+ * number: the Project's own, or the Playbook's ("/tandembike:implement T42")
+ * when it has none (T621, T1218); Ask opens a draft tab for the User's own question, through
  * `onAsk`. A refusal, such as the Start run limit, shows its reason.
  */
 export const TicketAgentActions: FC<TicketAgentActionsProps> = ({

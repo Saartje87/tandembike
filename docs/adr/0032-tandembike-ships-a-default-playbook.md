@@ -6,6 +6,14 @@ ADR 0019 tells a run only its situation and leaves the whole process to the repo
 
 Tandembike therefore ships a **Playbook**: a Claude Code plugin bundled with it and loaded into every run through the Agent SDK's plugins option. It has one skill per **Stage**: triage, spec, implement (Start), review (run inline by Start), merge, plan and retro. The skills are adapted from `mattpocock-skills`, whose MIT notice the plugin keeps, and call Tandembike's workflow tools directly. A Project's Agent command overrides the Playbook for its Stage. A blank command now means the Playbook's skill, not a plain `Start T42`. The command still goes at the start of the run's first message, as ADR 0019 requires.
 
+The spike T1205 (`docs/research/sdk-plugin-per-run.md`) confirmed the mechanism and fixed three details:
+
+- The plugin is named `tandembike`, and its commands are always sent namespaced, `/tandembike:<stage>` (for example `/tandembike:implement T42`), never bare. A bare name also reaches the User's own plugins, which may ship a skill of the same name, and the order they resolve in is undocumented. A command the Project set is sent as it is, so a repository's own skill of the same bare name never collides with the Playbook's.
+- The runner passes the plugin to every run through the SDK's `plugins` option as a local path to the folder bundled with Tandembike. A run needs nothing in the repository's `.claude/`.
+- When a user-scope copy of the plugin is installed too (phase 10), the inline copy is the only one loaded: it wins. A user-scope copy is a cached copy keyed by `version`, so each change to the Playbook bumps the plugin's `version`, enforced by a test that compares a lock file beside the plugin with a hash of its files.
+
+Each Stage resolves on its own: the Project's command for it, otherwise the Playbook's. A blank command for Start on an Epic is the Playbook's `implement-epic`, not the Project's Start command. Existing Projects keep the commands they stored; only new Projects start blank.
+
 What stays the repository's: its instructions (`CLAUDE.md`), its Check command, its prepare command and any Stage it overrides. A repository with a process of its own, like this one, keeps it.
 
 ## Considered Options

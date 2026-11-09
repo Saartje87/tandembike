@@ -93,6 +93,8 @@ export type RunOptions = {
   systemPrompt: string;
   /** The User's first message of this run. */
   prompt: string;
+  /** The plugins every run loads: the Playbook, by local path (ADR 0032). */
+  plugins: { type: 'local'; path: string }[];
   /** The permission mode of the run; `default` when left out (ADR 0029). */
   runMode?: 'default' | 'auto';
   /** The model to start on; left out for the User's default model. */
