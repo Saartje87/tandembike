@@ -46,6 +46,7 @@ import type {
   Ticket,
   TicketClaim,
 } from '../../tickets/tickets';
+import type { TriageProposal as Proposal } from '../../tickets/triage-proposals';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
 import { ApproveMergeButton } from '../approve-merge-button/approve-merge-button';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
@@ -78,6 +79,7 @@ import { TicketConversationList } from '../ticket-conversation-list/ticket-conve
 import { useTicketDrawer } from '../ticket-drawer-shell/ticket-drawer-shell';
 import { TicketEpic } from '../ticket-epic/ticket-epic';
 import { TicketOrigin } from '../ticket-origin/ticket-origin';
+import { TriageProposal } from '../triage-proposal/triage-proposal';
 import * as styles from './ticket-drawer.css';
 
 export type TicketDrawerProps = {
@@ -121,6 +123,8 @@ export type TicketDrawerProps = {
    * Defaults to none, which sends the Playbook's commands.
    */
   agentCommands?: ProjectAgentCommands;
+  /** The Ticket's pending triage proposal, if it has one. */
+  triageProposal?: Proposal | null;
   /**
    * The Board the drawer opens over, where an Epic's children on it open.
    * Defaults to none: each child opens over its own Board.
@@ -228,6 +232,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   referenceTemplates,
   conversations = [],
   agentCommands = noAgentCommands,
+  triageProposal = null,
   board,
 }) => {
   const { titleId, close } = useTicketDrawer();
@@ -548,6 +553,9 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       )}
       {ticket.splitOff.length > 0 && (
         <SplitOffTickets items={ticket.splitOff} />
+      )}
+      {triageProposal && !archived && (
+        <TriageProposal key={triageProposal.id} proposal={triageProposal} />
       )}
       <DescriptionField
         description={fields.description}

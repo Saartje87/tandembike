@@ -88,6 +88,7 @@ const tandembike: Record<string, [line: string, without: string]> = {
   next_work: ['Finding the next work', 'Finding the next work'],
   start_work: ['Starting {T}', 'Starting a Ticket'],
   add_note: ['Commenting on {T}', 'Commenting'],
+  propose_triage: ['Proposing triage for {T}', 'Proposing triage'],
   check_criterion: ['Checking criteria of {T}', 'Checking criteria'],
   open_pr: ['Linking a pull request to {T}', 'Linking a pull request'],
   finish_work: ['Finishing {T}', 'Finishing a Ticket'],
