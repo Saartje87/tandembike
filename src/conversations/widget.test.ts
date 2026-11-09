@@ -165,3 +165,47 @@ describe('Checking a scale answer', () => {
     }
   });
 });
+
+describe('Checking a matrix answer', () => {
+  const matrix: Widget = {
+    kind: 'matrix',
+    prompt: 'Place these',
+    items: ['A', 'B'],
+    xAxis: { low: 'Cheap', high: 'Costly' },
+    yAxis: { low: 'Small', high: 'Big' },
+  };
+
+  it('takes a position per item and derives each quadrant, x first, whatever the answer says', () => {
+    expect(
+      checkWidgetAnswer(matrix, {
+        positions: [
+          { item: 'B', x: 0.9, y: 0.1, quadrant: 'low-low' },
+          { item: 'A', x: 0.2, y: 0.5 },
+        ],
+      }),
+    ).toEqual({
+      positions: [
+        { item: 'A', x: 0.2, y: 0.5, quadrant: 'low-high' },
+        { item: 'B', x: 0.9, y: 0.1, quadrant: 'high-low' },
+      ],
+    });
+  });
+
+  it('refuses a position outside 0..1, a missing item or an unknown one', () => {
+    for (const positions of [
+      [
+        { item: 'A', x: 1.2, y: 0 },
+        { item: 'B', x: 0, y: 0 },
+      ],
+      [{ item: 'A', x: 0, y: 0 }],
+      [
+        { item: 'A', x: 0, y: 0 },
+        { item: 'C', x: 0, y: 0 },
+      ],
+    ]) {
+      expect(
+        errorFrom(() => checkWidgetAnswer(matrix, { positions })),
+      ).toBeInstanceOf(ValidationError);
+    }
+  });
+});

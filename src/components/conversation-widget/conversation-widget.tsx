@@ -10,6 +10,7 @@ import type {
 } from '../../conversations/widget';
 import { ChoiceWidget } from '../choice-widget/choice-widget';
 import { useKeptConversation } from '../conversation-dialog-provider/kept-conversations';
+import { MatrixWidget } from '../matrix-widget/matrix-widget';
 import { RankWidget } from '../rank-widget/rank-widget';
 import { ScaleWidget } from '../scale-widget/scale-widget';
 
@@ -40,6 +41,12 @@ const answerLines = (widget: Widget, answer: WidgetAnswer): string[] => {
     return answer.values.map(
       ({ item, value }) => `${item}: ${value} of ${widget.max}`,
     );
+  }
+  if ('positions' in answer && widget.kind === 'matrix') {
+    return answer.positions.map(({ item, quadrant }) => {
+      const [x, y] = quadrant.split('-') as ('low' | 'high')[];
+      return `${item}: ${widget.xAxis[x]}, ${widget.yAxis[y]}`;
+    });
   }
   return [];
 };
@@ -108,6 +115,14 @@ export const ConversationWidget: FC<ConversationWidgetProps> = ({
     case 'scale':
       return (
         <ScaleWidget
+          conversationId={conversationId}
+          entryId={entryId}
+          widget={widget}
+        />
+      );
+    case 'matrix':
+      return (
+        <MatrixWidget
           conversationId={conversationId}
           entryId={entryId}
           widget={widget}

@@ -1,10 +1,11 @@
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { answerConversationWidget } from '../../app/conversations/actions';
 import type {
   ChoiceWidget,
+  MatrixWidget,
   RankWidget,
   ScaleWidget,
   Widget,
@@ -235,7 +236,87 @@ describe('A scale Widget', () => {
   });
 });
 
+const matrix: MatrixWidget = {
+  kind: 'matrix',
+  prompt: 'Place these',
+  items: ['Alpha', 'Beta'],
+  xAxis: { low: 'Cheap', high: 'Costly' },
+  yAxis: { low: 'Small', high: 'Big' },
+};
+
+describe('A matrix Widget', () => {
+  it('shows the four axis labels and sends once every item is placed by quadrant picker and arrow keys', async () => {
+    renderKind(matrix);
+    for (const label of ['Cheap', '↑ Big', 'Costly →', 'Small']) {
+      expect(screen.getByText(label)).toBeInTheDocument();
+    }
+    const send = screen.getByRole('button', { name: 'Send answer' });
+    expect(send).toBeDisabled();
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Quadrant of Alpha' }),
+      'Costly, Small',
+    );
+    expect(send).toBeDisabled();
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Quadrant of Beta' }),
+      'Cheap, Big',
+    );
+    screen.getByRole('button', { name: /^Alpha: Costly, Small/ }).focus();
+    await userEvent.keyboard('{ArrowUp}{ArrowRight}');
+    await userEvent.click(send);
+
+    expect(sent()?.answer).toEqual({
+      positions: [
+        { item: 'Alpha', x: 0.8, y: 0.3, quadrant: 'high-low' },
+        { item: 'Beta', x: 0.25, y: 0.75, quadrant: 'low-high' },
+      ],
+    });
+  });
+
+  it('places an item by dragging it onto the matrix', async () => {
+    renderKind(matrix);
+    const area = screen.getByRole('group', { name: /^Matrix/ });
+    vi.spyOn(area, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 200, 200),
+    );
+    const alpha = screen.getByRole('button', { name: 'Alpha: not placed' });
+
+    fireEvent.pointerDown(alpha, { pointerId: 1 });
+    fireEvent.pointerMove(alpha, { pointerId: 1, clientX: 150, clientY: 50 });
+    fireEvent.pointerUp(screen.getByRole('button', { name: /^Alpha:/ }), {
+      pointerId: 1,
+      clientX: 150,
+      clientY: 50,
+    });
+
+    expect(
+      within(area).getByRole('button', { name: /^Alpha: Costly, Big/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('offers Skip', async () => {
+    renderKind(matrix);
+    await userEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    expect(sent()?.answer).toEqual({ skipped: true });
+  });
+});
+
 describe('A settled Widget', () => {
+  it('shows a matrix answer by quadrant, read-only', () => {
+    renderWidget({
+      widget: matrix,
+      answer: {
+        positions: [
+          { item: 'Alpha', x: 0.8, y: 0.3, quadrant: 'high-low' },
+          { item: 'Beta', x: 0.1, y: 0.9, quadrant: 'low-high' },
+        ],
+      },
+    });
+    expect(screen.getByText('Alpha: Costly, Small')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('shows a rank and a scale answer read-only', () => {
     const { unmount } = renderWidget({
       widget: rank,

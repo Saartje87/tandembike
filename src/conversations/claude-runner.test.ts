@@ -674,6 +674,22 @@ describe('The Claude runner', () => {
           maxLabel: 'Lots',
         },
       ],
+      [
+        'ask_matrix',
+        {
+          prompt: 'Place',
+          items: ['A'],
+          xAxis: { low: 'l', high: 'h' },
+          yAxis: { low: 'd', high: 'u' },
+        },
+        {
+          kind: 'matrix',
+          prompt: 'Place',
+          items: ['A'],
+          xAxis: { low: 'l', high: 'h' },
+          yAxis: { low: 'd', high: 'u' },
+        },
+      ],
     ])('serves %s, asking its Widget', async (name, input, widget) => {
       const askWidget = vi.fn(async () => ({ skipped: true }));
       const tool = startWith(askWidget)(name);

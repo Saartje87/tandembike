@@ -33,7 +33,19 @@ export type ScaleWidget = {
   maxLabel?: string;
 };
 
-export type Widget = ChoiceWidget | RankWidget | ScaleWidget;
+/** The two ends of a matrix axis. */
+export type MatrixAxis = { low: string; high: string };
+
+/** A 2×2 the User places each item on; the Agent labels both axes. */
+export type MatrixWidget = {
+  kind: 'matrix';
+  prompt: string;
+  items: string[];
+  xAxis: MatrixAxis;
+  yAxis: MatrixAxis;
+};
+
+export type Widget = ChoiceWidget | RankWidget | ScaleWidget | MatrixWidget;
 export type WidgetKind = Widget['kind'];
 
 /** What the User gave besides the Widget's own answer: free text, a Skip, or nothing because the run ended. */
@@ -45,11 +57,26 @@ export type ChoiceAnswer = { selected: string[] };
 export type RankAnswer = { order: string[] };
 export type ScaleAnswer = { values: { item: string; value: number }[] };
 
+/** Which quarter of a matrix a position is in, x first: `high-low` is high on x, low on y. */
+export type Quadrant = 'low-low' | 'low-high' | 'high-low' | 'high-high';
+export type MatrixPosition = {
+  item: string;
+  x: number;
+  y: number;
+  quadrant: Quadrant;
+};
+export type MatrixAnswer = { positions: MatrixPosition[] };
+
+/** The quadrant of a position in 0..1 on both axes; the middle counts as high. */
+export const quadrantOf = (x: number, y: number): Quadrant =>
+  `${x < 0.5 ? 'low' : 'high'}-${y < 0.5 ? 'low' : 'high'}`;
+
 /** A Widget's answer as the Agent gets it back. */
 export type WidgetAnswer =
   | ChoiceAnswer
   | RankAnswer
   | ScaleAnswer
+  | MatrixAnswer
   | OtherAnswer
   | SkippedAnswer
   | ExpiredAnswer;
@@ -143,6 +170,43 @@ const checkScale = (widget: ScaleWidget, values: unknown[]): ScaleAnswer => {
   };
 };
 
+const inUnit = (value: unknown): value is number =>
+  typeof value === 'number' && value >= 0 && value <= 1;
+
+const checkMatrix = (
+  widget: MatrixWidget,
+  positions: unknown[],
+): MatrixAnswer => {
+  const byItem = new Map<string, { x: number; y: number }>();
+  for (const entry of positions) {
+    if (
+      !isRecord(entry) ||
+      typeof entry.item !== 'string' ||
+      !inUnit(entry.x) ||
+      !inUnit(entry.y)
+    ) {
+      throw new ValidationError({
+        positions: 'Place each item with x and y from 0 to 1.',
+      });
+    }
+    if (!widget.items.includes(entry.item)) {
+      throw new ValidationError({
+        positions: `"${entry.item}" is not one of the items.`,
+      });
+    }
+    byItem.set(entry.item, { x: entry.x, y: entry.y });
+  }
+  if (byItem.size !== widget.items.length) {
+    throw new ValidationError({ positions: 'Place every item.' });
+  }
+  return {
+    positions: widget.items.map((item) => {
+      const { x, y } = byItem.get(item) as { x: number; y: number };
+      return { item, x, y, quadrant: quadrantOf(x, y) };
+    }),
+  };
+};
+
 /**
  * The User's answer to `widget`, checked and tidied: the Widget's own kind of
  * answer, Other with its text, or Skip. Refused with a ValidationError when it
@@ -186,6 +250,12 @@ export function checkWidgetAnswer(
       }
       return checkScale(widget, answer.values);
     }
+    case 'matrix': {
+      if (!Array.isArray(answer.positions)) {
+        break;
+      }
+      return checkMatrix(widget, answer.positions);
+    }
   }
   throw unfit(widget.kind);
 }
@@ -213,6 +283,8 @@ export function tidyWidget(widget: Widget): Widget {
       const max = Math.max(widget.min, widget.max);
       return { ...widget, items: [...new Set(widget.items)], min, max };
     }
+    case 'matrix':
+      return { ...widget, items: [...new Set(widget.items)] };
   }
 }
 

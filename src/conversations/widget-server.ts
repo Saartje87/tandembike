@@ -99,6 +99,20 @@ export function createWidgetServer(
             }),
           ),
       ),
+      tool(
+        'ask_matrix',
+        `Ask the User to place each item on a 2×2 in the chat, whose two axes you label at their low and high ends, and wait for the answer. Returns { "positions": [{ "item", "x", "y", "quadrant" }] }, x and y from 0 to 1, quadrant x first ("high-low" is high on x, low on y). ${otherAndSkip}`,
+        {
+          prompt: z.string().min(1).describe('The question, in one line.'),
+          items: z.array(z.string().min(1)).min(1).max(12),
+          xAxis: z.object({ low: z.string(), high: z.string() }),
+          yAxis: z.object({ low: z.string(), high: z.string() }),
+        },
+        async ({ prompt, items, xAxis, yAxis }) =>
+          answerResult(
+            await askWidget({ kind: 'matrix', prompt, items, xAxis, yAxis }),
+          ),
+      ),
     ],
   });
 }
