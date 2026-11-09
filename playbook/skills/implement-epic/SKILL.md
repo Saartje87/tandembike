@@ -1,6 +1,6 @@
 ---
 name: implement-epic
-description: "Implement a Tandembike Epic from claim to one pull request: its children in Blocker order on one branch, one review, then hand off."
+description: "Implement a Tandembike Epic from claim to one pull request: its children in Blocker order on one branch, one review, then merge or hand off as start_work's merge says."
 disable-model-invocation: true
 ---
 
@@ -10,7 +10,7 @@ Implement the Epic the first message names, such as `T42`, in the repository you
 
 ## 1. Pick up the Epic
 
-Call `start_work` on the Epic. It claims the Epic, which covers its children, and returns its description (the context they share), its children with their Statuses and Blockers, and `nextChild`, the next one to work.
+Call `start_work` on the Epic. It claims the Epic, which covers its children, and returns its description (the context they share), its children with their Statuses and Blockers, `nextChild`, the next one to work, and `merge`, which says how you end at the pull request (step 6).
 
 - A refusal names who holds the Claim or which Blockers are unresolved. Do not work around it: end with a short message saying what refused.
 - Read the Epic's description and comments before you start.
@@ -29,7 +29,7 @@ Repeat until every child is Done, taking `nextChild` each time:
 4. Verify each acceptance criterion of the child against the running code or its tests, and call `check_criterion` for each as you verify it. A criterion you leave unmet needs an `add_note` saying why.
 5. Commit on the shared branch. Commit messages name the child (`T43`).
 
-Do not call `finish_work` on a child or on the Epic yet: a Ticket is finished only once its work is merged, and merging is the User's decision after the hand off. Do not merge anything yourself.
+Do not call `finish_work` on a child: the Epic's `finish_work`, once its pull request is merged, finishes its children with it (step 6).
 
 When a child cannot be built as written, see "When you cannot finish".
 
@@ -41,11 +41,18 @@ When all children are built and the Check command passes, call the `review` skil
 
 When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open one pull request for the Epic. The body says what changed per child (`T43`, `T44`), how you checked it, and which Epic it is for. When there is none, push the branch if a remote exists and say so in a note on the Epic with `add_note`.
 
-Then call `open_pr` on the Epic with the pull request's URL and `handOff: true`. That records the reference, releases your Claim and leaves the Epic for the User to review and approve the merge.
+Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, to record the reference.
 
-## 6. Feedback
+## 6. Merge or hand off
 
-If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
+Follow the Epic's `merge` from step 1, the Project's Auto-merge setting when you took the Claim; only the User sets it.
+
+- **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work`.
+- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, and the pull request's checks are green. Then run the "Merge" steps of the `implement` skill on the Epic's pull request, ending with `finish_work` on the Epic, which finishes its unarchived children with it. When a condition does not hold, or the merge cannot be done, call `add_note` on the Epic saying why and hand off as for `approve`, without `finish_work`. Never push to the default branch.
+
+## 7. Feedback
+
+If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you merge or hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
 
 - has a clear problem and how to reproduce it;
 - is labelled `needs-triage` and `from:agent-run`;
