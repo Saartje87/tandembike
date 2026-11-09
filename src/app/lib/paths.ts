@@ -49,6 +49,27 @@ export function projectSettingsPath(projectId: number): string {
   return `${projectPath(projectId)}/settings`;
 }
 
+/** The fields of a Project's Settings that other pages link to, by their anchor. */
+export type SettingsField =
+  | 'repository-path'
+  | 'check-command'
+  | 'prepare-command'
+  | 'run-mode'
+  | 'run-model'
+  | 'autopilot'
+  | 'spend-ceiling'
+  | 'auto-triage'
+  | 'triage-ceiling'
+  | 'agent-commands';
+
+/** One field of a Project's Settings, scrolled to by its anchor. */
+export function projectSettingsFieldPath(
+  projectId: number,
+  field: SettingsField,
+): string {
+  return `${projectSettingsPath(projectId)}#${field}`;
+}
+
 /** A Project's Flow: how its factory runs, and why work waits (ADR 0044). */
 export function projectFlowPath(projectId: number): string {
   return `${projectPath(projectId)}/flow`;

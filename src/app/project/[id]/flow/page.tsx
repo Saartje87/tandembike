@@ -1,4 +1,4 @@
-import { Stack, Text } from '@blockle/blocks';
+import { Inline, Stack, Text } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { type FC, Suspense } from 'react';
 
@@ -6,6 +6,9 @@ import { appAutopilot } from '../../../../autopilot/app-autopilot';
 import { FlowSection } from '../../../../components/flow-section/flow-section';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
+import { ProjectSwitch } from '../../../../components/project-switch/project-switch';
+import { appTickets } from '../../../../tickets/app-tickets';
+import { projectSettingsFieldPath } from '../../../lib/paths';
 import { loadProject, type ProjectPageProps } from '../project-data';
 
 export async function generateMetadata({
@@ -24,6 +27,7 @@ const comingSoon = (
 async function flowTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   const explanation = appAutopilot().explain(project.id);
+  const settings = appTickets('user').getProjectAgentSettings(project.id);
   return (
     <Stack gap={6}>
       <Text tag="p">
@@ -57,6 +61,32 @@ async function flowTab(params: ProjectPageProps['params']) {
         title="Switches and Pause reasons"
         intro="Whether Autopilot and Auto-triage start work now, and every reason they do not."
       >
+        <Inline gap={4} alignY="start">
+          <ProjectSwitch
+            projectId={project.id}
+            setting="autopilot"
+            checked={settings.autopilot}
+            ceiling={{
+              usd: settings.spendCeilingUsd,
+              settingsHref: projectSettingsFieldPath(
+                project.id,
+                'spend-ceiling',
+              ),
+            }}
+          />
+          <ProjectSwitch
+            projectId={project.id}
+            setting="autoTriage"
+            checked={settings.autoTriage}
+            ceiling={{
+              usd: settings.triageCeilingUsd,
+              settingsHref: projectSettingsFieldPath(
+                project.id,
+                'triage-ceiling',
+              ),
+            }}
+          />
+        </Inline>
         <PauseReasons
           autopilot={explanation.autopilot}
           autoTriage={explanation.autoTriage}

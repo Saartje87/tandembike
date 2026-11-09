@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appAutopilot } from '../../../../autopilot/app-autopilot';
@@ -11,6 +12,7 @@ import {
 } from '../../../../test/render';
 import { createTestTickets } from '../../../../test/tickets';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { setProjectAgentSettings } from '../../../projects/actions';
 import FlowPage, { generateMetadata } from './page';
 
 const { notFound } = vi.hoisted(() => ({
@@ -20,6 +22,9 @@ const { notFound } = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('../../../projects/actions', () => ({
+  setProjectAgentSettings: vi.fn(),
+}));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../autopilot/app-autopilot', () => ({
   appAutopilot: vi.fn(),
@@ -40,9 +45,16 @@ const explaining = (explanation: Partial<AutopilotExplanation>) =>
   } as unknown as ReturnType<typeof appAutopilot>);
 
 /** Renders Project `name`'s Flow page and returns its params. */
-async function renderFlow(name = 'Website') {
+async function renderFlow(
+  name = 'Website',
+  arrange: (
+    tickets: ReturnType<typeof createTestTickets>,
+    projectId: number,
+  ) => void = () => {},
+) {
   const tickets = createTestTickets();
   const project = tickets.createProject({ name });
+  arrange(tickets, project.id);
   vi.mocked(appTickets).mockReturnValue(tickets);
   const params = Promise.resolve({ id: String(project.id) });
   await renderPage(<main>{await FlowPage({ params })}</main>);
@@ -138,6 +150,41 @@ describe('FlowPage', () => {
       "Today's triage spend, $2.00, has reached the Triage ceiling of $1.50.",
       'A Triage run is already working; Auto-triage runs one at a time.',
     ]);
+  });
+
+  it("shows the Autopilot and Auto-triage switches as the Project's settings have them", async () => {
+    await renderFlow('Website', (tickets, projectId) =>
+      tickets.setProjectAgentSettings(projectId, {
+        autopilot: true,
+        spendCeilingUsd: 10,
+      }),
+    );
+
+    expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Auto-triage' })).toBeDisabled();
+    expect(
+      screen.getByRole('link', { name: 'Set a Triage ceiling' }),
+    ).toHaveAttribute(
+      'href',
+      expect.stringMatching(/\/settings#triage-ceiling$/),
+    );
+    expect(
+      screen.queryByRole('link', { name: 'Set a Spend ceiling' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('turns Autopilot on through the settings Server Action', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({ ok: true });
+    const { project } = await renderFlow('Website', (tickets, projectId) =>
+      tickets.setProjectAgentSettings(projectId, { spendCeilingUsd: 10 }),
+    );
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+
+    expect(setProjectAgentSettings).toHaveBeenCalledWith({
+      projectId: project.id,
+      autopilot: true,
+    });
   });
 
   it('shows the loading state until the Project loads', async () => {

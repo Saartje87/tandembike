@@ -231,7 +231,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
     <Stack gap={3}>
       <form aria-label="Agent settings" onSubmit={submit}>
         <Stack gap={3}>
-          <Stack gap={1}>
+          <Stack gap={1} id="repository-path">
             <Label htmlFor={pathId}>Repository path</Label>
             <TextInput
               {...register('repositoryPath')}
@@ -254,20 +254,22 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               </Button>
             </div>
           </Stack>
-          <CheckCommandField
-            registration={register('checkCommand')}
-            value={watch('checkCommand')}
-            error={checkError}
-            candidates={candidates}
-            onUse={(candidate) => setValue('checkCommand', candidate)}
-          >
-            <Text tag="p" fontSize="small" color="muted">
-              The command that defines green for the repository. Start runs must
-              see it pass before they open a pull request; leave empty to follow
-              the repository's own instructions.
-            </Text>
-          </CheckCommandField>
-          <Stack gap={1}>
+          <div id="check-command">
+            <CheckCommandField
+              registration={register('checkCommand')}
+              value={watch('checkCommand')}
+              error={checkError}
+              candidates={candidates}
+              onUse={(candidate) => setValue('checkCommand', candidate)}
+            >
+              <Text tag="p" fontSize="small" color="muted">
+                The command that defines green for the repository. Start runs
+                must see it pass before they open a pull request; leave empty to
+                follow the repository's own instructions.
+              </Text>
+            </CheckCommandField>
+          </div>
+          <Stack gap={1} id="prepare-command">
             <Label htmlFor={prepareId}>Prepare command</Label>
             <TextInput
               {...register('prepareCommand')}
@@ -324,7 +326,12 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             <FieldError id={modeErrorId} reason={modeError} />
           </Stack>
           {/* Blocks has no radio group yet, so a Stack carries the role (T1163). */}
-          <Stack gap={1} role="radiogroup" aria-labelledby={runModeLabelId}>
+          <Stack
+            gap={1}
+            role="radiogroup"
+            aria-labelledby={runModeLabelId}
+            id="run-mode"
+          >
             <Text tag="p" id={runModeLabelId} fontWeight="bold">
               Agent run mode
             </Text>
@@ -343,7 +350,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             </Text>
             <FieldError id={runModeErrorId} reason={runModeError} />
           </Stack>
-          <Stack gap={1}>
+          <Stack gap={1} id="run-model">
             <Label htmlFor={runModelId}>Run model</Label>
             <TextInput
               {...register('runModel')}
@@ -376,7 +383,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             </Text>
             <FieldError id={triageModelErrorId} reason={triageModelError} />
           </Stack>
-          <Stack gap={1}>
+          <Stack gap={1} id="autopilot">
             <Inline gap={2} alignY="center">
               <Switch {...register('autopilot')} id={autopilotId} />
               <Label htmlFor={autopilotId}>Autopilot</Label>
@@ -387,7 +394,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               runs allow. Turning it off leaves running runs alone.
             </Text>
           </Stack>
-          <Stack gap={1}>
+          <Stack gap={1} id="spend-ceiling">
             <Label htmlFor={ceilingId}>Spend ceiling (USD)</Label>
             <TextInput
               {...register('spendCeiling')}
@@ -415,7 +422,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               with or without Autopilot.
             </Text>
           </Stack>
-          <Stack gap={1}>
+          <Stack gap={1} id="auto-triage">
             <Inline gap={2} alignY="center">
               <Switch {...register('autoTriage')} id={autoTriageId} />
               <Label htmlFor={autoTriageId}>Auto-triage</Label>
@@ -427,7 +434,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               Turning it off leaves a running Triage run alone.
             </Text>
           </Stack>
-          <Stack gap={1}>
+          <Stack gap={1} id="triage-ceiling">
             <Label htmlFor={triageCeilingId}>Triage ceiling (USD)</Label>
             <TextInput
               {...register('triageCeiling')}
