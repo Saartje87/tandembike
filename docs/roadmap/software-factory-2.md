@@ -90,7 +90,7 @@ Autopilot also dispatches Triage runs for Intake, Backlog included, on a Project
 ### CLI sessions (Q27 to Q30)
 
 - The Playbook plugin registers at user scope, so `/tandembike:implement T42` and the other Stages work in any repository's terminal session. A repository's overrides still apply.
-- `tandembike start T42` (and `triage`, `plan "<goal>"`, `next`) resolves the Project from the cwd and creates the worktree as for a UI run. It records a Conversation Started by Terminal and execs interactive `claude` there, with the Stage's command, brief and Agent-run ID. This is the main way to work from a terminal. A bare `claude` session that only calls MCP still works, as an untracked Agent.
+- `tandembike start T42` (and `triage T42`, `spec T42`, `next`) resolves the Project (from the Ticket, or from the cwd for `next`) and creates the worktree as for a UI run. It records a Conversation Started by Terminal and execs interactive `claude` there, with the Stage's command, brief and Agent-run ID. This is the main way to work from a terminal. A bare `claude` session that only calls MCP still works, as an untracked Agent.
 - On the Board a Terminal Conversation is In flight, with a Status line from its latest MCP call, since Tandembike has no transcript of an interactive session. It has no permission relay, because the User answers prompts in the terminal. It counts against no run cap or spend, and its Ticket is not Eligible while it is open. It ends when the CLI reports that `claude` exited, or after an idle timeout. A session that exits before `finish_work` leaves its Ticket Stalled, as today.
 - **Continue in terminal** on a UI Conversation copies `tandembike resume <conversation>`. That command stops the UI run and runs `claude --resume <session id>` in its worktree, and the Conversation becomes Terminal. The reverse waits.
 
@@ -118,11 +118,11 @@ Built in steps. T1218: the plugin folder `playbook/` with its lock file, the run
 
 ### Phase 10: CLI sessions (T1196)
 
-The plugin at user scope, `tandembike start | triage | plan | next | resume`, and Terminal Conversations on the Board. ADR: Terminal Conversations. Glossary: Terminal under Started by.
+The plugin at user scope, `tandembike start | triage | spec | next | resume`, and Terminal Conversations on the Board. ADR: Terminal Conversations. Glossary: Terminal under Started by.
 
 ### Phase 11: autonomous intake and planning (T1197)
 
-Triage dispatch with its ceiling and model, `propose_triage` approval, the Plan Conversation, the feedback cap and Retro clustering. ADR: Autopilot triages, amending ADR 0030.
+Triage dispatch with its ceiling and model, `propose_triage` approval, the Plan Conversation (and `tandembike plan "<goal>"`, which phase 10 leaves out), the feedback cap and Retro clustering. ADR: Autopilot triages, amending ADR 0030.
 
 ### Phase 12: machine-wide control and notifications (T1198)
 

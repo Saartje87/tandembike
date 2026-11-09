@@ -15,6 +15,7 @@ import {
   shouldOfferPlugin,
 } from './install';
 import {
+  noWorkMessage,
   parseCommand,
   planClaudeSession,
   type TerminalStartResult,
@@ -45,8 +46,21 @@ async function main(): Promise<void> {
     console.log(parsed.text);
     process.exit(1);
   }
-  if (parsed.command === 'start') {
-    process.exit(await startSession(parsed.ticketNumber));
+  if (
+    parsed.command === 'start' ||
+    parsed.command === 'triage' ||
+    parsed.command === 'spec'
+  ) {
+    return process.exit(
+      await startSession({
+        action: 'start',
+        ticketNumber: parsed.ticketNumber,
+        intent: parsed.command,
+      }),
+    );
+  }
+  if (parsed.command === 'next') {
+    return process.exit(await startNext());
   }
 
   const blocker = firstRunCopyBlocker(join(checkout, 'data'), home);
@@ -110,17 +124,39 @@ async function callServer<T>(body: object): Promise<T> {
  * interactive `claude` in it with inherited stdio, and reports the end.
  * Returns `claude`'s exit code.
  */
-async function startSession(ticketNumber: number): Promise<number> {
+async function startSession(request: object): Promise<number> {
   let started: TerminalStartResult;
   try {
-    started = await callServer<TerminalStartResult>({
-      action: 'start',
-      ticketNumber,
-    });
+    started = await callServer<TerminalStartResult>(request);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return 1;
   }
+  return runSession(started);
+}
+
+/**
+ * `tandembike next`: the Project is the one whose repository holds this
+ * folder; the server starts its next Eligible item, or says why there is none.
+ */
+async function startNext(): Promise<number> {
+  let next:
+    | { started: true; session: TerminalStartResult }
+    | { started: false; reason: Parameters<typeof noWorkMessage>[0] };
+  try {
+    next = await callServer({ action: 'next', folder: process.cwd() });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+  if (!next.started) {
+    console.log(noWorkMessage(next.reason));
+    return 0;
+  }
+  return runSession(next.session);
+}
+
+async function runSession(started: TerminalStartResult): Promise<number> {
   const plan = planClaudeSession(started);
   // A heartbeat every minute tells the server the session is alive; a failure,
   // such as a server restart, is ignored (ADR 0039).

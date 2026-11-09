@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  noWorkMessage,
   parseCommand,
   planClaudeSession,
   type TerminalStartResult,
@@ -45,7 +46,23 @@ describe('parseCommand', () => {
     });
   });
 
+  it('accepts triage and spec with a Ticket, and next alone (T1240)', () => {
+    expect(parseCommand(['triage', 'T42'])).toEqual({
+      command: 'triage',
+      ticketNumber: 42,
+    });
+    expect(parseCommand(['spec', '7'])).toEqual({
+      command: 'spec',
+      ticketNumber: 7,
+    });
+    expect(parseCommand(['next'])).toEqual({ command: 'next' });
+  });
+
   it.each([
+    [['triage']],
+    [['spec', 'abc']],
+    [['spec', 'T1', 'extra']],
+    [['next', 'T1']],
     [['start']],
     [['start', 'abc']],
     [['start', '0']],
@@ -62,6 +79,17 @@ describe('parseCommand', () => {
 
   it('prints the usage with the start command', () => {
     expect(usageText).toContain('tandembike start <ticket>');
+    expect(usageText).toContain('tandembike triage <ticket>');
+    expect(usageText).toContain('tandembike spec <ticket>');
+    expect(usageText).toContain('tandembike next');
+  });
+
+  it('words each reason next_work gives for no work (T1240)', () => {
+    expect(noWorkMessage('no-active-cycle')).toMatch(/no Active Cycle/);
+    expect(noWorkMessage('nothing-ready')).toMatch(/ready-for-agent/);
+    expect(noWorkMessage('all-blocked-or-claimed')).toMatch(
+      /blocked or claimed/,
+    );
   });
 });
 

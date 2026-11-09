@@ -8,7 +8,12 @@ import { NotFoundError, TicketsError } from '../../../tickets/errors';
  * Later subcommands add actions here.
  */
 type TerminalAction =
-  | { action: 'start'; ticketNumber: number; intent?: 'start' }
+  | {
+      action: 'start';
+      ticketNumber: number;
+      intent?: 'start' | 'triage' | 'spec';
+    }
+  | { action: 'next'; folder: string }
   | { action: 'end'; conversationId: number; exitCode: number }
   | { action: 'heartbeat'; conversationId: number };
 
@@ -34,6 +39,10 @@ export const POST = async (request: Request): Promise<Response> => {
             ticketNumber: Number(body.ticketNumber),
             intent: body.intent ?? 'start',
           }),
+        );
+      case 'next':
+        return Response.json(
+          await conversations.startTerminalNext(String(body.folder)),
         );
       case 'end':
         await conversations.endTerminal(Number(body.conversationId), {

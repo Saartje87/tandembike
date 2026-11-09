@@ -74,6 +74,14 @@ unless the Project sets its own), the run brief, the bundled Playbook, the
 Project's run mode and model, and `TANDEMBIKE_RUN` set to the Conversation's
 id. You answer permission prompts and questions in the terminal.
 
+The other Stages work the same way: `tandembike triage T42` opens a Triage
+session and `tandembike spec T42` a Spec session, both in the main checkout
+with the Stage's command. Spec is refused unless the Ticket is an idea in
+Intake or an Epic without children. `tandembike next` takes the Project whose
+repository holds the current folder and starts a Terminal Start on the top
+Eligible item of its Active Cycle, the rule of `next_work`; with none it says
+why, and from a folder in no Project's repository it names the known Projects.
+
 The Conversation shows on the Board as In flight, **Started by Terminal**. It
 holds no Start run slot and counts against no Spend ceiling, and Autopilot does
 not start a second run on its Ticket. It ends when `claude` exits, and
