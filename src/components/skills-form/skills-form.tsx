@@ -53,7 +53,7 @@ export const SkillsForm: FC<SkillsFormProps> = ({ projectId, skills }) => {
             {...register('text')}
             id={fieldId}
             rows={6}
-            placeholder="/mattpocock-skills:grilling"
+            placeholder="/tandembike:spec"
             autoComplete="off"
             spellCheck={false}
             aria-invalid={fieldError ? true : undefined}

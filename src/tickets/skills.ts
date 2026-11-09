@@ -1,10 +1,11 @@
-/** The Skills every Project starts with (T620). */
+/**
+ * The Skills a new Project starts with (T620): the Playbook's, so every
+ * chip runs without installing anything else (T1229, ADR 0032).
+ */
 export const defaultSkills = [
-  '/mattpocock-skills:grilling',
-  '/mattpocock-skills:grill-with-docs',
-  '/mattpocock-skills:retro',
-  '/mattpocock-skills:to-spec',
-  '/mattpocock-skills:to-tickets',
+  '/tandembike:spec',
+  '/tandembike:plan',
+  '/tandembike:retro',
 ];
 
 const maxSkills = 20;

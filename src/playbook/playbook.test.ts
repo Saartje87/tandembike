@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { findRemovedToolMentions } from '../mcp/removed-tools';
 import { agentStages, playbookPluginName } from '../tickets/agent-commands';
+import { defaultSkills } from '../tickets/skills';
 import {
   currentPlaybookLock,
   hashPlaybook,
@@ -11,7 +12,13 @@ import {
   playbookPath,
   readPlaybookLock,
 } from './playbook';
-import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -79,6 +86,20 @@ describe('The Playbook plugin', () => {
     expect(text).toContain('AskUserQuestion');
     expect(text).toMatch(/never start a Cycle/);
     expect(text).not.toContain('propose_cycle');
+  });
+
+  it("ships every default Skill a new Project's Conversations offer (T1229)", () => {
+    expect(defaultSkills).not.toEqual([]);
+    for (const command of defaultSkills) {
+      expect(command).not.toMatch(/^\/mattpocock-skills/);
+      const prefix = `/${playbookPluginName}:`;
+      expect(command.startsWith(prefix), command).toBe(true);
+      const skill = command.slice(prefix.length);
+      expect(
+        existsSync(join(playbookPath, 'skills', skill, 'SKILL.md')),
+        `${command} has a skill in playbook/skills`,
+      ).toBe(true);
+    }
   });
 
   it('names no MCP tool that was removed', () => {

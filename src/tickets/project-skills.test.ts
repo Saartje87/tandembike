@@ -9,16 +9,14 @@ const fieldError = (run: () => unknown) =>
   (errorFrom(run) as ValidationError).fieldErrors.skills;
 
 describe("A Project's Skills", () => {
-  it('start with the mattpocock-skills commands', () => {
+  it("start with the Playbook's spec, plan and retro commands", () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
     expect(tickets.getProjectSkills(project.id)).toEqual([
-      '/mattpocock-skills:grilling',
-      '/mattpocock-skills:grill-with-docs',
-      '/mattpocock-skills:retro',
-      '/mattpocock-skills:to-spec',
-      '/mattpocock-skills:to-tickets',
+      '/tandembike:spec',
+      '/tandembike:plan',
+      '/tandembike:retro',
     ]);
   });
 

@@ -199,7 +199,7 @@ A Project setting, `default` or `auto`, that every run the Project starts uses a
 _Avoid_: Permission level, trust mode
 
 **Skill**:
-A Claude Code command, such as `/mattpocock-skills:grilling`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings; Tandembike does not check that the Agent has them.
+A Claude Code command, such as `/tandembike:spec`, that a Project offers in its Conversations and Drafts as a chip above the message field. A click puts the command at the start of the message; it sends nothing. Only the User sets a Project's Skills, in order, on its Settings, and a new Project starts with the **Playbook's** spec, plan and retro; Tandembike does not check that the Agent has them.
 _Avoid_: Command chip, preset, slash command (for the setting)
 
 **Playbook**:
