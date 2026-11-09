@@ -107,9 +107,9 @@ removed.
 
 The checkout is also a Claude Code marketplace named `tandembike`
 (`.claude-plugin/marketplace.json`) whose one plugin is the bundled Playbook
-(`./playbook`), so installing needs no network. On its first start, and on any
-later start where the installed plugin is older than the bundled Playbook, the
-`tandembike` command offers to run:
+(`./playbook`), so installing needs no network. The offer is made only when
+`tandembike` starts the server: on the first run, and on any later start where
+the installed plugin is older than the bundled Playbook. It offers to run:
 
 ```bash
 claude plugin marketplace add <this checkout>
@@ -119,9 +119,11 @@ claude plugin install tandembike@tandembike --scope user
 (or, for an older install, `claude plugin marketplace update tandembike` and
 `claude plugin update tandembike@tandembike`). You confirm each offer; with no
 `claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
-again. Afterwards `/tandembike:implement T42` and the other Playbook commands
-work in a bare `claude` session in any repository. `tandembike start` sessions
-always load the bundled Playbook, so they do not depend on this install.
+again at any time. Afterwards `/tandembike:implement T42` and the other
+Playbook commands work in a bare `claude` session in any repository. The
+session subcommands (`start`, `triage`, `spec`, `next`, `resume`) never make
+the offer: they load the bundled Playbook themselves, so they do not depend on
+this install.
 
 ## Connect an Agent
 
