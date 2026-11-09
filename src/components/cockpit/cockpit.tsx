@@ -37,6 +37,7 @@ import {
   useOptimistic,
 } from 'react';
 
+import { formatCost } from '../../app/lib/format-cost';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
@@ -67,7 +68,6 @@ import {
   useTicketCosts,
 } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
-import { formatCost } from '../conversation-labels/conversation-labels';
 import { Icon, type IconName } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';

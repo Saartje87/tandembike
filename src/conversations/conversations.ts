@@ -313,6 +313,22 @@ export const holdsStartRunSlot = (conversation: {
   (conversation.state === 'running' || conversation.state === 'waiting');
 
 /**
+ * Whether a Conversation holds a machine slot (ADR 0041): a working run, not
+ * a Terminal one, of a Start, a Merge or a Triage Autopilot started. The
+ * User's own interactive Conversations hold none.
+ */
+export const holdsMachineSlot = (conversation: {
+  intent: ConversationIntent;
+  state: ConversationState;
+  startedBy: ConversationStarter;
+}): boolean =>
+  holdsStartRunSlot(conversation) ||
+  (!isTerminal(conversation) &&
+    conversation.intent === 'triage' &&
+    conversation.startedBy === 'autopilot' &&
+    (conversation.state === 'running' || conversation.state === 'waiting'));
+
+/**
  * Whether a Start Conversation is open for Approve merge to resume: not
  * closed, and its run idle after handing off or interrupted. A stopped one
  * takes no replies, and a working one is refused before this is asked
@@ -655,9 +671,25 @@ export function createConversations({
   };
 
   /**
+   * How many runs hold a machine slot across all Projects (see
+   * `holdsMachineSlot`). `exceptId` is a Conversation about to work, not
+   * counted against itself.
+   */
+  const machineSlotsInUse = (exceptId?: number): number => {
+    let working = 0;
+    for (const id of live.keys()) {
+      if (id !== exceptId && holdsMachineSlot(get(id))) {
+        working += 1;
+      }
+    }
+    return working;
+  };
+
+  /**
    * Refuses a Start run beyond the Project's limit: a Start is not queued
    * (ADR 0019). A Merge counts like a Start; Triage and Ask are never
    * limited, and do not count. Slots are counted by `holdsStartRunSlot`.
+   * The machine cap (ADR 0041) limits them in the same way, across Projects.
    * `exceptId` is the Conversation about to work, not counted against
    * itself. The User's reply skips this check (ADR 0031).
    */
@@ -687,6 +719,12 @@ export function createConversations({
         settings.parallelRuns
           ? `This Project already has ${running} Start runs working, the most it allows at once. Stop one, or raise max concurrent Start runs in the Project settings.`
           : 'This Project already has a Start run working. Stop it first, or turn on Parallel runs in the Project settings to allow more.',
+      );
+    }
+    const cap = tickets.getMachineSettings().maxConcurrentRuns;
+    if (machineSlotsInUse(exceptId) >= cap) {
+      throw new NotAllowedError(
+        `The machine runs its cap of ${cap} runs; wait for one to finish or raise the cap in Settings.`,
       );
     }
   };
@@ -1457,8 +1495,68 @@ export function createConversations({
     return (ended?.total ?? 0) + working;
   };
 
+  /**
+   * What Autopilot's runs have cost since `dayStart` across all Projects
+   * (ADR 0041): the Run outcomes of runs it started that ended then or later,
+   * plus the cost so far of its runs still working. An approved merge and the
+   * User's own runs are left out.
+   */
+  const autopilotSpendToday = (dayStart: Date): number => {
+    const ended = db
+      .select({
+        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+      })
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.startedByAutopilot, true),
+          ne(runOutcomes.stage, 'merge'),
+          gte(runOutcomes.endedAt, dayStart),
+        ),
+      )
+      .get();
+    let working = 0;
+    for (const id of live.keys()) {
+      const pending = live.get(id)?.pending;
+      if (pending?.startedByAutopilot && pending.stage !== 'merge') {
+        working += Math.max(0, get(id).costUsd - pending.costAtStart);
+      }
+    }
+    return (ended?.total ?? 0) + working;
+  };
+
   return {
     get,
+
+    autopilotSpendToday,
+
+    /**
+     * Today's Machine ceiling budget (ADR 0041), the one place that decides
+     * "paused": Autopilot's spend since the start of `now`'s local day against
+     * the machine's daily ceiling. Null while no ceiling is set.
+     */
+    machineBudget(
+      now: Date = new Date(),
+    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const ceilingUsd = tickets.getMachineSettings().dailySpendCeilingUsd;
+      if (ceilingUsd === null) {
+        return null;
+      }
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const spendUsd = autopilotSpendToday(dayStart);
+      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+    },
+
+    /**
+     * How many working runs hold a machine slot, across all Projects (ADR
+     * 0041, GLOSSARY: Machine slot): Start and Merge runs and Triage runs
+     * Autopilot started. Idle, Terminal and the User's interactive ones do
+     * not count.
+     */
+    machineSlotsInUse(): number {
+      return machineSlotsInUse();
+    },
 
     /**
      * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
@@ -1532,6 +1630,25 @@ export function createConversations({
     },
 
     autopilotTriageSpend,
+
+    /**
+     * A Cycle's Spend ceiling budget (the Project's setting), the one place
+     * that decides "paused": Autopilot's spend on the Cycle against the
+     * ceiling. Null while the Project has no Spend ceiling.
+     */
+    spendBudget(input: {
+      projectId: number;
+      cycleId: number;
+    }): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const ceilingUsd = tickets.getProjectAgentSettings(
+        input.projectId,
+      ).spendCeilingUsd;
+      if (ceilingUsd === null) {
+        return null;
+      }
+      const spendUsd = this.autopilotSpend(input);
+      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+    },
 
     /**
      * Today's Auto-triage budget of a Project (ADR 0040), the one place that
@@ -2063,8 +2180,14 @@ export function createConversations({
      * takes it off the open Conversations. Its transcript stays.
      */
     async close(id: number): Promise<Conversation> {
-      await this.stop(id);
+      // Closed before it stops, so the stop's change already reads as the
+      // User's own and Notices raise nothing for it.
+      const conversation = get(id);
+      if (conversation.state !== 'stopped') {
+        refuseTerminal(conversation);
+      }
       setHidden(id, true);
+      await this.stop(id);
       announce(id);
       await tryRelease(id);
       return get(id);

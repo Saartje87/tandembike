@@ -11,8 +11,8 @@ import {
 import { useForm } from 'react-hook-form';
 
 import { refusalReason } from '../../app/lib/action-result';
+import { formatCost } from '../../app/lib/format-cost';
 import { setProjectAgentSettings } from '../../app/projects/actions';
-import { formatCost } from '../conversation-labels/conversation-labels';
 import { FieldError } from '../field-error/field-error';
 
 export type AutopilotBarProps = {

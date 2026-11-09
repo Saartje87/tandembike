@@ -4,10 +4,10 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { stopConversation } from '../../app/conversations/actions';
+import { formatCost } from '../../app/lib/format-cost';
 import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
 import {
-  formatCost,
   hasRun,
   intentNames,
   starterNames,

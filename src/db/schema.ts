@@ -550,3 +550,15 @@ export const triageProposals = sqliteTable(
   },
   (table) => [index('triage_proposals_ticket_number').on(table.ticketNumber)],
 );
+
+/**
+ * The settings of the whole machine (ADR 0041): one row, id 1, written only
+ * through a Server Action. No row means the defaults.
+ */
+export const machineSettings = sqliteTable('machine_settings', {
+  id: integer('id').primaryKey(),
+  /** The most working runs across all Projects at once. */
+  maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
+  /** Autopilot's most spend per local day across all Projects; null is none. */
+  dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
+});

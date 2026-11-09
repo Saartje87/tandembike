@@ -1,7 +1,7 @@
 import { Inline, Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
-import { formatCost } from '../conversation-labels/conversation-labels';
+import { formatCost } from '../../app/lib/format-cost';
 
 export type TriageSpendProps = {
   /** What Auto-triage spent today, in USD. */

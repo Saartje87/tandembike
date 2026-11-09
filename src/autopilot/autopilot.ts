@@ -6,7 +6,7 @@ import {
   startRunLimit,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
-import type { Change, ChangeChannel } from '../tickets/changes';
+import type { ChangeChannel } from '../tickets/changes';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
@@ -30,13 +30,14 @@ const transientResumeText =
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /**
- * Autopilot (ADR 0030): while a Project's switch is on and it has an Active
- * Cycle, it starts a Start Conversation for each Eligible Ticket or Epic, in
- * the Cycle Board's Todo order, up to the Project's free Start run slots.
- * Evaluations run one at a time, so nothing is dispatched twice. It never
- * changes Status or labels, and retries only a transient end, once (ADR
- * 0034): any other Ticket with a Start Conversation that is not closed waits
- * for the User.
+ * Autopilot (ADR 0030, ADR 0041): while a Project's switch is on and it has
+ * an Active Cycle, it starts a Start Conversation for each Eligible Ticket or
+ * Epic, in the Cycle Board's Todo order, up to the Project's free Start run
+ * slots and the machine's free slots. One pass covers every Project, and
+ * passes run one at a time, so nothing is dispatched twice. It never changes
+ * Status or labels, and retries only a transient end, once (ADR 0034): any
+ * other Ticket with a Start Conversation that is not closed waits for the
+ * User.
  */
 export function createAutopilot({
   tickets,
@@ -47,7 +48,8 @@ export function createAutopilot({
   let queue: Promise<void> = Promise.resolve();
   /** Backoff timers by Conversation; a restart drops them (startup resume covers it). */
   const backoffs = new Map<number, ReturnType<typeof setTimeout>>();
-  const pendingEvaluations = new Map<number, Promise<void>>();
+  /** The pass that is queued but has not begun; every request shares it. */
+  let pendingPass: Promise<void> | null = null;
 
   /** Runs `step` after the queued ones, logging a failure instead of losing it. */
   const enqueue = (step: () => Promise<void>): Promise<void> => {
@@ -144,6 +146,14 @@ export function createAutopilot({
     );
   };
 
+  /** How many machine slots are free now (ADR 0041); never below 0. */
+  const machineFree = (): number =>
+    Math.max(
+      0,
+      tickets.getMachineSettings().maxConcurrentRuns -
+        conversations.machineSlotsInUse(),
+    );
+
   /**
    * The Active Cycle and free Start run slots Autopilot may use for the
    * Project now, or null with the switch off, no Active Cycle, the Spend
@@ -166,11 +176,7 @@ export function createAutopilot({
     if (!cycle) {
       return null;
     }
-    if (
-      settings.spendCeilingUsd !== null &&
-      conversations.autopilotSpend({ projectId, cycleId: cycle.id }) >=
-        settings.spendCeilingUsd
-    ) {
+    if (conversations.spendBudget({ projectId, cycleId: cycle.id })?.paused) {
       return null;
     }
     // A Merge the User approved holds a run slot like a Start (T1221).
@@ -207,6 +213,10 @@ export function createAutopilot({
         );
       });
     for (const conversation of interrupted.slice(0, open.slots)) {
+      // Read again for each: a resume takes a machine slot.
+      if (machineFree() === 0) {
+        return;
+      }
       try {
         await conversations.reply(
           conversation.id,
@@ -228,7 +238,7 @@ export function createAutopilot({
    * latest Run outcome is `failed_transient` and a minute old, unless that run
    * was itself an automatic resume (marked on its outcome; the startup resume
    * and the User's reply start the count again). One not yet old enough
-   * gets a timer that evaluates the Project when it is.
+   * gets a timer that queues a pass when it is.
    */
   const resumeTransient = async (projectId: number) => {
     const open = room(projectId);
@@ -260,14 +270,14 @@ export function createAutopilot({
             conversation.id,
             setTimeout(() => {
               backoffs.delete(conversation.id);
-              void evaluate(projectId);
+              void evaluate();
             }, wait),
           );
         }
         continue;
       }
       // Room is read again for each resume: the one before took a slot.
-      if (!room(projectId)) {
+      if (!room(projectId) || machineFree() === 0) {
         break;
       }
       try {
@@ -286,28 +296,38 @@ export function createAutopilot({
     }
   };
 
-  const dispatch = async (projectId: number) => {
+  /**
+   * One turn's build (ADR 0041): starts the Project's first Eligible Ticket
+   * when it has room, and says whether it did. A refusal, such as a missing
+   * repository path, starts nothing; the Ticket has no Conversation, so the
+   * next change tries it again.
+   */
+  const dispatchOne = async (projectId: number): Promise<boolean> => {
     const open = room(projectId);
-    if (!open) {
-      return;
+    if (!open || machineFree() === 0) {
+      return false;
     }
-    const { cycleId, slots } = open;
-    const commands = tickets.getProjectAgentCommands(projectId);
-    for (const ticket of eligible(projectId, cycleId).slice(0, slots)) {
-      try {
-        await conversations.start({
-          startedBy: 'autopilot',
-          ticketNumber: ticket.number,
-          intent: 'start',
-          cycleId,
-          prompt: agentCommandMessage('start', ticket, commands),
-        });
-      } catch (error) {
-        // A refusal, such as a missing repository path, ends this dispatch;
-        // the Ticket has no Conversation, so the next change tries it again.
-        console.error(`Autopilot could not start T${ticket.number}`, error);
-        return;
-      }
+    const { cycleId } = open;
+    const [ticket] = eligible(projectId, cycleId);
+    if (!ticket) {
+      return false;
+    }
+    try {
+      await conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        cycleId,
+        prompt: agentCommandMessage(
+          'start',
+          ticket,
+          tickets.getProjectAgentCommands(projectId),
+        ),
+      });
+      return true;
+    } catch (error) {
+      console.error(`Autopilot could not start T${ticket.number}`, error);
+      return false;
     }
   };
 
@@ -379,14 +399,15 @@ export function createAutopilot({
    * Conversation on the oldest Triage-eligible Ticket. It needs no Active
    * Cycle, records none and takes no Start run slot.
    */
-  const triage = async (projectId: number) => {
+  const triageOne = async (projectId: number): Promise<boolean> => {
     const settings = tickets.getProjectAgentSettings(projectId);
     if (
       tickets.getProject(projectId).archived ||
       !settings.autoTriage ||
-      settings.triageCeilingUsd === null
+      settings.triageCeilingUsd === null ||
+      machineFree() === 0
     ) {
-      return;
+      return false;
     }
     if (
       conversations
@@ -397,14 +418,14 @@ export function createAutopilot({
             workingStates.includes(conversation.state),
         )
     ) {
-      return;
+      return false;
     }
     if (conversations.triageBudget(projectId, now())?.paused !== false) {
-      return;
+      return false;
     }
     const [ticket] = triageEligible(projectId);
     if (!ticket) {
-      return;
+      return false;
     }
     try {
       await conversations.start({
@@ -417,65 +438,144 @@ export function createAutopilot({
           tickets.getProjectAgentCommands(projectId),
         ),
       });
+      return true;
     } catch (error) {
       console.error(`Autopilot could not triage T${ticket.number}`, error);
+      return false;
     }
   };
 
-  const projectOf = (change: Change): number | null => {
+  /** The ids of the Projects a pass covers: the unarchived ones, lowest id first. */
+  const projectIds = (): number[] =>
+    tickets
+      .listProjects()
+      .filter((project) => !project.archived)
+      .map((project) => project.id);
+
+  /** Runs `step` for one Project, logging a failure so the others still go on. */
+  const forProject = async (
+    projectId: number,
+    step: (projectId: number) => Promise<void>,
+  ) => {
     try {
-      switch (change.type) {
-        case 'project':
-          return change.id;
-        case 'cycle':
-          return tickets.getCycle(change.id).projectId;
-        case 'ticket':
-          return tickets.getTicket(change.number).projectId;
-        case 'tickets':
-          return change.numbers.length === 0
-            ? null
-            : tickets.getTicket(change.numbers[0]).projectId;
-        case 'conversation':
-          return conversations.get(change.id).projectId;
-      }
+      await step(projectId);
     } catch (error) {
-      console.error('Autopilot could not place a change in a Project', error);
-      return null;
+      console.error(`Autopilot step failed in Project ${projectId}`, error);
     }
   };
 
-  const evaluate = (projectId: number): Promise<void> => {
-    const pending = pendingEvaluations.get(projectId);
-    if (pending) {
-      return pending;
+  /** The Project served last by any pass; in memory, so a restart begins at the lowest id. */
+  let lastServed: number | null = null;
+
+  /**
+   * Round-robin (ADR 0041): offers each Project one run per turn, its next
+   * Eligible build when it has room, else its next Triage-eligible Ticket,
+   * starting after the Project served last. Turns go on until the machine's
+   * slots run out or no Project took a run; a Project that took none leaves
+   * the rest of the pass.
+   */
+  const roundRobin = async (ids: number[]) => {
+    const after = ids.filter((id) => lastServed !== null && id > lastServed);
+    let active = [...after, ...ids.filter((id) => !after.includes(id))];
+    while (active.length > 0 && machineFree() > 0) {
+      const next: number[] = [];
+      for (const id of active) {
+        if (machineFree() === 0) {
+          return;
+        }
+        let started = false;
+        try {
+          started = (await dispatchOne(id)) || (await triageOne(id));
+        } catch (error) {
+          console.error(`Autopilot step failed in Project ${id}`, error);
+        }
+        if (started) {
+          lastServed = id;
+          next.push(id);
+        }
+      }
+      active = next;
+    }
+  };
+
+  /** The timer that queues a pass when the paused day ends. */
+  let dayTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Today's Machine ceiling budget (ADR 0041), or null with no ceiling. While
+   * it is paused the pass starts and resumes nothing anywhere; running runs
+   * finish. Notices read the pause state here.
+   */
+  const machineBudget = () => conversations.machineBudget(now());
+
+  /** Queues a pass at the next local midnight, once, when the day resets the spend. */
+  const wakeNextDay = () => {
+    if (dayTimer) {
+      return;
+    }
+    const next = new Date(now());
+    next.setHours(24, 0, 0, 0);
+    dayTimer = setTimeout(
+      () => {
+        dayTimer = null;
+        void evaluate();
+      },
+      Math.max(1, next.getTime() - now().getTime()),
+    );
+  };
+
+  /**
+   * One machine-wide pass (ADR 0041): the resumes of every Project first,
+   * then the round-robin of builds and triages, all within the machine's free
+   * slots and every Project's own limits. The world is read afresh at each
+   * step, so a run another step started is counted.
+   */
+  const runPass = async (startupResume: boolean) => {
+    if (machineBudget()?.paused) {
+      wakeNextDay();
+      return;
+    }
+    const ids = projectIds();
+    if (startupResume) {
+      for (const id of ids) {
+        await forProject(id, resume);
+      }
+    }
+    for (const id of ids) {
+      await forProject(id, resumeTransient);
+    }
+    await roundRobin(ids);
+  };
+
+  const evaluate = (): Promise<void> => {
+    if (pendingPass) {
+      return pendingPass;
     }
     const run = enqueue(async () => {
-      pendingEvaluations.delete(projectId);
-      await resumeTransient(projectId);
-      await dispatch(projectId);
-      await triage(projectId);
+      pendingPass = null;
+      await runPass(false);
     });
-    pendingEvaluations.set(projectId, run);
+    pendingPass = run;
     return run;
   };
 
-  /** Resumes first, then dispatches, as one queued step. */
-  const startup = (projectId: number): Promise<void> =>
-    enqueue(async () => {
-      await resume(projectId);
-      await resumeTransient(projectId);
-      await dispatch(projectId);
-      await triage(projectId);
-    });
+  /** Resumes first, then dispatches, as one queued pass. */
+  const startup = (): Promise<void> => enqueue(() => runPass(true));
 
   return {
     /**
-     * Dispatches the Project's Eligible work now. Evaluations are queued, one
-     * finishing before the next begins; one already waiting is shared.
+     * Runs a pass over every Project now. Passes are queued, one finishing
+     * before the next begins; one already waiting is shared.
      */
     evaluate,
 
-    /** Resolves once every queued evaluation has finished. */
+    /**
+     * The Machine ceiling's budget now, or null with no ceiling set; `paused`
+     * is true at or over it. The one place that says so (ADR 0041).
+     */
+    machineBudget,
+
+    /** Resolves once every queued pass has finished. */
     async idle(): Promise<void> {
       let seen: Promise<void>;
       do {
@@ -485,26 +585,28 @@ export function createAutopilot({
     },
 
     /**
-     * Re-evaluates the Project each change touches, and for every Project
-     * resumes Autopilot's interrupted Conversations, then dispatches, once
-     * now. Returns a function that stops listening.
+     * Queues a pass on every change, and runs one now that first resumes
+     * Autopilot's interrupted Conversations. Returns a function that stops
+     * listening.
      */
     start(): () => void {
       const unsubscribe = changes.subscribe((change) => {
-        const projectId = projectOf(change);
-        if (projectId !== null) {
-          void evaluate(projectId);
+        // A Notice is raised from changes Autopilot already saw (ADR 0042).
+        if (change.type !== 'notice') {
+          void evaluate();
         }
       });
-      for (const project of tickets.listProjects()) {
-        void startup(project.id);
-      }
+      void startup();
       return () => {
         unsubscribe();
         for (const timer of backoffs.values()) {
           clearTimeout(timer);
         }
         backoffs.clear();
+        if (dayTimer) {
+          clearTimeout(dayTimer);
+          dayTimer = null;
+        }
       };
     },
   };

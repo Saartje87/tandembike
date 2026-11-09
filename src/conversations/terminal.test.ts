@@ -302,7 +302,7 @@ describe('A Terminal Conversation and the limits', () => {
       intent: 'start',
     });
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(
       conversations

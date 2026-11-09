@@ -344,6 +344,20 @@
       "when": 1794247024511,
       "tag": "0048_auto_triage",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "6",
+      "when": 1794250956267,
+      "tag": "0049_machine_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1794251810480,
+      "tag": "0050_machine_ceiling",
+      "breakpoints": true
     }
   ]
 }

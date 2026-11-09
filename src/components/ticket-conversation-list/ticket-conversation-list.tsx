@@ -3,10 +3,10 @@
 import { Alert, Button, Heading, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
+import { formatCost } from '../../app/lib/format-cost';
 import type { Conversation } from '../../conversations/conversations';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import {
-  formatCost,
   intentNames,
   stateNames,
 } from '../conversation-labels/conversation-labels';

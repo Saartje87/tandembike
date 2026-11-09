@@ -124,6 +124,7 @@ import {
   throwOutOfScope,
   writeLaneOrder,
 } from './lanes';
+import { createMachineSettings } from './machine-settings';
 import {
   checkOrigin,
   type OriginLink,
@@ -3229,6 +3230,7 @@ export function createTickets(
       checkCriteria: checkAcceptanceCriteria,
       transaction: core.transaction,
     }),
+    ...createMachineSettings(db, changes),
     ...createWork({
       ...core,
     }),

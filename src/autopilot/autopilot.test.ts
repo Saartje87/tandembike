@@ -5,6 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestConversations } from '../test/conversations';
 import { createChangeChannel } from '../tickets/changes';
 import { createAutopilot } from './autopilot';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 function setup(options: { autopilot?: boolean; parallel?: number } = {}) {
   const changes = createChangeChannel();
@@ -55,15 +58,15 @@ describe('Autopilot dispatch', () => {
     } = setup({ parallel: 9 });
     const a = ready('A');
     tickets.startCycle(cycle.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     const id = conversations.list({ ticketNumber: a.number })[0].id;
 
     await conversations.stop(id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number]);
 
     await conversations.close(id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number, a.number]);
   });
 
@@ -81,7 +84,7 @@ describe('Autopilot dispatch', () => {
     });
     tickets.startCycle(cycle.id);
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     const list = conversations.list({ projectId: project.id }).reverse();
     expect(list.map((x) => x.ticketNumber)).toEqual([c.number, a.number]);
@@ -110,7 +113,7 @@ describe('Autopilot dispatch', () => {
       epicNumber: epic.number,
     });
     tickets.startCycle(cycle.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await conversations.stop(
       conversations.list({ ticketNumber: epic.number })[0].id,
     );
@@ -118,7 +121,7 @@ describe('Autopilot dispatch', () => {
     vi.setSystemTime(Date.now() + 1000);
 
     tickets.backToTodo(epic.number);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(started()).toEqual([epic.number, epic.number]);
   });
@@ -133,7 +136,7 @@ describe('Autopilot dispatch', () => {
     });
     tickets.startCycle(cycle.id);
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(runner.runs[0].options.prompt).toBe(
       `/tandembike:implement-epic T${epic.number}`,
@@ -170,8 +173,8 @@ describe('Autopilot dispatch', () => {
     const doing = ready('doing');
     tickets.startCycle(cycle.id);
 
-    await autopilot.evaluate(project.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
+    await autopilot.evaluate();
 
     expect(started().sort()).toEqual(
       [blocker.number, epic.number, doing.number].sort(),
@@ -185,12 +188,12 @@ describe('Autopilot dispatch', () => {
     const off = setup({ autopilot: false });
     off.ready('A');
     off.tickets.startCycle(off.cycle.id);
-    await off.autopilot.evaluate(off.project.id);
+    await off.autopilot.evaluate();
     expect(off.started()).toEqual([]);
 
     const noCycle = setup();
     noCycle.ready('A');
-    await noCycle.autopilot.evaluate(noCycle.project.id);
+    await noCycle.autopilot.evaluate();
     expect(noCycle.started()).toEqual([]);
   });
 
@@ -201,9 +204,7 @@ describe('Autopilot dispatch', () => {
     ready('B');
     tickets.startCycle(cycle.id);
 
-    await Promise.all(
-      Array.from({ length: 10 }, () => autopilot.evaluate(project.id)),
-    );
+    await Promise.all(Array.from({ length: 10 }, () => autopilot.evaluate()));
 
     expect(started()).toHaveLength(2);
     expect(started()).toContain(a.number);
@@ -302,24 +303,24 @@ describe('Autopilot dispatch', () => {
     const b = ready('B');
     const c = ready('C');
     tickets.startCycle(cycle.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     // A goes idle waiting for the User, so its slot goes to B.
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number, b.number]);
 
     // The User answers A: two Starts work against a limit of one.
     const first = conversations.list({ ticketNumber: a.number })[0];
     await conversations.reply(first.id, 'Go on', 'user');
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number, b.number]);
 
     // Back at the limit, still nothing; below it, the next Ticket starts.
     runner.runs[1].emit({ type: 'turn', costUsd: 0 });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number, b.number]);
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([a.number, b.number, c.number]);
   });
 
@@ -345,12 +346,12 @@ describe('Autopilot dispatch', () => {
     tickets.startCycle(cycle.id);
     await conversations.approveMerge({ ticketNumber: review.number });
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([review.number]);
 
     const merge = conversations.list({ ticketNumber: review.number })[0];
     await conversations.stop(merge.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(started()).toEqual([review.number, next.number]);
     expect(
       conversations
@@ -372,14 +373,14 @@ describe('Autopilot dispatch', () => {
     } = world;
     ready('A');
     tickets.startCycle(cycle.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     tickets.setProjectAgentSettings(project.id, {
       autopilot: false,
       parallelRuns: true,
       maxConcurrentRuns: 5,
     });
     ready('B');
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(started()).toHaveLength(1);
     expect(conversations.list({ projectId: project.id })[0].state).toBe(
@@ -413,11 +414,11 @@ describe('Autopilot dispatch', () => {
       tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
       const a = ready('A');
       tickets.startCycle(cycle.id);
-      await world.autopilot.evaluate(project.id);
+      await world.autopilot.evaluate();
       runner.runs[0].emit({ type: 'turn', costUsd: 1 });
       ready('B');
 
-      await world.autopilot.evaluate(project.id);
+      await world.autopilot.evaluate();
 
       expect(world.started()).toEqual([a.number]);
       expect(tickets.getProjectAgentSettings(project.id).autopilot).toBe(true);
@@ -471,7 +472,7 @@ describe('Autopilot dispatch', () => {
         conversations.list({ projectId: project.id })[0].id,
       );
 
-      await world.autopilot.evaluate(project.id);
+      await world.autopilot.evaluate();
 
       expect(world.started()).toHaveLength(2);
     });
@@ -566,7 +567,7 @@ describe('Autopilot startup', () => {
       costUsd: 1,
       error: 'API Error: 529 overloaded',
     });
-    await autopilot.evaluate(mine.projectId);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(60_000);
     await autopilot.idle();
 
@@ -667,7 +668,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     const world = setup({ parallel: 3, ...options });
     const ticket = world.ready('A');
     world.tickets.startCycle(world.cycle.id);
-    await world.autopilot.evaluate(world.project.id);
+    await world.autopilot.evaluate();
     const conversation = world.conversations.list({
       ticketNumber: ticket.number,
     })[0];
@@ -681,7 +682,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
   it('resumes a failed_transient Start Conversation once, 60 seconds later, as Autopilot', async () => {
     const { runner, autopilot, project, resumes } = await begin();
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(59_000);
     expect(resumes()).toHaveLength(0);
 
@@ -694,7 +695,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
   it('does not resume a failed outcome', async () => {
     const { runner, autopilot, project, resumes } = await begin();
     runner.runs[0].emit({ type: 'turn', costUsd: 1, error: 'error_max_turns' });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(120_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(0);
@@ -703,7 +704,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
   it('does not resume while Autopilot is off', async () => {
     const { runner, autopilot, project, tickets, resumes } = await begin();
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     tickets.setProjectAgentSettings(project.id, { autopilot: false });
     await vi.advanceTimersByTimeAsync(120_000);
     await autopilot.idle();
@@ -714,7 +715,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     const { runner, autopilot, project, tickets, resumes } = await begin();
     runner.runs[0].emit(overloaded);
     tickets.setProjectAgentSettings(project.id, { spendCeilingUsd: 1 });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(120_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(0);
@@ -731,7 +732,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
       intent: 'start',
       prompt: 'go',
     });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(120_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(0);
@@ -755,7 +756,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
       prompt: 'go',
     });
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(60_000);
     await autopilot.idle();
     expect(
@@ -769,20 +770,20 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     const { runner, autopilot, project, conversations, conversation, resumes } =
       await begin();
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(60_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(1);
 
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(300_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(1);
 
     await conversations.reply(conversation.id, 'try again', 'user');
     runner.runs[0].emit(overloaded);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(60_000);
     await autopilot.idle();
     expect(resumes()).toHaveLength(2);
@@ -845,7 +846,7 @@ describe('Auto-triage', () => {
     const { project, autopilot, idea, triages } = triageSetup({ on: false });
     idea('A', ['needs-triage']);
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages()).toEqual([]);
   });
@@ -854,7 +855,7 @@ describe('Auto-triage', () => {
     const { project, autopilot, idea, triages, runner } = triageSetup();
     const a = idea('A', ['needs-triage']);
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     const [conversation] = triages();
     expect(conversation).toMatchObject({
@@ -876,7 +877,7 @@ describe('Auto-triage', () => {
       cycleId: cycle.id,
     });
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages().map((x) => x.ticketNumber)).toEqual([a.number]);
   });
@@ -886,12 +887,12 @@ describe('Auto-triage', () => {
     const a = idea('A');
     const b = idea('B');
 
-    await autopilot.evaluate(project.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
+    await autopilot.evaluate();
     expect(triages().map((x) => x.ticketNumber)).toEqual([a.number]);
 
     finish(0);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     // A has no proposal yet, but its Conversation is still open: B is next.
     expect(triages().map((x) => x.ticketNumber)).toEqual([a.number, b.number]);
     expect(runner.runs).toHaveLength(2);
@@ -910,7 +911,7 @@ describe('Auto-triage', () => {
     tickets.updateTicket(busy.number, { status: 'In progress' });
     const wanted = idea('Wanted');
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages().map((x) => x.ticketNumber)).toEqual([wanted.number]);
   });
@@ -927,11 +928,11 @@ describe('Auto-triage', () => {
     });
     await conversations.stop(mine.id);
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(triages()).toHaveLength(1);
 
     await conversations.close(mine.id);
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(triages()).toHaveLength(2);
     expect(tickets.getTicket(a.number).status).toBe('Todo');
   });
@@ -947,7 +948,7 @@ describe('Auto-triage', () => {
       prompt: '/tandembike:triage',
     });
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages()).toHaveLength(1);
   });
@@ -965,12 +966,12 @@ describe('Auto-triage', () => {
     const proposal = propose(tickets, rejected.number);
     tickets.rejectTriage(proposal.id, 'No');
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     expect(triages()).toEqual([]);
 
     tickets.updateTicket(rejected.number, { removeLabels: ['needs-triage'] });
     tickets.updateTicket(rejected.number, { addLabels: ['needs-triage'] });
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages().map((x) => x.ticketNumber)).toEqual([rejected.number]);
     expect(conversations.list({ ticketNumber: a.number })).toEqual([]);
@@ -982,14 +983,14 @@ describe('Auto-triage', () => {
         triageSetup({ ceiling: 2 });
       idea('A');
       const b = idea('B');
-      await autopilot.evaluate(project.id);
+      await autopilot.evaluate();
       finish(0, 2.5);
 
-      await autopilot.evaluate(project.id);
+      await autopilot.evaluate();
       expect(triages()).toHaveLength(1);
 
       setClock(new Date(Date.now() + 25 * 60 * 60 * 1000));
-      await autopilot.evaluate(project.id);
+      await autopilot.evaluate();
       expect(triages().map((x) => x.ticketNumber)).toContain(b.number);
     });
 
@@ -998,7 +999,7 @@ describe('Auto-triage', () => {
         ceiling: 2,
       });
       idea('A');
-      await autopilot.evaluate(project.id);
+      await autopilot.evaluate();
       runner.runs[0].emit({ type: 'turn', costUsd: 1 });
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -1026,7 +1027,7 @@ describe('Auto-triage', () => {
       runner.runs[0].emit({ type: 'turn', costUsd: 0 });
       expect(runner.runs[0].options.disallowedTools).toBeUndefined();
 
-      await autopilot.evaluate(project.id);
+      await autopilot.evaluate();
 
       expect(runner.runs[1].options.prompt).toContain(`T${a.number}`);
       expect(runner.runs[1].options.disallowedTools).toEqual([
@@ -1041,15 +1042,448 @@ describe('Auto-triage', () => {
       triageSetup();
     idea('A');
     idea('B');
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
     tickets.setProjectAgentSettings(project.id, {
       autoTriage: false,
       triageCeilingUsd: null,
     });
 
-    await autopilot.evaluate(project.id);
+    await autopilot.evaluate();
 
     expect(triages()).toHaveLength(1);
     expect(conversations.get(triages()[0].id).state).toBe('running');
+  });
+});
+
+describe('Autopilot machine cap (ADR 0041)', () => {
+  function machineSetup(
+    cap: number,
+    options: { projects?: number; parallel?: number } = {},
+  ) {
+    const changes = createChangeChannel();
+    const world = createTestConversations(changes);
+    const { tickets, conversations } = world;
+    tickets.setMachineSettings({ maxConcurrentRuns: cap });
+    const projects = Array.from({ length: options.projects ?? 2 }, (_, i) => {
+      const project = tickets.createProject({ name: `Project ${i + 1}` });
+      tickets.setProjectAgentSettings(project.id, {
+        repositoryPath:
+          i === 0
+            ? world.repositoryDir
+            : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
+        autopilot: true,
+        spendCeilingUsd: 50,
+        parallelRuns: true,
+        maxConcurrentRuns: options.parallel ?? 9,
+      });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Beta',
+      });
+      tickets.startCycle(cycle.id);
+      return { ...project, cycleId: cycle.id };
+    });
+    const ready = (project: (typeof projects)[number], title: string) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: project.cycleId,
+      });
+    const autopilot = createAutopilot({ tickets, conversations, changes });
+    /** The Tickets with a Start Conversation, per Project, in start order. */
+    const startedIn = (project: (typeof projects)[number]) =>
+      conversations
+        .list({ projectId: project.id })
+        .reverse()
+        .map((conversation) => conversation.ticketNumber);
+    return {
+      ...world,
+      changes,
+      projects,
+      ready,
+      autopilot,
+      startedIn,
+    };
+  }
+
+  it('never runs more than the cap across Projects, and goes on when a run ends', async () => {
+    const { projects, ready, autopilot, startedIn, conversations, runner } =
+      machineSetup(3);
+    const a = ready(projects[0], 'A');
+    const b = ready(projects[0], 'B');
+    const c = ready(projects[1], 'C');
+    const d = ready(projects[1], 'D');
+
+    await autopilot.evaluate();
+
+    expect(conversations.machineSlotsInUse()).toBe(3);
+    expect(startedIn(projects[0])).toEqual([a.number, b.number]);
+    expect(startedIn(projects[1])).toEqual([c.number]);
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    await autopilot.evaluate();
+
+    expect(startedIn(projects[1])).toEqual([c.number, d.number]);
+    expect(conversations.machineSlotsInUse()).toBe(3);
+  });
+
+  it('keeps each Project start run limit inside the machine cap', async () => {
+    const { projects, ready, autopilot, startedIn, conversations } =
+      machineSetup(5, { parallel: 1 });
+    ready(projects[0], 'A');
+    ready(projects[0], 'B');
+    const c = ready(projects[1], 'C');
+    ready(projects[1], 'D');
+
+    await autopilot.evaluate();
+
+    expect(startedIn(projects[0])).toHaveLength(1);
+    expect(startedIn(projects[1])).toEqual([c.number]);
+    expect(conversations.machineSlotsInUse()).toBe(2);
+  });
+
+  it('leaves the User interactive and Terminal runs out of the cap', async () => {
+    const { projects, ready, autopilot, startedIn, conversations, tickets } =
+      machineSetup(1);
+    await conversations.start({
+      startedBy: 'user',
+      projectId: projects[0].id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    const terminalTicket = tickets.createTicket({
+      projectId: projects[1].id,
+      title: 'In a terminal',
+    });
+    await conversations.startTerminal({
+      ticketNumber: terminalTicket.number,
+      intent: 'start',
+    });
+    const a = ready(projects[0], 'A');
+
+    await autopilot.evaluate();
+
+    expect(startedIn(projects[0]).filter((n) => n === a.number)).toEqual([
+      a.number,
+    ]);
+  });
+
+  it('counts its own Triage run against the cap', async () => {
+    const { projects, ready, autopilot, startedIn, conversations, tickets } =
+      machineSetup(1);
+    tickets.setProjectAgentSettings(projects[1].id, {
+      autoTriage: true,
+      triageCeilingUsd: 5,
+    });
+    const idea = tickets.createTicket({
+      projectId: projects[1].id,
+      title: 'Idea',
+      labels: ['needs-triage'],
+    });
+    await autopilot.evaluate();
+    expect(
+      conversations
+        .list({ projectId: projects[1].id })
+        .map((conversation) => conversation.intent),
+    ).toEqual(['triage']);
+    expect(idea.number).toBeGreaterThan(0);
+
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+
+    expect(startedIn(projects[0])).toEqual([]);
+  });
+
+  describe('round-robin (ADR 0041)', () => {
+    it('gives two different Projects a run when 3 have ready work and 2 slots are free', async () => {
+      const { projects, ready, autopilot, startedIn } = machineSetup(2, {
+        projects: 3,
+      });
+      for (const project of projects) {
+        ready(project, 'A');
+        ready(project, 'B');
+      }
+
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(1);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(startedIn(projects[2])).toEqual([]);
+    });
+
+    it('starts the next pass after the Project served last', async () => {
+      const { projects, ready, autopilot, startedIn, runner } = machineSetup(
+        1,
+        { projects: 3 },
+      );
+      for (const project of projects) {
+        ready(project, 'A');
+        ready(project, 'B');
+      }
+
+      await autopilot.evaluate();
+      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+      runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+      runner.runs[2].emit({ type: 'turn', costUsd: 1 });
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(2);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(startedIn(projects[2])).toHaveLength(1);
+    });
+
+    it('gives a Project one run per turn, a build before a triage, and keeps going round', async () => {
+      const { projects, ready, autopilot, startedIn, conversations, tickets } =
+        machineSetup(4);
+      tickets.setProjectAgentSettings(projects[0].id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea',
+        labels: ['needs-triage'],
+      });
+      ready(projects[0], 'A');
+      ready(projects[0], 'B');
+      ready(projects[1], 'C');
+
+      await autopilot.evaluate();
+
+      const intents = conversations
+        .list({ projectId: projects[0].id })
+        .reverse()
+        .map((conversation) => conversation.intent);
+      // Turn 1: P1 and P2 each build. Turn 2: P1 builds, P2 has nothing.
+      // Turn 3: P1 has no build left, so it triages.
+      expect(intents).toEqual(['start', 'start', 'triage']);
+      expect(startedIn(projects[1])).toHaveLength(1);
+      expect(conversations.machineSlotsInUse()).toBe(4);
+    });
+
+    it("keeps each Project's own Start run limit and one Triage run at a time", async () => {
+      const { projects, ready, autopilot, startedIn, conversations, tickets } =
+        machineSetup(9, { parallel: 1 });
+      tickets.setProjectAgentSettings(projects[0].id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea 1',
+        labels: ['needs-triage'],
+      });
+      tickets.createTicket({
+        projectId: projects[0].id,
+        title: 'Idea 2',
+        labels: ['needs-triage'],
+      });
+      ready(projects[0], 'A');
+      ready(projects[0], 'B');
+      ready(projects[1], 'C');
+
+      await autopilot.evaluate();
+
+      expect(startedIn(projects[0])).toHaveLength(2);
+      expect(
+        conversations
+          .list({ projectId: projects[0].id })
+          .map((conversation) => conversation.intent)
+          .sort(),
+      ).toEqual(['start', 'triage']);
+      expect(startedIn(projects[1])).toHaveLength(1);
+    });
+  });
+
+  it('takes a machine slot for each startup resume', async () => {
+    const world = machineSetup(2);
+    const { tickets, conversations, projects, ready, changes } = world;
+    const mine = projects.map((project) => ready(project, 'Mine'));
+    for (const [i, ticket] of mine.entries()) {
+      await conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        cycleId: projects[i].cycleId,
+        prompt: 'Go',
+      });
+      tickets.updateTicket(ticket.number, { status: 'In progress' });
+    }
+    // A restart, with the cap lowered to 1 meanwhile.
+    tickets.setMachineSettings({ maxConcurrentRuns: 1 });
+    const fresh = world.restart();
+    fresh.interruptStale();
+    const autopilot = createAutopilot({
+      tickets,
+      conversations: fresh,
+      changes,
+    });
+
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    expect(fresh.machineSlotsInUse()).toBe(1);
+    stop();
+  });
+
+  it('takes a machine slot for a transient resume', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    const { projects, ready, autopilot, conversations, runner } =
+      machineSetup(1);
+    const a = ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({
+      type: 'turn',
+      costUsd: 1,
+      error: 'API Error: 529 overloaded',
+    });
+    // The failed run freed its slot; another Project's work takes it.
+    const b = ready(projects[1], 'B');
+    await autopilot.evaluate();
+    expect(conversations.list({ ticketNumber: b.number })).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(120_000);
+    await autopilot.idle();
+    expect(conversations.list({ ticketNumber: a.number })[0].state).not.toBe(
+      'running',
+    );
+
+    runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+    await autopilot.evaluate();
+    expect(conversations.list({ ticketNumber: a.number })[0].state).toBe(
+      'running',
+    );
+    expect(conversations.machineSlotsInUse()).toBe(1);
+  });
+});
+
+describe('Machine ceiling (ADR 0041)', () => {
+  function ceilingSetup(ceiling: number | null) {
+    const changes = createChangeChannel();
+    const world = createTestConversations(changes);
+    const { tickets, conversations } = world;
+    tickets.setMachineSettings({ dailySpendCeilingUsd: ceiling });
+    const projects = [0, 1].map((i) => {
+      const project = tickets.createProject({ name: `Project ${i + 1}` });
+      tickets.setProjectAgentSettings(project.id, {
+        repositoryPath:
+          i === 0
+            ? world.repositoryDir
+            : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
+        autopilot: true,
+        spendCeilingUsd: 500,
+        parallelRuns: true,
+        maxConcurrentRuns: 9,
+      });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Beta',
+      });
+      tickets.startCycle(cycle.id);
+      return { ...project, cycleId: cycle.id };
+    });
+    const ready = (project: (typeof projects)[number], title: string) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: project.cycleId,
+      });
+    let clock = new Date();
+    const autopilot = createAutopilot({
+      tickets,
+      conversations,
+      changes,
+      now: () => clock,
+    });
+    const total = () =>
+      projects.reduce(
+        (sum, project) =>
+          sum + conversations.list({ projectId: project.id }).length,
+        0,
+      );
+    return {
+      ...world,
+      projects,
+      ready,
+      autopilot,
+      total,
+      setClock: (next: Date) => {
+        clock = next;
+      },
+    };
+  }
+
+  it('starts nothing in any Project at the ceiling, leaves running runs and resets the next day', async () => {
+    const {
+      projects,
+      ready,
+      autopilot,
+      runner,
+      total,
+      setClock,
+      conversations,
+    } = ceilingSetup(2);
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 2.5 });
+    ready(projects[0], 'B');
+    ready(projects[1], 'C');
+
+    await autopilot.evaluate();
+
+    expect(total()).toBe(1);
+    expect(autopilot.machineBudget()).toMatchObject({
+      ceilingUsd: 2,
+      paused: true,
+    });
+    expect(conversations.machineBudget()?.spendUsd).toBeGreaterThanOrEqual(2.5);
+
+    setClock(new Date(Date.now() + 25 * 60 * 60 * 1000));
+    expect(autopilot.machineBudget()?.paused).toBe(false);
+    await autopilot.evaluate();
+    expect(total()).toBe(3);
+  });
+
+  it('resumes nothing while paused and goes on when the ceiling is raised', async () => {
+    const { projects, ready, autopilot, runner, total, tickets } =
+      ceilingSetup(2);
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+    ready(projects[1], 'C');
+    await autopilot.evaluate();
+    expect(total()).toBe(1);
+
+    tickets.setMachineSettings({ dailySpendCeilingUsd: 10 });
+    await autopilot.evaluate();
+
+    expect(total()).toBe(2);
+  });
+
+  it('has no budget without a ceiling', async () => {
+    const { autopilot } = ceilingSetup(null);
+
+    expect(autopilot.machineBudget()).toBeNull();
+  });
+
+  it('queues a pass at the next local midnight while paused, and drops it on stop', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { projects, ready, autopilot, runner, total } = ceilingSetup(1);
+    const baseline = vi.getTimerCount();
+    ready(projects[0], 'A');
+    await autopilot.evaluate();
+    runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+    const stop = autopilot.start();
+    await autopilot.idle();
+
+    const paused = vi.getTimerCount();
+    expect(paused).toBeGreaterThan(baseline);
+    stop();
+    expect(vi.getTimerCount()).toBe(paused - 1);
+    expect(total()).toBe(1);
   });
 });

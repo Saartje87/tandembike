@@ -11,10 +11,10 @@ import {
   startCycle,
 } from '../../app/cycles/actions';
 import { type ActionResult, refusalReason } from '../../app/lib/action-result';
+import { formatCost } from '../../app/lib/format-cost';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
-import { formatCost } from '../conversation-labels/conversation-labels';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
 
