@@ -2,9 +2,9 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // The files drizzle-kit writes per migration: `NNNN_<name>.sql`, its
-// `meta/NNNN_snapshot.json` and its entry in `meta/_journal.json`. Parallel
-// runs that each generate one collide on the number (T1162); see "Worktrees
-// for parallel runs" in docs/agents/issue-tracker.md for the recipe.
+// `meta/NNNN_snapshot.json` and its entry in `meta/_journal.json`. For runs
+// that collide on a number, see "Migrations in parallel runs" in
+// docs/agents/issue-tracker.md (T1162).
 export type MigrationFiles = {
   sqlFiles: string[];
   snapshotFiles: string[];

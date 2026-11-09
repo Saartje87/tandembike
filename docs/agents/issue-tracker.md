@@ -38,12 +38,12 @@ This applies to every parallel run, including those Tandembike starts in a workt
 
 - **Generate last.** Change `src/db/schema.ts` first. Then merge the latest base branch (`main`, or the integration branch for an `implement-spec` implementer), and generate the migration as the last step before you report or open the PR.
 - **Regenerate on a collision.** When your branch lands second and its number is taken, never merge snapshots or the journal by hand. Instead:
-  1. Merge the base branch with `git merge --no-commit <base>`.
-  2. Take the base's meta: `git checkout <base> -- src/db/migrations/meta/`.
-  3. Delete your own `.sql` file with `git rm src/db/migrations/<NNNN>_<name>.sql`. Your snapshot and journal entry went with step 2.
-  4. Regenerate it as the next number with `npm run db:generate -- --name <name>`, on top of the merged schema.
+  1. Fetch the base and merge it: `git fetch origin <base> && git merge --no-commit origin/<base>`. It may stop on conflicts in `meta/`; the next step resolves them.
+  2. Replace the whole `meta/` folder with the base's, which drops your snapshots and journal entries, even ones whose number the base lacks: `git rm -rq src/db/migrations/meta/ && git checkout origin/<base> -- src/db/migrations/meta/`.
+  3. Delete each `.sql` file your branch added: `git rm src/db/migrations/<NNNN>_<name>.sql`.
+  4. Regenerate them as one new migration, numbered after the base's, with `npm run db:generate -- --name <name>`.
   5. Run `npx biome format --write src/db/migrations/meta/`, because Biome's format check rejects drizzle-kit's snapshots.
-  6. Compare the new SQL with your original (`git show <your branch>:src/db/migrations/<NNNN>_<name>.sql`). It should say the same thing. Then run `npx vitest run src/db/migration-files.test.ts`, and commit the merge.
+  6. Compare the new SQL with your original: `git show <your branch>:src/db/migrations/<NNNN>_<name>.sql | diff - src/db/migrations/<new NNNN>_<name>.sql` prints nothing when they match (with several originals, compare their concatenation). Then run `npx vitest run src/db/migration-files.test.ts`, and commit the merge.
 - **Merger.** An `implement-spec` merger subagent runs the same test after each merge, and sends a failing branch back to its implementer with this recipe.
 
 ## Working an Epic
