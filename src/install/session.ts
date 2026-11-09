@@ -9,6 +9,7 @@ export const usageText = [
   'Usage:',
   '  tandembike                    start the server',
   '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
+  '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
 ].join('\n');
 
@@ -16,6 +17,7 @@ export type ParsedCommand =
   | { command: 'server'; args: string[] }
   | { command: 'mcp' }
   | { command: 'start'; ticketNumber: number }
+  | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
 
 const usage: ParsedCommand = { command: 'usage', text: usageText };
@@ -46,6 +48,13 @@ export function parseCommand(argv: string[]): ParsedCommand {
       ? { command: 'start', ticketNumber }
       : usage;
   }
+  if (first === 'resume') {
+    const match = /^(\d+)$/.exec(rest[0] ?? '');
+    const conversationId = match ? Number(match[1]) : 0;
+    return rest.length === 1 && conversationId > 0
+      ? { command: 'resume', conversationId }
+      : usage;
+  }
   return usage;
 }
 
@@ -57,6 +66,12 @@ export type TerminalStartResult = {
   brief: string;
   runMode: 'default' | 'auto';
   model: string | null;
+};
+
+/** What the server returns for a Conversation handed over to the terminal. */
+export type TerminalResumeResult = Omit<TerminalStartResult, 'firstMessage'> & {
+  /** The SDK session `claude --resume` opens. */
+  sessionId: string;
 };
 
 export type ClaudeSessionPlan = {
@@ -75,13 +90,14 @@ export type ClaudeSessionPlan = {
  * to its Conversation.
  */
 export function planClaudeSession(
-  result: TerminalStartResult,
+  result: TerminalStartResult | TerminalResumeResult,
   playbookDir: string = playbookPath,
 ): ClaudeSessionPlan {
   return {
     command: 'claude',
     cwd: result.cwd,
     args: [
+      ...('sessionId' in result ? ['--resume', result.sessionId] : []),
       '--plugin-dir',
       playbookDir,
       '--append-system-prompt',
@@ -89,7 +105,7 @@ export function planClaudeSession(
       '--permission-mode',
       result.runMode,
       ...(result.model === null ? [] : ['--model', result.model]),
-      result.firstMessage,
+      ...('firstMessage' in result ? [result.firstMessage] : []),
     ],
     env: { TANDEMBIKE_RUN: String(result.conversationId) },
   };

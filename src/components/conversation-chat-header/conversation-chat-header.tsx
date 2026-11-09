@@ -27,6 +27,11 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
 }) => {
   const [pending, startStop] = useTransition();
   const [error, setError] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  const resumeCommand = `tandembike resume ${conversation.id}`;
+  // Continue in terminal hands a UI Conversation's SDK session to `claude`.
+  const canContinue =
+    conversation.startedBy !== 'terminal' && conversation.sdkSessionId !== null;
 
   return (
     <Stack gap={1}>
@@ -52,6 +57,25 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
             {`Started by ${starterNames[conversation.startedBy]}`}
           </Text>
         </Stack>
+        {canContinue && (
+          <Button
+            type="button"
+            size="small"
+            variant="outline"
+            onClick={async () => {
+              setError(undefined);
+              try {
+                await navigator.clipboard.writeText(resumeCommand);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+                setError(`Could not copy. Run: ${resumeCommand}`);
+              }
+            }}
+          >
+            Continue in terminal
+          </Button>
+        )}
         {hasRun(conversation.state) &&
           conversation.startedBy !== 'terminal' && (
             <Button
@@ -78,6 +102,11 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
           )}
       </Inline>
       <ConversationWorktree conversation={conversation} />
+      {copied && canContinue && (
+        <Text fontSize="small" color="muted" role="status">
+          {`Copied: ${resumeCommand}`}
+        </Text>
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

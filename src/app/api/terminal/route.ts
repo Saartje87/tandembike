@@ -9,6 +9,7 @@ import { NotFoundError, TicketsError } from '../../../tickets/errors';
  */
 type TerminalAction =
   | { action: 'start'; ticketNumber: number; intent?: 'start' }
+  | { action: 'resume'; conversationId: number }
   | { action: 'end'; conversationId: number; exitCode: number };
 
 const text = (message: string, status: number) =>
@@ -33,6 +34,10 @@ export const POST = async (request: Request): Promise<Response> => {
             ticketNumber: Number(body.ticketNumber),
             intent: body.intent ?? 'start',
           }),
+        );
+      case 'resume':
+        return Response.json(
+          await conversations.handOffToTerminal(Number(body.conversationId)),
         );
       case 'end':
         await conversations.endTerminal(Number(body.conversationId), {

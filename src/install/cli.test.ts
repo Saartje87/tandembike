@@ -87,3 +87,39 @@ describe('tandembike start', () => {
     expect(result.stdout).toContain('tandembike start <ticket>');
   }, 30_000);
 });
+
+describe('tandembike resume (T1241)', () => {
+  const run = (args: string[], env: Record<string, string> = {}) =>
+    spawnSync(
+      process.execPath,
+      [
+        join(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+        join('src', 'install', 'cli.ts'),
+        ...args,
+      ],
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        input: '',
+        env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
+      },
+    );
+
+  it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
+    const result = run(['resume', '3'], {
+      TANDEMBIKE_URL: 'http://127.0.0.1:1',
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Tandembike is not running. Start it with `tandembike`.',
+    );
+  }, 30_000);
+
+  it('prints the usage and exits 1 for a resume without a Conversation', () => {
+    const result = run(['resume']);
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('tandembike resume <conversation>');
+  }, 30_000);
+});

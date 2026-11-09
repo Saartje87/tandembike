@@ -57,6 +57,63 @@ describe('parseCommand', () => {
   });
 });
 
+describe('parseCommand resume', () => {
+  it('accepts resume with a Conversation id', () => {
+    expect(parseCommand(['resume', '12'])).toEqual({
+      command: 'resume',
+      conversationId: 12,
+    });
+  });
+
+  it.each([
+    [['resume']],
+    [['resume', 'abc']],
+    [['resume', '0']],
+    [['resume', 'T12']],
+    [['resume', '12', 'extra']],
+  ])('returns usage for %j', (argv) => {
+    expect(parseCommand(argv)).toEqual({ command: 'usage', text: usageText });
+  });
+
+  it('prints the usage with the resume command', () => {
+    expect(usageText).toContain('tandembike resume <conversation>');
+  });
+});
+
+describe('planClaudeSession for a resume', () => {
+  it('resumes the session in the cwd with the Playbook, the brief and the env', () => {
+    const plan = planClaudeSession(
+      {
+        conversationId: 12,
+        sessionId: 'sess-1',
+        cwd: '/work/tree',
+        brief: 'You were started by Tandembike.',
+        runMode: 'auto',
+        model: 'opus',
+      },
+      '/checkout/playbook',
+    );
+
+    expect(plan).toEqual({
+      command: 'claude',
+      cwd: '/work/tree',
+      args: [
+        '--resume',
+        'sess-1',
+        '--plugin-dir',
+        '/checkout/playbook',
+        '--append-system-prompt',
+        'You were started by Tandembike.',
+        '--permission-mode',
+        'auto',
+        '--model',
+        'opus',
+      ],
+      env: { TANDEMBIKE_RUN: '12' },
+    });
+  });
+});
+
 describe('planClaudeSession', () => {
   const result: TerminalStartResult = {
     conversationId: 12,
