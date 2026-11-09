@@ -2,7 +2,7 @@
 
 Amended by [ADR 0036](0036-mcp-calls-default-to-the-project-of-the-callers-folder.md): a repository no longer names its Project in `AGENTS.md`; the Project defaults from the caller's folder, and the instructions say so.
 
-Amended by [ADR 0037](0037-mcp-tools-follow-the-work.md): the tool set is now sixteen workflow tools, so the tool names in this record (`add_blocker`, `list_tickets`, `set_acceptance_criteria_checked` and the rest) are history; the rules about instructions, the cap and `detail` stand.
+Amended by [ADR 0037](0037-mcp-tools-follow-the-work.md): the tool set is now the workflow tools ADR 0037 lists, so the tool names in this record (`add_blocker`, `list_tickets`, `set_acceptance_criteria_checked` and the rest) are history; the rules about instructions, the cap and `detail` stand.
 
 Tandembike serves every repository on the machine, and its Agents may be Claude Code or GitHub Copilot. The rules for using the tracker (Statuses, Claims, acceptance criteria as a field, Blockers, Epics, Cycles, labels, reconnecting after tool changes) ship with the MCP server, in its instructions and tool descriptions, because that is the one thing every repository and every client already loads, and it cannot drift from the tools it describes. Each repository adds only what is its own: one line in `AGENTS.md` naming its Project, which both clients read, plus its process (branches, when a Ticket counts as done, triage roles), which the server deliberately leaves out. We rejected a doc copied into every repository, which goes stale, and a setup skill, which would work only in Claude Code. This repository's `docs/agents/issue-tracker.md` shrank to its own process accordingly (#63).
 
