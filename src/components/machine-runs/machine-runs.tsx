@@ -15,9 +15,9 @@ const usd = (amount: number): string => `$${amount.toFixed(2)}`;
  * "Runs 2/3" for the app header (ADR 0041): the working runs holding a
  * machine slot against the machine cap. It loads when it mounts and again on
  * every Conversation or machine settings change `LiveUpdates` hears of; until
- * the first load it shows nothing. Its text is white, as the header is
- * primary-coloured in both Colour modes. With a Machine ceiling set it also shows
+ * the first load it shows nothing. With a Machine ceiling set it also shows
  * today's Autopilot spend against it, and "paused: machine ceiling" at it.
+ * Its text is white, as the header is primary-coloured in both Colour modes.
  */
 export const MachineRuns: FC = () => {
   const revision = useConversationRevision();
