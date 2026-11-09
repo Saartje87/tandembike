@@ -49,7 +49,7 @@ An In progress Ticket or Epic with no live Conversation, no Claim and no pull re
 _Avoid_: Stuck, orphaned
 
 **Status line**:
-The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going and what it has cost so far (a Terminal run shows the time only; it has no cost). It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none.
+The one line on an In progress card saying what its live Conversation is doing now, such as "Reading board.tsx" or "Updating T42", with how long the run has been going and what it has cost so far (a Terminal run shows the time only; it has no cost). It is made from the Conversation's latest transcript entry and cut to one line, with the full text as a tooltip. A card without a live Conversation has none. A tool call ("Running …") shows only while the Conversation is running: a waiting, idle, interrupted or failed Conversation's row shows the Agent's latest message instead, what it said or asks (a permission request as its rule), so a bell always comes with the message that explains it.
 _Avoid_: Progress line, activity line
 
 **Queued**:

@@ -3,7 +3,7 @@ import {
   type ConversationState,
   isTerminal,
 } from './conversation-state';
-import { type StatusEntry, statusLine } from './status-line';
+import { messageLine, type StatusEntry, statusLine } from './status-line';
 
 /**
  * What a Ticket's live Conversation is doing, for the Board's lanes and the
@@ -15,7 +15,11 @@ export type LiveConversation = {
   /** The Conversation's id, to open it in the Conversation dialog. */
   conversationId: number;
   state: 'running' | 'waiting' | 'idle' | 'interrupted' | 'error';
-  /** The status line: what the Conversation is doing now (T1066). */
+  /**
+   * While running, the status line: what the Conversation is doing now
+   * (T1066). Otherwise the Agent's latest message: what it said or asks
+   * (T1262).
+   */
   line: string;
   /** When the current run started, as an ISO string. */
   since: string;
@@ -64,6 +68,8 @@ export type ActivityRow = {
   state: ConversationState;
   /** The Conversation's latest transcript entry, null if none. */
   latest: StatusEntry | null;
+  /** Its latest entry that is a message to the User, null if none (T1262). */
+  message: StatusEntry | null;
   /** When the current run started, as an ISO string. */
   startedAt: string;
   /** What the Conversation has cost in USD, 0 if nothing yet. */
@@ -96,7 +102,8 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
     live[ticketNumber] = {
       conversationId: row.id,
       state,
-      line: statusLine(row.latest),
+      line:
+        state === 'running' ? statusLine(row.latest) : messageLine(row.message),
       since: row.startedAt,
       cost: row.costUsd,
       terminal: isTerminal(row),

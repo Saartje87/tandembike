@@ -173,3 +173,26 @@ export function statusLine(entry: StatusEntry | null): string {
       return 'Starting';
   }
 }
+
+/** The roles of the entries that are a message to the User (T1262). */
+export const messageRoles = [
+  'agent',
+  'question',
+  'permission',
+  'error',
+] as const satisfies readonly TranscriptRole[];
+
+/**
+ * The line for a Conversation that is not running: the Agent's latest
+ * message, what it said or asks, on one line (T1262). A permission request
+ * reads as its rule, as on the status line. Empty without a message.
+ */
+export function messageLine(entry: StatusEntry | null): string {
+  if (!entry) {
+    return '';
+  }
+  if (entry.role === 'permission') {
+    return statusLine(entry);
+  }
+  return entry.text.trim().replace(/\s+/g, ' ');
+}
