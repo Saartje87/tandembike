@@ -26,7 +26,7 @@ Once you open the PR, add its URL to the Ticket with `open_pr`, which records it
 
 ## The Claim, through merge
 
-A Claim covers one Agent run's work, through its merge. In this repository the run merges its own PR itself; it does not hand off for the User's Approve merge as the Playbook does (see "Playbook runs in this repository").
+A Claim covers one Agent run's work, through its merge. In this repository the run merges its own PR; it does not hand off for the User's Approve merge as the Playbook does (see "Playbook runs in this repository").
 
 - The run that opens the PR waits for CI (`gh pr checks <number> --watch`). Green, with review complete and every acceptance criterion checked: merge with `gh pr merge <number> --merge`, then call `finish_work`. Red: fix the branch and wait again; when you cannot, comment on the Ticket why the PR stays open (`add_note`) and hand it off with `open_pr` and `handOff: true`, which releases the Claim. The Ticket stays `In progress`, and that plus the PR reference show it is taken.
 - A later run that works on the open PR, for example on review findings, claims the Ticket for that work with `start_work`, which leaves its Status as it is, and releases it with `open_pr` and `handOff: true` when done.
