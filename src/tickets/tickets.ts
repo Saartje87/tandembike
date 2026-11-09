@@ -31,6 +31,7 @@ import {
   tickets,
   triageProposals,
 } from '../db/schema';
+import { detectRepository } from '../repository/detect-repository';
 import {
   canonicalFolder,
   repositoryRootOf,
@@ -329,6 +330,15 @@ function spendCeilingProblem(
   return autopilot
     ? 'Set a Spend ceiling before turning on Autopilot.'
     : undefined;
+}
+
+/**
+ * Whether a run worktree can be made of the folder at `path`: a git
+ * repository with a default branch to start from (ADR 0033).
+ */
+function canHoldWorktrees(path: string): boolean {
+  const detection = detectRepository(path);
+  return detection.ok && detection.defaultBranch !== null;
 }
 
 /** Why `path` cannot be a repository path, or `undefined` when it can. */
@@ -1532,10 +1542,17 @@ export function createTickets(
           })
           .returning(projectColumns)
           .get();
+        const folder = trimmedOrNull(repositoryPath ?? null);
         if (repositoryPath !== undefined || checkCommand !== undefined) {
           this.setProjectAgentSettings(created.id, {
             ...(repositoryPath === undefined ? {} : { repositoryPath }),
             ...(checkCommand === undefined ? {} : { checkCommand }),
+            // A Project created with a folder works hands-off from its first
+            // Start (T1228, ADR 0029): agent mode on, and Parallel runs on
+            // when the folder can give each Start run a worktree (ADR 0033).
+            ...(folder === null
+              ? {}
+              : { agentMode: true, parallelRuns: canHoldWorktrees(folder) }),
           });
         }
         if (referenceTemplate !== undefined) {

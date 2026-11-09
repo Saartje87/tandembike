@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,6 +29,71 @@ describe("A Project's agent settings", () => {
       spendCeilingUsd: null,
       autoTriage: false,
       triageCeilingUsd: null,
+    });
+  });
+
+  describe('of a Project created with a repository folder (T1228)', () => {
+    /** A git repository with `main` checked out, as `git init` leaves it. */
+    const repository = () => {
+      const path = directory();
+      mkdirSync(join(path, '.git'));
+      writeFileSync(join(path, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+      return path;
+    };
+
+    it('start with agent mode and Parallel runs on', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({
+        name: 'Website',
+        repositoryPath: repository(),
+      });
+
+      expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+        agentMode: true,
+        parallelRuns: true,
+      });
+    });
+
+    it('can still turn both off afterwards', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({
+        name: 'Website',
+        repositoryPath: repository(),
+      });
+
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          agentMode: false,
+          parallelRuns: false,
+        }),
+      ).toMatchObject({ agentMode: false, parallelRuns: false });
+    });
+
+    it('keep Parallel runs off for a folder that is not a git repository, which a run worktree needs', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({
+        name: 'Website',
+        repositoryPath: directory(),
+      });
+
+      expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+        agentMode: true,
+        parallelRuns: false,
+      });
+    });
+
+    it('keep both off for an empty folder field', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({
+        name: 'Website',
+        repositoryPath: '  ',
+      });
+
+      expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+        repositoryPath: null,
+        agentMode: false,
+        parallelRuns: false,
+      });
     });
   });
 
