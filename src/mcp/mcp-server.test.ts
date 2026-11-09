@@ -146,6 +146,7 @@ describe('MCP server', () => {
       'read_attachment',
       'start_work',
       'update_ticket',
+      'update_write_up',
     ]);
     for (const tool of tools) {
       expect(tool.description, tool.name).toMatch(/\w{3,}/);

@@ -19,6 +19,8 @@ export type SparViewProps = {
   canvas: ReactNode;
   /** The Write-up, below the Canvas. */
   writeUp: ReactNode;
+  /** A closed Spar: the chat takes no replies. */
+  closed?: boolean;
 };
 
 type Region = 'chat' | 'canvas' | 'writeUp';
@@ -40,6 +42,7 @@ export const SparView: FC<SparViewProps> = ({
   title,
   canvas,
   writeUp,
+  closed = false,
 }) => {
   const [shown, setShown] = useState<Region>('chat');
   const shownFlag = (region: Region) => String(shown === region);
@@ -77,6 +80,9 @@ export const SparView: FC<SparViewProps> = ({
             // Every message carries what changed on the Canvas.
             onReply={(text) => sendSparTurn({ sparId, text })}
             beforeReply={<SparTurnBar sparId={sparId} />}
+            {...(closed
+              ? { closedReason: 'This Spar is closed. Reopen it to reply.' }
+              : {})}
           />
         </section>
         <Stack gap={4}>

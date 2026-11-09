@@ -73,6 +73,42 @@ describe('The Spar tools', () => {
     await client.close();
   });
 
+  it('update_write_up replaces the sections it is given', async () => {
+    const { client, spars, spar } = await sparRun();
+
+    const writeUp = resultJson(
+      await client.callTool({
+        name: 'update_write_up',
+        arguments: { decisions: '- Cache it', nextSteps: '- Measure' },
+      }),
+    );
+
+    expect(writeUp).toEqual({
+      decisions: '- Cache it',
+      openQuestions: '',
+      nextSteps: '- Measure',
+    });
+    expect(spars.getSpar(spar.id).writeUp).toEqual(writeUp);
+    await client.close();
+  });
+
+  it('are refused on a closed Spar', async () => {
+    const { client, spars, spar, runner } = await sparRun();
+    await spars.closeSpar(spar.id);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    const result = await client.callTool({
+      name: 'update_write_up',
+      arguments: { decisions: 'X' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(
+      'This Spar is closed. Reopen it to change it.',
+    );
+    await client.close();
+  });
+
   it('are refused outside a Spar run', async () => {
     const world = createTestSpars();
     const conversation = await world.conversations.start({

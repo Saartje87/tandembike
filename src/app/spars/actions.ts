@@ -3,7 +3,7 @@
 import type { Conversation } from '../../conversations/conversations';
 import { appSpars } from '../../spars/app-spars';
 import type { Canvas, CanvasOp } from '../../spars/canvas';
-import type { Spar } from '../../spars/spars';
+import type { Spar, WriteUp } from '../../spars/spars';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
 
@@ -85,5 +85,40 @@ export async function sendSparTurn(input: {
       Number(input?.sparId),
       String(input?.text ?? ''),
     ),
+  }));
+}
+
+/** The User's edit of sections of a Spar's Write-up; the others stay. */
+export async function updateSparWriteUp(input: {
+  sparId: number;
+  writeUp: Partial<WriteUp>;
+}): Promise<ActionResult<{ writeUp: WriteUp }>> {
+  return sparResult(async () => ({
+    writeUp: appSpars().updateWriteUp(
+      Number(input?.sparId),
+      input?.writeUp ?? {},
+      'user',
+    ),
+  }));
+}
+
+/**
+ * Closes a Spar: it sends Summarise, and closes once that turn ends, its
+ * run stopped and its page read-only until reopened.
+ */
+export async function closeSpar(input: {
+  sparId: number;
+}): Promise<ActionResult<{ spar: Spar }>> {
+  return sparResult(async () => ({
+    spar: await appSpars().closeSpar(Number(input?.sparId)),
+  }));
+}
+
+/** Reopens a closed Spar; the next reply resumes its run. */
+export async function reopenSpar(input: {
+  sparId: number;
+}): Promise<ActionResult<{ spar: Spar }>> {
+  return sparResult(async () => ({
+    spar: appSpars().reopenSpar(Number(input?.sparId)),
   }));
 }

@@ -24,6 +24,22 @@ import {
   type Sticky,
   type StickyAuthor,
 } from './canvas';
+import { summariseMessage } from './spar-moves';
+
+/** A Spar's Write-up (GLOSSARY): three Markdown sections, empty for none. */
+export type WriteUp = {
+  decisions: string;
+  openQuestions: string;
+  nextSteps: string;
+};
+
+export const writeUpSections = [
+  'decisions',
+  'openQuestions',
+  'nextSteps',
+] as const satisfies readonly (keyof WriteUp)[];
+
+const maxWriteUpLength = 20_000;
 
 /** A Spar (GLOSSARY): its id is its Conversation's. */
 export type Spar = {
@@ -35,8 +51,11 @@ export type Spar = {
   focusTicketNumber: number | null;
   /** Closed by the User: read-only until reopened. */
   closed: boolean;
+  /** Close was asked: it closes once the Summarise turn ends. */
+  closing: boolean;
   /** The Ticket its Hand-off filed; null before. */
   outcomeTicketNumber: number | null;
+  writeUp: WriteUp;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -107,7 +126,13 @@ export function createSpars({
     topic: row.topic,
     focusTicketNumber: conversation.ticketNumber,
     closed: row.closed,
+    closing: row.closing,
     outcomeTicketNumber: row.outcomeTicketNumber,
+    writeUp: {
+      decisions: row.decisions,
+      openQuestions: row.openQuestions,
+      nextSteps: row.nextSteps,
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });
@@ -288,6 +313,62 @@ export function createSpars({
     }
   };
 
+  /** Marks a closing Spar closed and stops its run, once its Summarise turn has ended. */
+  const finishClosing = (id: number) => {
+    const row = db.select().from(spars).where(eq(spars.id, id)).get();
+    if (!row?.closing) {
+      return;
+    }
+    const state = conversations.get(id).state;
+    if (state === 'running' || state === 'waiting') {
+      return;
+    }
+    db.update(spars)
+      .set({ closing: false, closed: true, updatedAt: new Date() })
+      .where(eq(spars.id, id))
+      .run();
+    announce(id);
+    void conversations.stop(id).catch(() => undefined);
+  };
+
+  // A closing Spar closes when its Conversation's turn ends.
+  changes?.subscribe((change) => {
+    if (change.type === 'conversation') {
+      finishClosing(change.id);
+    }
+  });
+
+  /**
+   * Sends `message` into Spar `id` with what changed on the Canvas since the
+   * Agent's last turn after it, and makes the Canvas now the baseline.
+   */
+  const sendTurn = async (id: number, text: string): Promise<Conversation> => {
+    const row = rowOf(id);
+    if (row.closed) {
+      throw new NotAllowedError('This Spar is closed. Reopen it to reply.');
+    }
+    if (row.closing) {
+      throw new NotAllowedError('This Spar is closing.');
+    }
+    const current = canvasOf(id);
+    const changes = canvasChanges(baselineOf(id), current);
+    const typed = (text ?? '').trim();
+    const message = [
+      typed === '' ? 'Your move.' : typed,
+      changes.length > 0
+        ? `Canvas changes since your last turn:\n${changes.map((line) => `- ${line}`).join('\n')}`
+        : typed === ''
+          ? 'The Canvas has not changed since your last turn.'
+          : null,
+    ]
+      .filter((part) => part !== null)
+      .join('\n\n');
+    const conversation = await conversations.reply(id, message, 'user');
+    setBaseline(id, current);
+    announce(id);
+    return conversation;
+  };
+
   /** Refuses a Sticky linked to a Ticket that does not exist. */
   const checkTickets = (ops: readonly CanvasOp[]) => {
     for (const op of ops) {
@@ -456,27 +537,73 @@ export function createSpars({
      * Sends the User's message into Spar `id`, with what changed on the
      * Canvas since the Agent's last turn after it, and makes the Canvas now
      * the baseline. A blank message is "Your move": the turn passes with
-     * only the changes. Canvas edits alone never send anything.
+     * only the changes. Canvas edits alone never send anything. Refused on a
+     * closed or closing Spar.
      */
-    async sendTurn(id: number, text: string): Promise<Conversation> {
-      rowOf(id);
-      const current = canvasOf(id);
-      const changes = canvasChanges(baselineOf(id), current);
-      const typed = (text ?? '').trim();
-      const message = [
-        typed === '' ? 'Your move.' : typed,
-        changes.length > 0
-          ? `Canvas changes since your last turn:\n${changes.map((line) => `- ${line}`).join('\n')}`
-          : typed === ''
-            ? 'The Canvas has not changed since your last turn.'
-            : null,
-      ]
-        .filter((part) => part !== null)
-        .join('\n\n');
-      const conversation = await conversations.reply(id, message, 'user');
-      setBaseline(id, current);
+    sendTurn,
+
+    /**
+     * Replaces the sections of Spar `id`'s Write-up given in `input`, by
+     * `author`; the others stay. Refused on a closed Spar.
+     */
+    updateWriteUp(
+      id: number,
+      input: Partial<WriteUp>,
+      _author: StickyAuthor,
+    ): WriteUp {
+      checkOpen(id);
+      const values: Partial<WriteUp> = {};
+      for (const section of writeUpSections) {
+        const value = input?.[section];
+        if (value === undefined) {
+          continue;
+        }
+        if (typeof value !== 'string' || value.length > maxWriteUpLength) {
+          throw new ValidationError({
+            [section]: `Keep each section to ${maxWriteUpLength} characters.`,
+          });
+        }
+        values[section] = value.trim();
+      }
+      if (Object.keys(values).length === 0) {
+        throw new ValidationError({
+          writeUp: 'Give at least one section of the Write-up.',
+        });
+      }
+      db.update(spars)
+        .set({ ...values, updatedAt: new Date() })
+        .where(eq(spars.id, id))
+        .run();
       announce(id);
-      return conversation;
+      return getSpar(id).writeUp;
+    },
+
+    /**
+     * Closes Spar `id`: sends Summarise, so the Agent brings the Write-up up
+     * to date, and once that turn ends the Spar is closed and its run
+     * stopped. A closed Spar keeps its page, read-only, until reopened.
+     */
+    async closeSpar(id: number): Promise<Spar> {
+      const row = rowOf(id);
+      if (row.closed || row.closing) {
+        return getSpar(id);
+      }
+      await sendTurn(id, summariseMessage);
+      db.update(spars).set({ closing: true }).where(eq(spars.id, id)).run();
+      announce(id);
+      finishClosing(id);
+      return getSpar(id);
+    },
+
+    /** Reopens closed Spar `id`: editable again; the next reply resumes its run. */
+    reopenSpar(id: number): Spar {
+      rowOf(id);
+      db.update(spars)
+        .set({ closed: false, closing: false, updatedAt: new Date() })
+        .where(eq(spars.id, id))
+        .run();
+      announce(id);
+      return getSpar(id);
     },
 
     /** A Project's Spars, newest first. */

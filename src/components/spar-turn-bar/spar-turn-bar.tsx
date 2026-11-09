@@ -6,13 +6,11 @@ import { type FC, useState, useTransition } from 'react';
 import { refusalReason } from '../../app/lib/action-result';
 import { callAction } from '../../app/lib/call-action';
 import { sendSparTurn } from '../../app/spars/actions';
+import { sparMoves } from '../../spars/spar-moves';
 
 export type SparTurnBarProps = {
   sparId: number;
 };
-
-/** A move the bar sends, and the message it sends; empty is Your move. */
-const moves = [{ label: 'Your move', message: '' }] as const;
 
 /**
  * The button bar above a Spar's message field: each button sends its move
@@ -37,7 +35,7 @@ export const SparTurnBar: FC<SparTurnBarProps> = ({ sparId }) => {
   return (
     <Stack gap={1}>
       <Inline gap={1} flexWrap="wrap" role="group" aria-label="Moves">
-        {moves.map(({ label, message }) => (
+        {sparMoves.map(({ label, message }) => (
           <Button
             key={label}
             type="button"

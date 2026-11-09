@@ -25,6 +25,9 @@ vi.mock('../../../../conversations/actions', () => ({}));
 vi.mock('../../../../spars/actions', () => ({
   editSparCanvas: vi.fn(),
   sendSparTurn: vi.fn(),
+  updateSparWriteUp: vi.fn(),
+  closeSpar: vi.fn(),
+  reopenSpar: vi.fn(),
 }));
 vi.mock('../../../../projects/actions', () => ({
   loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
@@ -70,6 +73,32 @@ describe('SparPage', () => {
     await expect(generateMetadata({ params })).resolves.toEqual({
       title: `Spar: T${ticket.number} Faster triage · Website`,
     });
+  });
+
+  it('shows a closed Spar read-only, with Reopen', async () => {
+    const test = await world();
+    const spar = await test.spars.startSpar({ projectId: test.project.id });
+    test.spars.updateWriteUp(spar.id, { decisions: 'Keep it small' }, 'user');
+    await test.spars.closeSpar(spar.id);
+    test.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    const params = Promise.resolve({
+      id: String(test.project.id),
+      sparId: String(spar.id),
+    });
+    await renderPage(<main>{await SparPage({ params })}</main>);
+
+    expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+    expect(
+      screen.getByText('This Spar is closed. Reopen it to reply.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull();
+    expect(screen.getByText('Keep it small')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Canvas' })).queryByRole(
+        'textbox',
+      ),
+    ).toBeNull();
   });
 
   it('returns not-found for a Spar of another Project or none', async () => {

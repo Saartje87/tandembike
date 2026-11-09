@@ -364,3 +364,113 @@ describe('Turns of a Spar', () => {
     );
   });
 });
+
+describe('The Write-up of a Spar', () => {
+  it('starts empty and keeps the sections it is given, announcing each change', async () => {
+    const { spars, project, published } = createTestSpars();
+    const spar = await spars.startSpar({ projectId: project.id });
+    expect(spar.writeUp).toEqual({
+      decisions: '',
+      openQuestions: '',
+      nextSteps: '',
+    });
+    published.length = 0;
+
+    spars.updateWriteUp(spar.id, { decisions: '- Use a cache' }, 'agent');
+    const writeUp = spars.updateWriteUp(
+      spar.id,
+      { nextSteps: ' - Try it ' },
+      'user',
+    );
+
+    expect(writeUp).toEqual({
+      decisions: '- Use a cache',
+      openQuestions: '',
+      nextSteps: '- Try it',
+    });
+    expect(spars.getSpar(spar.id).writeUp).toEqual(writeUp);
+    expect(published).toHaveLength(2);
+  });
+
+  it('refuses an empty update', async () => {
+    const { spars, project } = createTestSpars();
+    const spar = await spars.startSpar({ projectId: project.id });
+
+    expect(() => spars.updateWriteUp(spar.id, {}, 'user')).toThrow(
+      ValidationError,
+    );
+  });
+});
+
+describe('Closing and reopening a Spar', () => {
+  async function started() {
+    const world = createTestSpars();
+    const spar = await world.spars.startSpar({ projectId: world.project.id });
+    const run = world.runner.runs[0];
+    run.emit({ type: 'session', sessionId: 'sess-1' });
+    run.emit({ type: 'turn', costUsd: 0.1 });
+    return { ...world, spar, run };
+  }
+
+  it('sends Summarise, and closes the Spar and stops its run once that turn ends', async () => {
+    const { spars, spar, run, conversations } = await started();
+
+    const closing = await spars.closeSpar(spar.id);
+
+    expect(run.sent.at(-1)).toMatch(/^Summarise: update the Write-up/);
+    expect(closing).toMatchObject({ closing: true, closed: false });
+
+    run.emit({ type: 'turn', costUsd: 0.2 });
+    await Promise.resolve();
+
+    expect(spars.getSpar(spar.id)).toMatchObject({
+      closing: false,
+      closed: true,
+    });
+    expect(conversations.get(spar.id)).toMatchObject({
+      state: 'stopped',
+      hidden: false,
+    });
+    expect(spars.listSpars(spar.projectId)[0].closed).toBe(true);
+  });
+
+  it('refuses Canvas and Write-up edits and replies on a closed Spar, with a reason', async () => {
+    const { spars, spar, run } = await started();
+    const [ideas] = spars.getCanvas(spar.id).columns;
+    await spars.closeSpar(spar.id);
+    run.emit({ type: 'turn', costUsd: 0.2 });
+
+    expect(() =>
+      spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user'),
+    ).toThrow('This Spar is closed. Reopen it to change it.');
+    expect(() =>
+      spars.updateWriteUp(spar.id, { decisions: 'X' }, 'agent'),
+    ).toThrow(NotAllowedError);
+    await expect(spars.sendTurn(spar.id, 'Hi')).rejects.toThrow(
+      'This Spar is closed. Reopen it to reply.',
+    );
+  });
+
+  it('refuses a reply while it is closing', async () => {
+    const { spars, spar } = await started();
+    await spars.closeSpar(spar.id);
+
+    await expect(spars.sendTurn(spar.id, 'Wait')).rejects.toThrow(
+      'This Spar is closing.',
+    );
+  });
+
+  it('reopens: editable again, and the next reply resumes the run from its session', async () => {
+    const { spars, spar, run, runner } = await started();
+    await spars.closeSpar(spar.id);
+    run.emit({ type: 'turn', costUsd: 0.2 });
+
+    expect(spars.reopenSpar(spar.id).closed).toBe(false);
+    const [ideas] = spars.getCanvas(spar.id).columns;
+    spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user');
+    await spars.sendTurn(spar.id, 'Back again');
+
+    expect(runner.runs).toHaveLength(2);
+    expect(runner.runs[1].options.resume).toBe('sess-1');
+  });
+});

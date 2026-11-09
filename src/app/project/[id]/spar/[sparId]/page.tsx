@@ -1,11 +1,13 @@
-import { Heading, Stack, Text } from '@blockle/blocks';
+import { Heading, Inline, Stack } from '@blockle/blocks';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { type FC, Suspense } from 'react';
 
 import { PageLoading } from '../../../../../components/page-loading/page-loading';
 import { SparCanvas } from '../../../../../components/spar-canvas/spar-canvas';
+import { SparCloseButton } from '../../../../../components/spar-close-button/spar-close-button';
 import { SparView } from '../../../../../components/spar-view/spar-view';
+import { SparWriteUp } from '../../../../../components/spar-write-up/spar-write-up';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import { appSpars } from '../../../../../spars/app-spars';
 import type { Spar } from '../../../../../spars/spars';
@@ -64,9 +66,17 @@ async function sparPage(params: SparPageProps['params']) {
   const title = sparTitle(spar);
   return (
     <Stack gap={3}>
-      <Heading level={2}>Spar: {title}</Heading>
+      <Inline gap={2} alignY="center" alignX="between">
+        <Heading level={2}>Spar: {title}</Heading>
+        <SparCloseButton
+          sparId={spar.id}
+          closed={spar.closed}
+          closing={spar.closing}
+        />
+      </Inline>
       <SparView
         sparId={spar.id}
+        closed={spar.closed}
         title={title}
         item={{
           conversation: conversations.get(spar.id),
@@ -80,9 +90,11 @@ async function sparPage(params: SparPageProps['params']) {
           />
         }
         writeUp={
-          <Text tag="p" color="muted">
-            The Write-up
-          </Text>
+          <SparWriteUp
+            sparId={spar.id}
+            writeUp={spar.writeUp}
+            readOnly={spar.closed}
+          />
         }
       />
     </Stack>

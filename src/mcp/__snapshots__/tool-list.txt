@@ -1427,5 +1427,35 @@
     "_meta": {
       "anthropic/alwaysLoad": true
     }
+  },
+  {
+    "name": "update_write_up",
+    "title": "Update Write-up",
+    "description": "Update the Write-up of your Spar, the outcome the User sees build up beside the Canvas: its Decisions, Open questions and Next steps, each a Markdown section you replace whole, usually as a short list. Give only the sections you change. Record a decision when it lands, and bring all three up to date when the User asks you to summarise. Only in a Spar run, and refused on a closed Spar. Returns the Write-up.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "decisions": {
+          "description": "The whole Decisions section in Markdown, replacing it; left out, it stays.",
+          "type": "string",
+          "maxLength": 20000
+        },
+        "openQuestions": {
+          "description": "The whole Open questions section in Markdown, replacing it; left out, it stays.",
+          "type": "string",
+          "maxLength": 20000
+        },
+        "nextSteps": {
+          "description": "The whole Next steps section in Markdown, replacing it; left out, it stays.",
+          "type": "string",
+          "maxLength": 20000
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
   }
 ]

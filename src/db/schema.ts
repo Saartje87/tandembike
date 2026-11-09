@@ -614,6 +614,12 @@ export const spars = sqliteTable('spars', {
    * what the next message tells the Agent changed. Null before the first.
    */
   baseline: text('baseline', { mode: 'json' }).$type<Canvas>(),
+  /** Close was asked: closed once the Summarise turn it sent ends. */
+  closing: integer('closing', { mode: 'boolean' }).notNull().default(false),
+  /** The Write-up's sections, Markdown, empty for none. */
+  decisions: text('decisions').notNull().default(''),
+  openQuestions: text('open_questions').notNull().default(''),
+  nextSteps: text('next_steps').notNull().default(''),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

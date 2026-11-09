@@ -131,7 +131,7 @@ The User can always reply: their reply is never refused by the Project's Start r
 _Avoid_: Session, run, chat, thread, active Conversation (Active belongs to Cycles)
 
 **Spar**:
-A Project-scoped Conversation, optionally about one Ticket or Epic (its focus), in which the User thinks a half-formed idea through with an Agent on the Spar's own page (`/project/<id>/spar/<sparId>`), not in the Conversation dialog. Only the User starts one, from the Spar button or "Spar about this" in the Ticket drawer, with an optional one-line topic; never Autopilot or `tandembike start`. A Spar's id is its Conversation's, and its focus is the Conversation's Ticket, so it is listed among that Ticket's Conversations. It runs read-only whatever the Agent run mode: it reads code and Tickets, asks through Widgets and changes nothing; any command reaches the User as a permission request (ADR 0046). It runs in the main checkout, holds no Machine slot and is never refused a reply, like an Ask. Its Notices and bells open its page.
+A Project-scoped Conversation, optionally about one Ticket or Epic (its focus), in which the User thinks a half-formed idea through with an Agent on the Spar's own page (`/project/<id>/spar/<sparId>`), not in the Conversation dialog. Only the User starts one, from the Spar button or "Spar about this" in the Ticket drawer, with an optional one-line topic; never Autopilot or `tandembike start`. A Spar's id is its Conversation's, and its focus is the Conversation's Ticket, so it is listed among that Ticket's Conversations. It runs read-only whatever the Agent run mode: it reads code and Tickets, asks through Widgets and changes nothing; any command reaches the User as a permission request (ADR 0046). It runs in the main checkout, holds no Machine slot and is never refused a reply, like an Ask. Its Notices and bells open its page. A button bar above its message field sends a move in one click: Challenge me, Diverge, Converge, Summarise and Your move, which hands the turn over with only the Canvas changes. **Close** sends a final Summarise and, once that turn ends, makes the Spar read-only and stops its run; its page still shows the chat, Canvas and Write-up, and it stays listed. **Reopen** makes it editable again, and the next reply resumes its session.
 _Avoid_: Brainstorm, session, chat
 
 **Canvas**:
@@ -145,6 +145,10 @@ _Avoid_: Lane (a Lane is a Board situation), list
 **Sticky**:
 One idea on a Canvas: a title, an optional Markdown note, who wrote it (the User or the Agent, shown as a badge), and optionally the Ticket it already has work in. It is dragged within and between Columns, by pointer or keyboard, or moved with its "Move to" menu.
 _Avoid_: Card (a card is a Ticket on the Board), note
+
+**Write-up**:
+The outcome of a Spar, beside its Canvas: three Markdown sections, **Decisions**, **Open questions** and **Next steps**, that build up as the Spar goes. The Agent updates it with `update_write_up`, and does so on Summarise and on Close; the User edits it in place.
+_Avoid_: Summary, notes, minutes
 
 **Widget**:
 A typed question an Agent asks the User through a tool, which the chat shows as a control of its kind and which blocks the run until the User answers: **choice** cards (one or several, the Agent's recommendation preselected), a **rank** list, a 2×2 **matrix** and **scale** sliders. Every Widget also takes **Other…** with free text and **Skip**; a run that ends first expires it. A waiting Widget makes its Conversation `waiting` and raises the `waiting` Notice, as a permission request does. Widgets work in every Conversation the server runs; AskUserQuestion shows as choice cards too (ADR 0045).

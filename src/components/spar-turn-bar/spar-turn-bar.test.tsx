@@ -26,6 +26,22 @@ describe('SparTurnBar', () => {
     expect(sendSparTurn).toHaveBeenCalledWith({ sparId: 4, text: '' });
   });
 
+  it.each([
+    ['Challenge me', /^Challenge me: /],
+    ['Diverge', /^Diverge: /],
+    ['Converge', /^Converge: /],
+    ['Summarise', /^Summarise: update the Write-up/],
+  ])('sends %s as a message', async (name, message) => {
+    renderWithTheme(<SparTurnBar sparId={4} />);
+
+    await userEvent.click(screen.getByRole('button', { name }));
+
+    expect(sendSparTurn).toHaveBeenCalledWith({
+      sparId: 4,
+      text: expect.stringMatching(message),
+    });
+  });
+
   it('shows a refusal', async () => {
     vi.mocked(sendSparTurn).mockResolvedValue({
       ok: false,

@@ -33,6 +33,11 @@ export type ConversationChatProps = {
   onReply?: (text: string) => Promise<ActionResult>;
   /** Shown just above the reply input, such as a Spar's button bar. */
   beforeReply?: ReactNode;
+  /**
+   * Why it takes no replies, such as a closed Spar's: shown in place of the
+   * reply input and its notices.
+   */
+  closedReason?: string;
 };
 
 /** The options of the Agent's latest message, while it waits for the User. */
@@ -59,6 +64,7 @@ export const ConversationChat: FC<ConversationChatProps> = ({
   error,
   onReply,
   beforeReply,
+  closedReason,
 }) => {
   const reply = useRef<ReplyControl>(null);
   const kept = useKeptConversation();
@@ -73,45 +79,51 @@ export const ConversationChat: FC<ConversationChatProps> = ({
       <ConversationChatHeader conversation={conversation} title={title} />
       {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
-      {!terminal && conversation.state === 'interrupted' && (
-        <Alert intent="warning">
-          This Conversation was interrupted. Reply to resume it.
-        </Alert>
-      )}
-      {!terminal && conversation.state === 'stopped' && (
-        <Alert intent="info">
-          This Conversation was stopped. Reply to resume it.
-        </Alert>
-      )}
-      {!terminal && questions && (
-        <ConversationReplyOptions
-          questions={questions}
-          onChoose={({ label }, { key }) =>
-            label === null
-              ? reply.current?.sendWith(key)
-              : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
-          }
-        />
-      )}
-      {!terminal && beforeReply}
-      {terminal ? (
-        <ConversationTerminalNotice conversation={conversation} />
+      {closedReason !== undefined ? (
+        <Alert intent="info">{closedReason}</Alert>
       ) : (
-        <ConversationReplyForm
-          {...(onReply ? { send: onReply } : {})}
-          key={conversation.id}
-          conversationId={conversation.id}
-          projectId={conversation.projectId}
-          control={reply}
-          {...(kept
-            ? {
-                initialText: kept.reply,
-                onTextChange: (text: string) => {
-                  kept.reply = text;
-                },
+        <>
+          {!terminal && conversation.state === 'interrupted' && (
+            <Alert intent="warning">
+              This Conversation was interrupted. Reply to resume it.
+            </Alert>
+          )}
+          {!terminal && conversation.state === 'stopped' && (
+            <Alert intent="info">
+              This Conversation was stopped. Reply to resume it.
+            </Alert>
+          )}
+          {!terminal && questions && (
+            <ConversationReplyOptions
+              questions={questions}
+              onChoose={({ label }, { key }) =>
+                label === null
+                  ? reply.current?.sendWith(key)
+                  : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
               }
-            : {})}
-        />
+            />
+          )}
+          {!terminal && beforeReply}
+          {terminal ? (
+            <ConversationTerminalNotice conversation={conversation} />
+          ) : (
+            <ConversationReplyForm
+              {...(onReply ? { send: onReply } : {})}
+              key={conversation.id}
+              conversationId={conversation.id}
+              projectId={conversation.projectId}
+              control={reply}
+              {...(kept
+                ? {
+                    initialText: kept.reply,
+                    onTextChange: (text: string) => {
+                      kept.reply = text;
+                    },
+                  }
+                : {})}
+            />
+          )}
+        </>
       )}
     </div>
   );

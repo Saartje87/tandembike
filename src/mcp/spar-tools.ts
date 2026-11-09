@@ -6,10 +6,13 @@ import { NotAllowedError, NotFoundError } from '../tickets/errors';
 import { respond, type ToolContext } from './tool-shared';
 
 /** What the Spar tools call of the Spars module. */
-export type SparTools = Pick<Spars, 'getSpar' | 'getCanvas' | 'editCanvas'>;
+export type SparTools = Pick<
+  Spars,
+  'getSpar' | 'getCanvas' | 'editCanvas' | 'updateWriteUp'
+>;
 
 /** The tools of a Spar run, which change only its own Spar (ADR 0046). */
-export const sparToolNames = ['get_canvas', 'edit_canvas'];
+export const sparToolNames = ['get_canvas', 'edit_canvas', 'update_write_up'];
 
 const notInSpar = 'This tool works only in a Spar run.';
 
@@ -112,6 +115,33 @@ export const registerSparTools = (
     ({ ops }) =>
       respond(() =>
         spars?.editCanvas(sparOfRun(spars, runId), ops as CanvasOp[], 'agent'),
+      ),
+  );
+
+  const section = (name: string) =>
+    z
+      .string()
+      .max(20_000)
+      .optional()
+      .describe(
+        `The whole ${name} section in Markdown, replacing it; left out, it stays.`,
+      );
+
+  registerTool(
+    'update_write_up',
+    {
+      title: 'Update Write-up',
+      description:
+        'Update the Write-up of your Spar, the outcome the User sees build up beside the Canvas: its Decisions, Open questions and Next steps, each a Markdown section you replace whole, usually as a short list. Give only the sections you change. Record a decision when it lands, and bring all three up to date when the User asks you to summarise. Only in a Spar run, and refused on a closed Spar. Returns the Write-up.',
+      inputSchema: {
+        decisions: section('Decisions'),
+        openQuestions: section('Open questions'),
+        nextSteps: section('Next steps'),
+      },
+    },
+    (input) =>
+      respond(() =>
+        spars?.updateWriteUp(sparOfRun(spars, runId), input, 'agent'),
       ),
   );
 };
