@@ -510,3 +510,48 @@ describe('Moving an Epic with its children', () => {
     expect(changes).toContainEqual({ type: 'cycle', id: gamma.id });
   });
 });
+
+describe('Moving an Epic with its children, edge cases', () => {
+  it('puts the children back when the Epic itself cannot be planned', () => {
+    const { tickets, beta, gamma, epic, child } = setup();
+    tickets.planTicket({ cycleId: gamma.id, number: epic.number });
+    const a = child('Todo', gamma.id);
+    const b = child();
+
+    const result = tickets.planTickets({
+      cycleId: beta.id,
+      ticketNumbers: [epic.number],
+      withChildren: true,
+    });
+
+    expect(result).toMatchObject({ updated: [], children: [] });
+    expect(result.failed).toHaveLength(1);
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([]);
+    expect(tickets.getCycle(gamma.id).ticketNumbers).toEqual([
+      epic.number,
+      a.number,
+    ]);
+    expect(tickets.getTicket(b.number).cycle).toBeNull();
+  });
+
+  it('still pulls in the children of an Epic already in the Cycle', () => {
+    const { tickets, beta, epic, child } = setup();
+    tickets.planTicket({ cycleId: beta.id, number: epic.number });
+    const a = child();
+
+    const result = tickets.moveTicketsToCycle({
+      cycleId: beta.id,
+      ticketNumbers: [epic.number],
+      withChildren: true,
+    });
+
+    expect(result).toMatchObject({
+      updated: [epic.number],
+      children: [a.number],
+    });
+    expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([
+      epic.number,
+      a.number,
+    ]);
+  });
+});
