@@ -43,7 +43,7 @@ The User approves triage, the only path to `ready-for-agent`, starts each Cycle 
 
 ### The Merge gate (Q11)
 
-A Ticket whose PR is reviewed and green waits in Needs you with **Approve merge**. The click resumes its Start Conversation, or starts a Merge run, which merges, completes the Ticket and leaves cleanup to Tandembike. The merge stays on the Agent's side, so it works for any git host and handles rebases and conflicts. Tandembike itself still runs no `gh`. Rejected: Tandembike calling `gh pr merge` (one host only, no conflict handling), and detecting merges made on GitHub (polling, a network dependency).
+A Ticket whose PR is reviewed and green waits in Needs you with **Approve merge**. The click resumes its Start Conversation, or starts a Merge run, which merges, completes the Ticket and leaves cleanup to Tandembike. The merge stays on the Agent's side (ADR 0038), so it works for any git host and handles rebases and conflicts. Tandembike itself still runs no `gh`. Rejected: Tandembike calling `gh pr merge` (one host only, no conflict handling), and detecting merges made on GitHub (polling, a network dependency).
 
 ### Tandembike creates run worktrees (Q3, Q7)
 

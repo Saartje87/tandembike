@@ -16,6 +16,7 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: '/mattpocock-skills:implement-spec',
   retroCommand: '/retro',
+  mergeCommand: '/merge',
 };
 
 const none = {
@@ -23,6 +24,7 @@ const none = {
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  mergeCommand: null,
 };
 
 const started = {

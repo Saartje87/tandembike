@@ -15,6 +15,7 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: null,
   retroCommand: null,
+  mergeCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
@@ -31,6 +32,7 @@ describe('AgentCommandsForm', () => {
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
         retroCommand: '/retro',
+        mergeCommand: '/merge',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -57,6 +59,7 @@ describe('AgentCommandsForm', () => {
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: 'implement-spec',
       retroCommand: 'retro',
+      mergeCommand: '',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');
@@ -73,6 +76,12 @@ describe('AgentCommandsForm', () => {
     expect(
       screen.getByText('Blank runs /tandembike:retro'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText('Blank runs /tandembike:merge'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Merge command' })).toHaveValue(
+      '',
+    );
     expect(screen.queryByText('Blank runs /tandembike:implement')).toBeNull();
     expect(screen.queryByText('Blank runs /tandembike:triage')).toBeNull();
 

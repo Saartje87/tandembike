@@ -7,6 +7,7 @@ import { activity, liveConversation } from '../../test/conversation-activity';
 import { createTestConversations } from '../../test/conversations';
 import {
   answerConversationPermission,
+  approveMerge,
   closeConversation,
   currentConversationActivity,
   listOpenConversations,
@@ -53,6 +54,28 @@ describe('Conversation actions', () => {
     expect(result).toMatchObject({
       ok: true,
       conversation: { projectId: project.id, state: 'running' },
+    });
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('approve a merge for a Ticket in Review, and refuse one that is not', async () => {
+    const { project, tickets, runner } = setup();
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Handed off',
+    });
+
+    const refused = await approveMerge({ number: ticket.number });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+    tickets.addExternalReferences(ticket.number, [
+      'https://github.com/acme/site/pull/12',
+    ]);
+    const approved = await approveMerge({ number: ticket.number });
+
+    expect(refused).toMatchObject({ ok: false, error: expect.any(String) });
+    expect(approved).toMatchObject({
+      ok: true,
+      conversation: { intent: 'merge', startedBy: 'user' },
     });
     expect(runner.runs).toHaveLength(1);
   });

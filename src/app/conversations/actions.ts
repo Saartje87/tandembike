@@ -62,6 +62,19 @@ export async function startConversation(
   );
 }
 
+/**
+ * The User approves the merge of a Ticket or Epic in Review (ADR 0038): the
+ * Start Conversation that waits resumes with the fixed reply, or a Merge
+ * Conversation starts. A refusal names why.
+ */
+export async function approveMerge(input: {
+  number: number;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return conversationResult(() =>
+    appConversations().approveMerge({ ticketNumber: Number(input?.number) }),
+  );
+}
+
 /** The User's first message of a Setup: the Agent's brief holds the checklist. */
 const setupPrompt =
   "Check that this repository is ready for Tandembike's Agent runs.";

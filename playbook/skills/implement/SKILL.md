@@ -58,7 +58,16 @@ Commit messages name the Ticket (`T42`) and say what changed in plain words, unl
 - When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open a pull request with it. The body says what changed, how you checked it (the Check command and what it covered), and which Ticket it is for (`T42`).
 - When there is none, push the branch if a remote exists and say so in a note on the Ticket with `add_note`: the branch name, and that no pull request could be opened.
 
-Then call `open_pr` with the pull request's URL and `handOff: true`. That records the reference, releases your Claim and leaves the Ticket for the User to review and approve the merge. Do not merge the pull request yourself, and do not call `finish_work`.
+Then call `open_pr` with the pull request's URL and `handOff: true`. That records the reference, releases your Claim and leaves the Ticket for the User to review and approve the merge. Do not merge the pull request yourself, and do not call `finish_work`, until the User approves (see "When the User approves the merge").
+
+## When the User approves the merge
+
+The User may reply to this Conversation with `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` That is the only approval. Merge the pull request you opened, from the worktree you are in:
+
+1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub).
+2. When the branch is behind the default branch or conflicts, rebase onto it, resolve conflicts without losing the Ticket's change, push with `--force-with-lease`, and wait for the checks again. At most twice.
+3. When the checks are green, merge with the host CLI (`gh pr merge <number> --merge`, unless the repository's instructions name another method), then call `finish_work` with the Ticket number.
+4. When you cannot (a check fails after a rebase, a conflict you cannot resolve, a refusal), call `add_note` saying what stopped you, do not call `finish_work`, and say so. Never push to the default branch.
 
 ## 8. Feedback
 

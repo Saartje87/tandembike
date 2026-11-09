@@ -74,7 +74,8 @@ async function settingsTab(params: ProjectPageProps['params']) {
               of Tandembike's Playbook shown under it; a command you set
               replaces it for that Stage only. Start on an Epic does not fall
               back to the Start command. The Retro command is followed by the
-              Cycle's title and id.
+              Cycle's title and id. The Merge command runs when you approve a
+              merge.
             </Text>
           </Stack>
           <AgentCommandsForm

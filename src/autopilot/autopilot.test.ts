@@ -323,6 +323,42 @@ describe('Autopilot dispatch', () => {
     expect(started()).toEqual([a.number, b.number, c.number]);
   });
 
+  it('leaves a Ticket in Review alone and gives a working Merge a slot (T1221)', async () => {
+    const {
+      tickets,
+      conversations,
+      project,
+      cycle,
+      autopilot,
+      ready,
+      started,
+    } = setup();
+    const review = tickets.createTicket({
+      projectId: project.id,
+      title: 'Handed off',
+    });
+    tickets.updateTicket(review.number, { status: 'In progress' });
+    tickets.addExternalReferences(review.number, [
+      'https://github.com/acme/site/pull/12',
+    ]);
+    const next = ready('Next');
+    tickets.startCycle(cycle.id);
+    await conversations.approveMerge({ ticketNumber: review.number });
+
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([review.number]);
+
+    const merge = conversations.list({ ticketNumber: review.number })[0];
+    await conversations.stop(merge.id);
+    await autopilot.evaluate(project.id);
+    expect(started()).toEqual([review.number, next.number]);
+    expect(
+      conversations
+        .list({ projectId: project.id })
+        .filter((conversation) => conversation.intent === 'merge'),
+    ).toHaveLength(1);
+  });
+
   it('leaves running runs alone when it is turned off', async () => {
     const world = setup();
     const {

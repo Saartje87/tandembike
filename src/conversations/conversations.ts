@@ -3,7 +3,10 @@ import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import { playbookPath } from '../playbook/playbook';
-import { commandForStage } from '../tickets/agent-commands';
+import {
+  agentCommandMessage,
+  commandForStage,
+} from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -539,9 +542,13 @@ export function createConversations({
     announce(id);
   };
 
+  /** A Start and a Merge each hold one of the Project's run slots (T1221). */
+  const countsAsStartRun = (intent: ConversationIntent) =>
+    intent === 'start' || intent === 'merge';
+
   /**
    * Refuses a Start run beyond the Project's limit: a Start is not queued
-   * (ADR 0019). Triage and Ask are never limited, and do not count. Only
+   * (ADR 0019). A Merge counts like a Start. Triage and Ask are never limited, and do not count. Only
    * Starts that are working count, running or waiting on a permission: an
    * idle Start waits for a reply and holds no slot. `exceptId` is the
    * Conversation about to work, not counted against itself. The User's
@@ -553,7 +560,7 @@ export function createConversations({
     settings: { parallelRuns: boolean; maxConcurrentRuns: number },
     exceptId?: number,
   ) => {
-    if (intent !== 'start') {
+    if (!countsAsStartRun(intent)) {
       return;
     }
     const limit = startRunLimit(settings);
@@ -563,7 +570,7 @@ export function createConversations({
       if (
         id !== exceptId &&
         other.projectId === projectId &&
-        other.intent === 'start' &&
+        countsAsStartRun(other.intent) &&
         (other.state === 'running' || other.state === 'waiting')
       ) {
         running += 1;
@@ -714,6 +721,18 @@ export function createConversations({
         projectId: 'Choose a Project or a Ticket.',
       });
     }
+    if (input.intent === 'merge') {
+      if (input.startedBy === 'autopilot') {
+        throw new NotAllowedError(
+          'Autopilot never starts a Merge: the User approves each merge (ADR 0038).',
+        );
+      }
+      if (input.ticketNumber === undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Merge is about a Ticket or an Epic.',
+        });
+      }
+    }
     if (input.intent === 'setup') {
       if (input.ticketNumber !== undefined) {
         throw new ValidationError({
@@ -777,7 +796,12 @@ export function createConversations({
       .returning({ id: conversations.id })
       .get();
     append(created.id, input.startedBy, prompt);
-    if (input.intent === 'start' && settings.parallelRuns) {
+    // A Merge always gets a worktree: it checks out the PR branch, which must
+    // not disturb the User's checkout, even with Parallel runs off (T1221).
+    if (
+      input.intent === 'merge' ||
+      (input.intent === 'start' && settings.parallelRuns)
+    ) {
       try {
         const made = await worktrees.create({
           repositoryPath: settings.repositoryPath,
@@ -960,7 +984,30 @@ export function createConversations({
                 ),
               )
               .get();
-      return (started?.total ?? 0) + (replies?.total ?? 0);
+      // What the User's replies cost on a Conversation Autopilot started,
+      // such as the reply of Approve merge, is not Autopilot's spend (T1221).
+      const userTurns = db
+        .select({
+          total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        })
+        .from(runOutcomes)
+        .innerJoin(
+          conversations,
+          eq(conversations.id, runOutcomes.conversationId),
+        )
+        .where(
+          and(
+            eq(runOutcomes.projectId, input.projectId),
+            eq(runOutcomes.startedByAutopilot, false),
+            eq(conversations.startedBy, 'autopilot'),
+            eq(conversations.autopilotCycleId, input.cycleId),
+          ),
+        )
+        .get();
+      return (
+        Math.max(0, (started?.total ?? 0) - (userTurns?.total ?? 0)) +
+        (replies?.total ?? 0)
+      );
     },
 
     /**
@@ -1261,6 +1308,70 @@ export function createConversations({
       }
       announce(id);
       return get(id);
+    },
+
+    /**
+     * The User approves the merge of the Ticket or Epic `ticketNumber` in
+     * Review (ADR 0038): a pull request, no Claim, not Done and no working
+     * Conversation. An open Start Conversation that waits resumes with the
+     * fixed reply; otherwise a Merge Conversation starts. Only a Server
+     * Action calls it, so neither Autopilot nor an Agent can approve.
+     */
+    async approveMerge(input: { ticketNumber: number }): Promise<Conversation> {
+      const ticket = tickets.getTicket(input.ticketNumber);
+      const label = `T${ticket.number}`;
+      if (ticket.status === 'Done') {
+        throw new NotAllowedError(`${label} is already Done.`);
+      }
+      if (ticket.status !== 'In progress') {
+        throw new NotAllowedError(
+          `${label} is not in Review: only a Ticket whose work is handed off can be approved for a merge.`,
+        );
+      }
+      if (!ticket.externalReferences.some(isPullRequestReference)) {
+        throw new NotAllowedError(
+          `${label} has no pull request to merge. Add its reference first.`,
+        );
+      }
+      if (ticket.claim !== null) {
+        throw new NotAllowedError(
+          `${label} is claimed by a run that is still working on it.`,
+        );
+      }
+      const own = db
+        .select()
+        .from(conversations)
+        .where(eq(conversations.ticketNumber, ticket.number))
+        .orderBy(desc(conversations.id))
+        .all();
+      if (
+        own.some((row) => row.state === 'running' || row.state === 'waiting')
+      ) {
+        throw new NotAllowedError(
+          `A Conversation is working on ${label}. Wait for it, or stop it.`,
+        );
+      }
+      const startRow = own.find((row) => row.intent === 'start' && !row.hidden);
+      if (
+        startRow &&
+        (startRow.state === 'idle' || startRow.state === 'interrupted')
+      ) {
+        return this.reply(
+          startRow.id,
+          `Approved: merge ${label} now by the Playbook's merge steps, then finish_work.`,
+          'user',
+        );
+      }
+      return start({
+        startedBy: 'user',
+        ticketNumber: ticket.number,
+        intent: 'merge',
+        prompt: agentCommandMessage(
+          'merge',
+          ticket,
+          tickets.getProjectAgentCommands(ticket.projectId),
+        ),
+      });
     },
 
     /** Interrupts the run, ends it and marks the Conversation stopped. */

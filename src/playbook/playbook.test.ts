@@ -19,7 +19,7 @@ import { join } from 'node:path';
  * The skills the Playbook ships so far. Each Stage's ticket adds its skill
  * here and to `playbook/skills/`.
  */
-const shippedStageSkills = ['implement'];
+const shippedStageSkills = ['implement', 'merge'];
 
 const frontmatterOf = (skill: string): Record<string, string> => {
   const text = readFileSync(
@@ -91,6 +91,23 @@ describe('The Playbook plugin', () => {
     }
     expect(text).toContain('handOff: true');
     expect(text).toContain('t<number>-<slug>');
+  });
+});
+
+describe('The Playbook merge Stage', () => {
+  const text = (skill: string) =>
+    readFileSync(join(playbookPath, 'skills', skill, 'SKILL.md'), 'utf8');
+
+  it('has a merge skill that merges through the host CLI and finishes, or comments and stops', () => {
+    const merge = text('merge');
+    for (const tool of ['finish_work', 'add_note', 'get_ticket']) {
+      expect(merge).toContain(tool);
+    }
+    expect(merge).toContain('rebase');
+  });
+
+  it('lets implement merge only after the User approves', () => {
+    expect(text('implement')).toContain('Approved: merge');
   });
 });
 

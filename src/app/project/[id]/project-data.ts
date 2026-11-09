@@ -121,7 +121,8 @@ export function runSlotsOf(projectId: number) {
     .list({ projectId })
     .filter(
       ({ intent, state }) =>
-        intent === 'start' && (state === 'running' || state === 'waiting'),
+        (intent === 'start' || intent === 'merge') &&
+        (state === 'running' || state === 'waiting'),
     ).length;
   const cap = startRunLimit(
     appTickets('user').getProjectAgentSettings(projectId),

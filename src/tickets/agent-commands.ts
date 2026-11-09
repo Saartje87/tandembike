@@ -12,6 +12,8 @@ export type ProjectAgentCommands = {
   startEpicCommand: string | null;
   /** Retro on a Cycle, sent with the Cycle's title and id (T1171). */
   retroCommand: string | null;
+  /** Merge on a Ticket or Epic in Review; blank is the Playbook's (T1221). */
+  mergeCommand: string | null;
 };
 
 /**
@@ -52,6 +54,12 @@ export const agentStages = [
     skill: 'retro',
     label: 'Retro command',
   },
+  {
+    stage: 'merge',
+    field: 'mergeCommand',
+    skill: 'merge',
+    label: 'Merge command',
+  },
 ] as const satisfies readonly {
   stage: string;
   field: keyof ProjectAgentCommands;
@@ -87,10 +95,11 @@ export const noAgentCommands: ProjectAgentCommands = {
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  mergeCommand: null,
 };
 
 /** The buttons that send an agent command. */
-export type AgentCommandIntent = 'triage' | 'start';
+export type AgentCommandIntent = 'triage' | 'start' | 'merge';
 
 /**
  * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
@@ -138,7 +147,7 @@ export function normalizeAgentCommands(
 }
 
 /**
- * The first message Triage or Start sends about Ticket `number`: the
+ * The first message Triage, Start or Merge sends about Ticket `number`: the
  * command of its Stage followed by `T<number>`, such as
  * `/tandembike:implement T42` when the Project set none. Start on an Epic
  * uses the Epic Stage.
@@ -151,8 +160,10 @@ export function agentCommandMessage(
   const stage: AgentStage =
     intent === 'triage'
       ? 'triage'
-      : ticket.type === 'Epic'
-        ? 'startEpic'
-        : 'start';
+      : intent === 'merge'
+        ? 'merge'
+        : ticket.type === 'Epic'
+          ? 'startEpic'
+          : 'start';
   return `${commandForStage(stage, commands)} T${ticket.number}`;
 }

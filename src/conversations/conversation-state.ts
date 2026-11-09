@@ -6,6 +6,7 @@ export const conversationIntents = [
   'new_ticket',
   'setup',
   'retro',
+  'merge',
 ] as const;
 export type ConversationIntent = (typeof conversationIntents)[number];
 

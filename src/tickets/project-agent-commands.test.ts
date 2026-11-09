@@ -18,6 +18,7 @@ describe("A Project's agent commands", () => {
       startCommand: null,
       startEpicCommand: null,
       retroCommand: null,
+      mergeCommand: null,
     });
   });
 
@@ -29,6 +30,7 @@ describe("A Project's agent commands", () => {
       startCommand: 'implement',
       startEpicCommand: '',
       retroCommand: '',
+      mergeCommand: '',
     });
     tickets.setProjectAgentSettings(first.id, { runMode: 'default' });
 
@@ -50,6 +52,7 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: '   ',
       retroCommand: ' retro ',
+      mergeCommand: ' merge ',
     });
 
     expect(saved).toEqual({
@@ -57,6 +60,7 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: '/retro',
+      mergeCommand: '/merge',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -73,11 +77,13 @@ describe("A Project's agent commands", () => {
           startCommand: '/implement',
           startEpicCommand: `/${'a'.repeat(100)}`,
           retroCommand: '/retro',
+          mergeCommand: '/merge now',
         }),
       ),
     ).toEqual({
       triageCommand: '"/triage T1" has a space. Enter one command.',
       startEpicCommand: `"/${'a'.repeat(100)}" is longer than 100 characters.`,
+      mergeCommand: '"/merge now" has a space. Enter one command.',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(before);
   });
@@ -94,6 +100,7 @@ describe("A Project's agent commands", () => {
           startCommand: '',
           startEpicCommand: '',
           retroCommand: '',
+          mergeCommand: '',
         }),
       ),
     ).toBeInstanceOf(NotAllowedError);

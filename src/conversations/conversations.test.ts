@@ -2010,6 +2010,7 @@ describe('A Retro Conversation', () => {
       startCommand: '',
       startEpicCommand: '',
       retroCommand: '',
+      mergeCommand: '',
     });
     const cycle = tickets.createCycle({
       projectId: project.id,
@@ -2046,6 +2047,7 @@ describe('A Retro Conversation', () => {
       startCommand: '',
       startEpicCommand: '',
       retroCommand: 'retro',
+      mergeCommand: 'merge',
     });
     const cycle = tickets.createCycle({
       projectId: project.id,
