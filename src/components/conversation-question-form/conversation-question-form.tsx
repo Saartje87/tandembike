@@ -14,6 +14,7 @@ import { type FC, useEffect, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { answerConversationQuestion } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { QuestionEntry } from '../../conversations/conversation-state';
 import {
   type QuestionAnswers,
@@ -87,10 +88,10 @@ export const ConversationQuestionForm: FC<ConversationQuestionFormProps> = ({
   }, [kept, entryId, settled, watch]);
 
   const send = async (given: Record<string, string>) => {
-    const result = await answerConversationQuestion({
-      entryId,
-      answers: given,
-    });
+    const result = await callAction(
+      () => answerConversationQuestion({ entryId, answers: given }),
+      'The answer could not be sent. Try again.',
+    );
     if (result.ok) {
       kept?.answers.delete(entryId);
     } else {

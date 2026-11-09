@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startSetup } from '../../app/conversations/actions';
 import type {
@@ -120,6 +120,22 @@ describe('ProjectSetup', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Run Setup' }));
 
     expect(await screen.findByText('No path.')).toBeVisible();
+  });
+
+  it('shows a Setup start that throws as a refusal and stops loading (T1186)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(startSetup).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <ProjectSetup projectId={3} agentMode offer={null} latestSetup={null} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run Setup' }));
+
+    expect(
+      await screen.findByText('Setup could not be started. Try again.'),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Run Setup' })).toBeEnabled();
   });
 
   it('shows the latest Setup with its state and opens it in the dialog', async () => {

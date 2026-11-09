@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState } from 'react';
 
 import { startSetup } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { Conversation } from '../../conversations/conversations';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { stateNames } from '../conversation-labels/conversation-labels';
@@ -55,7 +56,10 @@ export const ProjectSetup: FC<ProjectSetupProps> = ({
   const run = async () => {
     setPending(true);
     setError(undefined);
-    const result = await startSetup({ projectId });
+    const result = await callAction(
+      () => startSetup({ projectId }),
+      'Setup could not be started. Try again.',
+    );
     setPending(false);
     if (!result.ok) {
       setError(result.error);
