@@ -437,6 +437,9 @@ export function createAutopilot({
             : tickets.getTicket(change.numbers[0]).projectId;
         case 'conversation':
           return conversations.get(change.id).projectId;
+        case 'notice':
+          // Raised by Notices from changes Autopilot already saw (ADR 0042).
+          return null;
       }
     } catch (error) {
       console.error('Autopilot could not place a change in a Project', error);

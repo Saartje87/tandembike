@@ -8,6 +8,7 @@ import { ColorModeProvider } from '../components/color-mode-provider/color-mode-
 import { ConversationActivityProvider } from '../components/conversation-activity/conversation-activity';
 import { ConversationDialogProvider } from '../components/conversation-dialog-provider/conversation-dialog-provider';
 import { LiveUpdates } from '../components/live-updates/live-updates';
+import { NoticeNotifier } from '../components/notice-notifier/notice-notifier';
 import { ProjectNavLoader } from '../components/project-nav-loader/project-nav-loader';
 import { colorModeScript } from './lib/color-mode';
 
@@ -57,6 +58,7 @@ const RootLayout: FC<RootLayoutProps> = ({ children, breadcrumbs }) => {
       <body>
         <ColorModeProvider>
           <LiveUpdates>
+            <NoticeNotifier />
             <ConversationActivityProvider>
               <ConversationDialogProvider>
                 <AppShell

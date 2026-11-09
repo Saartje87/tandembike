@@ -18,6 +18,7 @@ import { AppLink } from '../app-link/app-link';
 import { ColorModeMenu } from '../color-mode-menu/color-mode-menu';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { Icon } from '../icon/icon';
+import { NotificationToggle } from '../notification-toggle/notification-toggle';
 
 export type AppHeaderProps = {
   /** The side navigation the menu button opens. */
@@ -118,6 +119,7 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
               <AppLink href={statsPath()} intent="inherit">
                 Stats
               </AppLink>
+              <NotificationToggle />
               <ColorModeMenu />
             </Inline>
           </Inline>
