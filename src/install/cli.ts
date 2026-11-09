@@ -72,6 +72,7 @@ async function main(): Promise<void> {
 }
 
 const serverUrl = process.env.TANDEMBIKE_URL ?? 'http://localhost:4747';
+const heartbeatMs = 60 * 1000;
 const notRunning = 'Tandembike is not running. Start it with `tandembike`.';
 
 /** A refusal or failure of the server's terminal route, as text. */
@@ -137,6 +138,14 @@ async function runSession(
   started: TerminalStartResult | TerminalResumeResult,
 ): Promise<number> {
   const plan = planClaudeSession(started);
+  // A heartbeat every minute tells the server the session is alive; a failure,
+  // such as a server restart, is ignored (ADR 0039).
+  const heartbeat = setInterval(() => {
+    callServer({
+      action: 'heartbeat',
+      conversationId: started.conversationId,
+    }).catch(() => undefined);
+  }, heartbeatMs);
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(plan.command, plan.args, {
       cwd: plan.cwd,
@@ -161,6 +170,7 @@ async function runSession(
       resolve(code ?? (signal ? 128 + (osConstants.signals[signal] ?? 1) : 1)),
     );
   });
+  clearInterval(heartbeat);
   try {
     await callServer({
       action: 'end',
