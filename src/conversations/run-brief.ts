@@ -26,6 +26,8 @@ export type RunBrief = {
   checkCommand?: string | null;
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
   runMode: 'default' | 'auto';
+  /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
+  terminal?: boolean;
   defaults?: NewTicketDefaults;
 };
 
@@ -81,7 +83,9 @@ export function runBrief(brief: RunBrief): string {
       ? 'This Conversation is about the Project; it has no Ticket yet.'
       : `This Conversation is about Ticket T${brief.ticketNumber}, "${brief.ticketTitle}"${brief.ticketType === 'Epic' ? ', an Epic' : ''}.`,
     intentLines[brief.intent],
-    'A human answers in the Tandembike UI, not in a terminal: when you need a decision, offer the choices with the AskUserQuestion tool, which shows the User a form; ask open questions in your messages.',
+    brief.terminal
+      ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
+      : 'A human answers in the Tandembike UI, not in a terminal: when you need a decision, offer the choices with the AskUserQuestion tool, which shows the User a form; ask open questions in your messages.',
     `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};

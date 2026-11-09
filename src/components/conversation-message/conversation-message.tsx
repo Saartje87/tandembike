@@ -36,7 +36,11 @@ const withTicketLinks = (text: string): ReactNode[] =>
 export const ConversationMessage: FC<ConversationMessageProps> = ({
   entry,
 }) => {
-  if (entry.role === 'tool' || entry.role === 'created') {
+  if (
+    entry.role === 'tool' ||
+    entry.role === 'created' ||
+    entry.role === 'session'
+  ) {
     return (
       <Box asChild alignSelf="flex-start" className={styles.bubble}>
         <li data-side="start">

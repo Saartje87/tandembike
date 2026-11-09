@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { LiveConversation } from '../../conversations/conversation-activity';
-import { liveConversation } from '../../test/conversation-activity';
-import type { Status } from '../../tickets/status';
-import type { Ticket } from '../../tickets/tickets';
+import type { LiveConversation } from '../conversations/conversation-activity';
+import { liveConversation } from '../test/conversation-activity';
+import type { Status } from './status';
 import {
   canSpec,
   inheritsSection,
@@ -11,7 +10,8 @@ import {
   isParked,
   isStalled,
   laneOf,
-} from './board-lanes';
+} from './ticket-lanes';
+import type { Ticket } from './tickets';
 
 const placed = (
   status: Status,

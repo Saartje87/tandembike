@@ -3,6 +3,7 @@ import { appChangeChannel } from '../tickets/changes';
 import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
+import { terminalSweepMs } from './terminal-shared';
 
 const globalKey = Symbol.for('ticket.conversations');
 type GlobalWithConversations = typeof globalThis & {
@@ -23,7 +24,7 @@ const mcpUrl =
  * lives on `globalThis`, with the runs it holds, so Server Actions share it
  * and dev-mode reloads keep it. The first call marks the Conversations of
  * runs that died with the previous server as interrupted. Only Server
- * Actions call it (ADR 0019): no route handler or MCP tool may.
+ * Actions and the CLI's terminal route (ADR 0039) call it: no MCP tool may.
  */
 export function appConversations(): Conversations {
   const global = globalThis as GlobalWithConversations;
@@ -38,6 +39,14 @@ export function appConversations(): Conversations {
     });
     conversations.interruptStale();
     void conversations.cleanupWorktrees().catch(() => undefined);
+    // End Terminal Conversations whose CLI went quiet (ADR 0039).
+    setInterval(() => {
+      try {
+        conversations.endIdleTerminals();
+      } catch {
+        // The next sweep tries again.
+      }
+    }, terminalSweepMs).unref();
     global[globalKey] = conversations;
   }
   return global[globalKey];

@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { stopConversation } from '../../app/conversations/actions';
+import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
 import {
   formatCost,
@@ -20,13 +21,18 @@ export type ConversationChatHeaderProps = {
   title: string;
 };
 
-/** The chat's header: its Ticket or Project, intent, state and cost, and Stop while a run is alive. */
+/** The chat's header: its Ticket or Project, intent, state and cost, and Stop while a run is alive (a Terminal Conversation has no Stop). */
 export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
   conversation,
   title,
 }) => {
   const [pending, startStop] = useTransition();
   const [error, setError] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  const resumeCommand = `tandembike resume ${conversation.id}`;
+  // Continue in terminal hands a UI Conversation's SDK session to `claude`.
+  const canContinue =
+    !isTerminal(conversation) && conversation.sdkSessionId !== null;
 
   return (
     <Stack gap={1}>
@@ -39,13 +45,40 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
         <Stack gap={0}>
           <Text fontWeight="strong">{title}</Text>
           <Text fontSize="small" color="muted">
-            {`${intentNames[conversation.intent]}, ${stateNames[conversation.state]}, ${formatCost(conversation.costUsd)}`}
+            {[
+              intentNames[conversation.intent],
+              stateNames[conversation.state],
+              // Tandembike sees no cost of an interactive session, but keeps
+              // what a UI run spent before the hand-off (ADR 0039).
+              ...(isTerminal(conversation) && conversation.costUsd <= 0
+                ? []
+                : [formatCost(conversation.costUsd)]),
+            ].join(', ')}
           </Text>
           <Text fontSize="small" color="muted">
             {`Started by ${starterNames[conversation.startedBy]}`}
           </Text>
         </Stack>
-        {hasRun(conversation.state) && (
+        {canContinue && (
+          <Button
+            type="button"
+            size="small"
+            variant="outline"
+            onClick={async () => {
+              setError(undefined);
+              try {
+                await navigator.clipboard.writeText(resumeCommand);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+                setError(`Could not copy. Run: ${resumeCommand}`);
+              }
+            }}
+          >
+            Continue in terminal
+          </Button>
+        )}
+        {hasRun(conversation.state) && !isTerminal(conversation) && (
           <Button
             type="button"
             size="small"
@@ -70,6 +103,11 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
         )}
       </Inline>
       <ConversationWorktree conversation={conversation} />
+      {copied && canContinue && (
+        <Text fontSize="small" color="muted" role="status">
+          {`Copied: ${resumeCommand}`}
+        </Text>
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

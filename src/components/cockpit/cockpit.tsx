@@ -46,6 +46,7 @@ import {
 import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { BatchFailure } from '../../tickets/errors';
+import type { InProgressSection } from '../../tickets/ticket-lanes';
 import type { Ticket } from '../../tickets/tickets';
 import { readyForAgent } from '../../tickets/triage-labels';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
@@ -60,7 +61,6 @@ import {
   mergeLaneOrder,
   ticketMatches,
 } from '../board/board-filter';
-import type { InProgressSection } from '../board/board-lanes';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
@@ -684,7 +684,9 @@ const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
  * claimed Ticket with no live run (such as one worked in a terminal), that.
  */
 function inFlightLine(row: InFlightRow, now: number): string {
-  const cost = row.cost > 0 && formatCost(row.cost);
+  // A Terminal run shows elapsed time only, even when a UI run spent before
+  // the hand-off (ADR 0039).
+  const cost = !row.live?.terminal && row.cost > 0 && formatCost(row.cost);
   return row.live
     ? lineOf(
         row.live.line,

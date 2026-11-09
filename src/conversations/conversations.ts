@@ -1,6 +1,15 @@
-import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  max,
+  ne,
+  sql,
+} from 'drizzle-orm';
 
-import { isInReview } from '../components/board/board-lanes';
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import { playbookPath } from '../playbook/playbook';
@@ -15,8 +24,10 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { isPullRequestReference } from '../tickets/external-reference-display';
+import { canSpec, isInReview } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
+import type { NoWorkReason } from '../tickets/work';
 import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
@@ -31,6 +42,7 @@ import {
   type ConversationIntent,
   type ConversationStarter,
   type ConversationState,
+  isTerminal,
   type PermissionAnswer,
   type PermissionStatus,
   permissionAnswers,
@@ -41,9 +53,14 @@ import {
 import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 import { type RunResult, runResultOf, runResults } from './run-outcome';
+import {
+  type TerminalIntent,
+  terminalIdleMinutes,
+  terminalIdleMs,
+} from './terminal-shared';
 
 /** Who sends a reply: the User, or Autopilot in their place. */
-export type ConversationSender = ConversationStarter;
+export type ConversationSender = Exclude<ConversationStarter, 'terminal'>;
 
 export type Conversation = {
   id: number;
@@ -51,7 +68,7 @@ export type Conversation = {
   ticketNumber: number | null;
   intent: ConversationIntent;
   state: ConversationState;
-  /** Who started it, the User or Autopilot. */
+  /** Who started it: the User, Autopilot or a Terminal session. */
   startedBy: ConversationStarter;
   sdkSessionId: string | null;
   costUsd: number;
@@ -132,7 +149,7 @@ export type TranscriptEntry = {
 
 export type StartConversationInput = {
   /** Who starts the Conversation; its first message is recorded as theirs. */
-  startedBy: ConversationStarter;
+  startedBy: ConversationSender;
   /** The Project, unless `ticketNumber` names a Ticket of it. */
   projectId?: number;
   ticketNumber?: number;
@@ -149,6 +166,40 @@ export type StartConversationInput = {
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
 };
+
+/** What the CLI needs to open `claude` for a Terminal Conversation. */
+export type TerminalSession = {
+  /** The Conversation's id, which is the session's Agent-run ID. */
+  conversationId: number;
+  /** The worktree, else the Project's repository path. */
+  cwd: string;
+  /** The Stage's command and the Ticket, as the UI sends it. */
+  firstMessage: string;
+  /** The run brief, saying the run is in a terminal. */
+  brief: string;
+  runMode: 'default' | 'auto';
+  /** The Project's run model; null for Claude Code's own default. */
+  model: string | null;
+};
+
+/** What `tandembike next` gets: a session, or why there is no work. */
+export type TerminalNext =
+  | { started: true; session: TerminalSession }
+  | { started: false; reason: NoWorkReason };
+
+/** What the CLI needs to resume a handed-over Conversation. */
+export type TerminalHandOff = Omit<TerminalSession, 'firstMessage'> & {
+  /** The SDK session `claude --resume` opens. */
+  sessionId: string;
+};
+
+export type StartTerminalInput = {
+  ticketNumber: number;
+  intent: TerminalIntent;
+};
+
+const terminalRefusal =
+  'This Conversation runs in a terminal; answer it there.';
 
 /** An open Conversation with what its tab in the Conversation dialog shows. */
 export type OpenConversation = {
@@ -229,12 +280,15 @@ const isStartRunIntent = (intent: ConversationIntent) =>
 /**
  * Whether a Conversation holds one of its Project's Start run slots: a Start
  * or a Merge whose run is working, running or waiting on a permission. An
- * idle one waits for a reply and holds none (ADR 0019).
+ * idle one waits for a reply and holds none (ADR 0019). A Terminal
+ * Conversation has no run in the server and holds none (ADR 0039).
  */
 export const holdsStartRunSlot = (conversation: {
   intent: ConversationIntent;
   state: ConversationState;
+  startedBy: ConversationStarter;
 }): boolean =>
+  !isTerminal(conversation) &&
   isStartRunIntent(conversation.intent) &&
   (conversation.state === 'running' || conversation.state === 'waiting');
 
@@ -262,7 +316,7 @@ export const startRunLimit = (settings: {
 /**
  * Conversations (ADR 0019): the User's exchanges with Agent runs that
  * Tandembike starts. Runs begin, receive replies and stop only through this
- * module, which only Server Actions call. Every change is stored and
+ * module, which only Server Actions and the terminal route call. Every change is stored and
  * announced as a `conversation` change over the events route (ADR 0005).
  */
 export function createConversations({
@@ -297,6 +351,7 @@ export function createConversations({
       Pick<
         Conversation,
         | 'state'
+        | 'startedBy'
         | 'sdkSessionId'
         | 'costUsd'
         | 'worktreePath'
@@ -630,6 +685,44 @@ export function createConversations({
       .run();
   };
 
+  /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
+  const briefOf = (id: number): string => {
+    const conversation = get(id);
+    const settings = tickets.getProjectAgentSettings(conversation.projectId);
+    const ticket =
+      conversation.ticketNumber === null
+        ? null
+        : tickets.getTicket(conversation.ticketNumber);
+    return runBrief({
+      conversationId: id,
+      ticketNumber: ticket?.number ?? null,
+      ticketTitle: ticket?.title ?? null,
+      ticketType: ticket?.type ?? null,
+      projectName: tickets.getProject(conversation.projectId).name,
+      intent: conversation.intent,
+      retroCycle:
+        conversation.retroCycleId === null
+          ? null
+          : tickets.getCycle(conversation.retroCycleId),
+      parallelRuns: settings.parallelRuns,
+      worktree:
+        conversation.worktreePath === null
+          ? null
+          : {
+              path: conversation.worktreePath,
+              base: worktreeBaseOf(id),
+            },
+      checkCommand: settings.checkCommand,
+      runMode: settings.runMode,
+      terminal: isTerminal(conversation),
+      defaults: {
+        cycleId: conversation.defaultCycleId,
+        epicNumber: conversation.defaultEpicNumber,
+        type: conversation.defaultType,
+      },
+    });
+  };
+
   /**
    * Starts a run for Conversation `id` with `prompt`, resuming `resume`.
    * `limited: false` skips the Start run limit, for the User's reply (ADR 0031).
@@ -656,11 +749,6 @@ export function createConversations({
         id,
       );
     }
-    const ticket =
-      conversation.ticketNumber === null
-        ? null
-        : tickets.getTicket(conversation.ticketNumber);
-
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,
@@ -683,33 +771,7 @@ export function createConversations({
         agentRunId: String(id),
         mcpUrl,
         plugins: [{ type: 'local', path: playbookPath }],
-        systemPrompt: runBrief({
-          conversationId: id,
-          ticketNumber: ticket?.number ?? null,
-          ticketTitle: ticket?.title ?? null,
-          ticketType: ticket?.type ?? null,
-          projectName: tickets.getProject(conversation.projectId).name,
-          intent: conversation.intent,
-          retroCycle:
-            conversation.retroCycleId === null
-              ? null
-              : tickets.getCycle(conversation.retroCycleId),
-          parallelRuns: settings.parallelRuns,
-          worktree:
-            conversation.worktreePath === null
-              ? null
-              : {
-                  path: conversation.worktreePath,
-                  base: worktreeBaseOf(id),
-                },
-          checkCommand: settings.checkCommand,
-          runMode: settings.runMode,
-          defaults: {
-            cycleId: conversation.defaultCycleId,
-            epicNumber: conversation.defaultEpicNumber,
-            type: conversation.defaultType,
-          },
-        }),
+        systemPrompt: briefOf(id),
         prompt,
         runMode: settings.runMode,
         ...(settings.runModel === null ? {} : { model: settings.runModel }),
@@ -721,6 +783,40 @@ export function createConversations({
     } catch (error) {
       live.delete(id);
       throw error;
+    }
+  };
+
+  /**
+   * Makes the worktree of Conversation `id` and runs the Project's Prepare
+   * command in it. Returns why it failed, or null when the worktree is ready.
+   */
+  const prepareWorktree = async (
+    id: number,
+    projectId: number,
+    settings: { repositoryPath: string | null; prepareCommand: string | null },
+  ): Promise<string | null> => {
+    try {
+      const made = await worktrees.create({
+        repositoryPath: settings.repositoryPath as string,
+        projectId,
+        conversationId: id,
+      });
+      update(id, { worktreePath: made.path, worktreeBase: made.base });
+      if (settings.prepareCommand !== null) {
+        const prepared = await worktrees.runPrepare(
+          made.path,
+          settings.prepareCommand,
+        );
+        if (prepared.exitCode !== 0) {
+          // No run starts in a worktree its dependencies are missing from.
+          return `The Prepare command \`${settings.prepareCommand}\` failed with exit code ${prepared.exitCode}.\n\n${prepared.output}`.trim();
+        }
+      }
+      return null;
+    } catch (error) {
+      return `Tandembike could not create a worktree for this Conversation: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
     }
   };
 
@@ -845,44 +941,12 @@ export function createConversations({
       input.intent === 'merge' ||
       (input.intent === 'start' && settings.parallelRuns)
     ) {
-      try {
-        const made = await worktrees.create({
-          repositoryPath: settings.repositoryPath,
-          projectId,
-          conversationId: created.id,
-        });
-        update(created.id, {
-          worktreePath: made.path,
-          worktreeBase: made.base,
-        });
-        if (settings.prepareCommand !== null) {
-          const prepared = await worktrees.runPrepare(
-            made.path,
-            settings.prepareCommand,
-          );
-          if (prepared.exitCode !== 0) {
-            // No run starts in a worktree its dependencies are missing from.
-            update(created.id, { state: 'interrupted' });
-            append(
-              created.id,
-              'error',
-              `The Prepare command \`${settings.prepareCommand}\` failed with exit code ${prepared.exitCode}.\n\n${prepared.output}`.trim(),
-            );
-            announce(created.id);
-            return get(created.id);
-          }
-        }
-      } catch (error) {
+      const problem = await prepareWorktree(created.id, projectId, settings);
+      if (problem !== null) {
         // No run starts in a broken checkout: the Conversation waits for the
         // User in Action needed (ADR 0023).
         update(created.id, { state: 'interrupted' });
-        append(
-          created.id,
-          'error',
-          `Tandembike could not create a worktree for this Conversation: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
+        append(created.id, 'error', problem);
         announce(created.id);
         return get(created.id);
       }
@@ -897,6 +961,244 @@ export function createConversations({
     }
     announce(created.id);
     return get(created.id);
+  };
+
+  const refuseTerminal = (conversation: Conversation) => {
+    if (isTerminal(conversation)) {
+      throw new NotAllowedError(terminalRefusal);
+    }
+  };
+
+  /**
+   * Opens a Conversation Started by Terminal on a Ticket (ADR 0039): the
+   * refusals of a UI start, but neither the Start run limit nor the Spend
+   * ceiling. It makes the worktree and runs the Prepare command as a UI Start
+   * does, and returns what the CLI needs to open `claude`. No run starts in
+   * the server: the Conversation is `running` until `endTerminal`.
+   */
+  const startTerminal = async (
+    input: StartTerminalInput,
+  ): Promise<TerminalSession> => {
+    const ticket = tickets.getTicket(input.ticketNumber);
+    const label = `T${ticket.number}`;
+    if (ticket.archived) {
+      throw new NotAllowedError(`${label} is archived.`);
+    }
+    const settings = tickets.getProjectAgentSettings(ticket.projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    if (input.intent === 'spec' && !canSpec(ticket)) {
+      throw new NotAllowedError(
+        `${label} is not an idea in Intake or an Epic without children, so it cannot be specced.`,
+      );
+    }
+    if (input.intent === 'start') {
+      const working = db
+        .select({ id: conversations.id, state: conversations.state })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.ticketNumber, ticket.number),
+            eq(conversations.intent, 'start'),
+            eq(conversations.hidden, false),
+          ),
+        )
+        .all()
+        .some((row) => row.state === 'running' || row.state === 'waiting');
+      if (working) {
+        throw new NotAllowedError(
+          `${label} already has a Start Conversation working. Wait for it, or stop it.`,
+        );
+      }
+    }
+    const firstMessage = agentCommandMessage(
+      input.intent,
+      ticket,
+      tickets.getProjectAgentCommands(ticket.projectId),
+    );
+    const now = new Date();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId: ticket.projectId,
+        ticketNumber: ticket.number,
+        intent: input.intent,
+        startedBy: 'terminal',
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, 'user', firstMessage);
+    if (input.intent === 'start' && settings.parallelRuns) {
+      const problem = await prepareWorktree(
+        created.id,
+        ticket.projectId,
+        settings,
+      );
+      if (problem !== null) {
+        // There is no session to wait in: close the Conversation, and say why.
+        append(created.id, 'error', problem);
+        update(created.id, { state: 'stopped' });
+        setHidden(created.id, true);
+        announce(created.id);
+        throw new NotAllowedError(problem);
+      }
+    }
+    announce(created.id);
+    const conversation = get(created.id);
+    return {
+      conversationId: created.id,
+      cwd: conversation.worktreePath ?? settings.repositoryPath,
+      firstMessage,
+      brief: briefOf(created.id),
+      runMode: settings.runMode,
+      model: settings.runModel,
+    };
+  };
+
+  /**
+   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * item of the Active Cycle of the Project whose repository holds `folder`,
+   * by the `next_work` rule. With no work it returns `next_work`'s reason.
+   */
+  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
+    const projectId = tickets.findProjectIdOfFolder(folder);
+    if (projectId === undefined) {
+      const names = tickets
+        .listProjects()
+        .filter(({ archived }) => !archived)
+        .map(({ name }) => `"${name}"`);
+      throw new ValidationError({
+        cwd: `No Project has a repository containing ${folder}. ${
+          names.length === 0
+            ? 'There are no Projects yet.'
+            : `Known Projects: ${names.join(', ')}.`
+        }`,
+      });
+    }
+    const next = tickets.nextWork({ projectId });
+    if (next.ticket === null) {
+      return { started: false, reason: next.reason };
+    }
+    return {
+      started: true,
+      session: await startTerminal({
+        ticketNumber: next.ticket.number,
+        intent: 'start',
+      }),
+    };
+  };
+
+  /**
+   * The CLI reports its `claude` session ended: the Conversation becomes
+   * `stopped` with a "Session ended" entry holding the exit code. It records
+   * no Run outcome (ADR 0039). Ending an ended one changes nothing.
+   */
+  const endTerminal = async (
+    id: number,
+    end: { exitCode: number },
+  ): Promise<Conversation> => {
+    const conversation = get(id);
+    if (!isTerminal(conversation)) {
+      throw new NotAllowedError(
+        'This Conversation does not run in a terminal.',
+      );
+    }
+    if (conversation.state === 'stopped') {
+      return conversation;
+    }
+    append(id, 'session', `Session ended (exit code ${end.exitCode}).`);
+    update(id, { state: 'stopped' });
+    announce(id);
+    return get(id);
+  };
+
+  /**
+   * A Tandembike MCP call of a `claude` session, attributed by its
+   * `X-Tandembike-Run` header (T1238): becomes the Conversation's latest
+   * `tool` entry, which the Status line reads, and refreshes its last
+   * activity. Anything but a running, unclosed Terminal Conversation's id is
+   * ignored.
+   */
+  const recordTerminalCall = (
+    runId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+  ): void => {
+    if (!/^\d+$/.test(runId)) {
+      return;
+    }
+    const id = Number(runId);
+    const conversation = db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id))
+      .get();
+    if (
+      !conversation ||
+      !isTerminal(conversation) ||
+      conversation.hidden ||
+      conversation.state !== 'running'
+    ) {
+      return;
+    }
+    const name = `mcp__tandembike__${toolName}`;
+    append(id, 'tool', `${name} ${JSON.stringify(input)}`.slice(0, 300), {
+      tool: { name, input },
+    });
+    update(id, {});
+    announce(id);
+  };
+
+  /**
+   * The CLI's heartbeat while `claude` runs: refreshes the last activity of a
+   * Terminal Conversation that is still open (ADR 0039). Ignored for others.
+   */
+  const heartbeatTerminal = (id: number, now: Date = new Date()) => {
+    db.update(conversations)
+      .set({ updatedAt: now })
+      .where(
+        and(
+          eq(conversations.id, id),
+          eq(conversations.startedBy, 'terminal'),
+          inArray(conversations.state, liveStates),
+        ),
+      )
+      .run();
+  };
+
+  /**
+   * Ends every open Terminal Conversation whose last activity, a heartbeat or
+   * an MCP call, is more than 5 minutes before `now`, as an exit does but with
+   * an entry saying it timed out. Returns how many it ended. The server calls
+   * it once a minute.
+   */
+  const endIdleTerminals = (now: Date = new Date()): number => {
+    const cutoff = now.getTime() - terminalIdleMs;
+    const idle = db
+      .select({ id: conversations.id, updatedAt: conversations.updatedAt })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.startedBy, 'terminal'),
+          inArray(conversations.state, liveStates),
+        ),
+      )
+      .all()
+      .filter((row) => row.updatedAt.getTime() < cutoff);
+    for (const { id } of idle) {
+      append(
+        id,
+        'session',
+        `Session timed out (no activity for ${terminalIdleMinutes} minutes).`,
+      );
+      update(id, { state: 'stopped' });
+      announce(id);
+    }
+    return idle.length;
   };
 
   const repositoryPathOf = (projectId: number): string | null => {
@@ -1189,30 +1491,42 @@ export function createConversations({
           state: conversations.state,
           costUsd: conversations.costUsd,
           createdAt: conversations.createdAt,
+          startedBy: conversations.startedBy,
         })
         .from(conversations)
         .orderBy(desc(conversations.id))
         .all()
-        .map(({ id, ticketNumber, projectId, state, costUsd, createdAt }) => {
-          const entry = latest.get(id);
-          return {
+        .map(
+          ({
             id,
             ticketNumber,
             projectId,
             state,
-            costUsd: costUsd ?? 0,
-            latest: entry
-              ? {
-                  role: entry.role,
-                  text: entry.text,
-                  permissionRules: entry.permissionRules,
-                  toolName: entry.toolName,
-                  toolInput: entry.toolInput,
-                }
-              : null,
-            startedAt: (started.get(id) ?? createdAt).toISOString(),
-          };
-        });
+            costUsd,
+            createdAt,
+            startedBy,
+          }) => {
+            const entry = latest.get(id);
+            return {
+              id,
+              ticketNumber,
+              projectId,
+              state,
+              costUsd: costUsd ?? 0,
+              startedBy,
+              latest: entry
+                ? {
+                    role: entry.role,
+                    text: entry.text,
+                    permissionRules: entry.permissionRules,
+                    toolName: entry.toolName,
+                    toolInput: entry.toolInput,
+                  }
+                : null,
+              startedAt: (started.get(id) ?? createdAt).toISOString(),
+            };
+          },
+        );
     },
 
     /**
@@ -1257,6 +1571,66 @@ export function createConversations({
     },
 
     start,
+
+    startTerminal,
+    startTerminalNext,
+
+    endTerminal,
+    heartbeatTerminal,
+    endIdleTerminals,
+
+    recordTerminalCall,
+
+    /**
+     * Continue in terminal (ADR 0039): hands a UI Conversation with an SDK
+     * session over to `tandembike resume`. The live run stops as Stop does, so
+     * its Run outcome is recorded as stopped and its prompts expire; the
+     * Conversation then becomes a Terminal one, `running` until `endTerminal`.
+     * Cost and Cycle stay. Refused for a closed Conversation, one already
+     * Terminal, one without an SDK session or one whose worktree was removed.
+     */
+    async handOffToTerminal(id: number): Promise<TerminalHandOff> {
+      const conversation = get(id);
+      if (isTerminal(conversation)) {
+        throw new NotAllowedError(
+          'This Conversation already runs in a terminal.',
+        );
+      }
+      if (conversation.hidden) {
+        throw new NotAllowedError('This Conversation is closed.');
+      }
+      if (conversation.sdkSessionId === null) {
+        throw new NotAllowedError(
+          'This Conversation has no session to continue yet.',
+        );
+      }
+      if (conversation.worktreeRemoved) {
+        throw new NotAllowedError(
+          'The worktree of this Conversation was removed.',
+        );
+      }
+      const settings = tickets.getProjectAgentSettings(conversation.projectId);
+      if (settings.repositoryPath === null) {
+        throw new ValidationError(noRepositoryPath);
+      }
+      // The worktree is the terminal's now: stopping must not release it.
+      const handle = live.get(id);
+      if (handle) {
+        handle.releaseWhenEnded = false;
+      }
+      await this.stop(id);
+      append(id, 'session', 'Continued in terminal');
+      update(id, { startedBy: 'terminal', state: 'running' });
+      announce(id);
+      return {
+        conversationId: id,
+        sessionId: conversation.sdkSessionId,
+        cwd: conversation.worktreePath ?? settings.repositoryPath,
+        brief: briefOf(id),
+        runMode: settings.runMode,
+        model: settings.runModel,
+      };
+    },
 
     /**
      * Starts the Retro of a Cycle: a Conversation about its Project that looks
@@ -1305,6 +1679,7 @@ export function createConversations({
         throw new ValidationError({ text: 'Write a reply first.' });
       }
       const conversation = get(id);
+      refuseTerminal(conversation);
       if (
         conversation.worktreePath !== null &&
         !live.get(id)?.run &&
@@ -1424,6 +1799,7 @@ export function createConversations({
       if (conversation.state === 'stopped') {
         return conversation;
       }
+      refuseTerminal(conversation);
       const handle = live.get(id);
       live.delete(id);
       if (handle) {
@@ -1564,6 +1940,7 @@ export function createConversations({
       if (entry?.role !== 'permission') {
         throw new NotFoundError(`There is no permission request ${entryId}.`);
       }
+      refuseTerminal(get(entry.conversationId));
       const handle = live.get(entry.conversationId);
       const resolve = handle?.asking.get(entryId);
       if (!handle || !resolve) {
@@ -1595,6 +1972,7 @@ export function createConversations({
       if (entry?.role !== 'question' || !entry.question) {
         throw new NotFoundError(`There is no question ${entryId}.`);
       }
+      refuseTerminal(get(entry.conversationId));
       if (entry.question.answers !== null) {
         throw new NotAllowedError('This question was already answered.');
       }
@@ -1627,7 +2005,7 @@ export function createConversations({
     },
 
     /**
-     * Marks as interrupted every Conversation that says its run is alive,
+     * Marks as interrupted every Conversation, but a Terminal one, that says its run is alive,
      * for the server to call once on start, when all its runs are dead.
      * Returns how many it marked.
      */
@@ -1635,7 +2013,14 @@ export function createConversations({
       const stale = db
         .select({ id: conversations.id })
         .from(conversations)
-        .where(inArray(conversations.state, liveStates))
+        .where(
+          and(
+            inArray(conversations.state, liveStates),
+            // A Terminal session outlives the server; the idle sweep ends it
+            // if its CLI is gone (ADR 0039).
+            ne(conversations.startedBy, 'terminal'),
+          ),
+        )
         .all();
       db.update(conversationEntries)
         .set({ permission: 'expired' })

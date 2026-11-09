@@ -29,8 +29,11 @@ export const conversationStates = [
 ] as const;
 export type ConversationState = (typeof conversationStates)[number];
 
-/** Who started a Conversation (GLOSSARY: Started by). */
-export const conversationStarters = ['user', 'autopilot'] as const;
+/**
+ * Who started a Conversation (GLOSSARY: Started by). `terminal` is the
+ * User's `tandembike start` in a terminal (ADR 0039).
+ */
+export const conversationStarters = ['user', 'autopilot', 'terminal'] as const;
 export type ConversationStarter = (typeof conversationStarters)[number];
 
 /** Who wrote a transcript entry. */
@@ -45,6 +48,8 @@ export const transcriptRoles = [
   'question',
   /** Tickets the Agent created, as "Created T1, T2". */
   'created',
+  /** Tandembike's own note on the session, such as "Session ended" (ADR 0039). */
+  'session',
 ] as const;
 export type TranscriptRole = (typeof transcriptRoles)[number];
 
@@ -91,3 +96,8 @@ export type QuestionEntry = {
   answers: Record<string, string> | null;
   expired: boolean;
 };
+
+/** Whether a Conversation runs in the User's terminal (ADR 0039). */
+export const isTerminal = (conversation: {
+  startedBy: ConversationStarter;
+}): boolean => conversation.startedBy === 'terminal';

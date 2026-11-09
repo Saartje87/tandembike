@@ -63,6 +63,68 @@ projects on the default 3000. To run it on another port once, pass it after
 is fixed: when you change the port, register the MCP server with the same
 port (`http://localhost:<port>/api/mcp`).
 
+## Work a Ticket in your terminal
+
+With Tandembike running, `tandembike start T42` (or `tandembike start 42`) in
+any folder opens interactive `claude` on that Ticket, whatever the folder is:
+the Ticket's Project says where. Tandembike makes the run's worktree and runs
+the Prepare command as for a Start from the UI (with Parallel runs on), then
+opens `claude` there with the Stage's command (`/tandembike:implement T42`
+unless the Project sets its own), the run brief, the bundled Playbook, the
+Project's run mode and model, and `TANDEMBIKE_RUN` set to the Conversation's
+id. You answer permission prompts and questions in the terminal.
+
+The other Stages work the same way: `tandembike triage T42` opens a Triage
+session and `tandembike spec T42` a Spec session, both in the main checkout
+with the Stage's command. Spec is refused unless the Ticket is an idea in
+Intake or an Epic without children. `tandembike next` takes the Project whose
+repository holds the current folder and starts a Terminal Start on the top
+Eligible item of its Active Cycle, the rule of `next_work`; with none it says
+why, and from a folder in no Project's repository it names the known Projects.
+
+The Conversation shows on the Board as In flight, **Started by Terminal**. It
+holds no Start run slot and counts against no Spend ceiling, and Autopilot does
+not start a second run on its Ticket. It ends when `claude` exits, and
+`tandembike start` exits with `claude`'s exit code. If Tandembike is not
+running, it says so and exits 1. See
+`docs/adr/0039-terminal-conversations.md`.
+
+### Continue a Conversation in your terminal
+
+A Conversation you started in the UI that has an SDK session shows **Continue
+in terminal** in its header, which copies `tandembike resume <id>`. Run it in
+any folder: Tandembike stops the live run (its Run outcome is recorded as
+stopped and its pending prompts expire), appends "Continued in terminal", and
+the Conversation becomes Started by Terminal and `running`. Its cost so far and
+Autopilot Cycle stay. The command then runs `claude --resume <session id>` in
+the Conversation's worktree, or in the Project's repository when it has none,
+with the bundled Playbook and `TANDEMBIKE_RUN` set, and reports the end when
+`claude` exits. It is refused, with the reason, for a closed Conversation, one
+without an SDK session, one already in a terminal and one whose worktree was
+removed.
+
+## Install the Playbook plugin
+
+The checkout is also a Claude Code marketplace named `tandembike`
+(`.claude-plugin/marketplace.json`) whose one plugin is the bundled Playbook
+(`./playbook`), so installing needs no network. The offer is made only when
+`tandembike` starts the server: on the first run, and on any later start where
+the installed plugin is older than the bundled Playbook. It offers to run:
+
+```bash
+claude plugin marketplace add <this checkout>
+claude plugin install tandembike@tandembike --scope user
+```
+
+(or, for an older install, `claude plugin marketplace update tandembike` and
+`claude plugin update tandembike@tandembike`). You confirm each offer; with no
+`claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
+again at any time. Afterwards `/tandembike:implement T42` and the other
+Playbook commands work in a bare `claude` session in any repository. The
+session subcommands (`start`, `triage`, `spec`, `next`, `resume`) never make
+the offer: they load the bundled Playbook themselves, so they do not depend on
+this install.
+
 ## Connect an Agent
 
 The MCP server is served by the running app at
@@ -99,7 +161,7 @@ on `localhost:4747`, then register it at user level for each client you use:
 - **Claude Code:**
 
   ```bash
-  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'
+  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}' --header 'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}'
   ```
 
   Keep the single quotes: Claude Code expands `${PWD}` to the folder each

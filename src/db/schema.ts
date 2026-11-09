@@ -380,7 +380,7 @@ export const conversations = sqliteTable(
     ticketNumber: integer('ticket_number').references(() => tickets.number),
     intent: text('intent', { enum: conversationIntents }).notNull(),
     state: text('state', { enum: conversationStates }).notNull(),
-    /** Who started it, the User or Autopilot; older rows read the User. */
+    /** Who started it: the User, Autopilot or a Terminal session; older rows read the User. No CHECK constraint, so `terminal` needs no migration. */
     startedBy: text('started_by', { enum: conversationStarters })
       .notNull()
       .default('user'),

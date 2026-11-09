@@ -86,10 +86,17 @@ export function markOffersMade(folder: string, offer: string): void {
 
 const mcpUrl = 'http://localhost:4747/api/mcp';
 const cwdHeader = 'X-Tandembike-Cwd';
+const runHeader = 'X-Tandembike-Run';
+
+/** Offer keys in `config.json`: both are recorded when the offer is made. */
+export const mcpOfferKeys = ['mcp', 'mcp-run-header'];
 
 export type McpRegistration = 'none' | 'outdated' | 'current';
 
-export type McpOfferPlan = {
+/** The words an offer prints: what is done, the intro, and the command that asks again. */
+export type OfferWords = { done: string; intro: string; again: string };
+
+export type OfferPlan = {
   action: 'ask' | 'print' | 'skip';
   /** `claude` arguments to run, in order, after a yes. */
   steps: string[][];
@@ -97,15 +104,27 @@ export type McpOfferPlan = {
   text: string;
 };
 
-/** Whether to make the MCP registration offer: once, or when asked for. */
-export function shouldOfferMcp(made: string[], explicit: boolean): boolean {
-  return explicit || !made.includes('mcp');
+/**
+ * Whether to make the MCP registration offer: once, or when asked for. A
+ * registration that predates the run header (T1238) is offered the update
+ * once more, under its own key.
+ */
+export function shouldOfferMcp(
+  made: string[],
+  explicit: boolean,
+  registration: McpRegistration = 'none',
+): boolean {
+  return (
+    explicit ||
+    !made.includes('mcp') ||
+    (registration === 'outdated' && !made.includes('mcp-run-header'))
+  );
 }
 
 /**
  * What `~/.claude.json` holds for `tandembike` at user scope: `current` when
- * it sends the folder header, `outdated` when it is there without it (it
- * must be removed first, `claude mcp add` refuses duplicates).
+ * it sends the folder and run headers, `outdated` when it is there without
+ * both (it must be removed first, `claude mcp add` refuses duplicates).
  */
 export function mcpRegistration(claudeJson: unknown): McpRegistration {
   const servers = (
@@ -115,11 +134,15 @@ export function mcpRegistration(claudeJson: unknown): McpRegistration {
     | { headers?: Record<string, unknown> }
     | undefined;
   if (!entry || typeof entry !== 'object') return 'none';
-  return entry.headers && cwdHeader in entry.headers ? 'current' : 'outdated';
+  return entry.headers &&
+    cwdHeader in entry.headers &&
+    runHeader in entry.headers
+    ? 'current'
+    : 'outdated';
 }
 
 const removeStep = ['mcp', 'remove', '--scope', 'user', 'tandembike'];
-// ${PWD} stays literal: Claude Code expands it to the session's folder.
+// ${PWD} and ${TANDEMBIKE_RUN:-} stay literal: Claude Code expands them.
 const addStep = [
   'mcp',
   'add',
@@ -131,6 +154,9 @@ const addStep = [
   mcpUrl,
   '--header',
   `${cwdHeader}: \${PWD}`,
+  '--header',
+  // Empty in a bare `claude` session, which the server treats as no run.
+  `${runHeader}: \${TANDEMBIKE_RUN:-}`,
 ];
 
 function quote(arg: string): string {
@@ -138,7 +164,7 @@ function quote(arg: string): string {
 }
 
 /** The shell text of `claude` steps, one command per line. */
-export function mcpCommandText(steps: string[][]): string {
+export function claudeCommandText(steps: string[][]): string {
   return steps.map((s) => ['claude', ...s].map(quote).join(' ')).join('\n');
 }
 
@@ -146,7 +172,7 @@ export function mcpCommandText(steps: string[][]): string {
 export function planMcpOffer(state: {
   claudeOnPath: boolean;
   registration: McpRegistration;
-}): McpOfferPlan {
+}): OfferPlan {
   if (state.registration === 'current') {
     return { action: 'skip', steps: [], text: '' };
   }
@@ -155,7 +181,7 @@ export function planMcpOffer(state: {
   return {
     action: state.claudeOnPath ? 'ask' : 'print',
     steps,
-    text: mcpCommandText(steps),
+    text: claudeCommandText(steps),
   };
 }
 
@@ -165,11 +191,93 @@ export function planMcpOffer(state: {
  * `claude` is missing; a start with no terminal shows no prompt, so the next
  * interactive start asks.
  */
-export function decideMcpOffer(
-  plan: McpOfferPlan,
+export function decideOffer(
+  plan: OfferPlan,
   isTTY: boolean,
 ): { mode: 'ask' | 'print' | 'skip'; markMade: boolean } {
   if (plan.action === 'skip') return { mode: 'skip', markMade: true };
   if (plan.action === 'ask' && isTTY) return { mode: 'ask', markMade: true };
   return { mode: 'print', markMade: plan.action !== 'ask' };
+}
+
+export type PluginInstallState = 'none' | 'older' | 'current';
+
+const pluginName = 'tandembike@tandembike';
+
+/** -1, 0 or 1 for `a` against `b`; a pre-release sorts below its release. */
+function compareVersions(a: string, b: string): number {
+  const [coreA, preA] = a.split('-', 2);
+  const [coreB, preB] = b.split('-', 2);
+  const partsA = coreA.split('.').map(Number);
+  const partsB = coreB.split('.').map(Number);
+  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+    const diff = (partsA[i] || 0) - (partsB[i] || 0);
+    if (diff !== 0) return diff < 0 ? -1 : 1;
+  }
+  if (preA !== undefined && preB === undefined) return -1;
+  if (preA === undefined && preB !== undefined) return 1;
+  return 0;
+}
+
+/**
+ * The user-scope install of the Playbook in Claude Code's
+ * `installed_plugins.json`, against the bundled Playbook's version: `older`
+ * when its version is below (or unreadable), `current` otherwise.
+ */
+export function pluginInstallState(
+  installedPlugins: unknown,
+  bundledVersion: string,
+): PluginInstallState {
+  const entries = (
+    installedPlugins as { plugins?: Record<string, unknown> } | null
+  )?.plugins?.[pluginName];
+  const entry = Array.isArray(entries)
+    ? (entries.find((e) => e?.scope === 'user') as
+        | { version?: unknown }
+        | undefined)
+    : undefined;
+  if (!entry) return 'none';
+  return typeof entry.version === 'string' &&
+    compareVersions(entry.version, bundledVersion) >= 0
+    ? 'current'
+    : 'older';
+}
+
+/** Whether to make the plugin offer: once, when older, or when asked for. */
+export function shouldOfferPlugin(
+  made: string[],
+  state: PluginInstallState,
+  explicit: boolean,
+): boolean {
+  return explicit || !made.includes('plugin') || state === 'older';
+}
+
+/**
+ * Decides what the plugin offer does. The checkout carries a marketplace
+ * manifest named `tandembike` whose one plugin is `./playbook`, so adding it
+ * needs no network. Same shape as `planMcpOffer`, so `decideOffer` runs it.
+ */
+export function planPluginOffer(state: {
+  claudeOnPath: boolean;
+  state: PluginInstallState;
+  checkout: string;
+}): OfferPlan {
+  if (state.state === 'current') {
+    return { action: 'skip', steps: [], text: '' };
+  }
+  const steps =
+    state.state === 'older'
+      ? [
+          ['plugin', 'marketplace', 'update', 'tandembike'],
+          ['plugin', 'update', pluginName],
+        ]
+      : [
+          ['plugin', 'marketplace', 'add', state.checkout],
+          ['plugin', 'install', pluginName, '--scope', 'user'],
+        ];
+  return {
+    action: state.claudeOnPath ? 'ask' : 'print',
+    steps,
+    text: claudeCommandText(steps),
+  };
 }

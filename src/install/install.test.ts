@@ -3,16 +3,19 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  claudeCommandText,
   copyFirstRunDatabase,
-  decideMcpOffer,
+  decideOffer,
   firstRunCopyBlocker,
   markOffersMade,
-  mcpCommandText,
   mcpRegistration,
   offersMade,
   planFirstRunCopy,
   planMcpOffer,
+  planPluginOffer,
+  pluginInstallState,
   shouldOfferMcp,
+  shouldOfferPlugin,
 } from './install';
 import {
   existsSync,
@@ -147,29 +150,29 @@ describe('first-run copy blocker', () => {
   });
 });
 
-describe('decideMcpOffer', () => {
+describe('decideOffer', () => {
   const ask = { action: 'ask' as const, steps: [], text: 'x' };
 
   it('asks and marks the offer made on a terminal', () => {
-    expect(decideMcpOffer(ask, true)).toEqual({ mode: 'ask', markMade: true });
+    expect(decideOffer(ask, true)).toEqual({ mode: 'ask', markMade: true });
   });
 
   it('prints without marking the offer made when there is no terminal', () => {
-    expect(decideMcpOffer(ask, false)).toEqual({
+    expect(decideOffer(ask, false)).toEqual({
       mode: 'print',
       markMade: false,
     });
   });
 
   it('prints and marks when claude is not on the path', () => {
-    expect(decideMcpOffer({ ...ask, action: 'print' }, false)).toEqual({
+    expect(decideOffer({ ...ask, action: 'print' }, false)).toEqual({
       mode: 'print',
       markMade: true,
     });
   });
 
   it('skips and marks when already registered', () => {
-    expect(decideMcpOffer({ ...ask, action: 'skip' }, true)).toEqual({
+    expect(decideOffer({ ...ask, action: 'skip' }, true)).toEqual({
       mode: 'skip',
       markMade: true,
     });
@@ -210,7 +213,7 @@ describe('offers made', () => {
 });
 
 const addText =
-  "claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'";
+  "claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}' --header 'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}'";
 const removeText = 'claude mcp remove --scope user tandembike';
 
 describe('shouldOfferMcp', () => {
@@ -221,6 +224,20 @@ describe('shouldOfferMcp', () => {
 
   it('offers again when asked with tandembike mcp', () => {
     expect(shouldOfferMcp(['mcp'], true)).toBe(true);
+  });
+});
+
+describe('the run header update offer (T1238)', () => {
+  it('offers an outdated registration once more under mcp-run-header', () => {
+    expect(shouldOfferMcp(['mcp'], false, 'outdated')).toBe(true);
+    expect(shouldOfferMcp(['mcp', 'mcp-run-header'], false, 'outdated')).toBe(
+      false,
+    );
+  });
+
+  it('does not re-offer a current or missing registration', () => {
+    expect(shouldOfferMcp(['mcp'], false, 'current')).toBe(false);
+    expect(shouldOfferMcp(['mcp'], false, 'none')).toBe(false);
   });
 });
 
@@ -241,7 +258,7 @@ describe('mcpRegistration', () => {
     ).toBe('outdated');
   });
 
-  it('is current with the folder header', () => {
+  it('is outdated with the folder header only (T1238)', () => {
     expect(
       mcpRegistration({
         mcpServers: {
@@ -249,6 +266,23 @@ describe('mcpRegistration', () => {
             type: 'http',
             url: 'http://localhost:4747/api/mcp',
             headers: { 'X-Tandembike-Cwd': '${PWD}' },
+          },
+        },
+      }),
+    ).toBe('outdated');
+  });
+
+  it('is current with the folder header and the run header', () => {
+    expect(
+      mcpRegistration({
+        mcpServers: {
+          tandembike: {
+            type: 'http',
+            url: 'http://localhost:4747/api/mcp',
+            headers: {
+              'X-Tandembike-Cwd': '${PWD}',
+              'X-Tandembike-Run': '${TANDEMBIKE_RUN:-}',
+            },
           },
         },
       }),
@@ -273,6 +307,8 @@ describe('planMcpOffer', () => {
         'http://localhost:4747/api/mcp',
         '--header',
         'X-Tandembike-Cwd: ${PWD}',
+        '--header',
+        'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}',
       ],
     ]);
   });
@@ -306,8 +342,138 @@ describe('planMcpOffer', () => {
   });
 });
 
-describe('mcpCommandText', () => {
+describe('claudeCommandText', () => {
   it('quotes arguments with spaces', () => {
-    expect(mcpCommandText([['mcp', 'x', 'a b']])).toBe("claude mcp x 'a b'");
+    expect(claudeCommandText([['mcp', 'x', 'a b']])).toBe("claude mcp x 'a b'");
+  });
+});
+
+describe('pluginInstallState', () => {
+  const file = (entries: unknown) => ({ version: 2, plugins: entries });
+  const user = (version: string) => [{ scope: 'user', version }];
+
+  it('is none without a user-scope tandembike install', () => {
+    expect(pluginInstallState(null, '1.4.1')).toBe('none');
+    expect(pluginInstallState(file({}), '1.4.1')).toBe('none');
+    expect(
+      pluginInstallState(
+        file({
+          'tandembike@tandembike': [{ scope: 'project', version: '1.4.1' }],
+        }),
+        '1.4.1',
+      ),
+    ).toBe('none');
+  });
+
+  it('is older when the installed version is below the bundled one', () => {
+    for (const installed of ['1.4.0', '1.3.9', '0.9.9', '1.4.1-beta']) {
+      expect(
+        pluginInstallState(
+          file({ 'tandembike@tandembike': user(installed) }),
+          '1.4.1',
+        ),
+      ).toBe('older');
+    }
+    expect(
+      pluginInstallState(
+        file({ 'tandembike@tandembike': user('1.10.0') }),
+        '1.9.0',
+      ),
+    ).toBe('current');
+  });
+
+  it('is current at or above the bundled version', () => {
+    expect(
+      pluginInstallState(
+        file({ 'tandembike@tandembike': user('1.4.1') }),
+        '1.4.1',
+      ),
+    ).toBe('current');
+    expect(
+      pluginInstallState(
+        file({ 'tandembike@tandembike': user('2.0.0') }),
+        '1.4.1',
+      ),
+    ).toBe('current');
+  });
+
+  it('treats an install with no readable version as older', () => {
+    expect(
+      pluginInstallState(
+        file({ 'tandembike@tandembike': [{ scope: 'user' }] }),
+        '1.4.1',
+      ),
+    ).toBe('older');
+  });
+});
+
+describe('planPluginOffer', () => {
+  it('adds the checkout as a marketplace and installs when none', () => {
+    const plan = planPluginOffer({
+      claudeOnPath: true,
+      state: 'none',
+      checkout: '/src/tandembike',
+    });
+    expect(plan.action).toBe('ask');
+    expect(plan.steps).toEqual([
+      ['plugin', 'marketplace', 'add', '/src/tandembike'],
+      ['plugin', 'install', 'tandembike@tandembike', '--scope', 'user'],
+    ]);
+    expect(plan.text).toBe(
+      'claude plugin marketplace add /src/tandembike\nclaude plugin install tandembike@tandembike --scope user',
+    );
+  });
+
+  it('updates the marketplace and the plugin when older', () => {
+    const plan = planPluginOffer({
+      claudeOnPath: true,
+      state: 'older',
+      checkout: '/src/tandembike',
+    });
+    expect(plan.action).toBe('ask');
+    expect(plan.steps).toEqual([
+      ['plugin', 'marketplace', 'update', 'tandembike'],
+      ['plugin', 'update', 'tandembike@tandembike'],
+    ]);
+  });
+
+  it('skips when current', () => {
+    expect(
+      planPluginOffer({ claudeOnPath: true, state: 'current', checkout: '/x' }),
+    ).toEqual({ action: 'skip', steps: [], text: '' });
+  });
+
+  it('prints the steps when claude is not on PATH', () => {
+    const plan = planPluginOffer({
+      claudeOnPath: false,
+      state: 'none',
+      checkout: '/x',
+    });
+    expect(plan.action).toBe('print');
+    expect(plan.steps).toHaveLength(2);
+  });
+
+  it('quotes a checkout path with spaces', () => {
+    const plan = planPluginOffer({
+      claudeOnPath: true,
+      state: 'none',
+      checkout: '/my src/t',
+    });
+    expect(plan.text.split('\n')[0]).toBe(
+      "claude plugin marketplace add '/my src/t'",
+    );
+  });
+});
+
+describe('shouldOfferPlugin', () => {
+  it('offers on first run, when older, or when asked for', () => {
+    expect(shouldOfferPlugin([], 'none', false)).toBe(true);
+    expect(shouldOfferPlugin(['plugin'], 'older', false)).toBe(true);
+    expect(shouldOfferPlugin(['plugin'], 'none', true)).toBe(true);
+  });
+
+  it('stays quiet once made and not older', () => {
+    expect(shouldOfferPlugin(['plugin'], 'none', false)).toBe(false);
+    expect(shouldOfferPlugin(['plugin'], 'current', false)).toBe(false);
   });
 });

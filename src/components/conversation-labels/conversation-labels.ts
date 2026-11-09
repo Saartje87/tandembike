@@ -29,6 +29,7 @@ export const intentNames: Record<ConversationIntent, string> = {
 export const starterNames: Record<ConversationStarter, string> = {
   user: 'you',
   autopilot: 'Autopilot',
+  terminal: 'Terminal',
 };
 
 /** Who a transcript entry is from, as its bubble says it. */
@@ -41,6 +42,7 @@ export const roleNames: Record<TranscriptRole, string> = {
   permission: 'Permission',
   question: 'Question',
   created: 'Created',
+  session: 'Session',
 };
 
 export const stateNames: Record<ConversationState, string> = {

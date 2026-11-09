@@ -1,4 +1,8 @@
-import type { ConversationState } from './conversation-state';
+import {
+  type ConversationStarter,
+  type ConversationState,
+  isTerminal,
+} from './conversation-state';
 import { type StatusEntry, statusLine } from './status-line';
 
 /**
@@ -17,6 +21,8 @@ export type LiveConversation = {
   since: string;
   /** What this Conversation has cost so far in USD: the running cost. */
   cost: number;
+  /** Whether it runs in a terminal; Tandembike sees no cost of such a run (ADR 0039). */
+  terminal: boolean;
 };
 
 export type ConversationActivity = {
@@ -62,6 +68,8 @@ export type ActivityRow = {
   startedAt: string;
   /** What the Conversation has cost in USD, 0 if nothing yet. */
   costUsd: number;
+  /** Who started it. */
+  startedBy: ConversationStarter;
 };
 
 const isLive = (row: ActivityRow) =>
@@ -91,6 +99,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
       line: statusLine(row.latest),
       since: row.startedAt,
       cost: row.costUsd,
+      terminal: isTerminal(row),
     };
   };
   // Rows are newest first. A running or waiting Conversation anywhere is
