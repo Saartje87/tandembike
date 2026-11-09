@@ -18,5 +18,6 @@ export const liveConversation = (
   line: 'Reading board.tsx',
   since: '2026-11-07T10:00:00.000Z',
   cost: 0,
+  terminal: false,
   ...overrides,
 });

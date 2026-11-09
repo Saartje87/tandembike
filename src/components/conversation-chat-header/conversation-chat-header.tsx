@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack, Text } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { stopConversation } from '../../app/conversations/actions';
+import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
 import {
   formatCost,
@@ -31,7 +32,7 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
   const resumeCommand = `tandembike resume ${conversation.id}`;
   // Continue in terminal hands a UI Conversation's SDK session to `claude`.
   const canContinue =
-    conversation.startedBy !== 'terminal' && conversation.sdkSessionId !== null;
+    !isTerminal(conversation) && conversation.sdkSessionId !== null;
 
   return (
     <Stack gap={1}>
@@ -47,8 +48,9 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
             {[
               intentNames[conversation.intent],
               stateNames[conversation.state],
-              // Tandembike sees no cost of an interactive session (ADR 0039).
-              ...(conversation.startedBy === 'terminal'
+              // Tandembike sees no cost of an interactive session, but keeps
+              // what a UI run spent before the hand-off (ADR 0039).
+              ...(isTerminal(conversation) && conversation.costUsd <= 0
                 ? []
                 : [formatCost(conversation.costUsd)]),
             ].join(', ')}
@@ -76,30 +78,29 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
             Continue in terminal
           </Button>
         )}
-        {hasRun(conversation.state) &&
-          conversation.startedBy !== 'terminal' && (
-            <Button
-              type="button"
-              size="small"
-              variant="outline"
-              intent="danger"
-              loading={pending}
-              disabled={pending}
-              onClick={() => {
-                setError(undefined);
-                startStop(async () => {
-                  const result = await stopConversation({
-                    conversationId: conversation.id,
-                  });
-                  if (!result.ok) {
-                    setError(result.error);
-                  }
+        {hasRun(conversation.state) && !isTerminal(conversation) && (
+          <Button
+            type="button"
+            size="small"
+            variant="outline"
+            intent="danger"
+            loading={pending}
+            disabled={pending}
+            onClick={() => {
+              setError(undefined);
+              startStop(async () => {
+                const result = await stopConversation({
+                  conversationId: conversation.id,
                 });
-              }}
-            >
-              Stop
-            </Button>
-          )}
+                if (!result.ok) {
+                  setError(result.error);
+                }
+              });
+            }}
+          >
+            Stop
+          </Button>
+        )}
       </Inline>
       <ConversationWorktree conversation={conversation} />
       {copied && canContinue && (

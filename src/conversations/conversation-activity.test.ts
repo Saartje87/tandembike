@@ -23,6 +23,7 @@ const row = (
   latest: { role, text, permissionRules: null },
   startedAt: '2026-11-07T10:00:00.000Z',
   costUsd: 0,
+  startedBy: 'user',
 });
 
 describe('conversationActivity', () => {
@@ -81,6 +82,7 @@ describe('conversationActivity', () => {
           line: 'Working on it.',
           since,
           cost: 0,
+          terminal: false,
         },
         5: {
           conversationId: 105,
@@ -88,6 +90,7 @@ describe('conversationActivity', () => {
           line: 'Working on it.',
           since,
           cost: 0,
+          terminal: false,
         },
       });
     });
@@ -125,6 +128,7 @@ describe('conversationActivity', () => {
         line: 'Reading board.tsx',
         since: '2026-11-07T09:00:00.000Z',
         cost: 0,
+        terminal: false,
       });
       expect(live[5].line).toBe('Bash');
     });
@@ -158,6 +162,7 @@ describe('conversationActivity', () => {
           line: 'Working on it.',
           since,
           cost: 0,
+          terminal: false,
         },
       });
     });

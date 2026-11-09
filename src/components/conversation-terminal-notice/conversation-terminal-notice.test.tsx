@@ -52,7 +52,10 @@ describe('ConversationTerminalNotice', () => {
   });
 
   it('closes the Conversation once the session ended', async () => {
-    vi.mocked(closeConversation).mockResolvedValue({ ok: true });
+    vi.mocked(closeConversation).mockResolvedValue({
+      ok: true,
+      conversation: conversation({ state: 'stopped', hidden: true }),
+    });
     renderWithTheme(
       <ConversationTerminalNotice
         conversation={conversation({ state: 'stopped' })}

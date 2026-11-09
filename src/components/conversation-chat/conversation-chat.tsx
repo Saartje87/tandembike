@@ -4,6 +4,7 @@ import { Alert } from '@blockle/blocks';
 import { type FC, useRef } from 'react';
 
 import { waitsOnUser } from '../../conversations/conversation-activity';
+import { isTerminal } from '../../conversations/conversation-state';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import {
   type ReplyQuestion,
@@ -54,7 +55,7 @@ export const ConversationChat: FC<ConversationChatProps> = ({
 }) => {
   const reply = useRef<ReplyControl>(null);
   const kept = useKeptConversation();
-  const terminal = conversation.startedBy === 'terminal';
+  const terminal = isTerminal(conversation);
   const questions = optionsToAnswer(
     waitsOnUser(conversation.state),
     transcript,

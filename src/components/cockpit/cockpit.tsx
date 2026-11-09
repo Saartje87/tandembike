@@ -684,7 +684,9 @@ const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
  * claimed Ticket with no live run (such as one worked in a terminal), that.
  */
 function inFlightLine(row: InFlightRow, now: number): string {
-  const cost = row.cost > 0 && formatCost(row.cost);
+  // A Terminal run shows elapsed time only, even when a UI run spent before
+  // the hand-off (ADR 0039).
+  const cost = !row.live?.terminal && row.cost > 0 && formatCost(row.cost);
   return row.live
     ? lineOf(
         row.live.line,

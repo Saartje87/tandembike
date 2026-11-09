@@ -728,6 +728,17 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
   });
 
+  it('shows the cost a UI run spent before the hand-off (T1196)', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ startedBy: 'terminal', state: 'running', costUsd: 0.75 })}
+      />,
+    );
+
+    expect(screen.getByText('Start, working, $0.75')).toBeInTheDocument();
+  });
+
   it('offers Close once the session has ended, and closes the Conversation', async () => {
     vi.mocked(closeConversation).mockResolvedValue(ok('stopped'));
     renderWithTheme(
