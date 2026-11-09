@@ -19,7 +19,7 @@ import { join } from 'node:path';
  * The skills the Playbook ships so far. Each Stage's ticket adds its skill
  * here and to `playbook/skills/`.
  */
-const shippedStageSkills = ['implement'];
+const shippedStageSkills = ['implement', 'implement-epic'];
 
 const frontmatterOf = (skill: string): Record<string, string> => {
   const text = readFileSync(
@@ -62,6 +62,13 @@ describe('The Playbook plugin', () => {
     }
   });
 
+  it('has a review skill the model can invoke', () => {
+    const frontmatter = frontmatterOf('review');
+    expect(frontmatter.name).toBe('review');
+    expect(frontmatter.description).not.toBe('');
+    expect(frontmatter).not.toHaveProperty('disable-model-invocation');
+  });
+
   it('ships only skills a Stage runs, plus the review skill', () => {
     const stageSkills = agentStages.map(({ skill }) => skill);
     for (const skill of shippedStageSkills) {
@@ -91,6 +98,32 @@ describe('The Playbook plugin', () => {
     }
     expect(text).toContain('handOff: true');
     expect(text).toContain('t<number>-<slug>');
+  });
+
+  it('has an implement skill that reviews through the review skill before the pull request', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/implement/SKILL.md'),
+      'utf8',
+    );
+    expect(text).toContain('`review` skill');
+    expect(text.indexOf('`review` skill')).toBeLessThan(
+      text.indexOf('open_pr'),
+    );
+  });
+
+  it('has an implement-epic skill that works the children in Blocker order to one pull request', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/implement-epic/SKILL.md'),
+      'utf8',
+    );
+    for (const tool of ['start_work', 'check_criterion', 'open_pr']) {
+      expect(text).toContain(tool);
+    }
+    expect(text).toContain('Blocker order');
+    expect(text).toContain('`review` skill');
+    expect(text).toContain('handOff: true');
+    expect(text).toContain('one pull request');
+    expect(text).toContain('Do not call `finish_work`');
   });
 });
 
