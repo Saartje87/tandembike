@@ -46,7 +46,12 @@ function repository({ remote }: { remote: boolean }) {
     git(repo, 'push', '-u', 'origin', 'main');
   }
   const root = join(base, 'worktrees');
-  return { repo, origin, root, worktrees: createWorktrees({ root }) };
+  return {
+    repo,
+    origin,
+    root,
+    worktrees: createWorktrees({ root, owner: '/data/this' }),
+  };
 }
 
 describe('worktrees.create', () => {
@@ -304,7 +309,60 @@ describe('worktrees.list', () => {
     });
 
     expect(await worktrees.list()).toEqual([
-      { path: a.path, projectId: 3, conversationId: 12 },
+      { path: a.path, projectId: 3, conversationId: 12, owned: true },
+    ]);
+  });
+
+  it('marks the worktrees another data folder made, or nobody marked, as not owned', async () => {
+    const { repo, root } = repository({ remote: false });
+    const other = createWorktrees({ root, owner: '/data/other' });
+    const theirs = await other.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+    });
+    const unmarked = join(root, '3', 'c13');
+    mkdirSync(unmarked, { recursive: true });
+
+    const listed = await createWorktrees({ root, owner: '/data/this' }).list();
+
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        { path: theirs.path, projectId: 3, conversationId: 12, owned: false },
+        { path: unmarked, projectId: 3, conversationId: 13, owned: false },
+      ]),
+    );
+    expect(listed).toHaveLength(2);
+  });
+
+  it('knows its own worktrees however its data folder is written', async () => {
+    const { repo, root, worktrees } = repository({ remote: false });
+    const a = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+    });
+
+    expect(
+      await createWorktrees({ root, owner: '/data/this/' }).list(),
+    ).toEqual([
+      { path: a.path, projectId: 3, conversationId: 12, owned: true },
+    ]);
+  });
+
+  it('forgets the owner once the worktree is removed', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    const a = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+    });
+
+    await worktrees.remove(repo, a.path);
+    mkdirSync(a.path);
+
+    expect(await worktrees.list()).toEqual([
+      { path: a.path, projectId: 3, conversationId: 12, owned: false },
     ]);
   });
 });
