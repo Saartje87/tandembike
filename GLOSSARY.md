@@ -81,7 +81,7 @@ Where a Ticket stands: one of a fixed set, **Todo**, **In progress** or **Done**
 _Avoid_: State, stage, column
 
 **Acceptance criterion**:
-An optional, independently verifiable condition describing a Ticket's desired outcome. It can be checked off separately; doing so does not change the Ticket's Status.
+An optional, independently verifiable condition describing a Ticket's desired outcome. It can be checked off separately; doing so does not change the Ticket's Status. `finish_work` refuses while any is unchecked unless given an `override` reason, which it posts as a comment, and the **Merged** button asks the User to confirm instead (ADR 0043).
 _Avoid_: Checklist task
 
 **Label**:
@@ -157,7 +157,7 @@ Who started a Conversation: the **User**, **Autopilot**, or **Terminal**, the Us
 _Avoid_: Owner, author, initiator
 
 **Notice**:
-Something the User should look at while they are away: a run that starts waiting on a permission or a question (`waiting`), or a Start or Merge run that ends needing a reply or failing on a substantive error (`needs_reply`). The Notices module computes the machine-wide set after every change and raises a Notice, as a `notice` change on the events connection, once for each key that is new; the set at server start raises nothing. A browser shows it as a notification only when the User opted in in that browser, permission is granted and the tab is hidden or the window unfocused; a click opens its Conversation. See ADR 0042.
+Something the User should look at while they are away: a run that starts waiting on a permission or a question (`waiting`), a Start or Merge run that ends needing a reply or failing on a substantive error (`needs_reply`), or an Agent completing a Ticket or Epic through **Auto-merge** (`auto_merged`), among others. The Notices module computes the machine-wide set after every change and raises a Notice, as a `notice` change on the events connection, once for each key that is new; the set at server start raises nothing. A browser shows it as a notification only when the User opted in in that browser, permission is granted and the tab is hidden or the window unfocused; a click opens its Conversation. See ADR 0042.
 _Avoid_: Alert, push notification, toast
 
 **Run outcome**:
@@ -207,8 +207,12 @@ Tandembike's own Claude Code plugin, named `tandembike`, bundled with the app an
 _Avoid_: Default skills, process, built-in prompts
 
 **Merge gate**:
-The point where a Ticket or Epic in Review, whose PR the Agent reviewed and opened, waits for the User's **Approve merge** in its drawer. The click resumes the Start Conversation if it is open, or starts a **Merge** Conversation in a worktree; that run waits for green checks, rebases when behind, merges through the host CLI and calls `finish_work`, or comments why and stops. A Start run never merges its own PR, Autopilot never approves, and an approved merge stays outside the Spend ceiling and counts against the Start run limit. **Merged** stays for a PR the User merged by hand. See ADR 0038.
-_Avoid_: Auto-merge, merge button (for Approve merge)
+The point where a Ticket or Epic in Review, whose PR the Agent reviewed and opened, waits for the User's **Approve merge** in its drawer. The click resumes the Start Conversation if it is open, or starts a **Merge** Conversation in a worktree; that run waits for green checks, rebases when behind, merges through the host CLI and calls `finish_work`, or comments why and stops. With **Auto-merge** off a run never merges its own PR; with it on, a run stops here only when it cannot meet the merge conditions. Autopilot never approves, and an approved merge stays outside the Spend ceiling and counts against the Start run limit. **Merged** stays for a PR the User merged by hand; when acceptance criteria are unchecked it lists them and completes only once the User confirms, recording the override. See ADR 0038 and ADR 0043.
+_Avoid_: Auto-merge (that is the setting that skips the gate), merge button (for Approve merge)
+
+**Auto-merge**:
+A Project agent setting, off by default and independent of Autopilot, that lets the run that opened a PR merge it. Every Agent run in the Project learns it from `start_work`'s `merge` (`"auto"` or `"approve"`), which the Claim keeps, so switching it affects only later runs. With `auto` the run merges only when the Check command passes, its review has no unresolved findings, every acceptance criterion is checked (or a comment says why not) and the checks are green, by the `merge` skill's steps, then calls `finish_work`; otherwise it comments why and hands off to the **Merge gate**. It never pushes to the default branch, its cost counts against the Spend ceiling with its run, and each auto-merge raises a Notice naming the Ticket and its PR. Only the User sets it, through a Server Action; no MCP tool exposes it. See ADR 0043.
+_Avoid_: Self-merge, auto mode (that is the Agent run mode)
 
 **Stage**:
 One step of the flow that a Playbook skill, and an Agent command, run: Triage, Start (`implement`), Start on an Epic (`implement-epic`), Retro, Spec (`spec`), Plan (`plan`) and Merge (`merge`), with more to come. Each Stage has one Agent command field and one skill; its command is the Project's when set, otherwise `/tandembike:<skill>`, and no Stage falls back to another's command.
