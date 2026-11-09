@@ -518,8 +518,11 @@ export function createAutopilot({
      * listening.
      */
     start(): () => void {
-      const unsubscribe = changes.subscribe(() => {
-        void evaluate();
+      const unsubscribe = changes.subscribe((change) => {
+        // A Notice is raised from changes Autopilot already saw (ADR 0042).
+        if (change.type !== 'notice') {
+          void evaluate();
+        }
       });
       void startup();
       return () => {

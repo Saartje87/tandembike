@@ -1,3 +1,5 @@
+import type { Notice } from '../notices/notice';
+
 /**
  * What changed, enough for a client to know what to refetch: a Project or a
  * Cycle by id, a Ticket by Ticket number, or several Tickets changed in one
@@ -10,7 +12,9 @@ export type Change =
   | { type: 'tickets'; numbers: number[] }
   | { type: 'conversation'; id: number }
   /** The machine settings changed (ADR 0041). */
-  | { type: 'machine' };
+  | { type: 'machine' }
+  /** A Notice the Notices module raised (ADR 0042); only the browser reads it. */
+  | { type: 'notice'; notice: Notice };
 
 export type ChangeListener = (change: Change) => void;
 
