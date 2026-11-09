@@ -102,8 +102,6 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   };
 
   const submit = handleSubmit(async ({ text }) => {
-    // A Server Action that throws, rather than return a refusal, is shown
-    // too, never left as an uncaught rejection (T1185).
     const outcome: SendOutcome = await callAction(
       () => onSend(text),
       'The message could not be sent. Try again.',
