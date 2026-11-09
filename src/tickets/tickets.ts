@@ -556,7 +556,6 @@ export type BatchTicketInput = Pick<
   originPosition?: number;
 };
 
-/** Any subset of a Ticket's editable fields; missing ones stay as they are. */
 /** How `completeTicket` treats unchecked acceptance criteria (ADR 0043). */
 export type CompleteTicketOptions = {
   /**
@@ -566,6 +565,7 @@ export type CompleteTicketOptions = {
   override?: string;
 };
 
+/** Any subset of a Ticket's editable fields; missing ones stay as they are. */
 export type UpdateTicketInput = {
   title?: string;
   description?: string;
@@ -3439,16 +3439,23 @@ export function createTickets(
     return mergeModeOf(row?.autoMerge ?? false);
   }
 
-  /** Ticket `number`'s unchecked criteria and its unarchived children's. */
+  /**
+   * Ticket `number`'s unchecked criteria and its unarchived children's. A
+   * Ticket already Done is past the rule, so finishing it again is a no-op
+   * check, as `finish_work` is idempotent.
+   */
   function uncheckedCriteriaOf(number: number): UncheckedCriterion[] {
-    const { acceptanceCriteria, children } = getTicket(number);
-    const own = acceptanceCriteria
-      .filter(({ checked }) => !checked)
-      .map(({ text }) => ({ number, text }));
+    const { acceptanceCriteria, children, status } = getTicket(number);
+    const own =
+      status === 'Done'
+        ? []
+        : acceptanceCriteria
+            .filter(({ checked }) => !checked)
+            .map(({ text }) => ({ number, text }));
     return [
       ...own,
       ...children
-        .filter((child) => !child.archived)
+        .filter((child) => !child.archived && child.status !== 'Done')
         .flatMap((child) =>
           getTicket(child.number)
             .acceptanceCriteria.filter(({ checked }) => !checked)

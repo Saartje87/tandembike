@@ -252,6 +252,30 @@ describe('the completion rule and acceptance criteria', () => {
     expect(tickets.listComments(ticket.number)).toEqual([]);
   });
 
+  it('finishes a Done Ticket again without refusing or a second comment', () => {
+    const { tickets, create } = setup();
+    const ticket = create('A', [], criteria(['Menu opens', false]));
+    tickets.completeTicket(ticket.number, { override: 'Moved to T99.' });
+
+    expect(tickets.completeTicket(ticket.number).status).toBe('Done');
+    tickets.completeTicket(ticket.number, { override: 'Again.' });
+    expect(tickets.listComments(ticket.number)).toHaveLength(1);
+  });
+
+  it("does not count a Done child's criteria against its Epic", () => {
+    const { tickets, create } = setup();
+    const epic = create('Login', [], { type: 'Epic' });
+    const done = create('A', [], {
+      epicNumber: epic.number,
+      ...criteria(['Form validates', false]),
+    });
+    create('B', [], { epicNumber: epic.number });
+    tickets.completeTicket(done.number, { override: 'Covered by B.' });
+
+    expect(tickets.uncheckedCriteria(epic.number)).toEqual([]);
+    expect(tickets.completeTicket(epic.number).status).toBe('Done');
+  });
+
   it('refuses a blank override', () => {
     const { tickets, create } = setup();
     const ticket = create('A', [], criteria(['Menu opens', false]));
