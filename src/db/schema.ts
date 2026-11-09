@@ -134,6 +134,8 @@ export const tickets = sqliteTable(
       .references(() => projects.id),
     claimAgentRunId: text('claim_agent_run_id'),
     claimAgentName: text('claim_agent_name'),
+    /** The Agent-run ID that filed this Ticket (`X-Tandembike-Run`), or null. */
+    filedByRun: text('filed_by_run'),
     position: integer('position').notNull().default(0),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
     /**

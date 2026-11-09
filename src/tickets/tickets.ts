@@ -3,6 +3,7 @@ import {
   and,
   asc,
   count,
+  countDistinct,
   eq,
   gt,
   gte,
@@ -108,6 +109,13 @@ import {
   withAnyExternalReference,
   withExternalReferences,
 } from './external-references';
+import {
+  duplicateSimilarity,
+  feedbackLabels,
+  isFeedback,
+  jaccardSimilarity,
+  maxFeedbackPerRun,
+} from './feedback';
 import {
   checkLaneCycle,
   type LaneScope,
@@ -373,6 +381,8 @@ export type Ticket = {
    */
   cycle: CycleLink | null;
   projectId: number;
+  /** The Agent-run ID that filed it through `file_tickets`, or `null`. */
+  filedByRun: string | null;
   position: number;
   archived: boolean;
   /** Trimmed, lower-cased and sorted; empty when the Ticket has none. */
@@ -460,6 +470,12 @@ export type CreateTicketBatchInput = {
   originNumber?: number;
   /** A Cycle of the same Project to plan them all into. */
   cycleId?: number;
+  /**
+   * The Agent run filing the batch (`X-Tandembike-Run`). Recorded on every
+   * Ticket, and it caps the feedback Tickets the run may file. Without it
+   * nothing is capped.
+   */
+  filedByRun?: string;
   /** In order, from 1 to `maxBatchSize` of them. */
   tickets: BatchTicketInput[];
 };
@@ -1093,6 +1109,67 @@ function checkBlockedByPositions(
  * labels and acceptance criteria and its `created` Activity entry by
  * `actor`, and returns its number. Run it in a transaction.
  */
+/**
+ * Refuses a batch whose feedback Tickets (T1250) would take `filedByRun`
+ * past the cap, or whose titles nearly repeat a live feedback Ticket of the
+ * Project. Tickets without a source label are never checked.
+ */
+function checkFeedback(
+  db: DatabaseConnection,
+  projectId: number,
+  filedByRun: string | undefined,
+  batch: readonly CheckedNewTicket[],
+) {
+  const feedback = batch.flatMap(({ values, labels }, position) =>
+    isFeedback(labels) ? [{ position, title: values.title }] : [],
+  );
+  if (feedback.length === 0) {
+    return;
+  }
+  if (filedByRun !== undefined) {
+    const { filed } = db
+      .select({ filed: countDistinct(tickets.number) })
+      .from(tickets)
+      .innerJoin(ticketLabels, eq(ticketLabels.ticketNumber, tickets.number))
+      .where(
+        and(
+          eq(tickets.filedByRun, filedByRun),
+          inArray(ticketLabels.label, [...feedbackLabels]),
+        ),
+      )
+      .get() as { filed: number };
+    if (filed + feedback.length > maxFeedbackPerRun) {
+      throw new NotAllowedError(
+        `This run has filed ${Math.min(filed, maxFeedbackPerRun)} feedback Tickets already; add a note to one of them with add_note instead.`,
+      );
+    }
+  }
+  const live = db
+    .selectDistinct({ number: tickets.number, title: tickets.title })
+    .from(tickets)
+    .innerJoin(ticketLabels, eq(ticketLabels.ticketNumber, tickets.number))
+    .where(
+      and(
+        eq(tickets.projectId, projectId),
+        eq(tickets.archived, false),
+        ne(tickets.status, 'Done'),
+        inArray(ticketLabels.label, [...feedbackLabels]),
+      ),
+    )
+    .all();
+  const reasons: Record<string, string> = {};
+  for (const { position, title } of feedback) {
+    const match = live.find(
+      (other) => jaccardSimilarity(title, other.title) >= duplicateSimilarity,
+    );
+    if (match) {
+      reasons[`tickets[${position}].title`] =
+        `Ticket at position ${position}: its title nearly repeats feedback Ticket T${match.number} ("${match.title}"). Add a note to T${match.number} with add_note instead.`;
+    }
+  }
+  throwFieldErrors(reasons);
+}
+
 function insertTicket(
   db: DatabaseConnection,
   actor: Actor,
@@ -1102,6 +1179,7 @@ function insertTicket(
     epicNumber: number | null;
     originNumber: number | null;
     createdAt: Date;
+    filedByRun?: string;
   },
 ): number {
   const { number } = db
@@ -1113,6 +1191,7 @@ function insertTicket(
           ? (values.color ?? leastUsedColor(db, row.projectId))
           : null,
       ...row,
+      filedByRun: row.filedByRun ?? null,
       position: nextPosition(db, row.projectId, values.status),
       updatedAt: row.createdAt,
     })
@@ -1287,6 +1366,7 @@ const ticketColumns = {
   color: tickets.color,
   epicNumber: tickets.epicNumber,
   originNumber: tickets.originNumber,
+  filedByRun: tickets.filedByRun,
   projectId: tickets.projectId,
   claimAgentRunId: tickets.claimAgentRunId,
   claimAgentName: tickets.claimAgentName,
@@ -2056,6 +2136,12 @@ export function createTickets(
       const originNumber = input.originNumber ?? null;
 
       const numbers = db.transaction(() => {
+        checkFeedback(
+          db,
+          project.id,
+          input.filedByRun,
+          checked.map(({ ticket }) => ticket),
+        );
         if (epicNumber !== null) {
           checkEpicChild(db, epicNumber, {
             type: 'Ticket',
@@ -2091,6 +2177,7 @@ export function createTickets(
             epicNumber: ticketEpic,
             originNumber: ticketOrigin,
             createdAt,
+            filedByRun: input.filedByRun,
           });
           if (epicPosition !== undefined) {
             epics.add(ticketEpic as number);
