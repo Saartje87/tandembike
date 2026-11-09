@@ -117,7 +117,7 @@ on `localhost:4747`, then register it at user level for each client you use:
 - **Claude Code:**
 
   ```bash
-  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'
+  claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}' --header 'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}'
   ```
 
   Keep the single quotes: Claude Code expands `${PWD}` to the folder each

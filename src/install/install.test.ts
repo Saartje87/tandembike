@@ -210,7 +210,7 @@ describe('offers made', () => {
 });
 
 const addText =
-  "claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}'";
+  "claude mcp add --scope user --transport http tandembike http://localhost:4747/api/mcp --header 'X-Tandembike-Cwd: ${PWD}' --header 'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}'";
 const removeText = 'claude mcp remove --scope user tandembike';
 
 describe('shouldOfferMcp', () => {
@@ -221,6 +221,20 @@ describe('shouldOfferMcp', () => {
 
   it('offers again when asked with tandembike mcp', () => {
     expect(shouldOfferMcp(['mcp'], true)).toBe(true);
+  });
+});
+
+describe('the run header update offer (T1238)', () => {
+  it('offers an outdated registration once more under mcp-run-header', () => {
+    expect(shouldOfferMcp(['mcp'], false, 'outdated')).toBe(true);
+    expect(shouldOfferMcp(['mcp', 'mcp-run-header'], false, 'outdated')).toBe(
+      false,
+    );
+  });
+
+  it('does not re-offer a current or missing registration', () => {
+    expect(shouldOfferMcp(['mcp'], false, 'current')).toBe(false);
+    expect(shouldOfferMcp(['mcp'], false, 'none')).toBe(false);
   });
 });
 
@@ -241,7 +255,7 @@ describe('mcpRegistration', () => {
     ).toBe('outdated');
   });
 
-  it('is current with the folder header', () => {
+  it('is outdated with the folder header only (T1238)', () => {
     expect(
       mcpRegistration({
         mcpServers: {
@@ -249,6 +263,23 @@ describe('mcpRegistration', () => {
             type: 'http',
             url: 'http://localhost:4747/api/mcp',
             headers: { 'X-Tandembike-Cwd': '${PWD}' },
+          },
+        },
+      }),
+    ).toBe('outdated');
+  });
+
+  it('is current with the folder header and the run header', () => {
+    expect(
+      mcpRegistration({
+        mcpServers: {
+          tandembike: {
+            type: 'http',
+            url: 'http://localhost:4747/api/mcp',
+            headers: {
+              'X-Tandembike-Cwd': '${PWD}',
+              'X-Tandembike-Run': '${TANDEMBIKE_RUN:-}',
+            },
           },
         },
       }),
@@ -273,6 +304,8 @@ describe('planMcpOffer', () => {
         'http://localhost:4747/api/mcp',
         '--header',
         'X-Tandembike-Cwd: ${PWD}',
+        '--header',
+        'X-Tandembike-Run: ${TANDEMBIKE_RUN:-}',
       ],
     ]);
   });

@@ -113,7 +113,7 @@ A cooperative marker on a Ticket identifying the Agent run working on it. `start
 _Avoid_: Lock, reservation
 
 **Agent-run ID**:
-A unique identifier for one Agent run, used to claim Tickets independently of its optional display name. Runs Tandembike starts send it in the `X-Tandembike-Run` header, so their tool calls need not pass it; a terminal session passes `agentRunId` itself (ADR 0037).
+A unique identifier for one Agent run, used to claim Tickets independently of its optional display name. Runs Tandembike starts send it in the `X-Tandembike-Run` header, so their tool calls need not pass it; so does a `tandembike start` session, whose `TANDEMBIKE_RUN` the registered header carries, and its calls feed the Ticket's Status line. Any other terminal session passes `agentRunId` itself (ADR 0037, ADR 0039).
 _Avoid_: Agent name as the owner identifier
 
 **Conversation**:
