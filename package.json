@@ -13,6 +13,7 @@
     "format": "biome format --write",
     "check": "npm run lint && npm run ts && npm run test",
     "prepare": "husky",
+    "playbook:lock": "tsx scripts/update-playbook-lock.ts",
     "db:generate": "drizzle-kit generate",
     "setup": "npm ci && NODE_ENV=production npm run build && npm link"
   },

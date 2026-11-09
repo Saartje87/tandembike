@@ -9,16 +9,40 @@ const fieldErrors = (run: () => unknown) =>
   (errorFrom(run) as ValidationError).fieldErrors;
 
 describe("A Project's agent commands", () => {
-  it('start with the mattpocock-skills triage, implement, implement-spec and retro commands', () => {
+  it('start blank, so every Stage runs the Playbook', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
     expect(tickets.getProjectAgentCommands(project.id)).toEqual({
-      triageCommand: '/mattpocock-skills:triage',
-      startCommand: '/mattpocock-skills:implement',
-      startEpicCommand: '/mattpocock-skills:implement-spec',
-      retroCommand: '/mattpocock-skills:retro',
+      triageCommand: null,
+      startCommand: null,
+      startEpicCommand: null,
+      retroCommand: null,
+      specCommand: null,
+      mergeCommand: null,
     });
+  });
+
+  it('are kept as set when more Projects are created', () => {
+    const tickets = createTestTickets();
+    const first = tickets.createProject({ name: 'First' });
+    tickets.setProjectAgentCommands(first.id, {
+      triageCommand: 'triage',
+      startCommand: 'implement',
+      startEpicCommand: '',
+      retroCommand: '',
+      specCommand: '',
+      mergeCommand: '',
+    });
+    tickets.setProjectAgentSettings(first.id, { runMode: 'default' });
+
+    tickets.createProject({ name: 'Second' });
+
+    expect(tickets.getProjectAgentCommands(first.id)).toMatchObject({
+      triageCommand: '/triage',
+      startCommand: '/implement',
+    });
+    expect(tickets.getProjectAgentSettings(first.id).runMode).toBe('default');
   });
 
   it('are replaced trimmed, with a missing slash added, and blank clears one', () => {
@@ -30,6 +54,8 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: '   ',
       retroCommand: ' retro ',
+      specCommand: '/spec',
+      mergeCommand: ' merge ',
     });
 
     expect(saved).toEqual({
@@ -37,6 +63,8 @@ describe("A Project's agent commands", () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: '/retro',
+      specCommand: '/spec',
+      mergeCommand: '/merge',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(saved);
   });
@@ -53,11 +81,14 @@ describe("A Project's agent commands", () => {
           startCommand: '/implement',
           startEpicCommand: `/${'a'.repeat(100)}`,
           retroCommand: '/retro',
+          specCommand: '/spec',
+          mergeCommand: '/merge now',
         }),
       ),
     ).toEqual({
       triageCommand: '"/triage T1" has a space. Enter one command.',
       startEpicCommand: `"/${'a'.repeat(100)}" is longer than 100 characters.`,
+      mergeCommand: '"/merge now" has a space. Enter one command.',
     });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(before);
   });
@@ -74,11 +105,40 @@ describe("A Project's agent commands", () => {
           startCommand: '',
           startEpicCommand: '',
           retroCommand: '',
+          specCommand: '',
+          mergeCommand: '',
         }),
       ),
     ).toBeInstanceOf(NotAllowedError);
     expect(
       errorFrom(() => tickets.getProjectAgentCommands(999)),
     ).toBeInstanceOf(NotFoundError);
+  });
+});
+
+describe('The Spec command (T1222)', () => {
+  it('is saved, and a blank one sends the Playbook command', async () => {
+    const { agentCommandMessage } = await import('./agent-commands');
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const blank = tickets.getProjectAgentCommands(project.id);
+
+    expect(
+      agentCommandMessage('spec', { number: 42, type: 'Ticket' }, blank),
+    ).toBe('/tandembike:spec T42');
+
+    const saved = tickets.setProjectAgentCommands(project.id, {
+      ...blank,
+      triageCommand: '',
+      startCommand: '',
+      startEpicCommand: '',
+      retroCommand: '',
+      specCommand: 'my:spec',
+      mergeCommand: '',
+    });
+    expect(saved.specCommand).toBe('/my:spec');
+    expect(
+      agentCommandMessage('spec', { number: 42, type: 'Epic' }, saved),
+    ).toBe('/my:spec T42');
   });
 });

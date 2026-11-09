@@ -15,6 +15,8 @@ const commands = {
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
+  mergeCommand: null,
 };
 
 describe('AgentCommandsForm', () => {
@@ -31,6 +33,8 @@ describe('AgentCommandsForm', () => {
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
         retroCommand: '/retro',
+        specCommand: '/spec',
+        mergeCommand: '/merge',
       },
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
@@ -49,6 +53,10 @@ describe('AgentCommandsForm', () => {
     await user.type(triage, 'triage');
     await user.type(startEpic, 'implement-spec');
     await user.type(retro, 'retro');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Spec command' }),
+      'my:spec',
+    );
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(setProjectAgentCommands).toHaveBeenCalledWith({
@@ -57,10 +65,37 @@ describe('AgentCommandsForm', () => {
       startCommand: '/mattpocock-skills:implement',
       startEpicCommand: 'implement-spec',
       retroCommand: 'retro',
+      specCommand: 'my:spec',
+      mergeCommand: '',
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');
     expect(retro).toHaveValue('/retro');
+  });
+
+  it('shows the Playbook command each blank field runs, and none for a set one', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+
+    expect(
+      screen.getByText('Blank runs /tandembike:implement-epic'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Blank runs /tandembike:retro'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Blank runs /tandembike:merge'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Merge command' })).toHaveValue(
+      '',
+    );
+    expect(screen.queryByText('Blank runs /tandembike:implement')).toBeNull();
+    expect(screen.queryByText('Blank runs /tandembike:triage')).toBeNull();
+
+    await user.clear(screen.getByRole('textbox', { name: 'Start command' }));
+    expect(
+      screen.getByText('Blank runs /tandembike:implement'),
+    ).toBeInTheDocument();
   });
 
   it('shows a refusal under the field it names and keeps the text', async () => {

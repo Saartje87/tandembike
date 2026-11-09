@@ -3,35 +3,113 @@ import type { TicketType } from './ticket-type';
 
 /**
  * The commands a Project's Triage, Start and Retro buttons send as the
- * first message of a run, each `null` when it has none (T621, ADR 0019).
+ * first message of a run, each `null` when it has none and the Playbook's command runs (T621, ADR 0032).
  */
 export type ProjectAgentCommands = {
   triageCommand: string | null;
   startCommand: string | null;
-  /** Start on an Epic; falls back to `startCommand` when `null`. */
+  /** Start on an Epic; blank is the Playbook's, not `startCommand`. */
   startEpicCommand: string | null;
   /** Retro on a Cycle, sent with the Cycle's title and id (T1171). */
   retroCommand: string | null;
+  /** Merge on a Ticket or Epic in Review; blank is the Playbook's (T1221). */
+  mergeCommand: string | null;
+  /** Spec on a Ticket: turns an idea into an Epic of build Tickets (T1222). */
+  specCommand: string | null;
 };
 
-/** The commands every Project starts with (T621). */
-export const defaultAgentCommands = {
-  triageCommand: '/mattpocock-skills:triage',
-  startCommand: '/mattpocock-skills:implement',
-  startEpicCommand: '/mattpocock-skills:implement-spec',
-  retroCommand: '/mattpocock-skills:retro',
-} satisfies ProjectAgentCommands;
+/**
+ * The Playbook: Tandembike's own plugin, loaded into every run (ADR 0032).
+ * Its commands are always namespaced, so they never collide with a
+ * repository's own skills or the User's plugins.
+ */
+export const playbookPluginName = 'tandembike';
 
-/** No commands: Triage and Start send the plain `Triage T42` / `Start T42`. */
+/**
+ * Every Stage of the flow that sends an agent command, in the order the
+ * agent commands form shows them. One list drives which command a Stage
+ * sends and the form's fields: a Stage is added here with one entry, its
+ * `field` in `ProjectAgentCommands`, and its skill folder in `playbook/`.
+ */
+export const agentStages = [
+  {
+    stage: 'triage',
+    field: 'triageCommand',
+    skill: 'triage',
+    label: 'Triage command',
+  },
+  {
+    stage: 'start',
+    field: 'startCommand',
+    skill: 'implement',
+    label: 'Start command',
+  },
+  {
+    stage: 'startEpic',
+    field: 'startEpicCommand',
+    skill: 'implement-epic',
+    label: 'Start command for Epics',
+  },
+  {
+    stage: 'retro',
+    field: 'retroCommand',
+    skill: 'retro',
+    label: 'Retro command',
+  },
+  {
+    stage: 'spec',
+    field: 'specCommand',
+    skill: 'spec',
+    label: 'Spec command',
+  },
+  {
+    stage: 'merge',
+    field: 'mergeCommand',
+    skill: 'merge',
+    label: 'Merge command',
+  },
+] as const satisfies readonly {
+  stage: string;
+  field: keyof ProjectAgentCommands;
+  skill: string;
+  label: string;
+}[];
+
+export type AgentStage = (typeof agentStages)[number]['stage'];
+
+/** The Playbook's command for the skill of a Stage, `/tandembike:<skill>`. */
+export const playbookCommand = (skill: string): string =>
+  `/${playbookPluginName}:${skill}`;
+
+const stageEntry = Object.fromEntries(
+  agentStages.map((entry) => [entry.stage, entry]),
+) as { [S in AgentStage]: Extract<(typeof agentStages)[number], { stage: S }> };
+
+/**
+ * The command a Stage sends: the Project's own when it set one, otherwise
+ * the Playbook's. Each Stage resolves on its own; a blank command for
+ * Epics does not fall back to the Start command.
+ */
+export function commandForStage(
+  stage: AgentStage,
+  commands: ProjectAgentCommands,
+): string {
+  const entry = stageEntry[stage];
+  return commands[entry.field] ?? playbookCommand(entry.skill);
+}
+
+/** No commands: every Stage sends the Playbook's command. */
 export const noAgentCommands: ProjectAgentCommands = {
   triageCommand: null,
   startCommand: null,
   startEpicCommand: null,
   retroCommand: null,
+  specCommand: null,
+  mergeCommand: null,
 };
 
 /** The buttons that send an agent command. */
-export type AgentCommandIntent = 'triage' | 'start';
+export type AgentCommandIntent = 'triage' | 'start' | 'spec' | 'merge';
 
 /**
  * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
@@ -79,22 +157,17 @@ export function normalizeAgentCommands(
 }
 
 /**
- * The first message Triage or Start sends about Ticket `number`: the
- * Project's command for it followed by `T<number>`, or the plain
- * `Triage T42` / `Start T42` when it has none. Start on an Epic uses the
- * Epic command, falling back to the Start command.
+ * The first message Triage, Start or Merge sends about Ticket `number`: the
+ * command of its Stage followed by `T<number>`, such as
+ * `/tandembike:implement T42` when the Project set none. Start on an Epic
+ * uses the Epic Stage.
  */
 export function agentCommandMessage(
   intent: AgentCommandIntent,
   ticket: { number: number; type: TicketType },
   commands: ProjectAgentCommands,
 ): string {
-  const command =
-    intent === 'triage'
-      ? commands.triageCommand
-      : ticket.type === 'Epic'
-        ? (commands.startEpicCommand ?? commands.startCommand)
-        : commands.startCommand;
-  const fallback = intent === 'triage' ? 'Triage' : 'Start';
-  return `${command ?? fallback} T${ticket.number}`;
+  const stage: AgentStage =
+    intent === 'start' && ticket.type === 'Epic' ? 'startEpic' : intent;
+  return `${commandForStage(stage, commands)} T${ticket.number}`;
 }

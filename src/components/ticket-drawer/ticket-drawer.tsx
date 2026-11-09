@@ -20,6 +20,7 @@ import {
   useTransition,
 } from 'react';
 
+import { approveMerge } from '../../app/conversations/actions';
 import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import {
   archiveTicket,
@@ -45,10 +46,11 @@ import type {
   TicketClaim,
 } from '../../tickets/tickets';
 import { AcceptanceCriteriaEditor } from '../acceptance-criteria-editor/acceptance-criteria-editor';
+import { ApproveMergeButton } from '../approve-merge-button/approve-merge-button';
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
-import { isInReview, isParked } from '../board/board-lanes';
+import { canSpec, isInReview, isParked } from '../board/board-lanes';
 import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
@@ -116,7 +118,7 @@ export type TicketDrawerProps = {
   conversations?: Conversation[];
   /**
    * The commands of the Ticket's Project that Triage and Start send.
-   * Defaults to none, which sends the plain "Triage T42" and "Start T42".
+   * Defaults to none, which sends the Playbook's commands.
    */
   agentCommands?: ProjectAgentCommands;
   /**
@@ -324,12 +326,31 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     });
   };
 
+  const approveThisMerge = () => {
+    setActionError(undefined);
+    startAction(async () => {
+      const result = await approveMerge({ number: ticket.number });
+      if (result.ok) {
+        dialog.open(result.conversation.id);
+      } else {
+        setActionError(result.error);
+      }
+    });
+  };
+
   const showMerged = isInReview(ticket, live);
   const showBackToTodo = isParked(ticket, live);
 
   const statusActions = (
     <Stack gap={1}>
       <Inline gap={2} alignY="center">
+        {showMerged && (
+          <ApproveMergeButton
+            ticket={ticket}
+            pending={actionPending}
+            onApprove={approveThisMerge}
+          />
+        )}
         {showMerged && (
           <MergedButton
             ticket={ticket}
@@ -544,6 +565,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         ticketNumber={ticket.number}
         ticketType={ticket.type}
         commands={agentCommands}
+        specAvailable={canSpec(ticket)}
         onStarted={dialog.open}
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })

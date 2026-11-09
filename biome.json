@@ -14,7 +14,8 @@
       "!dist",
       "!build",
       "!public",
-      "!.agents"
+      "!.agents",
+      "!playbook/skills"
     ]
   },
   "formatter": {

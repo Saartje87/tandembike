@@ -275,6 +275,8 @@ describe('Skill actions', () => {
       startCommand: '/implement',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
+      mergeCommand: '',
     });
 
     const commands = {
@@ -282,6 +284,8 @@ describe('Skill actions', () => {
       startCommand: '/implement',
       startEpicCommand: null,
       retroCommand: null,
+      specCommand: null,
+      mergeCommand: null,
     };
     expect(result).toEqual({ ok: true, commands });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
@@ -299,6 +303,8 @@ describe('Skill actions', () => {
       startCommand: '/implement T1',
       startEpicCommand: '',
       retroCommand: '',
+      specCommand: '',
+      mergeCommand: '',
     });
 
     expect(result).toMatchObject({

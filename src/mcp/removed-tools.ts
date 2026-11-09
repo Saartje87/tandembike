@@ -49,8 +49,9 @@ export const removedToolNames = [
 ] as const;
 
 /**
- * Where Agents read how to use the tools: the skills, the agent docs, the
- * repository instructions and the sources of the run brief and Retro prompt.
+ * Where Agents read how to use the tools: the skills (this repository's and
+ * the Playbook's), the agent docs, the repository instructions and the
+ * sources of the run brief and Retro prompt.
  * ADRs, research notes and roadmaps are history and left out.
  */
 export const guardedPaths = [
@@ -58,6 +59,7 @@ export const guardedPaths = [
   'docs/agents',
   'AGENTS.md',
   'CLAUDE.md',
+  'playbook',
   'src/conversations/run-brief.ts',
   'src/conversations/retro-prompt.ts',
 ];

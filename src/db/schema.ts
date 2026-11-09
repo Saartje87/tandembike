@@ -21,7 +21,6 @@ import {
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
 import type { ActivityChange } from '../tickets/activity-change';
-import { defaultAgentCommands } from '../tickets/agent-commands';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
 import { paletteColors } from '../tickets/palette';
@@ -29,6 +28,19 @@ import { projectIcons } from '../tickets/project-icons';
 import { defaultSkills } from '../tickets/skills';
 import { statuses } from '../tickets/status';
 import { ticketTypes } from '../tickets/ticket-type';
+
+/**
+ * What the agent command and run mode columns defaulted to before the
+ * Playbook (T1218). SQLite cannot alter a column default without rebuilding
+ * the table, so the defaults stay and `createProject` sets every one of these
+ * explicitly: new Projects start blank and `auto`, stored values are kept.
+ */
+const legacyAgentCommandDefaults = {
+  triageCommand: '/mattpocock-skills:triage',
+  startCommand: '/mattpocock-skills:implement',
+  startEpicCommand: '/mattpocock-skills:implement-spec',
+  retroCommand: '/mattpocock-skills:retro',
+};
 
 export const projects = sqliteTable('projects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -71,22 +83,26 @@ export const projects = sqliteTable('projects', {
     .$type<string[]>()
     .notNull()
     .default(defaultSkills),
-  /** The command Triage sends before the Ticket number; null for none. */
+  /** The command Triage sends before the Ticket number; null runs the Playbook's. */
   triageCommand: text('triage_command').default(
-    defaultAgentCommands.triageCommand,
+    legacyAgentCommandDefaults.triageCommand,
   ),
-  /** The command Start sends before the Ticket number; null for none. */
+  /** The command Start sends before the Ticket number; null runs the Playbook's. */
   startCommand: text('start_command').default(
-    defaultAgentCommands.startCommand,
+    legacyAgentCommandDefaults.startCommand,
   ),
-  /** The command Start sends for an Epic; null falls back to startCommand. */
+  /** The command Start sends for an Epic; null runs the Playbook's. */
   startEpicCommand: text('start_epic_command').default(
-    defaultAgentCommands.startEpicCommand,
+    legacyAgentCommandDefaults.startEpicCommand,
   ),
-  /** The command a Retro sends before the Cycle reference; null for none. */
+  /** The command a Retro sends before the Cycle reference; null runs the Playbook's. */
   retroCommand: text('retro_command').default(
-    defaultAgentCommands.retroCommand,
+    legacyAgentCommandDefaults.retroCommand,
   ),
+  /** The command a Spec Conversation sends before the Ticket number; null runs the Playbook's. */
+  specCommand: text('spec_command'),
+  /** The command a Merge Conversation sends before the Ticket number; null runs the Playbook's. */
+  mergeCommand: text('merge_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 

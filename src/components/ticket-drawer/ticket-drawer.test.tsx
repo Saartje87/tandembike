@@ -4,7 +4,10 @@ import { useRouter } from 'next/navigation';
 import { Activity, type FC } from 'react';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { startConversation } from '../../app/conversations/actions';
+import {
+  approveMerge,
+  startConversation,
+} from '../../app/conversations/actions';
 import { noBoardFilter } from '../../app/lib/paths';
 import {
   addTicketBlocker,
@@ -41,6 +44,7 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
 }));
 vi.mock('../../app/conversations/actions', () => ({
+  approveMerge: vi.fn(),
   answerConversationPermission: vi.fn(),
   replyToConversation: vi.fn(),
   startConversation: vi.fn(),
@@ -218,6 +222,7 @@ describe('TicketDrawer', () => {
     vi.mocked(clearTicketClaim).mockReset();
     vi.mocked(completeTicket).mockReset();
     vi.mocked(backToTodo).mockReset();
+    vi.mocked(approveMerge).mockReset();
     vi.mocked(useTicketLiveConversation).mockReset().mockReturnValue(undefined);
     vi.mocked(useConversationDialog).mockReturnValue(dialog);
     dialog.open.mockReset();
@@ -305,6 +310,31 @@ describe('TicketDrawer', () => {
     expect(button('Start')).toBeInTheDocument();
     expect(button('Triage')).toBeInTheDocument();
     expect(button('Ask')).toBeInTheDocument();
+  });
+
+  it('offers Spec on a Todo Ticket in Intake and an Epic without children only (T1222)', () => {
+    const { unmount } = renderDrawer({ ...ticket, status: 'Todo', labels: [] });
+    expect(button('Spec')).toBeInTheDocument();
+    unmount();
+
+    const queued = renderDrawer({
+      ...ticket,
+      status: 'Todo',
+      labels: ['ready-for-agent'],
+    });
+    expect(screen.queryByRole('button', { name: 'Spec' })).toBeNull();
+    queued.unmount();
+
+    renderDrawer({
+      ...ticket,
+      status: 'Todo',
+      type: 'Epic',
+      children: [],
+      labels: [],
+    });
+    expect(button('Spec')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ask' })).not.toBeNull();
+    expect(button('Spec')).toBeInTheDocument();
   });
 
   it('links a Claim made with a Conversation’s id to that Conversation in the dialog', async () => {
@@ -497,6 +527,69 @@ describe('TicketDrawer', () => {
       renderDrawer(inReview);
 
       expect(field('Status')).toHaveValue('In progress');
+    });
+  });
+
+  describe('Approve merge', () => {
+    const pullRequest = 'https://github.com/owner/repo/pull/87';
+    const inReview: Ticket = { ...ticket, externalReferences: [pullRequest] };
+    const approve = () =>
+      inDrawer().queryByRole('button', { name: /^Approve merge/ });
+
+    it('approves a Ticket in Review beside Merged and opens the Conversation', async () => {
+      vi.mocked(approveMerge).mockResolvedValue({
+        ok: true,
+        conversation: { id: 31 } as Conversation,
+      });
+      renderDrawer(inReview);
+
+      expect(button('Merged T4 Fix the header')).toBeInTheDocument();
+      await userEvent.click(button('Approve merge T4 Fix the header'));
+
+      expect(approveMerge).toHaveBeenCalledExactlyOnceWith({ number: 4 });
+      await vi.waitFor(() => expect(dialog.open).toHaveBeenCalledWith(31));
+    });
+
+    it('shows on an Epic in Review and for an idle Start Conversation', () => {
+      vi.mocked(useTicketLiveConversation).mockReturnValue(
+        liveConversation({ state: 'idle' }),
+      );
+      renderDrawer({ ...inReview, type: 'Epic', title: 'Login' });
+
+      expect(button('Approve merge T4 Login')).toBeInTheDocument();
+    });
+
+    it('shows the reason when refused', async () => {
+      vi.mocked(approveMerge).mockResolvedValue({
+        ok: false,
+        error: 'A Conversation is working on T4.',
+      });
+      renderDrawer(inReview);
+
+      await userEvent.click(button('Approve merge T4 Fix the header'));
+
+      expect(
+        await inDrawer().findByText('A Conversation is working on T4.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows nothing while a Conversation is running', () => {
+      vi.mocked(useTicketLiveConversation).mockReturnValue(
+        liveConversation({ state: 'running' }),
+      );
+      renderDrawer(inReview);
+
+      expect(approve()).toBeNull();
+    });
+
+    it.each([
+      ['Done', { ...inReview, status: 'Done' as const }],
+      ['without a PR reference', ticket],
+      ['Todo', { ...inReview, status: 'Todo' as const }],
+    ])('shows nothing for a Ticket %s', (_name, shown) => {
+      renderDrawer(shown);
+
+      expect(approve()).toBeNull();
     });
   });
 

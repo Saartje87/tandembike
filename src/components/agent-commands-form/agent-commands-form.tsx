@@ -1,11 +1,15 @@
 'use client';
 
-import { Alert, Button, Label, Stack, TextInput } from '@blockle/blocks';
+import { Alert, Button, Label, Stack, Text, TextInput } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { setProjectAgentCommands } from '../../app/projects/actions';
-import type { ProjectAgentCommands } from '../../tickets/agent-commands';
+import {
+  agentStages,
+  type ProjectAgentCommands,
+  playbookCommand,
+} from '../../tickets/agent-commands';
 import { FieldError } from '../field-error/field-error';
 
 export type AgentCommandsFormProps = {
@@ -16,23 +20,15 @@ export type AgentCommandsFormProps = {
 
 type AgentCommandsFormValues = Record<keyof ProjectAgentCommands, string>;
 
-const fields: { name: keyof ProjectAgentCommands; label: string }[] = [
-  { name: 'triageCommand', label: 'Triage command' },
-  { name: 'startCommand', label: 'Start command' },
-  { name: 'startEpicCommand', label: 'Start command for Epics' },
-  { name: 'retroCommand', label: 'Retro command' },
-];
-
-const valuesOf = (commands: ProjectAgentCommands): AgentCommandsFormValues => ({
-  triageCommand: commands.triageCommand ?? '',
-  startCommand: commands.startCommand ?? '',
-  startEpicCommand: commands.startEpicCommand ?? '',
-  retroCommand: commands.retroCommand ?? '',
-});
+const valuesOf = (commands: ProjectAgentCommands): AgentCommandsFormValues =>
+  Object.fromEntries(
+    agentStages.map(({ field }) => [field, commands[field] ?? '']),
+  ) as AgentCommandsFormValues;
 
 /**
- * A Project's Triage, Start, Start-for-Epics and Retro commands (T621), each a
- * single line, blank for none. Save shows them as stored; a refusal shows
+ * A Project's agent commands (T621), one field for each Stage in
+ * `agentStages`, each a single line. A blank field shows the Playbook command
+ * it runs. Save shows them as stored; a refusal shows
  * under the field it names and keeps the text.
  */
 export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
@@ -44,6 +40,7 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
     formState: { errors, isSubmitting },
     handleSubmit,
     register,
+    watch,
     reset,
     setError,
   } = useForm<AgentCommandsFormValues>({ defaultValues: valuesOf(commands) });
@@ -56,7 +53,7 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
       return;
     }
     let named = false;
-    for (const { name } of fields) {
+    for (const { field: name } of agentStages) {
       const message = result.fieldErrors?.[name];
       if (message) {
         setError(name, { type: 'server', message });
@@ -71,10 +68,11 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
   return (
     <form aria-label="Agent commands" onSubmit={submit}>
       <Stack gap={3}>
-        {fields.map(({ name, label }) => {
+        {agentStages.map(({ field: name, label, skill }) => {
           const fieldId = `${idPrefix}-${name}`;
           const errorId = `${fieldId}-error`;
           const fieldError = errors[name]?.message;
+          const blank = watch(name).trim() === '';
           return (
             <Stack key={name} gap={1}>
               <Label htmlFor={fieldId}>{label}</Label>
@@ -86,6 +84,11 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
                 aria-invalid={fieldError ? true : undefined}
                 aria-describedby={fieldError ? errorId : undefined}
               />
+              {blank && (
+                <Text tag="p" fontSize="small" color="muted">
+                  Blank runs {playbookCommand(skill)}
+                </Text>
+              )}
               <FieldError id={errorId} reason={fieldError} />
             </Stack>
           );

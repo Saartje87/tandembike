@@ -183,6 +183,7 @@ export function createClaudeRunner(): AgentRunner {
       systemPrompt,
       prompt,
       resume,
+      plugins,
       runMode = 'default',
       model,
       askPermission,
@@ -196,6 +197,7 @@ export function createClaudeRunner(): AgentRunner {
         prompt: input.messages(),
         options: {
           cwd,
+          plugins,
           ...(resume === undefined ? {} : { resume }),
           ...(model === undefined ? {} : { model }),
           // The Project's run mode, never the repository's or the user's

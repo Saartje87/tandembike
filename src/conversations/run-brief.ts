@@ -40,6 +40,9 @@ const intentLines: Record<ConversationIntent, string> = {
     "The User started this Conversation to check that this Project's repository has what Tandembike's Agent runs rely on (Setup). Their first message asks for it.",
   retro:
     'The User started this Conversation for a retrospective (Retro) on a Cycle.',
+  merge:
+    'The User approved the merge of the Ticket (Approve merge) and started this Conversation to merge its pull request.',
+  spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
 };
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
@@ -94,7 +97,11 @@ export function runBrief(brief: RunBrief): string {
       );
     }
   }
-  if (brief.worktree && brief.intent === 'start') {
+  if (brief.worktree && brief.intent === 'merge') {
+    lines.push(
+      `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. It is not on the pull request's branch: the merge skill checks that branch out here. Do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
+    );
+  } else if (brief.worktree && brief.intent === 'start') {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
@@ -103,7 +110,7 @@ export function runBrief(brief: RunBrief): string {
       "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     );
   }
-  if (brief.intent === 'start') {
+  if (brief.intent === 'start' || brief.intent === 'merge') {
     lines.push(
       brief.checkCommand
         ? `This Project's Check command is \`${brief.checkCommand}\`. Run it and see it pass before you open a pull request.`
