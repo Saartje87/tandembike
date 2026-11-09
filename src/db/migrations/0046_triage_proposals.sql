@@ -14,5 +14,4 @@ CREATE TABLE `triage_proposals` (
 	FOREIGN KEY (`ticket_number`) REFERENCES `tickets`(`number`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE INDEX `triage_proposals_ticket_number` ON `triage_proposals` (`ticket_number`);--> statement-breakpoint
-ALTER TABLE `projects` ADD `triage_model` text;
+CREATE INDEX `triage_proposals_ticket_number` ON `triage_proposals` (`ticket_number`);
