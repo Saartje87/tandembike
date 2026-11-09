@@ -58,6 +58,7 @@ describe('MCP server and Project agent settings', () => {
       repositoryPath: '/tmp',
       checkCommand: 'npm run check',
       prepareCommand: 'npm ci',
+      autoMerge: true,
     });
     const client = await connectMcpClient(tickets);
 
@@ -70,10 +71,10 @@ describe('MCP server and Project agent settings', () => {
     );
 
     expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
-      /repository|agent_setting|parallel|agent_mode/,
+      /repository|agent_setting|parallel|agent_mode|auto_merge/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|spendCeiling|checkCommand|prepareCommand|npm ci|npm run check|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|autoMerge|spendCeiling|checkCommand|prepareCommand|npm ci|npm run check|\/tmp/,
     );
     await client.close();
   });
@@ -1286,6 +1287,19 @@ describe('Ticket tools', () => {
       labels: ['enhancement'],
     });
     expect(tickets.getTicket(ticket.number).externalReferences).toEqual([]);
+    await client.close();
+  });
+
+  it("documents start_work's merge field", async () => {
+    const client = await connectMcpClient(createTestTickets());
+
+    const { tools } = await client.listTools();
+    const description =
+      tools.find((tool) => tool.name === 'start_work')?.description ?? '';
+
+    expect(description).toMatch(/merge \("auto"/);
+    expect(description).toMatch(/"approve": hand off/);
+    expect(description).toMatch(/Auto-merge/);
     await client.close();
   });
 

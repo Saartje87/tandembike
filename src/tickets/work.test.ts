@@ -265,6 +265,47 @@ describe('startWork', () => {
   });
 });
 
+describe("startWork's merge mode", () => {
+  it('is approve while Auto-merge is off and auto once it is on', () => {
+    const { tickets, project, make } = setup();
+    const off = make('Off');
+    const on = make('On');
+
+    expect(tickets.startWork(off.number, 'run-1').merge).toBe('approve');
+    tickets.setProjectAgentSettings(project.id, { autoMerge: true });
+    expect(tickets.startWork(on.number, 'run-2').merge).toBe('auto');
+  });
+
+  it('keeps the mode the Claim was taken with, so a later switch changes only later runs', () => {
+    const { tickets, project, make } = setup();
+    const ticket = make('A');
+    tickets.startWork(ticket.number, 'run-1');
+
+    tickets.setProjectAgentSettings(project.id, { autoMerge: true });
+
+    expect(tickets.startWork(ticket.number, 'run-1').merge).toBe('approve');
+    expect(tickets.claimMergeMode(ticket.number)).toBe('approve');
+  });
+
+  it("gives an Epic's children the mode of the Epic's Claim", () => {
+    const { tickets, project, make } = setup();
+    const epic = make('Login', { type: 'Epic' });
+    const child = make('Form', { epicNumber: epic.number });
+    tickets.setProjectAgentSettings(project.id, { autoMerge: true });
+
+    expect(tickets.startWork(epic.number, 'run-1').merge).toBe('auto');
+    tickets.setProjectAgentSettings(project.id, { autoMerge: false });
+    expect(tickets.startWork(child.number, 'run-1').merge).toBe('auto');
+  });
+
+  it('has no mode without a Claim', () => {
+    const { tickets, make } = setup();
+    const ticket = make('A');
+
+    expect(tickets.claimMergeMode(ticket.number)).toBeNull();
+  });
+});
+
 describe('startWork on an Epic child blocked by a sibling', () => {
   const epicSetup = () => {
     const { tickets, project, make } = setup();

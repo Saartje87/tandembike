@@ -47,6 +47,7 @@ type AgentSettingsValues = {
   spendCeiling: string;
   autoTriage: boolean;
   triageCeiling: string;
+  autoMerge: boolean;
 };
 
 /** The form field each field of a refusal names. */
@@ -122,6 +123,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
         settings.triageCeilingUsd === null
           ? ''
           : String(settings.triageCeilingUsd),
+      autoMerge: settings.autoMerge,
     },
   });
   const hasPath = settings.repositoryPath !== null;
@@ -142,6 +144,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const ceilingErrorId = useId();
   const autopilotId = useId();
   const autoTriageId = useId();
+  const autoMergeId = useId();
   const triageCeilingId = useId();
   const triageCeilingErrorId = useId();
   const triageCeilingError = errors.triageCeiling?.message;
@@ -189,6 +192,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
         values.triageCeiling.trim() === ''
           ? null
           : Number(values.triageCeiling),
+      autoMerge: values.autoMerge,
     });
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
@@ -397,6 +401,19 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={ceilingError ? ceilingErrorId : undefined}
             />
             <FieldError id={ceilingErrorId} reason={ceilingError} />
+          </Stack>
+          <Stack gap={1}>
+            <Inline gap={2} alignY="center">
+              <Switch {...register('autoMerge')} id={autoMergeId} />
+              <Label htmlFor={autoMergeId}>Auto-merge</Label>
+            </Inline>
+            <Text tag="p" fontSize="small" color="muted">
+              While on, a run merges its own PR once its checks, its review and
+              every acceptance criterion pass, then finishes the Ticket; it
+              hands off for your approval when they do not. Off, every PR waits
+              for Approve merge. It applies to runs started after you change it,
+              with or without Autopilot.
+            </Text>
           </Stack>
           <Stack gap={1}>
             <Inline gap={2} alignY="center">

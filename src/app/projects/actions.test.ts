@@ -168,6 +168,7 @@ describe('setProjectAgentSettings', () => {
       spendCeilingUsd: null,
       autoTriage: true,
       triageCeilingUsd: 3,
+      autoMerge: false,
     });
     expect(revalidatePath).toHaveBeenCalled();
   });
@@ -232,6 +233,22 @@ describe('setProjectAgentSettings Autopilot', () => {
       autopilot: true,
       spendCeilingUsd: 20,
     });
+  });
+});
+
+describe('setProjectAgentSettings Auto-merge', () => {
+  it('saves the switch on its own', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const saved = await setProjectAgentSettings({
+      projectId: project.id,
+      autoMerge: true,
+    });
+
+    expect(saved).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(true);
   });
 });
 

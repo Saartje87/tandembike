@@ -23,6 +23,7 @@ import { runResults } from '../conversations/run-outcome';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
+import { mergeModes } from '../tickets/merge-mode';
 import { paletteColors } from '../tickets/palette';
 import { projectIcons } from '../tickets/project-icons';
 import { statuses } from '../tickets/status';
@@ -103,6 +104,10 @@ export const projects = sqliteTable('projects', {
     .default(false),
   /** What Auto-triage may spend per local calendar day, in dollars; null while unset. */
   triageCeilingUsd: real('triage_ceiling_usd'),
+  /** Whether the run that opened a PR merges it itself (ADR 0043). */
+  autoMerge: integer('auto_merge', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   /** The Skill commands its Conversations offer as chips, in order. */
   skills: text('skills', { mode: 'json' })
     .$type<string[]>()
@@ -161,6 +166,11 @@ export const tickets = sqliteTable(
       .references(() => projects.id),
     claimAgentRunId: text('claim_agent_run_id'),
     claimAgentName: text('claim_agent_name'),
+    /**
+     * The merge mode the Project gave the Claim when it was taken (ADR 0043);
+     * read only while `claimAgentRunId` is set.
+     */
+    claimMerge: text('claim_merge', { enum: mergeModes }),
     /** The Agent-run ID that filed this Ticket (`X-Tandembike-Run`), or null. */
     filedByRun: text('filed_by_run'),
     position: integer('position').notNull().default(0),

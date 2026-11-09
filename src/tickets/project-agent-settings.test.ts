@@ -29,6 +29,7 @@ describe("A Project's agent settings", () => {
       spendCeilingUsd: null,
       autoTriage: false,
       triageCeilingUsd: null,
+      autoMerge: false,
     });
   });
 
@@ -448,5 +449,22 @@ describe("A Project's agent settings", () => {
 
     expect(tickets.getProject(project.id)).not.toHaveProperty('repositoryPath');
     expect(tickets.listProjects()[0]).not.toHaveProperty('repositoryPath');
+  });
+
+  it('turn Auto-merge on and off on its own, without Autopilot or a Spend ceiling', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, { autoMerge: true }),
+    ).toMatchObject({ autoMerge: true, autopilot: false });
+    expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(true);
+    expect(tickets.getProject(project.id)).not.toHaveProperty('autoMerge');
+
+    tickets.setProjectAgentSettings(project.id, { checkCommand: 'npm test' });
+    expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(true);
+
+    tickets.setProjectAgentSettings(project.id, { autoMerge: false });
+    expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(false);
   });
 });

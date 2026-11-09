@@ -128,6 +128,7 @@ import {
   writeLaneOrder,
 } from './lanes';
 import { createMachineSettings } from './machine-settings';
+import { type MergeMode, mergeModeOf } from './merge-mode';
 import {
   checkOrigin,
   type OriginLink,
@@ -227,6 +228,8 @@ export type ProjectAgentSettings = {
   autoTriage: boolean;
   /** What Auto-triage may spend per local calendar day, in dollars; `null` while unset. */
   triageCeilingUsd: number | null;
+  /** Whether the run that opened a PR merges it itself (ADR 0043). */
+  autoMerge: boolean;
 };
 
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
@@ -280,6 +283,7 @@ const agentSettingsColumns = {
   spendCeilingUsd: projects.spendCeilingUsd,
   autoTriage: projects.autoTriage,
   triageCeilingUsd: projects.triageCeilingUsd,
+  autoMerge: projects.autoMerge,
 };
 
 /** A trimmed text setting; blank reads as not set. */
@@ -1706,6 +1710,7 @@ export function createTickets(
         spendCeilingUsd,
         autoTriage,
         triageCeilingUsd,
+        autoMerge,
       } = input;
       const nextTriageCeiling =
         triageCeilingUsd === undefined
@@ -1778,6 +1783,7 @@ export function createTickets(
           spendCeilingUsd: nextCeiling,
           autoTriage: nextAutoTriage,
           triageCeilingUsd: nextTriageCeiling,
+          ...(autoMerge === undefined ? {} : { autoMerge }),
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)
@@ -2024,6 +2030,8 @@ export function createTickets(
           .set({
             claimAgentRunId: agentRunId,
             claimAgentName: agentName,
+            // The mode is fixed when the Claim is taken (ADR 0043).
+            claimMerge: projectMergeMode(number),
             updatedAt: new Date(),
           })
           .where(
@@ -2482,6 +2490,26 @@ export function createTickets(
       });
       publishWith(number, changedEpic);
       return getTicket(number);
+    },
+
+    /**
+     * The merge mode Ticket `number`'s Claim was taken with (ADR 0043), or
+     * `null` while it has no Claim. A child under an Epic Claim has none of
+     * its own: read the Epic's.
+     */
+    claimMergeMode(number: number): MergeMode | null {
+      getTicket(number);
+      const row = db
+        .select({
+          claimAgentRunId: tickets.claimAgentRunId,
+          claimMerge: tickets.claimMerge,
+        })
+        .from(tickets)
+        .where(eq(tickets.number, number))
+        .get();
+      return row?.claimAgentRunId == null
+        ? null
+        : (row.claimMerge ?? 'approve');
     },
 
     /**
@@ -3354,6 +3382,17 @@ export function createTickets(
       numbers: [epic, ...selected.map((child) => child.number)],
     });
     return getTicket(epic);
+  }
+
+  /** The merge mode Ticket `number`'s Project gives a Claim taken now. */
+  function projectMergeMode(number: number): MergeMode {
+    const row = db
+      .select({ autoMerge: projects.autoMerge })
+      .from(tickets)
+      .innerJoin(projects, eq(projects.id, tickets.projectId))
+      .where(eq(tickets.number, number))
+      .get();
+    return mergeModeOf(row?.autoMerge ?? false);
   }
 
   /** Ticket `number`'s unchecked criteria and its unarchived children's. */
