@@ -15,6 +15,7 @@ type TerminalAction =
       intent?: TerminalIntent;
     }
   | { action: 'next'; folder: string }
+  | { action: 'plan'; folder: string; goal: string }
   | { action: 'resume'; conversationId: number }
   | { action: 'end'; conversationId: number; exitCode: number }
   | { action: 'heartbeat'; conversationId: number };
@@ -45,6 +46,13 @@ export const POST = async (request: Request): Promise<Response> => {
       case 'next':
         return Response.json(
           await conversations.startTerminalNext(String(body.folder)),
+        );
+      case 'plan':
+        return Response.json(
+          await conversations.startTerminalPlan({
+            folder: String(body.folder),
+            goal: String(body.goal ?? ''),
+          }),
         );
       case 'resume':
         return Response.json(

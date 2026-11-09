@@ -58,6 +58,21 @@ describe('parseCommand', () => {
     expect(parseCommand(['next'])).toEqual({ command: 'next' });
   });
 
+  it('accepts plan with a goal and refuses a missing one (T1249)', () => {
+    expect(parseCommand(['plan', 'Ship the blog'])).toEqual({
+      command: 'plan',
+      goal: 'Ship the blog',
+    });
+    expect(parseCommand(['plan', 'Ship', 'the', 'blog'])).toEqual({
+      command: 'plan',
+      goal: 'Ship the blog',
+    });
+    for (const argv of [['plan'], ['plan', '  ']]) {
+      expect(parseCommand(argv)).toMatchObject({ command: 'usage' });
+    }
+    expect(usageText).toContain('tandembike plan "<goal>"');
+  });
+
   it.each([
     [['triage']],
     [['spec', 'abc']],
