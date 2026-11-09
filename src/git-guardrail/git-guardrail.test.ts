@@ -1,15 +1,22 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
 
-import { checkCommand, hookDecision } from './git-guardrail';
+import { afterEach, describe, expect, it } from 'vitest';
 
-const onBranch = (branch: string | null) => ({
+import { checkCommand, gitBranch, hookDecision } from './git-guardrail';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const onBranch = (branch: string | null | undefined) => ({
   cwd: '/repo',
   currentBranch: () => branch,
 });
 
-const ruleOf = (command: string, branch: string | null = 'feature') =>
-  checkCommand(command, onBranch(branch))?.rule ?? null;
+const ruleOf = (
+  command: string,
+  branch: string | null | undefined = 'feature',
+) => checkCommand(command, onBranch(branch))?.rule ?? null;
 
 describe('checkCommand', () => {
   it('denies git reset --hard', () => {
@@ -200,6 +207,57 @@ describe('checkCommand', () => {
     expect(ruleOf('git branch --contains x -- -D')).toBeNull();
   });
 
+  it('denies a commit on main, naming the rule', () => {
+    expect(ruleOf('git commit -m x', 'main')).toBe('no-commit-main');
+    expect(ruleOf('git add . && git commit -m x', 'main')).toBe(
+      'no-commit-main',
+    );
+    expect(checkCommand('git commit', onBranch('main'))?.reason).toMatch(
+      /main/,
+    );
+  });
+
+  it('denies a commit on a detached HEAD', () => {
+    expect(ruleOf('git commit -m x', null)).toBe('no-commit-main');
+  });
+
+  it('allows a commit when the branch is unknown', () => {
+    expect(ruleOf('git commit -m x', undefined)).toBeNull();
+  });
+
+  it('allows a commit on a ticket branch', () => {
+    expect(ruleOf('git commit -m x', 'ticket-1-x')).toBeNull();
+    expect(ruleOf('git commit --amend --no-edit', 'ticket-1-x')).toBeNull();
+  });
+
+  it('checks a commit against the branch of the directory it runs in', () => {
+    const branches: Record<string, string> = {
+      '/repo': 'main',
+      '/repo/wt': 'ticket-1-x',
+      '/other': 'ticket-2-y',
+    };
+    const inDirs = {
+      cwd: '/repo',
+      currentBranch: (dir: string) => branches[dir] ?? null,
+    };
+    const rule = (command: string) =>
+      checkCommand(command, inDirs)?.rule ?? null;
+    expect(rule('git commit -m x')).toBe('no-commit-main');
+    expect(rule('git -C /other commit -m x')).toBeNull();
+    expect(rule('git -C wt commit -m x')).toBeNull();
+    expect(rule('cd wt && git commit -m x')).toBeNull();
+    expect(rule('cd /other && git commit -m x')).toBeNull();
+    expect(rule('cd /other && git -C /repo commit -m x')).toBe(
+      'no-commit-main',
+    );
+  });
+
+  it('allows merging and other commands on main', () => {
+    expect(ruleOf('git merge origin/main', 'main')).toBeNull();
+    expect(ruleOf('git pull', 'main')).toBeNull();
+    expect(ruleOf('git log', 'main')).toBeNull();
+  });
+
   it('allows ordinary git commands', () => {
     expect(ruleOf('git status')).toBeNull();
     expect(ruleOf('git reset HEAD file.ts')).toBeNull();
@@ -243,5 +301,44 @@ describe('hookDecision', () => {
     expect(hookDecision(JSON.stringify({ tool_name: 'Read' }), noBranch)).toBe(
       null,
     );
+  });
+});
+
+describe('gitBranch', () => {
+  const dirs: string[] = [];
+  const tempDir = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'git-guardrail-'));
+    dirs.push(dir);
+    return dir;
+  };
+  const git = (dir: string, ...args: string[]) =>
+    execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' });
+
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true });
+  });
+
+  it('reads the checked-out branch, and null on a detached HEAD', () => {
+    const dir = tempDir();
+    git(dir, 'init', '-q', '-b', 'topic');
+    git(
+      dir,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@t',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'x',
+    );
+    expect(gitBranch(dir)).toBe('topic');
+    git(dir, 'checkout', '-q', '--detach');
+    expect(gitBranch(dir)).toBeNull();
+  });
+
+  it('is undefined outside a repository', () => {
+    expect(gitBranch(tempDir())).toBeUndefined();
   });
 });

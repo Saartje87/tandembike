@@ -65,7 +65,7 @@ The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) run
 - Push that branch and open a PR with `gh` freely; write the body with the `pr` skill.
 - Changes reach `main` through a merged PR. Merge a PR yourself with `gh pr merge --merge` once CI is green, its review is complete and its Ticket's acceptance criteria are checked; see `docs/agents/start-run.md` for the Ticket side. Ask the User before pushing to `main` directly.
 - Refer to a Ticket in commits and PRs as `T23` (ADR 0016).
-- A PreToolUse hook (`src/git-guardrail/`, wired in `.claude/settings.json`) denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D` and `git stash drop`/`clear` in every session: a denial naming a `Git guardrail` rule is policy, not a bug, so do not work around it; ask the User.
+- A PreToolUse hook (`src/git-guardrail/`, wired in `.claude/settings.json`) denies force pushes, pushes to `main`, `git reset --hard`, `git clean`, `git branch -D`, `git stash drop`/`clear` and `git commit` on `main` or a detached HEAD in every session: a denial naming a `Git guardrail` rule is policy, not a bug, so do not work around it; ask the User.
 - When a Ticket's work is done, see `docs/agents/start-run.md` for when to move it to `Done`.
 
 ### Before finishing
