@@ -1,5 +1,4 @@
 ---
-
 name: triage
 description: "Triage one Tandembike Ticket: read it, check whether the codebase already does it, and recommend a category and a state in a comment. Never marks it ready for an agent."
 disable-model-invocation: true

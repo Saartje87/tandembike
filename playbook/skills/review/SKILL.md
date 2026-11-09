@@ -1,5 +1,4 @@
 ---
-
 name: review
 description: "Review the current branch's diff against the Ticket's acceptance criteria and the repository's instructions, and return findings. Use before opening a pull request, or when asked to review changes."
 ---

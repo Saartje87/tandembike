@@ -1,5 +1,4 @@
 ---
-
 name: implement-epic
 description: "Implement a Tandembike Epic from claim to one pull request: its children in Blocker order on one branch, one review, then hand off."
 disable-model-invocation: true

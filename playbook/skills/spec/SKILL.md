@@ -1,5 +1,4 @@
 ---
-
 name: spec
 description: "Turn a Tandembike idea Ticket, or an Epic without children, into a spec and its build Tickets, together with the User: grill a round at a time, check the test seams, then publish after the User approves the breakdown."
 disable-model-invocation: true

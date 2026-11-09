@@ -1,5 +1,4 @@
 ---
-
 name: implement
 description: "Implement one Tandembike Ticket from claim to a pull request: branch, test-first build, the Check command, acceptance criteria, a review of your own diff, then hand off."
 disable-model-invocation: true
