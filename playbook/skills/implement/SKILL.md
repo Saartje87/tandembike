@@ -41,15 +41,9 @@ Run the Check command from the `start_work` bundle once your work is complete, a
 
 Verify each acceptance criterion against the running code or its tests, not against your memory of writing it. Call `check_criterion` for each one as you verify it. A criterion you deliberately leave unmet: add a note with `add_note` saying why, and leave it unchecked.
 
-## 6. Review your own diff
+## 6. Review
 
-Commit your work first, then read the whole diff against the default branch as a reviewer who did not write it:
-
-- **The Ticket.** Does it do what the Ticket and each criterion asked, and nothing more?
-- **The repository.** Does it follow the conventions in the repository's instructions and the code around it?
-- **Defects.** Edge cases, error paths, leftover debugging, missing tests, files that should not be committed.
-
-Fix what you find, run the Check command again, and commit.
+Commit your work first, then call the `review` skill on the diff against the default branch, with the Ticket's number. Fix the findings you agree with, say in a note on the Ticket (`add_note`) which you did not fix and why, run the Check command again, and commit.
 
 ## 7. Push and open the pull request
 
