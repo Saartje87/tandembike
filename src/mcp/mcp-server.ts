@@ -35,12 +35,24 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - Your client keeps the tools and these instructions from when it connected: when the app's MCP tools change, ask the User to start a new session, as reconnecting may keep the tool descriptions already loaded. Until then, a tool missing from your list may still exist.
 - Your repository's own instructions set its process, such as when a Ticket is finished; follow them where they say more.`;
 
+/**
+ * Called after each tool call of a request that sent `X-Tandembike-Run`, with
+ * that run id, the tool's name and its input (T1238). The app wires it to the
+ * Conversations module; the server itself knows nothing of Conversations.
+ */
+export type ToolCallHook = (
+  runId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+) => void;
+
 /** An MCP server whose tools call the Tickets module `tickets` only. */
 export function createMcpServer(
   tickets: Tickets,
   origin = 'http://localhost:4747',
   cwd?: string,
   runId?: string,
+  onToolCall?: ToolCallHook,
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -52,7 +64,12 @@ export function createMcpServer(
     cwd,
     runId,
     resolveProjectId: (ref) => tickets.resolveProjectId({ ...ref, cwd }),
-    registerTool: toolRegistrar(server),
+    registerTool: toolRegistrar(
+      server,
+      runId && onToolCall
+        ? (name, input) => onToolCall(runId, name, input)
+        : undefined,
+    ),
   };
 
   registerTicketTools(context);
@@ -73,6 +90,7 @@ export function createMcpServer(
 export async function handleMcpRequest(
   request: Request,
   tickets: Tickets,
+  onToolCall?: ToolCallHook,
 ): Promise<Response> {
   const host = request.headers.get('host') ?? new URL(request.url).host;
   if (!isAllowedHost(host)) {
@@ -92,6 +110,7 @@ export async function handleMcpRequest(
     new URL(request.url).origin,
     cwd,
     runId,
+    onToolCall,
   );
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
