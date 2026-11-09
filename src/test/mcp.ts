@@ -1,12 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-import { handleMcpRequest, type ToolCallHook } from '../mcp/mcp-server';
+import { handleMcpRequest, type McpServerOptions } from '../mcp/mcp-server';
 import type { Tickets } from '../tickets/tickets';
 
 /**
  * A real MCP SDK client connected in-process to the MCP request handler
- * (no running server), backed by `tickets`. Close it at the end of the test.
+ * (no running server), backed by `tickets` and, for get_conversations,
+ * `conversations`. Close it at the end of the test.
  * Test files that use it need `// @vitest-environment node` on line 1.
  */
 export async function connectMcpClient(
@@ -14,8 +15,8 @@ export async function connectMcpClient(
   {
     cwd,
     runId,
-    onToolCall,
-  }: { cwd?: string; runId?: string; onToolCall?: ToolCallHook } = {},
+    ...options
+  }: { cwd?: string; runId?: string } & McpServerOptions = {},
 ): Promise<Client> {
   const client = new Client({ name: 'test-agent', version: '0.0.0' });
   const transport = new StreamableHTTPClientTransport(
@@ -28,7 +29,7 @@ export async function connectMcpClient(
         },
       },
       fetch: (url, init) =>
-        handleMcpRequest(new Request(url, init), tickets, onToolCall),
+        handleMcpRequest(new Request(url, init), tickets, options),
     },
   );
   await client.connect(transport);
