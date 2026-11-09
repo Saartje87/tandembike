@@ -15,6 +15,10 @@ import type {
   Ticket,
   UpdateTicketInput,
 } from '../../tickets/tickets';
+import type {
+  TriageCategory,
+  TriageState,
+} from '../../tickets/triage-proposal-state';
 import { type ActionResult, actionResult } from '../lib/action-result';
 import { boardRoute, cycleRoute, projectPath } from '../lib/paths';
 
@@ -668,6 +672,45 @@ export async function addTicketAttachments(
       revalidatePath(boardRoute, 'page');
       revalidatePath(cycleRoute, 'page');
     }
+    return {};
+  });
+}
+
+export type TriageDecisionResult = ActionResult;
+
+/**
+ * Approves a pending triage proposal as the User, with the category and
+ * state they chose. There is no MCP tool for it: only the User applies a
+ * proposal.
+ */
+export async function approveTriage(input: {
+  id: number;
+  category?: TriageCategory;
+  state?: TriageState;
+}): Promise<TriageDecisionResult> {
+  return actionResult(() => {
+    appTickets('user').approveTriage(Number(input?.id), {
+      ...(input?.category === undefined ? {} : { category: input.category }),
+      ...(input?.state === undefined ? {} : { state: input.state }),
+    });
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
+    return {};
+  });
+}
+
+/** Rejects a pending triage proposal as the User, with an optional reason. */
+export async function rejectTriage(input: {
+  id: number;
+  reason?: string;
+}): Promise<TriageDecisionResult> {
+  return actionResult(() => {
+    appTickets('user').rejectTriage(
+      Number(input?.id),
+      input?.reason === undefined ? undefined : String(input.reason),
+    );
+    revalidatePath(boardRoute, 'page');
+    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }

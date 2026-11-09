@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
 import {
+  triageCategories,
+  triageStates,
+} from '../tickets/triage-proposal-state';
+import {
   commentBody,
   criterionId,
   detail,
@@ -76,6 +80,52 @@ export const registerWorkTools = ({
     },
     ({ number, body }) =>
       respond(() => tickets.addComment(number, { body, author: 'agent' })),
+  );
+
+  registerTool(
+    'propose_triage',
+    {
+      title: 'Propose triage',
+      description: `End a Triage run: propose a category and a state for a Todo Ticket, with your reasoning. The reasoning is posted as the Ticket's triage comment, starting with the AI disclaimer, so do not also call add_note. Nothing is applied: the User approves or rejects the proposal in the Ticket drawer, and only an approval sets the labels and replaces the acceptance criteria (when you give some). A newer proposal replaces a pending one. Refused for a Ticket that is not Todo. Returns the proposal.`,
+      inputSchema: {
+        number: ticketNumber,
+        category: z.enum(triageCategories).describe('bug or enhancement.'),
+        state: z
+          .enum(triageStates)
+          .describe(
+            'The state you recommend: ready-for-agent, ready-for-human, needs-info or wontfix.',
+          ),
+        reasoning: commentBody.describe(
+          'Why, in Markdown: what you checked and found. It becomes the triage comment.',
+        ),
+        acceptanceCriteria: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Proposed acceptance criteria, one line each. On approval they replace the Ticket's; leave out to keep its own.",
+          ),
+        duplicateOf: ticketNumber
+          .optional()
+          .describe('Not supported yet: refused.'),
+        splits: z
+          .array(
+            z.strictObject({
+              title: z.string(),
+              description: z.string(),
+              acceptanceCriteria: z.array(z.string()),
+            }),
+          )
+          .optional()
+          .describe('Not supported yet: refused.'),
+      },
+    },
+    ({ number, ...proposal }) =>
+      respond(() =>
+        tickets.proposeTriage(number, {
+          ...proposal,
+          ...(runId === undefined ? {} : { runId }),
+        }),
+      ),
   );
 
   registerTool(

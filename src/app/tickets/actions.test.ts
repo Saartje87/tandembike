@@ -10,6 +10,7 @@ import {
   addTicketComment,
   addTicketExternalReference,
   addTicketLabel,
+  approveTriage,
   archiveTicket,
   archiveTickets,
   attachTicketToEpic,
@@ -22,6 +23,7 @@ import {
   editTicketComment,
   moveTickets,
   moveTicketsToEpic,
+  rejectTriage,
   removeTicketAttachment,
   removeTicketComment,
   removeTicketExternalReference,
@@ -934,5 +936,32 @@ describe('Ticket actions', () => {
 
       expect(result).toMatchObject({ ok: false });
     });
+  });
+
+  it('approves and rejects a triage proposal as the User and refreshes the Boards', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const a = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const b = tickets.createTicket({ projectId: project.id, title: 'B' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const proposal = {
+      category: 'bug' as const,
+      state: 'ready-for-agent' as const,
+      reasoning: 'Why.',
+    };
+    const first = tickets.proposeTriage(a.number, proposal);
+    const second = tickets.proposeTriage(b.number, proposal);
+
+    expect(await approveTriage({ id: first.id, state: 'needs-info' })).toEqual({
+      ok: true,
+    });
+    expect(await rejectTriage({ id: second.id, reason: 'Nope' })).toEqual({
+      ok: true,
+    });
+
+    expect(tickets.getTicket(a.number).labels).toEqual(['bug', 'needs-info']);
+    expect(tickets.getTriageProposal(second.id).status).toBe('rejected');
+    expect(revalidatePath).toHaveBeenCalled();
+    expect(await approveTriage({ id: first.id })).toMatchObject({ ok: false });
   });
 });

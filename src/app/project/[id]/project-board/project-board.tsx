@@ -115,6 +115,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     cycles,
     epics,
     filter,
+    proposedTriage: tickets.pendingTriageNumbers(project.id),
   };
   if (tab === 'backlog') {
     // The Backlog is the whole scope of its Board: no progress, no runs.
