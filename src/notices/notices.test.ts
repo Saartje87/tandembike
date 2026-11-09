@@ -23,7 +23,7 @@ function setup() {
     parallelRuns: true,
     maxConcurrentRuns: 5,
   });
-  const notices = createNotices({ conversations, changes });
+  const notices = createNotices({ conversations, tickets, changes });
   const raised = vi.fn();
   changes.subscribe((change) => {
     if (change.type === 'notice') {
@@ -51,7 +51,168 @@ function setup() {
   return { ...world, changes, project, notices, raised, startRun };
 }
 
+const notStalled = (world: { raised: { mock: { calls: unknown[][] } } }) =>
+  world.raised.mock.calls.filter(
+    ([notice]) => (notice as { kind: string }).kind !== 'stalled',
+  );
+
 describe('Notices', () => {
+  describe('Ticket kinds', () => {
+    const pr = (n: number) => `https://github.com/acme/site/pull/${n}`;
+    const inProgress = (world: ReturnType<typeof setup>, title = 'Ship it') => {
+      const ticket = world.tickets.createTicket({
+        projectId: world.project.id,
+        title,
+      });
+      world.tickets.updateTicket(ticket.number, { status: 'In progress' });
+      return ticket;
+    };
+    const kinds = (world: ReturnType<typeof setup>, kind: string) =>
+      world.raised.mock.calls
+        .map(([notice]) => notice)
+        .filter((notice) => notice.kind === kind);
+
+    it('raises merge once at the Merge gate and again for a new PR', () => {
+      const world = setup();
+      const ticket = inProgress(world);
+      world.notices.start();
+
+      world.tickets.updateTicket(ticket.number, {
+        addExternalReferences: [pr(1)],
+      });
+      world.changes.publish({ type: 'project', id: world.project.id });
+
+      expect(kinds(world, 'merge')).toEqual([
+        {
+          kind: 'merge',
+          key: `merge:${ticket.number}:${pr(1)}`,
+          projectId: world.project.id,
+          ticketNumber: ticket.number,
+          conversationId: null,
+          title: `T${ticket.number} is ready to merge`,
+          body: 'Ship it',
+          path: `/project/${world.project.id}?ticket=${ticket.number}`,
+        },
+      ]);
+
+      world.tickets.updateTicket(ticket.number, {
+        addExternalReferences: [pr(2)],
+      });
+      expect(kinds(world, 'merge')).toHaveLength(2);
+    });
+
+    it('raises no merge for what is at the gate when the server starts,', () => {
+      const world = setup();
+      const gated = inProgress(world, 'Gated');
+      world.tickets.updateTicket(gated.number, {
+        addExternalReferences: [pr(1)],
+      });
+      world.notices.start();
+      world.changes.publish({ type: 'project', id: world.project.id });
+      expect(world.raised).not.toHaveBeenCalled();
+    });
+
+    it('raises stalled once when a Ticket has no Claim, PR or Conversation', () => {
+      vi.useFakeTimers();
+      try {
+        const world = setup();
+        const ticket = inProgress(world);
+        world.tickets.claimTicket(ticket.number, { agentRunId: 'r1' });
+        world.notices.start();
+
+        vi.advanceTimersByTime(5000);
+        world.tickets.releaseTicketClaim(ticket.number, { agentRunId: 'r1' });
+        world.changes.publish({ type: 'project', id: world.project.id });
+
+        const [notice] = kinds(world, 'stalled');
+        expect(kinds(world, 'stalled')).toHaveLength(1);
+        expect(notice).toMatchObject({
+          title: `T${ticket.number} is stalled`,
+          ticketNumber: ticket.number,
+          path: `/project/${world.project.id}?ticket=${ticket.number}`,
+        });
+        expect(notice.key).toMatch(`stalled:${ticket.number}:`);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('raises stalled for a Ticket whose PR is not Review, but not one with a PR', () => {
+      const world = setup();
+      const reviewed = inProgress(world, 'Reviewed');
+      world.tickets.updateTicket(reviewed.number, {
+        addExternalReferences: [pr(3)],
+      });
+      world.notices.start();
+      const stalled = inProgress(world, 'Stuck');
+
+      expect(kinds(world, 'stalled').map((n) => n.ticketNumber)).toEqual([
+        stalled.number,
+      ]);
+    });
+
+    it('raises triage once per pending proposal, and again for a new one', () => {
+      const world = setup();
+      const ticket = world.tickets.createTicket({
+        projectId: world.project.id,
+        title: 'Sort me',
+      });
+      world.notices.start();
+
+      const first = world.tickets.proposeTriage(ticket.number, {
+        category: 'bug',
+        state: 'ready-for-agent',
+        reasoning: 'Clear',
+      });
+      world.changes.publish({ type: 'project', id: world.project.id });
+
+      expect(kinds(world, 'triage')).toEqual([
+        {
+          kind: 'triage',
+          key: `triage:${first.id}`,
+          projectId: world.project.id,
+          ticketNumber: ticket.number,
+          conversationId: null,
+          title: `T${ticket.number} has a triage proposal`,
+          body: 'Sort me: bug, ready-for-agent',
+          path: `/project/${world.project.id}?ticket=${ticket.number}`,
+        },
+      ]);
+
+      world.tickets.rejectTriage(first.id);
+      world.tickets.proposeTriage(ticket.number, {
+        category: 'enhancement',
+        state: 'ready-for-human',
+        reasoning: 'Again',
+      });
+      expect(kinds(world, 'triage')).toHaveLength(2);
+    });
+
+    it('opens the Ticket over the Cycle Board it shows on', () => {
+      const world = setup();
+      const ticket = world.tickets.createTicket({
+        projectId: world.project.id,
+        title: 'Planned',
+      });
+      const cycle = world.tickets.createCycle({
+        projectId: world.project.id,
+        title: 'Goal',
+      });
+      world.tickets.planTicket({ cycleId: cycle.id, number: ticket.number });
+      world.notices.start();
+
+      world.tickets.proposeTriage(ticket.number, {
+        category: 'bug',
+        state: 'needs-info',
+        reasoning: 'Why',
+      });
+
+      expect(kinds(world, 'triage')[0].path).toBe(
+        `/project/${world.project.id}/cycle/${cycle.id}?ticket=${ticket.number}`,
+      );
+    });
+  });
+
   it('raises waiting once for a pending permission, with its title, body and path', async () => {
     const world = setup();
     const { run, conversation, ticket } = await world.startRun();
@@ -183,10 +344,10 @@ describe('Notices', () => {
 
     triage.run.emit({ type: 'turn', costUsd: 0 });
     await world.conversations.stop(stopped.conversation.id);
-    expect(world.raised).not.toHaveBeenCalled();
+    expect(notStalled(world)).toEqual([]);
 
     merge.run.emit({ type: 'turn', costUsd: 0 });
-    expect(world.raised).toHaveBeenCalledTimes(1);
+    expect(notStalled(world)).toHaveLength(1);
   });
 
   it('raises needs_reply again for a later run end', async () => {
@@ -209,7 +370,8 @@ describe('Notices', () => {
     await world.conversations.close(conversation.id);
     run.emit({ type: 'turn', costUsd: 0 });
 
-    expect(world.raised).not.toHaveBeenCalled();
+    // Closing leaves the Ticket Stalled, which is news of another kind.
+    expect(notStalled(world)).toEqual([]);
   });
 
   it('stops raising after the returned function is called', async () => {

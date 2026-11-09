@@ -12,8 +12,12 @@ export type NoticesDeps = NoticeWorld & {
  * not have. The set when `start` is called is the baseline and raises
  * nothing. It only reads; it never writes a Ticket or a Conversation.
  */
-export function createNotices({ conversations, changes }: NoticesDeps) {
-  const world: NoticeWorld = { conversations };
+export function createNotices({
+  conversations,
+  tickets,
+  changes,
+}: NoticesDeps) {
+  const world: NoticeWorld = { conversations, tickets };
 
   const compute = (): Notice[] =>
     noticeDetectors.flatMap((detect) => detect(world));

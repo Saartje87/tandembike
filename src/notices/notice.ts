@@ -2,7 +2,13 @@
  * What a Notice is about (GLOSSARY: Notice). A kind is added here and as a
  * detector in `notice-kinds.ts`; nothing else changes.
  */
-export const noticeKinds = ['waiting', 'needs_reply'] as const;
+export const noticeKinds = [
+  'waiting',
+  'needs_reply',
+  'merge',
+  'stalled',
+  'triage',
+] as const;
 export type NoticeKind = (typeof noticeKinds)[number];
 
 /**

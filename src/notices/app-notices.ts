@@ -1,4 +1,5 @@
 import { appConversations } from '../conversations/app-conversations';
+import { appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
 import { createNotices, type Notices } from './notices';
 
@@ -19,6 +20,7 @@ export function startAppNotices(): void {
   }
   const notices = createNotices({
     conversations: appConversations(),
+    tickets: appTickets('agent'),
     changes: appChangeChannel(),
   });
   global[globalKey] = notices;
