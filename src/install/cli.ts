@@ -19,6 +19,7 @@ import {
   noWorkMessage,
   parseCommand,
   planClaudeSession,
+  type TerminalResumeResult,
   type TerminalStartResult,
 } from './session';
 import { spawn, spawnSync } from 'node:child_process';
@@ -62,6 +63,10 @@ async function main(): Promise<void> {
   }
   if (parsed.command === 'next') {
     return process.exit(await startNext());
+  }
+
+  if (parsed.command === 'resume') {
+    process.exit(await resumeSession(parsed.conversationId));
   }
 
   const blocker = firstRunCopyBlocker(join(checkout, 'data'), home);
@@ -158,7 +163,28 @@ async function startNext(): Promise<number> {
   return runSession(next.session);
 }
 
-async function runSession(started: TerminalStartResult): Promise<number> {
+/**
+ * `tandembike resume`: asks the server to hand a Conversation over to this
+ * terminal, then resumes its `claude` session there and reports the end.
+ */
+async function resumeSession(conversationId: number): Promise<number> {
+  let resumed: TerminalResumeResult;
+  try {
+    resumed = await callServer<TerminalResumeResult>({
+      action: 'resume',
+      conversationId,
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+  return runSession(resumed);
+}
+
+/** Runs interactive `claude` for a Terminal Conversation and reports its end. */
+async function runSession(
+  started: TerminalStartResult | TerminalResumeResult,
+): Promise<number> {
   const plan = planClaudeSession(started);
   // A heartbeat every minute tells the server the session is alive; a failure,
   // such as a server restart, is ignored (ADR 0039).

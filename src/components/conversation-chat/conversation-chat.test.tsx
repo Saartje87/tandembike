@@ -751,3 +751,51 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
     expect(closeConversation).toHaveBeenCalledWith({ conversationId: 9 });
   });
 });
+
+describe('ConversationChat Continue in terminal (T1241)', () => {
+  const continueButton = () =>
+    screen.queryByRole('button', { name: 'Continue in terminal' });
+
+  it('shows only for a non-Terminal Conversation with an SDK session', () => {
+    const { rerender } = renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ sdkSessionId: 'sess-1' })}
+      />,
+    );
+    expect(continueButton()).toBeInTheDocument();
+
+    rerender(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ sdkSessionId: null })}
+      />,
+    );
+    expect(continueButton()).toBeNull();
+
+    rerender(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ sdkSessionId: 'sess-1', startedBy: 'terminal' })}
+      />,
+    );
+    expect(continueButton()).toBeNull();
+  });
+
+  it('copies tandembike resume with the Conversation id', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ id: 12, sdkSessionId: 'sess-1' })}
+      />,
+    );
+
+    await user.click(continueButton() as HTMLElement);
+
+    expect(
+      await screen.findByText('Copied: tandembike resume 12'),
+    ).toBeVisible();
+    expect(await navigator.clipboard.readText()).toBe('tandembike resume 12');
+  });
+});

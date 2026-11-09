@@ -89,6 +89,20 @@ not start a second run on its Ticket. It ends when `claude` exits, and
 running, it says so and exits 1. See
 `docs/adr/0039-terminal-conversations.md`.
 
+### Continue a Conversation in your terminal
+
+A Conversation you started in the UI that has an SDK session shows **Continue
+in terminal** in its header, which copies `tandembike resume <id>`. Run it in
+any folder: Tandembike stops the live run (its Run outcome is recorded as
+stopped and its pending prompts expire), appends "Continued in terminal", and
+the Conversation becomes Started by Terminal and `running`. Its cost so far and
+Autopilot Cycle stay. The command then runs `claude --resume <session id>` in
+the Conversation's worktree, or in the Project's repository when it has none,
+with the bundled Playbook and `TANDEMBIKE_RUN` set, and reports the end when
+`claude` exits. It is refused, with the reason, for a closed Conversation, one
+without an SDK session, one already in a terminal and one whose worktree was
+removed.
+
 ## Install the Playbook plugin
 
 The checkout is also a Claude Code marketplace named `tandembike`

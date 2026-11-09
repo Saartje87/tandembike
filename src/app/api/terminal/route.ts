@@ -14,6 +14,7 @@ type TerminalAction =
       intent?: 'start' | 'triage' | 'spec';
     }
   | { action: 'next'; folder: string }
+  | { action: 'resume'; conversationId: number }
   | { action: 'end'; conversationId: number; exitCode: number }
   | { action: 'heartbeat'; conversationId: number };
 
@@ -43,6 +44,10 @@ export const POST = async (request: Request): Promise<Response> => {
       case 'next':
         return Response.json(
           await conversations.startTerminalNext(String(body.folder)),
+        );
+      case 'resume':
+        return Response.json(
+          await conversations.handOffToTerminal(Number(body.conversationId)),
         );
       case 'end':
         await conversations.endTerminal(Number(body.conversationId), {
