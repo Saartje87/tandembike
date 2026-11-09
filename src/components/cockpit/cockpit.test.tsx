@@ -626,7 +626,7 @@ describe('Cockpit', () => {
         .map((item) => item.textContent),
     ).toEqual([
       'T30Child 30done',
-      'T31Child 31running',
+      'T31Child 31started',
       'T32Child 32needs you',
     ]);
     const childList = within(epicRow).getByRole('list');
@@ -708,7 +708,7 @@ describe('Cockpit', () => {
       within(epicRow)
         .getAllByRole('listitem')
         .map((item) => item.textContent),
-    ).toEqual(['T30Child 30done', 'T31Child 31built', 'T32Child 32running']);
+    ).toEqual(['T30Child 30done', 'T31Child 31built', 'T32Child 32started']);
   });
 
   it("links an opened Epic row's children over this Board, keeping its filter", async () => {

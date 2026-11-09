@@ -28,6 +28,10 @@ _Avoid_: Inbox, unplanned list
 A Ticket, fixed as such when created, that groups child Tickets of the same Project so they can be handed off as one unit. A Ticket belongs to at most one Epic, and an Epic cannot be a child. An Epic's Status is always derived from its children: it is Done once it has at least one child and every child is Done or archived. Claiming it covers its children. Every Epic has a colour, from a fixed set, that marks its children so related Tickets stand out. Planning an Epic into a Cycle, or removing it from one, by hand offers to take its non-archived children along (those in that Cycle, when removing), all or nothing (ADR 0010).
 _Avoid_: Feature, parent Ticket, story
 
+**Child state**:
+Where a child of an Epic stands in its Epic's children bar, by its own progress, never by the section it takes from its Epic's run (ADR 0028): **queued** (Todo), **started** (In progress, not built), **built** (In progress with every acceptance criterion checked: finished on the Epic's branch, waiting for the Epic to merge) and **done**. A child shows **needs you** only when its own Conversation needs the User; an Epic run's need for the User is on the Epic's row. The bar counts done and built children together.
+_Avoid_: Running, in review (for a child)
+
 **Origin**:
 The Ticket another Ticket was split from, such as the spec a build Ticket came out of. A Ticket has at most one Origin, possibly in another Project; the Tickets split from one Origin form a group whose members are each worked on their own. It records provenance only: it does not affect Status, Claims or Blockers.
 _Avoid_: Parent, source, spec link

@@ -44,8 +44,11 @@ export const pipState = styleVariants({
     backgroundColor: vars.colorRole.success.subtle,
     boxShadow: `inset 0 0 0 ${vars.borderWidth.thin} ${vars.colorRole.success.solid}`,
   },
-  review: { backgroundColor: vars.colorRole.info.solid },
-  running: { backgroundColor: vars.colorRole.primary.solid },
+  // In progress, not built: the primary colour, hollowed like built (T1263).
+  started: {
+    backgroundColor: vars.colorRole.primary.subtle,
+    boxShadow: `inset 0 0 0 ${vars.borderWidth.thin} ${vars.colorRole.primary.solid}`,
+  },
   'needs-you': { backgroundColor: vars.colorRole.warning.solid },
   queued: {
     backgroundColor: vars.colorRole.surface.sunken,

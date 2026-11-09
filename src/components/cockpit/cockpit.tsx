@@ -453,9 +453,8 @@ const sectionOf = (
 const childStateLabel: Record<EpicChildState, string> = {
   done: 'done',
   built: 'built',
-  running: 'running',
+  started: 'started',
   'needs-you': 'needs you',
-  review: 'in review',
   queued: 'queued',
 };
 
