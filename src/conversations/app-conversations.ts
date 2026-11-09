@@ -4,6 +4,8 @@ import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
 
+const idleSweepMs = 60 * 1000;
+
 const globalKey = Symbol.for('ticket.conversations');
 type GlobalWithConversations = typeof globalThis & {
   [globalKey]?: Conversations;
@@ -38,6 +40,14 @@ export function appConversations(): Conversations {
     });
     conversations.interruptStale();
     void conversations.cleanupWorktrees().catch(() => undefined);
+    // End Terminal Conversations whose CLI went quiet (ADR 0039).
+    setInterval(() => {
+      try {
+        conversations.endIdleTerminals();
+      } catch {
+        // The next sweep tries again.
+      }
+    }, idleSweepMs).unref();
     global[globalKey] = conversations;
   }
   return global[globalKey];
