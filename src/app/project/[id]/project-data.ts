@@ -6,6 +6,7 @@ import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
 import { startRunLimit } from '../../../conversations/conversations';
 import { appTickets } from '../../../tickets/app-tickets';
+import { cycleUnitCount } from '../../../tickets/cycle-units';
 import { NotFoundError } from '../../../tickets/errors';
 import { openTicketNumber } from '../../lib/paths';
 
@@ -193,4 +194,23 @@ export function backlogIntakeCountOf(projectId: number): number {
     appTickets('user').listTickets({ projectId, cycleId: null }),
     conversationActivity(appConversations().activityRows()),
   ).needsYou.intake.length;
+}
+
+/**
+ * What Starting a Prepared Cycle is estimated to cost: the Project's cost per
+ * Ticket times the Cycle's Ticket units (T1247), null while there are too few
+ * runs to estimate.
+ */
+export function cycleEstimate(
+  projectId: number,
+  cycleId: number,
+): { totalUsd: number | null; units: number } {
+  const perTicketUsd = appConversations().startCostEstimate(projectId);
+  const units = cycleUnitCount(
+    appTickets('user').listTickets({ projectId, cycleId }),
+  );
+  return {
+    totalUsd: perTicketUsd === null ? null : perTicketUsd * units,
+    units,
+  };
 }

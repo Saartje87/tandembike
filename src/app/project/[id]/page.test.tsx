@@ -22,7 +22,7 @@ vi.mock('next/navigation', () => ({ notFound }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../conversations/app-conversations', () => ({
-  appConversations: vi.fn(() => ({ list: () => [] })),
+  appConversations: vi.fn(() => ({ list: () => [], triageBudget: () => null })),
 }));
 vi.mock('../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
@@ -67,7 +67,11 @@ describe('ProjectPage', () => {
     const stub = (spend: number) =>
       vi.mocked(appConversations).mockReturnValue({
         list: () => [],
-        autopilotTriageSpend: () => spend,
+        triageBudget: () => ({
+          spendUsd: spend,
+          ceilingUsd: 2,
+          paused: spend >= 2,
+        }),
       } as unknown as ReturnType<typeof appConversations>);
     const params = Promise.resolve({ id: String(project.id) });
 
@@ -83,6 +87,10 @@ describe('ProjectPage', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     vi.mocked(appTickets).mockReturnValue(tickets);
+    vi.mocked(appConversations).mockReturnValue({
+      list: () => [],
+      triageBudget: () => null,
+    } as unknown as ReturnType<typeof appConversations>);
     const params = Promise.resolve({ id: String(project.id) });
 
     await renderPage(

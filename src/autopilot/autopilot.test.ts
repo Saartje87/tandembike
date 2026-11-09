@@ -1004,6 +1004,11 @@ describe('Auto-triage', () => {
       start.setHours(0, 0, 0, 0);
 
       expect(conversations.autopilotTriageSpend(project.id, start)).toBe(1);
+      expect(conversations.triageBudget(project.id)).toEqual({
+        spendUsd: 1,
+        ceilingUsd: 2,
+        paused: false,
+      });
     });
   });
 

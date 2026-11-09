@@ -99,6 +99,20 @@ describe('TriageProposal', () => {
     );
   });
 
+  it('offers no State for a duplicate, since approving labels it wontfix', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <TriageProposal proposal={{ ...proposal, duplicateOf: 12 }} />,
+    );
+
+    expect(screen.queryByLabelText('State')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() =>
+      expect(approveTriage).toHaveBeenCalledWith({ id: 7, category: 'bug' }),
+    );
+  });
+
   it('shows splits with their titles and criteria', () => {
     renderWithTheme(
       <TriageProposal

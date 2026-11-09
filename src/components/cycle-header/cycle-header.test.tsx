@@ -314,7 +314,10 @@ describe('CycleHeader', () => {
   describe('estimate', () => {
     it('shows the Estimate on a Prepared Cycle', () => {
       renderWithTheme(
-        <CycleHeader cycle={prepared} estimate={{ costUsd: 4.2, units: 3 }} />,
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ totalUsd: 12.6, units: 3 }}
+        />,
       );
 
       expect(
@@ -324,7 +327,7 @@ describe('CycleHeader', () => {
 
     it('counts one Ticket in the singular', () => {
       renderWithTheme(
-        <CycleHeader cycle={prepared} estimate={{ costUsd: 4, units: 1 }} />,
+        <CycleHeader cycle={prepared} estimate={{ totalUsd: 4, units: 1 }} />,
       );
 
       expect(
@@ -334,7 +337,10 @@ describe('CycleHeader', () => {
 
     it('says when there are too few runs to estimate', () => {
       renderWithTheme(
-        <CycleHeader cycle={prepared} estimate={{ costUsd: null, units: 3 }} />,
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ totalUsd: null, units: 3 }}
+        />,
       );
 
       expect(
@@ -346,7 +352,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={{ ...prepared, state: 'Active' }}
-          estimate={{ costUsd: 4, units: 1 }}
+          estimate={{ totalUsd: 4, units: 1 }}
         />,
       );
 

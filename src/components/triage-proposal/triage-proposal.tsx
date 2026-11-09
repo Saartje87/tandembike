@@ -22,21 +22,38 @@ import {
   triageCategories,
   triageStates,
 } from '../../tickets/triage-proposal-state';
-import type { TriageProposal as Proposal } from '../../tickets/triage-proposals';
+import type { TriageProposal as PendingTriageProposal } from '../../tickets/triage-proposals';
 import { AppLink } from '../app-link/app-link';
 import { DateTime } from '../date-time/date-time';
 import { Markdown } from '../markdown/markdown';
 
 export type TriageProposalProps = {
   /** The Ticket's pending triage proposal. */
-  proposal: Proposal;
+  proposal: PendingTriageProposal;
 };
 
 type TriageValues = {
-  category: Proposal['category'];
-  state: Proposal['state'];
+  category: PendingTriageProposal['category'];
+  state: PendingTriageProposal['state'];
   reason: string;
 };
+
+type CriteriaListProps = {
+  criteria: readonly string[];
+};
+
+/** Proposed acceptance criteria as a bulleted list. */
+const CriteriaList: FC<CriteriaListProps> = ({ criteria }) => (
+  <Box asChild>
+    <ul>
+      {criteria.map((text) => (
+        <li key={text}>
+          <Text>{text}</Text>
+        </li>
+      ))}
+    </ul>
+  </Box>
+);
 
 /**
  * A Ticket's pending triage proposal: the category and state as selects set
@@ -65,7 +82,12 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
     setError('root.server', { message: result.error });
 
   const approve = handleSubmit(async ({ category, state }) => {
-    const result = await approveTriage({ id: proposal.id, category, state });
+    // A duplicate is labelled wontfix on approval, so it has no State to pick.
+    const result = await approveTriage({
+      id: proposal.id,
+      category,
+      ...(isDuplicate ? {} : { state }),
+    });
     if (!result.ok) {
       refuse(result);
     }
@@ -78,6 +100,7 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
     }
   });
 
+  const isDuplicate = proposal.duplicateOf !== null;
   const error = errors.root?.server?.message;
 
   return (
@@ -111,16 +134,18 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
                   ))}
                 </Select>
               </Stack>
-              <Stack gap={1}>
-                <Label htmlFor={stateId}>State</Label>
-                <Select {...register('state')} id={stateId}>
-                  {triageStates.map((state) => (
-                    <option key={state} value={state}>
-                      {state}
-                    </option>
-                  ))}
-                </Select>
-              </Stack>
+              {!isDuplicate && (
+                <Stack gap={1}>
+                  <Label htmlFor={stateId}>State</Label>
+                  <Select {...register('state')} id={stateId}>
+                    {triageStates.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </Select>
+                </Stack>
+              )}
             </Inline>
             <Markdown headingLevel={4}>{proposal.reasoning}</Markdown>
             {proposal.duplicateOf !== null && (
@@ -145,15 +170,7 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
                         <Stack gap={1}>
                           <Text fontWeight="bold">{split.title}</Text>
                           {split.acceptanceCriteria.length > 0 && (
-                            <Box asChild>
-                              <ul>
-                                {split.acceptanceCriteria.map((text) => (
-                                  <li key={text}>
-                                    <Text>{text}</Text>
-                                  </li>
-                                ))}
-                              </ul>
-                            </Box>
+                            <CriteriaList criteria={split.acceptanceCriteria} />
                           )}
                         </Stack>
                       </li>
@@ -167,15 +184,7 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
                 <Text fontSize="small" color="muted">
                   Proposed acceptance criteria (replace the current ones)
                 </Text>
-                <Box asChild>
-                  <ul>
-                    {proposal.acceptanceCriteria.map((text) => (
-                      <li key={text}>
-                        <Text>{text}</Text>
-                      </li>
-                    ))}
-                  </ul>
-                </Box>
+                <CriteriaList criteria={proposal.acceptanceCriteria} />
               </Stack>
             )}
             <Stack gap={1}>

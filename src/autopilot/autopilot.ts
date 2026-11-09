@@ -399,12 +399,7 @@ export function createAutopilot({
     ) {
       return;
     }
-    const dayStart = now();
-    dayStart.setHours(0, 0, 0, 0);
-    if (
-      conversations.autopilotTriageSpend(projectId, dayStart) >=
-      settings.triageCeilingUsd
-    ) {
+    if (conversations.triageBudget(projectId, now())?.paused !== false) {
       return;
     }
     const [ticket] = triageEligible(projectId);

@@ -186,6 +186,21 @@ describe('Feedback dedupe', () => {
     expect(error.message).toContain(`T${first.number}`);
   });
 
+  it('refuses a near-duplicate between two feedback Tickets of one batch, naming both positions', () => {
+    const { tickets, project } = setUp();
+
+    const error = errorFrom(() =>
+      file(tickets, project.id, [
+        'Sidebar closes when I resize the window',
+        'Something else entirely',
+        'Sidebar closes when I resize the window!',
+      ]),
+    );
+
+    expect(error.message).toContain('position 2');
+    expect(error.message).toContain('position 0');
+  });
+
   it('refuses at exactly 0.75', () => {
     const { tickets, project } = setUp();
     file(tickets, project.id, ['alpha beta gamma delta']);

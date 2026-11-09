@@ -1185,13 +1185,23 @@ function checkFeedback(
     )
     .all();
   const reasons: Record<string, string> = {};
-  for (const { position, title } of feedback) {
+  for (const [index, { position, title }] of feedback.entries()) {
     const match = live.find(
       (other) => jaccardSimilarity(title, other.title) >= duplicateSimilarity,
     );
     if (match) {
       reasons[`tickets[${position}].title`] =
         `Ticket at position ${position}: its title nearly repeats feedback Ticket T${match.number} ("${match.title}"). Add a note to T${match.number} with add_note instead.`;
+      continue;
+    }
+    const earlier = feedback
+      .slice(0, index)
+      .find(
+        (other) => jaccardSimilarity(title, other.title) >= duplicateSimilarity,
+      );
+    if (earlier) {
+      reasons[`tickets[${position}].title`] =
+        `Ticket at position ${position}: its title nearly repeats the feedback Ticket at position ${earlier.position} of this batch ("${earlier.title}"). File it once.`;
     }
   }
   throwFieldErrors(reasons);

@@ -676,8 +676,6 @@ export async function addTicketAttachments(
   });
 }
 
-export type TriageDecisionResult = ActionResult;
-
 /**
  * Approves a pending triage proposal as the User, with the category and
  * state they chose. There is no MCP tool for it: only the User applies a
@@ -687,7 +685,7 @@ export async function approveTriage(input: {
   id: number;
   category?: TriageCategory;
   state?: TriageState;
-}): Promise<TriageDecisionResult> {
+}): Promise<ActionResult> {
   return actionResult(() => {
     appTickets('user').approveTriage(Number(input?.id), {
       ...(input?.category === undefined ? {} : { category: input.category }),
@@ -703,7 +701,7 @@ export async function approveTriage(input: {
 export async function rejectTriage(input: {
   id: number;
   reason?: string;
-}): Promise<TriageDecisionResult> {
+}): Promise<ActionResult> {
   return actionResult(() => {
     appTickets('user').rejectTriage(
       Number(input?.id),

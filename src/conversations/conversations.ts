@@ -1143,11 +1143,6 @@ export function createConversations({
     };
   };
 
-  /**
-   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
-   * item of the Active Cycle of the Project whose repository holds `folder`,
-   * by the `next_work` rule. With no work it returns `next_work`'s reason.
-   */
   /** The Project whose repository holds `folder`, else a refusal naming the known ones. */
   const projectIdOfFolder = (folder: string): number => {
     const projectId = tickets.findProjectIdOfFolder(folder);
@@ -1215,6 +1210,11 @@ export function createConversations({
     };
   };
 
+  /**
+   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * item of the Active Cycle of the Project whose repository holds `folder`,
+   * by the `next_work` rule. With no work it returns `next_work`'s reason.
+   */
   const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
     const projectId = projectIdOfFolder(folder);
     const next = tickets.nextWork({ projectId });
@@ -1420,6 +1420,43 @@ export function createConversations({
     }
   });
 
+  /**
+   * What Autopilot's Triage runs spent since `dayStart` in USD (ADR 0040):
+   * the cost of the runs it started that ended then or later, from Run
+   * outcomes, plus the cost so far of an Autopilot Triage run still working.
+   */
+  const autopilotTriageSpend = (projectId: number, dayStart: Date): number => {
+    const ended = db
+      .select({
+        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+      })
+      .from(runOutcomes)
+      .where(
+        and(
+          eq(runOutcomes.projectId, projectId),
+          eq(runOutcomes.stage, 'triage'),
+          eq(runOutcomes.startedByAutopilot, true),
+          gte(runOutcomes.endedAt, dayStart),
+        ),
+      )
+      .get();
+    let working = 0;
+    for (const id of live.keys()) {
+      const conversation = get(id);
+      const pending = live.get(id)?.pending;
+      if (
+        pending &&
+        conversation.projectId === projectId &&
+        conversation.intent === 'triage' &&
+        conversation.startedBy === 'autopilot'
+      ) {
+        // The run's own cost so far: the Conversation's total less its earlier runs.
+        working += Math.max(0, conversation.costUsd - pending.costAtStart);
+      }
+    }
+    return (ended?.total ?? 0) + working;
+  };
+
   return {
     get,
 
@@ -1494,41 +1531,29 @@ export function createConversations({
       );
     },
 
+    autopilotTriageSpend,
+
     /**
-     * What Autopilot's Triage runs spent since `dayStart` in USD (ADR 0040):
-     * the cost of the runs it started that ended then or later, from Run
-     * outcomes, plus the cost so far of an Autopilot Triage run still working.
+     * Today's Auto-triage budget of a Project (ADR 0040), the one place that
+     * decides "paused": the spend since the start of `now`'s day against the
+     * Triage ceiling. Null while Auto-triage is off or has no ceiling.
      */
-    autopilotTriageSpend(projectId: number, dayStart: Date): number {
-      const ended = db
-        .select({
-          total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
-        })
-        .from(runOutcomes)
-        .where(
-          and(
-            eq(runOutcomes.projectId, projectId),
-            eq(runOutcomes.stage, 'triage'),
-            eq(runOutcomes.startedByAutopilot, true),
-            gte(runOutcomes.endedAt, dayStart),
-          ),
-        )
-        .get();
-      let working = 0;
-      for (const id of live.keys()) {
-        const conversation = get(id);
-        const pending = live.get(id)?.pending;
-        if (
-          pending &&
-          conversation.projectId === projectId &&
-          conversation.intent === 'triage' &&
-          conversation.startedBy === 'autopilot'
-        ) {
-          // The run's own cost so far: the Conversation's total less its earlier runs.
-          working += Math.max(0, conversation.costUsd - pending.costAtStart);
-        }
+    triageBudget(
+      projectId: number,
+      now: Date = new Date(),
+    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+      const settings = tickets.getProjectAgentSettings(projectId);
+      if (!settings.autoTriage || settings.triageCeilingUsd === null) {
+        return null;
       }
-      return (ended?.total ?? 0) + working;
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const spendUsd = autopilotTriageSpend(projectId, dayStart);
+      return {
+        spendUsd,
+        ceilingUsd: settings.triageCeilingUsd,
+        paused: spendUsd >= settings.triageCeilingUsd,
+      };
     },
 
     /**

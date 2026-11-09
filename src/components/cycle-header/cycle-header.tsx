@@ -14,6 +14,7 @@ import { type ActionResult, refusalReason } from '../../app/lib/action-result';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
+import { formatCost } from '../conversation-labels/conversation-labels';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
 
@@ -25,7 +26,7 @@ export type CycleHeaderProps = {
    * A Prepared Cycle's Estimate (GLOSSARY: Estimate): the per-Ticket cost, or
    * null without enough Run outcomes, and the units of work planned.
    */
-  estimate?: { costUsd: number | null; units: number };
+  estimate?: { totalUsd: number | null; units: number };
 };
 
 type CycleTitleProps = {
@@ -173,9 +174,9 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
       </Inline>
       {cycle.state === 'Prepared' && estimate && (
         <Text fontSize="small" color="muted">
-          {estimate.costUsd === null
+          {estimate.totalUsd === null
             ? 'Not enough runs to estimate'
-            : `Estimated ≈ $${(estimate.costUsd * estimate.units).toFixed(2)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
+            : `Estimated ≈ ${formatCost(estimate.totalUsd)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
         </Text>
       )}
       {error && <Alert intent="danger">{error}</Alert>}
