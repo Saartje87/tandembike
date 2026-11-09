@@ -7,9 +7,18 @@ import { FlowSection } from '../../../../components/flow-section/flow-section';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
 import { ProjectSwitch } from '../../../../components/project-switch/project-switch';
+import { TicketPath } from '../../../../components/ticket-path/ticket-path';
 import { appTickets } from '../../../../tickets/app-tickets';
-import { projectSettingsFieldPath } from '../../../lib/paths';
-import { loadProject, type ProjectPageProps } from '../project-data';
+import {
+  cyclePath,
+  projectPath,
+  projectSettingsFieldPath,
+} from '../../../lib/paths';
+import {
+  loadProject,
+  type ProjectPageProps,
+  ticketPathOf,
+} from '../project-data';
 
 export async function generateMetadata({
   params,
@@ -28,6 +37,7 @@ async function flowTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   const explanation = appAutopilot().explain(project.id);
   const settings = appTickets('user').getProjectAgentSettings(project.id);
+  const path = ticketPathOf(project.id);
   return (
     <Stack gap={6}>
       <Text tag="p">
@@ -40,7 +50,17 @@ async function flowTab(params: ProjectPageProps['params']) {
         title="Ticket path"
         intro="Every Ticket's route from New Ticket to Done, who acts at each step and how many Tickets are there now."
       >
-        {comingSoon}
+        <TicketPath
+          backlogPath={projectPath(project.id)}
+          backlogIntake={path.backlogIntake}
+          activeCycle={
+            path.activeCycle && {
+              path: cyclePath(project.id, path.activeCycle.id),
+              counts: path.activeCycle.counts,
+            }
+          }
+          autoMerge={settings.autoMerge}
+        />
       </FlowSection>
       <FlowSection
         id="cycle-loop"

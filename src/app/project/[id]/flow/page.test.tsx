@@ -90,6 +90,33 @@ describe('FlowPage', () => {
     });
   });
 
+  it("counts the Ticket path's steps as the Board does, linking to their sections", async () => {
+    const { project } = await renderFlow('Website', (tickets, projectId) => {
+      tickets.createTicket({ projectId, title: 'Idea' });
+      const cycle = tickets.createCycle({ projectId, title: 'Beta' });
+      tickets.createTicket({
+        projectId,
+        title: 'Build',
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+      tickets.startCycle(cycle.id);
+    });
+
+    const link = (step: string) =>
+      within(screen.getByRole('region', { name: step })).getByRole('link');
+    expect(link('Intake')).toHaveTextContent('1 Ticket');
+    expect(link('Intake')).toHaveAttribute(
+      'href',
+      `/project/${project.id}#intake`,
+    );
+    expect(link('Queued')).toHaveTextContent('1 Ticket');
+    expect(link('Queued').getAttribute('href')).toMatch(
+      new RegExp(`^/project/${project.id}/cycle/\\d+#queued$`),
+    );
+    expect(link('In flight')).toHaveTextContent('0 Tickets');
+  });
+
   it('says Autopilot and Auto-triage are running', async () => {
     await renderFlow();
 

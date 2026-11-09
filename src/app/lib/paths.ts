@@ -49,6 +49,26 @@ export function projectSettingsPath(projectId: number): string {
   return `${projectPath(projectId)}/settings`;
 }
 
+/** A Board section's anchor, which Flow links to. */
+export type BoardSection =
+  | 'needs-you'
+  | 'action-needed'
+  | 'review'
+  | 'intake'
+  | 'in-flight'
+  | 'your-work'
+  | 'queued'
+  | 'done'
+  | 'archived';
+
+/** Section `section` of the Board at `boardPath`, scrolled to by its anchor. */
+export function boardSectionPath(
+  boardPath: string,
+  section: BoardSection,
+): string {
+  return `${boardPath}#${section}`;
+}
+
 /** The fields of a Project's Settings that other pages link to, by their anchor. */
 export type SettingsField =
   | 'repository-path'

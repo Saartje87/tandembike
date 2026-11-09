@@ -214,3 +214,39 @@ export function cycleEstimate(
     units,
   };
 }
+
+/**
+ * What Flow's Ticket path shows (ADR 0044): the Backlog's Intake and the
+ * Active Cycle's sections, counted by the Board's own derivation, unfiltered,
+ * so they match the Board.
+ */
+export function ticketPathOf(projectId: number) {
+  const activity = conversationActivity(appConversations().activityRows());
+  const active = appTickets('user')
+    .listCycles(projectId)
+    .find(({ state }) => state === 'Active');
+  const backlog = cockpitOf(
+    appTickets('user').listTickets({ projectId, cycleId: null }),
+    activity,
+  );
+  const cycle = active
+    ? cockpitOf(cycleTicketsWithEpics(projectId, active.id), activity)
+    : null;
+  return {
+    backlogIntake: backlog.needsYou.intake.length,
+    activeCycle:
+      active && cycle
+        ? {
+            id: active.id,
+            counts: {
+              queued: cycle.queued.length,
+              yourWork: cycle.yourWork.length,
+              inFlight: cycle.epics.length + cycle.inFlight.length,
+              actionNeeded: cycle.needsYou.actionNeeded.length,
+              review: cycle.needsYou.review.length,
+              done: cycle.done.length,
+            },
+          }
+        : null,
+  };
+}

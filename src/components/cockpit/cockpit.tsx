@@ -41,6 +41,7 @@ import { formatCost } from '../../app/lib/format-cost';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
+  type BoardSection,
   boardPathOf,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
@@ -616,6 +617,8 @@ const epicParts = (
 
 type RowListProps = {
   title: string;
+  /** Its anchor, which Flow links to (`boardSectionPath`). */
+  id: BoardSection;
   count: number;
   /** Open at first; the User opens and closes it on its heading. */
   open?: boolean;
@@ -625,12 +628,13 @@ type RowListProps = {
 /** A titled list of rows that opens and closes on its heading. */
 const RowList: FC<RowListProps> = ({
   title,
+  id,
   count,
   open = false,
   children,
 }) => (
   <Box asChild>
-    <section aria-label={title}>
+    <section aria-label={title} id={id}>
       <details open={open}>
         <Box asChild className={styles.summary} paddingBlockEnd={1}>
           <summary>
@@ -994,7 +998,7 @@ export const Cockpit: FC<CockpitProps> = ({
         )}
         {!hideEmpty(needsYou.count) && (
           <Stack gap={2} asChild>
-            <section aria-label="Needs you">
+            <section aria-label="Needs you" id="needs-you">
               <Inline gap={2} alignY="center">
                 <Heading level={3}>Needs you</Heading>
                 <Tag>{needsYou.count}</Tag>
@@ -1006,6 +1010,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   {needsYou.actionNeeded.length > 0 && (
                     <RowList
                       title="Action needed"
+                      id="action-needed"
                       count={needsYou.actionNeeded.length}
                       open
                     >
@@ -1013,12 +1018,22 @@ export const Cockpit: FC<CockpitProps> = ({
                     </RowList>
                   )}
                   {needsYou.review.length > 0 && (
-                    <RowList title="Review" count={needsYou.review.length} open>
+                    <RowList
+                      title="Review"
+                      id="review"
+                      count={needsYou.review.length}
+                      open
+                    >
                       {needRows(needsYou.review, 'review')}
                     </RowList>
                   )}
                   {needsYou.intake.length > 0 && (
-                    <RowList title="Intake" count={needsYou.intake.length} open>
+                    <RowList
+                      title="Intake"
+                      id="intake"
+                      count={needsYou.intake.length}
+                      open
+                    >
                       {needRows(needsYou.intake, 'intake')}
                     </RowList>
                   )}
@@ -1029,7 +1044,7 @@ export const Cockpit: FC<CockpitProps> = ({
         )}
         {!hideEmpty(inFlightCount) && (
           <Stack gap={2} asChild>
-            <section aria-label="In flight">
+            <section aria-label="In flight" id="in-flight">
               <Inline gap={2} alignY="center">
                 <Heading level={3}>In flight</Heading>
                 <Tag>{inFlightCount}</Tag>
@@ -1106,6 +1121,7 @@ export const Cockpit: FC<CockpitProps> = ({
           {!hideEmpty(cockpit.yourWork.length) && (
             <RowList
               title="Your work"
+              id="your-work"
               count={cockpit.yourWork.length}
               open={planning}
             >
@@ -1132,6 +1148,7 @@ export const Cockpit: FC<CockpitProps> = ({
           {!hideEmpty(cockpit.queued.length) && (
             <RowList
               title="Queued"
+              id="queued"
               count={cockpit.queued.length}
               open={planning}
             >
@@ -1162,7 +1179,7 @@ export const Cockpit: FC<CockpitProps> = ({
             </RowList>
           )}
           {!hideEmpty(cockpit.done.length) && (
-            <RowList title="Done" count={cockpit.done.length}>
+            <RowList title="Done" id="done" count={cockpit.done.length}>
               {cockpit.done.map((row) => (
                 <TicketRow
                   key={row.number}
@@ -1185,7 +1202,11 @@ export const Cockpit: FC<CockpitProps> = ({
             </RowList>
           )}
           {!hideEmpty(cockpit.archived.length) && (
-            <RowList title="Archived" count={cockpit.archived.length}>
+            <RowList
+              title="Archived"
+              id="archived"
+              count={cockpit.archived.length}
+            >
               {cockpit.archived.map((ticket) => (
                 <TicketRow
                   key={ticket.number}
