@@ -139,6 +139,7 @@ describe('BoardTicketDrawer', () => {
       retroCommand: '',
       specCommand: '',
       mergeCommand: '',
+      planCommand: '',
     });
 
     renderWithTheme(
@@ -164,6 +165,7 @@ describe('BoardTicketDrawer', () => {
       retroCommand: null,
       specCommand: null,
       mergeCommand: null,
+      planCommand: null,
     });
   });
 

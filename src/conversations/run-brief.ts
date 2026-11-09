@@ -28,6 +28,11 @@ export type RunBrief = {
   runMode: 'default' | 'auto';
   /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
   terminal?: boolean;
+  /**
+   * Plan only: the Project's cost of one Start in dollars, from its Run
+   * outcomes, or null when there are too few to estimate (T1248).
+   */
+  planEstimateUsd?: number | null;
   defaults?: NewTicketDefaults;
 };
 
@@ -45,7 +50,10 @@ const intentLines: Record<ConversationIntent, string> = {
   merge:
     'The User approved the merge of the Ticket (Approve merge) and started this Conversation to merge its pull request.',
   spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
+  plan: 'The User started this Conversation to plan a Cycle toward a goal (Plan). Their first message names the goal.',
 };
+
+const dollars = (usd: number) => `$${usd.toFixed(2)}`;
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
@@ -124,6 +132,13 @@ export function runBrief(brief: RunBrief): string {
   if (brief.intent === 'retro' && brief.retroCycle) {
     lines.push(
       `The Cycle to look back on is ${cycleReference(brief.retroCycle)}. Read its Tickets live with find_tickets and its cycleId; Done Tickets stay with the Cycle once it is archived. File each improvement Ticket by "Feedback as Tickets" in the repository's tracker doc.`,
+    );
+  }
+  if (brief.intent === 'plan') {
+    lines.push(
+      brief.planEstimateUsd == null
+        ? 'There are not enough runs to estimate what a Ticket costs, so size the Cycle by the work, not by a budget.'
+        : `A Start in this Project has cost about ${dollars(brief.planEstimateUsd)} per Ticket, the median of its recent runs. Multiply it by the number of Tickets to size the Cycle against a budget the User names. It is an estimate, not a limit.`,
     );
   }
   if (brief.intent === 'setup') {

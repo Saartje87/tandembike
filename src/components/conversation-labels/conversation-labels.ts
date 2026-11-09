@@ -23,6 +23,7 @@ export const intentNames: Record<ConversationIntent, string> = {
   retro: 'Retro',
   merge: 'Merge',
   spec: 'Spec',
+  plan: 'Plan',
 };
 
 /** Who started a Conversation, as the header says it. */

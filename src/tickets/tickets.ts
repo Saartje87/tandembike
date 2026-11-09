@@ -255,6 +255,7 @@ const agentCommandColumns = {
   retroCommand: projects.retroCommand,
   mergeCommand: projects.mergeCommand,
   specCommand: projects.specCommand,
+  planCommand: projects.planCommand,
 };
 
 const agentSettingsColumns = {

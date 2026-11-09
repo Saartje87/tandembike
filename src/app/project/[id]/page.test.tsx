@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,6 +89,25 @@ describe('ProjectPage', () => {
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
     ).resolves.toEqual({ title: 'Website' });
+  });
+
+  it('offers Plan on the Backlog once the Project has a repository (T1248)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+    expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull();
+    cleanup();
+
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
   });
 
   it("lists only an Epic's children in the Backlog, saying when the rest are elsewhere", async () => {
