@@ -10,7 +10,6 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import { canSpec, isInReview } from '../components/board/board-lanes';
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import { playbookPath } from '../playbook/playbook';
@@ -25,6 +24,7 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { isPullRequestReference } from '../tickets/external-reference-display';
+import { canSpec, isInReview } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
 import type { NoWorkReason } from '../tickets/work';

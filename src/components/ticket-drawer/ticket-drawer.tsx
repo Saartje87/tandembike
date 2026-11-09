@@ -39,6 +39,7 @@ import {
 import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
+import { canSpec, isInReview, isParked } from '../../tickets/ticket-lanes';
 import type {
   Blockers,
   Comment,
@@ -50,7 +51,6 @@ import { ApproveMergeButton } from '../approve-merge-button/approve-merge-button
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
-import { canSpec, isInReview, isParked } from '../board/board-lanes';
 import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';

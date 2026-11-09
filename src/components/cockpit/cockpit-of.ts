@@ -5,6 +5,12 @@ import type {
 } from '../../conversations/conversation-activity';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { PaletteColor } from '../../tickets/palette';
+import {
+  type BoardLane,
+  type InProgressSection,
+  inheritsSection,
+  laneOf,
+} from '../../tickets/ticket-lanes';
 import type { Ticket } from '../../tickets/tickets';
 import {
   isRowLabel,
@@ -12,12 +18,6 @@ import {
   readyForAgent,
 } from '../../tickets/triage-labels';
 import { isFiltering, ticketMatches } from '../board/board-filter';
-import {
-  type BoardLane,
-  type InProgressSection,
-  inheritsSection,
-  laneOf,
-} from '../board/board-lanes';
 import { epicCost } from '../conversation-activity/epic-cost';
 
 /** What every Cockpit row shows of its Ticket. */

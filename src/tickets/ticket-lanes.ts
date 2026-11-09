@@ -1,8 +1,8 @@
-import type { LiveConversation } from '../../conversations/conversation-activity';
-import type { EpicLink } from '../../tickets/epic-link';
-import { isPullRequestReference } from '../../tickets/external-reference-display';
-import type { Ticket } from '../../tickets/tickets';
-import { readyForAgent, readyForHuman } from '../../tickets/triage-labels';
+import type { LiveConversation } from '../conversations/conversation-activity';
+import type { EpicLink } from './epic-link';
+import { isPullRequestReference } from './external-reference-display';
+import type { Ticket } from './tickets';
+import { readyForAgent, readyForHuman } from './triage-labels';
 
 /** The Lanes a Ticket is derived into, in Board order. */
 export type BoardLane =

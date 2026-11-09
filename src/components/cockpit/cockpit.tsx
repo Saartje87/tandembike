@@ -46,6 +46,7 @@ import {
 import { reorderTickets } from '../../app/tickets/actions';
 import type { Cycle } from '../../tickets/cycles';
 import type { BatchFailure } from '../../tickets/errors';
+import type { InProgressSection } from '../../tickets/ticket-lanes';
 import type { Ticket } from '../../tickets/tickets';
 import { readyForAgent } from '../../tickets/triage-labels';
 import { AddToEpicMenu } from '../add-to-epic-menu/add-to-epic-menu';
@@ -60,7 +61,6 @@ import {
   mergeLaneOrder,
   ticketMatches,
 } from '../board/board-filter';
-import type { InProgressSection } from '../board/board-lanes';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
