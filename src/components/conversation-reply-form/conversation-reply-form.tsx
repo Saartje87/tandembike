@@ -3,6 +3,7 @@
 import type { FC, Ref } from 'react';
 
 import { replyToConversation } from '../../app/conversations/actions';
+import type { ActionResult } from '../../app/lib/action-result';
 import {
   ConversationMessageInput,
   type MessageInputControl,
@@ -21,6 +22,8 @@ export type ConversationReplyFormProps = {
   initialText?: string;
   /** Called as the text changes, and with `''` once it is sent. */
   onTextChange?: (text: string) => void;
+  /** Sends the reply in place of `replyToConversation`, such as a Spar's turn. */
+  send?: (text: string) => Promise<ActionResult>;
 };
 
 /**
@@ -34,6 +37,7 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
   control,
   initialText,
   onTextChange,
+  send = (text) => replyToConversation({ conversationId, text }),
 }) => {
   const skills = useProjectSkills({ projectId });
   return (
@@ -46,7 +50,7 @@ export const ConversationReplyForm: FC<ConversationReplyFormProps> = ({
       {...(initialText === undefined ? {} : { initialText })}
       {...(onTextChange ? { onTextChange } : {})}
       onSend={async (text) => {
-        const result = await replyToConversation({ conversationId, text });
+        const result = await send(text);
         return result.ok
           ? { ok: true }
           : {

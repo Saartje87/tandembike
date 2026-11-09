@@ -1,5 +1,6 @@
 'use server';
 
+import type { Conversation } from '../../conversations/conversations';
 import { appSpars } from '../../spars/app-spars';
 import type { Canvas, CanvasOp } from '../../spars/canvas';
 import type { Spar } from '../../spars/spars';
@@ -67,6 +68,22 @@ export async function editSparCanvas(input: {
       Number(input?.sparId),
       Array.isArray(input?.ops) ? input.ops : [],
       'user',
+    ),
+  }));
+}
+
+/**
+ * Sends the User's message into a Spar with what changed on its Canvas since
+ * the Agent's last turn; a blank one is Your move, the changes alone.
+ */
+export async function sendSparTurn(input: {
+  sparId: number;
+  text: string;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  return sparResult(async () => ({
+    conversation: await appSpars().sendTurn(
+      Number(input?.sparId),
+      String(input?.text ?? ''),
     ),
   }));
 }

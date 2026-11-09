@@ -256,3 +256,134 @@ export function applyCanvasOps(
     canvas,
   );
 }
+
+const quoted = (text: string) => JSON.stringify(text);
+
+/** `ids` in their order in `order`, keeping only those in both. */
+const commonOrder = (ids: number[], other: Set<number>) =>
+  ids.filter((id) => other.has(id));
+
+/**
+ * What changed from `before` to `after`, one line each, for the Agent: Columns
+ * added, removed, renamed and reordered, and Stickies added, removed, edited,
+ * moved between Columns and reordered within one. Empty when nothing did.
+ */
+export function canvasChanges(before: Canvas, after: Canvas): string[] {
+  const lines: string[] = [];
+  const beforeColumns = new Map(before.columns.map((c) => [c.id, c]));
+  const afterColumns = new Map(after.columns.map((c) => [c.id, c]));
+  const titleIn = (canvas: Map<number, Column>, id: number) =>
+    quoted(canvas.get(id)?.title ?? '?');
+
+  for (const column of after.columns) {
+    const old = beforeColumns.get(column.id);
+    if (!old) {
+      lines.push(`Added Column ${quoted(column.title)}`);
+    } else if (old.title !== column.title) {
+      lines.push(
+        `Renamed Column ${quoted(old.title)} to ${quoted(column.title)}`,
+      );
+    }
+  }
+  for (const column of before.columns) {
+    if (!afterColumns.has(column.id)) {
+      lines.push(`Removed Column ${quoted(column.title)}`);
+    }
+  }
+  const keptColumns = new Set(
+    after.columns.filter(({ id }) => beforeColumns.has(id)).map(({ id }) => id),
+  );
+  const oldColumnOrder = commonOrder(
+    before.columns.map(({ id }) => id),
+    keptColumns,
+  );
+  const newColumnOrder = commonOrder(
+    after.columns.map(({ id }) => id),
+    keptColumns,
+  );
+  if (oldColumnOrder.join() !== newColumnOrder.join()) {
+    lines.push(
+      `Reordered Columns: ${after.columns.map(({ title }) => quoted(title)).join(', ')}`,
+    );
+  }
+
+  const placesOf = (canvas: Canvas) => {
+    const places = new Map<number, { sticky: Sticky; columnId: number }>();
+    for (const column of canvas.columns) {
+      for (const sticky of column.stickies) {
+        places.set(sticky.id, { sticky, columnId: column.id });
+      }
+    }
+    return places;
+  };
+  const beforeStickies = placesOf(before);
+  const afterStickies = placesOf(after);
+
+  for (const column of after.columns) {
+    for (const sticky of column.stickies) {
+      const old = beforeStickies.get(sticky.id);
+      const name = quoted(sticky.title);
+      if (!old) {
+        lines.push(
+          `Added Sticky ${name} to ${quoted(column.title)}${sticky.note ? `, note: ${quoted(sticky.note)}` : ''}`,
+        );
+        continue;
+      }
+      const edits = [
+        old.sticky.title === sticky.title
+          ? null
+          : `title was ${quoted(old.sticky.title)}`,
+        old.sticky.note === sticky.note
+          ? null
+          : sticky.note === null
+            ? 'note removed'
+            : `note now ${quoted(sticky.note)}`,
+        old.sticky.ticketNumber === sticky.ticketNumber
+          ? null
+          : sticky.ticketNumber === null
+            ? 'unlinked from its Ticket'
+            : `linked to T${sticky.ticketNumber}`,
+      ].filter((edit) => edit !== null);
+      if (edits.length > 0) {
+        lines.push(`Edited Sticky ${name}: ${edits.join('; ')}`);
+      }
+      if (old.columnId !== column.id) {
+        lines.push(
+          `Moved Sticky ${name} from ${titleIn(beforeColumns, old.columnId)} to ${quoted(column.title)}`,
+        );
+      }
+    }
+  }
+  for (const [id, { sticky, columnId }] of beforeStickies) {
+    if (!afterStickies.has(id)) {
+      lines.push(
+        `Removed Sticky ${quoted(sticky.title)} from ${titleIn(beforeColumns, columnId)}`,
+      );
+    }
+  }
+  for (const column of after.columns) {
+    const old = beforeColumns.get(column.id);
+    if (!old) {
+      continue;
+    }
+    const stayed = new Set(
+      column.stickies
+        .filter(({ id }) => beforeStickies.get(id)?.columnId === column.id)
+        .map(({ id }) => id),
+    );
+    const was = commonOrder(
+      old.stickies.map(({ id }) => id),
+      stayed,
+    );
+    const now = commonOrder(
+      column.stickies.map(({ id }) => id),
+      stayed,
+    );
+    if (was.join() !== now.join()) {
+      lines.push(
+        `Reordered Stickies in ${quoted(column.title)}: ${column.stickies.map(({ title }) => quoted(title)).join(', ')}`,
+      );
+    }
+  }
+  return lines;
+}

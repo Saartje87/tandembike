@@ -281,3 +281,86 @@ describe('The Canvas of a Spar', () => {
     ]);
   });
 });
+
+describe('Turns of a Spar', () => {
+  async function started() {
+    const world = createTestSpars();
+    const spar = await world.spars.startSpar({ projectId: world.project.id });
+    const run = world.runner.runs[0];
+    const [ideas, explore] = world.spars.getCanvas(spar.id).columns;
+    return { ...world, spar, run, ideas, explore };
+  }
+
+  it('sends nothing to the run for a Canvas edit', async () => {
+    const { spars, spar, run, ideas } = await started();
+
+    spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user');
+
+    expect(run.sent).toEqual([]);
+  });
+
+  it("tells the Agent, with the User's next message, what changed since its last turn, then starts again from there", async () => {
+    const { spars, spar, run, ideas, explore } = await started();
+    const canvas = spars.addSticky(
+      spar.id,
+      { columnId: ideas.id, title: 'A' },
+      'user',
+    );
+    spars.moveSticky(
+      spar.id,
+      canvas.columns[0].stickies[0].id,
+      { columnId: explore.id },
+      'user',
+    );
+    expect(spars.canvasDiff(spar.id)).toEqual([
+      'Added Sticky "A" to "Explore"',
+    ]);
+
+    await spars.sendTurn(spar.id, 'What do you think?');
+
+    expect(run.sent.at(-1)).toBe(
+      'What do you think?\n\nCanvas changes since your last turn:\n- Added Sticky "A" to "Explore"',
+    );
+    expect(spars.canvasDiff(spar.id)).toEqual([]);
+    await spars.sendTurn(spar.id, 'And now?');
+    expect(run.sent.at(-1)).toBe('And now?');
+  });
+
+  it("leaves the Agent's own edits out of what it is told", async () => {
+    const { spars, spar, ideas } = await started();
+
+    spars.addColumn(spar.id, { title: 'Risks' }, 'agent');
+    const canvas = spars.addSticky(
+      spar.id,
+      { columnId: ideas.id, title: 'Its idea' },
+      'agent',
+    );
+    spars.renameColumn(spar.id, ideas.id, 'Options', 'user');
+    spars.editSticky(
+      spar.id,
+      canvas.columns[0].stickies[0].id,
+      { note: 'Mine too' },
+      'user',
+    );
+
+    expect(spars.canvasDiff(spar.id)).toEqual([
+      'Renamed Column "Ideas" to "Options"',
+      'Edited Sticky "Its idea": note now "Mine too"',
+    ]);
+  });
+
+  it('sends Your move with only the changes, or says nothing changed', async () => {
+    const { spars, spar, run, ideas } = await started();
+
+    await spars.sendTurn(spar.id, '');
+    expect(run.sent.at(-1)).toBe(
+      'Your move.\n\nThe Canvas has not changed since your last turn.',
+    );
+
+    spars.removeColumn(spar.id, ideas.id, 'user');
+    await spars.sendTurn(spar.id, '  ');
+    expect(run.sent.at(-1)).toBe(
+      'Your move.\n\nCanvas changes since your last turn:\n- Removed Column "Ideas"',
+    );
+  });
+});

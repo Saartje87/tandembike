@@ -3,11 +3,14 @@
 import { Button, Inline, Stack } from '@blockle/blocks';
 import { type FC, type ReactNode, useState } from 'react';
 
+import { sendSparTurn } from '../../app/spars/actions';
 import { ConversationChat } from '../conversation-chat/conversation-chat';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
+import { SparTurnBar } from '../spar-turn-bar/spar-turn-bar';
 import * as styles from './spar-view.css';
 
 export type SparViewProps = {
+  sparId: number;
   /** The Spar's Conversation and its transcript. */
   item: ConversationWithTranscript;
   /** What the chat header says the Spar is about. */
@@ -32,6 +35,7 @@ const regionNames: Record<Region, string> = {
  * switcher shows the Chat, the Canvas or the Write-up.
  */
 export const SparView: FC<SparViewProps> = ({
+  sparId,
   item,
   title,
   canvas,
@@ -67,7 +71,13 @@ export const SparView: FC<SparViewProps> = ({
           className={`${styles.region} ${styles.chat}`}
           data-shown={shownFlag('chat')}
         >
-          <ConversationChat item={item} title={title} />
+          <ConversationChat
+            item={item}
+            title={title}
+            // Every message carries what changed on the Canvas.
+            onReply={(text) => sendSparTurn({ sparId, text })}
+            beforeReply={<SparTurnBar sparId={sparId} />}
+          />
         </section>
         <Stack gap={4}>
           <section

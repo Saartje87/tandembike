@@ -21,7 +21,7 @@ import {
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
 import type { WidgetEntry } from '../conversations/widget';
-import { stickyAuthors } from '../spars/canvas';
+import { type Canvas, stickyAuthors } from '../spars/canvas';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
@@ -609,6 +609,11 @@ export const spars = sqliteTable('spars', {
   closed: integer('closed', { mode: 'boolean' }).notNull().default(false),
   /** The Ticket its Hand-off filed; null before. */
   outcomeTicketNumber: integer('outcome_ticket_number'),
+  /**
+   * The Canvas as of the Agent's last turn, with the Agent's own edits since:
+   * what the next message tells the Agent changed. Null before the first.
+   */
+  baseline: text('baseline', { mode: 'json' }).$type<Canvas>(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

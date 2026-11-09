@@ -22,7 +22,10 @@ vi.mock('../../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
 vi.mock('../../../../conversations/actions', () => ({}));
-vi.mock('../../../../spars/actions', () => ({ editSparCanvas: vi.fn() }));
+vi.mock('../../../../spars/actions', () => ({
+  editSparCanvas: vi.fn(),
+  sendSparTurn: vi.fn(),
+}));
 vi.mock('../../../../projects/actions', () => ({
   loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
 }));

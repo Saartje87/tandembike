@@ -19,6 +19,7 @@ import {
   applyCanvasOps,
   type Canvas,
   type CanvasOp,
+  canvasChanges,
   defaultColumnTitles,
   type Sticky,
   type StickyAuthor,
@@ -161,8 +162,13 @@ export function createSpars({
     };
   };
 
-  /** Stores `next` as Spar `id`'s Canvas: new items (negative ids) are inserted, gone ones deleted. */
-  const saveCanvas = (id: number, next: Canvas) => {
+  /**
+   * Stores `next` as Spar `id`'s Canvas: new items (negative ids) are
+   * inserted, gone ones deleted. Returns the ids the new ones got, by their
+   * temporary id.
+   */
+  const saveCanvas = (id: number, next: Canvas): Map<number, number> => {
+    const created = new Map<number, number>();
     const columnIds = new Map<number, number>();
     next.columns.forEach((column, position) => {
       if (column.id < 0) {
@@ -172,6 +178,7 @@ export function createSpars({
           .returning({ id: sparColumns.id })
           .get();
         columnIds.set(column.id, inserted.id);
+        created.set(column.id, inserted.id);
       } else {
         columnIds.set(column.id, column.id);
         db.update(sparColumns)
@@ -192,13 +199,13 @@ export function createSpars({
           ticketNumber: sticky.ticketNumber,
         };
         if (sticky.id < 0) {
-          keptStickies.push(
-            db
-              .insert(sparStickies)
-              .values({ ...values, sparId: id, author: sticky.author })
-              .returning({ id: sparStickies.id })
-              .get().id,
-          );
+          const inserted = db
+            .insert(sparStickies)
+            .values({ ...values, sparId: id, author: sticky.author })
+            .returning({ id: sparStickies.id })
+            .get().id;
+          keptStickies.push(inserted);
+          created.set(sticky.id, inserted);
         } else {
           keptStickies.push(sticky.id);
           db.update(sparStickies)
@@ -226,6 +233,45 @@ export function createSpars({
         ),
       )
       .run();
+    return created;
+  };
+
+  const setBaseline = (id: number, baseline: Canvas) => {
+    db.update(spars).set({ baseline }).where(eq(spars.id, id)).run();
+  };
+
+  /** The Canvas as the Agent last saw it, with its own edits since. */
+  const baselineOf = (id: number): Canvas => rowOf(id).baseline ?? canvasOf(id);
+
+  /**
+   * Adds the Agent's own edit to the baseline, so the next message does not
+   * tell it what it did itself. New items take the ids they were saved with.
+   * An op the baseline cannot take, such as on a Sticky the User added
+   * since, leaves the baseline, and the next message names it.
+   */
+  const addToBaseline = (
+    id: number,
+    ops: readonly CanvasOp[],
+    created: Map<number, number>,
+  ) => {
+    let temporary = 0;
+    let next: Canvas;
+    try {
+      next = applyCanvasOps(baselineOf(id), ops, 'agent', () => --temporary);
+    } catch {
+      return;
+    }
+    const real = (itemId: number) => created.get(itemId) ?? itemId;
+    setBaseline(id, {
+      columns: next.columns.map((column) => ({
+        ...column,
+        id: real(column.id),
+        stickies: column.stickies.map((sticky) => ({
+          ...sticky,
+          id: real(sticky.id),
+        })),
+      })),
+    });
   };
 
   const touch = (id: number) => {
@@ -282,7 +328,10 @@ export function createSpars({
     let temporary = 0;
     const next = applyCanvasOps(canvasOf(id), ops, author, () => --temporary);
     db.transaction(() => {
-      saveCanvas(id, next);
+      const created = saveCanvas(id, next);
+      if (author === 'agent') {
+        addToBaseline(id, ops, created);
+      }
       touch(id);
     });
     announce(id);
@@ -336,6 +385,7 @@ export function createSpars({
           .values({ sparId: conversation.id, position, title })
           .run();
       });
+      setBaseline(conversation.id, canvasOf(conversation.id));
       announce(conversation.id);
       return getSpar(conversation.id);
     },
@@ -393,6 +443,41 @@ export function createSpars({
 
     removeSticky: (id: number, stickyId: number, author: StickyAuthor) =>
       editCanvas(id, [{ op: 'removeSticky', stickyId }], author),
+
+    /**
+     * What changed on Spar `id`'s Canvas since the Agent's last turn, other
+     * than the Agent's own edits, one line each; empty when nothing did.
+     */
+    canvasDiff(id: number): string[] {
+      return canvasChanges(baselineOf(id), canvasOf(id));
+    },
+
+    /**
+     * Sends the User's message into Spar `id`, with what changed on the
+     * Canvas since the Agent's last turn after it, and makes the Canvas now
+     * the baseline. A blank message is "Your move": the turn passes with
+     * only the changes. Canvas edits alone never send anything.
+     */
+    async sendTurn(id: number, text: string): Promise<Conversation> {
+      rowOf(id);
+      const current = canvasOf(id);
+      const changes = canvasChanges(baselineOf(id), current);
+      const typed = (text ?? '').trim();
+      const message = [
+        typed === '' ? 'Your move.' : typed,
+        changes.length > 0
+          ? `Canvas changes since your last turn:\n${changes.map((line) => `- ${line}`).join('\n')}`
+          : typed === ''
+            ? 'The Canvas has not changed since your last turn.'
+            : null,
+      ]
+        .filter((part) => part !== null)
+        .join('\n\n');
+      const conversation = await conversations.reply(id, message, 'user');
+      setBaseline(id, current);
+      announce(id);
+      return conversation;
+    },
 
     /** A Project's Spars, newest first. */
     listSpars(projectId: number): SparListing[] {

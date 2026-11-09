@@ -19,6 +19,7 @@ import {
 import { isSortable } from '@dnd-kit/react/sortable';
 import {
   type FC,
+  useEffect,
   useId,
   useOptimistic,
   useRef,
@@ -47,8 +48,39 @@ export type SparCanvasProps = {
   canvas: Canvas;
   /** A closed Spar: the Canvas shows, but nothing changes. */
   readOnly?: boolean;
-  /** Stickies of the Agent's that arrived since the page last showed: they animate in. */
-  arrived?: ReadonlySet<number>;
+};
+
+/** How long a Sticky the Agent added stays marked as just arrived. */
+const arrivalMs = 2000;
+
+/**
+ * The Agent's Stickies that arrived since `canvas` was last shown, which
+ * animate in. The first Canvas shown has none.
+ */
+const useArrivals = (canvas: Canvas): ReadonlySet<number> => {
+  const seen = useRef<Set<number>>(undefined);
+  const [arrived, setArrived] = useState<ReadonlySet<number>>(new Set());
+  useEffect(() => {
+    const stickies = canvas.columns.flatMap(({ stickies }) => stickies);
+    if (seen.current === undefined) {
+      seen.current = new Set(stickies.map(({ id }) => id));
+      return;
+    }
+    const known = seen.current;
+    const fresh = stickies
+      .filter(({ id, author }) => author === 'agent' && !known.has(id))
+      .map(({ id }) => id);
+    for (const { id } of stickies) {
+      known.add(id);
+    }
+    if (fresh.length === 0) {
+      return;
+    }
+    setArrived(new Set(fresh));
+    const timer = setTimeout(() => setArrived(new Set()), arrivalMs);
+    return () => clearTimeout(timer);
+  }, [canvas]);
+  return arrived;
 };
 
 /** Saves Canvas edits and resolves to the reason when refused. */
@@ -262,8 +294,8 @@ export const SparCanvas: FC<SparCanvasProps> = ({
   sparId,
   canvas,
   readOnly = false,
-  arrived = new Set(),
 }) => {
+  const arrived = useArrivals(canvas);
   const [shown, showEdit] = useOptimistic(canvas, shownAfter);
   const [error, setError] = useState<string>();
   const [, startEdit] = useTransition();

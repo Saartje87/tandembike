@@ -8,7 +8,12 @@ import {
   NotFoundError,
   ValidationError,
 } from '../tickets/errors';
-import { applyCanvasOps, type Canvas, type CanvasOp } from './canvas';
+import {
+  applyCanvasOps,
+  type Canvas,
+  type CanvasOp,
+  canvasChanges,
+} from './canvas';
 
 const canvas: Canvas = {
   columns: [
@@ -130,5 +135,48 @@ describe('Applying Canvas edits', () => {
         ]),
       ),
     ).toBeInstanceOf(NotAllowedError);
+  });
+});
+
+describe('Describing Canvas changes', () => {
+  it('says nothing for no change', () => {
+    expect(canvasChanges(canvas, canvas)).toEqual([]);
+  });
+
+  it('names added, removed, renamed and reordered Columns', () => {
+    const after = apply([
+      { op: 'addColumn', title: 'Risks' },
+      { op: 'renameColumn', columnId: 1, title: 'Options' },
+      { op: 'moveColumn', columnId: 2, index: 0 },
+    ]);
+    expect(canvasChanges(canvas, after)).toEqual([
+      'Renamed Column "Ideas" to "Options"',
+      'Added Column "Risks"',
+      'Reordered Columns: "Keep", "Options", "Risks"',
+    ]);
+    expect(
+      canvasChanges(canvas, apply([{ op: 'removeColumn', columnId: 2 }])),
+    ).toEqual(['Removed Column "Keep"']);
+  });
+
+  it('names added, edited, moved, removed and reordered Stickies', () => {
+    const after = apply([
+      { op: 'addSticky', columnId: 2, title: 'C', note: 'Why' },
+      { op: 'editSticky', stickyId: 10, title: 'A2', ticketNumber: 7 },
+      { op: 'moveSticky', stickyId: 10, columnId: 2 },
+      { op: 'removeSticky', stickyId: 11 },
+    ]);
+    expect(canvasChanges(canvas, after)).toEqual([
+      'Added Sticky "C" to "Keep", note: "Why"',
+      'Edited Sticky "A2": title was "A"; linked to T7',
+      'Moved Sticky "A2" from "Ideas" to "Keep"',
+      'Removed Sticky "B" from "Ideas"',
+    ]);
+    expect(
+      canvasChanges(
+        canvas,
+        apply([{ op: 'moveSticky', stickyId: 11, columnId: 1, index: 0 }]),
+      ),
+    ).toEqual(['Reordered Stickies in "Ideas": "B", "A"']);
   });
 });

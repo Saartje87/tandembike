@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { sparToolNames } from '../mcp/spar-tools';
 import { createTestConversations } from '../test/conversations';
 import { connectMcpClient } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
@@ -46,6 +47,7 @@ describe('A Spar run (ADR 0046)', () => {
     );
     expect(options.disallowedTools).not.toContain('Read');
     expect(options.systemPrompt).toContain('read-only');
+    expect(options.systemPrompt).toContain('edit_canvas');
   });
 
   it('keeps the rules on a resumed run', async () => {
@@ -62,7 +64,7 @@ describe('A Spar run (ADR 0046)', () => {
     });
   });
 
-  it('disallows every Tandembike tool that is not read-only', async () => {
+  it("disallows every Tandembike tool that is not read-only, but the Spar's own", async () => {
     const client = await connectMcpClient(createTestTickets());
     const { tools } = await client.listTools();
     await client.close();
@@ -70,7 +72,8 @@ describe('A Spar run (ADR 0046)', () => {
     for (const tool of tools) {
       const name = `mcp__tandembike__${tool.name}`;
       expect(sparDisallowedTools.includes(name), name).toBe(
-        tool.annotations?.readOnlyHint !== true,
+        tool.annotations?.readOnlyHint !== true &&
+          !sparToolNames.includes(tool.name),
       );
     }
   });

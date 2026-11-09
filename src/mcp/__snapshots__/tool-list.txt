@@ -210,6 +210,267 @@
     }
   },
   {
+    "name": "edit_canvas",
+    "title": "Edit Canvas",
+    "description": "Change the Canvas of your Spar with a batch of operations, in order, all or nothing, written by you (author agent): addColumn, renameColumn, moveColumn, removeColumn (refused while it holds Stickies), addSticky, editSticky, moveSticky and removeSticky, naming Columns and Stickies by the ids get_canvas returns. Propose Columns of your own, such as Risks or Option A and Option B, when they fit the conversation. The User sees your edits at once. Only in a Spar run, and refused on a closed Spar. Returns the Canvas.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "ops": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "addColumn"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "A one-line title, at most 200 characters."
+                  },
+                  "index": {
+                    "description": "The place to put it, from 0; left out, the end.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "title"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "renameColumn"
+                  },
+                  "columnId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "A one-line title, at most 200 characters."
+                  }
+                },
+                "required": [
+                  "op",
+                  "columnId",
+                  "title"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "moveColumn"
+                  },
+                  "columnId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "columnId",
+                  "index"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "removeColumn"
+                  },
+                  "columnId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "columnId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "addSticky"
+                  },
+                  "columnId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "A one-line title, at most 200 characters."
+                  },
+                  "note": {
+                    "description": "Markdown; null for none.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ticketNumber": {
+                    "description": "A Ticket the idea already has work in.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "index": {
+                    "description": "The place to put it, from 0; left out, the end.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "columnId",
+                  "title"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "editSticky"
+                  },
+                  "stickyId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "A one-line title, at most 200 characters."
+                  },
+                  "note": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ticketNumber": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "op",
+                  "stickyId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "moveSticky"
+                  },
+                  "stickyId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "columnId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "index": {
+                    "description": "The place to put it, from 0; left out, the end.",
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "stickyId",
+                  "columnId"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "op": {
+                    "type": "string",
+                    "const": "removeSticky"
+                  },
+                  "stickyId": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "op",
+                  "stickyId"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "The operations, applied in order."
+        }
+      },
+      "required": [
+        "ops"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "file_tickets",
     "title": "File Tickets",
     "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition), so an Epic or a spec and its Tickets are created atomically. A feedback Ticket is one labelled from:agent-run or from:tandembike: a run may file at most 3 of them in total (a batch that would exceed it is refused whole; add a note to an earlier one with add_note instead), and one whose title nearly repeats (word overlap of 0.75 or more) a feedback Ticket in the Project that is neither Done nor archived is refused, naming it. Other Tickets are never capped or checked. Returns { numbers }: the new Ticket numbers, in the order given.",
@@ -567,9 +828,26 @@
     }
   },
   {
+    "name": "get_canvas",
+    "title": "Get Canvas",
+    "description": "Read the Canvas of your Spar: its Columns in order, each { id, title, stickies }, and each Sticky { id, title, note, author (user or agent), ticketNumber }. Only in a Spar run, for the run's own Spar; refused otherwise. Your next turn's message already says what the User changed since your last turn; read the whole Canvas when that is not enough.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "get_conversations",
     "title": "Get Conversations",
-    "description": "Read a Ticket's Conversations, the Agent runs Tandembike started about it. Without conversationId, returns { conversations }, newest first, each with id, intent (start, triage, ask, merge, spec…), state (running, waiting, idle, interrupted or stopped), startedBy (user, autopilot or terminal), entryCount, createdAt and updatedAt. With conversationId, returns { conversation, entries, nextBefore }: a page of its transcript, newest first, each entry with id, role (user, autopilot, agent, tool, error, permission, question, created or session), toolName, text, permission, question and createdAt, leaving out fields that do not apply. text is cut to 500 characters, with truncated: true, unless full is set, which also adds each tool entry's toolInput. Page back by passing nextBefore as before; it is null on the last page. Read-only.",
+    "description": "Read a Ticket's Conversations, the Agent runs Tandembike started about it. Without conversationId, returns { conversations }, newest first, each with id, intent (start, triage, ask, merge, spec…), state (running, waiting, idle, interrupted or stopped), startedBy (user, autopilot or terminal), entryCount, createdAt and updatedAt. With conversationId, returns { conversation, entries, nextBefore }: a page of its transcript, newest first, each entry with id, role (user, autopilot, agent, tool, error, permission, question, widget, created or session), toolName, text, permission, question, widget and createdAt, leaving out fields that do not apply. text is cut to 500 characters, with truncated: true, unless full is set, which also adds each tool entry's toolInput. Page back by passing nextBefore as before; it is null on the last page. Read-only.",
     "inputSchema": {
       "type": "object",
       "properties": {

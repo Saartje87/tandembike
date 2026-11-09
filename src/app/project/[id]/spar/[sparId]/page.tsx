@@ -66,6 +66,7 @@ async function sparPage(params: SparPageProps['params']) {
     <Stack gap={3}>
       <Heading level={2}>Spar: {title}</Heading>
       <SparView
+        sparId={spar.id}
         title={title}
         item={{
           conversation: conversations.get(spar.id),

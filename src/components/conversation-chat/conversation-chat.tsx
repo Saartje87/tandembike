@@ -1,8 +1,9 @@
 'use client';
 
 import { Alert } from '@blockle/blocks';
-import { type FC, useRef } from 'react';
+import { type FC, type ReactNode, useRef } from 'react';
 
+import type { ActionResult } from '../../app/lib/action-result';
 import { waitsOnUser } from '../../conversations/conversation-activity';
 import { isTerminal } from '../../conversations/conversation-state';
 import type { TranscriptEntry } from '../../conversations/conversations';
@@ -28,6 +29,10 @@ export type ConversationChatProps = {
   title: string;
   /** Why the latest reload failed, shown above the transcript it keeps (T1100). */
   error?: string | undefined;
+  /** Sends a reply in place of `replyToConversation`, such as a Spar's turn. */
+  onReply?: (text: string) => Promise<ActionResult>;
+  /** Shown just above the reply input, such as a Spar's button bar. */
+  beforeReply?: ReactNode;
 };
 
 /** The options of the Agent's latest message, while it waits for the User. */
@@ -52,6 +57,8 @@ export const ConversationChat: FC<ConversationChatProps> = ({
   item: { conversation, transcript },
   title,
   error,
+  onReply,
+  beforeReply,
 }) => {
   const reply = useRef<ReplyControl>(null);
   const kept = useKeptConversation();
@@ -86,10 +93,12 @@ export const ConversationChat: FC<ConversationChatProps> = ({
           }
         />
       )}
+      {!terminal && beforeReply}
       {terminal ? (
         <ConversationTerminalNotice conversation={conversation} />
       ) : (
         <ConversationReplyForm
+          {...(onReply ? { send: onReply } : {})}
           key={conversation.id}
           conversationId={conversation.id}
           projectId={conversation.projectId}

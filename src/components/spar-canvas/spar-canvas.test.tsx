@@ -190,6 +190,49 @@ describe('SparCanvas', () => {
     expect(lastOps()).toEqual([{ op: 'addColumn', title: 'Risks' }]);
   });
 
+  it("animates in the Agent's Stickies that arrive, not the User's or those it showed first", () => {
+    const { rerender } = renderWithTheme(
+      <SparCanvas sparId={3} canvas={canvas} />,
+    );
+    const sticky = (name: string) =>
+      screen.getByRole('listitem', { name }).getAttribute('data-arrived');
+    expect(sticky('Yours')).toBe('false');
+
+    const [ideas, keep] = canvas.columns;
+    rerender(
+      <SparCanvas
+        sparId={3}
+        canvas={{
+          columns: [
+            ideas,
+            {
+              ...keep,
+              stickies: [
+                {
+                  id: 12,
+                  title: 'New of Claude',
+                  note: null,
+                  author: 'agent',
+                  ticketNumber: null,
+                },
+                {
+                  id: 13,
+                  title: 'New of mine',
+                  note: null,
+                  author: 'user',
+                  ticketNumber: null,
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(sticky('New of Claude')).toBe('true');
+    expect(sticky('New of mine')).toBe('false');
+  });
+
   it('shows a closed Spar read-only', () => {
     renderWithTheme(<SparCanvas sparId={3} canvas={canvas} readOnly />);
 
