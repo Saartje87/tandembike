@@ -31,7 +31,7 @@ import type { Ticket } from '../../tickets/tickets';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { LiveUpdates } from '../live-updates/live-updates';
-import { Cockpit } from './cockpit';
+import { Cockpit, emptyText } from './cockpit';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
@@ -808,7 +808,7 @@ describe('Cockpit', () => {
     expect(within(review).queryAllByRole('button')).toEqual([]);
     // Listed once: In flight holds Running work only.
     expect(screen.getAllByRole('link', { name: 'Cockpit' })).toHaveLength(1);
-    expect(screen.getByText('Nothing in flight.')).toBeVisible();
+    expect(screen.getByText(emptyText.inFlight)).toBeVisible();
   });
 
   it('shows an Epic in Intake as an expandable row of Needs you > Intake, its children nested and counted once', async () => {
@@ -888,7 +888,7 @@ describe('Cockpit', () => {
     renderCockpit([]);
 
     expect(
-      within(section('Needs you')).getByText('Nothing needs you.'),
+      within(section('Needs you')).getByText(emptyText.needsYou),
     ).toBeVisible();
   });
 
@@ -1102,6 +1102,34 @@ describe('Cockpit', () => {
     }
   });
 
+  it('says what belongs in each empty section and how work gets there', () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([]);
+
+    expect(
+      within(section('Queued')).getByText(
+        'Queued is empty: triage a Ticket as ready-for-agent to queue it.',
+      ),
+    ).toBeVisible();
+    expect(
+      within(section('Your work')).getByText(emptyText.yourWork),
+    ).toBeVisible();
+    expect(within(section('Done')).getByText(emptyText.done)).toBeVisible();
+  });
+
+  it('links the Board to how its Project runs', () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderCockpit([]);
+
+    expect(
+      screen.getByRole('link', { name: 'How this Project runs' }),
+    ).toHaveAttribute('href', '/project/3/flow');
+  });
+
   it('says when nothing is in flight', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
@@ -1109,7 +1137,7 @@ describe('Cockpit', () => {
     renderCockpit([]);
 
     expect(
-      within(section('In flight')).getByText('Nothing in flight.'),
+      within(section('In flight')).getByText(emptyText.inFlight),
     ).toBeVisible();
   });
 

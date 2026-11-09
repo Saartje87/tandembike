@@ -43,6 +43,7 @@ import {
   type BoardFilter,
   type BoardSection,
   boardPathOf,
+  projectFlowPath,
   ticketOnBoardPath,
 } from '../../app/lib/paths';
 import { reorderTickets } from '../../app/tickets/actions';
@@ -615,8 +616,31 @@ const epicParts = (
       }
     : {};
 
+/**
+ * What each Board section holds and how work gets there, shown while it is
+ * empty, so an empty Board teaches the next step (ADR 0044).
+ */
+export const emptyText = {
+  needsYou:
+    'Nothing needs you: runs that ask or stop, pull requests to review and Tickets to triage show here.',
+  actionNeeded:
+    'Action needed is empty: a run that asks, stops or fails waits here for you.',
+  review:
+    'Review is empty: a Ticket comes here when its run opens a pull request.',
+  intake: 'Intake is empty: a new Ticket waits here until it is triaged.',
+  inFlight:
+    'Nothing in flight: Autopilot or you start a run on Queued work, and it shows here while it works.',
+  yourWork:
+    'Your work is empty: triage a Ticket as ready-for-human to put it here.',
+  queued: 'Queued is empty: triage a Ticket as ready-for-agent to queue it.',
+  done: 'Nothing Done yet: a Ticket lands here once its pull request is merged or it is finished.',
+  archived: 'Nothing archived: an archived Ticket is listed here.',
+};
+
 type RowListProps = {
   title: string;
+  /** What belongs here and how work gets here, shown while it is empty. */
+  empty: string;
   /** Its anchor, which Flow links to (`boardSectionPath`). */
   id: BoardSection;
   count: number;
@@ -628,34 +652,50 @@ type RowListProps = {
 /** A titled list of rows that opens and closes on its heading. */
 const RowList: FC<RowListProps> = ({
   title,
+  empty,
   id,
   count,
   open = false,
   children,
-}) => (
-  <Box asChild>
-    <section aria-label={title} id={id}>
-      <details open={open}>
-        <Box asChild className={styles.summary} paddingBlockEnd={1}>
-          <summary>
-            <Inline gap={2} alignY="center">
-              <span className={styles.chevron}>
-                <Icon name="chevron-right" size="small" />
-              </span>
-              <Text fontSize="small" fontWeight="strong" color="muted">
-                {title}
-              </Text>
-              <Tag>{count}</Tag>
-            </Inline>
-          </summary>
-        </Box>
-        <Stack gap={1} listStyle="none" role="list" asChild>
-          <ul>{children}</ul>
-        </Stack>
-      </details>
-    </section>
-  </Box>
-);
+}) =>
+  count === 0 ? (
+    <Stack gap={1} asChild>
+      <section aria-label={title} id={id}>
+        <Inline gap={2} alignY="center">
+          <Text fontSize="small" fontWeight="strong" color="muted">
+            {title}
+          </Text>
+          <Tag>0</Tag>
+        </Inline>
+        <Text tag="p" fontSize="small" color="muted">
+          {empty}
+        </Text>
+      </section>
+    </Stack>
+  ) : (
+    <Box asChild>
+      <section aria-label={title} id={id}>
+        <details open={open}>
+          <Box asChild className={styles.summary} paddingBlockEnd={1}>
+            <summary>
+              <Inline gap={2} alignY="center">
+                <span className={styles.chevron}>
+                  <Icon name="chevron-right" size="small" />
+                </span>
+                <Text fontSize="small" fontWeight="strong" color="muted">
+                  {title}
+                </Text>
+                <Tag>{count}</Tag>
+              </Inline>
+            </summary>
+          </Box>
+          <Stack gap={1} listStyle="none" role="list" asChild>
+            <ul>{children}</ul>
+          </Stack>
+        </details>
+      </section>
+    </Box>
+  );
 
 type NotMovedProps = { refusals: BatchFailure[] };
 
@@ -968,6 +1008,13 @@ export const Cockpit: FC<CockpitProps> = ({
     >
       <Stack gap={6}>
         {error && <Alert intent="danger">{error}</Alert>}
+        <Inline gap={2} alignX="end">
+          <Text fontSize="small">
+            <AppLink href={projectFlowPath(projectId)}>
+              How this Project runs
+            </AppLink>
+          </Text>
+        </Inline>
         <NewTicketInline
           projectId={projectId}
           {...(cycleId === null ? {} : { cycleId })}
@@ -1004,12 +1051,15 @@ export const Cockpit: FC<CockpitProps> = ({
                 <Tag>{needsYou.count}</Tag>
               </Inline>
               {needsYou.count === 0 ? (
-                <Text color="muted">Nothing needs you.</Text>
+                <Text tag="p" color="muted">
+                  {emptyText.needsYou}
+                </Text>
               ) : (
                 <Stack gap={3}>
                   {needsYou.actionNeeded.length > 0 && (
                     <RowList
                       title="Action needed"
+                      empty={emptyText.actionNeeded}
                       id="action-needed"
                       count={needsYou.actionNeeded.length}
                       open
@@ -1020,6 +1070,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   {needsYou.review.length > 0 && (
                     <RowList
                       title="Review"
+                      empty={emptyText.review}
                       id="review"
                       count={needsYou.review.length}
                       open
@@ -1030,6 +1081,7 @@ export const Cockpit: FC<CockpitProps> = ({
                   {needsYou.intake.length > 0 && (
                     <RowList
                       title="Intake"
+                      empty={emptyText.intake}
                       id="intake"
                       count={needsYou.intake.length}
                       open
@@ -1050,7 +1102,9 @@ export const Cockpit: FC<CockpitProps> = ({
                 <Tag>{inFlightCount}</Tag>
               </Inline>
               {inFlightCount === 0 ? (
-                <Text color="muted">Nothing in flight.</Text>
+                <Text tag="p" color="muted">
+                  {emptyText.inFlight}
+                </Text>
               ) : (
                 <Stack gap={1} listStyle="none" role="list" asChild>
                   <ul>
@@ -1121,6 +1175,7 @@ export const Cockpit: FC<CockpitProps> = ({
           {!hideEmpty(cockpit.yourWork.length) && (
             <RowList
               title="Your work"
+              empty={emptyText.yourWork}
               id="your-work"
               count={cockpit.yourWork.length}
               open={planning}
@@ -1148,6 +1203,7 @@ export const Cockpit: FC<CockpitProps> = ({
           {!hideEmpty(cockpit.queued.length) && (
             <RowList
               title="Queued"
+              empty={emptyText.queued}
               id="queued"
               count={cockpit.queued.length}
               open={planning}
@@ -1179,7 +1235,12 @@ export const Cockpit: FC<CockpitProps> = ({
             </RowList>
           )}
           {!hideEmpty(cockpit.done.length) && (
-            <RowList title="Done" id="done" count={cockpit.done.length}>
+            <RowList
+              title="Done"
+              empty={emptyText.done}
+              id="done"
+              count={cockpit.done.length}
+            >
               {cockpit.done.map((row) => (
                 <TicketRow
                   key={row.number}
@@ -1204,6 +1265,7 @@ export const Cockpit: FC<CockpitProps> = ({
           {!hideEmpty(cockpit.archived.length) && (
             <RowList
               title="Archived"
+              empty={emptyText.archived}
               id="archived"
               count={cockpit.archived.length}
             >
