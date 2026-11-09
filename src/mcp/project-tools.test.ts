@@ -187,6 +187,98 @@ describe('create_cycle with Tickets', () => {
   });
 });
 
+describe('create_cycle withChildren', () => {
+  const withEpic = () => {
+    const s = setup();
+    const epic = s.tickets.createTicket({
+      projectId: s.website.id,
+      title: 'Epic',
+      type: 'Epic',
+    });
+    const child = (cycleId?: number) =>
+      s.tickets.createTicket({
+        projectId: s.website.id,
+        title: 'Child',
+        epicNumber: epic.number,
+        cycleId,
+      });
+    return { ...s, epic, child };
+  };
+
+  it('plans each Epic with its live children and names them', async () => {
+    const { tickets, root, website, epic, child } = withEpic();
+    const other = tickets.createCycle({ projectId: website.id, title: 'Old' });
+    const a = child(other.id);
+    const b = child();
+    const archived = child();
+    tickets.archiveTicket(archived.number);
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const created = resultJson(
+      await client.callTool({
+        name: 'create_cycle',
+        arguments: {
+          title: 'Beta',
+          ticketNumbers: [epic.number],
+          withChildren: true,
+        },
+      }),
+    );
+
+    expect(created).toMatchObject({
+      ticketNumbers: [epic.number, a.number, b.number],
+      childrenPlanned: [a.number, b.number],
+    });
+    expect(tickets.getCycle(other.id).ticketNumbers).toEqual([]);
+    expect(tickets.getTicket(archived.number).cycle).toBeNull();
+    await client.close();
+  });
+
+  it('plans only the Epic without the flag', async () => {
+    const { tickets, root, epic, child } = withEpic();
+    const a = child();
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const created = resultJson(
+      await client.callTool({
+        name: 'create_cycle',
+        arguments: { title: 'Beta', ticketNumbers: [epic.number] },
+      }),
+    );
+
+    expect(created).toMatchObject({ ticketNumbers: [epic.number] });
+    expect(created).not.toHaveProperty('childrenPlanned');
+    expect(tickets.getTicket(a.number).cycle).toBeNull();
+    await client.close();
+  });
+
+  it('refuses a Ticket that is not an Epic, creates no Cycle and moves no child', async () => {
+    const { tickets, root, website, epic, child } = withEpic();
+    const other = tickets.createCycle({ projectId: website.id, title: 'Old' });
+    const a = child(other.id);
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const result = await client.callTool({
+      name: 'create_cycle',
+      arguments: {
+        title: 'Beta',
+        ticketNumbers: [epic.number, 1],
+        withChildren: true,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(
+      'No Cycle was created. T1: Ticket T1 is not an Epic. Only an Epic has children to take along.',
+    );
+    expect(tickets.listCycles(website.id).map((cycle) => cycle.title)).toEqual([
+      'Old',
+    ]);
+    expect(tickets.getCycle(other.id).ticketNumbers).toEqual([a.number]);
+    await client.close();
+  });
+});
+
 describe('project tool descriptions', () => {
   it('stay under the limit', async () => {
     const client = await connectMcpClient(createTestTickets());

@@ -10,6 +10,7 @@ import {
   projectId,
   respond,
   type ToolContext,
+  withChildren,
   withMoveHint,
 } from './tool-shared';
 
@@ -70,8 +71,7 @@ export const registerProjectTools = ({
     'create_cycle',
     {
       title: 'Create Cycle',
-      description:
-        'Create a Prepared Cycle in a Project, by default the one of your working folder, or the one given by projectId or projectName, plan the Tickets in ticketNumbers into it, and return it with its ticketNumbers. It never starts the Cycle: the User does. Planning: any non-archived Ticket of the Project can be planned, Done ones included, and a Ticket is in at most one Cycle that is not Archived. All or nothing: when any Ticket cannot be planned, no Cycle is created and the error names each Ticket and why. A Project can have several Prepared Cycles.',
+      description: `Create a Prepared Cycle in a Project, by default the one of your working folder, or the one given by projectId or projectName, plan the Tickets in ticketNumbers into it, and return it with its ticketNumbers. It never starts the Cycle: the User does. Planning: any non-archived Ticket of the Project can be planned, Done ones included, and a Ticket is in at most one Cycle that is not Archived. With withChildren: true, each Epic in ticketNumbers takes its unarchived children along, Done ones included, moving them out of any other Cycle that is not Archived; the result's childrenPlanned names the children it planned. All or nothing: when any Ticket cannot be planned, no Cycle is created, nothing moves, and the error names each Ticket and why. A Project can have several Prepared Cycles.`,
       inputSchema: {
         projectId: projectId
           .optional()
@@ -90,21 +90,27 @@ export const registerProjectTools = ({
           .describe(
             `The Tickets to plan into the Cycle, each once, at most ${maxBatchSize}. Left out or empty, the Cycle starts empty.`,
           ),
+        withChildren: withChildren.describe(
+          'Plan each Epic in ticketNumbers together with its unarchived children, Done ones included, moving them out of any other Cycle that is not Archived. Defaults to false: only the Tickets named are planned. Every Ticket in ticketNumbers must then be an Epic.',
+        ),
       },
     },
-    ({ projectId, projectName, title, ticketNumbers = [] }) =>
-      respond(() => {
-        const cycle = tickets.createCycle({
-          projectId: resolveProjectId({ projectId, projectName }),
-          title,
-        });
-        if (ticketNumbers.length === 0) {
-          return cycle;
-        }
-        try {
+    ({ projectId, projectName, title, ticketNumbers = [], withChildren }) =>
+      respond(() =>
+        // One transaction, so a refusal also undoes the children moved out
+        // of other Cycles before it.
+        tickets.transaction(() => {
+          const cycle = tickets.createCycle({
+            projectId: resolveProjectId({ projectId, projectName }),
+            title,
+          });
+          if (ticketNumbers.length === 0) {
+            return withChildren ? { ...cycle, childrenPlanned: [] } : cycle;
+          }
           const planned = tickets.planTickets({
             cycleId: cycle.id,
             ticketNumbers,
+            withChildren,
           });
           if (planned.failed.length > 0) {
             throw new TicketsError(
@@ -115,11 +121,10 @@ export const registerProjectTools = ({
                 .join(' ')}`,
             );
           }
-          return planned.cycle;
-        } catch (error) {
-          tickets.discardCycle(cycle.id);
-          throw error;
-        }
-      }),
+          return planned.children
+            ? { ...planned.cycle, childrenPlanned: planned.children }
+            : planned.cycle;
+        }),
+      ),
   );
 };

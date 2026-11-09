@@ -55,8 +55,7 @@ export type CycleTicketInput = {
   number: number;
   /**
    * Plan the Epic together with its live (non-archived) children, all or
-   * nothing. Refused on a Ticket that is not an Epic. Only the User does
-   * this: no MCP tool passes it.
+   * nothing. Refused on a Ticket that is not an Epic.
    */
   withChildren?: boolean;
 };
@@ -68,6 +67,16 @@ export type CycleTicketsInput = {
   ticketNumbers: number[];
 };
 
+/** Tickets to plan into one Cycle. */
+export type PlanTicketsInput = CycleTicketsInput & {
+  /**
+   * Take each Epic's live (non-archived) children along, each Epic with its
+   * children all or nothing, as `CycleTicketInput` does. A Ticket that is not
+   * an Epic fails.
+   */
+  withChildren?: boolean;
+};
+
 /** Which Tickets a batch planned or unplanned and which it did not, and why. */
 export type CycleTicketsResult = {
   /** The Tickets planned or unplanned, in the order given. */
@@ -76,6 +85,11 @@ export type CycleTicketsResult = {
   failed: BatchFailure[];
   /** The Cycle after the batch. */
   cycle: Cycle;
+  /**
+   * With `withChildren`, the children that were planned, moved or unplanned
+   * along with their Epics, in the order done; left out without it.
+   */
+  children?: number[];
 };
 
 /** Tickets to move to one Cycle, or to the Backlog. */
@@ -89,6 +103,8 @@ export type MoveToCycleInput = {
    * Cycle must be its, and so must each Ticket.
    */
   projectId?: number;
+  /** As in `PlanTicketsInput`. */
+  withChildren?: boolean;
 };
 
 /** Which Tickets a move moved and which it did not, and why. */
@@ -514,29 +530,90 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     }
   }
 
+  /** The numbers of Epic `number`'s non-archived children, in order. */
+  function liveChildrenOf(number: number): number[] {
+    return db
+      .select({ number: tickets.number })
+      .from(tickets)
+      .where(and(eq(tickets.epicNumber, number), eq(tickets.archived, false)))
+      .orderBy(tickets.number)
+      .all()
+      .map((child) => child.number);
+  }
+
   /**
-   * Plans Epic `number` into changeable `cycle` with every non-archived child
-   * not in it yet, moving children out of their other open Cycles, in one
-   * transaction. Returns the ids of the Cycles it changed.
+   * The Cycles an Epic's change touched, and the children it changed along
+   * with the Epic.
    */
-  function planEpicWithChildren(cycle: CycleRow, number: number): number[] {
+  type EpicChange = { touched: number[]; children: number[] };
+
+  /**
+   * Moves each of Epic `number`'s non-archived children into `target`, or to
+   * the Backlog when it is `null`, out of their other open Cycles, then
+   * changes the Epic itself with `changeEpic`, in one transaction, so a
+   * refusal of the Epic rolls the children back.
+   */
+  function withEpicChildren(
+    number: number,
+    target: CycleRow | null,
+    children: number[],
+    changeEpic: () => number[],
+  ): EpicChange {
     return db.transaction(() => {
       checkEpicForChildren(number);
       const touched = new Set<number>();
-      const children = db
-        .select({ number: tickets.number })
-        .from(tickets)
-        .where(and(eq(tickets.epicNumber, number), eq(tickets.archived, false)))
-        .orderBy(tickets.number)
-        .all();
+      const changed: number[] = [];
       for (const child of children) {
-        for (const id of moveInto(cycle, child.number, undefined)) {
+        const left = moveInto(target, child, undefined);
+        if (left.length > 0) {
+          changed.push(child);
+        }
+        for (const id of left) {
           touched.add(id);
         }
       }
+      for (const id of changeEpic()) {
+        touched.add(id);
+      }
+      return { touched: [...touched], children: changed };
+    });
+  }
+
+  /**
+   * Plans Epic `number` into changeable `cycle` with every non-archived child
+   * not in it yet, moving children out of their other open Cycles, in one
+   * transaction.
+   */
+  function planEpicWithChildren(cycle: CycleRow, number: number): EpicChange {
+    return withEpicChildren(number, cycle, liveChildrenOf(number), () => {
       planInto(cycle, number);
-      touched.add(cycle.id);
-      return [...touched];
+      return [cycle.id];
+    });
+  }
+
+  /**
+   * Moves Epic `number` into `target`, or to the Backlog when it is `null`,
+   * by `moveInto`'s rules, in one transaction. Into a Cycle, every
+   * non-archived child joins it too, leaving its other open Cycle; to the
+   * Backlog, the non-archived children in the Epic's open Cycle leave it with
+   * the Epic.
+   */
+  function moveEpicWithChildren(
+    target: CycleRow | null,
+    number: number,
+    projectId: number | undefined,
+  ): EpicChange {
+    return db.transaction(() => {
+      const { current } = placementOf(number);
+      const children =
+        target !== null
+          ? liveChildrenOf(number)
+          : current
+            ? liveChildrenIn(current.id, number)
+            : [];
+      return withEpicChildren(number, target, children, () =>
+        moveInto(target, number, projectId),
+      );
     });
   }
 
@@ -574,25 +651,30 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
   function unplanEpicWithChildren(cycle: CycleRow, number: number): number[] {
     return db.transaction(() => {
       checkEpicForChildren(number);
-      const children = db
-        .select({ number: tickets.number })
-        .from(cycleTickets)
-        .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
-        .where(
-          and(
-            eq(cycleTickets.cycleId, cycle.id),
-            eq(tickets.epicNumber, number),
-            eq(tickets.archived, false),
-          ),
-        )
-        .orderBy(tickets.number)
-        .all();
-      for (const child of children) {
-        unplanFrom(cycle, child.number);
+      for (const child of liveChildrenIn(cycle.id, number)) {
+        unplanFrom(cycle, child);
       }
       unplanFrom(cycle, number);
       return [cycle.id];
     });
+  }
+
+  /** The numbers of Epic `number`'s non-archived children in Cycle `cycleId`, in order. */
+  function liveChildrenIn(cycleId: number, number: number): number[] {
+    return db
+      .select({ number: tickets.number })
+      .from(cycleTickets)
+      .innerJoin(tickets, eq(tickets.number, cycleTickets.ticketNumber))
+      .where(
+        and(
+          eq(cycleTickets.cycleId, cycleId),
+          eq(tickets.epicNumber, number),
+          eq(tickets.archived, false),
+        ),
+      )
+      .orderBy(tickets.number)
+      .all()
+      .map((child) => child.number);
   }
 
   /**
@@ -624,6 +706,13 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         .run();
       return [...left, target.id];
     });
+  }
+
+  /** Announces each Cycle in `ids` once. */
+  function publishAll(ids: Iterable<number>) {
+    for (const id of ids) {
+      changes.publish({ type: 'cycle', id });
+    }
   }
 
   /**
@@ -938,7 +1027,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       const cycle = changeableCycle(cycleId);
       let touched = [cycleId];
       if (withChildren) {
-        touched = planEpicWithChildren(cycle, number);
+        touched = planEpicWithChildren(cycle, number).touched;
       } else {
         planInto(cycle, number);
       }
@@ -974,8 +1063,31 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      * are still planned. An invalid batch, or a missing or Archived Cycle, is
      * refused as a whole. The Cycle is announced once.
      */
-    planTickets(input: CycleTicketsInput): CycleTicketsResult {
-      return applyToEach(input, planInto);
+    planTickets({
+      withChildren,
+      ...input
+    }: PlanTicketsInput): CycleTicketsResult {
+      if (!withChildren) {
+        return applyToEach(input, planInto);
+      }
+      const touched = new Set<number>();
+      const children: number[] = [];
+      throwFieldErrors({
+        ticketNumbers: checkBatchNumbers(input.ticketNumbers),
+      });
+      const cycle = changeableCycle(input.cycleId);
+      const result = tryEach(
+        input.ticketNumbers,
+        (number) => {
+          const change = planEpicWithChildren(cycle, number);
+          for (const id of change.touched) {
+            touched.add(id);
+          }
+          children.push(...change.children);
+        },
+        () => publishAll(touched),
+      );
+      return { ...result, cycle: getCycle(cycle.id), children };
     },
 
     /**
@@ -994,12 +1106,15 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
      * `planTicket` otherwise. A Ticket already there counts as moved. Failures
      * are reported as `planTickets` does; an invalid batch, or a missing or
      * Archived Cycle, or one outside `projectId`, is refused as a whole.
-     * Every Cycle a Ticket left or joined is announced once.
+     * Every Cycle a Ticket left or joined is announced once. With
+     * `withChildren`, each Epic takes its children along by
+     * `moveEpicWithChildren`, and `children` names the ones it moved.
      */
     moveTicketsToCycle({
       cycleId,
       ticketNumbers,
       projectId,
+      withChildren,
     }: MoveToCycleInput): MoveToCycleResult {
       throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
       const target = cycleId === null ? null : changeableCycle(cycleId);
@@ -1013,22 +1128,28 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
         );
       }
       const touched = new Set<number>();
+      const children: number[] = [];
       const result = tryEach(
         ticketNumbers,
         (number) => {
-          for (const id of moveInto(target, number, projectId)) {
+          if (!withChildren) {
+            for (const id of moveInto(target, number, projectId)) {
+              touched.add(id);
+            }
+            return;
+          }
+          const change = moveEpicWithChildren(target, number, projectId);
+          for (const id of change.touched) {
             touched.add(id);
           }
+          children.push(...change.children);
         },
-        () => {
-          for (const id of touched) {
-            changes.publish({ type: 'cycle', id });
-          }
-        },
+        () => publishAll(touched),
       );
       return {
         ...result,
         cycle: cycleId === null ? null : getCycle(cycleId),
+        ...(withChildren ? { children } : {}),
       };
     },
   };
