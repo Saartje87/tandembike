@@ -93,7 +93,10 @@ export const mcpOfferKeys = ['mcp', 'mcp-run-header'];
 
 export type McpRegistration = 'none' | 'outdated' | 'current';
 
-export type McpOfferPlan = {
+/** The words an offer prints: what is done, the intro, and the command that asks again. */
+export type OfferWords = { done: string; intro: string; again: string };
+
+export type OfferPlan = {
   action: 'ask' | 'print' | 'skip';
   /** `claude` arguments to run, in order, after a yes. */
   steps: string[][];
@@ -161,7 +164,7 @@ function quote(arg: string): string {
 }
 
 /** The shell text of `claude` steps, one command per line. */
-export function mcpCommandText(steps: string[][]): string {
+export function claudeCommandText(steps: string[][]): string {
   return steps.map((s) => ['claude', ...s].map(quote).join(' ')).join('\n');
 }
 
@@ -169,7 +172,7 @@ export function mcpCommandText(steps: string[][]): string {
 export function planMcpOffer(state: {
   claudeOnPath: boolean;
   registration: McpRegistration;
-}): McpOfferPlan {
+}): OfferPlan {
   if (state.registration === 'current') {
     return { action: 'skip', steps: [], text: '' };
   }
@@ -178,7 +181,7 @@ export function planMcpOffer(state: {
   return {
     action: state.claudeOnPath ? 'ask' : 'print',
     steps,
-    text: mcpCommandText(steps),
+    text: claudeCommandText(steps),
   };
 }
 
@@ -188,8 +191,8 @@ export function planMcpOffer(state: {
  * `claude` is missing; a start with no terminal shows no prompt, so the next
  * interactive start asks.
  */
-export function decideMcpOffer(
-  plan: McpOfferPlan,
+export function decideOffer(
+  plan: OfferPlan,
   isTTY: boolean,
 ): { mode: 'ask' | 'print' | 'skip'; markMade: boolean } {
   if (plan.action === 'skip') return { mode: 'skip', markMade: true };
@@ -252,13 +255,13 @@ export function shouldOfferPlugin(
 /**
  * Decides what the plugin offer does. The checkout carries a marketplace
  * manifest named `tandembike` whose one plugin is `./playbook`, so adding it
- * needs no network. Same shape as `planMcpOffer`, so `decideMcpOffer` runs it.
+ * needs no network. Same shape as `planMcpOffer`, so `decideOffer` runs it.
  */
 export function planPluginOffer(state: {
   claudeOnPath: boolean;
   state: PluginInstallState;
   checkout: string;
-}): McpOfferPlan {
+}): OfferPlan {
   if (state.state === 'current') {
     return { action: 'skip', steps: [], text: '' };
   }
@@ -275,6 +278,6 @@ export function planPluginOffer(state: {
   return {
     action: state.claudeOnPath ? 'ask' : 'print',
     steps,
-    text: mcpCommandText(steps),
+    text: claudeCommandText(steps),
   };
 }

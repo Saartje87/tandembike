@@ -3,11 +3,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  claudeCommandText,
   copyFirstRunDatabase,
-  decideMcpOffer,
+  decideOffer,
   firstRunCopyBlocker,
   markOffersMade,
-  mcpCommandText,
   mcpRegistration,
   offersMade,
   planFirstRunCopy,
@@ -150,29 +150,29 @@ describe('first-run copy blocker', () => {
   });
 });
 
-describe('decideMcpOffer', () => {
+describe('decideOffer', () => {
   const ask = { action: 'ask' as const, steps: [], text: 'x' };
 
   it('asks and marks the offer made on a terminal', () => {
-    expect(decideMcpOffer(ask, true)).toEqual({ mode: 'ask', markMade: true });
+    expect(decideOffer(ask, true)).toEqual({ mode: 'ask', markMade: true });
   });
 
   it('prints without marking the offer made when there is no terminal', () => {
-    expect(decideMcpOffer(ask, false)).toEqual({
+    expect(decideOffer(ask, false)).toEqual({
       mode: 'print',
       markMade: false,
     });
   });
 
   it('prints and marks when claude is not on the path', () => {
-    expect(decideMcpOffer({ ...ask, action: 'print' }, false)).toEqual({
+    expect(decideOffer({ ...ask, action: 'print' }, false)).toEqual({
       mode: 'print',
       markMade: true,
     });
   });
 
   it('skips and marks when already registered', () => {
-    expect(decideMcpOffer({ ...ask, action: 'skip' }, true)).toEqual({
+    expect(decideOffer({ ...ask, action: 'skip' }, true)).toEqual({
       mode: 'skip',
       markMade: true,
     });
@@ -342,9 +342,9 @@ describe('planMcpOffer', () => {
   });
 });
 
-describe('mcpCommandText', () => {
+describe('claudeCommandText', () => {
   it('quotes arguments with spaces', () => {
-    expect(mcpCommandText([['mcp', 'x', 'a b']])).toBe("claude mcp x 'a b'");
+    expect(claudeCommandText([['mcp', 'x', 'a b']])).toBe("claude mcp x 'a b'");
   });
 });
 
