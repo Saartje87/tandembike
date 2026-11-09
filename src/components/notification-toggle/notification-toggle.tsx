@@ -70,7 +70,7 @@ export const NotificationToggle: FC = () => {
       disabled={blocked}
       onClick={toggle}
     >
-      <Icon name={on ? 'bell' : 'bell-slash'} color="white" />
+      <Icon name={on ? 'bell' : 'bell-slash'} color="white" size="small" />
     </IconButton>
   );
 };
