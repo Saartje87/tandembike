@@ -3,8 +3,7 @@ import { appChangeChannel } from '../tickets/changes';
 import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
-
-const idleSweepMs = 60 * 1000;
+import { terminalSweepMs } from './terminal-shared';
 
 const globalKey = Symbol.for('ticket.conversations');
 type GlobalWithConversations = typeof globalThis & {
@@ -47,7 +46,7 @@ export function appConversations(): Conversations {
       } catch {
         // The next sweep tries again.
       }
-    }, idleSweepMs).unref();
+    }, terminalSweepMs).unref();
     global[globalKey] = conversations;
   }
   return global[globalKey];

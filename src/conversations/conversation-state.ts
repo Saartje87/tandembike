@@ -96,3 +96,8 @@ export type QuestionEntry = {
   answers: Record<string, string> | null;
   expired: boolean;
 };
+
+/** Whether a Conversation runs in the User's terminal (ADR 0039). */
+export const isTerminal = (conversation: {
+  startedBy: ConversationStarter;
+}): boolean => conversation.startedBy === 'terminal';

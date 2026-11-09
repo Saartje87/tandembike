@@ -1,13 +1,15 @@
 import { terminalApiPath } from '../app/lib/paths';
+import { terminalHeartbeatMs } from '../conversations/terminal-shared';
 import { playbookVersion } from '../playbook/playbook';
 import {
   copyFirstRunDatabase,
-  decideMcpOffer,
+  decideOffer,
   firstRunCopyBlocker,
-  type McpOfferPlan,
   markOffersMade,
   mcpOfferKeys,
   mcpRegistration,
+  type OfferPlan,
+  type OfferWords,
   offersMade,
   planMcpOffer,
   planPluginOffer,
@@ -48,11 +50,7 @@ async function main(): Promise<void> {
     console.log(parsed.text);
     process.exit(1);
   }
-  if (
-    parsed.command === 'start' ||
-    parsed.command === 'triage' ||
-    parsed.command === 'spec'
-  ) {
+  if ('ticketNumber' in parsed) {
     return process.exit(
       await startSession({
         action: 'start',
@@ -102,7 +100,6 @@ async function main(): Promise<void> {
 }
 
 const serverUrl = process.env.TANDEMBIKE_URL ?? 'http://localhost:4747';
-const heartbeatMs = 60 * 1000;
 const notRunning = 'Tandembike is not running. Start it with `tandembike`.';
 
 /** A refusal or failure of the server's terminal route, as text. */
@@ -127,19 +124,26 @@ async function callServer<T>(body: object): Promise<T> {
 }
 
 /**
+ * Calls the server, or prints why it could not and returns null. The three
+ * session starts share it.
+ */
+async function callServerOrReport<T>(body: object): Promise<T | null> {
+  try {
+    return await callServer<T>(body);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return null;
+  }
+}
+
+/**
  * `tandembike start`: asks the server for a Terminal Conversation, opens
  * interactive `claude` in it with inherited stdio, and reports the end.
  * Returns `claude`'s exit code.
  */
 async function startSession(request: object): Promise<number> {
-  let started: TerminalStartResult;
-  try {
-    started = await callServer<TerminalStartResult>(request);
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
-  return runSession(started);
+  const started = await callServerOrReport<TerminalStartResult>(request);
+  return started ? runSession(started) : 1;
 }
 
 /**
@@ -147,15 +151,11 @@ async function startSession(request: object): Promise<number> {
  * folder; the server starts its next Eligible item, or says why there is none.
  */
 async function startNext(): Promise<number> {
-  let next:
+  const next = await callServerOrReport<
     | { started: true; session: TerminalStartResult }
-    | { started: false; reason: Parameters<typeof noWorkMessage>[0] };
-  try {
-    next = await callServer({ action: 'next', folder: process.cwd() });
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
+    | { started: false; reason: Parameters<typeof noWorkMessage>[0] }
+  >({ action: 'next', folder: process.cwd() });
+  if (!next) return 1;
   if (!next.started) {
     console.log(noWorkMessage(next.reason));
     return 0;
@@ -168,17 +168,11 @@ async function startNext(): Promise<number> {
  * terminal, then resumes its `claude` session there and reports the end.
  */
 async function resumeSession(conversationId: number): Promise<number> {
-  let resumed: TerminalResumeResult;
-  try {
-    resumed = await callServer<TerminalResumeResult>({
-      action: 'resume',
-      conversationId,
-    });
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    return 1;
-  }
-  return runSession(resumed);
+  const resumed = await callServerOrReport<TerminalResumeResult>({
+    action: 'resume',
+    conversationId,
+  });
+  return resumed ? runSession(resumed) : 1;
 }
 
 /** Runs interactive `claude` for a Terminal Conversation and reports its end. */
@@ -193,7 +187,7 @@ async function runSession(
       action: 'heartbeat',
       conversationId: started.conversationId,
     }).catch(() => undefined);
-  }, heartbeatMs);
+  }, terminalHeartbeatMs);
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawn(plan.command, plan.args, {
       cwd: plan.cwd,
@@ -297,11 +291,8 @@ function offerPlugin(): Promise<boolean> {
   );
 }
 
-async function runOffer(
-  plan: McpOfferPlan,
-  words: { done: string; intro: string; again: string },
-): Promise<boolean> {
-  const decision = decideMcpOffer(plan, Boolean(process.stdin.isTTY));
+async function runOffer(plan: OfferPlan, words: OfferWords): Promise<boolean> {
+  const decision = decideOffer(plan, Boolean(process.stdin.isTTY));
   if (decision.mode === 'skip') {
     console.log(words.done);
     return decision.markMade;

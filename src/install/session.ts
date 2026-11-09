@@ -1,3 +1,7 @@
+import {
+  isTerminalIntent,
+  type TerminalIntent,
+} from '../conversations/terminal-shared';
 import { playbookPath } from '../playbook/playbook';
 
 /**
@@ -21,9 +25,7 @@ export type ParsedCommand =
   | { command: 'server'; args: string[] }
   | { command: 'mcp' }
   | { command: 'plugin' }
-  | { command: 'start'; ticketNumber: number }
-  | { command: 'triage'; ticketNumber: number }
-  | { command: 'spec'; ticketNumber: number }
+  | { command: TerminalIntent; ticketNumber: number }
   | { command: 'next' }
   | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
@@ -56,10 +58,10 @@ export function parseCommand(argv: string[]): ParsedCommand {
   if (first === 'next') {
     return rest.length === 0 ? { command: 'next' } : usage;
   }
-  if (first === 'start' || first === 'triage' || first === 'spec') {
+  if (isTerminalIntent(first)) {
     const ticketNumber = ticketNumberOf(rest[0]);
     return rest.length === 1 && ticketNumber !== null
-      ? ({ command: first, ticketNumber } as ParsedCommand)
+      ? { command: first, ticketNumber }
       : usage;
   }
   if (first === 'resume') {

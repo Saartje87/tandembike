@@ -837,6 +837,7 @@ describe('Activity rows', () => {
         },
         startedAt: '2026-11-07T10:05:00.000Z',
         costUsd: 0,
+        startedBy: 'user',
       },
       {
         id: first.id,
@@ -852,6 +853,7 @@ describe('Activity rows', () => {
         },
         startedAt: '2026-11-07T10:00:00.000Z',
         costUsd: 0,
+        startedBy: 'user',
       },
     ]);
   });

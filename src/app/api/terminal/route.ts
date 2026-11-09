@@ -1,4 +1,5 @@
 import { appConversations } from '../../../conversations/app-conversations';
+import type { TerminalIntent } from '../../../conversations/terminal-shared';
 import { NotFoundError, TicketsError } from '../../../tickets/errors';
 
 /**
@@ -11,7 +12,7 @@ type TerminalAction =
   | {
       action: 'start';
       ticketNumber: number;
-      intent?: 'start' | 'triage' | 'spec';
+      intent?: TerminalIntent;
     }
   | { action: 'next'; folder: string }
   | { action: 'resume'; conversationId: number }

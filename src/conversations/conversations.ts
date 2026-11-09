@@ -42,6 +42,7 @@ import {
   type ConversationIntent,
   type ConversationStarter,
   type ConversationState,
+  isTerminal,
   type PermissionAnswer,
   type PermissionStatus,
   permissionAnswers,
@@ -52,6 +53,11 @@ import {
 import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 import { type RunResult, runResultOf, runResults } from './run-outcome';
+import {
+  type TerminalIntent,
+  terminalIdleMinutes,
+  terminalIdleMs,
+} from './terminal-shared';
 
 /** Who sends a reply: the User, or Autopilot in their place. */
 export type ConversationSender = Exclude<ConversationStarter, 'terminal'>;
@@ -161,9 +167,6 @@ export type StartConversationInput = {
   defaults?: NewTicketDefaults;
 };
 
-/** The Stages `tandembike` opens in a terminal (ADR 0039). */
-export type TerminalIntent = 'start' | 'triage' | 'spec';
-
 /** What the CLI needs to open `claude` for a Terminal Conversation. */
 export type TerminalSession = {
   /** The Conversation's id, which is the session's Agent-run ID. */
@@ -194,9 +197,6 @@ export type StartTerminalInput = {
   ticketNumber: number;
   intent: TerminalIntent;
 };
-
-/** How long a Terminal Conversation may be silent before the sweep ends it. */
-const terminalIdleMs = 5 * 60 * 1000;
 
 const terminalRefusal =
   'This Conversation runs in a terminal; answer it there.';
@@ -288,7 +288,7 @@ export const holdsStartRunSlot = (conversation: {
   state: ConversationState;
   startedBy: ConversationStarter;
 }): boolean =>
-  conversation.startedBy !== 'terminal' &&
+  !isTerminal(conversation) &&
   isStartRunIntent(conversation.intent) &&
   (conversation.state === 'running' || conversation.state === 'waiting');
 
@@ -714,7 +714,7 @@ export function createConversations({
             },
       checkCommand: settings.checkCommand,
       runMode: settings.runMode,
-      terminal: conversation.startedBy === 'terminal',
+      terminal: isTerminal(conversation),
       defaults: {
         cycleId: conversation.defaultCycleId,
         epicNumber: conversation.defaultEpicNumber,
@@ -964,7 +964,7 @@ export function createConversations({
   };
 
   const refuseTerminal = (conversation: Conversation) => {
-    if (conversation.startedBy === 'terminal') {
+    if (isTerminal(conversation)) {
       throw new NotAllowedError(terminalRefusal);
     }
   };
@@ -1102,7 +1102,7 @@ export function createConversations({
     end: { exitCode: number },
   ): Promise<Conversation> => {
     const conversation = get(id);
-    if (conversation.startedBy !== 'terminal') {
+    if (!isTerminal(conversation)) {
       throw new NotAllowedError(
         'This Conversation does not run in a terminal.',
       );
@@ -1120,7 +1120,8 @@ export function createConversations({
    * A Tandembike MCP call of a `claude` session, attributed by its
    * `X-Tandembike-Run` header (T1238): becomes the Conversation's latest
    * `tool` entry, which the Status line reads, and refreshes its last
-   * activity. Anything but an open Terminal Conversation's id is ignored.
+   * activity. Anything but a running, unclosed Terminal Conversation's id is
+   * ignored.
    */
   const recordTerminalCall = (
     runId: string,
@@ -1138,8 +1139,9 @@ export function createConversations({
       .get();
     if (
       !conversation ||
-      conversation.startedBy !== 'terminal' ||
-      conversation.state === 'stopped'
+      !isTerminal(conversation) ||
+      conversation.hidden ||
+      conversation.state !== 'running'
     ) {
       return;
     }
@@ -1188,7 +1190,11 @@ export function createConversations({
       .all()
       .filter((row) => row.updatedAt.getTime() < cutoff);
     for (const { id } of idle) {
-      append(id, 'session', 'Session timed out (no activity for 5 minutes).');
+      append(
+        id,
+        'session',
+        `Session timed out (no activity for ${terminalIdleMinutes} minutes).`,
+      );
       update(id, { state: 'stopped' });
       announce(id);
     }
@@ -1485,30 +1491,42 @@ export function createConversations({
           state: conversations.state,
           costUsd: conversations.costUsd,
           createdAt: conversations.createdAt,
+          startedBy: conversations.startedBy,
         })
         .from(conversations)
         .orderBy(desc(conversations.id))
         .all()
-        .map(({ id, ticketNumber, projectId, state, costUsd, createdAt }) => {
-          const entry = latest.get(id);
-          return {
+        .map(
+          ({
             id,
             ticketNumber,
             projectId,
             state,
-            costUsd: costUsd ?? 0,
-            latest: entry
-              ? {
-                  role: entry.role,
-                  text: entry.text,
-                  permissionRules: entry.permissionRules,
-                  toolName: entry.toolName,
-                  toolInput: entry.toolInput,
-                }
-              : null,
-            startedAt: (started.get(id) ?? createdAt).toISOString(),
-          };
-        });
+            costUsd,
+            createdAt,
+            startedBy,
+          }) => {
+            const entry = latest.get(id);
+            return {
+              id,
+              ticketNumber,
+              projectId,
+              state,
+              costUsd: costUsd ?? 0,
+              startedBy,
+              latest: entry
+                ? {
+                    role: entry.role,
+                    text: entry.text,
+                    permissionRules: entry.permissionRules,
+                    toolName: entry.toolName,
+                    toolInput: entry.toolInput,
+                  }
+                : null,
+              startedAt: (started.get(id) ?? createdAt).toISOString(),
+            };
+          },
+        );
     },
 
     /**
@@ -1573,7 +1591,7 @@ export function createConversations({
      */
     async handOffToTerminal(id: number): Promise<TerminalHandOff> {
       const conversation = get(id);
-      if (conversation.startedBy === 'terminal') {
+      if (isTerminal(conversation)) {
         throw new NotAllowedError(
           'This Conversation already runs in a terminal.',
         );
