@@ -9,6 +9,8 @@ import * as styles from './footprint-text.css';
 
 showOpenPopovers();
 
+// Written out rather than `aFootprint`, so the comparisons pin the exact
+// one-significant-figure strings below.
 const measured = {
   measured: true as const,
   energyWh: 12.3,

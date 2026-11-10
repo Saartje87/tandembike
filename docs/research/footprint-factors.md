@@ -144,7 +144,7 @@ No government agency publishes a measured figure for one boil. The value is deri
 
 - **Volume.** 1.7 L is the usual maximum capacity of a household electric kettle in the UK and EU; the tooltip calls it "kettles boiled", a full one.
 - **Heat needed.** Liquid water has a heat capacity of about 75.3 J/(mol·K) at 25 °C (NIST Chemistry WebBook, <https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2>), 4.18 J/(g·K). Heating 1.7 kg from 15 °C tap water to 100 °C: 1,700 × 4.18 × 85 ≈ 604 kJ ≈ **168 Wh**.
-- **Kettle losses.** An electric kettle turns 80–95% of its energy into heat in the water (body, element and steam losses); consumer and manufacturer measurements put a full 1.7 L boil at 180–200 Wh (for example Morphy Richards, 0.20 kWh). These are secondary checks, not sources. 168 Wh / 0.85 ≈ 198 Wh.
+- **Kettle losses.** An electric kettle turns 80–95% of its energy into heat in the water (body, element and steam losses); consumer and manufacturer measurements put a full 1.7 L boil at 180–200 Wh (for example Morphy Richards, 0.20 kWh). These are secondary checks, not sources. 168 Wh / 0.85 ≈ 197 Wh.
 
 **Default: 200 Wh.** Uncertainty: 160–210 Wh across start temperatures of 10–20 °C and efficiencies of 80–95%, which rounds to 200 Wh at one significant figure in every case.
 

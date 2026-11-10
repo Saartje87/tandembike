@@ -21,10 +21,10 @@ export type TicketConversationListProps = {
 };
 
 /**
- * A compact list of a Ticket's Conversations with Agents: intent, state,
- * cost, and its Footprint with the comparisons in a tooltip. A row's button opens the
- * Conversation in the Conversation dialog, reopening it first when the User
- * closed it. Renders nothing for a Ticket without any.
+ * A compact list of a Ticket's Conversations with Agents: intent, state and
+ * cost on a button, then the Footprint with its comparisons in a tooltip. The
+ * button opens the Conversation in the Conversation dialog, reopening it
+ * first when the User closed it. Renders nothing for a Ticket without any.
  */
 export const TicketConversationList: FC<TicketConversationListProps> = ({
   conversations,

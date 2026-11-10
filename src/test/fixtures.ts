@@ -83,7 +83,7 @@ export const anEpicChild = (overrides: Partial<EpicChild> = {}): EpicChild => ({
 
 /**
  * A measured Footprint for a test, with its comparisons worked out from its
- * energy and CO₂e: 12 Wh and 5.7 g CO₂e but for `energyWh` and `co2eG`.
+ * energy and CO₂e, which default to 12 Wh and 5.7 g CO₂e.
  */
 export const aFootprint = ({
   energyWh = 12,
