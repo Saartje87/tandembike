@@ -9,9 +9,11 @@ import {
   renameCycle,
   startCycle,
 } from '../../app/cycles/actions';
+import type { Conversation } from '../../conversations/conversations';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CycleHeader } from './cycle-header';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
@@ -20,6 +22,9 @@ vi.mock('../../app/cycles/actions', () => ({
   discardCycle: vi.fn(),
   renameCycle: vi.fn(),
   startCycle: vi.fn(),
+}));
+vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
+  useConversationDialog: vi.fn(),
 }));
 
 const prepared: Cycle = {
@@ -32,6 +37,39 @@ const prepared: Cycle = {
   archivedAt: null,
 };
 
+const dialogControl = () => ({
+  conversations: [],
+  open: vi.fn(),
+  show: vi.fn(),
+  reopenAndOpen: vi.fn().mockResolvedValue(undefined),
+  openDraft: vi.fn(),
+  shown: false,
+});
+
+const retroConversation = (
+  overrides: Partial<Conversation> = {},
+): Conversation => ({
+  id: 21,
+  projectId: 3,
+  ticketNumber: null,
+  intent: 'retro',
+  state: 'idle',
+  startedBy: 'user',
+  sdkSessionId: null,
+  costUsd: 0,
+  hidden: false,
+  retroCycleId: 7,
+  defaultCycleId: null,
+  defaultEpicNumber: null,
+  defaultType: null,
+  worktreePath: null,
+  worktreeKept: null,
+  worktreeRemoved: false,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
+
 describe('CycleHeader', () => {
   let router: ReturnType<typeof mockRouter>;
 
@@ -42,6 +80,7 @@ describe('CycleHeader', () => {
     vi.mocked(discardCycle).mockReset();
     vi.mocked(startCycle).mockReset();
     vi.mocked(archiveCycle).mockReset();
+    vi.mocked(useConversationDialog).mockReturnValue(dialogControl());
     vi.restoreAllMocks();
   });
 
@@ -270,6 +309,58 @@ describe('CycleHeader', () => {
     expect(screen.queryByText('Edit cycle title')).not.toBeInTheDocument();
     await userEvent.click(screen.getByText('Launch the beta'));
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  describe('over an Archived Cycle with a Retro', () => {
+    const archived: Cycle = {
+      ...prepared,
+      state: 'Archived',
+      archivedAt: new Date('2026-03-04T12:00:00Z'),
+    };
+
+    it.each([
+      ['open', false],
+      ['closed', true],
+    ])(
+      'opens its Retro whose tab is %s in the Conversation dialog',
+      async (_, hidden) => {
+        const dialog = dialogControl();
+        vi.mocked(useConversationDialog).mockReturnValue(dialog);
+        const retro = retroConversation({ hidden });
+        renderWithTheme(<CycleHeader cycle={archived} retro={retro} />);
+
+        await act(() =>
+          userEvent.click(screen.getByRole('button', { name: 'Open Retro' })),
+        );
+
+        expect(dialog.reopenAndOpen).toHaveBeenCalledExactlyOnceWith(retro);
+      },
+    );
+
+    it('shows why the Retro could not be opened', async () => {
+      const dialog = dialogControl();
+      dialog.reopenAndOpen.mockResolvedValue('The Retro could not reopen');
+      vi.mocked(useConversationDialog).mockReturnValue(dialog);
+      renderWithTheme(
+        <CycleHeader cycle={archived} retro={retroConversation()} />,
+      );
+
+      await act(() =>
+        userEvent.click(screen.getByRole('button', { name: 'Open Retro' })),
+      );
+
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'The Retro could not reopen',
+      );
+    });
+
+    it('shows no Open Retro without a Retro', () => {
+      renderWithTheme(<CycleHeader cycle={archived} retro={null} />);
+
+      expect(
+        screen.queryByRole('button', { name: 'Open Retro' }),
+      ).not.toBeInTheDocument();
+    });
   });
 
   describe('over an Active Cycle', () => {

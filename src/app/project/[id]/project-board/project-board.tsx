@@ -103,7 +103,11 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     // Its final membership, including Tickets moved to another Project since.
     return (
       <>
-        <CycleHeader key={tab.id} cycle={tab} />
+        <CycleHeader
+          key={tab.id}
+          cycle={tab}
+          retro={appConversations().retroOf(tab.id)}
+        />
         <CycleTicketList
           cycle={tab}
           tickets={tickets.listTickets({
