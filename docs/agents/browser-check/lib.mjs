@@ -137,9 +137,11 @@ export async function setRepositoryPath(page, projectId, path) {
   await form.getByRole('button', { name: 'Save' }).click();
   await saved;
   await page.waitForTimeout(500);
+  // React's ids can hold characters a `#id` selector rejects.
+  const reasonId = await field.getAttribute('aria-describedby');
   const refusal = [
     (await field.getAttribute('aria-invalid')) === 'true'
-      ? await form.locator(`#${await field.getAttribute('aria-describedby')}`).textContent()
+      ? await form.locator(`[id="${reasonId}"]`).textContent()
       : null,
     ...(await form.getByRole('alert').allTextContents()),
   ].filter(Boolean);
