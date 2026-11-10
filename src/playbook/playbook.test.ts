@@ -182,9 +182,7 @@ describe('The Playbook plugin', () => {
       expect(text, skill).toMatch(
         /only where force pushes are allowed[^.]*`git rebase origin\/<default>`[^.]*`git push --force-with-lease/,
       );
-      expect(text, skill).not.toMatch(
-        /rebase onto it \(`git fetch origin`, `git rebase/,
-      );
+      expect(text, skill).not.toMatch(/rebase onto (it|the default branch)/);
     }
   });
 
