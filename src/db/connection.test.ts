@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { createTickets } from '../tickets/tickets';
 import { openDatabase } from './connection';
+import * as schema from './schema';
 import {
   cpSync,
   existsSync,
@@ -88,6 +89,46 @@ describe('Migration 0059: the Project run count goes (T1330)', () => {
         .prepare("select parallel_runs from projects where name = 'Website'")
         .get(),
     ).toEqual({ parallel_runs: 1 });
+    rmSync(folder, { recursive: true, force: true });
+  });
+});
+
+describe('Migration 0063: Project Skills go (T1340)', () => {
+  it('drops the column, keeps existing Projects and still creates new ones', () => {
+    const folder = mkdtempSync(join(tmpdir(), 'ticket-migrations-'));
+    const source = join(process.cwd(), 'src', 'db', 'migrations');
+    cpSync(source, folder, { recursive: true });
+    const journalPath = join(folder, 'meta', '_journal.json');
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
+    const upTo = journal.entries.findIndex(
+      (entry: { tag: string }) => entry.tag === '0063_drop_project_skills',
+    );
+    writeFileSync(
+      journalPath,
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, upTo) }),
+    );
+    const sqlite = new Database(':memory:');
+    const db = drizzle(sqlite);
+    migrate(db, { migrationsFolder: folder });
+    sqlite
+      .prepare(
+        `insert into projects (name, name_key, skills, created_at) values ('Website', 'website', '["/review"]', 0)`,
+      )
+      .run();
+
+    migrate(db, { migrationsFolder: source });
+
+    const columns = sqlite
+      .prepare('pragma table_info(projects)')
+      .all()
+      .map((column) => (column as { name: string }).name);
+    expect(columns).not.toContain('skills');
+    const tickets = createTickets(drizzle(sqlite, { schema }), 'user');
+    tickets.createProject({ name: 'Shop' });
+    expect(tickets.listProjects().map((project) => project.name)).toEqual([
+      'Website',
+      'Shop',
+    ]);
     rmSync(folder, { recursive: true, force: true });
   });
 });

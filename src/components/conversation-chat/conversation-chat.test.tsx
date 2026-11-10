@@ -9,7 +9,6 @@ import {
   replyToConversation,
   stopConversation,
 } from '../../app/conversations/actions';
-import { loadProjectSkills } from '../../app/projects/actions';
 import type { QuestionEntry } from '../../conversations/conversation-state';
 import type {
   Conversation,
@@ -19,10 +18,6 @@ import { aConversation } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import { ConversationChat } from './conversation-chat';
-
-vi.mock('../../app/projects/actions', () => ({
-  loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
-}));
 
 vi.mock('../../app/conversations/actions', () => ({
   closeConversation: vi.fn(),
@@ -488,20 +483,6 @@ describe('ConversationChat', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('the').tagName).toBe('STRONG');
     expect(container.querySelectorAll('br')).toHaveLength(1);
-  });
-
-  it('offers no Skill chips, even when the Project has Skills', async () => {
-    vi.mocked(loadProjectSkills).mockResolvedValue({
-      ok: true,
-      skills: ['/mattpocock-skills:grilling'],
-    });
-    renderWithTheme(
-      <ConversationChat title="T4" item={one({ id: 7, projectId: 3 })} />,
-    );
-
-    await screen.findByRole('textbox', { name: 'Reply' });
-    expect(screen.queryByRole('group', { name: 'Skills' })).toBeNull();
-    expect(loadProjectSkills).not.toHaveBeenCalled();
   });
 
   it('shows the Tickets the Agent created as a line linking each', () => {

@@ -34,10 +34,6 @@ vi.mock('../../../../spars/actions', () => ({
   reopenSpar: vi.fn(),
   handOffSpar: vi.fn(),
 }));
-vi.mock('../../../../projects/actions', () => ({
-  loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
-}));
-
 async function world() {
   const test = createTestSpars();
   vi.mocked(appTickets).mockReturnValue(test.tickets);

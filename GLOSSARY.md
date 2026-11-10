@@ -246,10 +246,6 @@ _Avoid_: First-time setup, onboarding, readiness check
 A Project setting, `default` or `auto`, that every run the Project starts uses as its permission mode, whoever starts it. `default` asks the User about every call the repository has not allowed; `auto` lets the SDK's classifier decide and asks only for calls it cannot. New Projects are `auto`; existing Projects keep their mode. Only the User sets it, through a Server Action, and it is not part of the Project the MCP tools show. The Project also has a run model, the model its runs start on, unset for the User's default. See ADR 0029.
 _Avoid_: Permission level, trust mode
 
-**Skill**:
-A Claude Code command, such as `/tandembike:spec`, kept in a Project's Settings. Conversations and Drafts no longer offer Skills as chips above the message field (T1337): the User types a command; removing the setting is T1340. Only the User sets a Project's Skills, in order, on its Settings, and a new Project starts with the **Playbook's** spec, plan and retro; Tandembike does not check that the Agent has them.
-_Avoid_: Command chip, preset, slash command (for the setting)
-
 **Playbook**:
 Tandembike's own Claude Code plugin, named `tandembike`, bundled with the app and loaded into every run. It has one skill per **Stage**, written to work in any repository and to use only Tandembike's workflow tools. It keeps the MIT notice of `mattpocock-skills`, which its skills are adapted from, and has a `version` that is bumped whenever its files change. A Project's **Agent command** overrides it for one Stage. See ADR 0032.
 _Avoid_: Default skills, process, built-in prompts

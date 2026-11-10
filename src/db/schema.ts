@@ -51,18 +51,6 @@ const legacyAgentCommandDefaults = {
   retroCommand: '/mattpocock-skills:retro',
 };
 
-/**
- * What the Skills column defaulted to before the Playbook's chips (T1229).
- * Kept for the same reason; `createProject` sets the Skills explicitly.
- */
-const legacyDefaultSkills = [
-  '/mattpocock-skills:grilling',
-  '/mattpocock-skills:grill-with-docs',
-  '/mattpocock-skills:retro',
-  '/mattpocock-skills:to-spec',
-  '/mattpocock-skills:to-tickets',
-];
-
 export const projects = sqliteTable('projects', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
@@ -112,11 +100,6 @@ export const projects = sqliteTable('projects', {
   autoMerge: integer('auto_merge', { mode: 'boolean' })
     .notNull()
     .default(false),
-  /** The Skill commands its Conversations offer as chips, in order. */
-  skills: text('skills', { mode: 'json' })
-    .$type<string[]>()
-    .notNull()
-    .default(legacyDefaultSkills),
   /** The command Triage sends before the Ticket number; null runs the Playbook's. */
   triageCommand: text('triage_command').default(
     legacyAgentCommandDefaults.triageCommand,

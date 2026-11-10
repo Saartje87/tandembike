@@ -50,10 +50,6 @@ vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
   stopConversation: vi.fn(),
 }));
-vi.mock('../../app/projects/actions', () => ({
-  loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
-}));
-
 const at = new Date('2026-03-01T09:00:00Z');
 
 const conversation = (values: Partial<Conversation>): Conversation =>
