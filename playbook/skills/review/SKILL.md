@@ -1,9 +1,10 @@
 ---
 name: review
 description: "Review the current branch's diff against the Ticket's acceptance criteria and the repository's instructions, and return findings. Use before opening a pull request, or when asked to review changes."
+context: fork
 ---
 
-Review the changes on the current branch as a reviewer who did not write them. The caller may name a Ticket such as `T42` (or an Epic) and a base; otherwise the Ticket is the one in your conversation and the base is the repository's default branch.
+Review the changes on the current branch as a reviewer who did not write them. You run as a subagent and do not see the caller's conversation, so the caller names the Ticket, such as `T42` (or an Epic), and may name a base. When no Ticket is named, take its number from the branch name (such as `ticket-42-…` or `t42-…`); when the branch names none either, review the diff against the repository's instructions alone and say so. The base defaults to the repository's default branch.
 
 ## What to read
 
@@ -22,4 +23,4 @@ Run the repository's Check command when you doubt a claim; do not trust the auth
 
 ## What to return
 
-A list of findings, most serious first. For each: the file and line, what is wrong, why it matters and the fix you suggest. Mark each as a defect, a missing test, a convention break or a nit. Say plainly when you found nothing. Do not edit files, commit or call workflow tools that change a Ticket: the caller decides which findings to fix.
+A list of findings, most serious first. For each: the file and line, what is wrong, why it matters and the fix you suggest. Mark each as a defect, a missing test, a convention break or a nit. Say plainly when you found nothing. Do not edit files, commit or call workflow tools that change a Ticket: the caller decides which findings to fix. When a run called you, such as `implement`, your findings go back to that run, which fixes them and carries on: they are not a final answer to the User.

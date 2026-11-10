@@ -35,7 +35,7 @@ When a child cannot be built as written, see "When you cannot finish".
 
 ## 4. Review once
 
-When all children are built and the Check command passes, call the `review` skill on the whole branch against the Epic's spec and the children's criteria. Fix what you agree with, say in a note on the Epic what you did not and why, run the Check command again, and commit.
+When all children are built and the Check command passes, call the `review` skill on the whole branch against the Epic's spec and the children's criteria, naming the Epic. The skill runs as a subagent and returns its findings to you. They are input to this step, not the end of the run: without ending your turn, fix what you agree with, say in a note on the Epic what you did not and why, run the Check command again, and commit.
 
 ## 5. Push and open one pull request
 
