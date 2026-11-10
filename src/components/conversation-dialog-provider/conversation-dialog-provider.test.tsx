@@ -84,6 +84,7 @@ const entry = (conversationId: number, text: string): TranscriptEntry => ({
   question: null,
   widget: null,
   createdAt: at,
+  answeredAt: null,
 });
 
 /** Triage of T42 (working), then a New Ticket Conversation (needs you), then an Ask on T7. */

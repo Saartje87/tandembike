@@ -63,7 +63,7 @@ A request's cost has two parts. Reading the context and generating (input, cache
 
 Wall-clock time per phase: model time before a request goes to that request's phase, and tool time after it goes to the phase of the request that called the tool. Gaps over two minutes are left out and reported separately (the User, CI, or a background agent).
 
-Every run except the spike ran in `default` mode, so its wall-clock includes the User approving prompts: 17 in T622, 30 in T623, 6 in T629. Tandembike records when a prompt was asked but not when it was answered, so shorter waits cannot be separated out. The spike ran in auto mode with no prompts and is the clean reference for time.
+Every run except the spike ran in `default` mode, so its wall-clock includes the User approving prompts: 17 in T622, 30 in T623, 6 in T629. When these runs were measured, Tandembike recorded when a prompt was asked but not when it was answered, so shorter waits cannot be separated out. Since T1155 each permission entry also records when the User answered it (`answered_at`), and the Conversations module's `permissionWaitMs` gives a Conversation's total wait, so runs after it can separate the waiting from the work; these figures were not re-measured. The spike ran in auto mode with no prompts and is the clean reference for time.
 
 ### Repeating it
 

@@ -508,6 +508,11 @@ export const conversationEntries = sqliteTable(
     /** For a Widget of the Agent: the Widget, the answer and expired; null for other entries. */
     widget: text('widget', { mode: 'json' }).$type<WidgetEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    /**
+     * For a permission request: when the User answered it (T1155); null while
+     * pending, once expired, for other entries and for older rows.
+     */
+    answeredAt: integer('answered_at', { mode: 'timestamp_ms' }),
   },
   (table) => [
     index('conversation_entries_conversation_id').on(table.conversationId),

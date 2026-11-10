@@ -1309,6 +1309,129 @@ describe('Permission requests', () => {
   });
 });
 
+describe('Permission answer times', () => {
+  const request = {
+    toolName: 'Bash',
+    input: { command: 'npm test' },
+    rules: ['Bash(npm test:*)'],
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function started() {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-10T10:00:00Z'));
+    const world = setup();
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    const run = world.runner.runs[0];
+    const ask = () => {
+      void run.options.askPermission(request);
+      return world.conversations.transcript(conversation.id).at(-1)?.id ?? 0;
+    };
+    return { ...world, conversation, ask };
+  }
+
+  it.each(['allow', 'allow-always', 'deny'] as const)(
+    'records when %s answered the request',
+    async (choice) => {
+      const { conversations, conversation, ask } = await started();
+      const entryId = ask();
+      vi.setSystemTime(new Date('2026-11-10T10:00:30Z'));
+
+      await conversations.answerPermission(entryId, choice);
+
+      expect(
+        conversations.transcript(conversation.id).at(-1)?.answeredAt,
+      ).toEqual(new Date('2026-11-10T10:00:30Z'));
+    },
+  );
+
+  it('has no answer time while pending, and for entries other than permission requests', async () => {
+    const { conversations, conversation, ask } = await started();
+    ask();
+
+    const entries = conversations.transcript(conversation.id);
+    expect(entries.map((entry) => entry.answeredAt)).toEqual(
+      entries.map(() => null),
+    );
+  });
+
+  it('has no answer time for a request expired by its run ending', async () => {
+    const { conversations, conversation, ask } = await started();
+    ask();
+    vi.setSystemTime(new Date('2026-11-10T10:01:00Z'));
+
+    await conversations.stop(conversation.id);
+
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'expired',
+      answeredAt: null,
+    });
+  });
+
+  it('has no answer time for a request expired by restart recovery', async () => {
+    const { conversation, ask, restart } = await started();
+    ask();
+    vi.setSystemTime(new Date('2026-11-10T10:01:00Z'));
+
+    const next = restart();
+    next.interruptStale();
+
+    expect(next.transcript(conversation.id).at(-1)).toMatchObject({
+      permission: 'expired',
+      answeredAt: null,
+    });
+  });
+
+  it('totals the time waiting on answered requests, counting overlapping waits once', async () => {
+    const { conversations, conversation, ask } = await started();
+    expect(conversations.permissionWaitMs(conversation.id)).toBe(0);
+
+    // 10:00:00 to 10:00:10: alone, 10 s.
+    const first = ask();
+    vi.setSystemTime(new Date('2026-11-10T10:00:10Z'));
+    await conversations.answerPermission(first, 'allow');
+
+    // 10:01:00 to 10:01:30 and 10:01:20 to 10:01:40 overlap: 40 s.
+    vi.setSystemTime(new Date('2026-11-10T10:01:00Z'));
+    const second = ask();
+    vi.setSystemTime(new Date('2026-11-10T10:01:20Z'));
+    const third = ask();
+    vi.setSystemTime(new Date('2026-11-10T10:01:30Z'));
+    await conversations.answerPermission(second, 'deny');
+    vi.setSystemTime(new Date('2026-11-10T10:01:40Z'));
+    await conversations.answerPermission(third, 'allow');
+
+    // 10:02:00 and never answered: not counted.
+    vi.setSystemTime(new Date('2026-11-10T10:02:00Z'));
+    ask();
+    vi.setSystemTime(new Date('2026-11-10T10:05:00Z'));
+    await conversations.stop(conversation.id);
+
+    expect(conversations.permissionWaitMs(conversation.id)).toBe(50_000);
+  });
+
+  it('counts a wait inside another one once', async () => {
+    const { conversations, conversation, ask } = await started();
+    const outer = ask();
+    vi.setSystemTime(new Date('2026-11-10T10:00:05Z'));
+    const inner = ask();
+    vi.setSystemTime(new Date('2026-11-10T10:00:08Z'));
+    await conversations.answerPermission(inner, 'allow');
+    vi.setSystemTime(new Date('2026-11-10T10:00:20Z'));
+    await conversations.answerPermission(outer, 'allow');
+
+    expect(conversations.permissionWaitMs(conversation.id)).toBe(20_000);
+  });
+});
+
 describe('Widgets of the Agent', () => {
   const widget = {
     kind: 'choice' as const,
