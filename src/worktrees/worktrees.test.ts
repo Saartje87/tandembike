@@ -1,10 +1,9 @@
-// @vitest-environment node
-
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it } from 'vitest';
 
 import { createWorktrees } from './worktrees';
 import { execFileSync } from 'node:child_process';
 import {
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -27,10 +26,16 @@ afterEach(() => {
   }
 });
 
-/** A repository on `main` with one commit, optionally with a bare origin. */
-function repository({ remote }: { remote: boolean }) {
-  const base = temp('repo');
-  folders.push(base);
+/**
+ * A repository on `main` with one commit, optionally with a bare origin,
+ * built once with `git` and then copied into each test's own folder: a copy
+ * is much faster than the eight `git` runs that build it.
+ */
+const templates = new Map<boolean, string>();
+function template(remote: boolean) {
+  let base = templates.get(remote);
+  if (base) return base;
+  base = temp('template');
   const repo = join(base, 'repo');
   mkdirSync(repo);
   git(repo, 'init', '-b', 'main');
@@ -39,12 +44,29 @@ function repository({ remote }: { remote: boolean }) {
   writeFileSync(join(repo, 'a.txt'), 'one');
   git(repo, 'add', '.');
   git(repo, 'commit', '-m', 'one');
-  const origin = join(base, 'origin.git');
   if (remote) {
+    const origin = join(base, 'origin.git');
     git(base, 'init', '--bare', '-b', 'main', origin);
     git(repo, 'remote', 'add', 'origin', origin);
     git(repo, 'push', '-u', 'origin', 'main');
   }
+  templates.set(remote, base);
+  return base;
+}
+afterAll(() => {
+  for (const base of templates.values()) {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+function repository({ remote }: { remote: boolean }) {
+  const base = temp('repo');
+  folders.push(base);
+  cpSync(template(remote), base, { recursive: true });
+  const repo = join(base, 'repo');
+  const origin = join(base, 'origin.git');
+  // The copy's remote still names the template's origin.
+  if (remote) git(repo, 'remote', 'set-url', 'origin', origin);
   const root = join(base, 'worktrees');
   return {
     repo,
