@@ -161,6 +161,39 @@ describe('get_conversations', () => {
     await client.close();
   });
 
+  it('returns when a permission request was answered, leaving it out while pending', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-10T10:00:00Z'));
+    const { conversations, runner, ticket, client } = await setup();
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    const request = { toolName: 'Bash', input: {}, rules: [] };
+    void runner.runs[0].options.askPermission(request);
+    const answered = conversations.transcript(conversation.id).at(-1)?.id ?? 0;
+    vi.setSystemTime(new Date('2026-11-10T10:00:30Z'));
+    await conversations.answerPermission(answered, 'allow');
+    void runner.runs[0].options.askPermission(request);
+
+    const result = resultJson(
+      await call(client, {
+        number: ticket.number,
+        conversationId: conversation.id,
+      }),
+    ) as { entries: Record<string, unknown>[] };
+
+    expect(result.entries[0]).toMatchObject({ permission: 'pending' });
+    expect(result.entries[0]).not.toHaveProperty('answeredAt');
+    expect(result.entries[1]).toMatchObject({
+      permission: 'allowed',
+      answeredAt: '2026-11-10T10:00:30.000Z',
+    });
+    await client.close();
+  });
+
   it('pages back through the entries with limit and before', async () => {
     const { conversations, runner, ticket, client } = await setup();
     const conversation = await conversations.start({
