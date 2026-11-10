@@ -3,7 +3,7 @@
 import { Alert, Button, Inline, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { rootRefusal } from '../../app/lib/action-result';
 import { callAction } from '../../app/lib/call-action';
 import { sendSparTurn } from '../../app/spars/actions';
 import { sparMoves } from '../../spars/spar-moves';
@@ -28,7 +28,7 @@ export const SparTurnBar: FC<SparTurnBarProps> = ({ sparId }) => {
         () => sendSparTurn({ sparId, text: message }),
         'The message could not be sent. Try again.',
       );
-      setError(refusalReason(result));
+      setError(rootRefusal(result));
     });
   };
 

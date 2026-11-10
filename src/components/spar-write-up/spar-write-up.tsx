@@ -3,7 +3,7 @@
 import { Heading, Stack } from '@blockle/blocks';
 import { type FC, useOptimistic, useTransition } from 'react';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
 import { callAction } from '../../app/lib/call-action';
 import { updateSparWriteUp } from '../../app/spars/actions';
 import type { WriteUp } from '../../spars/spars';
@@ -52,7 +52,7 @@ export const SparWriteUp: FC<SparWriteUpProps> = ({
           () => updateSparWriteUp({ sparId, writeUp: { [key]: text } }),
           'The Write-up could not be saved. Try again.',
         );
-        resolve(refusalReason(result, key));
+        resolve(fieldRefusal(result, key) ?? rootRefusal(result));
       });
     });
 

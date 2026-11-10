@@ -3,7 +3,7 @@
 import { Alert, Button, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { rootRefusal } from '../../app/lib/action-result';
 import { callAction } from '../../app/lib/call-action';
 import { closeSpar, reopenSpar } from '../../app/spars/actions';
 
@@ -34,7 +34,7 @@ export const SparCloseButton: FC<SparCloseButtonProps> = ({
         () => (closed ? reopenSpar({ sparId }) : closeSpar({ sparId })),
         'The Spar could not be changed. Try again.',
       );
-      setError(refusalReason(result));
+      setError(rootRefusal(result));
     });
   };
 

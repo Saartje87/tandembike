@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
@@ -80,7 +80,7 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
         [setting]: next,
       });
       // A refusal puts the switch back when the transition ends.
-      const reason = refusalReason(result, ceilingField);
+      const reason = fieldRefusal(result, ceilingField) ?? rootRefusal(result);
       if (reason) {
         setError('on', { type: 'server', message: reason });
       }

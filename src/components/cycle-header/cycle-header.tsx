@@ -10,7 +10,11 @@ import {
   renameCycle,
   startCycle,
 } from '../../app/cycles/actions';
-import { type ActionResult, refusalReason } from '../../app/lib/action-result';
+import {
+  type ActionResult,
+  fieldRefusal,
+  rootRefusal,
+} from '../../app/lib/action-result';
 import { formatCost } from '../../app/lib/format-cost';
 import { projectPath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
@@ -40,7 +44,7 @@ type CycleTitleProps = {
 const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
   const saveTitle = async (title: string) => {
     const result = await renameCycle({ cycleId: cycle.id, title });
-    return refusalReason(result, 'title');
+    return fieldRefusal(result, 'title') ?? rootRefusal(result);
   };
 
   return (
