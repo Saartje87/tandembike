@@ -13,7 +13,7 @@ vi.mock('../../app/projects/actions', () => ({
 }));
 
 describe('ConversationDraft', () => {
-  it("offers the Skills of the asked-about Ticket's Project", async () => {
+  it('offers no Skill chips, even when the Project has Skills', async () => {
     vi.mocked(loadProjectSkills).mockResolvedValue({
       ok: true,
       skills: ['/mattpocock-skills:grilling'],
@@ -27,25 +27,9 @@ describe('ConversationDraft', () => {
     );
 
     expect(
-      await screen.findByRole('button', {
-        name: '/mattpocock-skills:grilling',
-      }),
+      await screen.findByRole('textbox', { name: 'Question' }),
     ).toBeInTheDocument();
-    expect(loadProjectSkills).toHaveBeenCalledWith({ ticketNumber: 42 });
-  });
-
-  it("offers the Skills of a new Ticket's Project", async () => {
-    vi.mocked(loadProjectSkills).mockResolvedValue({ ok: true, skills: [] });
-    renderWithTheme(
-      <ConversationDraft
-        draft={{ key: 'b', intent: 'new_ticket', projectId: 3, text: '' }}
-        onTextChange={vi.fn()}
-        onStarted={vi.fn()}
-      />,
-    );
-
-    await vi.waitFor(() =>
-      expect(loadProjectSkills).toHaveBeenCalledWith({ projectId: 3 }),
-    );
+    expect(screen.queryByRole('group', { name: 'Skills' })).toBeNull();
+    expect(loadProjectSkills).not.toHaveBeenCalled();
   });
 });

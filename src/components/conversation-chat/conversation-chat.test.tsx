@@ -403,6 +403,7 @@ describe('ConversationChat', () => {
     );
 
     expect(screen.getByText(/was interrupted/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Reply' })).toBeEnabled();
     expect(
       screen.queryByRole('button', { name: 'Stop' }),
@@ -415,6 +416,7 @@ describe('ConversationChat', () => {
     );
 
     expect(screen.getByText(/was stopped/)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Reply' })).toBeEnabled();
   });
 
@@ -458,8 +460,8 @@ describe('ConversationChat', () => {
     expect(container.querySelectorAll('br')).toHaveLength(1);
   });
 
-  it("offers the Project's Skills as chips above the reply", async () => {
-    vi.mocked(loadProjectSkills).mockResolvedValueOnce({
+  it('offers no Skill chips, even when the Project has Skills', async () => {
+    vi.mocked(loadProjectSkills).mockResolvedValue({
       ok: true,
       skills: ['/mattpocock-skills:grilling'],
     });
@@ -467,12 +469,9 @@ describe('ConversationChat', () => {
       <ConversationChat title="T4" item={one({ id: 7, projectId: 3 })} />,
     );
 
-    expect(
-      await screen.findByRole('button', {
-        name: '/mattpocock-skills:grilling',
-      }),
-    ).toHaveTextContent('grilling');
-    expect(loadProjectSkills).toHaveBeenCalledWith({ projectId: 3 });
+    await screen.findByRole('textbox', { name: 'Reply' });
+    expect(screen.queryByRole('group', { name: 'Skills' })).toBeNull();
+    expect(loadProjectSkills).not.toHaveBeenCalled();
   });
 
   it('shows the Tickets the Agent created as a line linking each', () => {

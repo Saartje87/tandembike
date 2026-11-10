@@ -1,11 +1,14 @@
 'use client';
 
-import { Alert } from '@blockle/blocks';
+import { Alert, Text } from '@blockle/blocks';
 import { type FC, type ReactNode, useRef } from 'react';
 
 import type { ActionResult } from '../../app/lib/action-result';
 import { waitsOnUser } from '../../conversations/conversation-activity';
-import { isTerminal } from '../../conversations/conversation-state';
+import {
+  type ConversationState,
+  isTerminal,
+} from '../../conversations/conversation-state';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import {
   type ReplyQuestion,
@@ -38,6 +41,12 @@ export type ConversationChatProps = {
    * reply input and its notices.
    */
   closedReason?: string;
+};
+
+/** Why to reply, one line above the input, for a run that ended without finishing. */
+const notices: Partial<Record<ConversationState, string>> = {
+  interrupted: 'This Conversation was interrupted. Reply to resume it.',
+  stopped: 'This Conversation was stopped. Reply to resume it.',
 };
 
 /** The options of the Agent's latest message, while it waits for the User. */
@@ -83,16 +92,6 @@ export const ConversationChat: FC<ConversationChatProps> = ({
         <Alert intent="info">{closedReason}</Alert>
       ) : (
         <>
-          {!terminal && conversation.state === 'interrupted' && (
-            <Alert intent="warning">
-              This Conversation was interrupted. Reply to resume it.
-            </Alert>
-          )}
-          {!terminal && conversation.state === 'stopped' && (
-            <Alert intent="info">
-              This Conversation was stopped. Reply to resume it.
-            </Alert>
-          )}
           {!terminal && questions && (
             <ConversationReplyOptions
               questions={questions}
@@ -104,6 +103,11 @@ export const ConversationChat: FC<ConversationChatProps> = ({
             />
           )}
           {!terminal && beforeReply}
+          {!terminal && notices[conversation.state] && (
+            <Text fontSize="small" color="muted">
+              {notices[conversation.state]}
+            </Text>
+          )}
           {terminal ? (
             <ConversationTerminalNotice conversation={conversation} />
           ) : (
@@ -111,7 +115,6 @@ export const ConversationChat: FC<ConversationChatProps> = ({
               {...(onReply ? { send: onReply } : {})}
               key={conversation.id}
               conversationId={conversation.id}
-              projectId={conversation.projectId}
               control={reply}
               {...(kept
                 ? {
