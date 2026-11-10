@@ -2120,7 +2120,8 @@ export function createTickets(
     ): Ticket {
       const agentRunId = checkedAgentRunId(input.agentRunId);
       const changed = db.transaction(() => {
-        checkTicketWritable(db, number);
+        // An archived Ticket still lets its Claim go (T1312).
+        checkTicketProjectWritable(db, number);
         const claim = db
           .select({
             claimAgentRunId: tickets.claimAgentRunId,
@@ -2193,7 +2194,8 @@ export function createTickets(
 
     /** Clears any claim on Ticket `number` for the User. */
     clearTicketClaim(number: number): Ticket {
-      checkTicketWritable(db, number);
+      // An archived Ticket still lets its Claim go (T1312).
+      checkTicketProjectWritable(db, number);
       const cleared = db.transaction(() => {
         const claim = db
           .select({
