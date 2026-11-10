@@ -18,7 +18,7 @@ Start runs here run the Playbook's `/tandembike:implement`, or `/tandembike:impl
 - **Review.** Commit first, then call the Playbook's `review` skill (`tandembike:review`) on the diff against `main`, for every change, docs-only included. Do not use `code-review` for a run's review.
 - **Browser check.** When the change touches routing, navigation, a drawer or dialog, or a Server Action that navigates, also run a real-browser check by [`browser-checks.md`](browser-checks.md) after the review: jsdom cannot run Next's routing, so those bugs pass every test.
 - **Feedback.** File friction by "Feedback as Tickets" below; it says more than the Playbook's step (which Project, the category label, the first comment).
-- **Merge.** The run merges or hands off as `start_work`'s `merge` says, by "The Claim, through merge" below, as the Playbook does (ADR 0043). It does not override the Playbook here: runs on this repository merge their own PRs because the Tandembike Project's Auto-merge is on, and the merge method is `gh pr merge --merge`.
+- **Merge.** The run merges or hands off as `start_work`'s `merge` says, by "The Claim, through merge" below, as the Playbook does (ADR 0043). It does not override the Playbook here: runs on this repository merge their own PRs because the Tandembike Project's Auto-merge is on, and the merge method is `gh pr merge --merge`. When the PR is behind `main` or conflicts, update it by merging `origin/main` into the branch (`git fetch origin`, `git merge origin/main`) and pushing normally with `git push`, never by rebasing and force-pushing: the Git guardrail denies every force push, `--force-with-lease` included. The Playbook's limit of two updates stays.
 
 ## The PR reference
 
