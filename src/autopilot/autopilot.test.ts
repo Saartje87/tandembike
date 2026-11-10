@@ -1169,10 +1169,10 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(conversations.machineSlotsInUse()).toBe(2);
   });
 
-  it('leaves the User interactive and Terminal runs out of the cap', async () => {
+  it('counts the User’s interactive and Terminal runs against its free slots (T1329)', async () => {
     const { projects, ready, autopilot, startedIn, conversations, tickets } =
-      machineSetup(1);
-    await conversations.start({
+      machineSetup(2);
+    const ask = await conversations.start({
       startedBy: 'user',
       projectId: projects[0].id,
       intent: 'ask',
@@ -1182,17 +1182,19 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       projectId: projects[1].id,
       title: 'In a terminal',
     });
-    await conversations.startTerminal({
+    const session = await conversations.startTerminal({
       ticketNumber: terminalTicket.number,
       intent: 'start',
     });
     const a = ready(projects[0], 'A');
 
     await autopilot.evaluate();
+    expect(startedIn(projects[0])).toEqual([null]);
 
-    expect(startedIn(projects[0]).filter((n) => n === a.number)).toEqual([
-      a.number,
-    ]);
+    await conversations.endTerminal(session.conversationId, { exitCode: 0 });
+    await autopilot.evaluate();
+    expect(startedIn(projects[0])).toEqual([null, a.number]);
+    expect(conversations.get(ask.id).state).toBe('running');
   });
 
   it('counts its own Triage run against the cap', async () => {

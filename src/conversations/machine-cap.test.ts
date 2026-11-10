@@ -409,3 +409,81 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     expect(world.conversations.machineSlotsInUse()).toBe(0);
   });
 });
+
+describe('Autopilot’s headroom counts every live Agent process (T1329)', () => {
+  it('counts the slot holders, the User’s own live runs and open Terminal Conversations', async () => {
+    const world = setup(9);
+    const { conversations, runner, tickets, projects, startIn } = world;
+    await startIn(projects[0].id, 'start');
+    expect(conversations.liveProcessesInUse()).toBe(1);
+
+    await startIn(projects[0].id, 'ask');
+    await startIn(projects[0].id, 'triage');
+    const idea = tickets.createTicket({
+      projectId: projects[0].id,
+      title: 'Idea',
+    });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: idea.number,
+      intent: 'spec',
+      prompt: 'Spec it',
+    });
+    // An idle run of the User's own is a live process too.
+    runner.runs[1].emit({ type: 'turn', costUsd: 0 });
+    expect(conversations.liveProcessesInUse()).toBe(4);
+
+    await startIn(projects[1].id, 'start', 'terminal');
+    expect(conversations.liveProcessesInUse()).toBe(5);
+    // Only the slot holders count against the cap for refusals.
+    expect(conversations.machineSlotsInUse()).toBe(1);
+  });
+
+  it('stops counting a Terminal Conversation when the CLI reports its end', async () => {
+    const { conversations, projects, startIn } = setup(9);
+    const session = await startIn(projects[0].id, 'start', 'terminal');
+    expect(conversations.liveProcessesInUse()).toBe(1);
+
+    await conversations.endTerminal(
+      (session as { conversationId: number }).conversationId,
+      { exitCode: 0 },
+    );
+
+    expect(conversations.liveProcessesInUse()).toBe(0);
+  });
+
+  it('stops counting the User’s own run when they close it', async () => {
+    const { conversations, projects, startIn } = setup(9);
+    const ask = await startIn(projects[0].id, 'ask');
+
+    await conversations.close((ask as { id: number }).id);
+
+    expect(conversations.liveProcessesInUse()).toBe(0);
+  });
+
+  it('leaves out a Triage Autopilot started once its turn ends', async () => {
+    const { conversations, runner, projects, startIn } = setup(9);
+    await startIn(projects[0].id, 'triage', 'autopilot');
+    expect(conversations.liveProcessesInUse()).toBe(1);
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    expect(conversations.liveProcessesInUse()).toBe(0);
+  });
+
+  it('never refuses the User’s own Conversations or a Terminal one at the cap, and refuses a Start only by slot holders', async () => {
+    const { conversations, projects, startIn } = setup(1);
+    await startIn(projects[0].id, 'ask');
+    await startIn(projects[0].id, 'triage');
+    await startIn(projects[1].id, 'start', 'terminal');
+
+    // The User's own runs and the Terminal one hold no slot: a Start goes.
+    await startIn(projects[0].id, 'start');
+
+    await startIn(projects[1].id, 'ask');
+    await startIn(projects[1].id, 'triage');
+    await startIn(projects[0].id, 'start', 'terminal');
+    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.liveProcessesInUse()).toBe(7);
+  });
+});

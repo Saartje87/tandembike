@@ -12,6 +12,7 @@ The cap now bounds the Agent processes alive on the machine:
 - **Back to Todo and Done end the process too.** When a live Start's Ticket moves to Todo or Done, its process ends at once when idle, or when its turn ends.
 - **An `interrupted` Conversation holds no slot**: it has no process. The User's reply resumes it and skips the limit, a rare, bounded overshoot after a restart or a crash.
 - A Triage Autopilot started holds a Machine slot only while it works, as before.
+- **Autopilot's headroom counts every live process.** Its free slots are the Machine cap minus `liveProcessesInUse()`: the slot holders, the User's own live Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage and Batch triage runs (idle ones included, until closed), and open Terminal Conversations (until the CLI reports the end). None of those holds a slot, so the cap never refuses them or `tandembike start`, and a Start the User presses is refused only by slot holders.
 
 ## Considered Options
 

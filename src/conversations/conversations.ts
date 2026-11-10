@@ -828,6 +828,38 @@ export function createConversations({
   };
 
   /**
+   * How many Agent processes are alive on the machine, for Autopilot's
+   * headroom (T1329): the Machine slot holders, the User's own live runs
+   * (Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage, Batch triage),
+   * idle ones included, and every open Terminal Conversation. A Triage
+   * Autopilot started counts only while it works, as its slot does. Nothing
+   * is refused by this count.
+   */
+  const liveProcessesInUse = (): number => {
+    let alive = 0;
+    for (const id of live.keys()) {
+      const conversation = get(id);
+      if (
+        holdsMachineSlot(conversation) ||
+        conversation.startedBy !== 'autopilot'
+      ) {
+        alive += 1;
+      }
+    }
+    const terminals = db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.startedBy, 'terminal'),
+          inArray(conversations.state, liveStates),
+        ),
+      )
+      .all();
+    return alive + terminals.length;
+  };
+
+  /**
    * How many of the Project's runs whose process is alive hold a Start run
    * slot (see `holdsStartRunSlot`). `exceptId` is not counted.
    */
@@ -1824,6 +1856,16 @@ export function createConversations({
      */
     machineSlotsInUse(): number {
       return machineSlotsInUse();
+    },
+
+    /**
+     * How many Agent processes are alive on the machine (T1329): the Machine
+     * slot holders, the User's own live runs and open Terminal
+     * Conversations. Autopilot's free slots are the Machine cap minus this;
+     * nothing is refused by it.
+     */
+    liveProcessesInUse(): number {
+      return liveProcessesInUse();
     },
 
     /**

@@ -145,12 +145,16 @@ export function createAutopilot({
     return todo;
   };
 
-  /** How many machine slots are free now (ADR 0041); never below 0. */
+  /**
+   * How many machine slots are free for Autopilot now (ADR 0041): the cap
+   * minus every live Agent process, the User's own runs and open Terminal
+   * Conversations included (T1329); never below 0.
+   */
   const machineFree = (): number =>
     Math.max(
       0,
       tickets.getMachineSettings().maxConcurrentRuns -
-        conversations.machineSlotsInUse(),
+        conversations.liveProcessesInUse(),
     );
 
   /** The machine's own Pause reasons (ADR 0041), shared by builds and triage. */
