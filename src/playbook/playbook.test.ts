@@ -83,6 +83,16 @@ describe('The Playbook plugin', () => {
     expect(text).toMatch(/Ask in text only an open question/);
   });
 
+  it("has a spec skill that files an idea's Epic, its Origin and its children in one call (T1231)", () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/spec/SKILL.md'),
+      'utf8',
+    );
+    expect(text).toMatch(
+      /`originNumber` on the Epic's own entry, not the batch's/,
+    );
+  });
+
   it('has spec and review skills that check every action of a removed or moved UI surface has a home (T1151)', () => {
     const spec = readFileSync(
       join(playbookPath, 'skills/spec/SKILL.md'),
