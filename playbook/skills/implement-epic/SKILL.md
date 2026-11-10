@@ -24,7 +24,7 @@ Create one branch off the repository's default branch, named after the Epic: `t<
 Repeat until every child is Done, taking `nextChild` each time:
 
 1. Call `start_work` on the child. A child under your own Epic Claim moves to In progress.
-2. Build it test-first in small vertical slices: one test through the public interface, watch it fail for the right reason, write the least code to pass, repeat; refactor only while green. Mock only at system boundaries and follow the repository's test conventions. Pure styling, copy or documentation needs no test.
+2. Build it test-first in small vertical slices: one test through the public interface, watch it fail for the right reason, write the least code to pass, repeat; refactor only while green. Mock only at system boundaries and follow the repository's test conventions. Pure styling, copy or documentation needs no test. Keep the red-run list as you go: each behaviour test's name and the failing line of its red run, or written after when it came after the code, leaving off tests that cover only styling or copy. When a subagent builds a child, ask for the same list in its report.
 3. Run the Check command from the `start_work` bundle (or the repository's own test and lint commands) and fix everything until it passes.
 4. Verify each acceptance criterion of the child against the running code or its tests, and call `check_criterion` for each as you verify it. A criterion you leave unmet needs an `add_note` saying why.
 5. Commit on the shared branch. Commit messages name the child (`T43`).
@@ -39,7 +39,7 @@ When all children are built and the Check command passes, call the `review` skil
 
 ## 5. Push and open one pull request
 
-When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open one pull request for the Epic. The body says what changed per child (`T43`, `T44`), how you checked it, and which Epic it is for. When there is none, push the branch if a remote exists and say so in a note on the Epic with `add_note`.
+When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open one pull request for the Epic. The body says what changed per child (`T43`, `T44`), how you checked it, the red-run list per child, and which Epic it is for. When there is none, push the branch if a remote exists and say so in a note on the Epic with `add_note`.
 
 Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, to record the reference.
 
@@ -48,7 +48,7 @@ Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, 
 Follow the Epic's `merge` from step 1, the Project's Auto-merge setting when you took the Claim; only the User sets it.
 
 - **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work`.
-- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, and the pull request's checks are green. Then run the "Merge" steps of the `implement` skill on the Epic's pull request, ending with `finish_work` on the Epic, which finishes its unarchived children with it. When a condition does not hold, or the merge cannot be done, call `add_note` on the Epic saying why and hand off as for `approve`, without `finish_work`. Never push to the default branch.
+- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, and the pull request's checks are green. Before merging, read the red-run list, as the `implement` skill's "Merge" says. Then run the "Merge" steps of the `implement` skill on the Epic's pull request, ending with `finish_work` on the Epic, which finishes its unarchived children with it. When a condition does not hold, or the merge cannot be done, call `add_note` on the Epic saying why and hand off as for `approve`, without `finish_work`. Never push to the default branch.
 
 ## 7. Feedback
 

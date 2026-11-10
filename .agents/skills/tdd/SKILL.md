@@ -38,3 +38,4 @@ When the shape of that interface is itself in question (how deep the module is, 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
 - **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+- **Record each red run.** For every behaviour test, note its name and the failing line of its red run (the assertion or error the runner printed). A test you wrote after the code goes on the list as written after. Tests that cover only styling or copy are left off. Hand the list back with your work: in your report when you are a subagent, in the pull request body when you open one. It is how whoever merges sees that the loop ran, since the final diff cannot show test order.

@@ -32,6 +32,8 @@ Test what the code does, not how: no tests of private helpers or call order, and
 
 Run type checks and the single test files you touch as you go.
 
+Keep the red-run list as you go: for each behaviour test, its name and the failing line of its red run (the assertion or error the runner printed). A test you wrote after the code goes on it as written after. Leave off tests that cover only styling or copy. When a subagent builds part of the work, ask for the same list in its report. The final diff cannot show test order, so this list is how the merge step sees that the work was test-first.
+
 ## 4. Check
 
 Run the Check command from the `start_work` bundle once your work is complete, and fix everything it reports until it passes. When the bundle has no Check command, run the repository's own test and lint commands as its instructions name them. Do not open a pull request with a failing check; if you cannot make it pass, go to "When you cannot finish".
@@ -48,7 +50,7 @@ Commit your work first, then call the `review` skill on the diff against the def
 
 Commit messages name the Ticket (`T42`) and say what changed in plain words, unless the repository's instructions say otherwise.
 
-- When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open a pull request with it. The body says what changed, how you checked it (the Check command and what it covered), and which Ticket it is for (`T42`).
+- When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open a pull request with it. The body says what changed, how you checked it (the Check command and what it covered), the red-run list from step 3, and which Ticket it is for (`T42`).
 - When there is none, push the branch if a remote exists and say so in a note on the Ticket with `add_note`: the branch name, and that no pull request could be opened.
 
 Then call `open_pr` with the pull request's URL, without `handOff`, to record the reference.
@@ -58,11 +60,11 @@ Then call `open_pr` with the pull request's URL, without `handOff`, to record th
 `start_work` returned `merge`, the Project's Auto-merge setting when you took the Claim. Only the User sets it; follow it, whatever the default branch's history suggests.
 
 - **`merge: "approve"`**: hand off. Call `open_pr` with the URL and `handOff: true`: it releases your Claim and leaves the Ticket in Review for the User to approve the merge. Do not merge and do not call `finish_work` unless the User approves (see "Merge").
-- **`merge: "auto"`**: merge it yourself, by "Merge", only when all of these hold: the Check command passes, your review has no unresolved findings (a finding you chose not to fix is explained in a note), every acceptance criterion is checked or a note says why it is not, and the pull request's checks are green. When one does not hold, call `add_note` saying which and why, then hand off as for `approve`. Do not call `finish_work`.
+- **`merge: "auto"`**: merge it yourself, by "Merge", only when all of these hold: the Check command passes, your review has no unresolved findings (a finding you chose not to fix is explained in a note), every acceptance criterion is checked or a note says why it is not, you have read the red-run list (see "Merge"), and the pull request's checks are green. When one does not hold, call `add_note` saying which and why, then hand off as for `approve`. Do not call `finish_work`.
 
 ## Merge
 
-Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. Merge the pull request you opened, from the worktree you are in:
+Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. First read the red-run list in the pull request body. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Ticket (`add_note`). The list is self-reported and nothing checks it automatically; it does not block the merge by itself. Then merge the pull request you opened, from the worktree you are in:
 
 1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: continue, and say so in a note.
 2. When the branch is behind the default branch or conflicts, rebase onto it (`git fetch origin`, `git rebase origin/<default>`), resolve conflicts keeping the intent of both sides without losing the Ticket's change, run the Check command when it is cheap, push with `git push --force-with-lease`, and go back to step 1. Rebase and push at most twice.
