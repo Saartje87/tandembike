@@ -71,4 +71,40 @@ describe('MergedButton', () => {
     expect(onCancel).toHaveBeenCalledOnce();
     expect(onMerged).not.toHaveBeenCalled();
   });
+
+  describe('as Done (T1268)', () => {
+    it('names its Ticket and calls back on click', async () => {
+      const onMerged = vi.fn();
+      renderWithTheme(
+        <MergedButton ticket={ticket} action="Done" onMerged={onMerged} />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Done T7 Fix the header' }),
+      );
+
+      expect(onMerged).toHaveBeenCalledExactlyOnceWith(false);
+    });
+
+    it('asks to finish with unchecked criteria', async () => {
+      const onMerged = vi.fn();
+      renderWithTheme(
+        <MergedButton
+          ticket={ticket}
+          action="Done"
+          onMerged={onMerged}
+          unchecked={[{ number: 7, text: 'Menu opens' }]}
+        />,
+      );
+
+      const dialog = screen.getByRole('dialog', {
+        name: 'Finish T7 with unchecked criteria?',
+      });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Done anyway' }),
+      );
+
+      expect(onMerged).toHaveBeenCalledExactlyOnceWith(true);
+    });
+  });
 });

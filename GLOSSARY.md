@@ -61,7 +61,7 @@ The Lane for Todo Tickets and Epics still to triage: labelled `needs-triage` or 
 _Avoid_: Inbox, Untriaged
 
 **Your work**:
-The Lane for Todo Tickets and Epics labelled `ready-for-human`: work handed to the User, often by an Agent. It is a group of Needs you, after Review and before Intake, in its own drag order; an unblocked one counts in Needs you, and a blocked one shows with its Blocked marker without counting (ADR 0048). Formerly called For human.
+The Lane for Todo Tickets and Epics labelled `ready-for-human`: work handed to the User, often by an Agent. It is a group of Needs you, after Review and before Intake, in its own drag order; an unblocked one counts in Needs you, and a blocked one shows with its Blocked marker without counting (ADR 0048). The User finishes one with **Done** in its drawer, offered on a `ready-for-human` Ticket or Epic in Todo or In progress with no Conversation running or waiting on it and not in Review (where Merged is): it applies the completion rule as Merged does, and confirms unchecked criteria the same way. Checking its last acceptance criterion does not finish it. Formerly called For human.
 _Avoid_: For human, Waiting on me
 
 **Needs you**:

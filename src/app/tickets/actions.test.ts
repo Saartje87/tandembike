@@ -489,6 +489,47 @@ describe('Ticket actions', () => {
     expect(comment.body).toContain(`T${ticket.number}: Menu opens`);
   });
 
+  it('finishes a claimed ready-for-human Ticket, keeping its category label (T1268)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Try the new header',
+      labels: ['enhancement', 'ready-for-human'],
+    });
+    tickets.claimTicket(ticket.number, { agentRunId: '12' });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await completeTicket({ number: ticket.number });
+
+    expect(result).toEqual({ ok: true, projectId: project.id });
+    expect(tickets.getTicket(ticket.number)).toMatchObject({
+      status: 'Done',
+      labels: ['enhancement'],
+      claim: null,
+    });
+  });
+
+  it('records a confirmed finish without naming Merged, as Done shares it (T1268)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Try the new header',
+      labels: ['ready-for-human'],
+      acceptanceCriteria: [{ text: 'Looks right' }],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    await completeTicket({ number: ticket.number, confirmed: true });
+
+    const [comment] = tickets.listComments(ticket.number);
+    expect(comment.body).toContain(
+      'The User confirmed finishing it in the drawer',
+    );
+  });
+
   it('sends a Ticket Back to Todo as the User and refreshes its Boards', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });

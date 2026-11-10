@@ -189,3 +189,25 @@ export function isInReview(
 export function isParked(ticket: LaneInput, live?: LiveConversation): boolean {
   return ticket.status === 'In progress' && live === undefined;
 }
+
+/**
+ * Whether the drawer offers Done on a Ticket or Epic: labelled
+ * ready-for-human, Todo or In progress, with no Conversation running or
+ * waiting on it, and not In progress with a PR reference, where Merged
+ * finishes it (T1268). An
+ * idle, interrupted or failed Conversation does not hide it: the User's own
+ * work often has one. Done applies the completion rule, as Merged does;
+ * nothing finishes such a Ticket by itself.
+ */
+export function offersDone(
+  ticket: LaneInput,
+  live?: LiveConversation,
+): boolean {
+  return (
+    ticket.status !== 'Done' &&
+    ticket.labels.includes(readyForHuman) &&
+    live?.state !== 'running' &&
+    live?.state !== 'waiting' &&
+    !isInReview(ticket)
+  );
+}
