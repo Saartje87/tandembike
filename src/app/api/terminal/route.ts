@@ -1,5 +1,9 @@
 import { appConversations } from '../../../conversations/app-conversations';
-import type { TerminalIntent } from '../../../conversations/terminal-shared';
+import {
+  isTerminalIntent,
+  type TerminalIntent,
+  terminalIntents,
+} from '../../../conversations/terminal-shared';
 import { NotFoundError, TicketsError } from '../../../tickets/errors';
 
 /**
@@ -12,7 +16,7 @@ type TerminalAction =
   | {
       action: 'start';
       ticketNumber: number;
-      intent?: TerminalIntent;
+      intent?: unknown;
     }
   | { action: 'next'; folder: string }
   | { action: 'plan'; folder: string; goal: string }
@@ -26,6 +30,12 @@ const text = (message: string, status: number) =>
     headers: { 'content-type': 'text/plain; charset=utf-8' },
   });
 
+/** The intent a start asks for: Start when left out, null when not one. */
+const startIntent = (intent: unknown): TerminalIntent | null => {
+  if (intent === undefined || intent === null) return 'start';
+  return typeof intent === 'string' && isTerminalIntent(intent) ? intent : null;
+};
+
 export const POST = async (request: Request): Promise<Response> => {
   let body: TerminalAction;
   try {
@@ -36,13 +46,21 @@ export const POST = async (request: Request): Promise<Response> => {
   try {
     const conversations = appConversations();
     switch (body?.action) {
-      case 'start':
+      case 'start': {
+        const intent = startIntent(body.intent);
+        if (!intent) {
+          return text(
+            `Unknown intent. Use one of: ${terminalIntents.join(', ')}.`,
+            400,
+          );
+        }
         return Response.json(
           await conversations.startTerminal({
             ticketNumber: Number(body.ticketNumber),
-            intent: body.intent ?? 'start',
+            intent,
           }),
         );
+      }
       case 'next':
         return Response.json(
           await conversations.startTerminalNext(String(body.folder)),
