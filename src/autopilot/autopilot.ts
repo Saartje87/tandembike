@@ -2,7 +2,6 @@ import type { ConversationState } from '../conversations/conversation-state';
 import {
   type Conversation,
   type Conversations,
-  holdsStartRunSlot,
   startRunLimit,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
@@ -35,7 +34,7 @@ const readyLabel = 'ready-for-agent';
 const transientBackoffMs = 60_000;
 const transientResumeText =
   'The last run ended on a transient error. Continue where you left off.';
-/** Its run is doing something, or waiting on an answer, and holds a slot. */
+/** Its run is doing something, or waiting on an answer: it holds its Ticket. */
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /** Running without a reason, else paused with every one of them. */
@@ -146,12 +145,16 @@ export function createAutopilot({
     return todo;
   };
 
-  /** How many machine slots are free now (ADR 0041); never below 0. */
+  /**
+   * How many machine slots are free for Autopilot now (ADR 0041): the cap
+   * minus every live Agent process, the User's own runs and open Terminal
+   * Conversations included (T1329); never below 0.
+   */
   const machineFree = (): number =>
     Math.max(
       0,
       tickets.getMachineSettings().maxConcurrentRuns -
-        conversations.machineSlotsInUse(),
+        conversations.liveProcessesInUse(),
     );
 
   /** The machine's own Pause reasons (ADR 0041), shared by builds and triage. */
@@ -167,6 +170,7 @@ export function createAutopilot({
       reasons.push({
         type: 'machineCapFull',
         cap: tickets.getMachineSettings().maxConcurrentRuns,
+        waitingOnUser: conversations.liveProcesses().waiting,
       });
     }
     const budget = machineBudget();
@@ -222,13 +226,17 @@ export function createAutopilot({
         });
       }
     }
-    // A Merge the User approved holds a run slot like a Start (T1221).
-    const working = conversations
-      .list({ projectId })
-      .filter(holdsStartRunSlot).length;
-    const limit = startRunLimit(settings);
+    // A Merge the User approved holds a run slot like a Start (T1221), and
+    // an idle one waiting on the User keeps it (ADR 0049).
+    const working = conversations.startRunSlotsInUse(projectId);
+    const limit = startRunLimit(
+      settings,
+      tickets.getMachineSettings().maxConcurrentRuns,
+    );
     const slots = Math.max(0, limit - working);
-    if (slots === 0) {
+    // With Parallel runs on the limit is the Machine cap, whose own reason
+    // says it is full.
+    if (slots === 0 && !settings.parallelRuns) {
       reasons.push({ type: 'noFreeStartRunSlot', limit });
     }
     return { cycleId: cycle?.id ?? null, slots, reasons };

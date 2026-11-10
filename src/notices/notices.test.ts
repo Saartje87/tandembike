@@ -25,7 +25,6 @@ function setup(now?: () => Date) {
   tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
     parallelRuns: true,
-    maxConcurrentRuns: 5,
   });
   const notices = createNotices({ conversations, tickets, changes, now });
   const raised = vi.fn();

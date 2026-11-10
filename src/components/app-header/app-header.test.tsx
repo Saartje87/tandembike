@@ -16,7 +16,7 @@ vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
 vi.mock('../../app/settings/actions', () => ({
   currentMachineRuns: vi
     .fn()
-    .mockResolvedValue({ inUse: 2, cap: 3, budget: null }),
+    .mockResolvedValue({ working: 2, waiting: 0, cap: 3, budget: null }),
 }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
@@ -50,7 +50,9 @@ describe('AppHeader', () => {
     renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
 
     const header = screen.getByRole('banner');
-    expect(await within(header).findByText('Runs 2/3')).toBeInTheDocument();
+    expect(
+      await within(header).findByText('Runs 2 working / 3'),
+    ).toBeInTheDocument();
     expect(
       within(header).getByRole('link', { name: 'Settings' }),
     ).toHaveAttribute('href', '/settings');

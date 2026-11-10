@@ -11,7 +11,7 @@ import { join } from 'node:path';
 const directory = () => mkdtempSync(join(tmpdir(), 'tandembike-repo-'));
 
 describe("A Project's agent settings", () => {
-  it('start with no repository path, Parallel runs off, a cap of 3, agent mode off and auto run mode', () => {
+  it('start with no repository path, Parallel runs off, agent mode off and auto run mode', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
@@ -20,7 +20,6 @@ describe("A Project's agent settings", () => {
       checkCommand: null,
       prepareCommand: null,
       parallelRuns: false,
-      maxConcurrentRuns: 3,
       agentMode: false,
       runMode: 'auto',
       runModel: null,
@@ -368,28 +367,16 @@ describe("A Project's agent settings", () => {
     );
   });
 
-  it('turn Parallel runs on and set the cap, which is at least 1', () => {
+  it('turn Parallel runs on, with no run count of their own: the Machine cap is the one number (T1330)', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
 
-    expect(
-      tickets.setProjectAgentSettings(project.id, {
-        parallelRuns: true,
-        maxConcurrentRuns: 5,
-      }),
-    ).toMatchObject({ parallelRuns: true, maxConcurrentRuns: 5 });
-    for (const maxConcurrentRuns of [0, -1, 1.5]) {
-      const error = errorFrom(() =>
-        tickets.setProjectAgentSettings(project.id, { maxConcurrentRuns }),
-      );
-      expect((error as ValidationError).fieldErrors).toHaveProperty(
-        'maxConcurrentRuns',
-      );
-    }
-    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+    const settings = tickets.setProjectAgentSettings(project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: 5,
     });
+
+    expect(settings).toMatchObject({ parallelRuns: true });
+    expect(settings).not.toHaveProperty('maxConcurrentRuns');
   });
 
   it('turn agent mode on only while a repository path is set, and clearing the path turns it off', () => {
@@ -417,11 +404,11 @@ describe("A Project's agent settings", () => {
     const project = tickets.createProject({ name: 'Website' });
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
 
-    tickets.setProjectAgentSettings(project.id, { maxConcurrentRuns: 2 });
+    tickets.setProjectAgentSettings(project.id, { checkCommand: 'npm test' });
 
     expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
       parallelRuns: true,
-      maxConcurrentRuns: 2,
+      checkCommand: 'npm test',
     });
   });
 

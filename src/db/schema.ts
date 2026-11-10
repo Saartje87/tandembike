@@ -79,12 +79,13 @@ export const projects = sqliteTable('projects', {
   /** The command that defines green for the repository; null while unset. */
   checkCommand: text('check_command'),
   prepareCommand: text('prepare_command'),
-  /** Whether Start runs of this Project may overlap, each in its own worktree. */
+  /**
+   * Whether Start runs of this Project may overlap, each in its own worktree:
+   * off allows one at a time, on up to the Machine cap (ADR 0049).
+   */
   parallelRuns: integer('parallel_runs', { mode: 'boolean' })
     .notNull()
     .default(false),
-  /** The most Start runs of this Project running at once. */
-  maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
   /** Whether the title fields create through a Conversation. */
   agentMode: integer('agent_mode', { mode: 'boolean' })
     .notNull()

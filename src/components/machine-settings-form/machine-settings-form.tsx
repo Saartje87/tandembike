@@ -93,9 +93,11 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
             aria-describedby={capError ? capErrorId : undefined}
           />
           <Text tag="p" fontSize="small" color="muted">
-            The most working Start, Merge and Autopilot Triage runs the machine
-            holds at once, across all Projects. Your own conversations and
-            Terminal sessions are not counted.
+            The most Agent runs alive at once, across all Projects. A Start or
+            Merge keeps its place while it waits on your reply, until you
+            answer, close or stop it. Your own conversations and Terminal
+            sessions are never refused, but Autopilot counts them before it
+            starts more work.
           </Text>
           <FieldError id={capErrorId} reason={capError} />
         </Stack>

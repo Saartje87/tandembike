@@ -16,13 +16,15 @@ function setup(options: { autopilot?: boolean; parallel?: number } = {}) {
   const project = tickets.createProject({ name: 'Website' });
   tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
-    ...(options.parallel === undefined
-      ? {}
-      : { parallelRuns: true, maxConcurrentRuns: options.parallel }),
+    ...(options.parallel === undefined ? {} : { parallelRuns: true }),
     ...(options.autopilot === false
       ? {}
       : { autopilot: true, spendCeilingUsd: 50 }),
   });
+  // With Parallel runs on, the Machine cap is the Project's limit (T1330).
+  if (options.parallel !== undefined) {
+    tickets.setMachineSettings({ maxConcurrentRuns: options.parallel });
+  }
   const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
   const autopilot = createAutopilot({ tickets, conversations, changes });
   const ready = (title: string, extra: { type?: 'Epic' } = {}) =>
@@ -288,7 +290,7 @@ describe('Autopilot dispatch', () => {
     stop();
   });
 
-  it('dispatches nothing while a User reply keeps working Starts at or over the limit (T1185)', async () => {
+  it('dispatches nothing into the slot of a Start waiting on the User, nor while the User answers it (T1185, ADR 0049)', async () => {
     const {
       tickets,
       conversations,
@@ -301,27 +303,29 @@ describe('Autopilot dispatch', () => {
     } = setup();
     const a = ready('A');
     const b = ready('B');
-    const c = ready('C');
+    ready('C');
     tickets.startCycle(cycle.id);
     await autopilot.evaluate();
-    // A goes idle waiting for the User, so its slot goes to B.
+    // A goes idle waiting for the User, in Action needed: it keeps its slot.
+    tickets.updateTicket(a.number, { status: 'In progress' });
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
     await autopilot.evaluate();
-    expect(started()).toEqual([a.number, b.number]);
+    expect(started()).toEqual([a.number]);
 
-    // The User answers A: two Starts work against a limit of one.
+    // The User answers A: it works in the slot it held, and nothing starts.
     const first = conversations.list({ ticketNumber: a.number })[0];
     await conversations.reply(first.id, 'Go on', 'user');
     await autopilot.evaluate();
-    expect(started()).toEqual([a.number, b.number]);
+    expect(started()).toEqual([a.number]);
+    expect(conversations.startRunSlotsInUse(project.id)).toBe(1);
 
-    // Back at the limit, still nothing; below it, the next Ticket starts.
-    runner.runs[1].emit({ type: 'turn', costUsd: 0 });
-    await autopilot.evaluate();
-    expect(started()).toEqual([a.number, b.number]);
+    // A hands off to Review: its process ends and the next Ticket starts.
+    tickets.addExternalReferences(a.number, [
+      'https://github.com/acme/site/pull/1',
+    ]);
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
     await autopilot.evaluate();
-    expect(started()).toEqual([a.number, b.number, c.number]);
+    expect(started()).toEqual([a.number, b.number]);
   });
 
   it('leaves a Ticket in Review alone and gives a working Merge a slot (T1221)', async () => {
@@ -377,7 +381,6 @@ describe('Autopilot dispatch', () => {
     tickets.setProjectAgentSettings(project.id, {
       autopilot: false,
       parallelRuns: true,
-      maxConcurrentRuns: 5,
     });
     ready('B');
     await autopilot.evaluate();
@@ -521,7 +524,6 @@ describe('Autopilot startup', () => {
     fresh.interruptStale();
     tickets.setProjectAgentSettings(project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: options.parallel ?? 9,
       ...(options.autopilot === undefined
         ? {}
         : { autopilot: options.autopilot }),
@@ -529,6 +531,7 @@ describe('Autopilot startup', () => {
         ? {}
         : { spendCeilingUsd: options.ceiling }),
     });
+    tickets.setMachineSettings({ maxConcurrentRuns: options.parallel ?? 9 });
     const autopilot = createAutopilot({
       tickets,
       conversations: fresh,
@@ -724,7 +727,9 @@ describe('Autopilot transient resume (ADR 0034)', () => {
   it('does not resume beyond the Start run limit', async () => {
     const { runner, autopilot, project, tickets, conversations, resumes } =
       await begin({ parallel: 1 });
-    runner.runs[0].emit(overloaded);
+    // Its process ended, so it holds no slot and a resume would take one; an
+    // idle run keeps its slot, and its resume adds nothing (ADR 0049).
+    runner.runs[0].emit({ type: 'exit', error: overloaded.error });
     const other = tickets.createTicket({ projectId: project.id, title: 'B' });
     await conversations.start({
       startedBy: 'user',
@@ -1058,7 +1063,7 @@ describe('Auto-triage', () => {
 describe('Autopilot machine cap (ADR 0041)', () => {
   function machineSetup(
     cap: number,
-    options: { projects?: number; parallel?: number } = {},
+    options: { projects?: number; parallelRuns?: boolean } = {},
   ) {
     const changes = createChangeChannel();
     const world = createTestConversations(changes);
@@ -1073,8 +1078,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
             : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
         autopilot: true,
         spendCeilingUsd: 50,
-        parallelRuns: true,
-        maxConcurrentRuns: options.parallel ?? 9,
+        parallelRuns: options.parallelRuns ?? true,
       });
       const cycle = tickets.createCycle({
         projectId: project.id,
@@ -1107,9 +1111,16 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     };
   }
 
-  it('never runs more than the cap across Projects, and goes on when a run ends', async () => {
-    const { projects, ready, autopilot, startedIn, conversations, runner } =
-      machineSetup(3);
+  it('never runs more than the cap across Projects, and goes on when a run hands off', async () => {
+    const {
+      projects,
+      ready,
+      autopilot,
+      startedIn,
+      conversations,
+      runner,
+      tickets,
+    } = machineSetup(3);
     const a = ready(projects[0], 'A');
     const b = ready(projects[0], 'B');
     const c = ready(projects[1], 'C');
@@ -1121,6 +1132,21 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(startedIn(projects[0])).toEqual([a.number, b.number]);
     expect(startedIn(projects[1])).toEqual([c.number]);
 
+    // A waiting on the User keeps its slot (ADR 0049).
+    tickets.updateTicket(a.number, { status: 'In progress' });
+    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    await autopilot.evaluate();
+    expect(startedIn(projects[1])).toEqual([c.number]);
+
+    // A handing off to Review frees it.
+    tickets.addExternalReferences(a.number, [
+      'https://github.com/acme/site/pull/1',
+    ]);
+    await conversations.reply(
+      conversations.list({ ticketNumber: a.number })[0].id,
+      'Open the PR',
+      'user',
+    );
     runner.runs[0].emit({ type: 'turn', costUsd: 1 });
     await autopilot.evaluate();
 
@@ -1130,7 +1156,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
   it('keeps each Project start run limit inside the machine cap', async () => {
     const { projects, ready, autopilot, startedIn, conversations } =
-      machineSetup(5, { parallel: 1 });
+      machineSetup(5, { parallelRuns: false });
     ready(projects[0], 'A');
     ready(projects[0], 'B');
     const c = ready(projects[1], 'C');
@@ -1143,10 +1169,10 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(conversations.machineSlotsInUse()).toBe(2);
   });
 
-  it('leaves the User interactive and Terminal runs out of the cap', async () => {
+  it('counts the User’s interactive and Terminal runs against its free slots (T1329)', async () => {
     const { projects, ready, autopilot, startedIn, conversations, tickets } =
-      machineSetup(1);
-    await conversations.start({
+      machineSetup(2);
+    const ask = await conversations.start({
       startedBy: 'user',
       projectId: projects[0].id,
       intent: 'ask',
@@ -1156,17 +1182,19 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       projectId: projects[1].id,
       title: 'In a terminal',
     });
-    await conversations.startTerminal({
+    const session = await conversations.startTerminal({
       ticketNumber: terminalTicket.number,
       intent: 'start',
     });
     const a = ready(projects[0], 'A');
 
     await autopilot.evaluate();
+    expect(startedIn(projects[0])).toEqual([null]);
 
-    expect(startedIn(projects[0]).filter((n) => n === a.number)).toEqual([
-      a.number,
-    ]);
+    await conversations.endTerminal(session.conversationId, { exitCode: 0 });
+    await autopilot.evaluate();
+    expect(startedIn(projects[0])).toEqual([null, a.number]);
+    expect(conversations.get(ask.id).state).toBe('running');
   });
 
   it('counts its own Triage run against the cap', async () => {
@@ -1222,12 +1250,13 @@ describe('Autopilot machine cap (ADR 0041)', () => {
         ready(project, 'B');
       }
 
+      // Each run's process ends, freeing the one slot for the next pass.
       await autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'exit' });
       await autopilot.evaluate();
-      runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[1].emit({ type: 'exit' });
       await autopilot.evaluate();
-      runner.runs[2].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[2].emit({ type: 'exit' });
       await autopilot.evaluate();
 
       expect(startedIn(projects[0])).toHaveLength(2);
@@ -1266,7 +1295,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
     it("keeps each Project's own Start run limit and one Triage run at a time", async () => {
       const { projects, ready, autopilot, startedIn, conversations, tickets } =
-        machineSetup(9, { parallel: 1 });
+        machineSetup(9, { parallelRuns: false });
       tickets.setProjectAgentSettings(projects[0].id, {
         autoTriage: true,
         triageCeilingUsd: 5,
@@ -1336,11 +1365,11 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     const a = ready(projects[0], 'A');
     await autopilot.evaluate();
     runner.runs[0].emit({
-      type: 'turn',
-      costUsd: 1,
+      type: 'exit',
       error: 'API Error: 529 overloaded',
     });
-    // The failed run freed its slot; another Project's work takes it.
+    // The failed run's process ended and freed its slot; another Project's
+    // work takes it.
     const b = ready(projects[1], 'B');
     await autopilot.evaluate();
     expect(conversations.list({ ticketNumber: b.number })).toHaveLength(1);
@@ -1351,7 +1380,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       'running',
     );
 
-    runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[1].emit({ type: 'exit' });
     await autopilot.evaluate();
     expect(conversations.list({ ticketNumber: a.number })[0].state).toBe(
       'running',
@@ -1376,7 +1405,6 @@ describe('Machine ceiling (ADR 0041)', () => {
         autopilot: true,
         spendCeilingUsd: 500,
         parallelRuns: true,
-        maxConcurrentRuns: 9,
       });
       const cycle = tickets.createCycle({
         projectId: project.id,
@@ -1573,7 +1601,25 @@ describe('explain (ADR 0044)', () => {
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'machineCapFull', cap: 1 }],
+        reasons: [{ type: 'machineCapFull', cap: 1, waitingOnUser: 0 }],
+      });
+    });
+
+    it('names how many runs holding a full cap wait on the User (T1332)', async () => {
+      const { project, tickets, cycle, autopilot, ready, runner } = setup({
+        parallel: 2,
+      });
+      const a = ready('A');
+      ready('B');
+      ready('C');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+      tickets.updateTicket(a.number, { status: 'In progress' });
+      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'machineCapFull', cap: 2, waitingOnUser: 1 }],
       });
     });
 

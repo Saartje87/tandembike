@@ -123,7 +123,6 @@ describe('A Plan Conversation (T1248)', () => {
     const { conversations, runner, tickets, project } = world;
     tickets.setProjectAgentSettings(project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: 50,
     });
     vi.useFakeTimers();
     let at = new Date('2026-01-01T10:00:00Z').getTime();

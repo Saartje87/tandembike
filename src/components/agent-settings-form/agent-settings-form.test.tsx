@@ -22,7 +22,6 @@ const unset: ProjectAgentSettings = {
   checkCommand: null,
   prepareCommand: null,
   parallelRuns: false,
-  maxConcurrentRuns: 3,
   agentMode: false,
   runMode: 'default',
   runModel: null,
@@ -129,9 +128,6 @@ describe('AgentSettingsForm', () => {
     expect(
       screen.queryByRole('switch', { name: 'Parallel runs' }),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByLabelText('Max concurrent Start runs'),
-    ).not.toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Agent mode' })).toBeDisabled();
     expect(
       screen.getByText(/Set a repository path to turn on agent mode/),
@@ -168,7 +164,6 @@ describe('AgentSettingsForm', () => {
         checkCommand: null,
         prepareCommand: null,
         parallelRuns: false,
-        maxConcurrentRuns: 3,
         agentMode: false,
         runMode: 'default',
         runModel: null,
@@ -249,15 +244,16 @@ describe('AgentSettingsForm', () => {
     );
   });
 
-  it('saves Parallel runs, the cap and agent mode once a path is set', async () => {
+  it('saves Parallel runs and agent mode once a path is set, with no run count of its own (T1330)', async () => {
     renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
 
+    expect(screen.queryByLabelText(/max concurrent/i)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('switch', { name: 'Parallel runs' }),
+    ).toHaveAccessibleDescription(/up to the machine cap set in Settings/);
     await userEvent.click(
       screen.getByRole('switch', { name: 'Parallel runs' }),
     );
-    const cap = screen.getByLabelText('Max concurrent Start runs');
-    await userEvent.clear(cap);
-    await userEvent.type(cap, '5');
     await userEvent.click(screen.getByRole('switch', { name: 'Agent mode' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -268,7 +264,6 @@ describe('AgentSettingsForm', () => {
         checkCommand: null,
         prepareCommand: null,
         parallelRuns: true,
-        maxConcurrentRuns: 5,
         agentMode: true,
         runMode: 'default',
         runModel: null,

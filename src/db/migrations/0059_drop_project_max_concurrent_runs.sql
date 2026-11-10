@@ -1,0 +1,1 @@
+ALTER TABLE `projects` DROP COLUMN `max_concurrent_runs`;

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { appAutopilot } from '../../../../../autopilot/app-autopilot';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import type { Conversation } from '../../../../../conversations/conversations';
+import { holdsStartRunSlot } from '../../../../../conversations/conversations';
 import { showOpenPopovers } from '../../../../../test/popover';
 import {
   renderPage,
@@ -91,6 +92,7 @@ const conversation = (
 const stubConversations = (list: Conversation[], spendUsd = 0) =>
   vi.mocked(appConversations).mockReturnValue({
     list: () => list,
+    startRunSlotsInUse: () => list.filter(holdsStartRunSlot).length,
     autopilotSpend: () => spendUsd,
     retroOf: () => null,
     startCostEstimate: () => null,
@@ -151,7 +153,6 @@ describe('CyclePage', () => {
       const project = tickets.createProject({ name: 'Website' });
       tickets.setProjectAgentSettings(project.id, {
         parallelRuns: true,
-        maxConcurrentRuns: 3,
       });
       const cycle = tickets.createCycle({
         projectId: project.id,
@@ -186,7 +187,8 @@ describe('CyclePage', () => {
       );
 
       expect(screen.getByText('0/1 done')).toBeVisible();
-      expect(screen.getByText('Runs 2/3')).toBeVisible();
+      // The idle Start waits on the User and keeps its slot (ADR 0049).
+      expect(screen.getByText('Runs 3/3')).toBeVisible();
       expect(
         within(screen.getByRole('region', { name: 'Needs you' })).getByRole(
           'link',

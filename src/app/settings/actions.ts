@@ -32,17 +32,20 @@ export async function saveMachineSettings(input: {
 
 /** What the app header shows of the machine: runs and the Machine ceiling. */
 export type MachineRunsState = {
-  inUse: number;
+  /** Live runs working, Terminal sessions included (T1332). */
+  working: number;
+  /** Live runs waiting on the User: idle, or on a permission or a Widget. */
+  waiting: number;
   cap: number;
   /** Today's Autopilot spend against the daily ceiling; null without one. */
   budget: { spendUsd: number; ceilingUsd: number; paused: boolean } | null;
 };
 
-/** The working runs against the cap and today's spend, for the app header. It only reads. */
+/** The live runs holding a slot against the cap and today's spend, for the app header. It only reads. */
 export async function currentMachineRuns(): Promise<MachineRunsState> {
   return {
     budget: appConversations().machineBudget(),
-    inUse: appConversations().machineSlotsInUse(),
+    ...appConversations().liveProcesses(),
     cap: appTickets('user').getMachineSettings().maxConcurrentRuns,
   };
 }

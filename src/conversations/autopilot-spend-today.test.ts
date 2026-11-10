@@ -18,7 +18,6 @@ function setup() {
   world.tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
     parallelRuns: true,
-    maxConcurrentRuns: 9,
   });
   const ticket = (title: string) =>
     world.tickets.createTicket({ projectId: project.id, title });

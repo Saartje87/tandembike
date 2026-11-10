@@ -40,7 +40,6 @@ type AgentSettingsValues = {
   checkCommand: string;
   prepareCommand: string;
   parallelRuns: boolean;
-  maxConcurrentRuns: number;
   agentMode: boolean;
   runMode: AgentRunMode;
   runModel: string;
@@ -57,7 +56,6 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   repositoryPath: 'repositoryPath',
   checkCommand: 'checkCommand',
   prepareCommand: 'prepareCommand',
-  maxConcurrentRuns: 'maxConcurrentRuns',
   agentMode: 'agentMode',
   runMode: 'runMode',
   runModel: 'runModel',
@@ -87,8 +85,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const parallelId = useId();
   const modeId = useId();
   const pathErrorId = useId();
-  const capId = useId();
-  const capErrorId = useId();
+  const parallelHintId = useId();
   const modeReasonId = useId();
   const modeErrorId = useId();
   const runModeErrorId = useId();
@@ -110,7 +107,6 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       checkCommand: settings.checkCommand ?? '',
       prepareCommand: settings.prepareCommand ?? '',
       parallelRuns: settings.parallelRuns,
-      maxConcurrentRuns: settings.maxConcurrentRuns,
       agentMode: settings.agentMode,
       runMode: settings.runMode,
       runModel: settings.runModel ?? '',
@@ -134,7 +130,6 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const prepareError = errors.prepareCommand?.message;
   const prepareId = useId();
   const prepareErrorId = useId();
-  const capError = errors.maxConcurrentRuns?.message;
   const modeError = errors.agentMode?.message;
   const runModeError = errors.runMode?.message;
   const runModelError = errors.runModel?.message;
@@ -183,7 +178,6 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
           prepareCommand:
             values.prepareCommand.trim() === '' ? null : values.prepareCommand,
           parallelRuns: values.parallelRuns,
-          maxConcurrentRuns: Number(values.maxConcurrentRuns),
           agentMode: values.agentMode,
           runMode: values.runMode,
           runModel:
@@ -296,25 +290,21 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             <FieldError id={prepareErrorId} reason={prepareError} />
           </Stack>
           {hasPath && (
-            <>
+            <Stack gap={1}>
               <Inline gap={2} alignY="center">
-                <Switch {...register('parallelRuns')} id={parallelId} />
+                <Switch
+                  {...register('parallelRuns')}
+                  id={parallelId}
+                  aria-describedby={parallelHintId}
+                />
                 <Label htmlFor={parallelId}>Parallel runs</Label>
               </Inline>
-              <Stack gap={1}>
-                <Label htmlFor={capId}>Max concurrent Start runs</Label>
-                <TextInput
-                  {...register('maxConcurrentRuns', { valueAsNumber: true })}
-                  id={capId}
-                  type="number"
-                  min={1}
-                  step={1}
-                  aria-invalid={capError ? true : undefined}
-                  aria-describedby={capError ? capErrorId : undefined}
-                />
-                <FieldError id={capErrorId} reason={capError} />
-              </Stack>
-            </>
+              <Text id={parallelHintId} tag="p" fontSize="small" color="muted">
+                Off runs one Start at a time in this repository. On lets Starts
+                overlap, each in a worktree of its own, up to the machine cap
+                set in Settings.
+              </Text>
+            </Stack>
           )}
           <Stack gap={1}>
             <Inline gap={2} alignY="center">
