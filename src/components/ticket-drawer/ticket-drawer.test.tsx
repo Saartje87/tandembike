@@ -549,10 +549,12 @@ describe('TicketDrawer', () => {
         within(dialog).getByRole('button', { name: 'Merged anyway' }),
       );
 
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
-      });
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
       await waitFor(() =>
         expect(
           screen.queryByRole('dialog', {
@@ -662,10 +664,12 @@ describe('TicketDrawer', () => {
         within(dialog).getByRole('button', { name: 'Done anyway' }),
       );
 
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
-      });
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
     });
 
     it.each([
