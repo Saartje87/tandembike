@@ -44,7 +44,12 @@ import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { UncheckedCriterion } from '../../tickets/errors';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
-import { canSpec, isInReview, isParked } from '../../tickets/ticket-lanes';
+import {
+  canSpec,
+  isInReview,
+  isParked,
+  offersDone,
+} from '../../tickets/ticket-lanes';
 import type {
   Blockers,
   Comment,
@@ -264,7 +269,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
   const live = useTicketLiveConversation(ticket.number);
-  // Shared by the buttons beside Status (Merged and Back to Todo).
+  // Shared by the buttons beside Status (Merged, Done and Back to Todo).
   const [actionError, setActionError] = useState<string>();
   const [actionPending, startAction] = useTransition();
 
@@ -343,7 +348,8 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     });
   };
 
-  // The criteria Merged returned unchecked, while it asks to confirm them.
+  // The criteria Merged or Done returned unchecked, while it asks to confirm
+  // them.
   const [mergedUnchecked, setMergedUnchecked] =
     useState<UncheckedCriterion[]>();
 
@@ -377,6 +383,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   };
 
   const showMerged = isInReview(ticket, live);
+  const showDone = offersDone(ticket, live);
   const showBackToTodo = isParked(ticket, live);
 
   const statusActions = (
@@ -392,6 +399,16 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         {showMerged && (
           <MergedButton
             ticket={ticket}
+            pending={actionPending}
+            onMerged={merge}
+            unchecked={mergedUnchecked}
+            onCancel={() => setMergedUnchecked(undefined)}
+          />
+        )}
+        {showDone && (
+          <MergedButton
+            ticket={ticket}
+            action="Done"
             pending={actionPending}
             onMerged={merge}
             unchecked={mergedUnchecked}

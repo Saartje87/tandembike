@@ -11,6 +11,7 @@ import {
   isParked,
   isStalled,
   laneOf,
+  offersDone,
 } from './ticket-lanes';
 import type { Ticket } from './tickets';
 
@@ -285,6 +286,53 @@ describe('isParked', () => {
     const epic = { ...base, type: 'Epic' as const };
     expect(isParked(epic, liveConversation({ state: 'running' }))).toBe(false);
     expect(isParked({ ...epic, status: 'Todo' })).toBe(false);
+  });
+});
+
+describe('offersDone (T1268)', () => {
+  const base = {
+    status: 'Todo' as const,
+    labels: ['enhancement', 'ready-for-human'],
+    claim: null,
+    externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
+  };
+
+  it.each([
+    ['a Todo Ticket', base],
+    ['an In progress Ticket', { ...base, status: 'In progress' as const }],
+    [
+      'a claimed In progress Ticket',
+      { ...base, status: 'In progress' as const, claim },
+    ],
+    ['an Epic', { ...base, type: 'Epic' as const }],
+  ])('is true for %s labelled ready-for-human', (_name, ticket) => {
+    expect(offersDone(ticket)).toBe(true);
+  });
+
+  it('is false without ready-for-human', () => {
+    expect(offersDone({ ...base, labels: ['ready-for-agent'] })).toBe(false);
+    expect(offersDone({ ...base, labels: [] })).toBe(false);
+  });
+
+  it('is false for a Done Ticket', () => {
+    expect(offersDone({ ...base, status: 'Done' })).toBe(false);
+  });
+
+  it('is false with a live Conversation', () => {
+    expect(offersDone(base, liveConversation({ state: 'running' }))).toBe(
+      false,
+    );
+  });
+
+  it('is false in Review, where Merged finishes it', () => {
+    const inReview = {
+      ...base,
+      status: 'In progress' as const,
+      externalReferences: [pullRequest],
+    };
+    expect(offersDone(inReview)).toBe(false);
   });
 });
 

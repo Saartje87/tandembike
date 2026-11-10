@@ -189,3 +189,21 @@ export function isInReview(
 export function isParked(ticket: LaneInput, live?: LiveConversation): boolean {
   return ticket.status === 'In progress' && live === undefined;
 }
+
+/**
+ * Whether the drawer offers Done on a Ticket or Epic: labelled
+ * ready-for-human, Todo or In progress, with no live Conversation and not in
+ * Review, where Merged finishes it (T1268). Done applies the completion rule,
+ * as Merged does; nothing finishes such a Ticket by itself.
+ */
+export function offersDone(
+  ticket: LaneInput,
+  live?: LiveConversation,
+): boolean {
+  return (
+    ticket.status !== 'Done' &&
+    ticket.labels.includes(readyForHuman) &&
+    live === undefined &&
+    !isInReview(ticket)
+  );
+}

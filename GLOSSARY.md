@@ -61,7 +61,7 @@ The Lane for Todo Tickets and Epics still to triage: labelled `needs-triage` or 
 _Avoid_: Inbox, Untriaged
 
 **Your work**:
-The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now; that is Needs you. Formerly called For human.
+The Lane for Todo Tickets labelled `ready-for-human`: work the User does. It does not mean the Ticket needs the User now; that is Needs you. The User finishes one with **Done** in its drawer, offered on a `ready-for-human` Ticket or Epic in Todo or In progress with no live Conversation and not in Review (where Merged is): it applies the completion rule as Merged does, and confirms unchecked criteria the same way. Checking its last acceptance criterion does not finish it. Formerly called For human.
 _Avoid_: For human, Waiting on me
 
 **Needs you**:

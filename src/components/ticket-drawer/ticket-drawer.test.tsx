@@ -601,6 +601,84 @@ describe('TicketDrawer', () => {
     });
   });
 
+  describe('Done (T1268)', () => {
+    const forHuman: Ticket = {
+      ...ticket,
+      labels: ['enhancement', 'ready-for-human'],
+    };
+    const done = () => inDrawer().queryByRole('button', { name: /^Done T/ });
+
+    it.each([
+      ['Todo', forHuman],
+      ['In progress', { ...forHuman, status: 'In progress' as const }],
+    ])('finishes a ready-for-human Ticket in %s', async (_name, shown) => {
+      vi.mocked(completeTicket).mockResolvedValue({ ok: true, projectId: 1 });
+      renderDrawer(shown);
+
+      await userEvent.click(button('Done T4 Fix the header'));
+
+      expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
+    });
+
+    it('asks to confirm unchecked criteria, then finishes with confirmed', async () => {
+      vi.mocked(completeTicket)
+        .mockResolvedValueOnce({
+          ok: true,
+          projectId: 1,
+          unchecked: [{ number: 4, text: 'Menu opens' }],
+        })
+        .mockResolvedValueOnce({ ok: true, projectId: 1 });
+      renderDrawer(forHuman);
+
+      await userEvent.click(button('Done T4 Fix the header'));
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Finish T4 with unchecked criteria?',
+      });
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Done anyway' }),
+      );
+
+      expect(completeTicket).toHaveBeenLastCalledWith({
+        number: 4,
+        confirmed: true,
+      });
+    });
+
+    it.each([
+      ['without ready-for-human', { ...ticket, labels: ['ready-for-agent'] }],
+      ['that is Done', { ...forHuman, status: 'Done' as const }],
+    ])('shows nothing for a Ticket %s', (_name, shown) => {
+      renderDrawer(shown);
+
+      expect(done()).toBeNull();
+    });
+
+    it('shows Merged, not Done, for a ready-for-human Ticket in Review', () => {
+      renderDrawer({
+        ...forHuman,
+        status: 'In progress',
+        externalReferences: ['https://github.com/owner/repo/pull/87'],
+      });
+
+      expect(button('Merged T4 Fix the header')).toBeInTheDocument();
+      expect(done()).toBeNull();
+    });
+
+    it('shows the reason when refused', async () => {
+      vi.mocked(completeTicket).mockResolvedValue({
+        ok: false,
+        error: 'The Project is archived.',
+      });
+      renderDrawer(forHuman);
+
+      await userEvent.click(button('Done T4 Fix the header'));
+
+      expect(
+        await inDrawer().findByText('The Project is archived.'),
+      ).toBeInTheDocument();
+    });
+  });
+
   describe('Approve merge', () => {
     const pullRequest = 'https://github.com/owner/repo/pull/87';
     const inReview: Ticket = { ...ticket, externalReferences: [pullRequest] };
