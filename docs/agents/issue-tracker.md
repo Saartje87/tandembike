@@ -69,11 +69,11 @@ Record triage roles as labels: one category label (`bug` or `enhancement`) and o
 
 ## Publishing a spec
 
-A spec is always an Epic in Tandembike, whatever its size, so that its build Tickets hang off it and "Working an Epic" applies. Unless it fills a placeholder Epic, one being triaged or named by the User (below), `/to-spec` publishes it with `file_tickets` (`type: "Epic"`) in the work's Project, with the spec as its description and the `ready-for-agent` label; `/to-tickets` then creates its children in one `file_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. A spec of one Ticket's worth is an Epic with one child.
+A spec is always an Epic in Tandembike, whatever its size, so that its build Tickets hang off it and "Working an Epic" applies. Unless it fills an existing Epic, a placeholder being triaged or named by the User or a named Epic that already has children (below), `/to-spec` publishes it with `file_tickets` (`type: "Epic"`) in the work's Project, with the spec as its description and the `ready-for-agent` label; `/to-tickets` then creates its children in one `file_tickets` call with its `epicNumber` and their Blockers in `blockedByPositions`, each labelled `ready-for-agent`. A spec of one Ticket's worth is an Epic with one child.
 
 Check what changed in the target Project before you publish, since a spec session can run long while other sessions publish or change the work it builds on:
 
-- **When.** Right before `/to-spec` publishes the spec or fills its placeholder Epic, and again right before `/to-tickets` creates its Tickets. The session starts when you first read the tracker in it, since everything before that is already in what you read; note that time then, in UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`).
+- **When.** Right before `/to-spec` publishes the spec or fills an existing Epic, and again right before `/to-tickets` creates or reconciles its Tickets. The session starts when you first read the tracker in it, since everything before that is already in what you read; note that time then, in UTC (`date -u +%Y-%m-%dT%H:%M:%SZ`).
 - **The call.** List the target Project's open Epics changed since then: `find_tickets` with `projectName`, `type: "Epic"`, `status: ["Todo", "In progress"]` and `changedSince` set to that time, plus `cycleId` when the work is planned into a Cycle.
 - **What to read.** Read each Epic that comes back with `get_ticket`, except the spec's own Epic.
 - **What to do.** If one removes, renames or rebuilds something the spec relies on, stop and tell the User before publishing. Otherwise go ahead.
@@ -91,6 +91,15 @@ When the spec refines an idea Ticket, for example one grilled in `/triage`:
 3. Comment `Refined into Epic T<number>` on the idea Ticket, remove its triage state label, and archive it with `update_ticket` and `archived: true`. Keep it out of the Epic: an Epic's Status follows its children, so a finished idea child would show the Epic `In progress` before any work starts.
 
 When the Ticket being triaged is an Epic with no children, or the User names an existing Epic with no children while running `/to-spec`, that Epic is a placeholder and becomes the spec itself. Examples are a follow-up an earlier spec filed as an Epic, or a roadmap phase's Epic. Replace its description with the spec and give it `ready-for-agent` with `update_ticket`, removing any other triage state label in the same call; a placeholder may carry none. It keeps its number, its other labels and its Origin. `/to-tickets` then creates its children under it with its `epicNumber`. Do not publish a new Epic, and archive or replace nothing. An Epic is a placeholder only when it is being triaged or the User names it, not by its labels; without either, `/to-spec` publishes a new Epic as above.
+
+When the User names an existing Epic that already has children while running `/to-spec`, for example after a grilling session filed its children before the spec was written, it becomes the spec the same way: replace its description with the spec and give it `ready-for-agent`, and it keeps its number, its other labels, its Origin and its children. Do not publish a new Epic: that duplicates the Epic and orphans its children (T1358). `/to-tickets` on that Epic then **reconciles** its children against the spec instead of filing a second set. Read each unarchived child with `get_ticket`, then:
+
+- **Keep** a child the spec covers as it is.
+- **Reword** a Todo child where the spec sharpens it: its title, description or `acceptanceCriteria`, with `update_ticket`. A child that is In progress or Done and differs from the spec is flagged instead.
+- **Add** each slice the spec needs that no child covers: `file_tickets` with the Epic's `epicNumber`, and `addBlockers` with `update_ticket` for Blockers between new and existing children, in either direction.
+- **Flag** a child the spec does not cover, or does not match and cannot be reworded: comment on it with `add_note`, naming the spec's Epic and what the spec leaves out, and leave it as it is. The User decides whether it goes; the run never archives it. List the flagged children to the User at the end.
+
+Show the reconciled breakdown, marked keep, reword, add or flag, when you quiz the User, and change nothing until they approve it.
 
 When the spec is feedback on an Epic that is already built or in review, such as follow-up requests after its PR, publish a new Epic with the existing Epic as its `originNumber`, and leave the existing Epic unchanged: no comment, no archive. Its new branch starts from the existing Epic's branch, and its PR targets that branch while the earlier PR is open.
 
