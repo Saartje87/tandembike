@@ -24,8 +24,8 @@ export const switcher = style({
 
 /** The chat column: as tall as the window allows, so its messages scroll. */
 export const chat = style({
-  blockSize: '75vh',
-  minBlockSize: '24rem',
+  blockSize: 'calc(100vh - 10rem)',
+  minBlockSize: '36rem',
 });
 
 /**
