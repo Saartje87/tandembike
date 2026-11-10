@@ -1,6 +1,13 @@
 'use client';
 
-import { IconButton, Tab, TabList, TabPanel, Tabs } from '@blockle/blocks';
+import {
+  IconButton,
+  Inline,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+} from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
 import { waitsOnUser } from '../../conversations/conversation-activity';
@@ -41,6 +48,8 @@ export type ConversationTabsProps<D extends DraftTab = DraftTab> = {
   renderDraft?: (draft: D) => ReactNode;
   /** Shown between the tab row and the panels, such as an error. */
   notice?: ReactNode;
+  /** Shown at the end of the tab row, outside the tab list, such as the dialog's Hide button. */
+  actions?: ReactNode;
 };
 
 /** A tab of either kind, in one list. */
@@ -113,6 +122,7 @@ export const ConversationTabs = <D extends DraftTab>({
   renderConversation,
   renderDraft,
   notice,
+  actions,
 }: ConversationTabsProps<D>) => {
   const items: TabItem[] = [
     ...tabs.map((item): TabItem => {
@@ -150,28 +160,31 @@ export const ConversationTabs = <D extends DraftTab>({
       onValueChange={(value) => itemOf.get(value)?.select()}
       className={styles.tabs}
     >
-      <TabList aria-label="Conversations" className={styles.tabList}>
-        {items.map((item) => (
-          <Tab
-            key={item.value}
-            value={item.value}
-            endSlot={
-              <IconButton
-                type="button"
-                size="small"
-                variant="ghost"
-                label={`Close ${item.label}`}
-                onClick={item.close}
-              >
-                <Icon name="x-mark" size="small" />
-              </IconButton>
-            }
-          >
-            {item.text}
-            {item.state && <StateMarker state={item.state} />}
-          </Tab>
-        ))}
-      </TabList>
+      <Inline gap={2} alignY="center" flexWrap="nowrap" flexShrink={0}>
+        <TabList aria-label="Conversations" className={styles.tabList}>
+          {items.map((item) => (
+            <Tab
+              key={item.value}
+              value={item.value}
+              endSlot={
+                <IconButton
+                  type="button"
+                  size="small"
+                  variant="ghost"
+                  label={`Close ${item.label}`}
+                  onClick={item.close}
+                >
+                  <Icon name="x-mark" size="small" />
+                </IconButton>
+              }
+            >
+              {item.text}
+              {item.state && <StateMarker state={item.state} />}
+            </Tab>
+          ))}
+        </TabList>
+        {actions}
+      </Inline>
       {notice}
       {items.map((item) => (
         <TabPanel key={item.value} value={item.value} className={styles.panel}>

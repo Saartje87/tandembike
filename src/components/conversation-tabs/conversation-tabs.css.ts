@@ -10,9 +10,10 @@ export const tabs = style({
   gap: vars.space[3],
 });
 
-/** The row keeps its height while the panel flexes. */
+/** The tab list takes the tab row but what its actions need, and scrolls when it overflows. */
 export const tabList = style({
-  flexShrink: 0,
+  flexGrow: 1,
+  minInlineSize: 0,
 });
 
 /** A panel fills what is left; the chat in it scrolls its own messages. */

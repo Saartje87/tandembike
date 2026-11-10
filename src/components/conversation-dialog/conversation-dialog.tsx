@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Dialog, Heading, Inline } from '@blockle/blocks';
+import { Alert, Button, Dialog, VisuallyHidden } from '@blockle/blocks';
 import { type FC, useEffect, useId, useState } from 'react';
 
 import { loadConversation } from '../../app/conversations/actions';
@@ -125,8 +125,8 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open, kept }) => {
 
 /**
  * The one modal dialog every Conversation is held in (ADR 0019, T608): a tab
- * per open Conversation, and the shown tab's chat below. Escape, the X
- * and a click on the backdrop hide it and keep every tab; a tab's close button
+ * per open Conversation, and the shown tab's chat below. Escape, the Hide
+ * button at the end of the tab row and a click on the backdrop hide it and keep every tab; a tab's close button
  * closes that Conversation. Mount it once, through
  * `ConversationDialogProvider`.
  */
@@ -157,25 +157,7 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
     >
       {shownKey !== undefined && (
         <div className={styles.content}>
-          <Inline
-            gap={2}
-            alignY="center"
-            justifyContent="space-between"
-            flexShrink={0}
-          >
-            <Heading id={titleId} level={2} fontSize="large">
-              Conversations
-            </Heading>
-            <Button
-              type="button"
-              variant="ghost"
-              size="small"
-              aria-label="Hide"
-              onClick={onHide}
-            >
-              <Icon name="x-mark" size="small" />
-            </Button>
-          </Inline>
+          <VisuallyHidden id={titleId}>Conversations</VisuallyHidden>
           <ConversationTabs
             tabs={tabs}
             selectedId={selectedId}
@@ -191,6 +173,17 @@ export const ConversationDialog: FC<ConversationDialogProps> = ({
               onClose: drafts.onClose,
             }}
             notice={error && <Alert intent="danger">{error}</Alert>}
+            actions={
+              <Button
+                type="button"
+                variant="ghost"
+                size="small"
+                aria-label="Hide"
+                onClick={onHide}
+              >
+                <Icon name="x-mark" size="small" />
+              </Button>
+            }
             renderConversation={(open) => (
               <ConversationPanel
                 key={open.conversation.id}
