@@ -184,6 +184,33 @@ describe('ReferenceTemplateEditor', () => {
     );
   });
 
+  it('keeps an edit open with a reason when its action throws (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(updateReferenceTemplate).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ReferenceTemplateEditor projectId={3} templates={[github, jira]} />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit Reference template #' }),
+    );
+    const form = within(
+      screen.getByRole('form', { name: 'Edit Reference template #' }),
+    );
+    await userEvent.clear(form.getByLabelText('Prefix'));
+    await userEvent.type(form.getByLabelText('Prefix'), 'GH-');
+    await userEvent.click(form.getByRole('button', { name: 'Save' }));
+
+    expect(await form.findByRole('alert')).toHaveTextContent(
+      'The Reference template could not be saved. Try again.',
+    );
+    expect(form.getByLabelText('Prefix')).toHaveValue('GH-');
+    expect(form.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
   it('cancels an edit without saving', async () => {
     renderWithTheme(
       <ReferenceTemplateEditor projectId={3} templates={[github]} />,
