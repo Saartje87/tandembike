@@ -1,5 +1,6 @@
 import next from 'next';
 
+import { refuseFakeRunsOnAppPort } from './src/conversations/fake-runs';
 import { isLoopbackAddress } from './src/http/loopback-address';
 import { serverPort } from './src/http/server-port';
 import { createServer as createHttpServer } from 'node:http';
@@ -26,6 +27,7 @@ const refusalResponse = [
 
 async function main(): Promise<void> {
   const port = serverPort(process.argv.slice(2));
+  refuseFakeRunsOnAppPort(process.env, port);
   const dev = process.env.NODE_ENV !== 'production';
 
   // One HTTP server, fed by a listener per loopback address: Next attaches its

@@ -93,3 +93,28 @@ export async function press(page, locator, mode) {
   await locator.focus();
   await page.keyboard.press(mode);
 }
+
+/**
+ * Gives Project `projectId` a fresh empty folder as its repository path,
+ * through its settings form as the User does, so a Start can run there. Only
+ * for a server with fake runs on (browser-checks.md, "Conversations in a
+ * given state"): a real run would work in that folder.
+ */
+export async function fakeRepository(page, projectId) {
+  const { mkdtempSync } = await import('node:fs');
+  await page.goto(`${base}/project/${projectId}/settings`);
+  const form = page.getByRole('form', { name: 'Agent settings' });
+  await form
+    .getByLabel('Repository path', { exact: true })
+    .fill(mkdtempSync('/tmp/fake-repo-'));
+  await form.getByRole('button', { name: 'Save' }).click();
+  await page.waitForTimeout(1500);
+}
+
+/** Sends `text` as the User's reply in the open Conversation and lets it settle. */
+export async function reply(page, text) {
+  const box = page.getByRole('textbox', { name: 'Reply' });
+  await box.fill(text);
+  await box.press('Enter');
+  await page.waitForTimeout(1500);
+}

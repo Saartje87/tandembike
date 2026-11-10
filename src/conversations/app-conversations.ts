@@ -4,6 +4,7 @@ import { appChangeChannel } from '../tickets/changes';
 import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
+import { agentBackends } from './fake-runs';
 import { terminalSweepMs } from './terminal-shared';
 
 const globalKey = Symbol.for('ticket.conversations');
@@ -21,7 +22,8 @@ const mcpUrl =
   process.env.TANDEMBIKE_MCP_URL ?? 'http://localhost:4747/api/mcp';
 
 /**
- * The Conversations module the app uses, with the Claude Code runner. It
+ * The Conversations module the app uses, with the Claude Code runner, or
+ * the scripted one with `TANDEMBIKE_FAKE_RUNS=1`. It
  * lives on `globalThis`, with the runs it holds, so Server Actions share it
  * and dev-mode reloads keep it. The first call marks the Conversations of
  * runs that died with the previous server as interrupted. Only Server
@@ -34,8 +36,11 @@ export function appConversations(): Conversations {
       db: appDatabase(),
       tickets: appTickets('user'),
       changes: appChangeChannel(),
-      runner: createClaudeRunner(),
-      worktrees: createWorktrees({ owner: appDataFolder }),
+      // Fake runs on a throwaway server for browser checks (T678).
+      ...agentBackends(process.env, () => ({
+        runner: createClaudeRunner(),
+        worktrees: createWorktrees({ owner: appDataFolder }),
+      })),
       mcpUrl,
     });
     conversations.interruptStale();
