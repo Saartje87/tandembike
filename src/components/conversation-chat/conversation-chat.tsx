@@ -88,46 +88,48 @@ export const ConversationChat: FC<ConversationChatProps> = ({
       <ConversationChatHeader conversation={conversation} title={title} />
       {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
-      {closedReason !== undefined ? (
-        <Alert intent="info">{closedReason}</Alert>
-      ) : (
-        <>
-          {!terminal && questions && (
-            <ConversationReplyOptions
-              questions={questions}
-              onChoose={({ label }, { key }) =>
-                label === null
-                  ? reply.current?.sendWith(key)
-                  : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
-              }
-            />
-          )}
-          {!terminal && beforeReply}
-          {!terminal && notices[conversation.state] && (
-            <Text fontSize="small" color="muted">
-              {notices[conversation.state]}
-            </Text>
-          )}
-          {terminal ? (
-            <ConversationTerminalNotice conversation={conversation} />
-          ) : (
-            <ConversationReplyForm
-              {...(onReply ? { send: onReply } : {})}
-              key={conversation.id}
-              conversationId={conversation.id}
-              control={reply}
-              {...(kept
-                ? {
-                    initialText: kept.reply,
-                    onTextChange: (text: string) => {
-                      kept.reply = text;
-                    },
-                  }
-                : {})}
-            />
-          )}
-        </>
-      )}
+      <div className={styles.replyArea}>
+        {closedReason !== undefined ? (
+          <Alert intent="info">{closedReason}</Alert>
+        ) : (
+          <>
+            {!terminal && questions && (
+              <ConversationReplyOptions
+                questions={questions}
+                onChoose={({ label }, { key }) =>
+                  label === null
+                    ? reply.current?.sendWith(key)
+                    : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
+                }
+              />
+            )}
+            {!terminal && beforeReply}
+            {!terminal && notices[conversation.state] && (
+              <Text fontSize="small" color="muted">
+                {notices[conversation.state]}
+              </Text>
+            )}
+            {terminal ? (
+              <ConversationTerminalNotice conversation={conversation} />
+            ) : (
+              <ConversationReplyForm
+                {...(onReply ? { send: onReply } : {})}
+                key={conversation.id}
+                conversationId={conversation.id}
+                control={reply}
+                {...(kept
+                  ? {
+                      initialText: kept.reply,
+                      onTextChange: (text: string) => {
+                        kept.reply = text;
+                      },
+                    }
+                  : {})}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
