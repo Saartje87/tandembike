@@ -63,6 +63,7 @@ A list of testing decisions that were made. Include:
 - A description of what makes a good test (only test external behavior, not implementation details)
 - Which modules will be tested
 - Prior art for the tests (i.e. similar types of tests in the codebase)
+- Each browser check (`docs/agents/browser-checks.md`), on a screen and control the app has today, named as the user reaches them: "Escape on the Move to Cycle menu in the Board's selection bar". Read the code to confirm the control sits on that screen. A check for a case the app does not have yet is marked **future**, with the case it guards: the implementer runs it once that case exists, and builds nothing to reach it now.
 
 ## Out of Scope
 
