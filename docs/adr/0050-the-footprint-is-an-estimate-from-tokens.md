@@ -78,13 +78,13 @@ The Footprint never pauses Autopilot, never limits a run and is not part of any 
 
 - **Five fixed comparisons.** Every measured Footprint's tooltip lists all five, always in this order, whatever the size (research §6):
 
-  | Comparison                             | Reference value | From   | Source                                                                            |
-  | -------------------------------------- | --------------: | ------ | --------------------------------------------------------------------------------- |
-  | phone charges                          |           19 Wh | energy | US EPA, 0.019 kWh per full charge                                                 |
-  | hours of an LED bulb                   |             9 W | energy | EU Regulations 244/2009 (806 lm = 60 W equivalent) and 2019/2020 (power cap)      |
-  | kettles boiled                         |          200 Wh | energy | A full 1.7 L kettle, 15 → 100 °C, NIST heat capacity of water, 85% efficiency    |
-  | days of an EU household's electricity  |        9,900 Wh | energy | Odyssee-Mure, 3.6 MWh per dwelling per year, EU average                           |
-  | km by petrol car                       |  250 gCO₂e / km | CO₂e   | US EPA, 393 g per mile                                                            |
+  | Comparison                            | Reference value | From   | Source                                                                        |
+  | ------------------------------------- | --------------: | ------ | ----------------------------------------------------------------------------- |
+  | phone charges                         |           19 Wh | energy | US EPA, 0.019 kWh per full charge                                             |
+  | hours of an LED bulb                  |             9 W | energy | EU Regulations 244/2009 (806 lm = 60 W equivalent) and 2019/2020 (power cap)  |
+  | kettles boiled                        |          200 Wh | energy | A full 1.7 L kettle, 15 → 100 °C, NIST heat capacity of water, 85% efficiency |
+  | days of an EU household's electricity |        9,900 Wh | energy | Odyssee-Mure, 3.6 MWh per dwelling per year, EU average                       |
+  | km by petrol car                      |  250 gCO₂e / km | CO₂e   | US EPA, 393 g per mile                                                        |
 
   Energy drives the first four and CO₂e the car, so changing the grid intensity changes only the car. The reference values are constants in code with their source, not settings, like the token fractions.
 - **One significant figure.** Each comparison shows as "≈ N <unit>" rounded to one significant figure ("≈ 0.02 kettles boiled", "≈ 4000 phone charges"), replacing the "<0.01" floor. The estimate may be off by a factor of 3, so more digits would claim precision it does not have.

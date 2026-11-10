@@ -1,4 +1,5 @@
 import type { Conversation } from '../conversations/conversations';
+import { comparisonsOf, type MeasuredFootprint } from '../footprint/footprint';
 import {
   agentStages,
   type ProjectAgentCommands,
@@ -78,4 +79,20 @@ export const anEpicChild = (overrides: Partial<EpicChild> = {}): EpicChild => ({
   blocked: false,
   uncheckedCriteria: 0,
   ...overrides,
+});
+
+/**
+ * A measured Footprint for a test, with its comparisons worked out from its
+ * energy and CO₂e: 12 Wh and 5.7 g CO₂e but for `energyWh` and `co2eG`.
+ */
+export const aFootprint = ({
+  energyWh = 12,
+  co2eG = 5.7,
+}: Partial<
+  Pick<MeasuredFootprint, 'energyWh' | 'co2eG'>
+> = {}): MeasuredFootprint => ({
+  measured: true,
+  energyWh,
+  co2eG,
+  comparisons: comparisonsOf(energyWh, co2eG),
 });

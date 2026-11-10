@@ -14,7 +14,7 @@ import type {
   Conversation,
   TranscriptEntry,
 } from '../../conversations/conversations';
-import { aConversation } from '../../test/fixtures';
+import { aConversation, aFootprint } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import { ConversationChat } from './conversation-chat';
@@ -124,13 +124,7 @@ describe('ConversationChat', () => {
         title="T4 A Ticket"
         item={{
           ...one({ costUsd: 0.5 }),
-          footprint: {
-            measured: true,
-            energyWh: 2400,
-            co2eG: 1140,
-            phoneCharges: 126,
-            carKm: 4.6,
-          },
+          footprint: aFootprint({ energyWh: 2400, co2eG: 1140 }),
         }}
       />,
     );

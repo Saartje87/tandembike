@@ -1,3 +1,5 @@
+import type { Comparisons } from './footprint';
+
 /**
  * An amount to two significant digits, whole from 100 up, and "<0.01" when
  * it is below that: a Footprint is a rough estimate (ADR 0050).
@@ -34,10 +36,39 @@ export function formatFootprint(footprint: {
   return `${scaled(footprint.energyWh, ['Wh', 'kWh', 'MWh'])} · ${scaled(footprint.co2eG, ['g', 'kg', 't'])} CO₂e est.`;
 }
 
-/** A Footprint's everyday comparisons: "≈ 2 phone charges · ≈ 0.1 km by car". */
-export function formatComparisons(footprint: {
-  phoneCharges: number;
-  carKm: number;
-}): string {
-  return `≈ ${formatMeasure(footprint.phoneCharges)} phone charges · ≈ ${formatMeasure(footprint.carKm)} km by car`;
+/**
+ * `amount` at one significant figure, written out in full: a comparison is
+ * no more precise than the estimate behind it (ADR 0050).
+ */
+function oneSignificantFigure(amount: number): string {
+  if (amount === 0) {
+    return '0';
+  }
+  const rounded = Number(amount.toPrecision(1));
+  const decimals = Math.max(0, -Math.floor(Math.log10(rounded)));
+  return rounded.toFixed(decimals);
+}
+
+/** Each comparison's unit, singular and plural, in the fixed order (ADR 0050). */
+const comparisonUnits: [keyof Comparisons, string, string][] = [
+  ['phoneCharges', 'phone charge', 'phone charges'],
+  ['ledBulbHours', 'hour of an LED bulb', 'hours of an LED bulb'],
+  ['kettles', 'kettle boiled', 'kettles boiled'],
+  [
+    'householdDays',
+    "day of an EU household's electricity",
+    "days of an EU household's electricity",
+  ],
+  ['carKm', 'km by petrol car', 'km by petrol car'],
+];
+
+/**
+ * A Footprint's five everyday comparisons, always all five in the same
+ * order, each "≈ N <unit>" at one significant figure (ADR 0050).
+ */
+export function formatComparisons(comparisons: Comparisons): string[] {
+  return comparisonUnits.map(([key, one, many]) => {
+    const amount = oneSignificantFigure(comparisons[key]);
+    return `≈ ${amount} ${amount === '1' ? one : many}`;
+  });
 }

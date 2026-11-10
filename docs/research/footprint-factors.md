@@ -158,13 +158,13 @@ No government agency publishes a measured figure for one boil. The value is deri
 
 ### Summary
 
-| Comparison                   | Reference value | From       | Source                                         |
-| ---------------------------- | --------------: | ---------- | ---------------------------------------------- |
-| Phone charges                |           19 Wh | energy     | US EPA                                         |
-| Hours of an LED bulb         |             9 W | energy     | EU Regulations 244/2009 and 2019/2020          |
-| Kettles boiled (1.7 L)       |          200 Wh | energy     | Physics, NIST heat capacity, 85% efficiency    |
-| Days of an EU household      |        9,900 Wh | energy     | Odyssee-Mure, 3.6 MWh per dwelling per year    |
-| km by petrol car             |  250 gCO₂e / km | CO₂e       | US EPA                                         |
+| Comparison              | Reference value | From   | Source                                      |
+| ----------------------- | --------------: | ------ | ------------------------------------------- |
+| Phone charges           |           19 Wh | energy | US EPA                                      |
+| Hours of an LED bulb    |             9 W | energy | EU Regulations 244/2009 and 2019/2020       |
+| Kettles boiled (1.7 L)  |          200 Wh | energy | Physics, NIST heat capacity, 85% efficiency |
+| Days of an EU household |        9,900 Wh | energy | Odyssee-Mure, 3.6 MWh per dwelling per year |
+| km by petrol car        |  250 gCO₂e / km | CO₂e   | US EPA                                      |
 
 No comparison needed replacing: each has a primary source or a physical derivation.
 

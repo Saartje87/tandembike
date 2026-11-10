@@ -25,7 +25,7 @@ import {
 } from '../../app/tickets/actions';
 import type { Conversation } from '../../conversations/conversations';
 import { liveConversation } from '../../test/conversation-activity';
-import { aConversation, anEpicChild } from '../../test/fixtures';
+import { aConversation, aFootprint, anEpicChild } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { EpicLink } from '../../tickets/epic-link';
@@ -293,23 +293,24 @@ describe('TicketDrawer', () => {
           conversationWithId(1, { state: 'stopped', hidden: true }),
         ]}
         conversationFootprints={{
-          2: {
-            measured: true,
-            energyWh: 12,
-            co2eG: 5.7,
-            phoneCharges: 0.63,
-            carKm: 0.023,
-          },
+          2: aFootprint({ energyWh: 12, co2eG: 5.7 }),
         }}
       />,
     );
 
-    const rows = within(
-      inDrawer().getByRole('list', { name: 'Conversations' }),
-    ).getAllByRole('button');
+    const list = inDrawer().getByRole('list', { name: 'Conversations' });
+    const rows = within(list).getAllByRole('button');
     expect(rows.map((row) => row.textContent)).toEqual([
-      'Ask · waiting for you · $1.23 · ~12 Wh · ~5.7 g CO₂e est.',
-      'Start · closed · $0.00 · Footprint not measured',
+      'Ask · waiting for you · $1.23',
+      'Start · closed · $0.00',
+    ]);
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      'Ask · waiting for you · $1.23·~12 Wh · ~5.7 g CO₂e est.',
+      'Start · closed · $0.00·Footprint not measured',
     ]);
     expect(
       inDrawer().queryByRole('textbox', { name: 'Reply' }),
