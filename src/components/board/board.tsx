@@ -212,13 +212,13 @@ function needLine(row: NeedRow, waited: string): string {
   return lineOf(label, row.live?.line ?? parked, waited);
 }
 
-/** A queued row's second line: its place, and what blocks it. */
 /** What a blocked Todo row waits on, by its Blockers when it knows them. */
 const blockedByOf = (row: TodoRow): string =>
   row.blockers.length > 0
     ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
     : 'blocked';
 
+/** A queued row's second line: its place, and what blocks it. */
 function queuedLine(row: QueuedRow, index: number): string {
   return lineOf(`Queued #${index + 1}`, row.blocked && blockedByOf(row));
 }
