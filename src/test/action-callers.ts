@@ -6,7 +6,8 @@
  * `files` maps a path to its source; `allowlist` maps a path to why that file
  * is safe without `callAction`. Returns one message per problem: a file that
  * bypasses `callAction` and is not allowlisted, or an allowlist entry that is
- * stale or gives no reason.
+ * stale or gives no reason. It checks a file as a whole: one `callAction`
+ * passes the file, so review still catches a second, direct call in it.
  */
 export function actionCallerProblems(
   files: Record<string, string>,
@@ -36,7 +37,8 @@ export function actionCallerProblems(
 }
 
 /** A value import (not `import type`) from a Server Action module. */
-const actionImport = /import\s+(?!type\b)[^;]*?from\s+'[./]*app\/[^']*actions'/;
+const actionImport =
+  /import\s+(?!type\b)[^;]*?from\s+'[./]*app\/(?:[^']*\/)?actions'/;
 
 function bypassesCallAction(source: string): boolean {
   return actionImport.test(source) && !/\bcallAction\(/.test(source);

@@ -41,6 +41,7 @@ describe('actionCallerProblems', () => {
       actionCallerProblems(
         {
           'plain/plain.tsx': `import { sparPath } from '../../app/lib/paths';`,
+          'near/near.tsx': `import { total } from '../../app/lib/transactions';`,
           'types/types.tsx': `import type { MachineRunsState } from '../../app/settings/actions';`,
         },
         {},
