@@ -2105,6 +2105,22 @@ describe('TicketDrawer', () => {
       await waitFor(() => expect(button('Archive')).toBeEnabled());
     });
 
+    it('shows a restore as a refusal and the Ticket as archived again', async () => {
+      vi.mocked(restoreTicket).mockImplementation(thrown);
+      renderDrawer({ ...ticket, archived: true });
+
+      await userEvent.click(button('Restore'));
+
+      await waitFor(() =>
+        expect(
+          inDrawer()
+            .getAllByRole('alert')
+            .map((alert) => alert.textContent),
+        ).toContain('The Ticket could not be restored. Try again.'),
+      );
+      await waitFor(() => expect(button('Restore')).toBeEnabled());
+    });
+
     it('shows Back to Todo as a refusal', async () => {
       vi.mocked(backToTodo).mockImplementation(thrown);
       renderDrawer();
