@@ -138,6 +138,24 @@ const splitTool = (text: string): [name: string, input: string] => {
     : [text.slice(0, space), text.slice(space + 1)];
 };
 
+/**
+ * A tool entry worded as on the Board cards, such as "Editing a.ts" (T1066),
+ * from its tool name and input, or for an older entry from its stored
+ * `Name {json}` text. The chat uses it for its steps too (T1386).
+ */
+export function toolPhrase(entry: StatusEntry): string {
+  if (entry.toolName && entry.toolInput) {
+    return toolLine(entry.toolName, entry.toolInput);
+  }
+  const [name, input] = splitTool(entry.text);
+  return toolLine(entry.toolName ?? name, parseInput(input));
+}
+
+/** A tool entry's input as stored: its text after the tool name, already capped. */
+export function toolRawInput(text: string): string {
+  return splitTool(text)[1];
+}
+
 const firstSentence = (text: string) => {
   const flat = text.trim().replace(/\s+/g, ' ');
   return flat.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? firstLine(text);
@@ -153,13 +171,8 @@ export function statusLine(entry: StatusEntry | null): string {
     return 'Starting';
   }
   switch (entry.role) {
-    case 'tool': {
-      if (entry.toolName && entry.toolInput) {
-        return toolLine(entry.toolName, entry.toolInput);
-      }
-      const [name, input] = splitTool(entry.text);
-      return toolLine(entry.toolName ?? name, parseInput(input));
-    }
+    case 'tool':
+      return toolPhrase(entry);
     case 'agent':
       return firstSentence(entry.text);
     case 'permission':
