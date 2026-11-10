@@ -13,8 +13,7 @@ import { join } from 'node:path';
  * a fake runner, next to the Tickets module they share it with.
  * `repositoryDir` is an existing directory to use as a Project's repository
  * path. `restart()` is a new Conversations module over the same database with
- * no live runs, like the server after a restart. Test files that use it need
- * `// @vitest-environment node` on line 1.
+ * no live runs, like the server after a restart.
  */
 export function createTestConversations(changes?: ChangeChannel) {
   const db = openDatabase(':memory:');

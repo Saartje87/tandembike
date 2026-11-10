@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import type { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -2353,15 +2351,72 @@ describe('Epic tools', () => {
     expect(JSON.parse(resultText(result))).toMatchObject({
       failed: [
         {
-          number: grouped.number,
-          error: `Ticket T${grouped.number} is already in Epic T${other.number}. Detach it from that Epic first.`,
-        },
-        {
           number: other.number,
           error: `Ticket T${other.number} is an Epic, and an Epic cannot be a child of another Epic.`,
         },
       ],
     });
+    expect(tickets.getTicket(grouped.number).epic?.number).toBe(epic.number);
+    await client.close();
+  });
+
+  it('moves a child from its Epic to another Epic in one call, as one Activity entry', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const [from, to] = ['Payments', 'Checkout'].map((title) =>
+      tickets.createTicket({ projectId: project.id, title, type: 'Epic' }),
+    );
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Refund',
+      epicNumber: from.number,
+    });
+    const before = tickets.listActivity(child.number).length;
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: child.number, epicNumber: to.number },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(tickets.getTicket(child.number).epic?.number).toBe(to.number);
+    expect(tickets.getTicket(from.number).children).toEqual([]);
+    expect(
+      tickets
+        .listActivity(child.number)
+        .slice(before)
+        .map(({ changes }) => changes),
+    ).toEqual([[{ type: 'epic', from: from.number, to: to.number }]]);
+    await client.close();
+  });
+
+  it('refuses a move between Epics that would leave a Blocker between an Epic and its child', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const [from, to] = ['Payments', 'Checkout'].map((title) =>
+      tickets.createTicket({ projectId: project.id, title, type: 'Epic' }),
+    );
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Refund',
+      epicNumber: from.number,
+    });
+    tickets.addBlocker({ blocker: child.number, blocked: to.number });
+    const before = tickets.listActivity(child.number);
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: child.number, epicNumber: to.number },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toContain(
+      `T${child.number} blocks T${to.number}. An Epic and its own children cannot block each other; remove that Blocker first.`,
+    );
+    expect(tickets.getTicket(child.number).epic?.number).toBe(from.number);
+    expect(tickets.listActivity(child.number)).toEqual(before);
     await client.close();
   });
 

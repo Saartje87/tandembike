@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
@@ -110,6 +109,36 @@ describe('Activity', () => {
       ]);
       expect(changesOf(tickets, epic.number).at(-1)?.changes).toEqual([
         { type: 'color', from: 'red', to: 'blue' },
+      ]);
+    });
+
+    it('records joining, moving between and leaving Epics, one entry each', () => {
+      const { tickets, project, ticket } = ticketsWithOne('agent');
+      const [first, second] = ['Checkout', 'Payments'].map((title) =>
+        tickets.createTicket({ projectId: project.id, title, type: 'Epic' }),
+      );
+
+      tickets.attachTicketsToEpic({
+        epic: first.number,
+        children: [ticket.number],
+      });
+      tickets.moveToEpic({ epic: second.number, child: ticket.number });
+      tickets.moveToEpic({ epic: second.number, child: ticket.number });
+      tickets.detachFromEpic(ticket.number);
+
+      expect(changesOf(tickets, ticket.number).slice(1)).toEqual([
+        {
+          actor: 'agent',
+          changes: [{ type: 'epic', from: null, to: first.number }],
+        },
+        {
+          actor: 'agent',
+          changes: [{ type: 'epic', from: first.number, to: second.number }],
+        },
+        {
+          actor: 'agent',
+          changes: [{ type: 'epic', from: second.number, to: null }],
+        },
       ]);
     });
 

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
