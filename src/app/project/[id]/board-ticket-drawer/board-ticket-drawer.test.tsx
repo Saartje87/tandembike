@@ -8,6 +8,7 @@ import { appConversations } from '../../../../conversations/app-conversations';
 import { createTestConversations } from '../../../../test/conversations';
 import { agentCommandEntries, agentCommands } from '../../../../test/fixtures';
 import { renderWithTheme } from '../../../../test/render';
+import { createTestSettings } from '../../../../test/settings';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { createChangeChannel } from '../../../../tickets/changes';
 import { BoardTicketDrawer } from './board-ticket-drawer';
@@ -17,6 +18,9 @@ vi.mock('../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
 vi.mock('../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
+vi.mock('../../../../settings/app-settings', () => ({
+  appSettings: () => createTestSettings(),
+}));
 vi.mock('../../../../autopilot/app-autopilot', () => ({
   appAutopilot: vi.fn(),
 }));
@@ -30,6 +34,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     outsideBlockers,
     referenceTemplates,
     conversations,
+    conversationFootprints,
     agentCommands,
     board,
     why,
@@ -42,6 +47,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     outsideBlockers: unknown;
     referenceTemplates: { prefix: string }[];
     conversations: unknown[];
+    conversationFootprints: unknown;
     agentCommands: unknown;
     board: unknown;
     why: ReactNode;
@@ -49,6 +55,7 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     <div
       role="dialog"
       data-epics={JSON.stringify(epics)}
+      data-footprints={JSON.stringify(conversationFootprints)}
       data-reference-prefixes={referenceTemplates
         .map(({ prefix }) => prefix)
         .join(' ')}
@@ -214,7 +221,7 @@ describe('BoardTicketDrawer', () => {
       projectId: project.id,
       title: 'Fix the header',
     });
-    await world.conversations.start({
+    const started = await world.conversations.start({
       ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go',
@@ -238,6 +245,11 @@ describe('BoardTicketDrawer', () => {
     expect(screen.getByRole('dialog')).toHaveAttribute(
       'data-conversations',
       '1',
+    );
+    // With their Footprints (T1176): this one recorded no tokens.
+    expect(screen.getByRole('dialog')).toHaveAttribute(
+      'data-footprints',
+      JSON.stringify({ [started.id]: { measured: false } }),
     );
   });
 

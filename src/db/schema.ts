@@ -622,6 +622,20 @@ export const machineSettings = sqliteTable('machine_settings', {
 });
 
 /**
+ * The app-wide Footprint factors (ADR 0050): one row, id 1, written and read
+ * only by the Settings module. No row means the defaults.
+ */
+export const footprintFactors = sqliteTable('footprint_factors', {
+  id: integer('id').primaryKey(),
+  /** Wh per 1M Haiku output tokens, data-centre PUE included. */
+  haikuWhPerMillion: real('haiku_wh_per_million').notNull(),
+  sonnetWhPerMillion: real('sonnet_wh_per_million').notNull(),
+  opusWhPerMillion: real('opus_wh_per_million').notNull(),
+  /** Grid carbon intensity in gCO₂e per kWh. */
+  gridGramsPerKwh: real('grid_grams_per_kwh').notNull(),
+});
+
+/**
  * A Spar (GLOSSARY): the User thinks an idea through with an Agent on its own
  * page. One-to-one with its Conversation of intent `spar`, whose id is the
  * Spar's id; the Conversation holds the run, cost, transcript and focus

@@ -3,18 +3,29 @@
 import { revalidatePath } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { defaultFootprintFactors } from '../../footprint/footprint';
+import { createTestSettings } from '../../test/settings';
 import { createTestTickets } from '../../test/tickets';
-import { currentMachineRuns, saveMachineSettings } from './actions';
+import {
+  currentMachineRuns,
+  resetFootprintFactor,
+  saveFootprintFactors,
+  saveMachineSettings,
+} from './actions';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const world = vi.hoisted(() => ({
   tickets: undefined as unknown,
+  settings: undefined as unknown,
   processes: { working: 0, waiting: 0 },
   budget: null as unknown,
 }));
 vi.mock('../../tickets/app-tickets', () => ({
   appTickets: () => world.tickets,
+}));
+vi.mock('../../settings/app-settings', () => ({
+  appSettings: () => world.settings,
 }));
 vi.mock('../../conversations/app-conversations', () => ({
   appConversations: () => ({
@@ -25,6 +36,7 @@ vi.mock('../../conversations/app-conversations', () => ({
 
 beforeEach(() => {
   world.tickets = createTestTickets();
+  world.settings = createTestSettings();
   world.processes = { working: 0, waiting: 0 };
   world.budget = null;
   vi.mocked(revalidatePath).mockReset();
@@ -95,5 +107,53 @@ describe('currentMachineRuns', () => {
     });
     world.budget = { spendUsd: 4, ceilingUsd: 10, paused: false };
     expect((await currentMachineRuns()).budget).toEqual(world.budget);
+  });
+});
+
+describe('saveFootprintFactors (T1178)', () => {
+  it('saves the factors and revalidates the pages that show Footprints', async () => {
+    expect(
+      await saveFootprintFactors({
+        ...defaultFootprintFactors,
+        opusWhPerMillion: 800,
+      }),
+    ).toEqual({
+      ok: true,
+      factors: { ...defaultFootprintFactors, opusWhPerMillion: 800 },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(revalidatePath).toHaveBeenCalledWith('/stats');
+  });
+
+  it('comes back with the field and reason for a negative factor', async () => {
+    expect(
+      await saveFootprintFactors({
+        ...defaultFootprintFactors,
+        gridGramsPerKwh: -5,
+      }),
+    ).toMatchObject({
+      ok: false,
+      fieldErrors: { gridGramsPerKwh: 'Enter a number of 0 or more.' },
+    });
+  });
+});
+
+describe('resetFootprintFactor (T1178)', () => {
+  it('sets one factor back to its default', async () => {
+    await saveFootprintFactors({
+      ...defaultFootprintFactors,
+      haikuWhPerMillion: 1,
+    });
+
+    expect(await resetFootprintFactor({ name: 'haikuWhPerMillion' })).toEqual({
+      ok: true,
+      factors: defaultFootprintFactors,
+    });
+  });
+
+  it('refuses a name that is not a factor', async () => {
+    expect(await resetFootprintFactor({ name: 'nope' as never })).toMatchObject(
+      { ok: false },
+    );
   });
 });

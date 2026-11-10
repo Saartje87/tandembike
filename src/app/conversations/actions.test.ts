@@ -7,6 +7,7 @@ import { createAutopilot } from '../../autopilot/autopilot';
 import { appConversations } from '../../conversations/app-conversations';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { createTestConversations } from '../../test/conversations';
+import { createTestSettings } from '../../test/settings';
 import { createChangeChannel } from '../../tickets/changes';
 import {
   answerConversationPermission,
@@ -30,6 +31,9 @@ vi.mock('../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
 vi.mock('../../autopilot/app-autopilot', () => ({ appAutopilot: vi.fn() }));
+vi.mock('../../settings/app-settings', () => ({
+  appSettings: () => createTestSettings(),
+}));
 
 function setup(withRepository = true) {
   const world = createTestConversations();

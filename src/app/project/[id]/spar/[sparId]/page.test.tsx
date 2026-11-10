@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import { appSpars } from '../../../../../spars/app-spars';
 import { renderPage, renderPageError } from '../../../../../test/render';
+import { createTestSettings } from '../../../../../test/settings';
 import { createTestSpars } from '../../../../../test/spars';
 import { appTickets } from '../../../../../tickets/app-tickets';
 import SparPage, { generateMetadata } from './page';
@@ -17,6 +18,9 @@ const { notFound } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ notFound, useRouter: vi.fn() }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
+vi.mock('../../../../../settings/app-settings', () => ({
+  appSettings: () => createTestSettings(),
+}));
 vi.mock('../../../../../spars/app-spars', () => ({ appSpars: vi.fn() }));
 vi.mock('../../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
