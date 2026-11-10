@@ -28,6 +28,7 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { isPullRequestReference } from '../tickets/external-reference-display';
+import type { Status } from '../tickets/status';
 import { canSpec, isInReview } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
 import type { Tickets } from '../tickets/tickets';
@@ -45,7 +46,6 @@ import {
   type CapacityIntent,
   type CapacitySnapshot,
   capacityOf,
-  isStartRunIntent,
   type ProjectCapacity,
   refusalOf,
   verdictOf,
@@ -65,7 +65,17 @@ import {
 } from './conversation-state';
 import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
-import { type RunResult, runResultOf, runResults } from './run-outcome';
+import {
+  type ConversationSender,
+  type LifecycleInput,
+  type LiveRun,
+  pendingRunOf,
+  type RunEffect,
+  type StepResult,
+  step,
+  type TicketFacts,
+} from './run-lifecycle';
+import { type RunResult, runResults } from './run-outcome';
 import { messageRoles, type StatusEntry } from './status-line';
 import {
   type TerminalIntent,
@@ -87,8 +97,7 @@ import {
   widgetText,
 } from './widget';
 
-/** Who sends a reply: the User, or Autopilot in their place. */
-export type ConversationSender = Exclude<ConversationStarter, 'terminal'>;
+export type { ConversationSender };
 
 export type Conversation = {
   id: number;
@@ -157,10 +166,6 @@ const startEstimateSample = 20;
 const startEstimateMinimum = 5;
 
 const runStatsWindowMs = 30 * 24 * 60 * 60 * 1000;
-
-/** The `/command` a message starts with, such as `/implement`; null for none. */
-const commandOf = (message: string): string | null =>
-  /^\/[\w:-]+/.exec(message.trim())?.[0] ?? null;
 
 /** The longest tool input, as JSON, that is stored whole; a longer one is not stored. */
 export const maxToolInputLength = 4096;
@@ -292,53 +297,23 @@ export type ConversationsDeps = {
   worktrees: Worktrees;
   /** The Tandembike MCP server the runs connect to. */
   mcpUrl: string;
+  /** The time now; every date this module stores comes from it. */
+  clock?: () => Date;
 };
 
-/** A live run of a Conversation, and what the Conversation cost before it. */
-type LiveRun = {
-  run: AgentRun | null;
-  costBefore: number;
-  /** The Conversation's tokens per model when the run started (ADR 0050). */
-  usageBefore: UsageByModel;
-  /** Set when the User stopped the run; it still reports its last cost. */
-  stopped?: boolean;
-  /** The model the run reported in its init message. */
-  model: string | null;
-  /** The `stopped` outcome of this run, waiting for the cost its last turn reports. */
-  stoppedOutcome?: { id: number; costAtStart: number };
-  /** Its Ticket reached Done while it was alive: release the worktree when it ends. */
-  releaseWhenEnded?: boolean;
-  /**
-   * Its Ticket's Status as this run last saw it, to tell a move to Todo or
-   * Done (ADR 0049). Null for a Conversation without a Ticket.
-   */
-  ticketStatus: string | null;
-  /** Its Ticket went Back to Todo or Done mid-turn: end the process when the turn ends. */
-  endWhenTurnEnds?: boolean;
-  /**
-   * The message the run is working on, until it ends (a turn, an exit or a
-   * stop): what its Run outcome is recorded from. Null between runs.
-   */
-  pending: PendingRun | null;
+/**
+ * A live run's process and what waits on the User, around its lifecycle
+ * (`run-lifecycle.ts`), which only the step changes.
+ */
+type RunHandle = {
+  process: AgentRun | null;
+  run: LiveRun;
+  /** The id of its `stopped` Run outcome, which its late cost goes to (T587). */
+  stoppedOutcomeId: number | null;
   /** Permission requests waiting for the User, by transcript entry id. */
   asking: Map<number, (answer: PermissionAnswer) => void>;
   /** Widgets waiting for the User, by transcript entry id. */
   widgets: Map<number, (answer: WidgetAnswer) => void>;
-};
-
-/** A run's start, recorded when its message goes in. */
-type PendingRun = {
-  startedAt: Date;
-  /** The Conversation's cost when the run began. */
-  costAtStart: number;
-  command: string | null;
-  startedByAutopilot: boolean;
-  transientResume: boolean;
-  /**
-   * The Stage this run is, when it is not the Conversation's intent: the
-   * resume of Approve merge is a `merge` run in a Start Conversation (ADR 0038).
-   */
-  stage?: ConversationIntent;
 };
 
 const noRepositoryPath = {
@@ -419,9 +394,10 @@ export function createConversations({
   runner,
   worktrees,
   mcpUrl,
+  clock = () => new Date(),
 }: ConversationsDeps) {
   /** The runs alive in this process, by Conversation id. */
-  const live = new Map<number, LiveRun>();
+  const live = new Map<number, RunHandle>();
 
   const announce = (id: number) =>
     changes?.publish({ type: 'conversation', id });
@@ -450,74 +426,16 @@ export function createConversations({
         | 'worktreePath'
         | 'worktreeKept'
         | 'worktreeRemoved'
+        | 'hidden'
       > & {
         worktreeBase: string | null;
       }
     >,
   ) => {
     db.update(conversations)
-      .set({ ...values, updatedAt: new Date() })
+      .set({ ...values, updatedAt: clock() })
       .where(eq(conversations.id, id))
       .run();
-  };
-
-  /**
-   * Records the Run outcome of the run `handle` is working on, if it is
-   * still working: a turn result, an exit or a stop each end it, once.
-   * `cost` is the Conversation's cost now.
-   */
-  const recordOutcome = (
-    id: number,
-    handle: LiveRun,
-    end: {
-      stopped?: boolean;
-      error?: string;
-      errorSubtype?: string;
-      /** The run still waits on a permission or a Widget as it ends. */
-      waitingOnUser?: boolean;
-      cost: number;
-    },
-  ) => {
-    const pending = handle.pending;
-    if (!pending) {
-      return undefined;
-    }
-    handle.pending = null;
-    const conversation = get(id);
-    const ticket =
-      conversation.ticketNumber === null
-        ? null
-        : tickets.getTicket(conversation.ticketNumber);
-    const result = runResultOf({
-      stopped: end.stopped ?? false,
-      error: end.error,
-      errorSubtype: end.errorSubtype,
-      ticketStatus: ticket?.status ?? null,
-      hasPullRequest:
-        ticket !== null &&
-        (ticket.externalReferences.some(isPullRequestReference) ||
-          ticket.epic?.hasPullRequest === true),
-      waitingOnUser: end.waitingOnUser ?? false,
-      intent: conversation.intent,
-    });
-    return db
-      .insert(runOutcomes)
-      .values({
-        conversationId: id,
-        projectId: conversation.projectId,
-        ticketNumber: conversation.ticketNumber,
-        stage: pending.stage ?? conversation.intent,
-        result,
-        startedAt: pending.startedAt,
-        endedAt: new Date(),
-        costUsd: Math.max(0, end.cost - pending.costAtStart),
-        model: handle.model,
-        command: pending.command,
-        startedByAutopilot: pending.startedByAutopilot,
-        transientResume: pending.transientResume,
-      })
-      .returning({ id: runOutcomes.id })
-      .get().id;
   };
 
   /** The input if its JSON fits the cap; the reader falls back to the entry's text otherwise. */
@@ -548,7 +466,7 @@ export function createConversations({
         toolName: extra.tool?.name ?? null,
         toolInput: cappedInput(extra.tool?.input),
         widget: extra.widget ?? null,
-        createdAt: new Date(),
+        createdAt: clock(),
       })
       .returning({ id: conversationEntries.id })
       .get().id;
@@ -566,7 +484,7 @@ export function createConversations({
   };
 
   /** Denies the requests a run still waits on, as its Conversation ended. */
-  const expireAsking = (handle: LiveRun) => {
+  const expireAsking = (handle: RunHandle) => {
     for (const [entryId, resolve] of handle.asking) {
       setPermission(entryId, 'expired');
       resolve('deny');
@@ -596,7 +514,7 @@ export function createConversations({
   };
 
   /** Expires the Widgets a run still waits on, as its Conversation ended. */
-  const expireWidgets = (handle: LiveRun) => {
+  const expireWidgets = (handle: RunHandle) => {
     for (const [entryId, resolve] of handle.widgets) {
       const widget = getEntry(entryId)?.widget;
       if (widget) {
@@ -608,59 +526,153 @@ export function createConversations({
   };
 
   /** Whether a live run still waits on the User for anything. */
-  const waitsOnUser = (handle: LiveRun) =>
+  const waitsOnUser = (handle: RunHandle) =>
     handle.asking.size > 0 || handle.widgets.size > 0;
 
-  /**
-   * Ends the process of a run between turns, freeing its slot (ADR 0049): the
-   * Conversation stays open in its state, and a reply resumes its stored
-   * session. A run mid-turn is left alone.
-   */
-  const endProcess = (id: number) => {
-    const handle = live.get(id);
-    if (!handle?.run || handle.pending) {
-      return;
-    }
-    live.delete(id);
-    expireAsking(handle);
-    expireWidgets(handle);
-    handle.run.close();
-  };
-
-  /**
-   * Whether a Start or Merge has handed its Ticket off as its turn ends, so
-   * nothing waits on its process (ADR 0049): the Ticket is Done, or in Review
-   * with a pull request and no Claim.
-   */
-  const handedOff = (conversation: Conversation): boolean => {
-    if (
-      !isStartRunIntent(conversation.intent) ||
-      conversation.ticketNumber === null
-    ) {
-      return false;
-    }
-    const ticket = tickets.getTicket(conversation.ticketNumber);
-    return (
-      ticket.status === 'Done' || (isInReview(ticket) && ticket.claim === null)
-    );
-  };
-
-  /** The Status of Conversation `id`'s Ticket now, null without one. */
-  const ticketStatusOf = (id: number): string | null => {
-    const number = get(id).ticketNumber;
-    if (number === null) {
+  /** What the run lifecycle reads of a Conversation's Ticket; null without one. */
+  const ticketFactsOf = (conversation: {
+    ticketNumber: number | null;
+  }): TicketFacts | null => {
+    if (conversation.ticketNumber === null) {
       return null;
     }
     try {
-      return tickets.getTicket(number).status;
+      const ticket = tickets.getTicket(conversation.ticketNumber);
+      return {
+        status: ticket.status,
+        hasPullRequest:
+          ticket.externalReferences.some(isPullRequestReference) ||
+          ticket.epic?.hasPullRequest === true,
+        inReview: isInReview(ticket),
+        claimed: ticket.claim !== null,
+      };
     } catch {
       return null;
     }
   };
 
+  /** Applies one effect of the run lifecycle; an async one returns its promise. */
+  const applyEffect = (
+    id: number,
+    handle: RunHandle | null,
+    effect: RunEffect,
+  ): Promise<unknown> | undefined => {
+    switch (effect.type) {
+      case 'append':
+        append(
+          id,
+          effect.role,
+          effect.text,
+          effect.tool === undefined ? {} : { tool: effect.tool },
+        );
+        return;
+      case 'writeUsage':
+        writeUsage(db, id, effect.before, effect.run);
+        return;
+      case 'recordOutcome': {
+        const outcomeId = db
+          .insert(runOutcomes)
+          .values({ conversationId: id, ...effect.outcome })
+          .returning({ id: runOutcomes.id })
+          .get().id;
+        if (handle && effect.outcome.result === 'stopped') {
+          handle.stoppedOutcomeId = outcomeId;
+        }
+        return;
+      }
+      case 'setStoppedOutcomeCost':
+        if (handle?.stoppedOutcomeId != null) {
+          db.update(runOutcomes)
+            .set({ costUsd: effect.costUsd })
+            .where(eq(runOutcomes.id, handle.stoppedOutcomeId))
+            .run();
+        }
+        return;
+      case 'send':
+        handle?.process?.send(effect.text);
+        return;
+      case 'detach':
+        if (handle && live.get(id) === handle) {
+          live.delete(id);
+        }
+        return;
+      case 'expireWaits':
+        if (handle) {
+          expireAsking(handle);
+          expireWidgets(handle);
+        }
+        return;
+      case 'endProcess': {
+        const process = handle?.process;
+        if (!process) {
+          return;
+        }
+        if (!effect.interrupt) {
+          process.close();
+          return;
+        }
+        return (async () => {
+          try {
+            await process.interrupt();
+          } finally {
+            process.close();
+          }
+        })();
+      }
+      case 'releaseWorktree':
+        return tryRelease(id);
+      case 'announce':
+        announce(id);
+        return;
+    }
+  };
+
+  /** Applies effects in order, waiting for each async one before the next. */
+  const applyEffects = (
+    id: number,
+    handle: RunHandle | null,
+    effects: RunEffect[],
+  ): Promise<void> | undefined => {
+    for (const [index, effect] of effects.entries()) {
+      const waiting = applyEffect(id, handle, effect);
+      if (waiting) {
+        return waiting.then(() =>
+          applyEffects(id, handle, effects.slice(index + 1)),
+        );
+      }
+    }
+    return undefined;
+  };
+
+  /**
+   * Runs the run lifecycle's step for Conversation `id` and `handle`, its
+   * live run or null, and applies what it returns: the run's next state, the
+   * Conversation's patch, then the effects in order.
+   */
+  const stepRun = (
+    id: number,
+    handle: RunHandle | null,
+    input: LifecycleInput,
+    conversation: Conversation = get(id),
+  ): Promise<void> | undefined => {
+    const result: StepResult = step(
+      handle?.run ?? null,
+      conversation,
+      input,
+      clock(),
+    );
+    if (handle && result.run) {
+      handle.run = result.run;
+    }
+    if (Object.keys(result.patch).length > 0) {
+      update(id, result.patch);
+    }
+    return applyEffects(id, handle, result.effects);
+  };
+
   const askWidget = (
     id: number,
-    handle: LiveRun,
+    handle: RunHandle,
     widget: Widget,
   ): Promise<WidgetAnswer> => {
     if (live.get(id) !== handle) {
@@ -679,7 +691,7 @@ export function createConversations({
 
   const askPermission = (
     id: number,
-    handle: LiveRun,
+    handle: RunHandle,
     request: PermissionRequest,
   ): Promise<PermissionAnswer> => {
     if (live.get(id) !== handle) {
@@ -702,129 +714,22 @@ export function createConversations({
     });
   };
 
-  const handleEvent = (id: number, handle: LiveRun, event: RunEvent) => {
-    // A run that was replaced or stopped no longer speaks for the Conversation.
-    if (live.get(id) !== handle) {
-      // An interrupted turn reports its cost after the stop (T587).
-      if (handle.stopped && event.type === 'turn') {
-        // The stopped outcome takes the first cost the stopped turn reports.
-        const outcome = handle.stoppedOutcome;
-        if (outcome) {
-          handle.stoppedOutcome = undefined;
-          db.update(runOutcomes)
-            .set({
-              costUsd: Math.max(
-                0,
-                handle.costBefore + event.costUsd - outcome.costAtStart,
-              ),
-            })
-            .where(eq(runOutcomes.id, outcome.id))
-            .run();
-        }
-        update(id, { costUsd: handle.costBefore + event.costUsd });
-        if (event.usage) {
-          writeUsage(db, id, handle.usageBefore, event.usage);
-        }
-        announce(id);
-      }
-      return;
-    }
-    // The Agent acts again after its turn ended, as when a background task
-    // it started reports and wakes it: it works, not waits (T1261).
-    if (
-      (event.type === 'agent' ||
-        event.type === 'tool' ||
-        event.type === 'created') &&
-      get(id).state === 'idle'
-    ) {
-      update(id, { state: 'running' });
-    }
-    switch (event.type) {
-      case 'session':
-        handle.model = event.model ?? handle.model;
-        update(id, { sdkSessionId: event.sessionId });
-        break;
-      case 'agent':
-        append(id, 'agent', event.text);
-        break;
-      case 'tool':
-        append(
-          id,
-          'tool',
-          event.text,
-          event.name === undefined
-            ? {}
-            : { tool: { name: event.name, input: event.input } },
-        );
-        break;
-      case 'created':
-        append(
-          id,
-          'created',
-          `Created ${event.numbers.map((number) => `T${number}`).join(', ')}`,
-        );
-        break;
-      case 'turn': {
-        const waitingOnUser =
-          waitsOnUser(handle) || get(id).state === 'waiting';
-        if (event.error) {
-          append(id, 'error', event.error);
-        }
-        update(id, {
-          state: 'idle',
-          costUsd: handle.costBefore + event.costUsd,
-        });
-        if (event.usage) {
-          writeUsage(db, id, handle.usageBefore, event.usage);
-        }
-        recordOutcome(id, handle, {
-          error: event.error,
-          errorSubtype: event.errorSubtype,
-          waitingOnUser,
-          cost: handle.costBefore + event.costUsd,
-        });
-        // The run stays alive for replies, but no longer works in the
-        // worktree of a Ticket that reached Done during the turn (T1232).
-        if (handle.releaseWhenEnded) {
-          handle.releaseWhenEnded = false;
-          void tryRelease(id);
-        }
-        // A run that handed off, or whose Ticket went Back to Todo, waits on
-        // nobody: its process ends and frees its slot (ADR 0049).
-        handle.ticketStatus = ticketStatusOf(id);
-        if (handle.endWhenTurnEnds || handedOff(get(id))) {
-          handle.endWhenTurnEnds = false;
-          endProcess(id);
-        }
-        break;
-      }
-      case 'waiting':
-        update(id, { state: event.waiting ? 'waiting' : 'running' });
-        break;
-      case 'exit': {
-        const waitingOnUser =
-          waitsOnUser(handle) || get(id).state === 'waiting';
-        live.delete(id);
-        expireAsking(handle);
-        expireWidgets(handle);
-        if (event.error) {
-          append(id, 'error', event.error);
-        }
-        // A run that ends is interrupted, even between turns: a reply
-        // resumes it, but nothing waits on the User (T587).
-        update(id, { state: 'interrupted' });
-        recordOutcome(id, handle, {
-          error: event.error,
-          waitingOnUser,
-          cost: get(id).costUsd,
-        });
-        if (handle.releaseWhenEnded) {
-          void tryRelease(id);
-        }
-        break;
-      }
-    }
-    announce(id);
+  const handleEvent = (id: number, handle: RunHandle, event: RunEvent) => {
+    const conversation = get(id);
+    void stepRun(
+      id,
+      handle,
+      {
+        type: 'event',
+        event,
+        waitsOnUser: waitsOnUser(handle),
+        ticket:
+          event.type === 'turn' || event.type === 'exit'
+            ? ticketFactsOf(conversation)
+            : null,
+      },
+      conversation,
+    );
   };
 
   /**
@@ -890,7 +795,7 @@ export function createConversations({
 
   const setHidden = (id: number, hidden: boolean) => {
     db.update(conversations)
-      .set({ hidden, updatedAt: new Date() })
+      .set({ hidden, updatedAt: clock() })
       .where(eq(conversations.id, id))
       .run();
   };
@@ -1006,26 +911,32 @@ export function createConversations({
       id,
     );
     const runModel = modelFor(conversation.intent, settings);
-    const handle: LiveRun = {
-      run: null,
-      costBefore: conversation.costUsd,
-      usageBefore: readUsage(db, id),
-      model: null,
-      ticketStatus: ticketStatusOf(id),
-      pending: {
-        startedAt: new Date(),
-        costAtStart: conversation.costUsd,
-        command: commandOf(prompt),
-        startedByAutopilot: sentBy === 'autopilot',
-        transientResume,
-        stage,
+    const handle: RunHandle = {
+      process: null,
+      run: {
+        phase: { name: 'alive', releaseWorktree: false },
+        costBefore: conversation.costUsd,
+        usageBefore: readUsage(db, id),
+        model: null,
+        ticketStatus: ticketFactsOf(conversation)?.status ?? null,
+        pending: pendingRunOf(
+          prompt,
+          {
+            costAtStart: conversation.costUsd,
+            sentBy,
+            transientResume,
+            stage,
+          },
+          clock(),
+        ),
       },
+      stoppedOutcomeId: null,
       asking: new Map(),
       widgets: new Map(),
     };
     live.set(id, handle);
     try {
-      handle.run = runner.start({
+      handle.process = runner.start({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         agentRunId: String(id),
         mcpUrl,
@@ -1253,7 +1164,7 @@ export function createConversations({
     }
     checkStartLimit(projectId, input.intent);
 
-    const now = new Date();
+    const now = clock();
     const created = db
       .insert(conversations)
       .values({
@@ -1365,7 +1276,7 @@ export function createConversations({
       ticket,
       tickets.getProjectAgentCommands(ticket.projectId),
     );
-    const now = new Date();
+    const now = clock();
     const created = db
       .insert(conversations)
       .values({
@@ -1449,7 +1360,7 @@ export function createConversations({
       goal,
       tickets.getProjectAgentCommands(projectId),
     );
-    const now = new Date();
+    const now = clock();
     const created = db
       .insert(conversations)
       .values({
@@ -1559,7 +1470,7 @@ export function createConversations({
    * The CLI's heartbeat while `claude` runs: refreshes the last activity of a
    * Terminal Conversation that is still open (ADR 0039). Ignored for others.
    */
-  const heartbeatTerminal = (id: number, now: Date = new Date()) => {
+  const heartbeatTerminal = (id: number, now: Date = clock()) => {
     db.update(conversations)
       .set({ updatedAt: now })
       .where(
@@ -1578,7 +1489,7 @@ export function createConversations({
    * an entry saying it timed out. Returns how many it ended. The server calls
    * it once a minute.
    */
-  const endIdleTerminals = (now: Date = new Date()): number => {
+  const endIdleTerminals = (now: Date = clock()): number => {
     const cutoff = now.getTime() - terminalIdleMs;
     const idle = db
       .select({ id: conversations.id, updatedAt: conversations.updatedAt })
@@ -1640,86 +1551,44 @@ export function createConversations({
     update(id, { worktreeKept: null, worktreeRemoved: true });
     // An idle run would work in a folder that is gone: it ends with its
     // worktree, and the Conversation stays idle (T1281).
-    endProcess(id);
+    const handle = live.get(id);
+    if (handle) {
+      void stepRun(id, handle, { type: 'worktreeRemoved' });
+    }
     announce(id);
   };
 
   /** Releases quietly: a failure leaves the worktree for the User's button. */
   const tryRelease = (id: number) => releaseWorktree(id).catch(() => undefined);
 
-  /**
-   * Ends the process of each live Start or Merge on Ticket `number` that has
-   * just moved to Todo (Back to Todo) or Done: nothing waits on it, so it
-   * frees its slot (ADR 0049). One mid-turn ends when its turn does.
-   */
-  const endRunsOfMovedTicket = (number: number, status: string) => {
-    for (const [id, handle] of [...live]) {
-      const conversation = get(id);
-      if (
-        conversation.ticketNumber !== number ||
-        !isStartRunIntent(conversation.intent)
-      ) {
-        continue;
-      }
-      const moved =
-        handle.ticketStatus !== status &&
-        (status === 'Todo' || status === 'Done');
-      handle.ticketStatus = status;
-      if (!moved) {
-        continue;
-      }
-      if (handle.pending) {
-        handle.endWhenTurnEnds = true;
-      } else {
-        endProcess(id);
-        announce(id);
-      }
-    }
-  };
-
-  // A Ticket reaching Done, by `finish_work` or the Merged button, frees
-  // the worktrees of its Conversations.
+  // A Ticket moving Back to Todo or to Done ends the processes of its
+  // Starts and Merges (ADR 0049), and reaching Done, by `finish_work` or the
+  // Merged button, frees the worktrees of its Conversations (T1232).
   changes?.subscribe((change) => {
     if (change.type !== 'ticket' && change.type !== 'tickets') {
       return;
     }
     const numbers = change.type === 'ticket' ? [change.number] : change.numbers;
     for (const number of numbers) {
-      try {
-        endRunsOfMovedTicket(number, tickets.getTicket(number).status);
-      } catch {
-        // A deleted Ticket has no runs to end.
-      }
-    }
-    for (const number of numbers) {
-      let status: string;
+      let status: Status;
       try {
         status = tickets.getTicket(number).status;
       } catch {
+        // A deleted Ticket has no runs to end.
         continue;
       }
-      if (status !== 'Done') {
-        continue;
-      }
-      const open = db
-        .select({ id: conversations.id })
+      const own = db
+        .select()
         .from(conversations)
-        .where(
-          and(
-            eq(conversations.ticketNumber, number),
-            isNotNull(conversations.worktreePath),
-            eq(conversations.worktreeRemoved, false),
-          ),
-        )
+        .where(eq(conversations.ticketNumber, number))
         .all();
-      for (const { id } of open) {
-        const handle = live.get(id);
-        if (handle?.run && handle.pending) {
-          // The run is mid-turn in the worktree: released when the turn ends.
-          handle.releaseWhenEnded = true;
-        } else {
-          void tryRelease(id);
-        }
+      for (const conversation of own) {
+        void stepRun(
+          conversation.id,
+          live.get(conversation.id) ?? null,
+          { type: 'ticketMoved', status },
+          conversation,
+        );
       }
     }
   });
@@ -1747,7 +1616,7 @@ export function createConversations({
     let working = 0;
     for (const id of live.keys()) {
       const conversation = get(id);
-      const pending = live.get(id)?.pending;
+      const pending = live.get(id)?.run.pending;
       if (
         pending &&
         conversation.projectId === projectId &&
@@ -1783,12 +1652,34 @@ export function createConversations({
       .get();
     let working = 0;
     for (const id of live.keys()) {
-      const pending = live.get(id)?.pending;
+      const pending = live.get(id)?.run.pending;
       if (pending?.startedByAutopilot && pending.stage !== 'merge') {
         working += Math.max(0, get(id).costUsd - pending.costAtStart);
       }
     }
     return (ended?.total ?? 0) + working;
+  };
+
+  /**
+   * Interrupts the run, ends it and marks the Conversation stopped.
+   * `keepWorktree`: a terminal takes the worktree over (ADR 0039).
+   */
+  const stop = async (
+    id: number,
+    keepWorktree = false,
+  ): Promise<Conversation> => {
+    const conversation = get(id);
+    if (conversation.state === 'stopped') {
+      return conversation;
+    }
+    refuseTerminal(conversation);
+    await stepRun(
+      id,
+      live.get(id) ?? null,
+      { type: 'stop', keepWorktree },
+      conversation,
+    );
+    return get(id);
   };
 
   return {
@@ -1841,7 +1732,7 @@ export function createConversations({
      * the machine's daily ceiling. Null while no ceiling is set.
      */
     machineBudget(
-      now: Date = new Date(),
+      now: Date = clock(),
     ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
       const ceilingUsd = tickets.getMachineSettings().dailySpendCeilingUsd;
       if (ceilingUsd === null) {
@@ -2284,11 +2175,7 @@ export function createConversations({
         throw new ValidationError(noRepositoryPath);
       }
       // The worktree is the terminal's now: stopping must not release it.
-      const handle = live.get(id);
-      if (handle) {
-        handle.releaseWhenEnded = false;
-      }
-      await this.stop(id);
+      await stop(id, true);
       append(id, 'session', 'Continued in terminal');
       update(id, { startedBy: 'terminal', state: 'running' });
       announce(id);
@@ -2444,23 +2331,19 @@ export function createConversations({
 
       const limited = sentBy !== 'user';
       const handle = live.get(id);
-      if (handle?.run) {
+      if (handle?.process) {
         checkStartLimit(
           conversation.projectId,
           limited ? conversation.intent : 'reply',
           id,
         );
-        append(id, sentBy, message);
-        update(id, { state: 'running' });
-        handle.pending ??= {
-          startedAt: new Date(),
-          costAtStart: conversation.costUsd,
-          command: commandOf(message),
-          startedByAutopilot: sentBy === 'autopilot',
-          transientResume,
-          stage,
-        };
-        handle.run.send(message);
+        await stepRun(
+          id,
+          handle,
+          { type: 'reply', text: message, sentBy, transientResume, stage },
+          get(id),
+        );
+        return get(id);
       } else {
         startRun(
           id,
@@ -2548,39 +2431,7 @@ export function createConversations({
 
     /** Interrupts the run, ends it and marks the Conversation stopped. */
     async stop(id: number): Promise<Conversation> {
-      const conversation = get(id);
-      if (conversation.state === 'stopped') {
-        return conversation;
-      }
-      refuseTerminal(conversation);
-      const handle = live.get(id);
-      live.delete(id);
-      if (handle) {
-        const costAtStart = handle.pending?.costAtStart ?? 0;
-        const outcomeId = recordOutcome(id, handle, {
-          stopped: true,
-          cost: conversation.costUsd,
-        });
-        if (outcomeId !== undefined) {
-          handle.stoppedOutcome = { id: outcomeId, costAtStart };
-        }
-        handle.stopped = true;
-        expireAsking(handle);
-        expireWidgets(handle);
-      }
-      update(id, { state: 'stopped' });
-      announce(id);
-      if (handle?.run) {
-        try {
-          await handle.run.interrupt();
-        } finally {
-          handle.run.close();
-        }
-      }
-      if (handle?.releaseWhenEnded) {
-        await tryRelease(id);
-      }
-      return get(id);
+      return stop(id);
     },
 
     /**
@@ -2588,16 +2439,11 @@ export function createConversations({
      * takes it off the open Conversations. Its transcript stays.
      */
     async close(id: number): Promise<Conversation> {
-      // Closed before it stops, so the stop's change already reads as the
-      // User's own and Notices raise nothing for it.
       const conversation = get(id);
       if (conversation.state !== 'stopped') {
         refuseTerminal(conversation);
       }
-      setHidden(id, true);
-      await this.stop(id);
-      announce(id);
-      await tryRelease(id);
+      await stepRun(id, live.get(id) ?? null, { type: 'close' }, conversation);
       return get(id);
     },
 
@@ -2713,7 +2559,7 @@ export function createConversations({
         throw new NotAllowedError('This request proposes no rule to allow.');
       }
       handle.asking.delete(entryId);
-      setPermission(entryId, permissionStatusOf[answer], new Date());
+      setPermission(entryId, permissionStatusOf[answer], clock());
       if (!waitsOnUser(handle)) {
         update(entry.conversationId, { state: 'running' });
       }
