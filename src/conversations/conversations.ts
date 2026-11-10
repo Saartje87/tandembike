@@ -5,6 +5,7 @@ import {
   gte,
   inArray,
   isNotNull,
+  isNull,
   max,
   ne,
   sql,
@@ -36,6 +37,7 @@ import type {
   PermissionRequest,
   RunEvent,
 } from './agent-runner';
+import { batchTriagePrompt } from './batch-triage-prompt';
 import type { ActivityRow } from './conversation-activity';
 import {
   type ConversationIntent,
@@ -84,6 +86,10 @@ export type Conversation = {
   hidden: boolean;
   /** Retro: the Cycle it looks back on; null for other intents. */
   retroCycleId: number | null;
+  /** Batch triage: the Board's Cycle, or null for the Backlog; null for other intents. */
+  batchTriageCycleId: number | null;
+  /** Batch triage: the Ticket numbers it covers, fixed at its start; null for other intents. */
+  batchTriageTickets: number[] | null;
   defaultCycleId: number | null;
   defaultEpicNumber: number | null;
   defaultType: TicketType | null;
@@ -177,6 +183,8 @@ export type StartConversationInput = {
   cycleId?: number;
   /** Retro only: the Cycle of the Project it looks back on. */
   retroCycleId?: number;
+  /** Batch triage only: the Board, a Cycle's id or null for the Backlog, and its Tickets. */
+  batchTriage?: { cycleId: number | null; ticketNumbers: number[] };
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
 };
@@ -1013,6 +1021,31 @@ export function createConversations({
       .get() ?? null;
 
   /**
+   * The open Batch triage of a Board, a Cycle's id or null for the Backlog:
+   * one not closed (unhidden), in any state; null when there is none.
+   */
+  const openBatchTriage = (
+    projectId: number,
+    cycleId: number | null,
+  ): Conversation | null =>
+    db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.projectId, projectId),
+          eq(conversations.intent, 'batch_triage'),
+          eq(conversations.hidden, false),
+          cycleId === null
+            ? isNull(conversations.batchTriageCycleId)
+            : eq(conversations.batchTriageCycleId, cycleId),
+        ),
+      )
+      .orderBy(conversations.id)
+      .limit(1)
+      .get() ?? null;
+
+  /**
    * Starts a Conversation on a Ticket or a Project and its first run.
    * Refused when the Project has no repository path.
    */
@@ -1102,6 +1135,40 @@ export function createConversations({
         throw new NotAllowedError('This Cycle already has a Retro.');
       }
     }
+    if (input.intent === 'batch_triage') {
+      if (input.startedBy !== 'user') {
+        throw new NotAllowedError('Only the User starts a Batch triage.');
+      }
+      if (input.ticketNumber !== undefined) {
+        throw new ValidationError({
+          ticketNumber: 'A Batch triage is about a Board, not a Ticket.',
+        });
+      }
+      if (input.batchTriage === undefined) {
+        throw new ValidationError({
+          cycleId: 'Choose the Board to triage.',
+        });
+      }
+      const { cycleId, ticketNumbers } = input.batchTriage;
+      if (
+        cycleId !== null &&
+        tickets.getCycle(cycleId).projectId !== projectId
+      ) {
+        throw new ValidationError({
+          cycleId: 'That Cycle belongs to another Project.',
+        });
+      }
+      // At most one open per Board: starting another opens it (T1316).
+      const open = openBatchTriage(projectId, cycleId);
+      if (open !== null) {
+        return open;
+      }
+      if (ticketNumbers.length === 0) {
+        throw new ValidationError({
+          ticketNumbers: 'This Board has nothing to triage.',
+        });
+      }
+    }
     const settings = tickets.getProjectAgentSettings(projectId);
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
@@ -1123,6 +1190,14 @@ export function createConversations({
           input.startedBy === 'autopilot' ? (input.cycleId ?? null) : null,
         retroCycleId:
           input.intent === 'retro' ? (input.retroCycleId ?? null) : null,
+        batchTriageCycleId:
+          input.intent === 'batch_triage'
+            ? (input.batchTriage?.cycleId ?? null)
+            : null,
+        batchTriageTickets:
+          input.intent === 'batch_triage'
+            ? (input.batchTriage?.ticketNumbers ?? null)
+            : null,
         state: 'running',
         createdAt: now,
         updatedAt: now,
@@ -2091,6 +2166,36 @@ export function createConversations({
     },
 
     retroOf,
+
+    /**
+     * Starts a Batch triage of a Board (T1316): a Conversation about the
+     * Project that triages `ticketNumbers`, the Board's Batch-triage Tickets
+     * when the User pressed Triage N, recorded so the list stays fixed. With
+     * one open for the Board, returns it and starts nothing. Only the User
+     * starts one; it runs in the main checkout, outside the Start run limit,
+     * and records no Cycle for Spend.
+     */
+    async startBatchTriage(input: {
+      projectId: number;
+      cycleId: number | null;
+      ticketNumbers: number[];
+    }): Promise<Conversation> {
+      return start({
+        startedBy: 'user',
+        projectId: input.projectId,
+        intent: 'batch_triage',
+        prompt: batchTriagePrompt(
+          input.cycleId === null ? null : tickets.getCycle(input.cycleId),
+          input.ticketNumbers,
+        ),
+        batchTriage: {
+          cycleId: input.cycleId,
+          ticketNumbers: input.ticketNumbers,
+        },
+      });
+    },
+
+    openBatchTriage,
 
     /**
      * Sends a reply, the User's or Autopilot's: into the run while it is

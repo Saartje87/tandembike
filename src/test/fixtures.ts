@@ -25,6 +25,8 @@ export const aConversation = (
   costUsd: 0,
   hidden: false,
   retroCycleId: null,
+  batchTriageCycleId: null,
+  batchTriageTickets: null,
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,

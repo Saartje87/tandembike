@@ -59,6 +59,8 @@ const retroConversation = (
   costUsd: 0,
   hidden: false,
   retroCycleId: 7,
+  batchTriageCycleId: null,
+  batchTriageTickets: null,
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,

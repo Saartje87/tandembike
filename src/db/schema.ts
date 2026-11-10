@@ -443,6 +443,15 @@ export const conversations = sqliteTable(
      * so a Retro never counts against the Spend ceiling. Null for others.
      */
     retroCycleId: integer('retro_cycle_id'),
+    /**
+     * Batch triage: the Board it triages, a Cycle's id, or null for the
+     * Backlog. Null for other intents too; the intent tells them apart.
+     */
+    batchTriageCycleId: integer('batch_triage_cycle_id'),
+    /** Batch triage: the Ticket numbers it covers, fixed when it started (T1316). */
+    batchTriageTickets: text('batch_triage_tickets', { mode: 'json' }).$type<
+      number[]
+    >(),
     /** New Ticket: the Cycle the title field was on, a default for the Agent. */
     defaultCycleId: integer('default_cycle_id'),
     /** New Ticket: the Epic the title field was under, a default. */

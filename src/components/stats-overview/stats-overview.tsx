@@ -44,6 +44,7 @@ const stageLabels = {
   spec: 'Spec',
   plan: 'Plan',
   spar: 'Spar',
+  batch_triage: 'Batch triage',
 } as const;
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;

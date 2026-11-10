@@ -25,6 +25,7 @@ export const intentNames: Record<ConversationIntent, string> = {
   spec: 'Spec',
   plan: 'Plan',
   spar: 'Spar',
+  batch_triage: 'Batch triage',
 };
 
 /** Who started a Conversation, as the header says it. */
