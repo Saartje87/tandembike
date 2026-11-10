@@ -267,7 +267,7 @@ A Ticket's record of the changes made to it, one **Activity entry** per action. 
 _Avoid_: History, event, audit log, changelog
 
 **Archived**:
-A Ticket or Project taken out of the normal views without being destroyed; it can be restored. An archived Project hides its Tickets and keeps them, and itself, read-only until it is restored; only the User archives a Project. An Epic is archived only once its children are: the User can archive it with its children in one step, and restoring it brings back the children archived with it, not ones archived before. Archiving a Cycle leaves its Epics and their children as they are.
+A Ticket or Project taken out of the normal views without being destroyed; it can be restored. An archived Project hides its Tickets and keeps them, and itself, read-only until it is restored; only the User archives a Project. An archived Ticket is read-only too: its fields, Status, labels, External references, acceptance criteria, Claim, Blockers, Epic and Cycle cannot change until it is restored, but it can still be restored, take comments and Attachments, and be deleted. An Epic is archived only once its children are: the User can archive it with its children in one step, and restoring it brings back the children archived with it, not ones archived before. Archiving a Cycle leaves its Epics and their children as they are.
 _Avoid_: Removed, trashed, closed
 
 **Deleted**:

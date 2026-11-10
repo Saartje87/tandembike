@@ -161,6 +161,32 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 
+  it('update_ticket restores an archived Ticket before changing it (T1152)', async () => {
+    const { tickets, project, client } = await setup();
+    const task = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.archiveTicket(task.number);
+
+    const refused = await client.callTool({
+      name: 'update_ticket',
+      arguments: { number: task.number, title: 'Renamed' },
+    });
+    resultJson(
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: task.number, title: 'Renamed', archived: false },
+      }),
+    );
+
+    expect(resultText(refused)).toBe(
+      `Ticket T${task.number} is archived. Restore it before changing it.`,
+    );
+    expect(tickets.getTicket(task.number)).toMatchObject({
+      title: 'Renamed',
+      archived: false,
+    });
+    await client.close();
+  });
+
   it("update_ticket refuses with the messages of today's rules", async () => {
     const { tickets, project, client } = await setup();
     const a = tickets.createTicket({ projectId: project.id, title: 'A' });

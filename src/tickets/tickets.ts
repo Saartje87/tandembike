@@ -52,7 +52,11 @@ import {
   type ProjectAgentCommands,
 } from './agent-commands';
 import { type AgentRunMode, agentRunModes } from './agent-run-mode';
-import { checkProjectWritable, checkTicketWritable } from './archived-projects';
+import {
+  checkProjectWritable,
+  checkTicketProjectWritable,
+  checkTicketWritable,
+} from './archived-projects';
 import {
   type AddAttachmentInput,
   type Attachment,
@@ -2425,13 +2429,8 @@ export function createTickets(
      */
     backToTodo(number: number): Ticket {
       const todo = checkTicketChanges({ status: 'Todo' });
-      const { type, archived, children } = getTicket(number);
+      const { type, children } = getTicket(number);
       checkTicketWritable(db, number);
-      if (archived) {
-        throw new NotAllowedError(
-          `Ticket T${number} is archived. Restore it before sending it Back to Todo.`,
-        );
-      }
       if (type === 'Epic') {
         return changeEpicChildren(
           number,
@@ -3090,7 +3089,7 @@ export function createTickets(
     addComment(number: number, input: AddCommentInput): Comment {
       const body = checkedCommentBody(input.body);
       getTicket(number);
-      checkTicketWritable(db, number);
+      checkTicketProjectWritable(db, number);
       const comment = db
         .insert(ticketComments)
         .values({
@@ -3112,7 +3111,7 @@ export function createTickets(
     editComment(id: number, input: EditCommentInput): Comment {
       const body = checkedCommentBody(input.body);
       const { ticketNumber } = editableComment(id, input.by);
-      checkTicketWritable(db, ticketNumber);
+      checkTicketProjectWritable(db, ticketNumber);
       const comment = db
         .update(ticketComments)
         .set({ body, editedAt: new Date() })
@@ -3129,7 +3128,7 @@ export function createTickets(
      */
     removeComment(id: number, { by }: RemoveCommentInput): void {
       const { ticketNumber } = editableComment(id, by);
-      checkTicketWritable(db, ticketNumber);
+      checkTicketProjectWritable(db, ticketNumber);
       db.delete(ticketComments).where(eq(ticketComments.id, id)).run();
       changes.publish({ type: 'ticket', number: ticketNumber });
     },
@@ -3142,7 +3141,7 @@ export function createTickets(
     addAttachment(number: number, input: AddAttachmentInput): Attachment {
       const { name, mediaType } = checkedAttachment(input);
       const attachment = db.transaction(() => {
-        checkTicketWritable(db, number);
+        checkTicketProjectWritable(db, number);
         touchTicket(db, number);
         checkAttachmentCount(db, number);
         const added = db
@@ -3202,7 +3201,7 @@ export function createTickets(
         );
       }
       db.transaction(() => {
-        checkTicketWritable(db, attachment.ticketNumber);
+        checkTicketProjectWritable(db, attachment.ticketNumber);
         touchTicket(db, attachment.ticketNumber);
         db.delete(ticketAttachments).where(eq(ticketAttachments.id, id)).run();
         recordActivity(db, attachment.ticketNumber, actor, [
@@ -3289,7 +3288,7 @@ export function createTickets(
     ): void {
       const { children, unblocked, epic, leftCycles, unlinked } =
         db.transaction(() => {
-          checkTicketWritable(db, number);
+          checkTicketProjectWritable(db, number);
           const { epic, children } = getTicket(number);
           const childNumbers = children.map((child) => child.number);
           if (!withChildren) {
@@ -3881,7 +3880,7 @@ export function createTickets(
     archived: boolean,
     withEpic = false,
   ): number | null {
-    checkTicketWritable(db, number);
+    checkTicketProjectWritable(db, number);
     if (archived) {
       checkChildrenArchived(db, number);
     } else {
