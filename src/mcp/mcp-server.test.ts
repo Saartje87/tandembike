@@ -351,7 +351,10 @@ describe('MCP server', () => {
       ['file_tickets', /All or nothing/],
       ['file_tickets', /Only earlier positions can be named/],
       ['file_tickets', /write \{\{T:n\}\}/],
-      ['update_ticket', /must be resolved \(Done or archived\)/],
+      [
+        'update_ticket',
+        /must be resolved \(Done, archived, or an In progress sibling in the same Epic while that Epic is claimed\)/,
+      ],
       ['update_ticket', /To only check or uncheck criteria/],
       ['check_criterion', /Status stay as they are/],
       ['get_ticket', /an Epic lists its children/],

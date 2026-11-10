@@ -43,8 +43,7 @@ export type WorkBundle = {
     children: EpicChild[];
     /**
      * The first child in order not yet started (not archived, Done or In
-     * progress) whose Blockers are resolved, counting In progress siblings as
-     * resolved; or `null`.
+     * progress) whose Blockers are resolved by the Blocker rule; or `null`.
      */
     nextChild: number | null;
   } | null;
@@ -90,17 +89,14 @@ const readyLabel = 'ready-for-agent';
  */
 export function createWork(deps: WorkDeps) {
   /**
-   * Ticket `number`'s unresolved Blockers. With `epic`, a Blocker that is an
-   * In progress child of it counts as resolved: worked on the Epic branch.
+   * Ticket `number`'s unresolved Blockers, by the Blocker rule: an In
+   * progress sibling under the Epic's Claim is worked on the Epic branch, so
+   * it counts as resolved (T1278, T828).
    */
-  function unresolvedBlockers(number: number, epic: Ticket | null) {
-    const siblings = new Set(epic?.children.map((child) => child.number));
+  function unresolvedBlockers(number: number) {
     return deps
       .listBlockers(number)
-      .blockedBy.filter(
-        ({ number: blocker, resolved, status }) =>
-          !resolved && !(siblings.has(blocker) && status === 'In progress'),
-      );
+      .blockedBy.filter(({ resolved }) => !resolved);
   }
 
   /** The Epic of `ticket` (itself, or its parent), with children read now. */
@@ -119,7 +115,7 @@ export function createWork(deps: WorkDeps) {
         (child) =>
           !child.archived &&
           child.status === 'Todo' &&
-          unresolvedBlockers(child.number, epic).length === 0,
+          unresolvedBlockers(child.number).length === 0,
       )?.number ?? null;
     return {
       number: epic.number,
@@ -208,8 +204,8 @@ export function createWork(deps: WorkDeps) {
      * except for an Epic, whose Status follows its children. An In progress
      * Ticket is only claimed. A child under its own run's Epic Claim is not
      * claimed again. Refused for a blocked Ticket, naming its unresolved
-     * Blockers (under its run's Epic Claim, an In progress sibling is not
-     * one), and for a Claim another run holds. Returns the bundle.
+     * Blockers (under the Epic's Claim, an In progress sibling is not one),
+     * and for a Claim another run holds. Returns the bundle.
      */
     startWork(number: number, runId: string): WorkBundle {
       const before = deps.getTicket(number);
@@ -224,12 +220,9 @@ export function createWork(deps: WorkDeps) {
       ) {
         deps.claimTicket(number, { agentRunId: runId });
       }
-      // Under its own Epic Claim, a sibling In progress is worked on the
-      // Epic branch, so it no longer holds the child back (T1278).
-      const unresolved = unresolvedBlockers(
-        number,
-        epicClaim === runId ? epic : null,
-      ).map(({ number: blocker, status }) => `T${blocker} (${status})`);
+      const unresolved = unresolvedBlockers(number).map(
+        ({ number: blocker, status }) => `T${blocker} (${status})`,
+      );
       if (unresolved.length > 0) {
         throw new NotAllowedError(
           `Ticket T${number} is blocked by ${unresolved.join(', ')}. Finish ${unresolved.length === 1 ? 'it' : 'them'} first.`,

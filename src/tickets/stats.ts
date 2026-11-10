@@ -1,4 +1,5 @@
 import { and, asc, eq, gte, ne, type SQL, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
@@ -10,6 +11,7 @@ import {
   tickets,
 } from '../db/schema';
 import type { ActivityChange } from './activity-change';
+import { resolvedBlockerSql } from './blocker-sql';
 import type { Project } from './tickets';
 
 /** One Project's figures on the Stats page (see `GLOSSARY.md`). */
@@ -72,12 +74,14 @@ const projectColumns = {
 const countOf = (condition: SQL | undefined) =>
   sql<number>`coalesce(sum(case when ${condition} then 1 else 0 end), 0)`;
 
-/** Whether the Ticket has a Blocker that is neither Done nor archived. */
+const blocker = alias(tickets, 'blocker');
+
+/** Whether the Ticket has a Blocker the Blocker rule leaves unresolved. */
 const hasUnresolvedBlocker = sql`exists (
   select 1 from ${ticketBlockers}
-  join ${tickets} as blocker on blocker.number = ${ticketBlockers.blockerNumber}
+  join ${tickets} as ${blocker} on ${blocker.number} = ${ticketBlockers.blockerNumber}
   where ${ticketBlockers.blockedNumber} = ${tickets.number}
-    and blocker.status <> 'Done' and blocker.archived = 0
+    and not ${resolvedBlockerSql(blocker, tickets.epicNumber)}
 )`;
 
 /** The Ticket counts of each Project that has any, by Project id. */

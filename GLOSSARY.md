@@ -113,7 +113,7 @@ A file the User or an Agent adds to a Ticket, an Epic included, such as a screen
 _Avoid_: File, upload, asset
 
 **Blocker**:
-A Ticket that must be resolved before another Ticket can start. A Blocker is resolved once it is Done or Archived; a Ticket is **blocked** while any of its Blockers is unresolved, and ready to start when none is. A Ticket cannot block itself, Blockers never form a cycle, and they may cross Projects. Archiving a Ticket keeps its Blockers.
+A Ticket that must be resolved before another Ticket can start. A Blocker is resolved once it is Done or Archived, or while it is an In progress sibling in the same Epic as the Ticket it blocks and that Epic is claimed, since the Epic's run works its children on one branch (T828); once the Claim is released the sibling blocks again. A Ticket is **blocked** while any of its Blockers is unresolved, and ready to start when none is. A Ticket cannot block itself, Blockers never form a cycle, and they may cross Projects. Archiving a Ticket keeps its Blockers.
 _Avoid_: Dependency, prerequisite, `Blocked by:` lines
 
 **Claim**:
