@@ -11,7 +11,7 @@ Date: 2026-11-10.
 - **Token fractions relative to one output token:** input 0.2, cache write 0.2, cache read 0.02.
 - **PUE:** 1.15 (AWS reports 1.14, Google 1.09). The Epoch anchor already includes data-centre overhead. The tier factors above are `IT energy × 1.15`.
 - **Grid:** 475 gCO₂e/kWh, the location-based global average for 2024.
-- **Comparisons:** 19 Wh per smartphone charge, 250 gCO₂e per km by petrol car.
+- **Comparisons:** 19 Wh per smartphone charge, 9 W per LED bulb, 200 Wh per full 1.7 L kettle, 9,900 Wh per EU household-day, 250 gCO₂e per km by petrol car (§5, §6).
 - **Not verified:** the Ember 2024 figure is confirmed only through secondary sources, and the UK DESNZ per-km car factor could not be read. See "Not verified".
 
 ## Formula
@@ -117,10 +117,63 @@ Do not apply PUE again at run time. The settings store the folded factor.
 - **Smartphone charge: 19 Wh.** EPA: 0.019 kWh per full charge (28.446 Wh over 24 h minus maintenance-mode energy), 12.4 gCO₂e at EPA's marginal rate (<https://www.epa.gov/energy/greenhouse-gas-equivalencies-calculator-calculations-and-references>). This is energy drawn from the wall, battery losses included. Uncertainty: 10–20 Wh depending on phone.
 - **Petrol car: 250 gCO₂e per km.** EPA: 393 gCO₂e per mile for the average US gasoline passenger vehicle (22.8 mpg, 2022), which is 244 g/km (same EPA page). Round to 250. Uncertainty: the average car on the road varies by country. The EEA gives 106.7 g/km for new cars registered in the EU in 2024, all fuels, type-approval (<https://www.eea.europa.eu/en/newsroom/news/average-co2-emissions-from-new-cars-and-vans-significantly-decreased-in-2025>, figure via search summary), which is much lower because it is new cars, includes electric ones, and is a lab cycle. 250 is the conservative in-use petrol value.
 
+## 6. Everyday comparisons for the tooltip (T1345)
+
+Added 2026-11-10 for Epic T1344: the Footprint tooltip lists five fixed comparisons, so three more reference values were needed. Each is used at one significant figure in the UI, so the defaults below only need to be right to about ±30%.
+
+### Phone charge and petrol car, re-confirmed
+
+Re-read on 2026-11-10 at the EPA Greenhouse Gas Equivalencies page (<https://www.epa.gov/energy/greenhouse-gas-equivalencies-calculator-calculations-and-references>, last updated 4 August 2026). Both values are unchanged:
+
+- "0.019 kWh/smartphone charged" (1.24 × 10⁻⁵ t CO₂ per charge): **19 Wh** stays.
+- "3.93 × 10⁻⁴ metric tons CO₂e/mile" for the average gasoline passenger vehicle, at 22.8 mpg in 2022: 244 g/km, **250 gCO₂e per km** stays.
+
+### LED bulb: 9 W
+
+The comparison is "hours of an LED bulb", meaning the bulb that replaces a classic 60 W incandescent, the household default.
+
+- **What "60 W equivalent" means.** Commission Regulation (EC) No 244/2009, Annex II, Table 6, sets the lumen output a lamp must reach to claim an incandescent equivalent: **806 lm for 60 W** for LED lamps (<https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32009R0244>). Packaging in the EU still uses this table.
+- **What such a bulb may draw.** Commission Regulation (EU) 2019/2020, which replaced 244/2009 and applies from 1 September 2021, caps the on-mode power of a light source at `Ponmax = C × (L + Φuse / (F × η)) × R` (Annex II, 1(a); <https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32019R2020>). For a non-directional mains lamp, F = 1.00 and the basic C = 1.08; η = 120 lm/W and L = 1.5 W, R = 1 for a standard colour rendering. For 806 lm: 1.08 × (1.5 + 806 / 120) ≈ **8.9 W**, the most a 60 W-equivalent LED bulb may draw on the EU market.
+- **Products on the market** draw 8 to 10 W for 806 lm (retailer listings, and an EU EPREL register entry at 8.6 W seen in a search summary); not used as a source, only as a check.
+
+**Default: 9 W**, the EU ceiling rounded. Uncertainty: 8–10 W. Region: EU rules; US bulbs of the same output draw about the same.
+
+### Kettle: 200 Wh per full 1.7 L kettle
+
+No government agency publishes a measured figure for one boil. The value is derived from physics, which is the stronger source here:
+
+- **Volume.** 1.7 L is the usual maximum capacity of a household electric kettle in the UK and EU; the tooltip calls it "kettles boiled", a full one.
+- **Heat needed.** Liquid water has a heat capacity of about 75.3 J/(mol·K) at 25 °C (NIST Chemistry WebBook, <https://webbook.nist.gov/cgi/cbook.cgi?ID=C7732185&Mask=2>), 4.18 J/(g·K). Heating 1.7 kg from 15 °C tap water to 100 °C: 1,700 × 4.18 × 85 ≈ 604 kJ ≈ **168 Wh**.
+- **Kettle losses.** An electric kettle turns 80–95% of its energy into heat in the water (body, element and steam losses); consumer and manufacturer measurements put a full 1.7 L boil at 180–200 Wh (for example Morphy Richards, 0.20 kWh). These are secondary checks, not sources. 168 Wh / 0.85 ≈ 198 Wh.
+
+**Default: 200 Wh.** Uncertainty: 160–210 Wh across start temperatures of 10–20 °C and efficiencies of 80–95%, which rounds to 200 Wh at one significant figure in every case.
+
+### Household-day of electricity: 9,900 Wh, EU average
+
+- **Source.** Odyssee-Mure, the EU-funded energy-efficiency database built on Eurostat and national statistics, gives an average electricity consumption of **3.6 MWh per dwelling per year for the EU**, from 1.8 MWh in Romania to 8.5 MWh in Sweden (<https://www.odyssee-mure.eu/publications/efficiency-by-sector/households/electricity-consumption-dwelling.html>, last updated November 2025). The page does not state the year of the figure; its update suggests 2023 or 2024 data.
+- **Cross-check.** A news summary of Eurostat data gives 3,641 kWh per household for the EU in 2020 (<https://chronicle.lu/category/energy/41371-luxembourg-household-electricity-consumption-decreased-by-10-in-past-decade-eu-average-down-8-8>). Not a primary source; it agrees.
+- **Per day.** 3,600 kWh / 365 ≈ 9.9 kWh.
+
+**Default: 9,900 Wh per household-day, EU average.** The unit names the region: "days of an EU household's electricity". Uncertainty: about a factor of 2 between member states; the average is stable within a few percent year to year. A US household uses about three times as much, so the region must stay in the label.
+
+### Summary
+
+| Comparison                   | Reference value | From       | Source                                         |
+| ---------------------------- | --------------: | ---------- | ---------------------------------------------- |
+| Phone charges                |           19 Wh | energy     | US EPA                                         |
+| Hours of an LED bulb         |             9 W | energy     | EU Regulations 244/2009 and 2019/2020          |
+| Kettles boiled (1.7 L)       |          200 Wh | energy     | Physics, NIST heat capacity, 85% efficiency    |
+| Days of an EU household      |        9,900 Wh | energy     | Odyssee-Mure, 3.6 MWh per dwelling per year    |
+| km by petrol car             |  250 gCO₂e / km | CO₂e       | US EPA                                         |
+
+No comparison needed replacing: each has a primary source or a physical derivation.
+
 ## Not verified
 
 - **Ember 2024 global intensity (473).** The Ember page did not state a per-kWh figure. It was derived from totals (about 474) and matched by secondary quotes (471–473).
 - **Uptime Institute PUE 1.56.** Seen only in search summaries. The report itself was not opened. Summaries disagree (1.55, 1.56, 1.58) by method.
+- **Kettle efficiency (80–95%).** Taken from consumer and manufacturer measurements, not a primary source; the rounded value does not depend on it.
+- **The year behind Odyssee-Mure's 3.6 MWh.** Not stated on the page.
 - **UK DESNZ 2025 conversion factor for an average petrol car.** The spreadsheets could not be read, so no DESNZ per-km number is used.
 - **EEA 106.7 g/km.** Taken from a search summary; the EEA page was not opened.
 - **Tier sizes and the three token fractions.** No source measures them. They are reasoned estimates, as set out above.
@@ -141,3 +194,6 @@ Do not apply PUE again at run time. The settings store the folded factor.
 | PUE (already folded in) | 1.15    | ratio                                 | AWS 1.14, Google 1.09               |
 | Smartphone charge       | 19      | Wh                                    | EPA                                 |
 | Petrol car              | 250     | gCO₂e per km                          | EPA, 393 g/mile                     |
+| LED bulb                | 9       | W                                     | EU Reg. 2019/2020, 806 lm           |
+| Full kettle (1.7 L)     | 200     | Wh                                    | Physics, 85% efficiency             |
+| EU household-day        | 9,900   | Wh                                    | Odyssee-Mure, 3.6 MWh/yr            |
