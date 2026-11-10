@@ -91,6 +91,7 @@ import {
   type NeedRow,
   type QueuedRow,
   rowOf,
+  type TodoRow,
 } from './board-of';
 import { isSelectClick, type SelectMode, selectModeOf } from './select-click';
 import { useBoardFilter } from './use-board-filter';
@@ -114,7 +115,7 @@ export type BoardProps = {
   autopilot?: Omit<AutopilotBarProps, 'projectId'>;
   /**
    * Whether this is a planning Board, a Prepared Cycle's or the Backlog's:
-   * Your work and Queued start open, and an empty section is hidden.
+   * Queued starts open, and an empty section is hidden.
    */
   planning?: boolean;
   /** The Board's archived Tickets, listed last. Defaults to none. */
@@ -211,13 +212,15 @@ function needLine(row: NeedRow, waited: string): string {
   return lineOf(label, row.live?.line ?? parked, waited);
 }
 
+/** What a blocked Todo row waits on, by its Blockers when it knows them. */
+const blockedByOf = (row: TodoRow): string =>
+  row.blockers.length > 0
+    ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
+    : 'blocked';
+
 /** A queued row's second line: its place, and what blocks it. */
 function queuedLine(row: QueuedRow, index: number): string {
-  const blockedBy =
-    row.blockers.length > 0
-      ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
-      : 'blocked';
-  return lineOf(`Queued #${index + 1}`, row.blocked && blockedBy);
+  return lineOf(`Queued #${index + 1}`, row.blocked && blockedByOf(row));
 }
 
 const countPrefix = /^\(\d+\) /;
@@ -621,7 +624,7 @@ const epicParts = (
  */
 export const emptyText = {
   needsYou:
-    'Nothing needs you: runs that ask or stop, pull requests to review and Tickets to triage show here.',
+    'Nothing needs you: runs that ask or stop, pull requests to review, work handed to you and Tickets to triage show here.',
   actionNeeded:
     'Action needed is empty: a run that asks, stops or fails waits here for you.',
   review:
@@ -630,7 +633,7 @@ export const emptyText = {
   inFlight:
     'Nothing in flight: Autopilot or you start a run on Queued work, and it shows here while it works.',
   yourWork:
-    'Your work is empty: triage a Ticket as ready-for-human to put it here.',
+    'Your work is empty: triage a Ticket as ready-for-human to hand it to you.',
   queued: 'Queued is empty: triage a Ticket as ready-for-agent to queue it.',
   done: 'Nothing Done yet: a Ticket lands here once its pull request is merged or it is finished.',
   archived: 'Nothing archived: an archived Ticket is listed here.',
@@ -744,10 +747,11 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * A Project's Board: a Cycle's or the Backlog's Tickets in one column, by
  * what needs the User first. The header shows the Cycle's progress and the Start runs
  * working; Needs you shows what waits on the User on this Board (Action
- * needed, Review, then Intake), in groups that start open,
- * longest waiting first; In flight shows each Running Ticket with what
- * its run is doing; Your work, Queued and Done stay closed until opened
- * on the Active Cycle's Board.
+ * needed, Review, Your work, then Intake), in groups that start open,
+ * Action needed and Review longest waiting first, Your work and Intake in
+ * Board order (ADR 0048); In flight shows each Running Ticket with what
+ * its run is doing; Queued and Done stay closed until opened on the Active
+ * Cycle's Board.
  * Its lists offer no actions: every row's title opens its Ticket in a
  * drawer over the Board. The browser tab's title carries the Needs you
  * count. It follows live Conversations.
@@ -804,6 +808,12 @@ export const Board: FC<BoardProps> = ({
   const { done, total } = view.progress;
   const hideEmpty = (count: number) => planning && count === 0;
   const { needsYou } = view;
+  // Needs you shows while it has rows, though a blocked one is not counted.
+  const needsYouRows =
+    needsYou.actionNeeded.length +
+    needsYou.review.length +
+    needsYou.yourWork.length +
+    needsYou.intake.length;
   const inFlightCount = view.epics.length + view.inFlight.length;
   useCountInTitle(needsYou.total);
 
@@ -823,7 +833,7 @@ export const Board: FC<BoardProps> = ({
   /** The rows of a section that a drag orders, in the order shown. */
   const sectionNumbers: Record<ReorderSection, number[]> = {
     Queued: view.queued.map(({ number }) => number),
-    'Your work': view.yourWork.map(({ number }) => number),
+    'Your work': needsYou.yourWork.map(({ number }) => number),
     Intake: needsYou.intake.map(({ number }) => number),
   };
   // An Epic of another Cycle shown here is not ordered by this Cycle.
@@ -943,7 +953,7 @@ export const Board: FC<BoardProps> = ({
     review: numbersOf(needsYou.review),
     intake: numbersOf(needsYou.intake),
     inFlight: numbersOf(view.inFlight),
-    yourWork: numbersOf(view.yourWork),
+    yourWork: numbersOf(needsYou.yourWork),
     queued: numbersOf(view.queued),
     done: numbersOf(view.done),
   };
@@ -1042,14 +1052,14 @@ export const Board: FC<BoardProps> = ({
             />
           </Stack>
         )}
-        {!hideEmpty(needsYou.count) && (
+        {!hideEmpty(needsYouRows) && (
           <Stack gap={2} asChild>
             <section aria-label="Needs you" id="needs-you">
               <Inline gap={2} alignY="center">
                 <Heading level={3}>Needs you</Heading>
                 <Tag>{needsYou.count}</Tag>
               </Inline>
-              {needsYou.count === 0 ? (
+              {needsYouRows === 0 ? (
                 <Text tag="p" color="muted">
                   {emptyText.needsYou}
                 </Text>
@@ -1075,6 +1085,42 @@ export const Board: FC<BoardProps> = ({
                       open
                     >
                       {needRows(needsYou.review, 'review')}
+                    </RowList>
+                  )}
+                  {needsYou.yourWork.length > 0 && (
+                    <RowList
+                      title="Your work"
+                      empty={emptyText.yourWork}
+                      id="your-work"
+                      count={needsYou.yourWork.length}
+                      open
+                    >
+                      {needsYou.yourWork.map((row) => (
+                        <DraggableTicketRow
+                          key={row.number}
+                          sortable={sortableIn('Your work', row.number)}
+                          ticket={row}
+                          href={hrefOf(row.number)}
+                          icon={row.children ? 'queue-list' : 'user'}
+                          {...epicParts(row, board, hrefOf)}
+                          selection={
+                            row.children
+                              ? undefined
+                              : selectable(row.number, 'yourWork')
+                          }
+                          line={lineOf(
+                            `ready-for-human · for ${age(row.updatedAt)}`,
+                            row.blocked && blockedByOf(row),
+                          )}
+                          end={
+                            row.blocked ? (
+                              <Tag intent="warning">Blocked</Tag>
+                            ) : (
+                              <Tag>Your work</Tag>
+                            )
+                          }
+                        />
+                      ))}
                     </RowList>
                   )}
                   {needsYou.intake.length > 0 && (
@@ -1171,34 +1217,6 @@ export const Board: FC<BoardProps> = ({
           </Stack>
         )}
         <Stack gap={2}>
-          {!hideEmpty(view.yourWork.length) && (
-            <RowList
-              title="Your work"
-              empty={emptyText.yourWork}
-              id="your-work"
-              count={view.yourWork.length}
-              open={planning}
-            >
-              {view.yourWork.map((row) => (
-                <DraggableTicketRow
-                  key={row.number}
-                  sortable={sortableIn('Your work', row.number)}
-                  muted
-                  ticket={row}
-                  href={hrefOf(row.number)}
-                  icon={row.children ? 'queue-list' : 'user'}
-                  {...epicParts(row, board, hrefOf)}
-                  selection={
-                    row.children
-                      ? undefined
-                      : selectable(row.number, 'yourWork')
-                  }
-                  line={`ready-for-human · for ${age(row.updatedAt)}`}
-                  end={<Tag>Your work</Tag>}
-                />
-              ))}
-            </RowList>
-          )}
           {!hideEmpty(view.queued.length) && (
             <RowList
               title="Queued"

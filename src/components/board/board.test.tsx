@@ -245,7 +245,7 @@ describe('Board', () => {
     await vi.waitFor(() =>
       expect(within(actionNeeded).getAllByRole('listitem')).toHaveLength(2),
     );
-    expect(within(needsYou).getAllByText('3')[0]).toBeVisible();
+    expect(within(needsYou).getAllByText('4')[0]).toBeVisible();
     expect(actionNeeded.querySelector('details')).toHaveAttribute('open');
     const [stalled, waiting] = within(actionNeeded).getAllByRole('listitem');
     expect(stalled).toHaveTextContent('Rename lanes');
@@ -396,7 +396,7 @@ describe('Board', () => {
     expect(filed).toHaveTextContent(/Intake · to triage · /);
     expect(within(filed).getByText('needs-triage')).toBeVisible();
     expect(within(planned).getByText('no triage label')).toBeVisible();
-    expect(within(section('Needs you')).getAllByText('3')[0]).toBeVisible();
+    expect(within(section('Needs you')).getAllByText('4')[0]).toBeVisible();
   });
 
   it("shows each row's labels in every section, leaving out the state labels", async () => {
@@ -870,14 +870,14 @@ describe('Board', () => {
     document.title = 'Board · Website | Tandembike';
     const { unmount } = renderBoard();
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Board · Website | Tandembike'),
+      expect(document.title).toBe('(2) Board · Website | Tandembike'),
     );
 
     // Next writes the page's metadata title again, as when a drawer opens.
     document.title = 'Board · Website | Tandembike';
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Board · Website | Tandembike'),
+      expect(document.title).toBe('(2) Board · Website | Tandembike'),
     );
     unmount();
     expect(document.title).toBe('Board · Website | Tandembike');
@@ -891,7 +891,7 @@ describe('Board', () => {
     const { rerender } = renderBoard();
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Board · Website | Tandembike'),
+      expect(document.title).toBe('(2) Board · Website | Tandembike'),
     );
 
     rerender(
@@ -921,7 +921,7 @@ describe('Board', () => {
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=7');
   });
 
-  it('shows its sections in the order Needs you, In flight, Your work, Queued, Done, Archived', async () => {
+  it('shows its sections in the order Needs you, In flight, Queued, Done, Archived, with Your work inside Needs you', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
@@ -930,7 +930,6 @@ describe('Board', () => {
     const boardSections = [
       'Needs you',
       'In flight',
-      'Your work',
       'Queued',
       'Done',
       'Archived',
@@ -941,17 +940,64 @@ describe('Board', () => {
         .map((region) => region.getAttribute('aria-label'))
         .filter((name) => name !== null && boardSections.includes(name)),
     ).toEqual(boardSections);
+    expect(section('Needs you')).toContainElement(section('Your work'));
   });
 
-  it('keeps Your work, Queued and Done closed with their counts, and opens them on click', async () => {
+  it('shows the groups of Needs you in the order Action needed, Review, Your work, Intake', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    renderBoard([
+      ...tickets,
+      ticket({ number: 12, title: 'Stalled', status: 'In progress' }),
+      ticket({ number: 13, title: 'Untriaged', labels: ['needs-triage'] }),
+    ]);
+
+    const groups = ['Action needed', 'Review', 'Your work', 'Intake'];
+    expect(
+      within(section('Needs you'))
+        .getAllByRole('region')
+        .map((region) => region.getAttribute('aria-label'))
+        .filter((name) => name !== null && groups.includes(name)),
+    ).toEqual(groups);
+  });
+
+  it('shows Your work open in Needs you, counting only its unblocked Tickets and marking a blocked one', async () => {
+    vi.mocked(currentConversationActivity).mockResolvedValue(
+      noConversationActivity,
+    );
+    document.title = 'Board | Tandembike';
+    renderBoard([
+      ...tickets,
+      ticket({
+        number: 12,
+        title: 'Check by hand',
+        labels: ['ready-for-human'],
+        position: 1,
+        blockedBy: [7],
+        blocked: true,
+      }),
+    ]);
+
+    const yourWork = section('Your work');
+    expect(yourWork.querySelector('details')).toHaveAttribute('open');
+    const [ready, blocked] = within(yourWork).getAllByRole('listitem');
+    expect(ready).toHaveTextContent('Pick a ceiling');
+    expect(within(ready).queryByText('Blocked')).toBeNull();
+    expect(blocked).toHaveTextContent('Check by hand');
+    expect(within(blocked).getByText('Blocked')).toBeVisible();
+    // Review 8 and the unblocked Your work 9; not the blocked 12.
+    await vi.waitFor(() =>
+      expect(document.title).toBe('(2) Board | Tandembike'),
+    );
+  });
+
+  it('keeps Queued and Done closed with their counts, and opens them on click', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
     renderBoard();
 
-    const yourWork = section('Your work');
-    expect(yourWork.querySelector('details')).not.toHaveAttribute('open');
-    expect(within(yourWork).getByText('1')).toBeVisible();
     const queued = section('Queued');
     expect(queued.querySelector('details')).not.toHaveAttribute('open');
     expect(within(queued).getByText('1')).toBeVisible();
@@ -1083,9 +1129,6 @@ describe('Board', () => {
       within(section('Queued')).getByText(
         'Queued is empty: triage a Ticket as ready-for-agent to queue it.',
       ),
-    ).toBeVisible();
-    expect(
-      within(section('Your work')).getByText(emptyText.yourWork),
     ).toBeVisible();
     expect(within(section('Done')).getByText(emptyText.done)).toBeVisible();
   });
@@ -1626,7 +1669,7 @@ describe('Board drag', () => {
   it('changes nothing for a row dropped in another section', async () => {
     renderDraggable();
 
-    // The first Queued row's neighbour above is the last of Your work.
+    // The first Queued row's neighbour above is the last of Needs you's Intake.
     await keyboardDrag(rowOf(1), '{ArrowUp}');
 
     expect(reorderTickets).not.toHaveBeenCalled();
@@ -1652,8 +1695,7 @@ describe('Board drag', () => {
     );
 
     // Dragged by its second row onto the third, the pair lands after it in
-    // Board order. One step keeps the drop inside Queued, which Your work
-    // follows.
+    // Board order. One step keeps the drop inside Queued.
     await keyboardDrag(rowOf(2), '{ArrowDown}');
 
     await vi.waitFor(() =>
@@ -1787,7 +1829,7 @@ describe('Board New Ticket field and Board filter (T1118)', () => {
     renderBoard(tickets, { query: 'nothing matches this', labels: [] });
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Board | Tandembike'),
+      expect(document.title).toBe('(2) Board | Tandembike'),
     );
   });
 });
@@ -1862,6 +1904,7 @@ describe('Board as a planning Board (T1119)', () => {
     });
 
     expect(section('Queued').querySelector('details')).toHaveAttribute('open');
+    expect(section('Needs you')).toContainElement(section('Your work'));
     expect(section('Your work').querySelector('details')).toHaveAttribute(
       'open',
     );
@@ -1869,14 +1912,24 @@ describe('Board as a planning Board (T1119)', () => {
       'open',
     );
     expect(screen.queryByRole('region', { name: 'In flight' })).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Intake' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Archived' })).toBeNull();
   });
 
-  it('hides Queued and Your work when they are empty', () => {
+  it('shows Needs you on the Backlog for its ready-for-human Tickets', () => {
+    quiet();
+    renderPlanning({ cycle: null });
+
+    expect(
+      within(section('Your work')).getByRole('link', { name: 'Mine' }),
+    ).toBeVisible();
+  });
+
+  it('hides Needs you, with Your work, and Done when they are empty', () => {
     quiet();
     renderPlanning({ tickets: [planning[0]] });
 
+    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Your work' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Done' })).toBeNull();
     expect(section('Queued')).toBeVisible();

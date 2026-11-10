@@ -72,7 +72,7 @@ describe('ProjectLayout', () => {
     expect(screen.getByText('The tab')).toBeInTheDocument();
   });
 
-  it("counts the Active Cycle's Needs you for its tab, and the Backlog's Intake for its own", async () => {
+  it("counts the Active Cycle's Needs you for its tab, Your work included, and the Backlog's Intake for its own", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Now' });
@@ -91,6 +91,19 @@ describe('ProjectLayout', () => {
       title: 'Ready later',
       labels: ['ready-for-agent'],
     });
+    // ready-for-human work needs the User on the Active Cycle (ADR 0048), but
+    // the Backlog's badge stays Intake only.
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Check by hand',
+      labels: ['ready-for-human'],
+      cycleId: cycle.id,
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Check by hand later',
+      labels: ['ready-for-human'],
+    });
     tickets.startCycle(cycle.id);
     vi.mocked(appTickets).mockReturnValue(tickets);
 
@@ -106,7 +119,7 @@ describe('ProjectLayout', () => {
     );
 
     expect(screen.getByRole('navigation')).toHaveTextContent(
-      'needs you 1; Backlog Intake 1',
+      'needs you 2; Backlog Intake 1',
     );
   });
 
