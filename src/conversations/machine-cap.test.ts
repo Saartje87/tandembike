@@ -609,3 +609,60 @@ describe('The live processes split into working and waiting on the User (T1332)'
     expect(conversations.liveProcessesInUse()).toBe(4);
   });
 });
+
+describe('An Epic’s Start and its children’s moves (ADR 0049)', () => {
+  /** An idle Start on an Epic with two In progress children. */
+  const epicRun = async () => {
+    const world = setup(9);
+    const { tickets, conversations, runner, projects } = world;
+    const epic = tickets.createTicket({
+      projectId: projects[0].id,
+      title: 'Epic',
+      type: 'Epic',
+    });
+    const children = ['One', 'Two'].map((title) => {
+      const child = tickets.createTicket({
+        projectId: projects[0].id,
+        title,
+        epicNumber: epic.number,
+      });
+      tickets.updateTicket(child.number, { status: 'In progress' });
+      return child;
+    });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: epic.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    return { ...world, epic, children, run: runner.runs[0] };
+  };
+
+  it('keeps the Epic’s run when one child goes Back to Todo', async () => {
+    const { tickets, conversations, children, run } = await epicRun();
+
+    tickets.backToTodo(children[0].number);
+
+    expect(run.closed).toBe(false);
+    expect(conversations.machineSlotsInUse()).toBe(1);
+  });
+
+  it('ends the Epic’s run when the Epic goes Back to Todo', async () => {
+    const { tickets, conversations, epic, run } = await epicRun();
+
+    tickets.backToTodo(epic.number);
+
+    expect(run.closed).toBe(true);
+    expect(conversations.machineSlotsInUse()).toBe(0);
+  });
+
+  it('ends the Epic’s run when the Epic is Done', async () => {
+    const { tickets, conversations, epic, run } = await epicRun();
+
+    tickets.completeTicket(epic.number);
+
+    expect(run.closed).toBe(true);
+    expect(conversations.machineSlotsInUse()).toBe(0);
+  });
+});
