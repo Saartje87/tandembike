@@ -62,7 +62,7 @@ This repo is one app: a local ticket tracker. Read `GLOSSARY.md` for the domain 
 
 ### Git workflow
 
-The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) runs lint, typecheck and tests on every PR and every push to `main`.
+The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and the production build (`npm run build`) on every PR and every push to `main`. The build catches errors only the bundler sees, such as a client component importing a server-only module.
 
 - Do each Ticket on its own branch off `main`, named `ticket-<number>-<slug>` (e.g. `ticket-23-remove-blocker-missing`). An Epic is one unit: claim it once, work its children in Blocker order on one branch named after the Epic, and open one PR for it; see "Working an Epic" in `docs/agents/issue-tracker.md`.
 - Give each Agent run its own git worktree when another run may share the checkout: runs in one tree sweep each other's staged files into commits and fail each other's pre-commit typecheck. See "Worktrees for parallel runs" in `docs/agents/issue-tracker.md`.
@@ -75,7 +75,7 @@ The remote `origin` is a public GitHub repo; CI (`.github/workflows/ci.yml`) run
 
 ### Before finishing
 
-Run `npm run check` (Biome, typecheck, tests). It must pass. The pre-commit hook runs Biome on staged files and the typecheck; CI runs all three on the PR.
+Run `npm run check` (Biome, typecheck, tests). It must pass. The pre-commit hook runs Biome on staged files and the typecheck; CI runs all three on the PR, plus `npm run build`. When your change moves code between client and server components, run `npm run build` too; in a shell that sets `NODE_ENV=development` it fails on `/_global-error`, so run it as `env -u NODE_ENV npm run build`.
 
 ### Process feedback
 
