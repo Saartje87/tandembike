@@ -173,9 +173,7 @@ export function cycleTicketsWithEpics(projectId: number, cycleId: number) {
  * Backlog's own (ADR 0025).
  */
 export function needsYouCountOf(projectId: number): number {
-  const active = appTickets('user')
-    .listCycles(projectId)
-    .find(({ state }) => state === 'Active');
+  const active = appTickets('user').activeCycle(projectId);
   if (!active) {
     return 0;
   }
@@ -222,9 +220,7 @@ export function cycleEstimate(
  */
 export function ticketPathOf(projectId: number) {
   const activity = conversationActivity(appConversations().activityRows());
-  const active = appTickets('user')
-    .listCycles(projectId)
-    .find(({ state }) => state === 'Active');
+  const active = appTickets('user').activeCycle(projectId);
   const backlog = boardOf(
     appTickets('user').listTickets({ projectId, cycleId: null }),
     activity,

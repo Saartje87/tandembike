@@ -350,9 +350,7 @@ const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
     if (project.archived) {
       continue;
     }
-    const cycle = tickets
-      .listCycles(project.id)
-      .find((candidate) => candidate.state === 'Active');
+    const cycle = tickets.activeCycle(project.id);
     const spend =
       tickets.getProjectAgentSettings(project.id).autopilot && cycle
         ? conversations.spendBudget({

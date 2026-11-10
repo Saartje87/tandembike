@@ -14,21 +14,25 @@ export type ActionResult<T extends object = object> =
   | { ok: false; error: string; fieldErrors?: FieldErrors };
 
 /**
- * Why a Server Action refused, for a field that shows it: the reason for
- * `field` when the input broke its rule, else the action's error. Nothing
- * when the action succeeded.
+ * Why a Server Action refused `field`'s input: the reason for that field when
+ * the input broke its rule. Nothing when the action succeeded or refused for
+ * another reason. Show it with `setError(field, …)` (AGENTS.md, Forms).
  */
-export function refusalReason(
+export function fieldRefusal(
   result: ActionResult,
-  field?: string,
+  field: string,
 ): string | undefined {
-  if (result.ok) {
-    return undefined;
-  }
-  return (
-    (field === undefined ? undefined : result.fieldErrors?.[field]) ??
-    result.error
-  );
+  return result.ok ? undefined : result.fieldErrors?.[field];
+}
+
+/**
+ * Why a Server Action refused, as a whole: its error, which also holds every
+ * field's reason. Nothing when it succeeded. Show it on `'root.server'`, or
+ * as the one reason of a control that shows a single one, after
+ * `fieldRefusal` (`fieldRefusal(result, field) ?? rootRefusal(result)`).
+ */
+export function rootRefusal(result: ActionResult): string | undefined {
+  return result.ok ? undefined : result.error;
 }
 
 /**

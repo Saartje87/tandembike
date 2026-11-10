@@ -2,6 +2,7 @@ import { screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../../../conversations/app-conversations';
+import { agentCommandEntries } from '../../../../test/fixtures';
 import {
   renderPage,
   renderPageError,
@@ -133,16 +134,13 @@ describe('SettingsPage', () => {
   it("shows the Project's Triage and Start commands", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '/triage',
-      startCommand: '/implement',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({
+        triageCommand: '/triage',
+        startCommand: '/implement',
+      }),
+    );
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({ id: String(project.id) });

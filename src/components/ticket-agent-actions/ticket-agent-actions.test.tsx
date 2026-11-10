@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
+import { agentCommands } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { TicketAgentActions } from './ticket-agent-actions';
 
@@ -11,27 +12,16 @@ vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
 }));
 
-const commands = {
+const commands = agentCommands({
   triageCommand: '/mattpocock-skills:triage',
   startCommand: '/mattpocock-skills:implement',
   startEpicCommand: '/mattpocock-skills:implement-spec',
   retroCommand: '/retro',
   specCommand: '/spec',
   mergeCommand: '/merge',
-  planCommand: '',
-  sparCommand: '',
-};
+});
 
-const none = {
-  triageCommand: null,
-  startCommand: null,
-  startEpicCommand: null,
-  retroCommand: null,
-  specCommand: null,
-  mergeCommand: null,
-  planCommand: null,
-  sparCommand: null,
-};
+const none = agentCommands();
 
 const started = {
   ok: true,

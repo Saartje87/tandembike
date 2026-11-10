@@ -56,12 +56,10 @@ export const registerProjectTools = ({
           return tickets.listProjects().map(agentProject);
         }
         const id = resolveProjectId({ projectId, projectName });
-        const cycles = tickets.listCycles(id);
         return {
           ...agentProject(tickets.getProject(id)),
-          activeCycleId:
-            cycles.find((cycle) => cycle.state === 'Active')?.id ?? null,
-          cycles,
+          activeCycleId: tickets.activeCycle(id)?.id ?? null,
+          cycles: tickets.listCycles(id),
           labels: tickets.listLabels({ projectId: id }),
         };
       }),

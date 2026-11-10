@@ -28,7 +28,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { rootRefusal } from '../../app/lib/action-result';
 import { callAction } from '../../app/lib/call-action';
 import { editSparCanvas } from '../../app/spars/actions';
 import {
@@ -314,7 +314,7 @@ export const SparCanvas: FC<SparCanvasProps> = ({
           () => editSparCanvas({ sparId, ops }),
           'The Canvas could not be saved. Try again.',
         );
-        const reason = refusalReason(result);
+        const reason = rootRefusal(result);
         if (reason !== undefined) {
           setError(reason);
         }

@@ -50,7 +50,7 @@ async function flowTab(params: ProjectPageProps['params']) {
     path: cyclePath(project.id, cycle.id),
   });
   const cycles = openCyclesInOrder(appTickets('user').listCycles(project.id));
-  const active = cycles.find(({ state }) => state === 'Active');
+  const active = appTickets('user').activeCycle(project.id);
   return (
     <Stack gap={6}>
       <Text tag="p">

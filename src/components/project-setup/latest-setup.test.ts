@@ -1,29 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Conversation } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { latestSetup } from './latest-setup';
 
-const conversation = (values: Partial<Conversation>): Conversation => ({
-  id: 1,
-  projectId: 3,
-  ticketNumber: null,
-  intent: 'setup',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: new Date('2026-03-01T09:00:00Z'),
-  updatedAt: new Date('2026-03-01T09:00:00Z'),
-  ...values,
-});
+const conversation = (values: Partial<Conversation>): Conversation =>
+  aConversation({
+    projectId: 3,
+    intent: 'setup',
+    createdAt: new Date('2026-03-01T09:00:00Z'),
+    updatedAt: new Date('2026-03-01T09:00:00Z'),
+    ...values,
+  });
 
 describe('latestSetup', () => {
   it('is none without a Setup', () => {

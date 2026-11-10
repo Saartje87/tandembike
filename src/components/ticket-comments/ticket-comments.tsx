@@ -14,7 +14,7 @@ import {
 import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   addTicketComment,
@@ -79,7 +79,7 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
 
   const saveBody = async (body: string) => {
     const result = await editTicketComment({ id: comment.id, body });
-    return refusalReason(result, 'body');
+    return fieldRefusal(result, 'body') ?? rootRefusal(result);
   };
 
   const remove = () => {
