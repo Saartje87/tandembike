@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { openDatabase } from '../db/connection';
 import { createTickets } from '../tickets/tickets';
@@ -88,6 +88,37 @@ describe('The scripted runner (fake runs on a throwaway server)', () => {
     expect(conversations.transcript(conversation.id)).toContainEqual(
       expect.objectContaining({ role: 'widget' }),
     );
+  });
+
+  it('records five tool calls a second apart and keeps running when a reply says fake:tool', async () => {
+    const { conversations, conversation } = await startRunning();
+    const steps = () =>
+      conversations
+        .transcript(conversation.id)
+        .filter((entry) => entry.role === 'tool');
+
+    vi.useFakeTimers();
+    onTestFinished(() => {
+      vi.useRealTimers();
+    });
+    await conversations.reply(conversation.id, 'fake:tool', 'user');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(steps()).toHaveLength(1);
+    expect(steps()[0]).toMatchObject({
+      toolName: 'Bash',
+      toolInput: { command: 'echo fake', description: 'Fake step 1' },
+    });
+
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(steps().map((step) => step.toolInput?.description)).toEqual([
+      'Fake step 1',
+      'Fake step 2',
+      'Fake step 3',
+      'Fake step 4',
+      'Fake step 5',
+    ]);
+    expect(conversations.get(conversation.id).state).toBe('running');
   });
 
   it('ends its turn when a reply says fake:idle', async () => {

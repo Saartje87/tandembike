@@ -101,7 +101,7 @@ describe('ConversationChat', () => {
     expect(lines[0]).toHaveAttribute('data-side', 'end');
     expect(lines[1]).toHaveAttribute('data-side', 'start');
     expect(within(lines[1]).getByText('Agent')).toBeInTheDocument();
-    expect(within(lines[2]).getByText('Read {"file_path":"a"}')).toBeVisible();
+    expect(within(lines[2]).getByText('Reading a')).toBeVisible();
     expect(within(lines[3]).getByText('Went wrong')).toBeInTheDocument();
   });
 
@@ -506,15 +506,158 @@ describe('ConversationChat', () => {
     expect(screen.getByText(/\$0\.0034/)).toBeInTheDocument();
   });
 
-  it('shows tool lines as plain text', () => {
-    renderWithTheme(
-      <ConversationChat
-        title="T4 A Ticket"
-        item={one({}, [entry({ id: 1, role: 'tool', text: 'Read **x**' })])}
-      />,
+  describe('tool calls (T1386)', () => {
+    const tool = (
+      id: number,
+      name: string,
+      input: Record<string, unknown>,
+    ): TranscriptEntry =>
+      entry({
+        id,
+        role: 'tool',
+        text: `${name} ${JSON.stringify(input)}`,
+        toolName: name,
+        toolInput: input,
+      });
+
+    const steps = [
+      tool(2, 'Read', { file_path: '/wt/src/a.ts' }),
+      tool(3, 'Bash', { command: 'npx vitest run', description: 'Run tests' }),
+      tool(4, 'Edit', { file_path: '/wt/src/b.ts', old_string: 'x' }),
+    ];
+
+    const chat = (transcript: TranscriptEntry[]) => (
+      <ConversationChat title="T4" item={one({}, transcript)} />
     );
 
-    expect(screen.getByText('Read **x**')).toBeInTheDocument();
+    it('collapses consecutive tool calls into one closed group naming the count and latest step', () => {
+      renderWithTheme(
+        chat([
+          entry({ id: 1, text: 'Looking' }),
+          ...steps,
+          entry({ id: 5, text: 'Done' }),
+        ]),
+      );
+
+      const lines = within(
+        screen.getByRole('list', { name: 'Transcript' }),
+      ).getAllByRole('listitem');
+      expect(lines).toHaveLength(3);
+      expect(
+        within(lines[1]).getByText('3 steps · Editing b.ts'),
+      ).toBeVisible();
+      expect(within(lines[1]).getByText('Reading a.ts')).not.toBeVisible();
+      expect(within(lines[1]).getByRole('group')).not.toHaveAttribute('open');
+    });
+
+    it('lists every step with its raw input when the group is opened', async () => {
+      const user = userEvent.setup();
+      renderWithTheme(chat(steps));
+
+      await user.click(screen.getByText('3 steps · Editing b.ts'));
+
+      expect(screen.getByText('Reading a.ts')).toBeVisible();
+      expect(screen.getByText('Running Run tests')).toBeVisible();
+      expect(screen.getByText('Editing b.ts')).toBeVisible();
+      expect(
+        screen.getByText(
+          '{"command":"npx vitest run","description":"Run tests"}',
+        ),
+      ).toBeVisible();
+      expect(screen.getByText('{"file_path":"/wt/src/a.ts"}').tagName).toBe(
+        'CODE',
+      );
+    });
+
+    it('shows a single tool call as its phrase and raw input, with no toggle', () => {
+      renderWithTheme(
+        chat([
+          entry({ id: 1, text: 'Looking' }),
+          steps[0],
+          entry({ id: 5, text: 'Done' }),
+        ]),
+      );
+
+      expect(screen.getByText('Reading a.ts')).toBeVisible();
+      expect(screen.getByText('{"file_path":"/wt/src/a.ts"}')).toBeVisible();
+      expect(screen.queryByRole('group')).toBeNull();
+      expect(screen.queryByText(/steps ·/)).toBeNull();
+    });
+
+    it('ends a group at a created, error, permission or Agent entry, which stay visible', () => {
+      renderWithTheme(
+        chat([
+          steps[0],
+          steps[1],
+          entry({ id: 10, role: 'created', text: 'Created T41' }),
+          steps[2],
+          tool(11, 'Grep', { pattern: 'foo' }),
+          entry({ id: 12, role: 'error', text: 'Went wrong' }),
+          tool(13, 'Glob', { pattern: '*.ts' }),
+          tool(14, 'Read', { file_path: 'c.ts' }),
+          entry({
+            id: 15,
+            role: 'permission',
+            text: 'Bash {"command":"rm"}',
+            permissionRules: ['Bash(rm)'],
+          }),
+          tool(16, 'Read', { file_path: 'd.ts' }),
+        ]),
+      );
+
+      expect(screen.getByText('2 steps · Running Run tests')).toBeVisible();
+      expect(screen.getByRole('link', { name: 'T41' })).toBeVisible();
+      expect(screen.getByText('2 steps · Searching foo')).toBeVisible();
+      expect(screen.getByText('Went wrong')).toBeVisible();
+      expect(screen.getByText('2 steps · Reading c.ts')).toBeVisible();
+      expect(screen.getByText('Reading d.ts')).toBeVisible();
+      expect(screen.getAllByRole('group')).toHaveLength(3);
+    });
+
+    it('keeps a group the User opened open as new steps arrive, with the latest step in its summary', async () => {
+      const user = userEvent.setup();
+      const { rerender } = renderWithTheme(chat(steps.slice(0, 2)));
+
+      await user.click(screen.getByText('2 steps · Running Run tests'));
+      rerender(chat(steps));
+
+      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByRole('group')).toHaveAttribute('open');
+      expect(screen.getByText('Reading a.ts')).toBeVisible();
+    });
+
+    it("updates a closed group's summary as new steps arrive", () => {
+      const { rerender } = renderWithTheme(chat(steps.slice(0, 2)));
+
+      rerender(chat(steps));
+
+      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByRole('group')).not.toHaveAttribute('open');
+    });
+
+    it('phrases an older tool entry from its stored text', () => {
+      renderWithTheme(
+        chat([
+          entry({ id: 1, role: 'tool', text: 'Read {"file_path":"/x/a.ts"}' }),
+          entry({
+            id: 2,
+            role: 'tool',
+            text: 'mcp__tandembike__start_work {"number":12}',
+          }),
+        ]),
+      );
+
+      expect(screen.getByText('2 steps · Starting T12')).toBeVisible();
+    });
+
+    it('shows the raw input as plain text, not Markdown or links', () => {
+      renderWithTheme(
+        chat([entry({ id: 1, role: 'tool', text: 'Mystery **x** T12' })]),
+      );
+
+      expect(screen.getByText('**x** T12')).toBeVisible();
+      expect(screen.queryByRole('link')).toBeNull();
+    });
   });
 
   describe('option chips', () => {
