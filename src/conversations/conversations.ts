@@ -1984,6 +1984,7 @@ export function createConversations({
             createdAt: conversations.createdAt,
             startedBy: conversations.startedBy,
             intent: conversations.intent,
+            batchTriageTickets: conversations.batchTriageTickets,
           })
           .from(conversations)
           .orderBy(desc(conversations.id))
@@ -2002,6 +2003,7 @@ export function createConversations({
               costUsd,
               createdAt,
               startedBy,
+              batchTriageTickets,
             }) => {
               return {
                 id,
@@ -2010,6 +2012,7 @@ export function createConversations({
                 state,
                 costUsd: costUsd ?? 0,
                 startedBy,
+                batchTriageTickets,
                 latest: statusEntryOf(latest.get(id)),
                 message: statusEntryOf(messages.get(id)),
                 startedAt: (started.get(id) ?? createdAt).toISOString(),
@@ -2201,6 +2204,27 @@ export function createConversations({
     },
 
     openBatchTriage,
+
+    /**
+     * The open Batch triages that list Ticket `number`, newest first: its
+     * drawer links to them as to its own Conversations (T1319).
+     */
+    openBatchTriagesOf(number: number): Conversation[] {
+      return db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.intent, 'batch_triage'),
+            eq(conversations.hidden, false),
+          ),
+        )
+        .orderBy(desc(conversations.id))
+        .all()
+        .filter((conversation) =>
+          (conversation.batchTriageTickets ?? []).includes(number),
+        );
+    },
 
     /**
      * Sends a reply, the User's or Autopilot's: into the run while it is
