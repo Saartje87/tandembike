@@ -636,4 +636,109 @@ describe('update_ticket cycleId withChildren', () => {
     expect(tickets.getTicket(epic.number).title).toBe('Epic');
     await client.close();
   });
+
+  describe('update_ticket before and after', () => {
+    /** A Project with Tickets T1 to T4 in Todo, as an Agent's tools see it. */
+    const laneSetup = async () => {
+      const tickets = createTestTickets(undefined, 'agent');
+      const project = tickets.createProject({ name: 'Website' });
+      for (const title of ['One', 'Two', 'Three', 'Four']) {
+        tickets.createTicket({ projectId: project.id, title });
+      }
+      const client = await connectMcpClient(tickets);
+      /** The Todo lane as find_tickets sort position lists it. */
+      const lane = async () =>
+        (
+          resultJson(
+            await client.callTool({
+              name: 'find_tickets',
+              arguments: {
+                projectName: 'Website',
+                status: 'Todo',
+                sort: 'position',
+              },
+            }),
+          ) as { tickets: { number: number }[] }
+        ).tickets.map(({ number }) => number);
+      return { tickets, project, client, lane };
+    };
+
+    it('moves a Ticket directly before or after another, as find_tickets shows', async () => {
+      const { tickets, client, lane } = await laneSetup();
+
+      const before = await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 4, before: 1 },
+      });
+      expect(before.isError).toBeFalsy();
+      expect(await lane()).toEqual([4, 1, 2, 3]);
+
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 1, after: 3 },
+      });
+      expect(await lane()).toEqual([4, 2, 3, 1]);
+      expect(tickets.listActivity(1).at(-1)).toMatchObject({
+        actor: 'agent',
+        changes: [{ type: 'reordered', after: 3 }],
+      });
+      await client.close();
+    });
+
+    it('changes the Status first, so a Ticket can land next to one in its new Status', async () => {
+      const { tickets, project, client } = await laneSetup();
+      tickets.updateTicket(2, { status: 'In progress' });
+
+      await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 4, status: 'In progress', before: 2 },
+      });
+
+      expect(
+        tickets
+          .findTickets({
+            projectId: project.id,
+            status: 'In progress',
+            sort: 'position',
+          })
+          .tickets.map(({ number }) => number),
+      ).toEqual([4, 2]);
+      await client.close();
+    });
+
+    it('refuses an anchor in another Status with a reason, leaving the order', async () => {
+      const { tickets, client, lane } = await laneSetup();
+      tickets.updateTicket(2, { status: 'In progress' });
+
+      const result = await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 4, before: 2 },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toMatch(/T2 is In progress, not Todo like T4/);
+      expect(await lane()).toEqual([1, 3, 4]);
+      await client.close();
+    });
+
+    it('refuses before and after together, and either with a list of Tickets', async () => {
+      const { client, lane } = await laneSetup();
+
+      const both = await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: 4, before: 1, after: 2 },
+      });
+      const batch = await client.callTool({
+        name: 'update_ticket',
+        arguments: { number: [3, 4], before: 1 },
+      });
+
+      expect(both.isError).toBe(true);
+      expect(resultText(both)).toMatch(/either before or after/);
+      expect(batch.isError).toBe(true);
+      expect(resultText(batch)).toMatch(/one Ticket at a time/);
+      expect(await lane()).toEqual([1, 2, 3, 4]);
+      await client.close();
+    });
+  });
 });

@@ -52,6 +52,8 @@ type TicketUpdate = Omit<UpdateTicketInput, 'projectId'> & {
   cycleId?: number | null;
   withChildren?: boolean;
   archived?: boolean;
+  before?: number;
+  after?: number;
 };
 
 /**
@@ -62,8 +64,8 @@ type TicketUpdateResult = { ticket: Ticket; childrenMoved?: number[] };
 
 /**
  * One Ticket's update_ticket change: a restore first, so the rest applies
- * to the restored Ticket, then the core fields, Epic, Blockers, Cycle and
- * archive, in that order, all in one transaction. Each
+ * to the restored Ticket, then the core fields, Epic, Blockers, Cycle, Board
+ * position and archive, in that order, all in one transaction. Each
  * step is refused with the message of the single-purpose rule it applies, and
  * a refusal leaves the Ticket unchanged.
  */
@@ -77,6 +79,8 @@ const applyTicketUpdate = (
     cycleId,
     withChildren,
     archived,
+    before,
+    after,
     ...core
   }: TicketUpdate,
 ): TicketUpdateResult =>
@@ -86,6 +90,11 @@ const applyTicketUpdate = (
         "withChildren takes an Epic's children along to a Cycle, so give cycleId with it.",
       );
     }
+    if (before !== undefined && after !== undefined) {
+      throw new TicketsError(
+        'Give either before or after: a Ticket lands next to one Ticket.',
+      );
+    }
     let childrenMoved: number[] | undefined;
     const hasCore = Object.values(core).some((value) => value !== undefined);
     const hasSteps =
@@ -93,6 +102,8 @@ const applyTicketUpdate = (
       addBlockers.length > 0 ||
       removeBlockers.length > 0 ||
       cycleId !== undefined ||
+      before !== undefined ||
+      after !== undefined ||
       archived !== undefined;
     // An archived Ticket is read-only, so restore it before the rest.
     if (archived === false) {
@@ -123,6 +134,11 @@ const applyTicketUpdate = (
         throw new TicketsError(withMoveHint(moved.failed[0].error));
       }
       childrenMoved = moved.children;
+    }
+    if (before !== undefined) {
+      tickets.reorderTicket(number, { before });
+    } else if (after !== undefined) {
+      tickets.reorderTicket(number, { after });
     }
     if (archived === true) {
       tickets.archiveTicket(number);
@@ -433,7 +449,7 @@ export const registerTicketTools = ({
     'update_ticket',
     {
       title: 'Update Ticket',
-      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, or moves it from another Epic; null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. An archived Ticket refuses every change until it is restored, so archived: false restores it first; then the core fields change, then the Epic, Blockers, Cycle and archived: true steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
+      description: `Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, or moves it from another Epic; null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along), Board position (before or after another Ticket of its Project and Status) and archived (true archives, false restores). Fields left out stay as they are. An archived Ticket refuses every change until it is restored, so archived: false restores it first; then the core fields change, then the Epic, Blockers, Cycle, Board position and archived: true steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to ${maxBatchSize} numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. ${returnsSummary({ extra: 'blockedBy, epicNumber or archived when the call changes them' })}`,
       inputSchema: {
         number: z
           .union([ticketNumber, batchTicketNumbers])
@@ -508,6 +524,16 @@ export const registerTicketTools = ({
         withChildren: withChildren.describe(
           "With cycleId, take an Epic's unarchived children along, Done ones included: into a Cycle, every child joins it, leaving any other Cycle that is not Archived; with null, the children in the Epic's Cycle return to the Backlog with it. The result's childrenMoved names the children it moved. Refused on a Ticket that is not an Epic, and without cycleId. Defaults to false: only the Ticket moves.",
         ),
+        before: ticketNumber
+          .optional()
+          .describe(
+            "Move the Ticket on the Board directly before this Ticket, which must be in the same Project and Status (after any status change in this call), by the same rule as the User's drag. The other Tickets keep their order; find_tickets sort position lists the new order. Recorded in Activity. One Ticket at a time, and not with after.",
+          ),
+        after: ticketNumber
+          .optional()
+          .describe(
+            'Move the Ticket on the Board directly after this Ticket, as before does. Not with before.',
+          ),
         archived: z
           .boolean()
           .optional()
@@ -568,6 +594,11 @@ export const registerTicketTools = ({
         });
       }
       return respondBatch(() => {
+        if (changes.before !== undefined || changes.after !== undefined) {
+          throw new TicketsError(
+            'Move one Ticket at a time with before or after: give number as a single Ticket.',
+          );
+        }
         const refusal = checkBatchNumbers(number);
         if (refusal) {
           throw new TicketsError(refusal);

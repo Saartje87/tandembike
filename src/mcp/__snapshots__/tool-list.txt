@@ -1300,7 +1300,7 @@
   {
     "name": "update_ticket",
     "title": "Update Ticket",
-    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, or moves it from another Epic; null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. An archived Ticket refuses every change until it is restored, so archived: false restores it first; then the core fields change, then the Epic, Blockers, Cycle and archived: true steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
+    "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, or moves it from another Epic; null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along), Board position (before or after another Ticket of its Project and Status) and archived (true archives, false restores). Fields left out stay as they are. An archived Ticket refuses every change until it is restored, so archived: false restores it first; then the core fields change, then the Epic, Blockers, Cycle, Board position and archived: true steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1465,6 +1465,18 @@
         "withChildren": {
           "description": "With cycleId, take an Epic's unarchived children along, Done ones included: into a Cycle, every child joins it, leaving any other Cycle that is not Archived; with null, the children in the Epic's Cycle return to the Backlog with it. The result's childrenMoved names the children it moved. Refused on a Ticket that is not an Epic, and without cycleId. Defaults to false: only the Ticket moves.",
           "type": "boolean"
+        },
+        "before": {
+          "description": "Move the Ticket on the Board directly before this Ticket, which must be in the same Project and Status (after any status change in this call), by the same rule as the User's drag. The other Tickets keep their order; find_tickets sort position lists the new order. Recorded in Activity. One Ticket at a time, and not with after.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "after": {
+          "description": "Move the Ticket on the Board directly after this Ticket, as before does. Not with before.",
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
         "archived": {
           "description": "true archives the Ticket: it leaves the Board and find_tickets (unless includeArchived is set) but keeps everything; false restores it. Restoring an Epic also brings back the children archived with it. An Epic cannot be archived while any child is not archived. Agents cannot delete Tickets; the User can, from the app.",
