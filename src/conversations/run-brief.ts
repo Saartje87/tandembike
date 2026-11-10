@@ -94,7 +94,7 @@ export function runBrief(brief: RunBrief): string {
     intentLines[brief.intent],
     brief.terminal
       ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
-      : 'A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: `ask_choice` for choice cards (put your recommendation in `recommended`). Use a Widget instead of asking in text whenever the answer is a pick; AskUserQuestion also works and shows as choice cards. Every Widget may come back as `{ "other": text }` or `{ "skipped": true }`. Ask open questions in your messages.',
+      : 'A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: `ask_choice` for choice cards (put your recommendation in `recommended`), `ask_rank` for an order, `ask_matrix` to place items on a 2×2 you label, and `ask_scale` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount; AskUserQuestion also works and shows as choice cards. Every Widget may come back as `{ "other": text }` or `{ "skipped": true }`. Ask open questions in your messages.',
     `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};

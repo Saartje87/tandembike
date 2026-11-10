@@ -16,6 +16,7 @@ import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
   NotFoundError,
+  TicketsError,
   ValidationError,
 } from '../tickets/errors';
 import type { Tickets } from '../tickets/tickets';
@@ -411,11 +412,29 @@ export function createSpars({
     ]
       .filter((part) => part !== null)
       .join('\n\n');
-    const conversation = await conversations.reply(id, message, 'user');
+    // The baseline moves before the reply, so an edit the Agent makes as
+    // the turn starts is added to it, not overwritten; a refused reply puts
+    // it back.
+    const before = baselineOf(id);
     setBaseline(id, current);
-    announce(id);
-    return conversation;
+    try {
+      const conversation = await conversations.reply(id, message, 'user');
+      announce(id);
+      return conversation;
+    } catch (error) {
+      setBaseline(id, before);
+      throw error;
+    }
   };
+
+  // Spars left closing when the server stopped close now: their run died.
+  for (const { id } of db
+    .select({ id: spars.id })
+    .from(spars)
+    .where(eq(spars.closing, true))
+    .all()) {
+    finishClosing(id);
+  }
 
   /** Refuses a Sticky linked to a Ticket that does not exist. */
   const checkTickets = (ops: readonly CanvasOp[]) => {
@@ -636,6 +655,8 @@ export function createSpars({
       if (row.closed || row.closing) {
         return getSpar(id);
       }
+      // A Widget left unanswered would hold the Summarise turn forever.
+      conversations.expireWidgets(id);
       await sendTurn(id, summariseMessage);
       db.update(spars).set({ closing: true }).where(eq(spars.id, id)).run();
       announce(id);
@@ -681,9 +702,14 @@ export function createSpars({
       spar: Spar;
       ticketNumber: number;
       conversation: Conversation | null;
+      /** Why the Spec could not start; the Ticket is filed all the same. */
+      specError: string | null;
     }> {
       checkOpen(id);
       const spar = getSpar(id);
+      if (spar.closing) {
+        throw new NotAllowedError('This Spar is closing.');
+      }
       if (spar.outcomeTicketNumber !== null) {
         throw new NotAllowedError(
           `This Spar was already handed off as T${spar.outcomeTicketNumber}.`,
@@ -709,20 +735,33 @@ export function createSpars({
         .where(eq(spars.id, id))
         .run();
       announce(id);
-      const conversation =
-        draft.path === 'spec'
-          ? await conversations.start({
-              startedBy: 'user',
-              ticketNumber: ticket.number,
-              intent: 'spec',
-              prompt: agentCommandMessage(
-                'spec',
-                ticket,
-                tickets.getProjectAgentCommands(spar.projectId),
-              ),
-            })
-          : null;
-      return { spar: getSpar(id), ticketNumber: ticket.number, conversation };
+      let conversation: Conversation | null = null;
+      let specError: string | null = null;
+      if (draft.path === 'spec') {
+        try {
+          conversation = await conversations.start({
+            startedBy: 'user',
+            ticketNumber: ticket.number,
+            intent: 'spec',
+            prompt: agentCommandMessage(
+              'spec',
+              ticket,
+              tickets.getProjectAgentCommands(spar.projectId),
+            ),
+          });
+        } catch (error) {
+          if (!(error instanceof TicketsError)) {
+            throw error;
+          }
+          specError = `T${ticket.number} is filed, but its Spec could not start: ${error.message} Start it from its Spec button.`;
+        }
+      }
+      return {
+        spar: getSpar(id),
+        ticketNumber: ticket.number,
+        conversation,
+        specError,
+      };
     },
 
     /** Reopens closed Spar `id`: editable again; the next reply resumes its run. */

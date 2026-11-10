@@ -1883,42 +1883,50 @@ export function createConversations({
           entry.createdAt,
         ]),
       );
-      return db
-        .select({
-          id: conversations.id,
-          ticketNumber: conversations.ticketNumber,
-          projectId: conversations.projectId,
-          state: conversations.state,
-          costUsd: conversations.costUsd,
-          createdAt: conversations.createdAt,
-          startedBy: conversations.startedBy,
-        })
-        .from(conversations)
-        .orderBy(desc(conversations.id))
-        .all()
-        .map(
-          ({
-            id,
-            ticketNumber,
-            projectId,
-            state,
-            costUsd,
-            createdAt,
-            startedBy,
-          }) => {
-            return {
+      return (
+        db
+          .select({
+            id: conversations.id,
+            ticketNumber: conversations.ticketNumber,
+            projectId: conversations.projectId,
+            state: conversations.state,
+            costUsd: conversations.costUsd,
+            createdAt: conversations.createdAt,
+            startedBy: conversations.startedBy,
+            intent: conversations.intent,
+          })
+          .from(conversations)
+          .orderBy(desc(conversations.id))
+          .all()
+          // A Spar places its focus Ticket only while it waits on the User:
+          // thinking an idea through is not work on the Ticket (ADR 0046).
+          .filter(
+            ({ intent, state }) => intent !== 'spar' || state === 'waiting',
+          )
+          .map(
+            ({
               id,
               ticketNumber,
               projectId,
               state,
-              costUsd: costUsd ?? 0,
+              costUsd,
+              createdAt,
               startedBy,
-              latest: statusEntryOf(latest.get(id)),
-              message: statusEntryOf(messages.get(id)),
-              startedAt: (started.get(id) ?? createdAt).toISOString(),
-            };
-          },
-        );
+            }) => {
+              return {
+                id,
+                ticketNumber,
+                projectId,
+                state,
+                costUsd: costUsd ?? 0,
+                startedBy,
+                latest: statusEntryOf(latest.get(id)),
+                message: statusEntryOf(messages.get(id)),
+                startedAt: (started.get(id) ?? createdAt).toISOString(),
+              };
+            },
+          )
+      );
     },
 
     /**
@@ -2184,7 +2192,11 @@ export function createConversations({
         .orderBy(desc(conversations.id))
         .all();
       if (
-        own.some((row) => row.state === 'running' || row.state === 'waiting')
+        own.some(
+          (row) =>
+            row.intent !== 'spar' &&
+            (row.state === 'running' || row.state === 'waiting'),
+        )
       ) {
         throw new NotAllowedError(
           `A Conversation is working on ${label}. Wait for it, or stop it.`,
@@ -2385,6 +2397,23 @@ export function createConversations({
       announce(entry.conversationId);
       resolve(answer);
       return get(entry.conversationId);
+    },
+
+    /**
+     * Expires the Widgets Conversation `id`'s run waits on, resolving each
+     * `{ expired: true }`, so the run goes on, such as when a Spar closes
+     * while a Widget is unanswered. Nothing when none waits.
+     */
+    expireWidgets(id: number): void {
+      const handle = live.get(id);
+      if (!handle || handle.widgets.size === 0) {
+        return;
+      }
+      expireWidgets(handle);
+      if (!waitsOnUser(handle)) {
+        update(id, { state: 'running' });
+      }
+      announce(id);
     },
 
     /**

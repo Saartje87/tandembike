@@ -53,6 +53,7 @@ describe('SparHandOffCard', () => {
       spar: {} as never,
       ticketNumber: 77,
       conversation: null,
+      specError: null,
     });
     renderWithTheme(<SparHandOffCard sparId={4} draft={draft} />);
 
@@ -79,6 +80,7 @@ describe('SparHandOffCard', () => {
       spar: {} as never,
       ticketNumber: 77,
       conversation: { id: 31 } as never,
+      specError: null,
     });
     renderWithTheme(<SparHandOffCard sparId={4} draft={draft} />);
 

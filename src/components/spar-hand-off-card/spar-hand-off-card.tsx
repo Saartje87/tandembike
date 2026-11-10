@@ -78,6 +78,11 @@ export const SparHandOffCard: FC<SparHandOffCardProps> = ({
       }
       return;
     }
+    if (result.specError) {
+      // The Ticket is filed: the outcome shows on the page, and this says why
+      // its Spec did not start.
+      window.alert(result.specError);
+    }
     if (result.conversation) {
       dialog.open(result.conversation.id);
     }

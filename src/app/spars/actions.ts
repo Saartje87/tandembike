@@ -139,6 +139,7 @@ export async function handOffSpar(input: {
     spar: Spar;
     ticketNumber: number;
     conversation: Conversation | null;
+    specError: string | null;
   }>
 > {
   return sparResult(() =>

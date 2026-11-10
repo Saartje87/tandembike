@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestSpars } from '../test/spars';
 import { NotAllowedError, ValidationError } from '../tickets/errors';
+import { createSpars } from './spars';
 
 describe('Starting a Spar', () => {
   it('starts a spar Conversation with the Spar command, its topic and focus, and stores the Spar under its id', async () => {
@@ -451,6 +452,40 @@ describe('Closing and reopening a Spar', () => {
     );
   });
 
+  it('expires a Widget left unanswered, so the Summarise turn can run and the Spar close', async () => {
+    const { spars, spar, run } = await started();
+    const pending = run.options.askWidget({
+      kind: 'choice',
+      prompt: 'Which mode?',
+      options: [{ label: 'Diverge' }, { label: 'Converge' }],
+      multiSelect: false,
+    });
+
+    await spars.closeSpar(spar.id);
+
+    expect(await pending).toEqual({ expired: true });
+    run.emit({ type: 'turn', costUsd: 0 });
+    expect(spars.getSpar(spar.id).closed).toBe(true);
+  });
+
+  it('closes a Spar left closing when the server restarts', async () => {
+    const world = await started();
+    await world.spars.closeSpar(world.spar.id);
+
+    const conversations = world.restart();
+    conversations.interruptStale();
+    const spars = createSpars({
+      db: world.db,
+      tickets: world.tickets,
+      conversations,
+    });
+
+    expect(spars.getSpar(world.spar.id)).toMatchObject({
+      closed: true,
+      closing: false,
+    });
+  });
+
   it('refuses a reply while it is closing', async () => {
     const { spars, spar } = await started();
     await spars.closeSpar(spar.id);
@@ -564,6 +599,24 @@ describe('The Hand-off of a Spar', () => {
     });
     expect(runner.runs.at(-1)?.options.prompt).toBe(
       `/tandembike:spec T${result.ticketNumber}`,
+    );
+  });
+
+  it('files the Ticket and says why when its Spec cannot start', async () => {
+    const { spars, spar, tickets, project } = await started();
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: null });
+
+    const result = await spars.handOff(spar.id, draft);
+
+    expect(tickets.getTicket(result.ticketNumber).title).toBe(draft.title);
+    expect(result.conversation).toBeNull();
+    expect(result.specError).toMatch(
+      new RegExp(
+        `^T${result.ticketNumber} is filed, but its Spec could not start`,
+      ),
+    );
+    expect(spars.getSpar(spar.id).outcomeTicketNumber).toBe(
+      result.ticketNumber,
     );
   });
 

@@ -110,3 +110,50 @@ describe('A Spar run (ADR 0046)', () => {
     ).rejects.toBeInstanceOf(NotAllowedError);
   });
 });
+
+describe('A Spar on a focus Ticket', () => {
+  async function sparOnTicket() {
+    const world = setup();
+    const ticket = world.tickets.createTicket({
+      projectId: world.project.id,
+      title: 'Idea',
+    });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'spar',
+      prompt: '/tandembike:spar',
+    });
+    return { ...world, ticket, conversation, run: world.runner.runs[0] };
+  }
+
+  const rowOf = (world: Awaited<ReturnType<typeof sparOnTicket>>) =>
+    world.conversations
+      .activityRows()
+      .find(({ id }) => id === world.conversation.id);
+
+  it('places its Ticket on the Board only while it waits on the User', async () => {
+    const world = await sparOnTicket();
+    expect(rowOf(world)).toBeUndefined();
+
+    void world.run.options.askWidget({
+      kind: 'choice',
+      prompt: 'Mode?',
+      options: [{ label: 'A' }, { label: 'B' }],
+      multiSelect: false,
+    });
+    expect(rowOf(world)).toMatchObject({ state: 'waiting' });
+  });
+
+  it('does not hold up Approve merge of its Ticket', async () => {
+    const world = await sparOnTicket();
+    world.tickets.updateTicket(world.ticket.number, { status: 'In progress' });
+    world.tickets.addExternalReferences(world.ticket.number, [
+      'https://github.com/acme/site/pull/12',
+    ]);
+
+    await expect(
+      world.conversations.approveMerge({ ticketNumber: world.ticket.number }),
+    ).resolves.toMatchObject({ intent: 'merge' });
+  });
+});
