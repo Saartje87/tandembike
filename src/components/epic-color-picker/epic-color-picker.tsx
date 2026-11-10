@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Popover, Stack } from '@blockle/blocks';
+import { Alert, Button, Inline, Popover, Stack, Text } from '@blockle/blocks';
 import { type FC, useOptimistic, useRef, useState, useTransition } from 'react';
 
 import { callAction } from '../../app/lib/call-action';
@@ -16,6 +16,8 @@ import {
 
 export type EpicColorPickerProps = {
   epic: Pick<EpicLink, 'number' | 'color'>;
+  /** Shows the colour with no way to change it, as for an archived Epic. */
+  readOnly?: boolean;
 };
 
 /**
@@ -24,7 +26,10 @@ export type EpicColorPickerProps = {
  * back, with the reason in the popover, when it is refused. Escape closes
  * the popover and not the drawer.
  */
-export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
+export const EpicColorPicker: FC<EpicColorPickerProps> = ({
+  epic,
+  readOnly = false,
+}) => {
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [color, showColor] = useOptimistic<PaletteColor>(epic.color);
@@ -47,6 +52,15 @@ export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
       }
     });
   };
+
+  if (readOnly) {
+    return (
+      <Inline gap={2} alignY="center">
+        <Swatch color={color} />
+        <Text>{colorName(color)}</Text>
+      </Inline>
+    );
+  }
 
   return (
     // Escape reaches this wrapper from the swatch button or the popover.

@@ -27,6 +27,11 @@ export type TicketAgentActionsProps = {
   onStarted?: (conversationId: number) => void;
   /** Called when Ask is clicked: the caller opens a draft (T611). */
   onAsk?: () => void;
+  /**
+   * Offers Ask only, as for an archived Ticket, which Start, Triage and Spec
+   * would change.
+   */
+  askOnly?: boolean;
 };
 
 /**
@@ -44,6 +49,7 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
   specAvailable = false,
   onStarted,
   onAsk,
+  askOnly = false,
 }) => {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
@@ -71,24 +77,28 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
   return (
     <Stack gap={2}>
       <Inline gap={2}>
-        <Button
-          type="button"
-          size="small"
-          disabled={pending}
-          onClick={begin('start')}
-        >
-          Start
-        </Button>
-        <Button
-          type="button"
-          size="small"
-          variant="outline"
-          disabled={pending}
-          onClick={begin('triage')}
-        >
-          Triage
-        </Button>
-        {specAvailable && (
+        {!askOnly && (
+          <>
+            <Button
+              type="button"
+              size="small"
+              disabled={pending}
+              onClick={begin('start')}
+            >
+              Start
+            </Button>
+            <Button
+              type="button"
+              size="small"
+              variant="outline"
+              disabled={pending}
+              onClick={begin('triage')}
+            >
+              Triage
+            </Button>
+          </>
+        )}
+        {specAvailable && !askOnly && (
           <Button
             type="button"
             size="small"

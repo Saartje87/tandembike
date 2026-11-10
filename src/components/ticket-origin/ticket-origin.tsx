@@ -27,6 +27,8 @@ import { FieldError } from '../field-error/field-error';
 
 export type TicketOriginProps = {
   ticket: Pick<Ticket, 'number' | 'origin'>;
+  /** Shows the Origin with no way to change it, as for an archived Ticket. */
+  readOnly?: boolean;
 };
 
 /**
@@ -35,7 +37,10 @@ export type TicketOriginProps = {
  * Setting or changing opens a field for the Origin's number, which shows
  * once saved; clearing shows at once.
  */
-export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
+export const TicketOrigin: FC<TicketOriginProps> = ({
+  ticket,
+  readOnly = false,
+}) => {
   const inputId = useId();
   const errorId = useId();
   const [origin, showOrigin] = useOptimistic(ticket.origin);
@@ -155,16 +160,18 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
         ) : (
           <Text color="muted">None</Text>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="small"
-          autoFocus={refocusEdit}
-          onClick={() => setEditing(true)}
-        >
-          {origin ? 'Change Origin' : 'Set Origin'}
-        </Button>
-        {origin && (
+        {!readOnly && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="small"
+            autoFocus={refocusEdit}
+            onClick={() => setEditing(true)}
+          >
+            {origin ? 'Change Origin' : 'Set Origin'}
+          </Button>
+        )}
+        {origin && !readOnly && (
           <Button
             type="button"
             variant="ghost"

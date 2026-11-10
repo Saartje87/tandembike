@@ -42,6 +42,11 @@ export type AcceptanceCriteriaEditorProps = {
   ticketNumber: number;
   /** The Ticket's acceptance criteria, in order. */
   criteria: AcceptanceCriterion[];
+  /**
+   * Shows the criteria and their checked states with no way to change them,
+   * as for an archived Ticket.
+   */
+  readOnly?: boolean;
 };
 
 /** One criterion checked or unchecked. */
@@ -354,6 +359,7 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
 export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
   ticketNumber,
   criteria,
+  readOnly = false,
 }) => {
   const headingId = useId();
   const [shown, showChange] = useOptimistic(criteria, changedCriteria);
@@ -422,7 +428,38 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
       <Heading id={headingId} level={3} fontSize="medium" tabIndex={-1}>
         Acceptance criteria
       </Heading>
-      {shown.length > 0 ? (
+      {shown.length > 0 && readOnly ? (
+        <Stack
+          gap={1}
+          aria-labelledby={headingId}
+          listStyle="none"
+          role="list"
+          asChild
+        >
+          <ul>
+            {shown.map((criterion) => (
+              <Inline
+                key={criterion.id}
+                gap={1}
+                alignY="center"
+                flexWrap="nowrap"
+                asChild
+              >
+                <li>
+                  <Checkbox
+                    name={`criterion-${criterion.id}`}
+                    aria-label={criterion.text}
+                    checked={criterion.checked}
+                    disabled
+                    readOnly
+                  />
+                  <Text>{criterion.text}</Text>
+                </li>
+              </Inline>
+            ))}
+          </ul>
+        </Stack>
+      ) : shown.length > 0 ? (
         <DragDropProvider onDragEnd={drop}>
           <Stack
             gap={1}
@@ -467,7 +504,9 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
           No acceptance criteria
         </Text>
       )}
-      <NewCriterion ticketNumber={ticketNumber} criteria={shown} />
+      {!readOnly && (
+        <NewCriterion ticketNumber={ticketNumber} criteria={shown} />
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

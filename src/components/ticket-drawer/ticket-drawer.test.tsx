@@ -417,7 +417,7 @@ describe('TicketDrawer', () => {
         button('Close'),
         inDrawer().getByText('This Ticket is archived'),
         inDrawer().getByRole('heading', { level: 2 }),
-        field('Status'),
+        inDrawer().getByText('Status'),
         inDrawer().getByText('Labels'),
         inDrawer().getByRole('heading', { name: 'Description' }),
         inDrawer().getByRole('heading', { name: 'Acceptance criteria' }),
@@ -1845,18 +1845,245 @@ describe('TicketDrawer', () => {
       expect(router.replace).not.toHaveBeenCalled();
     });
 
-    it('keeps an archived Ticket editable', async () => {
-      vi.mocked(updateTicket).mockResolvedValue({ ok: true, projectId: 1 });
-      renderDrawer({ ...ticket, archived: true });
-
-      await userEvent.selectOptions(field('Status'), 'Done');
-      await userEvent.click(titleButton());
-
-      expect(updateTicket).toHaveBeenCalledExactlyOnceWith({
-        number: 4,
-        status: 'Done',
+    describe('read-only while archived (T1313)', () => {
+      const related = (number: number, title: string) => ({
+        number,
+        title,
+        status: 'Todo' as const,
+        projectId: 1,
+        archived: false,
+        resolved: false,
       });
-      expect(titleInput()).toBeEnabled();
+      const pullRequest = 'https://github.com/owner/repo/pull/87';
+      const full: Ticket = {
+        ...ticket,
+        labels: ['bug'],
+        externalReferences: [pullRequest],
+        epic: {
+          number: 8,
+          title: 'Checkout',
+          claim: null,
+          color: 'teal',
+          hasPullRequest: false,
+        },
+        acceptanceCriteria: [{ id: 1, text: 'Logo visible', checked: true }],
+        claim: { agentRunId: 'run-1', agentName: 'A' },
+      };
+      const epics: EpicLink[] = [
+        full.epic as EpicLink,
+        {
+          number: 12,
+          title: 'Search',
+          claim: null,
+          color: 'red',
+          hasPullRequest: false,
+        },
+      ];
+      const props = {
+        allLabels: ['bug', 'ui'],
+        epics,
+        blockers: {
+          blockedBy: [related(5, 'Design header')],
+          blocks: [related(6, 'Ship it')],
+        },
+        cycles: [
+          {
+            id: 7,
+            projectId: 1,
+            title: 'Beta',
+            state: 'Prepared' as const,
+            ticketNumbers: [4],
+            createdAt: new Date('2026-01-01'),
+            archivedAt: null,
+          },
+        ],
+      };
+      const renderFull = (shown: Ticket) =>
+        renderWithTheme(<InShell ticket={shown} {...props} />);
+
+      const editControls = [
+        'Fix the header',
+        'Detach from Epic',
+        'Set Origin',
+        'Remove label bug',
+        `Remove External reference ${pullRequest}`,
+        'Add External reference',
+        'Remove Blocker T5',
+        'Add blocker',
+        'Stop blocking T6',
+        'Add blocked Ticket',
+        'Drag criterion: Logo visible',
+        'Remove criterion: Logo visible',
+        'Add criterion',
+      ];
+
+      const expectReadOnly = () => {
+        for (const name of editControls) {
+          expect(
+            inDrawer().queryByRole('button', { name }),
+            name,
+          ).not.toBeInTheDocument();
+        }
+        for (const name of ['Status', 'Add a label', 'Move to another Epic']) {
+          expect(
+            inDrawer().queryByLabelText(name),
+            name,
+          ).not.toBeInTheDocument();
+        }
+        expect(
+          inDrawer().getByRole('checkbox', { name: 'Logo visible' }),
+        ).toBeDisabled();
+      };
+
+      it('shows its fields without edit controls', async () => {
+        renderFull({ ...full, archived: true });
+
+        expectReadOnly();
+        expect(
+          inDrawer().getByRole('heading', { level: 2, name: 'Fix the header' }),
+        ).toBeInTheDocument();
+        expect(inDrawer().getByText('In progress')).toBeInTheDocument();
+        expect(
+          within(inDrawer().getByRole('list', { name: 'Labels' })).getByText(
+            'bug',
+          ),
+        ).toBeInTheDocument();
+        expect(
+          inDrawer().getByRole('link', { name: 'T8 Checkout' }),
+        ).toBeInTheDocument();
+        expect(inDrawer().getByRole('link', { name: 'Beta' })).toBeVisible();
+        // ADR 0010: an archived Ticket can still leave its Cycle.
+        expect(button('Remove from Cycle')).toBeEnabled();
+        expect(
+          inDrawer().getByRole('link', { name: 'owner/repo#87' }),
+        ).toBeVisible();
+        expect(
+          inDrawer().getByRole('link', { name: 'T5 Design header' }),
+        ).toBeVisible();
+        expect(
+          inDrawer().getByRole('link', { name: 'T6 Ship it' }),
+        ).toBeVisible();
+        expect(
+          inDrawer().getByRole('checkbox', { name: 'Logo visible' }),
+        ).toBeChecked();
+        await userEvent.click(inDrawer().getByText(/^It overlaps/));
+        expect(
+          inDrawer().queryByRole('textbox', { name: 'Description' }),
+        ).not.toBeInTheDocument();
+        expect(updateTicket).not.toHaveBeenCalled();
+      });
+
+      it("offers no Detach on an archived Epic's children", () => {
+        renderDrawer({
+          ...ticket,
+          type: 'Epic',
+          archived: true,
+          children: [
+            anEpicChild({ number: 9, title: 'Pay by card', archived: true }),
+          ],
+        });
+
+        expect(
+          inDrawer().getByRole('link', { name: 'Pay by card' }),
+        ).toBeInTheDocument();
+        expect(
+          inDrawer().queryByRole('button', { name: 'Detach T9' }),
+        ).not.toBeInTheDocument();
+      });
+
+      it("shows an archived Epic's colour without a picker", () => {
+        renderDrawer({
+          ...ticket,
+          type: 'Epic',
+          color: 'teal',
+          archived: true,
+        });
+
+        expect(
+          inDrawer().queryByRole('button', { name: /^Epic colour/ }),
+        ).not.toBeInTheDocument();
+        expect(inDrawer().getByText('Teal')).toBeInTheDocument();
+      });
+
+      it('still offers Restore, comments, Attachments, Delete and Clear claim', () => {
+        renderFull({ ...full, archived: true });
+
+        expect(button('Restore')).toBeEnabled();
+        expect(
+          inDrawer().getByRole('textbox', { name: 'Add a comment' }),
+        ).toBeInTheDocument();
+        expect(button('Add files')).toBeEnabled();
+        expect(button('Delete')).toBeEnabled();
+        expect(button('Clear claim')).toBeEnabled();
+        expect(button('Ask')).toBeEnabled();
+      });
+
+      it.each<[string, Ticket]>([
+        ['in Review', { ...ticket, externalReferences: [pullRequest] }],
+        ['parked', ticket],
+        ['in Intake', { ...ticket, status: 'Todo' }],
+      ])('offers no agent action that changes a Ticket %s', (_state, shown) => {
+        renderWithTheme(
+          <InShell
+            ticket={{ ...shown, archived: true }}
+            triageProposal={{
+              id: 1,
+              ticketNumber: 4,
+              runId: null,
+              category: 'bug',
+              state: 'ready-for-agent',
+              reasoning: 'Reproduced.',
+              acceptanceCriteria: null,
+              duplicateOf: null,
+              splits: null,
+              status: 'pending',
+              createdAt: new Date('2026-03-03T09:00:00Z'),
+              decidedAt: null,
+            }}
+          />,
+        );
+
+        for (const name of [
+          /^Merged/,
+          /^Done/,
+          /^Approve merge/,
+          'Back to Todo',
+          'Start',
+          'Triage',
+          'Spec',
+          /^Approve/,
+        ]) {
+          expect(
+            inDrawer().queryByRole('button', { name }),
+            String(name),
+          ).not.toBeInTheDocument();
+        }
+      });
+
+      it('turns read-only as soon as Archive is pressed, and editable again on Restore', async () => {
+        const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
+        vi.mocked(archiveTicket).mockReturnValue(promise);
+        onTestFinished(() => resolve({ ok: true }));
+        vi.mocked(restoreTicket).mockResolvedValue({ ok: true });
+        const { rerender } = renderFull(full);
+
+        await userEvent.click(button('Archive'));
+        expectReadOnly();
+
+        rerender(<InShell ticket={{ ...full, archived: true }} {...props} />);
+        await act(async () => resolve({ ok: true }));
+        await userEvent.click(button('Restore'));
+        rerender(<InShell ticket={full} {...props} />);
+
+        for (const name of editControls) {
+          expect(button(name)).toBeInTheDocument();
+        }
+        expect(field('Status')).toBeEnabled();
+        expect(field('Add a label')).toBeEnabled();
+        expect(
+          inDrawer().getByRole('checkbox', { name: 'Logo visible' }),
+        ).toBeEnabled();
+      });
     });
 
     it('offers Restore as soon as the Ticket is archived', async () => {

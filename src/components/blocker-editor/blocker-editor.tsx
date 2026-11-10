@@ -40,6 +40,8 @@ export type BlockerEditorProps = {
   direction: keyof Blockers;
   /** The Tickets on the other side, by number. */
   related: RelatedTicket[];
+  /** Shows the Tickets with no way to change them, as for an archived Ticket. */
+  readOnly?: boolean;
 };
 
 const copy = {
@@ -98,6 +100,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
   ticketNumber,
   direction,
   related,
+  readOnly = false,
 }) => {
   const wording = copy[direction];
   const inputId = useId();
@@ -192,15 +195,17 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
                   <Text fontSize="xsmall" color="muted">
                     {stateOf(ticket)}
                   </Text>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="small"
-                    aria-label={wording.remove(ticket.number)}
-                    onClick={() => remove(ticket.number)}
-                  >
-                    <Icon name="x-mark" size="small" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="small"
+                      aria-label={wording.remove(ticket.number)}
+                      onClick={() => remove(ticket.number)}
+                    >
+                      <Icon name="x-mark" size="small" />
+                    </Button>
+                  )}
                 </Inline>
               </li>
             ))}
@@ -211,7 +216,7 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
           None
         </Text>
       )}
-      {adding ? (
+      {readOnly ? null : adding ? (
         <form
           onSubmit={add}
           onKeyDown={(event) => {
