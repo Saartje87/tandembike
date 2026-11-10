@@ -9,10 +9,10 @@ import {
   cycleTitle,
   hasProject,
   projectId,
+  refusalMessage,
   respond,
   type ToolContext,
   withChildren,
-  withMoveHint,
 } from './tool-shared';
 
 export const registerProjectTools = ({
@@ -115,7 +115,8 @@ export const registerProjectTools = ({
             throw new TicketsError(
               `No Cycle was created. ${planned.failed
                 .map(
-                  ({ number, error }) => `T${number}: ${withMoveHint(error)}`,
+                  ({ number, error, refusal }) =>
+                    `T${number}: ${refusalMessage(error, refusal)}`,
                 )
                 .join(' ')}`,
             );

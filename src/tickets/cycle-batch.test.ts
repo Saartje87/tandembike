@@ -63,6 +63,11 @@ describe('Planning several Tickets into a Cycle at once', () => {
           number: 2,
           error:
             'Ticket T2 is already planned into the Cycle "Launch". Remove it from that Cycle first.',
+          refusal: {
+            code: 'plannedInOtherCycle',
+            number: 2,
+            cycleTitle: 'Launch',
+          },
         },
         {
           number: 3,

@@ -10,10 +10,10 @@ import { z } from 'zod';
 
 import { attachmentPath } from '../app/lib/paths';
 import { maxAttachmentSize } from '../tickets/attachments';
-import { removeFromCycleFirst } from '../tickets/cycles';
 import { agentEpicLink, type EpicLink } from '../tickets/epic-link';
 import {
   type BatchFailure,
+  type CodedRefusal,
   TicketsError,
   ValidationError,
 } from '../tickets/errors';
@@ -326,7 +326,12 @@ export function jsonResult(value: unknown): CallToolResult {
  */
 export function errorResult(error: unknown): CallToolResult {
   if (error instanceof TicketsError) {
-    return { isError: true, content: [{ type: 'text', text: error.message }] };
+    return {
+      isError: true,
+      content: [
+        { type: 'text', text: refusalMessage(error.message, error.refusal) },
+      ],
+    };
   }
   throw error;
 }
@@ -382,13 +387,18 @@ export function respondBatch(
 }
 
 /**
- * `message`, pointing an Agent to update_ticket's cycleId when it is the refusal to plan
- * a Ticket that is in another Cycle already.
+ * The message of a refusal, by its `message` and `refusal`, for an Agent: a coded
+ * refusal is worded for the tools, such as pointing to update_ticket's
+ * cycleId for a Ticket planned into another Cycle; any other keeps its own.
  */
-export function withMoveHint(message: string): string {
-  return message.endsWith(removeFromCycleFirst)
-    ? `${message.slice(0, -removeFromCycleFirst.length)} Move it with update_ticket cycleId, or unplan it from that Cycle first.`
-    : message;
+export function refusalMessage(
+  message: string,
+  refusal?: CodedRefusal,
+): string {
+  if (refusal?.code === 'plannedInOtherCycle') {
+    return `Ticket T${refusal.number} is already planned into the Cycle "${refusal.cycleTitle}". Move it with update_ticket cycleId, or unplan it from that Cycle first.`;
+  }
+  return message;
 }
 
 /** A tool's input: an object of `Shape` that refuses any other field. */

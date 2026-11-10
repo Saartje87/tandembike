@@ -132,6 +132,11 @@ describe('Cycle actions', () => {
         {
           number: other.number,
           error: `Ticket T${other.number} is already planned into the Cycle "Launch". Remove it from that Cycle first.`,
+          refusal: {
+            code: 'plannedInOtherCycle',
+            number: other.number,
+            cycleTitle: 'Launch',
+          },
         },
       ],
     });

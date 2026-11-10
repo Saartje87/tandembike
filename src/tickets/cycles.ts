@@ -126,12 +126,6 @@ export type OpenTicketCounts = {
   cycles: Record<number, number>;
 };
 
-/**
- * How the refusal to plan a Ticket that is in another open Cycle ends, so a
- * caller can name its own way to move it instead.
- */
-export const removeFromCycleFirst = ' Remove it from that Cycle first.';
-
 const cycleColumns = {
   id: cycles.id,
   projectId: cycles.projectId,
@@ -535,7 +529,8 @@ export function createCycles(
       checkPlannable(ticket, number, cycle);
       if (current) {
         throw new NotAllowedError(
-          `Ticket T${number} is already planned into the Cycle "${current.title}".${removeFromCycleFirst}`,
+          `Ticket T${number} is already planned into the Cycle "${current.title}". Remove it from that Cycle first.`,
+          { code: 'plannedInOtherCycle', number, cycleTitle: current.title },
         );
       }
       db.insert(cycleTickets)
@@ -774,7 +769,11 @@ export function createCycles(
           if (!(error instanceof TicketsError)) {
             throw error;
           }
-          failed.push({ number, error: error.message });
+          failed.push(
+            error.refusal
+              ? { number, error: error.message, refusal: error.refusal }
+              : { number, error: error.message },
+          );
         }
       }
     } finally {
