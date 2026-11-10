@@ -295,16 +295,20 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
-/** The model a run of `intent` starts on: Triage's own when set, else the run model. */
+/** The model a run of `intent` starts on: Triage's own when set, Batch triage's too, else the run model. */
 const modelFor = (
   intent: ConversationIntent,
   settings: { runModel: string | null; triageModel: string | null },
 ) =>
-  intent === 'triage' && settings.triageModel !== null
+  (intent === 'triage' || intent === 'batch_triage') &&
+  settings.triageModel !== null
     ? settings.triageModel
     : settings.runModel;
 
-/** What an Autopilot Triage run may not use: its only writes are a proposal and a note (ADR 0040). */
+/**
+ * What an Autopilot Triage run and every Batch triage run may not use: their
+ * only writes are a proposal and a note (ADR 0040, ADR 0047).
+ */
 const autopilotTriageDisallowedTools = [
   'mcp__tandembike__update_ticket',
   'mcp__tandembike__file_tickets',
@@ -958,8 +962,9 @@ export function createConversations({
         // A Spar is read-only whatever the Project's run mode (ADR 0046).
         runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
         ...(runModel === null ? {} : { model: runModel }),
-        ...(conversation.intent === 'triage' &&
-        conversation.startedBy === 'autopilot'
+        ...((conversation.intent === 'triage' &&
+          conversation.startedBy === 'autopilot') ||
+        conversation.intent === 'batch_triage'
           ? { disallowedTools: autopilotTriageDisallowedTools }
           : {}),
         ...(conversation.intent === 'spar'

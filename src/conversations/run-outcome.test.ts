@@ -124,6 +124,7 @@ describe('runResultOf', () => {
     'ask',
     'new_ticket',
     'setup',
+    'batch_triage',
   ] as const)('a %s run, which never ends in Done or a PR', (intent) => {
     it('is completed when it ends cleanly, with or without a Ticket', () => {
       expect(runResultOf({ ...base, intent })).toBe('completed');

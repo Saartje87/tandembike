@@ -156,3 +156,114 @@ describe('A Batch triage Conversation (T1316)', () => {
     expect(error).toBeInstanceOf(ValidationError);
   });
 });
+
+describe('A Batch triage run (T1317)', () => {
+  it('starts with a first message naming the Board and its Tickets, and how to triage them', async () => {
+    const { conversations, runner, project, cycle } = setup();
+
+    await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: cycle.id,
+      ticketNumbers: [12, 4],
+    });
+
+    const { prompt } = runner.runs[0].options;
+    expect(prompt).toContain(
+      `Batch triage the Cycle "Beta" (Cycle ${cycle.id})`,
+    );
+    expect(prompt).toContain('T12, T4');
+    expect(prompt).toContain('propose_triage');
+    expect(prompt).toContain('duplicateOf');
+    expect(prompt).toContain('splits');
+    expect(prompt).toMatch(/skip/i);
+  });
+
+  it('names the Backlog as its Board', async () => {
+    const { conversations, runner, project } = setup();
+
+    await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: null,
+      ticketNumbers: [7],
+    });
+
+    expect(runner.runs[0].options.prompt).toContain(
+      'Batch triage the Backlog: T7.',
+    );
+  });
+
+  it('disallows update_ticket and file_tickets on every run, the User replies included', async () => {
+    const { conversations, runner, project } = setup();
+    const batch = await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: null,
+      ticketNumbers: [7],
+    });
+    runner.runs[0].emit({ type: 'session', sessionId: 's' });
+    runner.runs[0].emit({ type: 'exit' });
+
+    await conversations.reply(batch.id, 'Label them yourself', 'user');
+
+    for (const run of runner.runs) {
+      expect(run.options.disallowedTools).toEqual([
+        'mcp__tandembike__update_ticket',
+        'mcp__tandembike__file_tickets',
+      ]);
+    }
+    expect(runner.runs).toHaveLength(2);
+  });
+
+  it("starts on the Project's triage model when set", async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      runModel: 'claude-opus-5-5',
+      triageModel: 'claude-haiku-5',
+    });
+
+    await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: null,
+      ticketNumbers: [7],
+    });
+
+    expect(runner.runs[0].options.model).toBe('claude-haiku-5');
+  });
+
+  it('takes no Start run or Machine slot and no worktree, and stays out of the Spend and Triage ceilings', async () => {
+    const { conversations, runner, tickets, project, cycle } = setup();
+    tickets.setProjectAgentSettings(project.id, {
+      parallelRuns: true,
+      maxConcurrentRuns: 1,
+      autoTriage: true,
+      triageCeilingUsd: 1,
+    });
+    tickets.setMachineSettings({ maxConcurrentRuns: 1 });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    const batch = await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: cycle.id,
+      ticketNumbers: [ticket.number],
+    });
+    runner.runs.at(-1)?.emit({ type: 'turn', costUsd: 3 });
+
+    expect(batch.worktreePath).toBeNull();
+    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.autopilotTriageSpend(project.id, new Date(0))).toBe(0);
+    expect(conversations.triageBudget(project.id, new Date())?.paused).toBe(
+      false,
+    );
+    expect(
+      conversations.autopilotSpend({
+        projectId: project.id,
+        cycleId: cycle.id,
+      }),
+    ).toBe(0);
+  });
+});
