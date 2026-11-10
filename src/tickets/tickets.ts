@@ -555,6 +555,11 @@ export type BatchTicketInput = Pick<
    */
   blockedByPositions?: number[];
   /**
+   * Existing Tickets, in any Project, that block this one, by the rules for
+   * adding a Blocker. Defaults to none.
+   */
+  blockedByNumbers?: number[];
+  /**
    * The position, from 0, of an earlier Epic in the batch to create this
    * Ticket under. Not with the batch's `epicNumber`, and not for an Epic.
    */
@@ -1025,7 +1030,11 @@ function checkBatchTicket(
   batchTicket: BatchTicketInput,
   position: number,
   batchSize: number,
-): { ticket: CheckedNewTicket; blockedByPositions: number[] } {
+): {
+  ticket: CheckedNewTicket;
+  blockedByPositions: number[];
+  blockedByNumbers: number[];
+} {
   const reasons: Record<string, string | undefined> = {};
   const reasonAt = (field: string, reason: string | undefined) => {
     reasons[`tickets[${position}].${field}`] =
@@ -1035,6 +1044,7 @@ function checkBatchTicket(
   };
   const {
     blockedByPositions = [],
+    blockedByNumbers = [],
     epicPosition: _epicPosition,
     originPosition: _originPosition,
     originNumber: _originNumber,
@@ -1068,9 +1078,19 @@ function checkBatchTicket(
     'blockedByPositions',
     checkBlockedByPositions(blockedByPositions, position),
   );
+  reasonAt(
+    'blockedByNumbers',
+    new Set(blockedByNumbers).size === blockedByNumbers.length
+      ? undefined
+      : 'name each Ticket in blockedByNumbers once.',
+  );
   throwFieldErrors(reasons);
   // Without a ValidationError, `checkNewTicket` returned.
-  return { ticket: ticket as CheckedNewTicket, blockedByPositions };
+  return {
+    ticket: ticket as CheckedNewTicket,
+    blockedByPositions,
+    blockedByNumbers,
+  };
 }
 
 /** Why `field` cannot name a position other than an earlier one. */
@@ -1190,6 +1210,30 @@ function fillPlaceholders<
           })),
         }),
   };
+}
+
+/**
+ * Runs `check` for the batch's Ticket at `position`, naming it in a refusal:
+ * a `ValidationError` is keyed `tickets[2].<field>`, and every reason starts
+ * with the position.
+ */
+function atPosition(position: number, field: string, check: () => void) {
+  const at = (reason: string) => `Ticket at position ${position}: ${reason}`;
+  try {
+    check();
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw new ValidationError({
+        [`tickets[${position}].${field}`]: at(
+          Object.values(error.fieldErrors).join(' '),
+        ),
+      });
+    }
+    if (error instanceof NotFoundError) {
+      throw new NotFoundError(at(error.message));
+    }
+    throw error;
+  }
 }
 
 /** Why a batch Ticket's Blocker positions break the rules, if they do. */
@@ -2222,7 +2266,8 @@ export function createTickets(
     /**
      * Creates every Ticket in `input.tickets` in one Project, in order, by
      * the rules for creating one, with the Blockers each names by position
-     * among the earlier ones, under an Epic when `epicNumber` is given, and
+     * among the earlier ones and by number among existing Tickets (by the
+     * rules for adding a Blocker), under an Epic when `epicNumber` is given, and
      * planned into a Cycle when `cycleId` is.
      * A `{{T:n}}` in a title, description or criterion text becomes
      * `T<number>` of the Ticket at position n of the batch, anywhere in the
@@ -2251,7 +2296,11 @@ export function createTickets(
       const epicNumber = input.epicNumber ?? null;
       const originNumber = input.originNumber ?? null;
 
-      const { created: numbers, origins } = db.transaction(() => {
+      const {
+        created: numbers,
+        origins,
+        existingBlockers,
+      } = db.transaction(() => {
         checkFeedback(
           db,
           project.id,
@@ -2268,24 +2317,18 @@ export function createTickets(
           checkOrigin(db, originNumber);
         }
         input.tickets.forEach((ticket, position) => {
-          if (ticket.originNumber === undefined) {
-            return;
-          }
-          try {
-            checkOrigin(db, ticket.originNumber);
-          } catch (error) {
-            if (error instanceof NotFoundError) {
-              throw new NotFoundError(
-                `Ticket at position ${position}: ${error.message}`,
-              );
-            }
-            throw error;
+          const { originNumber } = ticket;
+          if (originNumber !== undefined) {
+            atPosition(position, 'originNumber', () =>
+              checkOrigin(db, originNumber),
+            );
           }
         });
         const createdAt = new Date();
         const created: number[] = [];
         const epics = new Set<number>();
         const origins = new Set<number>();
+        const existingBlockers = new Set<number>();
         if (epicNumber !== null) {
           epics.add(epicNumber);
         }
@@ -2294,7 +2337,7 @@ export function createTickets(
         }
         for (const [
           position,
-          { ticket, blockedByPositions },
+          { ticket, blockedByPositions, blockedByNumbers },
         ] of checked.entries()) {
           const {
             epicPosition,
@@ -2329,6 +2372,18 @@ export function createTickets(
                 })),
               )
               .run();
+          }
+          for (const blocker of blockedByNumbers) {
+            atPosition(position, 'blockedByNumbers', () =>
+              checkBlocker({ blocker, blocked: number }),
+            );
+            db.insert(ticketBlockers)
+              .values({ blockerNumber: blocker, blockedNumber: number })
+              .run();
+            recordActivity(db, blocker, actor, [
+              { type: 'blocksAdded', number },
+            ]);
+            existingBlockers.add(blocker);
           }
           if (input.cycleId !== undefined) {
             planNewTicket(db, { cycleId: input.cycleId, number }, project.id);
@@ -2378,7 +2433,7 @@ export function createTickets(
         for (const epic of epics) {
           syncEpicStatus(db, epic);
         }
-        return { created, origins };
+        return { created, origins, existingBlockers };
       });
       changes.publish({
         type: 'tickets',
@@ -2387,6 +2442,7 @@ export function createTickets(
             ...numbers,
             ...(epicNumber === null ? [] : [epicNumber]),
             ...origins,
+            ...existingBlockers,
           ]),
         ],
       });
@@ -2745,15 +2801,8 @@ export function createTickets(
           blocker === blocked ? 'A Ticket cannot block itself.' : undefined,
       });
       db.transaction(() => {
-        getTicket(blocker);
         checkTicketWritable(db, blocked);
-        checkNotEpicAndChild(db, { blocker, blocked });
-        const cycle = blockingPath(db, blocked, blocker);
-        throwFieldErrors({
-          blocker: cycle
-            ? `T${blocker} cannot block T${blocked}, because T${blocked} already blocks T${blocker}: ${cycle.map((number) => `T${number}`).join(' → ')}.`
-            : undefined,
-        });
+        checkBlocker({ blocker, blocked });
         touchTicket(db, blocked);
         const added = db
           .insert(ticketBlockers)
@@ -3628,6 +3677,26 @@ export function createTickets(
       });
     }
     return getTicket(child);
+  }
+
+  /**
+   * Throws unless Ticket `blocker` may block Ticket `blocked`: it exists, it
+   * is not `blocked` itself, they are not an Epic and its own child, and it
+   * would not close a cycle of Blockers.
+   */
+  function checkBlocker({ blocker, blocked }: BlockerInput) {
+    throwFieldErrors({
+      blocker:
+        blocker === blocked ? 'A Ticket cannot block itself.' : undefined,
+    });
+    getTicket(blocker);
+    checkNotEpicAndChild(db, { blocker, blocked });
+    const cycle = blockingPath(db, blocked, blocker);
+    throwFieldErrors({
+      blocker: cycle
+        ? `T${blocker} cannot block T${blocked}, because T${blocked} already blocks T${blocker}: ${cycle.map((number) => `T${number}`).join(' → ')}.`
+        : undefined,
+    });
   }
 
   function getTicket(number: number): Ticket {

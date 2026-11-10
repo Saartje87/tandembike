@@ -62,6 +62,46 @@ describe('Creating Tickets in a batch', () => {
     });
   });
 
+  it('records existing Tickets as Blockers by number, next to positions', () => {
+    const { tickets, project } = setUp();
+    const other = tickets.createProject({ name: 'Backend' });
+    const api = tickets.createTicket({ projectId: other.id, title: 'API' });
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    const announced: Change[] = [];
+    tickets.subscribe((change) => announced.push(change));
+
+    const [design, build] = tickets.createTicketBatch({
+      projectId: project.id,
+      tickets: [
+        { title: 'Design', blockedByNumbers: [spec.number] },
+        {
+          title: 'Build',
+          blockedByPositions: [0],
+          blockedByNumbers: [api.number, spec.number],
+        },
+      ],
+    });
+
+    expect(tickets.getTicket(design.number).blockedBy).toEqual([spec.number]);
+    expect(tickets.getTicket(build.number).blockedBy).toEqual([
+      api.number,
+      spec.number,
+      design.number,
+    ]);
+    expect(
+      tickets.listBlockers(spec.number).blocks.map(({ number }) => number),
+    ).toEqual([design.number, build.number]);
+    expect(
+      tickets.listActivity(api.number).map(({ changes }) => changes),
+    ).toContainEqual([{ type: 'blocksAdded', number: build.number }]);
+    expect(announced).toEqual([
+      {
+        type: 'tickets',
+        numbers: [design.number, build.number, spec.number, api.number],
+      },
+    ]);
+  });
+
   it('creates the Tickets under an Epic', () => {
     const { tickets, project } = setUp();
     const epic = tickets.createTicket({
@@ -251,6 +291,75 @@ describe('Refusing a batch', () => {
       ),
     );
     expect(tickets.listTickets()).toEqual([]);
+  });
+
+  it('refuses a missing Blocker number, creating nothing', () => {
+    const { tickets, project } = setUp();
+
+    expect(
+      errorFrom(() =>
+        tickets.createTicketBatch({
+          projectId: project.id,
+          tickets: [
+            { title: 'Design' },
+            { title: 'Build', blockedByNumbers: [99] },
+          ],
+        }),
+      ),
+    ).toEqual(
+      new NotFoundError('Ticket at position 1: There is no Ticket T99.'),
+    );
+    expect(tickets.listTickets()).toEqual([]);
+  });
+
+  it('refuses a Blocker number named twice', () => {
+    const { tickets, project } = setUp();
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+
+    expect(
+      errorFrom(() =>
+        tickets.createTicketBatch({
+          projectId: project.id,
+          tickets: [
+            { title: 'Design', blockedByNumbers: [spec.number, spec.number] },
+          ],
+        }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        'tickets[0].blockedByNumbers':
+          'Ticket at position 0: name each Ticket in blockedByNumbers once.',
+      }),
+    );
+  });
+
+  it('refuses an Epic blocking its own new child, creating nothing', () => {
+    const { tickets, project } = setUp();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+
+    expect(
+      errorFrom(() =>
+        tickets.createTicketBatch({
+          projectId: project.id,
+          epicNumber: epic.number,
+          tickets: [
+            { title: 'Pay' },
+            { title: 'Refund', blockedByNumbers: [epic.number] },
+          ],
+        }),
+      ),
+    ).toEqual(
+      new ValidationError({
+        'tickets[1].blockedByNumbers': `Ticket at position 1: T${epic.number + 2} is a child of Epic T${epic.number}. An Epic and its own children cannot block each other; order the children with Blockers among themselves.`,
+      }),
+    );
+    expect(tickets.listTickets().map(({ number }) => number)).toEqual([
+      epic.number,
+    ]);
   });
 
   it('refuses a missing Project or an unusable Epic, creating nothing', () => {
