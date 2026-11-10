@@ -2088,6 +2088,25 @@ describe('Batch create tool', () => {
     await client.close();
   });
 
+  it('creates Tickets blocked by existing Tickets by number', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    const client = await connectMcpClient(tickets);
+
+    const result = await client.callTool({
+      name: 'file_tickets',
+      arguments: {
+        projectId: project.id,
+        tickets: [{ title: 'Build', blockedByNumbers: [spec.number] }],
+      },
+    });
+
+    expect(resultJson(result)).toEqual({ numbers: [2] });
+    expect(tickets.getTicket(2).blockedBy).toEqual([spec.number]);
+    await client.close();
+  });
+
   it('refuses the whole batch, naming the offending Ticket', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
