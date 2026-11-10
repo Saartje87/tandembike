@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { archiveProject } from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
@@ -40,6 +40,25 @@ describe('ArchiveProjectButton', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Project with id 3.',
+    );
+  });
+  it('shows an archive whose action throws as a refusal (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(archiveProject).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<ArchiveProjectButton project={project} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Archive Old site' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Project could not be archived. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Archive Old site' }),
+      ).toBeEnabled(),
     );
   });
 });

@@ -19,6 +19,8 @@ import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { createCycle } from '../../app/cycles/actions';
+import { fieldRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import {
   boardFilterOf,
   cyclePath,
@@ -184,9 +186,12 @@ const NewCycleForm: FC<NewCycleFormProps> = ({ projectId, onDone }) => {
   const reason = errors.title?.message ?? errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ title }) => {
-    const result = await createCycle({ projectId, title });
+    const result = await callAction(
+      () => createCycle({ projectId, title }),
+      'The Cycle could not be created. Try again.',
+    );
     if (!result.ok) {
-      const titleReason = result.fieldErrors?.title;
+      const titleReason = fieldRefusal(result, 'title');
       if (titleReason) {
         setError('title', { type: 'server', message: titleReason });
       } else {

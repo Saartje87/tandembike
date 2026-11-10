@@ -4,6 +4,7 @@ import { Heading } from '@blockle/blocks';
 import type { FC } from 'react';
 
 import { rootRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { renameProject } from '../../app/projects/actions';
 import type { Project } from '../../tickets/tickets';
 import { InlineEdit } from '../inline-edit/inline-edit';
@@ -22,7 +23,10 @@ export const RenameProjectInlineEdit: FC<RenameProjectInlineEditProps> = ({
   project,
 }) => {
   const save = async (name: string) => {
-    const result = await renameProject({ projectId: project.id, name });
+    const result = await callAction(
+      () => renameProject({ projectId: project.id, name }),
+      'The name could not be saved. Try again.',
+    );
     return rootRefusal(result);
   };
 

@@ -4,6 +4,8 @@ import { Alert, Button, Label, Stack, Textarea } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { fieldRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { setProjectSkills } from '../../app/projects/actions';
 import { FieldError } from '../field-error/field-error';
 
@@ -34,11 +36,17 @@ export const SkillsForm: FC<SkillsFormProps> = ({ projectId, skills }) => {
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ text }) => {
-    const result = await setProjectSkills({ projectId, text });
+    const result = await callAction(
+      () => setProjectSkills({ projectId, text }),
+      'The Skills could not be saved. Try again.',
+    );
     if (result.ok) {
       reset({ text: result.skills.join('\n') });
-    } else if (result.fieldErrors?.skills) {
-      setError('text', { type: 'server', message: result.fieldErrors.skills });
+      return;
+    }
+    const reason = fieldRefusal(result, 'skills');
+    if (reason) {
+      setError('text', { type: 'server', message: reason });
     } else {
       setError('root.server', { message: result.error });
     }

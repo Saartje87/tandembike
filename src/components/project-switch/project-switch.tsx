@@ -11,6 +11,7 @@ import {
 import { useForm } from 'react-hook-form';
 
 import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
@@ -75,10 +76,10 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
     clearErrors();
     startTransition(async () => {
       show(next);
-      const result = await setProjectAgentSettings({
-        projectId,
-        [setting]: next,
-      });
+      const result = await callAction(
+        () => setProjectAgentSettings({ projectId, [setting]: next }),
+        'The setting could not be saved. Try again.',
+      );
       // A refusal puts the switch back when the transition ends.
       const reason = fieldRefusal(result, ceilingField) ?? rootRefusal(result);
       if (reason) {
