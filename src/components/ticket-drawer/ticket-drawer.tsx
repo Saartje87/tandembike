@@ -172,6 +172,8 @@ function fieldOf(edit: Edit): keyof Fields {
 type DescriptionFieldProps = {
   description: string;
   onSave: (description: string) => Promise<string | undefined>;
+  /** Shows the description with no way to edit it, as for an archived Ticket. */
+  readOnly: boolean;
 };
 
 /**
@@ -181,6 +183,7 @@ type DescriptionFieldProps = {
 const DescriptionField: FC<DescriptionFieldProps> = ({
   description,
   onSave,
+  readOnly,
 }) => (
   <Stack gap={2}>
     <Heading level={3} fontSize="medium">
@@ -190,6 +193,7 @@ const DescriptionField: FC<DescriptionFieldProps> = ({
       value={description}
       label="Description"
       onSave={onSave}
+      readOnly={readOnly}
       multiline
       renderContent={(text) => <Markdown headingLevel={4}>{text}</Markdown>}
       placeholder="Add a description…"
@@ -233,6 +237,9 @@ const noCycles: Cycle[] = [];
  * Each field saves on its own when the User finishes with it, shows the new
  * value at once, and goes back with an error under it when refused. A field
  * being edited saves as focus leaves it, as when the drawer closes.
+ * While the Ticket is archived, from the moment Archive is pressed, its
+ * fields show read-only and only Ask of the agent actions is offered: it
+ * keeps Restore, comments, Attachments, Clear claim and Delete (T1313).
  */
 export const TicketDrawer: FC<TicketDrawerProps> = ({
   ticket,
@@ -386,7 +393,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const showDone = offersDone(ticket, live);
   const showBackToTodo = isParked(ticket, live);
 
-  const statusActions = (
+  const statusActions = archived ? null : (
     <Stack gap={1}>
       <Inline gap={2} alignY="center">
         {showMerged && (
@@ -461,6 +468,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
           value={fields.title}
           label="Title"
           onSave={saveTitle}
+          readOnly={archived}
           wrap={(title) => (
             <Heading
               id={titleId}
@@ -481,6 +489,13 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
               <Text>{ticket.status} · follows its child Tickets</Text>
               {why}
               {statusActions}
+            </Stack>
+          </Detail>
+        ) : archived ? (
+          <Detail name={<DetailName>Status</DetailName>}>
+            <Stack gap={2}>
+              <Text>{fields.status}</Text>
+              {why}
             </Stack>
           </Detail>
         ) : (
@@ -517,12 +532,13 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
                   number: ticket.number,
                   color: epicLinkOf(ticket).color,
                 }}
+                readOnly={archived}
               />
             </Detail>
           </>
         ) : (
           <Detail name={<DetailName>Epic</DetailName>}>
-            <TicketEpic ticket={ticket} epics={epics} />
+            <TicketEpic ticket={ticket} epics={epics} readOnly={archived} />
           </Detail>
         )}
         <Detail name={<DetailName>Origin</DetailName>}>
@@ -536,6 +552,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             ticketNumber={ticket.number}
             labels={ticket.labels}
             suggestions={allLabels}
+            readOnly={archived}
           />
         </Detail>
         <Detail name={<DetailName>External references</DetailName>}>
@@ -543,6 +560,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             ticketNumber={ticket.number}
             references={ticket.externalReferences}
             templates={referenceTemplates}
+            readOnly={archived}
           />
         </Detail>
         <Detail name={<DetailName>Claim</DetailName>}>
@@ -587,6 +605,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             ticketNumber={ticket.number}
             direction="blockedBy"
             related={blockers.blockedBy}
+            readOnly={archived}
           />
         </Detail>
         <Detail name={<DetailName>Blocks</DetailName>}>
@@ -594,6 +613,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             ticketNumber={ticket.number}
             direction="blocks"
             related={blockers.blocks}
+            readOnly={archived}
           />
         </Detail>
       </Stack>
@@ -614,6 +634,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       <DescriptionField
         description={fields.description}
         onSave={saveDescription}
+        readOnly={archived}
       />
       <TicketAttachments
         ticketNumber={ticket.number}
@@ -622,12 +643,14 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       <AcceptanceCriteriaEditor
         ticketNumber={ticket.number}
         criteria={ticket.acceptanceCriteria}
+        readOnly={archived}
       />
       <TicketAgentActions
         ticketNumber={ticket.number}
         ticketType={ticket.type}
         commands={agentCommands}
         specAvailable={canSpec(ticket)}
+        askOnly={archived}
         onStarted={dialog.open}
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })

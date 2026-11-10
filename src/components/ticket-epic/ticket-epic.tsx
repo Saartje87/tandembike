@@ -26,6 +26,8 @@ export type TicketEpicProps = {
   ticket: Pick<Ticket, 'number' | 'projectId' | 'epic'>;
   /** The live Epics of the Ticket's Project, to pick from. Defaults to none. */
   epics?: EpicLink[];
+  /** Shows the Epic with no way to change it, as for an archived Ticket. */
+  readOnly?: boolean;
 };
 
 /**
@@ -33,12 +35,18 @@ export type TicketEpicProps = {
  * it with Detach from Epic, or None, and a picker of the Project's other
  * Epics to attach it to or move it to. A change shows at once.
  */
-export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
+export const TicketEpic: FC<TicketEpicProps> = ({
+  ticket,
+  epics = [],
+  readOnly = false,
+}) => {
   const [epic, showEpic] = useOptimistic(ticket.epic);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
   const pickerId = useId();
-  const choices = epics.filter((choice) => choice.number !== epic?.number);
+  const choices = readOnly
+    ? []
+    : epics.filter((choice) => choice.number !== epic?.number);
   const pickerName = epic ? 'Move to another Epic' : 'Attach to Epic';
 
   const change = (
@@ -71,20 +79,22 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
           <AppLink href={ticketByNumberPath(epic.number)}>
             T{epic.number} {epic.title}
           </AppLink>
-          <Button
-            type="button"
-            variant="outline"
-            intent="neutral"
-            size="small"
-            disabled={pending}
-            onClick={() => {
-              change(null, () =>
-                detachTicketFromEpic({ number: ticket.number }),
-              );
-            }}
-          >
-            Detach from Epic
-          </Button>
+          {!readOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              intent="neutral"
+              size="small"
+              disabled={pending}
+              onClick={() => {
+                change(null, () =>
+                  detachTicketFromEpic({ number: ticket.number }),
+                );
+              }}
+            >
+              Detach from Epic
+            </Button>
+          )}
         </Inline>
       ) : (
         <Text color="muted">None</Text>

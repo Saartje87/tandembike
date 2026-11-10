@@ -32,6 +32,8 @@ export type ExternalReferenceEditorProps = {
   references: string[];
   /** The Project's Reference templates, which link keys. Defaults to none. */
   templates?: ReferenceTemplateLink[];
+  /** Shows the references with no way to change them, as for an archived Ticket. */
+  readOnly?: boolean;
 };
 
 type ReferenceChange = { type: 'add' | 'remove'; reference: string };
@@ -90,6 +92,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
   ticketNumber,
   references,
   templates = [],
+  readOnly = false,
 }) => {
   const inputId = useId();
   const errorId = useId();
@@ -166,15 +169,17 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
               <li key={reference}>
                 <Inline gap={2} alignY="center" flexWrap="nowrap">
                   <Reference reference={reference} templates={templates} />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="small"
-                    aria-label={`Remove External reference ${reference}`}
-                    onClick={() => remove(reference)}
-                  >
-                    <Icon name="x-mark" size="small" />
-                  </Button>
+                  {!readOnly && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="small"
+                      aria-label={`Remove External reference ${reference}`}
+                      onClick={() => remove(reference)}
+                    >
+                      <Icon name="x-mark" size="small" />
+                    </Button>
+                  )}
                 </Inline>
               </li>
             ))}
@@ -185,7 +190,7 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
           None
         </Text>
       )}
-      {adding ? (
+      {readOnly ? null : adding ? (
         <form
           onSubmit={add}
           onKeyDown={(event) => {

@@ -6,6 +6,7 @@ import {
   Label,
   Select,
   Stack,
+  Text,
   VisuallyHidden,
 } from '@blockle/blocks';
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
@@ -19,6 +20,8 @@ export type LabelEditorProps = {
   labels: string[];
   /** Every label in use, offered while typing. */
   suggestions: string[];
+  /** Shows the labels with no way to change them, as for an archived Ticket. */
+  readOnly?: boolean;
 };
 
 type LabelChange = { type: 'add' | 'remove'; label: string };
@@ -42,6 +45,7 @@ export const LabelEditor: FC<LabelEditorProps> = ({
   ticketNumber,
   labels,
   suggestions,
+  readOnly = false,
 }) => {
   const selectId = useId();
   const [shownLabels, showChange] = useOptimistic(labels, changedLabels);
@@ -66,6 +70,14 @@ export const LabelEditor: FC<LabelEditorProps> = ({
       }
     });
   };
+
+  if (readOnly) {
+    return labels.length > 0 ? (
+      <LabelList labels={labels} />
+    ) : (
+      <Text color="muted">None</Text>
+    );
+  }
 
   return (
     <Stack gap={2}>
