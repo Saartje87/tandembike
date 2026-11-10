@@ -199,4 +199,15 @@ describe('ConversationTabs', () => {
     expect(screen.getByText('Draft draft-a')).toBeVisible();
     expect(screen.queryByText(/^Chat/)).toBeNull();
   });
+
+  it('shows its actions at the end of the tab row, after the last tab', () => {
+    setup({ actions: <button type="button">Hide</button> });
+
+    const hide = screen.getByRole('button', { name: 'Hide' });
+    const lastTab = tabNamed(/Draft · Ask T42/);
+    expect(
+      lastTab.compareDocumentPosition(hide) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByRole('tablist')).not.toContainElement(hide);
+  });
 });

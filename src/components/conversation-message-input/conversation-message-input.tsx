@@ -7,13 +7,12 @@ import {
   type Ref,
   useId,
   useImperativeHandle,
-  useRef,
 } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { callAction } from '../../app/lib/call-action';
-import { ConversationSkillChips } from '../conversation-skill-chips/conversation-skill-chips';
 import { FieldError } from '../field-error/field-error';
+import * as styles from './conversation-message-input.css';
 
 /** What the chat does to the message input besides the User typing (T613). */
 export type MessageInputControl = {
@@ -39,45 +38,36 @@ export type ConversationMessageInputProps = {
   onSend: (text: string) => Promise<SendOutcome>;
   label: string;
   placeholder: string;
-  rows: number;
   /** The text to start with. */
   initialText?: string;
   autoFocus?: boolean;
   /**
-   * Called as the text changes: as the User types, a chip or the chat adds to
-   * it, and with `''` once it is sent.
+   * Called as the text changes: as the User types or the chat adds to it, and
+   * with `''` once it is sent.
    */
   onTextChange?: (text: string) => void;
   control?: Ref<MessageInputControl>;
   className?: string;
-  /** The Project's Skill commands, offered as chips above the input (T620). */
-  skills?: string[];
 };
-
-/** `text` starting with `command`, in place of a command it started with. */
-const withSkill = (text: string, command: string) =>
-  `${command} ${text.replace(/^\/\S*[ \t]*/, '')}`;
 
 /**
  * The text input and Send button of a Conversation message, shared by the
- * chat's reply form and a draft. Enter sends and Shift+Enter starts a new
- * line. A refused send keeps its text and shows the reason; a sent one
- * clears the input.
+ * chat's reply form and a draft: the input starts at one row and grows with
+ * its text to about eight, then scrolls, with Send beside it. Enter sends and
+ * Shift+Enter starts a new line. A refused send keeps its text and shows the
+ * reason; a sent one clears the input.
  */
 export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   onSend,
   label,
   placeholder,
-  rows,
   initialText = '',
   autoFocus,
   onTextChange,
   control,
   className,
-  skills = [],
 }) => {
   const errorId = useId();
-  const field = useRef<HTMLTextAreaElement | null>(null);
   const {
     formState: { errors, isSubmitting },
     handleSubmit,
@@ -132,13 +122,6 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
     },
   }));
 
-  const chooseSkill = (command: string) => {
-    const next = withSkill(watch('text'), command);
-    changeText(next);
-    field.current?.focus();
-    field.current?.setSelectionRange(next.length, next.length);
-  };
-
   const send = (event: { preventDefault: () => void }) => {
     event.preventDefault();
     if (!isSubmitting && !empty) {
@@ -159,28 +142,23 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   return (
     <form onSubmit={send} className={className}>
       <Stack gap={1}>
-        <ConversationSkillChips skills={skills} onChoose={chooseSkill} />
-        <Textarea
-          {...text}
-          ref={(element) => {
-            text.ref(element);
-            field.current = element;
-          }}
-          onChange={(event) => {
-            text.onChange(event);
-            onTextChange?.(event.target.value);
-          }}
-          aria-label={label}
-          placeholder={placeholder}
-          rows={rows}
-          autoFocus={autoFocus}
-          onKeyDown={onKeyDown}
-          aria-invalid={fieldError ? true : undefined}
-          aria-describedby={fieldError ? errorId : undefined}
-        />
-        <FieldError id={errorId} reason={fieldError} />
-        {error && <Alert intent="danger">{error}</Alert>}
-        <Inline gap={2} alignX="end">
+        <Inline gap={2} alignY="end" flexWrap="nowrap">
+          <Textarea
+            {...text}
+            onChange={(event) => {
+              text.onChange(event);
+              onTextChange?.(event.target.value);
+            }}
+            aria-label={label}
+            placeholder={placeholder}
+            rows={1}
+            grow
+            containerProps={{ className: styles.field }}
+            autoFocus={autoFocus}
+            onKeyDown={onKeyDown}
+            aria-invalid={fieldError ? true : undefined}
+            aria-describedby={fieldError ? errorId : undefined}
+          />
           <Button
             type="submit"
             size="small"
@@ -190,6 +168,8 @@ export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
             Send
           </Button>
         </Inline>
+        <FieldError id={errorId} reason={fieldError} />
+        {error && <Alert intent="danger">{error}</Alert>}
       </Stack>
     </form>
   );

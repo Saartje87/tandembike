@@ -10,8 +10,9 @@ import * as styles from './conversation-messages.css';
 export type ConversationMessagesProps = { transcript: TranscriptEntry[] };
 
 /**
- * The scrolling message list of the chat. It scrolls to the newest message
- * when one arrives.
+ * The scrolling message list of the chat, centred in its reading column while
+ * the scroller spans the chat. It scrolls to the newest message when one
+ * arrives.
  */
 export const ConversationMessages: FC<ConversationMessagesProps> = ({
   transcript,
@@ -30,7 +31,7 @@ export const ConversationMessages: FC<ConversationMessagesProps> = ({
   return (
     <div ref={scroller} className={styles.scroller}>
       <Stack gap={2} listStyle="none" role="list" asChild>
-        <ul aria-label="Transcript">
+        <ul aria-label="Transcript" className={styles.list}>
           {transcript.map((entry) => (
             <ConversationMessage key={entry.id} entry={entry} />
           ))}

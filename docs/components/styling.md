@@ -42,8 +42,15 @@ Atom classes are appended after your own `className`.
 These accept a single value or an array with one value per breakpoint, from
 smallest to largest: `mobile`, `tablet` (740px), `desktop` (992px), `wide`
 (1200px). Omitted breakpoints inherit the previous value, so `padding={[2, 4]}`
-is `2` on mobile and `4` from tablet up. The breakpoints are fixed pixel
-values; match them if you write your own media queries.
+is `2` on mobile and `4` from tablet up. In your own media queries in a
+`.css.ts` file, write the breakpoint with `minMediaQuery` from
+`@blockle/blocks` rather than its pixel value:
+
+```ts
+import { minMediaQuery } from '@blockle/blocks';
+
+style({ '@media': { [minMediaQuery('tablet')]: { borderRadius: 0 } } });
+```
 
 | Group      | Props                                                                                                                        | Values                                                                                  |
 | ---------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |

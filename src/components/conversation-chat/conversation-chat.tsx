@@ -1,11 +1,14 @@
 'use client';
 
-import { Alert } from '@blockle/blocks';
+import { Alert, Text } from '@blockle/blocks';
 import { type FC, type ReactNode, useRef } from 'react';
 
 import type { ActionResult } from '../../app/lib/action-result';
 import { waitsOnUser } from '../../conversations/conversation-activity';
-import { isTerminal } from '../../conversations/conversation-state';
+import {
+  type ConversationState,
+  isTerminal,
+} from '../../conversations/conversation-state';
 import type { TranscriptEntry } from '../../conversations/conversations';
 import {
   type ReplyQuestion,
@@ -38,6 +41,12 @@ export type ConversationChatProps = {
    * reply input and its notices.
    */
   closedReason?: string;
+};
+
+/** Why to reply, one line above the input, for a run that ended without finishing. */
+const notices: Partial<Record<ConversationState, string>> = {
+  interrupted: 'This Conversation was interrupted. Reply to resume it.',
+  stopped: 'This Conversation was stopped. Reply to resume it.',
 };
 
 /** The options of the Agent's latest message, while it waits for the User. */
@@ -79,52 +88,48 @@ export const ConversationChat: FC<ConversationChatProps> = ({
       <ConversationChatHeader conversation={conversation} title={title} />
       {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
-      {closedReason !== undefined ? (
-        <Alert intent="info">{closedReason}</Alert>
-      ) : (
-        <>
-          {!terminal && conversation.state === 'interrupted' && (
-            <Alert intent="warning">
-              This Conversation was interrupted. Reply to resume it.
-            </Alert>
-          )}
-          {!terminal && conversation.state === 'stopped' && (
-            <Alert intent="info">
-              This Conversation was stopped. Reply to resume it.
-            </Alert>
-          )}
-          {!terminal && questions && (
-            <ConversationReplyOptions
-              questions={questions}
-              onChoose={({ label }, { key }) =>
-                label === null
-                  ? reply.current?.sendWith(key)
-                  : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
-              }
-            />
-          )}
-          {!terminal && beforeReply}
-          {terminal ? (
-            <ConversationTerminalNotice conversation={conversation} />
-          ) : (
-            <ConversationReplyForm
-              {...(onReply ? { send: onReply } : {})}
-              key={conversation.id}
-              conversationId={conversation.id}
-              projectId={conversation.projectId}
-              control={reply}
-              {...(kept
-                ? {
-                    initialText: kept.reply,
-                    onTextChange: (text: string) => {
-                      kept.reply = text;
-                    },
-                  }
-                : {})}
-            />
-          )}
-        </>
-      )}
+      <div className={styles.replyArea}>
+        {closedReason !== undefined ? (
+          <Alert intent="info">{closedReason}</Alert>
+        ) : (
+          <>
+            {!terminal && questions && (
+              <ConversationReplyOptions
+                questions={questions}
+                onChoose={({ label }, { key }) =>
+                  label === null
+                    ? reply.current?.sendWith(key)
+                    : reply.current?.addLine(`${label}:`, `${label}: ${key}`)
+                }
+              />
+            )}
+            {!terminal && beforeReply}
+            {!terminal && notices[conversation.state] && (
+              <Text fontSize="small" color="muted">
+                {notices[conversation.state]}
+              </Text>
+            )}
+            {terminal ? (
+              <ConversationTerminalNotice conversation={conversation} />
+            ) : (
+              <ConversationReplyForm
+                {...(onReply ? { send: onReply } : {})}
+                key={conversation.id}
+                conversationId={conversation.id}
+                control={reply}
+                {...(kept
+                  ? {
+                      initialText: kept.reply,
+                      onTextChange: (text: string) => {
+                        kept.reply = text;
+                      },
+                    }
+                  : {})}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 };

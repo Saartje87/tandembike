@@ -339,7 +339,17 @@ describe('ConversationDialogProvider', () => {
     );
   });
 
-  it('hides with the X or Escape by removing ?conversation=, and keeps every tab', async () => {
+  it('is named Conversations without showing a heading row', async () => {
+    at$('/project/3', 'conversation=2');
+    show();
+    const dialog = await screen.findByRole('dialog', { name: 'Conversations' });
+
+    expect(
+      within(dialog).queryByRole('heading', { name: 'Conversations' }),
+    ).toBeNull();
+  });
+
+  it('hides with Hide in the tab row or Escape by removing ?conversation=, and keeps every tab', async () => {
     at$('/project/3', 'ticket=12&conversation=2');
     show();
     const dialog = await screen.findByRole('dialog', { name: 'Conversations' });

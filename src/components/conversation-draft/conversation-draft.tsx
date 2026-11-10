@@ -7,7 +7,6 @@ import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { NewTicketDefaults } from '../../conversations/run-brief';
 import { ConversationMessageInput } from '../conversation-message-input/conversation-message-input';
-import { useProjectSkills } from '../conversation-skill-chips/conversation-skill-chips';
 import * as styles from './conversation-draft.css';
 
 /**
@@ -46,7 +45,7 @@ export type ConversationDraftProps = {
 };
 
 /**
- * The shown tab of a draft: the Project's Skills as chips, an input and Send.
+ * The shown tab of a draft: an input and Send.
  * Nothing starts until Send; a refusal, such as the Start run limit, keeps the
  * text and shows the reason.
  */
@@ -55,13 +54,6 @@ export const ConversationDraft: FC<ConversationDraftProps> = ({
   onTextChange,
   onStarted,
 }) => {
-  const skills = useProjectSkills(
-    draft.ticketNumber !== undefined
-      ? { ticketNumber: draft.ticketNumber }
-      : draft.projectId !== undefined
-        ? { projectId: draft.projectId }
-        : undefined,
-  );
   return (
     <div className={styles.draft}>
       <Heading level={3} fontSize="medium">
@@ -77,8 +69,6 @@ export const ConversationDraft: FC<ConversationDraftProps> = ({
             ? 'Ask a question (Enter sends, Shift+Enter adds a line)'
             : 'Describe the Ticket (Enter sends, Shift+Enter adds a line)'
         }
-        rows={4}
-        skills={skills}
         autoFocus
         onSend={async (text) => {
           const result = await startConversation({

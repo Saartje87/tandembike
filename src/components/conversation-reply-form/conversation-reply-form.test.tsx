@@ -9,9 +9,6 @@ import { ConversationReplyForm } from './conversation-reply-form';
 vi.mock('../../app/conversations/actions', () => ({
   replyToConversation: vi.fn(),
 }));
-vi.mock('../../app/projects/actions', () => ({
-  loadProjectSkills: vi.fn().mockResolvedValue({ ok: true, skills: [] }),
-}));
 
 describe('ConversationReplyForm', () => {
   beforeEach(() => {
@@ -23,7 +20,7 @@ describe('ConversationReplyForm', () => {
       ok: true,
       conversation: {} as never,
     });
-    renderWithTheme(<ConversationReplyForm conversationId={4} projectId={3} />);
+    renderWithTheme(<ConversationReplyForm conversationId={4} />);
     const field = screen.getByRole('textbox', { name: 'Reply' });
 
     await userEvent.type(field, 'Go on{Enter}');
@@ -40,7 +37,7 @@ describe('ConversationReplyForm', () => {
       ok: false,
       error: 'Set a repository path in the Project settings first.',
     });
-    renderWithTheme(<ConversationReplyForm conversationId={4} projectId={3} />);
+    renderWithTheme(<ConversationReplyForm conversationId={4} />);
     const field = screen.getByRole('textbox', { name: 'Reply' });
 
     await userEvent.type(field, 'Go on{Enter}');
@@ -53,7 +50,7 @@ describe('ConversationReplyForm', () => {
 
   it('shows a reply whose Server Action throws as a refusal, not an uncaught rejection (T1185)', async () => {
     vi.mocked(replyToConversation).mockRejectedValue(new Error('boom'));
-    renderWithTheme(<ConversationReplyForm conversationId={4} projectId={3} />);
+    renderWithTheme(<ConversationReplyForm conversationId={4} />);
     const field = screen.getByRole('textbox', { name: 'Reply' });
 
     await userEvent.type(field, 'Go on{Enter}');

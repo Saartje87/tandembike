@@ -51,9 +51,9 @@ async function settingsTab(params: ProjectPageProps['params']) {
               Skills
             </Heading>
             <Text tag="p" fontSize="small" color="muted">
-              The Claude Code commands this Project's Conversations offer as
-              chips above the message field, one per line, such as
-              /tandembike:spec. Only you can change them.
+              Claude Code commands kept for this Project, one per line, such as
+              /tandembike:spec. Conversations no longer offer them as chips;
+              type a command in the message instead. Only you can change them.
             </Text>
           </Stack>
           <SkillsForm
