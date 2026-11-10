@@ -661,6 +661,7 @@ export function createConversations({
       input,
       clock(),
     );
+    // A step given a live run always returns one.
     if (handle && result.run) {
       handle.run = result.run;
     }
@@ -1851,7 +1852,7 @@ export function createConversations({
      */
     triageBudget(
       projectId: number,
-      now: Date = new Date(),
+      now: Date = clock(),
     ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
       const settings = tickets.getProjectAgentSettings(projectId);
       if (!settings.autoTriage || settings.triageCeilingUsd === null) {
@@ -1904,7 +1905,7 @@ export function createConversations({
      * window are left out.
      */
     runStats(projectId: number): StageRunStats[] {
-      const since = new Date(Date.now() - runStatsWindowMs);
+      const since = new Date(clock().getTime() - runStatsWindowMs);
       const rows = db
         .select()
         .from(runOutcomes)
