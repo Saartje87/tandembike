@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
+import { agentCommandEntries } from '../test/fixtures';
 import { createTestSpars } from '../test/spars';
 import { NotAllowedError, ValidationError } from '../tickets/errors';
 import { createSpars } from './spars';
@@ -43,16 +44,10 @@ describe('Starting a Spar', () => {
   it('starts one about the Project with no topic, using the Project’s own Spar command', async () => {
     const { spars, project, tickets, runner, conversations } =
       createTestSpars();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '/think',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({ sparCommand: '/think' }),
+    );
 
     const spar = await spars.startSpar({ projectId: project.id, topic: ' ' });
 

@@ -15,6 +15,7 @@ import type {
   Conversation,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 import { ConversationChat } from './conversation-chat';
@@ -33,27 +34,8 @@ vi.mock('../../app/conversations/actions', () => ({
 
 const at = new Date('2026-03-01T09:00:00Z');
 
-const conversation = (values: Partial<Conversation>): Conversation => ({
-  id: 1,
-  projectId: 1,
-  ticketNumber: 4,
-  intent: 'start',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: at,
-  updatedAt: at,
-  ...values,
-});
+const conversation = (values: Partial<Conversation>): Conversation =>
+  aConversation({ ticketNumber: 4, createdAt: at, updatedAt: at, ...values });
 
 const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   id: 1,

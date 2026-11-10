@@ -7,6 +7,7 @@ import type {
   Conversation,
   OpenConversation,
 } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { ProjectSetup } from './project-setup';
@@ -18,27 +19,15 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
 
 const setupConversation = (
   overrides: Partial<Conversation> = {},
-): Conversation => ({
-  id: 8,
-  projectId: 3,
-  ticketNumber: null,
-  intent: 'setup',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+): Conversation =>
+  aConversation({
+    id: 8,
+    projectId: 3,
+    intent: 'setup',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
 
 const control = (conversations: OpenConversation[] = []) => ({
   conversations,

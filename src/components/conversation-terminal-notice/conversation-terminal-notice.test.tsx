@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { ConversationTerminalNotice } from './conversation-terminal-notice';
 
@@ -13,27 +14,16 @@ vi.mock('../../app/conversations/actions', () => ({
 
 const at = new Date('2026-03-01T09:00:00Z');
 
-const conversation = (values: Partial<Conversation>): Conversation => ({
-  id: 7,
-  projectId: 1,
-  ticketNumber: 4,
-  intent: 'start',
-  state: 'running',
-  startedBy: 'terminal',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: at,
-  updatedAt: at,
-  ...values,
-});
+const conversation = (values: Partial<Conversation>): Conversation =>
+  aConversation({
+    id: 7,
+    ticketNumber: 4,
+    state: 'running',
+    startedBy: 'terminal',
+    createdAt: at,
+    updatedAt: at,
+    ...values,
+  });
 
 describe('ConversationTerminalNotice', () => {
   beforeEach(() => {

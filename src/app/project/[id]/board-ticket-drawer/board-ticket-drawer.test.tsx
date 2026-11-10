@@ -6,6 +6,7 @@ import { appAutopilot } from '../../../../autopilot/app-autopilot';
 import { createAutopilot } from '../../../../autopilot/autopilot';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { createTestConversations } from '../../../../test/conversations';
+import { agentCommandEntries, agentCommands } from '../../../../test/fixtures';
 import { renderWithTheme } from '../../../../test/render';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { createChangeChannel } from '../../../../tickets/changes';
@@ -190,16 +191,13 @@ describe('BoardTicketDrawer', () => {
 
   it("gives the drawer its Project's Triage and Start commands", async () => {
     const { tickets, website, ticket } = setUp();
-    tickets.setProjectAgentCommands(website.id, {
-      triageCommand: '/triage',
-      startCommand: '/implement',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      website.id,
+      agentCommandEntries({
+        triageCommand: '/triage',
+        startCommand: '/implement',
+      }),
+    );
 
     renderWithTheme(
       <div>
@@ -217,16 +215,9 @@ describe('BoardTicketDrawer', () => {
       JSON.parse(
         screen.getByRole('dialog').getAttribute('data-agent-commands') ?? '',
       ),
-    ).toEqual({
-      triageCommand: '/triage',
-      startCommand: '/implement',
-      startEpicCommand: null,
-      retroCommand: null,
-      specCommand: null,
-      mergeCommand: null,
-      planCommand: null,
-      sparCommand: null,
-    });
+    ).toEqual(
+      agentCommands({ triageCommand: '/triage', startCommand: '/implement' }),
+    );
   });
 
   it("tells an Epic's drawer the Board below, with its filter and the Epic's children on it", async () => {

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { agentCommandEntries, agentCommands } from '../../test/fixtures';
 import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
 import { boardRoute } from '../lib/paths';
@@ -293,26 +294,16 @@ describe('Skill actions', () => {
 
     const result = await setProjectAgentCommands({
       projectId: project.id,
-      triageCommand: 'triage',
-      startCommand: '/implement',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
+      ...agentCommandEntries({
+        triageCommand: 'triage',
+        startCommand: '/implement',
+      }),
     });
 
-    const commands = {
+    const commands = agentCommands({
       triageCommand: '/triage',
       startCommand: '/implement',
-      startEpicCommand: null,
-      retroCommand: null,
-      specCommand: null,
-      mergeCommand: null,
-      planCommand: null,
-      sparCommand: null,
-    };
+    });
     expect(result).toEqual({ ok: true, commands });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
     expect(revalidatePath).toHaveBeenCalled();
@@ -325,14 +316,7 @@ describe('Skill actions', () => {
 
     const result = await setProjectAgentCommands({
       projectId: project.id,
-      triageCommand: '',
-      startCommand: '/implement T1',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
+      ...agentCommandEntries({ startCommand: '/implement T1' }),
     });
 
     expect(result).toMatchObject({
