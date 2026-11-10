@@ -29,8 +29,7 @@ export function checkProjectWritable(db: DatabaseConnection, id: number) {
  * Ticket passes, so the caller reports it in its own words. Only the writes
  * an archived Ticket still allows use this alone: restoring or archiving it,
  * its comments and Attachments, releasing or clearing its Claim (T1312), and
- * deleting it. Every other write uses
- * `checkTicketWritable`.
+ * deleting it. Every other write uses `checkTicketWritable`.
  */
 export function checkTicketProjectWritable(
   db: DatabaseConnection,
