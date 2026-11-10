@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
 import { createChangeChannel } from '../tickets/changes';
-import { NotAllowedError } from '../tickets/errors';
+import { NotAllowedError, ValidationError } from '../tickets/errors';
 
 async function setup() {
   const world = createTestConversations(createChangeChannel());
@@ -318,5 +318,132 @@ describe('Worktree cleanup', () => {
     await restart().cleanupWorktrees();
 
     expect(worktrees.removed).toEqual([]);
+  });
+});
+
+describe('A reply after the worktree is released (T1281)', () => {
+  const gone = (path: string) =>
+    new ValidationError({
+      text: `The worktree of this Conversation is gone (${path}), so a reply cannot resume in it.`,
+    });
+
+  it('is refused when the worktree was released while the run was alive, and nothing reaches the run', async () => {
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+    tickets.completeTicket(ticket.number);
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+
+    await expect(
+      conversations.reply(conversation.id, 'One more thing.', 'user'),
+    ).rejects.toEqual(gone(path));
+
+    expect(runner.runs).toHaveLength(1);
+    expect(runner.runs[0].sent).toEqual([]);
+  });
+
+  it('is refused once the worktree is marked removed, with no live run', async () => {
+    const { conversations, worktrees, runner, conversation, path } =
+      await setup();
+    runner.runs[0].emit({ type: 'exit' });
+    await conversations.close(conversation.id);
+    expect(worktrees.removed).toEqual([path]);
+
+    await expect(
+      conversations.reply(conversation.id, 'Again.', 'user'),
+    ).rejects.toEqual(gone(path));
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('is refused while the worktree path is missing, though a run is alive', async () => {
+    const { conversations, worktrees, runner, conversation, path } =
+      await setup();
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    worktrees.states.set(path, 'missing');
+
+    await expect(
+      conversations.reply(conversation.id, 'Again.', 'user'),
+    ).rejects.toEqual(gone(path));
+    expect(runner.runs[0].sent).toEqual([]);
+  });
+
+  it('closes an idle live run when its Ticket reaches Done and the worktree is released', async () => {
+    const { tickets, worktrees, runner, ticket, path } = await setup();
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    tickets.completeTicket(ticket.number);
+
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+    expect(runner.runs[0].closed).toBe(true);
+  });
+
+  it('closes the live run once the turn that reached Done ends, not before', async () => {
+    const { tickets, worktrees, runner, ticket, path } = await setup();
+
+    tickets.completeTicket(ticket.number);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(runner.runs[0].closed).toBe(false);
+
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
+    expect(runner.runs[0].closed).toBe(true);
+  });
+
+  it('keeps the live run open while the worktree is kept', async () => {
+    const {
+      conversations,
+      tickets,
+      worktrees,
+      runner,
+      conversation,
+      ticket,
+      path,
+    } = await setup();
+    worktrees.states.set(path, 'dirty');
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    tickets.completeTicket(ticket.number);
+    await vi.waitFor(() =>
+      expect(conversations.get(conversation.id).worktreeKept).toBe('dirty'),
+    );
+
+    expect(runner.runs[0].closed).toBe(false);
+    await conversations.reply(conversation.id, 'Commit it.', 'user');
+    expect(runner.runs[0].sent).toEqual(['Commit it.']);
+  });
+
+  it('still accepts replies in a Conversation with no worktree, after its Ticket reaches Done', async () => {
+    const world = createTestConversations(createChangeChannel());
+    const project = world.tickets.createProject({ name: 'Website' });
+    world.tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+    });
+    const ticket = world.tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix it',
+    });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    expect(conversation.worktreePath).toBeNull();
+    world.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    world.tickets.completeTicket(ticket.number);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await world.conversations.reply(conversation.id, 'Thanks.', 'user');
+
+    expect(world.runner.runs[0].closed).toBe(false);
+    expect(world.runner.runs[0].sent).toEqual(['Thanks.']);
   });
 });
