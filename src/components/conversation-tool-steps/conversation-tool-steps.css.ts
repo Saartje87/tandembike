@@ -14,6 +14,7 @@ export const summary = style({
 /** The summary's chevron, turned down while its group is open. */
 export const chevron = style({
   display: 'inline-flex',
+  flexShrink: 0,
   transition: `transform ${vars.transition.fast}`,
   selectors: { 'details[open] > summary &': { transform: 'rotate(90deg)' } },
 });
