@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom } from '../test/tickets';
 import type { Change } from './changes';
-import { ValidationError } from './errors';
+import { NotFoundError, ValidationError } from './errors';
 
 const setUp = () => {
   const tickets = createTestTickets();
@@ -204,6 +204,94 @@ describe('Creating an Epic or an Origin in a batch', () => {
         }),
       ),
     ).toBeInstanceOf(ValidationError);
+  });
+
+  it('makes an existing Ticket the Origin of one Ticket of the batch', () => {
+    const { tickets, project } = setUp();
+    const ideas = tickets.createProject({ name: 'Ideas' });
+    const idea = tickets.createTicket({ projectId: ideas.id, title: 'Idea' });
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    const announced: Change[] = [];
+    tickets.subscribe((change) => announced.push(change));
+
+    const [epic, child, other, loose] = tickets.createTicketBatch({
+      projectId: project.id,
+      tickets: [
+        { title: 'Epic', type: 'Epic', originNumber: idea.number },
+        { title: 'Child', epicPosition: 0 },
+        { title: 'Other', originNumber: spec.number },
+        { title: 'Loose' },
+      ],
+    });
+
+    expect(tickets.getTicket(epic.number).origin?.number).toBe(idea.number);
+    expect(tickets.getTicket(child.number).epic?.number).toBe(epic.number);
+    expect(tickets.getTicket(child.number).origin).toBeNull();
+    expect(tickets.getTicket(other.number).origin?.number).toBe(spec.number);
+    expect(tickets.getTicket(loose.number).origin).toBeNull();
+    expect(
+      tickets.getTicket(idea.number).splitOff.map(({ number }) => number),
+    ).toEqual([epic.number]);
+    expect(announced).toEqual([
+      {
+        type: 'tickets',
+        numbers: expect.arrayContaining([
+          epic.number,
+          child.number,
+          other.number,
+          loose.number,
+          spec.number,
+          idea.number,
+        ]),
+      },
+    ]);
+  });
+
+  it('refuses a missing Origin of one Ticket, naming its position', () => {
+    const { tickets, project } = setUp();
+    tickets.createTicket({ projectId: project.id, title: 'Existing' });
+
+    const error = errorFrom(() =>
+      tickets.createTicketBatch({
+        projectId: project.id,
+        tickets: [{ title: 'A' }, { title: 'B', originNumber: 999 }],
+      }),
+    );
+
+    expect(error).toBeInstanceOf(NotFoundError);
+    expect((error as Error).message).toContain('position 1');
+    expect((error as Error).message).toContain('T999');
+    expect(tickets.listTickets()).toHaveLength(1);
+  });
+
+  it('refuses a Ticket originNumber with originPosition or the batch originNumber', () => {
+    const { tickets, project } = setUp();
+    const spec = tickets.createTicket({ projectId: project.id, title: 'Spec' });
+    const attempt = (input: { originNumber?: number; tickets: Batch }) => {
+      const error = errorFrom(() =>
+        tickets.createTicketBatch({ projectId: project.id, ...input }),
+      );
+      expect(tickets.listTickets()).toHaveLength(1);
+      return error as ValidationError;
+    };
+
+    const withPosition = attempt({
+      tickets: [
+        { title: 'A' },
+        { title: 'B', originNumber: spec.number, originPosition: 0 },
+      ],
+    });
+    expect(withPosition).toBeInstanceOf(ValidationError);
+    expect(withPosition.fieldErrors).toHaveProperty('tickets[1].originNumber');
+    expect(withPosition.message).toContain('position 1');
+
+    const withBatch = attempt({
+      originNumber: spec.number,
+      tickets: [{ title: 'A' }, { title: 'B', originNumber: spec.number }],
+    });
+    expect(withBatch).toBeInstanceOf(ValidationError);
+    expect(withBatch.fieldErrors).toHaveProperty('tickets[1].originNumber');
+    expect(withBatch.message).toContain('position 1');
   });
 
   it('refuses a colour on a normal Ticket by position', () => {

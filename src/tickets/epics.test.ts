@@ -81,7 +81,40 @@ describe('Creating a Ticket under an Epic', () => {
         archived: false,
         blockedBy: [],
         blocked: false,
+        uncheckedCriteria: 0,
       },
+    ]);
+  });
+
+  it("counts each child's unchecked acceptance criteria (T1226)", () => {
+    const { tickets, project, epic } = setUp();
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      acceptanceCriteria: [
+        { text: 'Visa works', checked: true },
+        { text: 'Mastercard works' },
+        { text: 'Refunds work' },
+      ],
+    });
+    const done = tickets.createTicket({
+      projectId: project.id,
+      title: 'Pay by bank',
+      epicNumber: epic.number,
+      acceptanceCriteria: [{ text: 'iDEAL works', checked: true }],
+    });
+
+    expect(
+      tickets
+        .getTicket(epic.number)
+        .children.map(({ number, uncheckedCriteria }) => ({
+          number,
+          uncheckedCriteria,
+        })),
+    ).toEqual([
+      { number: child.number, uncheckedCriteria: 2 },
+      { number: done.number, uncheckedCriteria: 0 },
     ]);
   });
 

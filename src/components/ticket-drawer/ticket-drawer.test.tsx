@@ -25,7 +25,7 @@ import {
 } from '../../app/tickets/actions';
 import type { Conversation } from '../../conversations/conversations';
 import { liveConversation } from '../../test/conversation-activity';
-import { aConversation } from '../../test/fixtures';
+import { aConversation, anEpicChild } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { EpicLink } from '../../tickets/epic-link';
@@ -1548,16 +1548,7 @@ describe('TicketDrawer', () => {
       number: 8,
       title: 'Checkout',
       type: 'Epic',
-      children: [
-        {
-          number: 9,
-          title: 'Pay by card',
-          status: 'Todo',
-          archived: false,
-          blockedBy: [],
-          blocked: false,
-        },
-      ],
+      children: [anEpicChild({ number: 9, title: 'Pay by card' })],
     };
 
     it("opens an Epic's children on the Board below over it", () => {
@@ -1782,14 +1773,11 @@ describe('TicketDrawer', () => {
     });
 
     describe('an Epic', () => {
-      const child = {
+      const child = anEpicChild({
         number: 9,
         title: 'Pay by card',
-        status: 'In progress' as const,
-        archived: false,
-        blockedBy: [],
-        blocked: false,
-      };
+        status: 'In progress',
+      });
       const epic: Ticket = {
         ...ticket,
         number: 8,

@@ -1,6 +1,7 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { anEpicChild } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import type { EpicChild } from '../../tickets/tickets';
 import { EpicOrder } from './epic-order';
@@ -10,15 +11,7 @@ function child(
   title: string,
   extra: Partial<EpicChild> = {},
 ): EpicChild {
-  return {
-    number,
-    title,
-    status: 'Todo',
-    archived: false,
-    blockedBy: [],
-    blocked: false,
-    ...extra,
-  };
+  return anEpicChild({ number, title, ...extra });
 }
 
 const design = child(5, 'Design the payment form', { status: 'Done' });

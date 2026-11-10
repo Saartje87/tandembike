@@ -7,8 +7,8 @@ import {
   createTicket,
   detachTicketFromEpic,
 } from '../../app/tickets/actions';
+import { anEpicChild } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
-import type { EpicChild } from '../../tickets/tickets';
 import { EpicChildren } from './epic-children';
 
 vi.mock('../../app/tickets/actions', () => ({
@@ -17,23 +17,18 @@ vi.mock('../../app/tickets/actions', () => ({
   detachTicketFromEpic: vi.fn(),
 }));
 
-const card: EpicChild = {
+const card = anEpicChild({
   number: 5,
   title: 'Pay by card',
   status: 'In progress',
-  archived: false,
-  blockedBy: [],
-  blocked: false,
-};
+});
 
-const invoice: EpicChild = {
+const invoice = anEpicChild({
   number: 6,
   title: 'Send the invoice',
-  status: 'Todo',
-  archived: false,
   blockedBy: [5],
   blocked: true,
-};
+});
 
 const epic = { number: 4, projectId: 1, archived: false };
 

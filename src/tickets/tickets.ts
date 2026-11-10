@@ -462,7 +462,13 @@ export type Ticket = {
 export type EpicChild = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'archived' | 'blockedBy' | 'blocked'
->;
+> & {
+  /**
+   * How many of its acceptance criteria are not checked, so a run can see
+   * what is left before finishing the Epic without reading each child (T1226).
+   */
+  uncheckedCriteria: number;
+};
 
 export type AcceptanceCriterion = {
   id: number;
@@ -559,6 +565,11 @@ export type BatchTicketInput = Pick<
    * split from. Not with the batch's `originNumber`.
    */
   originPosition?: number;
+  /**
+   * An existing Ticket, in any Project, this one was split from. Not with
+   * `originPosition` or the batch's `originNumber`.
+   */
+  originNumber?: number;
 };
 
 /** How `completeTicket` treats unchecked acceptance criteria (ADR 0043). */
@@ -1027,6 +1038,7 @@ function checkBatchTicket(
     blockedByPositions = [],
     epicPosition: _epicPosition,
     originPosition: _originPosition,
+    originNumber: _originNumber,
     ...input
   } = batchTicket;
   // Until the numbers exist, a placeholder stands in as a one-digit number, so
@@ -1071,9 +1083,10 @@ function earlierOnly(field: string, position: number): string {
 
 /**
  * Refuses the batch, naming each Ticket by position, when its `epicPosition`
- * or `originPosition` breaks the rules: only an earlier position, an Epic of
- * the batch as the Epic, no Epic with an Epic, and no position field next to
- * the matching batch-level field.
+ * `originPosition` or `originNumber` breaks the rules: only an earlier
+ * position, an Epic of the batch as the Epic, no Epic with an Epic, no
+ * position field next to the matching batch-level field, and a Ticket's own
+ * `originNumber` with neither `originPosition` nor the batch `originNumber`.
  */
 function checkBatchLinks(
   batch: CreateTicketBatchInput,
@@ -1089,7 +1102,7 @@ function checkBatchLinks(
     };
     const earlier = (at: number) =>
       Number.isInteger(at) && at >= 0 && at < position;
-    const { epicPosition, originPosition } = ticket;
+    const { epicPosition, originPosition, originNumber } = ticket;
     if (epicPosition !== undefined) {
       reasonAt(
         'epicPosition',
@@ -1116,6 +1129,16 @@ function checkBatchLinks(
           ? 'give originPosition or the batch originNumber, not both.'
           : !earlier(originPosition)
             ? earlierOnly('originPosition', position)
+            : undefined,
+      );
+    }
+    if (originNumber !== undefined) {
+      reasonAt(
+        'originNumber',
+        originPosition !== undefined
+          ? 'give originNumber or originPosition, not both.'
+          : batch.originNumber !== undefined
+            ? "give the Ticket's originNumber or the batch originNumber, not both."
             : undefined,
       );
     }
@@ -2271,7 +2294,7 @@ export function createTickets(
       const epicNumber = input.epicNumber ?? null;
       const originNumber = input.originNumber ?? null;
 
-      const numbers = db.transaction(() => {
+      const { created: numbers, origins } = db.transaction(() => {
         checkFeedback(
           db,
           project.id,
@@ -2287,6 +2310,21 @@ export function createTickets(
         if (originNumber !== null) {
           checkOrigin(db, originNumber);
         }
+        input.tickets.forEach((ticket, position) => {
+          if (ticket.originNumber === undefined) {
+            return;
+          }
+          try {
+            checkOrigin(db, ticket.originNumber);
+          } catch (error) {
+            if (error instanceof NotFoundError) {
+              throw new NotFoundError(
+                `Ticket at position ${position}: ${error.message}`,
+              );
+            }
+            throw error;
+          }
+        });
         const createdAt = new Date();
         const created: number[] = [];
         const epics = new Set<number>();
@@ -2301,13 +2339,17 @@ export function createTickets(
           position,
           { ticket, blockedByPositions },
         ] of checked.entries()) {
-          const { epicPosition, originPosition } = input.tickets[position];
+          const {
+            epicPosition,
+            originPosition,
+            originNumber: ownOrigin,
+          } = input.tickets[position];
           const ticketEpic =
             epicPosition === undefined ? epicNumber : created[epicPosition];
           const ticketOrigin =
-            originPosition === undefined
-              ? originNumber
-              : created[originPosition];
+            originPosition !== undefined
+              ? created[originPosition]
+              : (ownOrigin ?? originNumber);
           const number = insertTicket(db, actor, ticket, {
             projectId: project.id,
             epicNumber: ticketEpic,
@@ -2318,8 +2360,8 @@ export function createTickets(
           if (epicPosition !== undefined) {
             epics.add(ticketEpic as number);
           }
-          if (originPosition !== undefined) {
-            origins.add(ticketOrigin as number);
+          if (ticketOrigin !== null) {
+            origins.add(ticketOrigin);
           }
           if (blockedByPositions.length > 0) {
             db.insert(ticketBlockers)
@@ -2379,7 +2421,7 @@ export function createTickets(
         for (const epic of epics) {
           syncEpicStatus(db, epic);
         }
-        return created;
+        return { created, origins };
       });
       changes.publish({
         type: 'tickets',
@@ -2387,7 +2429,7 @@ export function createTickets(
           ...new Set([
             ...numbers,
             ...(epicNumber === null ? [] : [epicNumber]),
-            ...(originNumber === null ? [] : [originNumber]),
+            ...origins,
           ]),
         ],
       });
@@ -4757,6 +4799,11 @@ function withChildren<Row extends { number: number }>(
         title: tickets.title,
         status: tickets.status,
         archived: tickets.archived,
+        uncheckedCriteria: sql<number>`(
+          select count(*) from ${ticketAcceptanceCriteria}
+          where ${ticketAcceptanceCriteria.ticketNumber} = ${tickets.number}
+            and ${ticketAcceptanceCriteria.checked} = 0
+        )`,
       })
       .from(tickets)
       .where(inArray(tickets.epicNumber, [...childrenByNumber.keys()]))

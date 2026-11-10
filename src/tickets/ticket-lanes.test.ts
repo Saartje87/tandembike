@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LiveConversation } from '../conversations/conversation-activity';
 import { liveConversation } from '../test/conversation-activity';
+import { anEpicChild } from '../test/fixtures';
 import type { Status } from './status';
 import {
   canSpec,
@@ -34,14 +35,8 @@ const placed = (
     live,
   );
 
-const child = (number: number, archived = false) => ({
-  number,
-  title: `Child ${number}`,
-  status: 'Todo' as const,
-  archived,
-  blockedBy: [],
-  blocked: false,
-});
+const child = (number: number, archived = false) =>
+  anEpicChild({ number, archived });
 
 const claim = { agentRunId: 'run-1', agentName: null };
 const pullRequest = 'https://github.com/owner/repo/pull/87';

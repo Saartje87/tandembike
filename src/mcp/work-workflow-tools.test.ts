@@ -100,6 +100,42 @@ describe('work tools', () => {
     await client.close();
   });
 
+  it("start_work and get_ticket count each Epic child's unchecked criteria (T1226)", async () => {
+    const { tickets, ticket, client } = await setup('conv-7');
+    const epic = tickets.createTicket({
+      projectId: ticket.projectId,
+      title: 'Checkout',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: ticket.projectId,
+      title: 'Pay by card',
+      epicNumber: epic.number,
+      acceptanceCriteria: [
+        { text: 'Visa works', checked: true },
+        { text: 'Refunds work' },
+      ],
+    });
+    const children = [{ number: child.number, uncheckedCriteria: 1 }];
+
+    const bundle = resultJson(
+      await client.callTool({
+        name: 'start_work',
+        arguments: { number: epic.number },
+      }),
+    ) as { epic: { children: unknown[] } };
+    const read = resultJson(
+      await client.callTool({
+        name: 'get_ticket',
+        arguments: { number: epic.number, description: false },
+      }),
+    ) as { children: unknown[] };
+
+    expect(bundle.epic.children).toMatchObject(children);
+    expect(read.children).toMatchObject(children);
+    await client.close();
+  });
+
   it('start_work returns approve with Auto-merge off', async () => {
     const { ticket, client } = await setup('conv-7');
 
