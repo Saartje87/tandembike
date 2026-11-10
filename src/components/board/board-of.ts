@@ -30,7 +30,7 @@ export type BoardTicket = Pick<
   /** Its labels the row shows, in its order: those `isRowLabel` keeps. */
   labels: string[];
   /**
-   * For an Epic row outside In flight (Needs you, Queued, Your work, Done),
+   * For an Epic row outside In flight (Needs you, Queued, Done),
    * its children on this Board, how many more are elsewhere, and whether one
    * needs the User; absent for a normal Ticket.
    */
@@ -88,8 +88,8 @@ type EpicChildren = Required<
   Pick<BoardTicket, 'children' | 'childrenElsewhere' | 'childNeedsYou'>
 >;
 
-/** A ready-for-agent Todo Ticket, in the queue's order. */
-export type QueuedRow = BoardTicket & {
+/** A triaged Todo Ticket, in Board order, and whether it waits on a Blocker. */
+export type TodoRow = BoardTicket & {
   blocked: boolean;
   /**
    * Its Blockers this Board does not show as Done or archived, by number:
@@ -97,6 +97,12 @@ export type QueuedRow = BoardTicket & {
    */
   blockers: number[];
 };
+
+/** A ready-for-agent Todo Ticket, in the queue's order. */
+export type QueuedRow = TodoRow;
+
+/** A ready-for-human Todo Ticket: work handed to the User (ADR 0048). */
+export type YourWorkRow = TodoRow;
 
 /** What a Ticket in Needs you waits on. */
 export type NeedKind =
@@ -135,6 +141,11 @@ export type BoardView = {
   needsYou: {
     actionNeeded: NeedRow[];
     review: NeedRow[];
+    /**
+     * This Board's ready-for-human Todo Tickets, in Board order. A blocked
+     * one is listed but not counted: it cannot be done yet (ADR 0048).
+     */
+    yourWork: YourWorkRow[];
     /** This Board's Todo Tickets still to triage. */
     intake: NeedRow[];
     /** How many Tickets wait on the User, under the Board filter. */
@@ -145,12 +156,11 @@ export type BoardView = {
   /**
    * The Running Epics (In progress, their run going), in Board order. An Epic
    * in Review or Action needed is a row of Needs you instead, as is one in
-   * Intake; Epics in Todo or Done are rows of Queued, Your work or Done.
+   * Intake or Your work; Epics in Todo or Done are rows of Queued or Done.
    */
   epics: EpicRow[];
   /** The Running Tickets outside those Epics, in Board order. */
   inFlight: InFlightRow[];
-  yourWork: BoardTicket[];
   queued: QueuedRow[];
   done: DoneRow[];
   /** Done Tickets of all of them, Epics and archived Tickets left out. */
@@ -248,6 +258,18 @@ function keeps(
     })
   );
 }
+
+/** How many rows of Needs you wait on the User: a blocked Your work row does not. */
+const needsYouCount = ({
+  actionNeeded,
+  review,
+  yourWork,
+  intake,
+}: Omit<BoardView['needsYou'], 'count' | 'total'>): number =>
+  actionNeeded.length +
+  review.length +
+  yourWork.filter(({ blocked }) => !blocked).length +
+  intake.length;
 
 const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
   left.since.getTime() - right.since.getTime() || left.number - right.number;
@@ -438,18 +460,31 @@ export function boardOf(
     .filter((ticket) => !inIntakeEpic(ticket))
     .sort(byPosition)
     .map(intakeRow);
+  /** A triaged Todo row: its Epic's children, and its open Blockers. */
+  const todoRow = (ticket: Ticket): TodoRow => ({
+    ...rowOf(ticket),
+    ...withChildren(ticket),
+    blocked: ticket.blocked,
+    blockers: ticket.blocked
+      ? ticket.blockedBy.filter((number) => !resolved.has(number))
+      : [],
+  });
   const needsYouRow = (row: NeedRow): NeedRow => {
     const epic = allEpics.find(({ epic }) => epic.number === row.number);
     return epic ? { ...row, ...childrenOf(epic.epic) } : row;
   };
 
+  const needsYouRows = {
+    actionNeeded: actionNeeded.map(needsYouRow),
+    review: review.map(needsYouRow),
+    yourWork: rowsIn('Your work').map(({ ticket }) => todoRow(ticket)),
+    intake,
+  };
   const unfiltered: BoardView = {
     needsYou: {
-      actionNeeded: actionNeeded.map(needsYouRow),
-      review: review.map(needsYouRow),
-      intake,
-      count: actionNeeded.length + review.length + intake.length,
-      total: actionNeeded.length + review.length + intake.length,
+      ...needsYouRows,
+      count: needsYouCount(needsYouRows),
+      total: needsYouCount(needsYouRows),
     },
     epics: epics.map(epicRowOf),
     inFlight: inSection('Running')
@@ -461,18 +496,7 @@ export function boardOf(
         cost: cost(ticket),
         pullRequest: latestPullRequest(ticket),
       })),
-    yourWork: rowsIn('Your work').map(({ ticket }) => ({
-      ...rowOf(ticket),
-      ...withChildren(ticket),
-    })),
-    queued: rowsIn('Queued').map(({ ticket }) => ({
-      ...rowOf(ticket),
-      ...withChildren(ticket),
-      blocked: ticket.blocked,
-      blockers: ticket.blocked
-        ? ticket.blockedBy.filter((number) => !resolved.has(number))
-        : [],
-    })),
+    queued: rowsIn('Queued').map(({ ticket }) => todoRow(ticket)),
     done: rowsIn('Done')
       .map(({ ticket }) => ({
         ...rowOf(ticket),
@@ -516,21 +540,18 @@ export function boardOf(
   const narrowed = {
     actionNeeded: keep(unfiltered.needsYou.actionNeeded),
     review: keep(unfiltered.needsYou.review),
+    yourWork: keep(unfiltered.needsYou.yourWork),
     intake: keep(unfiltered.needsYou.intake),
   };
   return {
     ...unfiltered,
     needsYou: {
       ...narrowed,
-      count:
-        narrowed.actionNeeded.length +
-        narrowed.review.length +
-        narrowed.intake.length,
+      count: needsYouCount(narrowed),
       total: unfiltered.needsYou.total,
     },
     epics: keep(unfiltered.epics),
     inFlight: keep(unfiltered.inFlight),
-    yourWork: keep(unfiltered.yourWork),
     queued: keep(unfiltered.queued),
     done: keep(unfiltered.done),
   };

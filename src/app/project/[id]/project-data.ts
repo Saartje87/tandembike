@@ -249,7 +249,7 @@ export function ticketPathOf(projectId: number) {
             id: active.id,
             counts: {
               queued: cycle.queued.length,
-              yourWork: cycle.yourWork.length,
+              yourWork: cycle.needsYou.yourWork.length,
               inFlight: cycle.epics.length + cycle.inFlight.length,
               actionNeeded: cycle.needsYou.actionNeeded.length,
               review: cycle.needsYou.review.length,

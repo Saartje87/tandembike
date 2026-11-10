@@ -120,7 +120,7 @@ export const TicketPath: FC<TicketPathProps> = ({
                   <FlowStep
                     title="Your work"
                     actors={['You']}
-                    section="Board: Your work"
+                    section="Board: Needs you → Your work"
                     count={onCycle('yourWork', 'your-work')}
                   >
                     {withNote('Autopilot leaves it to you.')}

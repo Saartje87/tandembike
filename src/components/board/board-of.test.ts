@@ -246,7 +246,7 @@ describe('boardOf', () => {
     expect(row.pullRequest).toBe(pullRequest(12));
   });
 
-  it('lists ready-for-human Todo Tickets as Your work, in Board order', () => {
+  it('lists ready-for-human Todo Tickets in Needs you as Your work, in Board order', () => {
     const view = boardOf(
       [
         ticket({ number: 1, labels: ['ready-for-human'], position: 2 }),
@@ -256,7 +256,52 @@ describe('boardOf', () => {
       activity(),
     );
 
-    expect(numbers(view.yourWork)).toEqual([2, 1]);
+    expect(numbers(view.needsYou.yourWork)).toEqual([2, 1]);
+  });
+
+  it('counts an unblocked Your work Ticket in Needs you, and shows a blocked one with its Blockers without counting it', () => {
+    const view = boardOf(
+      [
+        ticket({ number: 1, labels: ['ready-for-human'] }),
+        ticket({
+          number: 2,
+          labels: ['ready-for-human'],
+          blockedBy: [3],
+          blocked: true,
+        }),
+        ticket({ number: 3, labels: ['ready-for-agent'] }),
+        ticket({ number: 4, labels: ['needs-triage'] }),
+      ],
+      activity(),
+    );
+
+    expect(view.needsYou.yourWork).toMatchObject([
+      { number: 1, blocked: false, blockers: [] },
+      { number: 2, blocked: true, blockers: [3] },
+    ]);
+    expect(view.needsYou.count).toBe(2);
+    expect(view.needsYou.total).toBe(2);
+  });
+
+  it('counts only the unblocked Your work Tickets the Board filter keeps', () => {
+    const view = boardOf(
+      [
+        ticket({ number: 1, labels: ['ready-for-human', 'bug'] }),
+        ticket({ number: 2, labels: ['ready-for-human'] }),
+        ticket({
+          number: 3,
+          labels: ['ready-for-human', 'bug'],
+          blockedBy: [9],
+          blocked: true,
+        }),
+      ],
+      activity(),
+      { query: '', labels: ['bug'] },
+    );
+
+    expect(numbers(view.needsYou.yourWork)).toEqual([1, 3]);
+    expect(view.needsYou.count).toBe(1);
+    expect(view.needsYou.total).toBe(2);
   });
 
   it('queues ready-for-agent Todo Tickets in the Queued order', () => {
@@ -331,8 +376,8 @@ describe('boardOf', () => {
     );
 
     expect(view).toMatchObject({
+      needsYou: { yourWork: [] },
       inFlight: [],
-      yourWork: [],
       queued: [],
       done: [],
     });
@@ -376,7 +421,7 @@ describe('boardOf', () => {
 
     expect(view.needsYou.intake[0].labels).toEqual(['from:tandembike', 'bug']);
     expect(view.inFlight[0].labels).toEqual(['enhancement']);
-    expect(view.yourWork[0].labels).toEqual(['bug']);
+    expect(view.needsYou.yourWork[0].labels).toEqual(['bug']);
     expect(view.queued[0].labels).toEqual([]);
     expect(view.done[0].labels).toEqual(['bug']);
   });
@@ -820,9 +865,10 @@ describe('boardOf', () => {
           childrenElsewhere: 0,
         },
       ]);
-      expect(view.needsYou.count).toBe(1);
-      expect(view.needsYou.total).toBe(1);
-      expect(numbers(view.yourWork)).toEqual([53]);
+      // The ready-for-human Epic counts too, in Your work (ADR 0048).
+      expect(numbers(view.needsYou.yourWork)).toEqual([53]);
+      expect(view.needsYou.count).toBe(2);
+      expect(view.needsYou.total).toBe(2);
     });
 
     it('labels such an Epic ready-for-agent in Intake whatever other state label it carries', () => {
@@ -987,7 +1033,7 @@ describe('boardOf', () => {
         color: 'teal',
         children: [{ number: 3, state: 'queued' }],
       });
-      expect(numbers(view.yourWork)).toEqual([6, 51]);
+      expect(numbers(view.needsYou.yourWork)).toEqual([6, 51]);
       expect(view.epics).toEqual([]);
     });
 
@@ -1023,7 +1069,7 @@ describe('boardOf', () => {
       );
 
       expect(numbers(view.queued)).toEqual([50]);
-      expect(view.yourWork).toEqual([]);
+      expect(view.needsYou.yourWork).toEqual([]);
       expect(view.done).toEqual([]);
       expect(view.inFlight).toEqual([]);
     });
@@ -1113,7 +1159,7 @@ describe('boardOf', () => {
 
       expect(numbers(view.inFlight)).toEqual([1]);
       expect(numbers(view.queued)).toEqual([3]);
-      expect(numbers(view.yourWork)).toEqual([5]);
+      expect(numbers(view.needsYou.yourWork)).toEqual([5]);
       expect(numbers(view.done)).toEqual([7]);
       expect(numbers(view.needsYou.review)).toEqual([9]);
       expect(numbers(view.needsYou.intake)).toEqual([11]);

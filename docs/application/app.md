@@ -14,9 +14,8 @@ A Ticket has a Status: Todo, In progress or Done. An **Epic** groups child Ticke
 
 The Board shows a Backlog's or a Cycle's Tickets in sections:
 
-- **Needs you**: what waits on you. **Action needed** holds runs that ask, stop or fail; **Review** holds Tickets whose run opened a pull request; **Intake** holds Tickets still to triage.
+- **Needs you**: what waits on you. **Action needed** holds runs that ask, stop or fail; **Review** holds Tickets whose run opened a pull request; **Your work** holds Tickets triaged as `ready-for-human`, work handed to you that Autopilot leaves alone (a blocked one shows but is not counted); **Intake** holds Tickets still to triage.
 - **In flight**: Tickets whose run is working.
-- **Your work**: Tickets triaged as `ready-for-human`, which Autopilot leaves to you.
 - **Queued**: Tickets triaged as `ready-for-agent`, in the order Autopilot takes them.
 - **Done**.
 
