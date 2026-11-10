@@ -1,6 +1,6 @@
 'use client';
 
-import { Stack, Text, Tooltip } from '@blockle/blocks';
+import { Box, Stack, Text, Tooltip } from '@blockle/blocks';
 import type { FC, ReactNode } from 'react';
 
 import type { Footprint } from '../../footprint/footprint';
@@ -51,11 +51,12 @@ export const FootprintText: FC<FootprintTextProps> = ({
       <Tooltip
         content={tooltipContent(
           <Stack gap={1}>
-            {scope && <Text>{scope}</Text>}
+            {/* Box, not Text: Text sets its own colour over the Tooltip's. */}
+            {scope && <Box>{scope}</Box>}
             {formatComparisons(footprint.comparisons).map((line) => (
-              <Text key={line} data-comparison>
+              <Box key={line} data-comparison>
                 {line}
-              </Text>
+              </Box>
             ))}
           </Stack>,
         )}

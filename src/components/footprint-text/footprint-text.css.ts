@@ -6,6 +6,7 @@ import { style } from '@vanilla-extract/css';
  */
 export const hint = style({
   textDecorationStyle: 'dotted',
-  textUnderlineOffset: '0.2em',
+  // Below the subscript of CO₂e, so the dots do not hide it.
+  textUnderlineOffset: '0.35em',
   cursor: 'help',
 });
