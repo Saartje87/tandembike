@@ -1,5 +1,5 @@
 /** The port the app serves on unless told otherwise; the MCP URL names it. */
-const defaultPort = 4747;
+export const appPort = 4747;
 
 /**
  * The port from the server's command-line arguments: `-p <port>`,
@@ -9,7 +9,7 @@ const defaultPort = 4747;
  * instead of being ignored.
  */
 export function serverPort(args: readonly string[]): number {
-  let port = defaultPort;
+  let port = appPort;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg.startsWith('--port=')) {

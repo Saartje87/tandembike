@@ -1,0 +1,117 @@
+// @vitest-environment node
+
+import { describe, expect, it } from 'vitest';
+
+import { openDatabase } from '../db/connection';
+import { createTickets } from '../tickets/tickets';
+import { createConversations } from './conversations';
+import {
+  createScriptedRunner,
+  createScriptedWorktrees,
+} from './scripted-runner';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/** Lets the scripted run's deferred events land. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+
+function setup() {
+  const db = openDatabase(':memory:');
+  const tickets = createTickets(db, 'user');
+  const conversations = createConversations({
+    db,
+    tickets,
+    runner: createScriptedRunner(),
+    worktrees: createScriptedWorktrees(),
+    mcpUrl: 'http://localhost:3100/api/mcp',
+  });
+  const project = tickets.createProject({ name: 'Website' });
+  tickets.setProjectAgentSettings(project.id, {
+    // Any directory: the scripted worktrees never run git in it.
+    repositoryPath: mkdtempSync(join(tmpdir(), 'tandembike-scripted-')),
+    parallelRuns: true,
+  });
+  const ticket = tickets.createTicket({
+    projectId: project.id,
+    title: 'Fix the footer',
+  });
+  return { conversations, project, ticket };
+}
+
+async function startRunning() {
+  const world = setup();
+  const conversation = await world.conversations.start({
+    startedBy: 'user',
+    ticketNumber: world.ticket.number,
+    intent: 'start',
+    prompt: `/tandembike:implement T${world.ticket.number}`,
+  });
+  await settle();
+  return { ...world, conversation };
+}
+
+describe('The scripted runner (fake runs on a throwaway server)', () => {
+  it('starts through the normal start path and keeps the Conversation running', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    expect(conversations.get(conversation.id).state).toBe('running');
+    expect(conversations.get(conversation.id).worktreePath).not.toBeNull();
+    expect(conversations.transcript(conversation.id)).toContainEqual(
+      expect.objectContaining({ role: 'agent' }),
+    );
+  });
+
+  it('waits for the User on a permission request when a reply says fake:permission, and runs again once answered', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    await conversations.reply(conversation.id, 'fake:permission', 'user');
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+    const request = conversations
+      .transcript(conversation.id)
+      .find((entry) => entry.role === 'permission');
+    expect(request).toBeDefined();
+
+    await conversations.answerPermission(request?.id as number, 'allow');
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('running');
+  });
+
+  it('waits for the User on a Widget when a reply says fake:widget', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    await conversations.reply(conversation.id, 'fake:widget', 'user');
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+    expect(conversations.transcript(conversation.id)).toContainEqual(
+      expect.objectContaining({ role: 'widget' }),
+    );
+  });
+
+  it('ends its turn when a reply says fake:idle', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    await conversations.reply(conversation.id, 'fake:idle', 'user');
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('idle');
+  });
+
+  it('takes the directive in the first message too, as an Ask', async () => {
+    const { conversations, project } = setup();
+
+    const conversation = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Check the tab marker. fake:permission',
+    });
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('waiting');
+  });
+});
