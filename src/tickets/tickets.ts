@@ -67,6 +67,7 @@ import {
   type StoredAttachment,
   withAttachments,
 } from './attachments';
+import { resolvedBlockerSql } from './blocker-sql';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { claimOwner } from './claim-owner';
 import {
@@ -447,7 +448,10 @@ export type Ticket = {
   attachments: Attachment[];
   /** The numbers of the Ticket's Blockers, sorted, resolved ones included. */
   blockedBy: number[];
-  /** Whether any Blocker is unresolved: neither Done nor archived. */
+  /**
+   * Whether any Blocker is unresolved by the Blocker rule: neither Done,
+   * archived, nor an In progress sibling under its Epic's Claim (T828).
+   */
   blocked: boolean;
   /** The Agent run holding this Ticket's claim, or `null` when unclaimed. */
   claim: TicketClaim | null;
@@ -834,7 +838,11 @@ export type RelatedTicket = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'projectId' | 'archived'
 > & {
-  /** Whether it is Done or archived, so it no longer blocks anything. */
+  /**
+   * For a Blocker, whether the Blocker rule resolves it (Done, archived, or
+   * an In progress sibling under its Epic's Claim, T828); for a Ticket it
+   * blocks, whether that Ticket is Done or archived.
+   */
   resolved: boolean;
 };
 
@@ -2915,13 +2923,21 @@ export function createTickets(
           direction === 'blockedBy'
             ? [ticketBlockers.blockedNumber, ticketBlockers.blockerNumber]
             : [ticketBlockers.blockerNumber, ticketBlockers.blockedNumber];
+        // A Blocker is resolved by the Blocker rule; a Ticket it blocks,
+        // when it is Done or archived itself.
         return db
           .select({
             ...relatedTicketColumns,
-            resolved: sql`${resolvedTicket}`.mapWith(Boolean),
+            resolved: sql`${
+              direction === 'blockedBy' ? resolvedBlocker : resolvedTicket
+            }`.mapWith(Boolean),
           })
           .from(ticketBlockers)
           .innerJoin(tickets, eq(tickets.number, other))
+          .innerJoin(
+            blockedTicket,
+            eq(blockedTicket.number, ticketBlockers.blockedNumber),
+          )
           .where(eq(side, number))
           .orderBy(asc(tickets.number))
           .all();
@@ -4108,7 +4124,11 @@ function matchingTickets(db: DatabaseConnection, filter: ListTicketsFilter) {
               tickets,
               eq(tickets.number, ticketBlockers.blockerNumber),
             )
-            .where(not(resolvedTicket)),
+            .innerJoin(
+              blockedTicket,
+              eq(blockedTicket.number, ticketBlockers.blockedNumber),
+            )
+            .where(not(resolvedBlocker)),
         ),
     filter.claimed === undefined
       ? undefined
@@ -4717,8 +4737,17 @@ function blockingPath(
   return path;
 }
 
-/** The condition for a Blocker Ticket that is resolved: Done or archived. */
+/** The condition for a Ticket that is Done or archived. */
 const resolvedTicket = sql`(${eq(tickets.status, 'Done')} or ${eq(tickets.archived, true)})`;
+
+/** The blocked Ticket of a `ticketBlockers` row, beside its Blocker's row. */
+const blockedTicket = alias(tickets, 'blocked_ticket');
+
+/**
+ * Whether the `tickets` row, as the Blocker of `blockedTicket`, is resolved:
+ * the one Blocker rule (T828).
+ */
+const resolvedBlocker = resolvedBlockerSql(tickets, blockedTicket.epicNumber);
 
 /**
  * `rows` with each Ticket's Blockers by number, sorted, and whether any of
@@ -4737,10 +4766,14 @@ function withBlockers<Row extends { number: number }>(
       .select({
         blocked: ticketBlockers.blockedNumber,
         blocker: ticketBlockers.blockerNumber,
-        resolved: sql<number>`${resolvedTicket}`,
+        resolved: sql<number>`${resolvedBlocker}`,
       })
       .from(ticketBlockers)
       .innerJoin(tickets, eq(tickets.number, ticketBlockers.blockerNumber))
+      .innerJoin(
+        blockedTicket,
+        eq(blockedTicket.number, ticketBlockers.blockedNumber),
+      )
       .where(
         inArray(ticketBlockers.blockedNumber, [...blockersByNumber.keys()]),
       )

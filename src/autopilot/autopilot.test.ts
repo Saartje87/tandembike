@@ -1811,6 +1811,37 @@ describe('explain (ADR 0044)', () => {
       expect(reasons(epic.number)).toMatchObject({ eligible: true, place: 1 });
     });
 
+    it('leaves an In progress sibling under its Epic Claim out of the Blockers it names', () => {
+      const { project, tickets, cycle, autopilot, ready } = setup();
+      const epic = ready('Epic', { type: 'Epic' });
+      const child = (title: string) =>
+        tickets.createTicket({
+          projectId: project.id,
+          title,
+          epicNumber: epic.number,
+          labels: ['ready-for-agent'],
+          cycleId: cycle.id,
+        });
+      const first = child('First');
+      const second = child('Second');
+      const outside = ready('Outside');
+      tickets.addBlocker({ blocker: first.number, blocked: second.number });
+      tickets.addBlocker({ blocker: outside.number, blocked: second.number });
+      tickets.claimTicket(epic.number, { agentRunId: 'run-1' });
+      tickets.updateTicket(first.number, { status: 'In progress' });
+      tickets.startCycle(cycle.id);
+
+      const explanation = autopilot.explain(project.id);
+
+      expect(entry(explanation, second.number)?.build).toEqual({
+        eligible: false,
+        reasons: [
+          { type: 'blocked', blockers: [outside.number] },
+          { type: 'epicChild', epicNumber: epic.number },
+        ],
+      });
+    });
+
     it('gives Triage-eligibility oldest first, and every reason a Ticket is not', async () => {
       const { project, tickets, conversations, autopilot } = setup();
       const idea = tickets.createTicket({ projectId: project.id, title: 'A' });

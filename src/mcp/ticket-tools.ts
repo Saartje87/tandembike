@@ -208,7 +208,7 @@ export const registerTicketTools = ({
           .boolean()
           .optional()
           .describe(
-            'true lists only Tickets with an unresolved Blocker; false lists only Tickets with none, ready to start once their Status allows.',
+            'true lists only Tickets with an unresolved Blocker; false lists only Tickets with none, ready to start once their Status allows. A Blocker is resolved when it is Done, archived, or an In progress sibling in the same Epic while that Epic is claimed.',
           ),
         claimed: z
           .boolean()
@@ -507,7 +507,7 @@ export const registerTicketTools = ({
           .array(ticketNumber)
           .optional()
           .describe(
-            'Numbers of Tickets that must be resolved (Done or archived) before this one can start. A Ticket cannot block itself, a Blocker that makes a cycle is refused, and Blockers between an Epic and its own children are refused.',
+            'Numbers of Tickets that must be resolved (Done, archived, or an In progress sibling in the same Epic while that Epic is claimed) before this one can start. A Ticket cannot block itself, a Blocker that makes a cycle is refused, and Blockers between an Epic and its own children are refused.',
           ),
         removeBlockers: z
           .array(ticketNumber)

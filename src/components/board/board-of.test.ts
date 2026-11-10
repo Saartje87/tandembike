@@ -283,6 +283,34 @@ describe('boardOf', () => {
     expect(view.needsYou.total).toBe(2);
   });
 
+  it('leaves an In progress sibling under its Epic Claim out of a Your work row’s Blockers', () => {
+    const claimed: EpicLink = {
+      number: 50,
+      title: 'Roadmap',
+      color: 'teal',
+      claim,
+      hasPullRequest: false,
+    };
+    const view = boardOf(
+      [
+        ticket({
+          number: 1,
+          labels: ['ready-for-human'],
+          epic: claimed,
+          blockedBy: [2, 3],
+          blocked: true,
+        }),
+        ticket({ number: 2, status: 'In progress', epic: claimed }),
+        ticket({ number: 3, labels: ['ready-for-agent'], epic: claimed }),
+      ],
+      activity(),
+    );
+
+    expect(view.needsYou.yourWork).toMatchObject([
+      { number: 1, blocked: true, blockers: [3] },
+    ]);
+  });
+
   it('counts only the unblocked Your work Tickets the Board filter keeps', () => {
     const view = boardOf(
       [

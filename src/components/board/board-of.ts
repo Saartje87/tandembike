@@ -3,6 +3,7 @@ import type {
   ConversationActivity,
   LiveConversation,
 } from '../../conversations/conversation-activity';
+import { blockerResolved } from '../../tickets/blocker-rule';
 import { isPullRequestReference } from '../../tickets/external-reference-display';
 import type { PaletteColor } from '../../tickets/palette';
 import {
@@ -92,8 +93,8 @@ type EpicChildren = Required<
 export type TodoRow = BoardTicket & {
   blocked: boolean;
   /**
-   * Its Blockers this Board does not show as Done or archived, by number:
-   * those still open here, and those on another Board.
+   * Its Blockers the Blocker rule leaves unresolved, by number: those still
+   * open here, and those on another Board.
    */
   blockers: number[];
 };
@@ -322,11 +323,6 @@ export function boardOf(
     inherited: boolean;
   }) =>
     inherited && ticket.epic !== null && runningEpics.has(ticket.epic.number);
-  const resolved = new Set(
-    tickets
-      .filter((ticket) => ticket.archived || ticket.status === 'Done')
-      .map(({ number }) => number),
-  );
   // A child with no run state of its own is placed by its Epic's (T1143).
   const placed = shown
     .map((ticket) => ({
@@ -466,7 +462,11 @@ export function boardOf(
     ...withChildren(ticket),
     blocked: ticket.blocked,
     blockers: ticket.blocked
-      ? ticket.blockedBy.filter((number) => !resolved.has(number))
+      ? ticket.blockedBy.filter((number) => {
+          // A Blocker off this Board counts as unresolved.
+          const blocker = onBoard.get(number);
+          return !blocker || !blockerResolved(blocker, ticket);
+        })
       : [],
   });
   const needsYouRow = (row: NeedRow): NeedRow => {

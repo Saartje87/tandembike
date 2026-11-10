@@ -285,10 +285,10 @@ export function createAutopilot({
       if (ticket.blocked) {
         reasons.push({
           type: 'blocked',
-          blockers: ticket.blockedBy.filter((number) => {
-            const blocker = tickets.getTicket(number);
-            return blocker.status !== 'Done' && !blocker.archived;
-          }),
+          blockers: tickets
+            .listBlockers(ticket.number)
+            .blockedBy.filter(({ resolved }) => !resolved)
+            .map(({ number }) => number),
         });
       }
       if (ticket.claim !== null) {
