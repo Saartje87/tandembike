@@ -89,7 +89,6 @@ export async function updateTicket(
       // The module checks the colour against the palette.
       ...(color === undefined ? {} : { color }),
     });
-    // Its card shows on its Board and on the Cycle tab it is planned into.
     return { projectId: ticket.projectId };
   });
 }
@@ -638,6 +637,8 @@ export async function addTicketAttachments(
     if (uploads.length === 0) {
       throw new ValidationError({ files: 'Choose a file to add.' });
     }
+    // A refusal does not refresh the page (userAction), so files added
+    // before it reach the drawer on the change event, like any other tab.
     let added = 0;
     for (const upload of uploads) {
       try {
