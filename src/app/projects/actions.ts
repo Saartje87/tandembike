@@ -1,19 +1,16 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import {
   detectRepository,
   type RepositoryDetection,
 } from '../../repository/detect-repository';
 import type { ProjectAgentCommands } from '../../tickets/agent-commands';
-import { appTickets } from '../../tickets/app-tickets';
 import type {
   SetProjectAgentSettingsInput,
   StyleProjectInput,
 } from '../../tickets/tickets';
-import { type ActionResult, actionResult } from '../lib/action-result';
-import { boardRoute } from '../lib/paths';
+import type { ActionResult } from '../lib/action-result';
+import { userAction } from '../lib/user-action';
 
 export type CreateProjectResult = ActionResult<{ projectId: number }>;
 
@@ -39,8 +36,8 @@ export async function createProject(input: {
   checkCommand?: string | null;
   referenceTemplate?: { prefix: string; url: string };
 }): Promise<CreateProjectResult> {
-  return actionResult(() => {
-    const project = appTickets('user').createProject({
+  return userAction((tickets) => {
+    const project = tickets.createProject({
       name: String(input?.name ?? ''),
       ...(input?.repositoryPath === undefined
         ? {}
@@ -55,7 +52,6 @@ export async function createProject(input: {
             },
           }),
     });
-    revalidatePath('/', 'layout');
     return { projectId: project.id };
   });
 }
@@ -83,9 +79,8 @@ export async function detectProjectRepository(input: {
 export async function archiveProject(input: {
   projectId: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').archiveProject(Number(input?.projectId));
-    revalidatePath('/', 'layout');
+  return userAction((tickets) => {
+    tickets.archiveProject(Number(input?.projectId));
     return {};
   });
 }
@@ -94,9 +89,8 @@ export async function archiveProject(input: {
 export async function restoreProject(input: {
   projectId: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').restoreProject(Number(input?.projectId));
-    revalidatePath('/', 'layout');
+  return userAction((tickets) => {
+    tickets.restoreProject(Number(input?.projectId));
     return {};
   });
 }
@@ -108,11 +102,10 @@ export async function renameProject(input: {
   projectId: number;
   name: string;
 }): Promise<RenameProjectResult> {
-  return actionResult(() => {
-    const project = appTickets('user').renameProject(Number(input?.projectId), {
+  return userAction((tickets) => {
+    const project = tickets.renameProject(Number(input?.projectId), {
       name: String(input?.name ?? ''),
     });
-    revalidatePath('/', 'layout');
     return { name: project.name };
   });
 }
@@ -125,12 +118,11 @@ export async function renameProject(input: {
 export async function styleProject(
   input: { projectId: number } & StyleProjectInput,
 ): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').styleProject(Number(input?.projectId), {
+  return userAction((tickets) => {
+    tickets.styleProject(Number(input?.projectId), {
       ...(input?.color === undefined ? {} : { color: input.color }),
       ...(input?.icon === undefined ? {} : { icon: input.icon }),
     });
-    revalidatePath('/', 'layout');
     return {};
   });
 }
@@ -143,9 +135,9 @@ export async function styleProject(
 export async function setProjectAgentSettings(
   input: { projectId: number } & SetProjectAgentSettingsInput,
 ): Promise<ActionResult> {
-  return actionResult(() => {
+  return userAction((tickets) => {
     const { projectId, ...settings } = input ?? { projectId: Number.NaN };
-    appTickets('user').setProjectAgentSettings(Number(projectId), {
+    tickets.setProjectAgentSettings(Number(projectId), {
       ...(settings.repositoryPath === undefined
         ? {}
         : { repositoryPath: settings.repositoryPath }),
@@ -198,7 +190,6 @@ export async function setProjectAgentSettings(
                 : Number(settings.triageCeilingUsd),
           }),
     });
-    revalidatePath(boardRoute, 'layout');
     return {};
   });
 }
@@ -213,12 +204,11 @@ export async function addReferenceTemplate(input: {
   prefix: string;
   url: string;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').addReferenceTemplate(Number(input?.projectId), {
+  return userAction((tickets) => {
+    tickets.addReferenceTemplate(Number(input?.projectId), {
       prefix: String(input?.prefix ?? ''),
       url: String(input?.url ?? ''),
     });
-    revalidatePath(boardRoute, 'layout');
     return {};
   });
 }
@@ -229,12 +219,11 @@ export async function updateReferenceTemplate(input: {
   prefix: string;
   url: string;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').updateReferenceTemplate(Number(input?.id), {
+  return userAction((tickets) => {
+    tickets.updateReferenceTemplate(Number(input?.id), {
       prefix: String(input?.prefix ?? ''),
       url: String(input?.url ?? ''),
     });
-    revalidatePath(boardRoute, 'layout');
     return {};
   });
 }
@@ -243,9 +232,8 @@ export async function updateReferenceTemplate(input: {
 export async function removeReferenceTemplate(input: {
   id: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').removeReferenceTemplate(Number(input?.id));
-    revalidatePath(boardRoute, 'layout');
+  return userAction((tickets) => {
+    tickets.removeReferenceTemplate(Number(input?.id));
     return {};
   });
 }
@@ -268,21 +256,17 @@ export async function setProjectAgentCommands(input: {
   planCommand: string;
   sparCommand: string;
 }): Promise<ActionResult<{ commands: ProjectAgentCommands }>> {
-  return actionResult(() => {
-    const commands = appTickets('user').setProjectAgentCommands(
-      Number(input?.projectId),
-      {
-        triageCommand: String(input?.triageCommand ?? ''),
-        startCommand: String(input?.startCommand ?? ''),
-        startEpicCommand: String(input?.startEpicCommand ?? ''),
-        retroCommand: String(input?.retroCommand ?? ''),
-        mergeCommand: String(input?.mergeCommand ?? ''),
-        specCommand: String(input?.specCommand ?? ''),
-        planCommand: String(input?.planCommand ?? ''),
-        sparCommand: String(input?.sparCommand ?? ''),
-      },
-    );
-    revalidatePath(boardRoute, 'layout');
+  return userAction((tickets) => {
+    const commands = tickets.setProjectAgentCommands(Number(input?.projectId), {
+      triageCommand: String(input?.triageCommand ?? ''),
+      startCommand: String(input?.startCommand ?? ''),
+      startEpicCommand: String(input?.startEpicCommand ?? ''),
+      retroCommand: String(input?.retroCommand ?? ''),
+      mergeCommand: String(input?.mergeCommand ?? ''),
+      specCommand: String(input?.specCommand ?? ''),
+      planCommand: String(input?.planCommand ?? ''),
+      sparCommand: String(input?.sparCommand ?? ''),
+    });
     return { commands };
   });
 }

@@ -5,10 +5,8 @@ import {
   attachmentPath,
   boardFilterOf,
   boardPathOf,
-  boardRoute,
   conversationOnPath,
   cyclePath,
-  cycleRoute,
   cyclesPath,
   filteredBoardPath,
   openConversationId,
@@ -64,11 +62,6 @@ describe('paths', () => {
 
   it('finds a Ticket by its number alone', () => {
     expect(ticketByNumberPath(12)).toBe('/ticket/12');
-  });
-
-  it('names the route patterns that revalidatePath takes', () => {
-    expect(boardRoute).toBe('/project/[id]');
-    expect(cycleRoute).toBe('/project/[id]/cycle/[cycleId]');
   });
 });
 

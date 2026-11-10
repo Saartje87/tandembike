@@ -224,14 +224,6 @@ export function attachmentPath(id: number): string {
   return `/attachment/${id}`;
 }
 
-/**
- * Route patterns, for revalidating every Backlog or Cycle Board, and with
- * them the Ticket drawers they open (ADR 0013). A
- * `revalidatePath(boardRoute, 'layout')` covers every page of a Project.
- */
-export const boardRoute = '/project/[id]';
-export const cycleRoute = '/project/[id]/cycle/[cycleId]';
-
 /** The id of the Project whose Board is on screen, if any. */
 export function projectIdFromPath(pathname: string): number | undefined {
   const match = /^\/project\/(\d+)(?:\/|$)/.exec(pathname);

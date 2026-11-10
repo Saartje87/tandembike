@@ -1,10 +1,9 @@
-import { revalidatePath } from 'next/cache';
+import { refresh } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentCommandEntries, agentCommands } from '../../test/fixtures';
 import { createTestTickets } from '../../test/tickets';
 import { appTickets } from '../../tickets/app-tickets';
-import { boardRoute } from '../lib/paths';
 import {
   addReferenceTemplate,
   createProject,
@@ -19,12 +18,12 @@ import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ refresh: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 describe('Project actions', () => {
   beforeEach(() => {
-    vi.mocked(revalidatePath).mockClear();
+    vi.mocked(refresh).mockClear();
   });
 
   it('creates a Project with its repository, Check command and template', async () => {
@@ -94,7 +93,7 @@ describe('Project actions', () => {
       color: 'teal',
       icon: 'rocket-launch',
     });
-    expect(revalidatePath).toHaveBeenCalledWith('/', 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('clears one with null and leaves the other alone', async () => {
@@ -165,7 +164,7 @@ describe('setProjectAgentSettings', () => {
       triageCeilingUsd: 3,
       autoMerge: false,
     });
-    expect(revalidatePath).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns a refusal with the field it names', async () => {
@@ -267,7 +266,7 @@ describe('Agent command actions', () => {
     });
     expect(result).toEqual({ ok: true, commands });
     expect(tickets.getProjectAgentCommands(project.id)).toEqual(commands);
-    expect(revalidatePath).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns a refusal naming the agent command field', async () => {
@@ -293,7 +292,7 @@ describe('Reference template actions', () => {
   const github = 'https://github.com/acme/web/issues/{n}';
 
   beforeEach(() => {
-    vi.mocked(revalidatePath).mockClear();
+    vi.mocked(refresh).mockClear();
   });
 
   function setUp() {
@@ -316,7 +315,7 @@ describe('Reference template actions', () => {
     expect(tickets.listReferenceTemplates(project.id)).toMatchObject([
       { prefix: '#', url: github },
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith(boardRoute, 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns a refusal with the field it names', async () => {
@@ -332,7 +331,7 @@ describe('Reference template actions', () => {
       ok: false,
       fieldErrors: { prefix: expect.stringMatching(/without spaces/) },
     });
-    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('edits and removes a template', async () => {
@@ -357,6 +356,6 @@ describe('Reference template actions', () => {
       ok: true,
     });
     expect(tickets.listReferenceTemplates(project.id)).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 });

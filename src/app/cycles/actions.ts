@@ -1,16 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
-import { appTickets } from '../../tickets/app-tickets';
 import type { BatchFailure } from '../../tickets/errors';
-import { type ActionResult, actionResult } from '../lib/action-result';
-import { boardRoute } from '../lib/paths';
-
-/** Every page of every Project shows its Cycle tabs, so refresh them all. */
-function revalidateProjects() {
-  revalidatePath(boardRoute, 'layout');
-}
+import type { ActionResult } from '../lib/action-result';
+import { userAction } from '../lib/user-action';
 
 export type CreateCycleResult = ActionResult<{ cycleId: number }>;
 
@@ -22,12 +14,11 @@ export async function createCycle(input: {
   projectId: number;
   title: string;
 }): Promise<CreateCycleResult> {
-  return actionResult(() => {
-    const cycle = appTickets('user').createCycle({
+  return userAction((tickets) => {
+    const cycle = tickets.createCycle({
       projectId: Number(input?.projectId),
       title: String(input?.title ?? ''),
     });
-    revalidateProjects();
     return { cycleId: cycle.id };
   });
 }
@@ -37,11 +28,10 @@ export async function renameCycle(input: {
   cycleId: number;
   title: string;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').renameCycle(Number(input?.cycleId), {
+  return userAction((tickets) => {
+    tickets.renameCycle(Number(input?.cycleId), {
       title: String(input?.title ?? ''),
     });
-    revalidateProjects();
     return {};
   });
 }
@@ -50,9 +40,8 @@ export async function renameCycle(input: {
 export async function discardCycle(input: {
   cycleId: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').discardCycle(Number(input?.cycleId));
-    revalidateProjects();
+  return userAction((tickets) => {
+    tickets.discardCycle(Number(input?.cycleId));
     return {};
   });
 }
@@ -64,13 +53,12 @@ export async function planTicket(input: {
   /** Plan the Epic together with its live children, all or nothing. */
   withChildren?: boolean;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').planTicket({
+  return userAction((tickets) => {
+    tickets.planTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
       withChildren: input?.withChildren === true,
     });
-    revalidateProjects();
     return {};
   });
 }
@@ -82,13 +70,12 @@ export async function unplanTicket(input: {
   /** Take the Epic out together with its live children in the Cycle. */
   withChildren?: boolean;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').unplanTicket({
+  return userAction((tickets) => {
+    tickets.unplanTicket({
       cycleId: Number(input?.cycleId),
       number: Number(input?.number),
       withChildren: input?.withChildren === true,
     });
-    revalidateProjects();
     return {};
   });
 }
@@ -118,9 +105,8 @@ function cycleTicketsInput(input: CycleTicketsActionInput) {
 export async function planTickets(
   input: CycleTicketsActionInput,
 ): Promise<CycleTicketsActionResult> {
-  return actionResult(() => {
-    const { failed } = appTickets('user').planTickets(cycleTicketsInput(input));
-    revalidateProjects();
+  return userAction((tickets) => {
+    const { failed } = tickets.planTickets(cycleTicketsInput(input));
     return { failed };
   });
 }
@@ -132,11 +118,8 @@ export async function planTickets(
 export async function unplanTickets(
   input: CycleTicketsActionInput,
 ): Promise<CycleTicketsActionResult> {
-  return actionResult(() => {
-    const { failed } = appTickets('user').unplanTickets(
-      cycleTicketsInput(input),
-    );
-    revalidateProjects();
+  return userAction((tickets) => {
+    const { failed } = tickets.unplanTickets(cycleTicketsInput(input));
     return { failed };
   });
 }
@@ -151,15 +134,14 @@ export async function moveTicketsToCycle(input: {
   cycleId: number | null;
   ticketNumbers: number[];
 }): Promise<CycleTicketsActionResult> {
-  return actionResult(() => {
-    const { failed } = appTickets('user').moveTicketsToCycle({
+  return userAction((tickets) => {
+    const { failed } = tickets.moveTicketsToCycle({
       projectId: Number(input?.projectId),
       cycleId: input?.cycleId == null ? null : Number(input.cycleId),
       ticketNumbers: Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
         : [],
     });
-    revalidateProjects();
     return { failed };
   });
 }
@@ -176,14 +158,13 @@ export async function startCycle(input: {
   /** The Active Cycle the User confirmed archiving. */
   activeCycleId?: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').startCycle(Number(input?.cycleId), {
+  return userAction((tickets) => {
+    tickets.startCycle(Number(input?.cycleId), {
       archiveActive: input?.archiveActive === true,
       ...(input?.activeCycleId === undefined
         ? {}
         : { activeCycleId: Number(input.activeCycleId) }),
     });
-    revalidateProjects();
     return {};
   });
 }
@@ -192,9 +173,8 @@ export async function startCycle(input: {
 export async function archiveCycle(input: {
   cycleId: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').archiveCycle(Number(input?.cycleId));
-    revalidateProjects();
+  return userAction((tickets) => {
+    tickets.archiveCycle(Number(input?.cycleId));
     return {};
   });
 }

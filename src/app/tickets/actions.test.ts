@@ -1,4 +1,4 @@
-import { revalidatePath } from 'next/cache';
+import { refresh } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets } from '../../test/tickets';
@@ -32,12 +32,12 @@ import {
   updateTicket,
 } from './actions';
 
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ refresh: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 describe('Ticket actions', () => {
   beforeEach(() => {
-    vi.mocked(revalidatePath).mockClear();
+    vi.mocked(refresh).mockClear();
   });
 
   it('deletes a Ticket and refreshes its Boards, leaving navigation to the drawer', async () => {
@@ -50,7 +50,7 @@ describe('Ticket actions', () => {
 
     expect(result).toEqual({ ok: true });
     expect(tickets.listTickets({ projectId: project.id })).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('moves several Tickets into a lane and refreshes the Boards', async () => {
@@ -75,7 +75,7 @@ describe('Ticket actions', () => {
         .sort((left, right) => left.position - right.position)
         .map(({ number }) => number),
     ).toEqual([b, a]);
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('refuses a move with the reason the Tickets module gives', async () => {
@@ -148,7 +148,7 @@ describe('Ticket actions', () => {
 
     expect(result).toEqual({ ok: true });
     expect(tickets.getTicket(child.number).epic?.number).toBe(to.number);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('archives several Tickets and refreshes the Boards', async () => {
@@ -164,11 +164,7 @@ describe('Ticket actions', () => {
     expect(result).toEqual({ ok: true });
     expect(tickets.getTicket(a).archived).toBe(true);
     expect(tickets.getTicket(b).archived).toBe(true);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('archives an Epic with its children only when asked to', async () => {
@@ -261,7 +257,7 @@ describe('Ticket actions', () => {
     expect(
       tickets.getTicket(epic.number).children.map(({ number }) => number),
     ).toEqual([a, b]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('refuses a move into an Epic with the reason the Tickets module gives', async () => {
@@ -296,7 +292,7 @@ describe('Ticket actions', () => {
 
     expect(result).toEqual({ ok: true, projectId: project.id });
     expect(tickets.getTicket(epic.number).color).toBe('teal');
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns a refused deletion as an error', async () => {
@@ -327,7 +323,7 @@ describe('Ticket actions', () => {
       status: 'Todo',
       labels: ['needs-triage'],
     });
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('plans a Ticket created on a Cycle tab into that Cycle', async () => {
@@ -346,13 +342,10 @@ describe('Ticket actions', () => {
       throw new Error(result.error);
     }
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([result.number]);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
-  it('revalidates the Cycle Boards, whose drawers show the Ticket, after updates and archiving', async () => {
+  it('refreshes the page after an update, archiving and restoring', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({
@@ -365,17 +358,7 @@ describe('Ticket actions', () => {
     await archiveTicket({ number: ticket.number });
     await restoreTicket({ number: ticket.number });
 
-    expect(
-      vi
-        .mocked(revalidatePath)
-        .mock.calls.filter(
-          ([path]) => path === '/project/[id]/cycle/[cycleId]',
-        ),
-    ).toEqual([
-      ['/project/[id]/cycle/[cycleId]', 'page'],
-      ['/project/[id]/cycle/[cycleId]', 'page'],
-      ['/project/[id]/cycle/[cycleId]', 'page'],
-    ]);
+    expect(refresh).toHaveBeenCalledTimes(3);
   });
 
   it("lets the User clear a claim and refreshes the Ticket's Board and drawer", async () => {
@@ -395,11 +378,7 @@ describe('Ticket actions', () => {
 
     expect(result).toEqual({ ok: true });
     expect(tickets.getTicket(ticket.number).claim).toBeNull();
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it("returns the Ticket's Project after it is moved", async () => {
@@ -438,11 +417,7 @@ describe('Ticket actions', () => {
       labels: [],
     });
     expect(appTickets).toHaveBeenCalledWith('user');
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('completes nothing while criteria are unchecked, returning them for the User to confirm', async () => {
@@ -544,11 +519,7 @@ describe('Ticket actions', () => {
     expect(result).toEqual({ ok: true, projectId: project.id });
     expect(tickets.getTicket(ticket.number).status).toBe('Todo');
     expect(appTickets).toHaveBeenCalledWith('user');
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('refuses Back to Todo in an archived Project', async () => {
@@ -588,11 +559,7 @@ describe('Ticket actions', () => {
 
     expect(added).toEqual({ ok: true });
     expect(tickets.getTicket(ticket.number).labels).toEqual(['bug']);
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
 
     const removed = await removeTicketLabel({
       number: ticket.number,
@@ -639,7 +606,7 @@ describe('Ticket actions', () => {
     expect(tickets.getTicket(ticket.number).externalReferences).toEqual([
       '#55',
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(refresh).toHaveBeenCalled();
 
     const removed = await removeTicketExternalReference({
       number: ticket.number,
@@ -691,10 +658,7 @@ describe('Ticket actions', () => {
     expect(added).toEqual({ ok: true });
     const [comment] = tickets.listComments(ticket.number);
     expect(comment).toMatchObject({ author: 'user', body: 'Looks good.' });
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
 
     const edited = await editTicketComment({
       id: comment.id,
@@ -727,7 +691,7 @@ describe('Ticket actions', () => {
       ok: true,
     });
     expect(tickets.getTicket(ticket.number).attachments).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
+    expect(refresh).toHaveBeenCalled();
 
     expect(await removeTicketAttachment({ id: attachment.id })).toEqual({
       ok: false,
@@ -805,11 +769,7 @@ describe('Ticket actions', () => {
       { text: 'The search box is visible', checked: false },
       { text: 'The logo is centred', checked: true },
     ]);
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('checks and unchecks one acceptance criterion, leaving the Status alone', async () => {
@@ -834,7 +794,7 @@ describe('Ticket actions', () => {
       status: 'Todo',
       acceptanceCriteria: [{ id: logo.id, checked: true }],
     });
-    expect(revalidatePath).toHaveBeenCalledWith(`/project/${project.id}`);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns why an acceptance criterion was refused', async () => {
@@ -881,11 +841,7 @@ describe('Ticket actions', () => {
     expect(origin?.number).toBe(spec.number);
     expect(cleared).toEqual({ ok: true });
     expect(tickets.getTicket(ticket.number).origin).toBeNull();
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'page');
-    expect(revalidatePath).toHaveBeenCalledWith(
-      '/project/[id]/cycle/[cycleId]',
-      'page',
-    );
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('returns why an Origin was refused', async () => {
@@ -952,10 +908,7 @@ describe('Ticket actions', () => {
           changes: [{ type: 'attachmentAdded', name: 'b.png' }],
         },
       ]);
-      expect(revalidatePath).toHaveBeenCalledWith(
-        '/project/[id]/cycle/[cycleId]',
-        'page',
-      );
+      expect(refresh).toHaveBeenCalled();
     });
 
     it('refuses a file over 10 MB with the module reason, keeping the files before it', async () => {
@@ -978,7 +931,6 @@ describe('Ticket actions', () => {
       expect(
         tickets.getTicket(ticket.number).attachments.map(({ name }) => name),
       ).toEqual(['small.txt']);
-      expect(revalidatePath).toHaveBeenCalled();
     });
 
     it('adds a file whose browser-given type carries a charset', async () => {
@@ -1042,7 +994,7 @@ describe('Ticket actions', () => {
 
     expect(tickets.getTicket(a.number).labels).toEqual(['bug', 'needs-info']);
     expect(tickets.getTriageProposal(second.id).status).toBe('rejected');
-    expect(revalidatePath).toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
     expect(await approveTriage({ id: first.id })).toMatchObject({ ok: false });
   });
 });
