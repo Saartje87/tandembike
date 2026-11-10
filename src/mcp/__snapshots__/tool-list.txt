@@ -476,7 +476,7 @@
   {
     "name": "file_tickets",
     "title": "File Tickets",
-    "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, instead of one call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition); any Ticket may instead be split from an existing Ticket (its own originNumber), so an Epic, its Origin and its children, or a spec and its Tickets, are created atomically. A feedback Ticket is one labelled from:agent-run or from:tandembike: a run may file at most 3 of them in total (a batch that would exceed it is refused whole; add a note to an earlier one with add_note instead), and one whose title nearly repeats (word overlap of 0.75 or more) a feedback Ticket in the Project that is neither Done nor archived is refused, naming it. Other Tickets are never capped or checked. Returns { numbers }: the new Ticket numbers, in the order given.",
+    "description": "Create from 1 to 50 Tickets in one Project, given by projectId or projectName, optionally planned into a Cycle, in one call, in order, with the Blockers between them given by position, and Blockers among existing Tickets given by number (blockedByNumbers), instead of one call each. To refer to another Ticket of the batch in a title, description or acceptance criterion, write {{T:n}}, n being its position counted from 0: it is replaced by that Ticket's number, such as T42, in the same call, wherever it stands in the text (code included), and may name a later Ticket or the Ticket itself. A position outside the batch refuses it. Do not guess numbers; they are shared by all Projects. Length limits apply after the replacement. All or nothing: if any Ticket breaks a rule, none is created and the error names it by position. A Ticket may also be an Epic (type \"Epic\", with an optional color) and the Tickets after it may be its children (epicPosition), or be split from an earlier one (originPosition); any Ticket may instead be split from an existing Ticket (its own originNumber), so an Epic, its Origin and its children, or a spec and its Tickets, are created atomically. A feedback Ticket is one labelled from:agent-run or from:tandembike: a run may file at most 3 of them in total (a batch that would exceed it is refused whole; add a note to an earlier one with add_note instead), and one whose title nearly repeats (word overlap of 0.75 or more) a feedback Ticket in the Project that is neither Done nor archived is refused, naming it. Other Tickets are never capped or checked. Returns { numbers }: the new Ticket numbers, in the order given.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -616,6 +616,16 @@
                   "type": "integer",
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991
+                }
+              },
+              "blockedByNumbers": {
+                "description": "Existing Tickets, in any Project, that block this one, by the rules of update_ticket's addBlockers: no Epic blocking its own child. A missing Ticket or a broken rule refuses the batch, naming this Ticket by position.",
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991,
+                  "description": "The Ticket number, e.g. 42 for T42."
                 }
               }
             },
