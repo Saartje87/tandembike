@@ -66,8 +66,10 @@ describe('sending a Ticket Back to Todo', () => {
     tickets.updateTicket(ticket.number, { status: 'In progress' });
     tickets.archiveTicket(ticket.number);
 
-    expect(errorFrom(() => tickets.backToTodo(ticket.number))).toBeInstanceOf(
-      NotAllowedError,
+    expect(errorFrom(() => tickets.backToTodo(ticket.number))).toEqual(
+      new NotAllowedError(
+        `Ticket T${ticket.number} is archived. Restore it before changing it.`,
+      ),
     );
     expect(tickets.getTicket(ticket.number).status).toBe('In progress');
   });

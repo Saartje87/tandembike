@@ -138,13 +138,13 @@ describe('Deleting a Ticket', () => {
         labels: ['bug'],
       }),
     );
-    tickets.archiveTicket(archived.number);
     const outside = tickets.createTicket({
       projectId: project.id,
       title: 'Outside',
     });
     tickets.addBlocker({ blocker: open.number, blocked: outside.number });
     tickets.addBlocker({ blocker: open.number, blocked: archived.number });
+    tickets.archiveTicket(archived.number);
     const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
     tickets.planTicket({ cycleId: cycle.id, number: open.number });
     return { tickets, epic, open, archived, outside, cycle };

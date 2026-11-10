@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
-import { createTestTickets } from '../test/tickets';
+import { createTestTickets, errorFrom } from '../test/tickets';
 import type { Change } from './changes';
+import { NotAllowedError } from './errors';
 
 function epicWithChildren() {
   const tickets = createTestTickets();
@@ -64,15 +65,16 @@ describe('Restoring an Epic', () => {
     ]);
   });
 
-  it('does not restore a child detached from it while archived', () => {
-    const { tickets, epic, todo, doing } = epicWithChildren();
+  it('refuses detaching a child while it is archived (T1152)', () => {
+    const { tickets, epic, todo } = epicWithChildren();
     tickets.archiveTicket(epic.number, { withChildren: true });
-    tickets.detachFromEpic(todo.number);
 
-    tickets.restoreTicket(epic.number);
-
-    expect(tickets.getTicket(todo.number).archived).toBe(true);
-    expect(tickets.getTicket(doing.number).archived).toBe(false);
+    expect(errorFrom(() => tickets.detachFromEpic(todo.number))).toEqual(
+      new NotAllowedError(
+        `Ticket T${todo.number} is archived. Restore it before changing it.`,
+      ),
+    );
+    expect(tickets.getTicket(todo.number).epic?.number).toBe(epic.number);
   });
 
   it('brings a child back only once: archived again on its own, it stays archived', () => {
