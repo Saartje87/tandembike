@@ -83,6 +83,22 @@ describe('The Playbook plugin', () => {
     expect(text).toMatch(/Ask in text only an open question/);
   });
 
+  it('has spec and review skills that check every action of a removed or moved UI surface has a home (T1151)', () => {
+    const spec = readFileSync(
+      join(playbookPath, 'skills/spec/SKILL.md'),
+      'utf8',
+    );
+    expect(spec).toMatch(/removes or moves a UI surface/);
+    expect(spec).toMatch(/every action the surface offered/);
+    expect(spec).toMatch(/re-triage/);
+    const review = readFileSync(
+      join(playbookPath, 'skills/review/SKILL.md'),
+      'utf8',
+    );
+    expect(review).toMatch(/removes or moves a UI surface/);
+    expect(review).toMatch(/no new home/);
+  });
+
   it('has a spar skill that opens with the mode Widget and covers the Canvas, the Write-up, the buttons and the Hand-off (T1309)', () => {
     const text = readFileSync(
       join(playbookPath, 'skills/spar/SKILL.md'),

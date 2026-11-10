@@ -87,6 +87,13 @@ Ask whether the granularity is right, whether each Blocker really gates its Tick
 
 ## 7. Check what changed, then publish
 
+When the spec removes or moves a UI surface (a page, panel, card, menu or drawer section), check before publishing that its actions survive. A surface removed without this check once left its actions with nowhere in the app and no Ticket to bring them back:
+
+- **List the actions.** Read the surface's code and list every action the surface offered: buttons, menu items, links, shortcuts, drag targets.
+- **Give each a home.** Name where each goes: another surface that already has it, a Ticket in the breakdown that adds it, or an explicit drop in Out of Scope. Put the list in Implementation Decisions, and give the Ticket that removes the surface a criterion that each action has its home. An action with no home: ask the User before publishing.
+- **Flag what targets it for re-triage.** Search with `find_tickets` for open Tickets that change the surface. Each is built for something that will be gone: after publishing, `add_note` on it naming the new Epic and what changes, and with `update_ticket` swap its triage state label for `needs-triage`. Tell the User which you flagged.
+
+
 Right before you publish, list the Project's open Epics changed since the time you noted: `find_tickets` with `type: "Epic"`, `status: ["Todo", "In progress"]` and `changedSince` set to that time (plus the Cycle, when the work is planned into one). Read each result with `get_ticket`, except the Epic you are specing. If one removes, renames or rebuilds something the spec relies on, stop and tell the User before publishing, and let them decide.
 
 Then publish, with only the approved breakdown:
