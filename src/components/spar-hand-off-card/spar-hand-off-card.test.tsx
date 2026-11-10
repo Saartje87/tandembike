@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { handOffSpar } from '../../app/spars/actions';
 import { renderWithTheme } from '../../test/render';
@@ -102,5 +102,24 @@ describe('SparHandOffCard', () => {
     expect(
       await screen.findByText('Give the idea Ticket a one-line title.'),
     ).toBeInTheDocument();
+  });
+
+  it('shows a Hand-off that throws as a refusal and keeps the edits (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(handOffSpar).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<SparHandOffCard sparId={4} draft={draft} />);
+
+    const title = screen.getByRole('textbox', { name: 'Title' });
+    await userEvent.clear(title);
+    await userEvent.type(title, 'Cache it');
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+
+    expect(
+      await screen.findByText('The Hand-off could not be saved. Try again.'),
+    ).toBeInTheDocument();
+    expect(title).toHaveValue('Cache it');
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    expect(open).not.toHaveBeenCalled();
   });
 });

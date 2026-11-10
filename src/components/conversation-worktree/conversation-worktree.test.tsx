@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { removeConversationWorktree } from '../../app/conversations/actions';
 import { renderWithTheme } from '../../test/render';
@@ -102,5 +102,32 @@ describe('ConversationWorktree', () => {
         'The worktree still has uncommitted changes.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows a removal that throws as a refusal in the dialog (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(removeConversationWorktree).mockRejectedValue(
+      new Error('network down'),
+    );
+    const user = userEvent.setup();
+    render({ worktreeKept: 'dirty' });
+
+    await user.click(screen.getByRole('button', { name: 'Remove worktree' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Remove worktree' }),
+    );
+
+    expect(
+      await within(dialog).findByText(
+        'The worktree could not be removed. Try again.',
+      ),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Remove worktree' }),
+      ).toBeEnabled(),
+    );
   });
 });

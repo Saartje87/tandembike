@@ -8,7 +8,7 @@ import {
 import { userEvent } from '@testing-library/user-event';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { FC } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   answerConversationWidget,
@@ -444,6 +444,26 @@ describe('ConversationDialogProvider', () => {
     expect(tabNamed(/Website/)).toBeInTheDocument();
   });
 
+  it('keeps the tab and shows a refusal when closing throws (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    at$('/project/3', 'conversation=2');
+    vi.mocked(closeConversation).mockRejectedValue(new Error('network down'));
+    show();
+    await screen.findByRole('dialog', { name: 'Conversations' });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Close Website · New Ticket' }),
+    );
+
+    expect(
+      await screen.findByText(
+        'The Conversation could not be closed. Try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(tabNamed(/Website/)).toBeInTheDocument();
+  });
+
   it('opens a tab on request, keeping the rest of the URL', async () => {
     at$('/project/3', 'ticket=12');
     show();
@@ -489,6 +509,35 @@ describe('ConversationDialogProvider', () => {
         scroll: false,
       }),
     );
+  });
+
+  it('resolves to a refusal, without opening, when reopening throws (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(reopenConversation).mockRejectedValue(new Error('network down'));
+    show();
+    await waitFor(() => expect(listOpenConversations).toHaveBeenCalled());
+
+    const refusal = await opener?.reopenAndOpen(
+      conversation({ id: 9, hidden: true }),
+    );
+
+    expect(refusal).toBe('The Conversation could not be reopened. Try again.');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a refusal in the tab when loading its Conversation throws (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(loadConversation).mockRejectedValue(new Error('network down'));
+    at$('/project/3', 'conversation=2');
+    show();
+
+    expect(
+      await within(await screen.findByRole('tabpanel')).findByText(
+        'The Conversation could not be loaded. Try again.',
+      ),
+    ).toBeInTheDocument();
   });
 
   describe('only the shown tab is mounted (T1100)', () => {

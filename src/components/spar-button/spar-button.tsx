@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { sparPath } from '../../app/lib/paths';
 import { startSpar } from '../../app/spars/actions';
 import { FieldError } from '../field-error/field-error';
@@ -49,11 +50,15 @@ export const SparButton: FC<SparButtonProps> = ({
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ topic }) => {
-    const result = await startSpar({
-      projectId,
-      focusTicketNumber: focusTicketNumber ?? null,
-      topic,
-    });
+    const result = await callAction(
+      () =>
+        startSpar({
+          projectId,
+          focusTicketNumber: focusTicketNumber ?? null,
+          topic,
+        }),
+      'The Spar could not be started. Try again.',
+    );
     if (!result.ok) {
       const reason = result.fieldErrors?.topic;
       if (reason) {

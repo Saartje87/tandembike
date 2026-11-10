@@ -1,7 +1,7 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startSpar } from '../../app/spars/actions';
 import { mockRouter } from '../../test/navigation';
@@ -82,6 +82,32 @@ describe('SparButton', () => {
     expect(
       await screen.findByText('Keep the topic to one line.'),
     ).toBeInTheDocument();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a start that throws as a refusal and keeps the topic (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(startSpar).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<SparButton projectId={3} />);
+
+    await user.click(screen.getByRole('button', { name: 'Spar' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Topic (optional)' }),
+      'Faster triage',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start sparring' }));
+
+    expect(
+      await screen.findByText('The Spar could not be started. Try again.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('textbox', { name: 'Topic (optional)' }),
+    ).toHaveValue('Faster triage');
+    expect(
+      screen.getByRole('button', { name: 'Start sparring' }),
+    ).toBeEnabled();
     expect(router.push).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { closeConversation } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { Conversation } from '../../conversations/conversations';
 
 export type ConversationTerminalNoticeProps = {
@@ -38,9 +39,10 @@ export const ConversationTerminalNotice: FC<
           onClick={() => {
             setError(undefined);
             startClose(async () => {
-              const result = await closeConversation({
-                conversationId: conversation.id,
-              });
+              const result = await callAction(
+                () => closeConversation({ conversationId: conversation.id }),
+                'The Conversation could not be closed. Try again.',
+              );
               if (!result.ok) {
                 setError(result.error);
               }
