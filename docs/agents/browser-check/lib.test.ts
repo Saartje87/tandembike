@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 // The helper imports `playwright-core`, which lives in the driver folder a
 // check copies it to, not in this repository. Importing it here must not
 // launch a browser either.
-vi.mock('playwright-core', () => ({ chromium: { launch: vi.fn() } }));
+const launch = vi.hoisted(() => vi.fn());
+vi.mock('playwright-core', () => ({ chromium: { launch } }));
 
 // The port is read when the module loads, so each case imports it afresh.
 const importHelper = async () => {
@@ -19,6 +20,12 @@ const importHelper = async () => {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+it('launches no browser on import', async () => {
+  await importHelper();
+
+  expect(launch).not.toHaveBeenCalled();
 });
 
 describe('base', () => {
@@ -92,9 +99,15 @@ describe('the helpers browser-checks.md names', () => {
     const start = doc.indexOf(marker);
     if (start === -1) throw new Error('browser-checks.md lists no helpers');
     const list = doc.slice(start + marker.length).split('\n')[0];
-    return [...list.matchAll(/\(([^()]*)\)/g)].flatMap(([, inside]) =>
+    const listed = [...list.matchAll(/\(([^()]*)\)/g)].flatMap(([, inside]) =>
       [...inside.matchAll(/`([A-Za-z]\w*)`/g)].map(([, name]) => name),
     );
+    // Elsewhere the doc shows a helper as a call on the page, such as
+    // `reply(page, 'fake:permission')`.
+    const called = [...doc.matchAll(/`([A-Za-z]\w*)\(page\b/g)].map(
+      ([, name]) => name,
+    );
+    return [...new Set([...listed, ...called])];
   };
 
   it('finds the helper list in the doc', () => {
