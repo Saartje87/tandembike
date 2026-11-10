@@ -12,6 +12,7 @@ import {
 import { type FC, useId, useState, useTransition } from 'react';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { Cycle } from '../../tickets/cycles';
 import type { EpicChild, Ticket } from '../../tickets/tickets';
 
@@ -48,12 +49,14 @@ const copy = {
     description: (epic: number, title: string, cycle: string) =>
       `Plan T${epic} "${title}" into the Cycle "${cycle}"`,
     action: planTicket,
+    failed: 'The Epic could not be planned. Try again.',
   },
   unplan: {
     heading: (epic: number, cycle: string) => `Remove T${epic} from ${cycle}?`,
     description: (epic: number, title: string, cycle: string) =>
       `Remove T${epic} "${title}" from the Cycle "${cycle}"`,
     action: unplanTicket,
+    failed: 'The Epic could not be taken out of the Cycle. Try again.',
   },
 };
 
@@ -79,11 +82,15 @@ export const EpicCycleDialog: FC<EpicCycleDialogProps> = ({
   const confirm = (withChildren: boolean) => {
     setError(undefined);
     startConfirm(async () => {
-      const result = await copy[mode].action({
-        cycleId: cycle.id,
-        number: epic.number,
-        withChildren,
-      });
+      const result = await callAction(
+        () =>
+          copy[mode].action({
+            cycleId: cycle.id,
+            number: epic.number,
+            withChildren,
+          }),
+        copy[mode].failed,
+      );
       if (result.ok) {
         onClose();
       } else {

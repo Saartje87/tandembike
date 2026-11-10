@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   attachTicketToEpic,
@@ -221,5 +221,49 @@ describe('EpicChildren', () => {
       ),
     ).toHaveLength(1);
     await act(async () => resolve({ ok: true }));
+  });
+
+  it('keeps the number and shows a refusal when attaching throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(attachTicketToEpic).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<EpicChildren epic={epic} items={[]} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Attach Ticket' }),
+    );
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Ticket number to attach' }),
+      '9{Enter}',
+    );
+
+    expect(
+      await screen.findByText('The Ticket could not be attached. Try again.'),
+    ).toBeInTheDocument();
+    const field = screen.getByRole('textbox', {
+      name: 'Ticket number to attach',
+    });
+    expect(field).toHaveValue('9');
+    expect(field).toBeEnabled();
+  });
+
+  it('shows the child again and a refusal when detaching throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(detachTicketFromEpic).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<EpicChildren epic={epic} items={[card]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detach T5' }));
+
+    expect(
+      await screen.findByText('The Ticket could not be detached. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        within(childList()).getByRole('link', { name: 'Pay by card' }),
+      ).toBeInTheDocument(),
+    );
   });
 });

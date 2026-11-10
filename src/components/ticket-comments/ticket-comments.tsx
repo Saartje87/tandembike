@@ -15,6 +15,7 @@ import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   addTicketComment,
@@ -78,14 +79,20 @@ const CommentItem: FC<CommentItemProps> = ({ comment }) => {
   };
 
   const saveBody = async (body: string) => {
-    const result = await editTicketComment({ id: comment.id, body });
+    const result = await callAction(
+      () => editTicketComment({ id: comment.id, body }),
+      'The comment could not be saved. Try again.',
+    );
     return fieldRefusal(result, 'body') ?? rootRefusal(result);
   };
 
   const remove = () => {
     setError(undefined);
     startRemove(async () => {
-      const result = await removeTicketComment({ id: comment.id });
+      const result = await callAction(
+        () => removeTicketComment({ id: comment.id }),
+        'The comment could not be removed. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }
@@ -210,7 +217,10 @@ const CommentForm: FC<CommentFormProps> = ({
   const error = errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ body }) => {
-    const result = await save(body);
+    const result = await callAction(
+      () => save(body),
+      'The comment could not be saved. Try again.',
+    );
     if (!result.ok) {
       const bodyReason = result.fieldErrors?.body;
       if (bodyReason) {

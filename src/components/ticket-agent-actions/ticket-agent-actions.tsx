@@ -4,6 +4,7 @@ import { Alert, Button, Inline, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
 import { startConversation } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import {
   type AgentCommandIntent,
   agentCommandMessage,
@@ -55,7 +56,10 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
     );
     setError(undefined);
     startTransition(async () => {
-      const result = await startConversation({ ticketNumber, intent, prompt });
+      const result = await callAction(
+        () => startConversation({ ticketNumber, intent, prompt }),
+        'The run could not be started. Try again.',
+      );
       if (result.ok) {
         onStarted?.(result.conversation.id);
       } else {

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   addTicketExternalReference,
@@ -216,6 +216,59 @@ describe('ExternalReferenceEditor', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(
         'This Project is archived.',
       ),
+    );
+    await waitFor(() => {
+      expect(referencesShown()).toEqual(['#55']);
+    });
+  });
+
+  it('reopens the field with the draft when adding throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(addTicketExternalReference).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ExternalReferenceEditor ticketNumber={4} references={[]} />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add External reference' }),
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'URL or key' }),
+      'ABC-33{Enter}',
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The External reference could not be added. Try again.',
+    );
+    expect(screen.getByRole('textbox', { name: 'URL or key' })).toHaveValue(
+      'ABC-33',
+    );
+    await waitFor(() => {
+      expect(screen.getByText('None')).toBeInTheDocument();
+    });
+  });
+
+  it('shows a removal that throws as a refusal and brings the reference back (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(removeTicketExternalReference).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ExternalReferenceEditor ticketNumber={4} references={['#55']} />,
+    );
+
+    await user.click(
+      screen.getByRole('button', { name: 'Remove External reference #55' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The External reference could not be removed. Try again.',
     );
     await waitFor(() => {
       expect(referencesShown()).toEqual(['#55']);

@@ -12,6 +12,7 @@ import {
 } from '@blockle/blocks';
 import { type FC, useId, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { deleteTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
@@ -92,10 +93,10 @@ export const DeleteTicketDialog: FC<DeleteTicketDialogProps> = ({
   const confirm = () => {
     setError(undefined);
     startDelete(async () => {
-      const result = await deleteTicket({
-        number: ticket.number,
-        withChildren,
-      });
+      const result = await callAction(
+        () => deleteTicket({ number: ticket.number, withChildren }),
+        'The Ticket could not be deleted. Try again.',
+      );
       if (result.ok) {
         onDeleted?.();
       } else {

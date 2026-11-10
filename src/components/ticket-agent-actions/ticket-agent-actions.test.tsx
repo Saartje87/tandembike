@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
@@ -256,5 +256,30 @@ describe('TicketAgentActions', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This Project already has a Start run working.',
     );
+  });
+
+  it('shows a Start that throws as a refusal (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(startConversation).mockRejectedValue(new Error('network down'));
+    const onStarted = vi.fn();
+    renderWithTheme(
+      <TicketAgentActions
+        ticketNumber={42}
+        ticketType="Ticket"
+        commands={none}
+        onStarted={onStarted}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The run could not be started. Try again.',
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
+    );
+    expect(onStarted).not.toHaveBeenCalled();
   });
 });

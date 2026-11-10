@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { updateTicket } from '../../app/tickets/actions';
 import { showOpenPopovers } from '../../test/popover';
@@ -89,5 +89,22 @@ describe('EpicColorPicker', () => {
     ).not.toBeInTheDocument();
     expect(claimed.mock.calls).toEqual([[true]]);
     document.removeEventListener('keydown', onKeyDown);
+  });
+
+  it('puts the colour back and shows a refusal when the pick throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(updateTicket).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<EpicColorPicker epic={{ number: 8, color: 'teal' }} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^Epic colour/ }));
+    await userEvent.click(swatches().getByRole('button', { name: 'Pink' }));
+
+    expect(
+      await within(
+        screen.getByRole('dialog', { name: 'Epic colour' }),
+      ).findByRole('alert'),
+    ).toHaveTextContent('The colour could not be saved. Try again.');
+    await waitFor(() => expect(pressed()).toEqual(['Teal']));
   });
 });

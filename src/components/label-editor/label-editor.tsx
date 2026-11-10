@@ -10,6 +10,7 @@ import {
 } from '@blockle/blocks';
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { addTicketLabel, removeTicketLabel } from '../../app/tickets/actions';
 import { LabelList } from '../label-list/label-list';
 
@@ -57,10 +58,10 @@ export const LabelEditor: FC<LabelEditorProps> = ({
       showChange(labelChange);
       const action =
         labelChange.type === 'add' ? addTicketLabel : removeTicketLabel;
-      const result = await action({
-        number: ticketNumber,
-        label: labelChange.label,
-      });
+      const result = await callAction(
+        () => action({ number: ticketNumber, label: labelChange.label }),
+        'The label could not be changed. Try again.',
+      );
       if (!result.ok) {
         setError(result.fieldErrors?.labels ?? result.error);
       }
