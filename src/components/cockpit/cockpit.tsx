@@ -70,6 +70,7 @@ import {
   useTicketCosts,
 } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
+import { CopyTicketNumber } from '../copy-ticket-number/copy-ticket-number';
 import { Icon, type IconName } from '../icon/icon';
 import { LabelList } from '../label-list/label-list';
 import { useTicketChanged } from '../live-updates/live-updates';
@@ -323,9 +324,7 @@ const TicketRow: FC<TicketRowProps> = ({
           size="small"
           color={muted ? modeColors.textMuted : undefined}
         />
-        <Text fontFamily="mono" fontSize="small" color="muted">
-          T{ticket.number}
-        </Text>
+        <CopyTicketNumber number={ticket.number} quiet />
         <Stack gap={0} minInlineSize={0} flex={1}>
           <Inline gap={2} alignY="center">
             <Text
