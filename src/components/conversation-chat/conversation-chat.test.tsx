@@ -530,6 +530,10 @@ describe('ConversationChat', () => {
       <ConversationChat title="T4" item={one({}, transcript)} />
     );
 
+    /** A group's summary by its whole text: its count and phrase are apart (T1391). */
+    const summary = (text: string) => (_: string, element: Element | null) =>
+      element?.tagName === 'SUMMARY' && element.textContent === text;
+
     it('collapses consecutive tool calls into one closed group naming the count and latest step', () => {
       renderWithTheme(
         chat([
@@ -544,7 +548,7 @@ describe('ConversationChat', () => {
       ).getAllByRole('listitem');
       expect(lines).toHaveLength(3);
       expect(
-        within(lines[1]).getByText('3 steps · Editing b.ts'),
+        within(lines[1]).getByText(summary('3 steps · Editing b.ts')),
       ).toBeVisible();
       expect(within(lines[1]).getByText('Reading a.ts')).not.toBeVisible();
       expect(within(lines[1]).getByRole('group')).not.toHaveAttribute('open');
@@ -554,11 +558,11 @@ describe('ConversationChat', () => {
       const user = userEvent.setup();
       renderWithTheme(chat(steps));
 
-      await user.click(screen.getByText('3 steps · Editing b.ts'));
+      await user.click(screen.getByText(summary('3 steps · Editing b.ts')));
 
       expect(screen.getByText('Reading a.ts')).toBeVisible();
       expect(screen.getByText('Running Run tests')).toBeVisible();
-      expect(screen.getByText('Editing b.ts')).toBeVisible();
+      expect(screen.getAllByText('Editing b.ts').at(-1)).toBeVisible();
       expect(
         screen.getByText(
           '{"command":"npx vitest run","description":"Run tests"}',
@@ -605,11 +609,15 @@ describe('ConversationChat', () => {
         ]),
       );
 
-      expect(screen.getByText('2 steps · Running Run tests')).toBeVisible();
+      expect(
+        screen.getByText(summary('2 steps · Running Run tests')),
+      ).toBeVisible();
       expect(screen.getByRole('link', { name: 'T41' })).toBeVisible();
-      expect(screen.getByText('2 steps · Searching foo')).toBeVisible();
+      expect(
+        screen.getByText(summary('2 steps · Searching foo')),
+      ).toBeVisible();
       expect(screen.getByText('Went wrong')).toBeVisible();
-      expect(screen.getByText('2 steps · Reading c.ts')).toBeVisible();
+      expect(screen.getByText(summary('2 steps · Reading c.ts'))).toBeVisible();
       expect(screen.getByText('Reading d.ts')).toBeVisible();
       expect(screen.getAllByRole('group')).toHaveLength(3);
     });
@@ -618,10 +626,12 @@ describe('ConversationChat', () => {
       const user = userEvent.setup();
       const { rerender } = renderWithTheme(chat(steps.slice(0, 2)));
 
-      await user.click(screen.getByText('2 steps · Running Run tests'));
+      await user.click(
+        screen.getByText(summary('2 steps · Running Run tests')),
+      );
       rerender(chat(steps));
 
-      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByText(summary('3 steps · Editing b.ts'))).toBeVisible();
       expect(screen.getByRole('group')).toHaveAttribute('open');
       expect(screen.getByText('Reading a.ts')).toBeVisible();
     });
@@ -631,7 +641,7 @@ describe('ConversationChat', () => {
 
       rerender(chat(steps));
 
-      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByText(summary('3 steps · Editing b.ts'))).toBeVisible();
       expect(screen.getByRole('group')).not.toHaveAttribute('open');
     });
 
@@ -647,7 +657,7 @@ describe('ConversationChat', () => {
         ]),
       );
 
-      expect(screen.getByText('2 steps · Starting T12')).toBeVisible();
+      expect(screen.getByText(summary('2 steps · Starting T12'))).toBeVisible();
     });
 
     it('shows the raw input as plain text, not Markdown or links', () => {

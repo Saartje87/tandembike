@@ -67,9 +67,14 @@ export const ConversationToolSteps: FC<ConversationToolStepsProps> = ({
                   <span className={styles.chevron}>
                     <Icon name="chevron-right" size="small" />
                   </span>
+                  <Box flexShrink={0}>
+                    <Text fontSize="small" color="muted" whiteSpace="nowrap">
+                      {`${steps.length} steps · `}
+                    </Text>
+                  </Box>
                   <Box minInlineSize={0}>
                     <Text fontSize="small" color="muted" truncate>
-                      {`${steps.length} steps · ${toolPhrase(latest)}`}
+                      {toolPhrase(latest)}
                     </Text>
                   </Box>
                 </Inline>
