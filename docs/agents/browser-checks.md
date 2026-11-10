@@ -32,7 +32,7 @@ A check that needs a running Conversation, or one waiting for the User, uses fak
 3. Move it with a reply holding a directive, `reply(page, 'fake:permission')`, or put the directive in an Ask's first message. A reply without one keeps it running.
    - `fake:permission`: a permission request, so it waits for the User ("Needs you" on the tab, the Board and the header). Answering it runs it again.
    - `fake:widget`: choice cards, waiting the same way.
-   - `fake:tool`: records one Bash tool call ("Running Fake step 1", counting up) and keeps running, so a check can watch tool steps arrive in the chat.
+   - `fake:tool`: records five Bash tool calls a second apart ("Running Fake step 1", counting up) and keeps running, so a check can watch tool steps arrive in the chat.
    - `fake:idle`: the turn ends; it listens for a reply.
    - `fake:exit`: the turn and the run's process end; a later reply resumes it.
 

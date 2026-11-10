@@ -11,7 +11,8 @@ import type { AgentRun, AgentRunner, RunOptions } from './agent-runner';
  * Each message, the first one or a reply, may hold one directive:
  * - `fake:permission`: asks the User a permission request (waiting).
  * - `fake:widget`: asks the User choice cards (waiting).
- * - `fake:tool`: records one Bash tool call and keeps running (T1386).
+ * - `fake:tool`: records five Bash tool calls a second apart and keeps
+ *   running, so a check can watch steps arrive (T1386).
  * - `fake:idle`: ends the turn; the Conversation listens for a reply.
  * - `fake:exit`: ends the turn and the run's process.
  * Without one, the run says it got the message and keeps running. An
@@ -71,16 +72,24 @@ export function createScriptedRunner(): AgentRunner {
               );
             return;
           case 'tool': {
-            const input = {
-              command: 'echo fake',
-              description: `Fake step ${++steps}`,
+            const step = (left: number) => {
+              const input = {
+                command: 'echo fake',
+                description: `Fake step ${++steps}`,
+              };
+              options.onEvent({
+                type: 'tool',
+                text: `Bash ${JSON.stringify(input)}`,
+                name: 'Bash',
+                input,
+              });
+              if (left > 1) {
+                setTimeout(() => {
+                  if (!closed) step(left - 1);
+                }, 1000);
+              }
             };
-            options.onEvent({
-              type: 'tool',
-              text: `Bash ${JSON.stringify(input)}`,
-              name: 'Bash',
-              input,
-            });
+            step(5);
             return;
           }
           case 'idle':
