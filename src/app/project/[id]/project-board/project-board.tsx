@@ -129,7 +129,6 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     .listTickets({ projectId: project.id, cycleId, includeArchived: true })
     .filter((ticket) => ticket.archived);
   const epics = tickets.listTickets({ projectId: project.id, type: 'Epic' });
-  // What every Board gets alike.
   // Triage N (T1318) needs a repository for its run, as Plan does.
   const batchTriage =
     tab !== 'backlog' &&
@@ -140,6 +139,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         {...batchTriageOf(project.id, tab.id)}
       />
     ) : undefined;
+  // What every Board gets alike.
   const shared = {
     projectId: project.id,
     archived,
