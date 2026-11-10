@@ -63,7 +63,7 @@ export type WorkBundle = {
 export type WorkDeps = {
   getTicket: (number: number) => Ticket;
   resolveProjectId: (ref: ProjectRef) => number;
-  listCycles: (projectId: number) => Cycle[];
+  activeCycle: (projectId: number) => Cycle | null;
   findTickets: (input: FindTicketsInput) => TicketPage;
   claimTicket: (number: number, input: ClaimTicketInput) => Ticket;
   releaseTicketClaim: (
@@ -140,9 +140,7 @@ export function createWork(deps: WorkDeps) {
      */
     nextWork(ref: ProjectRef): NextWork {
       const projectId = deps.resolveProjectId(ref);
-      const active = deps
-        .listCycles(projectId)
-        .find((cycle) => cycle.state === 'Active');
+      const active = deps.activeCycle(projectId);
       if (!active) {
         return { ticket: null, reason: 'no-active-cycle' };
       }
