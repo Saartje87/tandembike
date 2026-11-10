@@ -163,13 +163,26 @@ describe('The Playbook plugin', () => {
       expect(section, `${skill} has a "Merge" section`).toBeDefined();
       expect(section).toContain('Approved: merge T42 now');
       expect(section).toContain('gh pr checks <number> --watch');
-      expect(section).toContain('git push --force-with-lease');
       expect(section).toContain('gh pr merge <number> --merge');
       expect(section).toContain('`finish_work`');
       expect(text).toMatch(
         /do not call `finish_work` unless the User approves \(see "Merge"\)/,
       );
       expect(text).not.toMatch(/of the `implement` skill/);
+    }
+  });
+
+  it('updates a behind PR by merging the default branch, and force-pushes only where allowed (T1333)', () => {
+    for (const skill of ['implement', 'implement-epic', 'merge']) {
+      const text = readFileSync(
+        join(playbookPath, 'skills', skill, 'SKILL.md'),
+        'utf8',
+      );
+      expect(text, skill).toContain('git merge origin/<default>');
+      expect(text, skill).toMatch(
+        /only where force pushes are allowed[^.]*`git rebase origin\/<default>`[^.]*`git push --force-with-lease/,
+      );
+      expect(text, skill).not.toMatch(/rebase onto (it|the default branch)/);
     }
   });
 

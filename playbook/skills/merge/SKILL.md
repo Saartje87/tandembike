@@ -1,6 +1,6 @@
 ---
 name: merge
-description: "Merge the pull request of one Tandembike Ticket or Epic the User approved: check out its branch, wait for the checks, rebase when it is behind, merge with the host CLI, then finish the Ticket."
+description: "Merge the pull request of one Tandembike Ticket or Epic the User approved: check out its branch, wait for the checks, merge the default branch in when it is behind, merge with the host CLI, then finish the Ticket."
 disable-model-invocation: true
 ---
 
@@ -24,11 +24,11 @@ Wait until the pull request's checks finish, with the host CLI (`gh pr checks <n
 - A check failed: go to "When you cannot merge", unless the failure is clearly the branch being behind, in which case go to step 4.
 - No checks exist: continue, and say in your note that none ran.
 
-## 4. Rebase when the branch is behind or conflicts
+## 4. Update the branch when it is behind or conflicts
 
-When the pull request is behind the default branch or reports conflicts, rebase onto the default branch: `git fetch origin`, `git rebase origin/<default>`. Resolve each conflict by keeping the intent of both sides, without losing the Ticket's change. Then run the Check command the repository's instructions name, when it is cheap, push with `git push --force-with-lease origin HEAD:<branch>` and go back to step 3. Rebase and push at most twice; a third time is a loop, so stop.
+When the pull request is behind the default branch or reports conflicts, merge the default branch into it: `git fetch origin`, `git merge origin/<default>`. Resolve each conflict by keeping the intent of both sides, without losing the Ticket's change. Then run the Check command the repository's instructions name, when it is cheap, push normally with `git push origin HEAD:<branch>` and go back to step 3. Many repositories forbid force pushes, by a guardrail hook or in their instructions; only where force pushes are allowed may you rebase instead (`git rebase origin/<default>`, then `git push --force-with-lease origin HEAD:<branch>`). Update and push at most twice; a third time is a loop, so stop.
 
-When a conflict is not one you can resolve with confidence, or the checks fail after a rebase, go to "When you cannot merge". Never push to the default branch, and never merge with failing checks.
+When a conflict is not one you can resolve with confidence, or the checks fail after the update, go to "When you cannot merge". Never push to the default branch, and never merge with failing checks.
 
 ## 5. Merge
 
