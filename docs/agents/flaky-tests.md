@@ -39,16 +39,18 @@ Example: T1314 (`ticket-drawer.test.tsx`).
 
 ## An interaction ignored only in jsdom: an unflushed render
 
-**Symptom:** an interaction seems to do nothing in a jsdom test, such as Escape not closing a Drawer, but works in a real browser. It fails every run, not only under load.
+**Symptom:** an interaction seems to do nothing in a jsdom test, such as Escape not closing a Drawer, but works in a real browser. It usually fails every run, not only under load.
 
 **Cause:** a synchronous `render()`, or an update the test did not await, left a React update unflushed. A layout effect that schedules a store update while a child below a `Suspense` boundary is suspended is one case: the component never re-renders, so it keeps acting on its first render's state.
 
-**Fix:** await the render or the interaction, so React flushes the update before the test goes on. Render inside an async `act`, as `renderPage` in `src/test/render.tsx` does, or check the result inside `waitFor`:
+**Fix:** flush the update before the test interacts. Render inside an async `act`, as `renderPage` in `src/test/render.tsx` does; an update that follows an interaction is checked inside `waitFor`, as in the sections above:
 
 ```tsx
 await act(async () => {
   renderWithTheme(
-    <TicketDrawerShell number={4}>{suspendedBody}</TicketDrawerShell>,
+    <TicketDrawerShell number={4} boardPath="/project/1">
+      {suspendedBody}
+    </TicketDrawerShell>,
   );
 });
 await userEvent.keyboard('{Escape}');
