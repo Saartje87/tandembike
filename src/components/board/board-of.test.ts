@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import type { EpicLink } from '../../tickets/epic-link';
 import type { Ticket } from '../../tickets/tickets';
-import { cockpitOf } from './cockpit-of';
+import { boardOf } from './board-of';
 
 const ticket = (fields: Partial<Ticket> & Pick<Ticket, 'number'>): Ticket => ({
   title: `Ticket ${fields.number}`,
@@ -36,9 +36,9 @@ const pullRequest = (n: number) => `https://github.com/owner/repo/pull/${n}`;
 const numbers = (rows: { number: number }[]) =>
   rows.map(({ number }) => number);
 
-describe('cockpitOf', () => {
+describe('boardOf', () => {
   it('puts In progress Tickets In flight, in Board order', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 2, status: 'In progress', position: 2, claim }),
         ticket({ number: 1, status: 'In progress', position: 1, claim }),
@@ -46,7 +46,7 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(numbers(cockpit.inFlight)).toEqual([1, 2]);
+    expect(numbers(view.inFlight)).toEqual([1, 2]);
   });
 
   it("gives an In flight row its section, live line, run start and the Ticket's total cost", () => {
@@ -55,7 +55,7 @@ describe('cockpitOf', () => {
       since: '2026-11-07T10:00:00.000Z',
       cost: 0.4,
     });
-    const [row] = cockpitOf(
+    const [row] = boardOf(
       [
         ticket({
           number: 7,
@@ -78,7 +78,7 @@ describe('cockpitOf', () => {
   });
 
   it('keeps only Running Tickets In flight; Action needed and Review need you', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, status: 'In progress', claim }),
         ticket({
@@ -92,13 +92,13 @@ describe('cockpitOf', () => {
       activity({ live: { 4: liveConversation({ state: 'waiting' }) } }),
     );
 
-    expect(numbers(cockpit.inFlight)).toEqual([1]);
-    expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([3, 4]);
-    expect(numbers(cockpit.needsYou.review)).toEqual([2]);
+    expect(numbers(view.inFlight)).toEqual([1]);
+    expect(numbers(view.needsYou.actionNeeded)).toEqual([3, 4]);
+    expect(numbers(view.needsYou.review)).toEqual([2]);
   });
 
   it('says what each Action needed Ticket waits on', () => {
-    const { actionNeeded } = cockpitOf(
+    const { actionNeeded } = boardOf(
       [
         ticket({ number: 1, status: 'In progress', claim }),
         ticket({ number: 2, status: 'In progress', claim }),
@@ -135,7 +135,7 @@ describe('cockpitOf', () => {
   });
 
   it('puts the longest waiting first within a group', () => {
-    const { actionNeeded, review } = cockpitOf(
+    const { actionNeeded, review } = boardOf(
       [
         ticket({
           number: 1,
@@ -185,7 +185,7 @@ describe('cockpitOf', () => {
   });
 
   it('lists Intake after Review, in Board order', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({
           number: 1,
@@ -199,7 +199,7 @@ describe('cockpitOf', () => {
     );
 
     expect(
-      cockpit.needsYou.intake.map(({ number, kind, triageLabel, since }) => [
+      view.needsYou.intake.map(({ number, kind, triageLabel, since }) => [
         number,
         kind,
         triageLabel,
@@ -209,12 +209,12 @@ describe('cockpitOf', () => {
       [1, 'intake', 'needs-triage', new Date('2026-11-05')],
       [2, 'intake', null, new Date('2026-11-03')],
     ]);
-    expect(numbers(cockpit.queued)).toEqual([3]);
-    expect(cockpit.needsYou.count).toBe(2);
+    expect(numbers(view.queued)).toEqual([3]);
+    expect(view.needsYou.count).toBe(2);
   });
 
   it('counts every Ticket that needs you', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, status: 'In progress' }),
         ticket({
@@ -227,11 +227,11 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(cockpit.needsYou.count).toBe(2);
+    expect(view.needsYou.count).toBe(2);
   });
 
   it("shows the Ticket's latest pull request", () => {
-    const [row] = cockpitOf(
+    const [row] = boardOf(
       [
         ticket({
           number: 1,
@@ -246,7 +246,7 @@ describe('cockpitOf', () => {
   });
 
   it('lists ready-for-human Todo Tickets as Your work, in Board order', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, labels: ['ready-for-human'], position: 2 }),
         ticket({ number: 2, labels: ['ready-for-human'], position: 1 }),
@@ -255,11 +255,11 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(numbers(cockpit.yourWork)).toEqual([2, 1]);
+    expect(numbers(view.yourWork)).toEqual([2, 1]);
   });
 
   it('queues ready-for-agent Todo Tickets in the Queued order', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, labels: ['ready-for-agent'], position: 3 }),
         ticket({ number: 2, labels: ['ready-for-agent'], position: 1 }),
@@ -269,11 +269,11 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(numbers(cockpit.queued)).toEqual([2, 4, 1]);
+    expect(numbers(view.queued)).toEqual([2, 4, 1]);
   });
 
   it('names the unresolved Blockers of a queued Ticket it knows of', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({
           number: 1,
@@ -288,14 +288,14 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(cockpit.queued).toMatchObject([
+    expect(view.queued).toMatchObject([
       { number: 1, blocked: true, blockers: [3, 9] },
       { number: 4, blocked: false, blockers: [] },
     ]);
   });
 
   it('lists Done Tickets most recently changed first, with their cost and pull request', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({
           number: 1,
@@ -312,14 +312,14 @@ describe('cockpitOf', () => {
       activity({ cost: { 2: 3.5 } }),
     );
 
-    expect(cockpit.done).toMatchObject([
+    expect(view.done).toMatchObject([
       { number: 2, cost: 3.5, pullRequest: pullRequest(20) },
       { number: 1, cost: 0, pullRequest: null },
     ]);
   });
 
   it('leaves out Epics, archived Tickets and Intake', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, type: 'Epic', status: 'In progress' }),
         ticket({ number: 2, status: 'In progress', archived: true }),
@@ -329,7 +329,7 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(cockpit).toMatchObject({
+    expect(view).toMatchObject({
       inFlight: [],
       yourWork: [],
       queued: [],
@@ -340,12 +340,12 @@ describe('cockpitOf', () => {
   it("keeps a child's Epic on its row", () => {
     const epic = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim: null,
       hasPullRequest: false,
     };
-    const [row] = cockpitOf(
+    const [row] = boardOf(
       [ticket({ number: 1, labels: ['ready-for-agent'], epic })],
       activity(),
     ).queued;
@@ -354,7 +354,7 @@ describe('cockpitOf', () => {
   });
 
   it("gives every row the Ticket's labels, in its order, without state labels", () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({
           number: 1,
@@ -373,18 +373,15 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(cockpit.needsYou.intake[0].labels).toEqual([
-      'from:tandembike',
-      'bug',
-    ]);
-    expect(cockpit.inFlight[0].labels).toEqual(['enhancement']);
-    expect(cockpit.yourWork[0].labels).toEqual(['bug']);
-    expect(cockpit.queued[0].labels).toEqual([]);
-    expect(cockpit.done[0].labels).toEqual(['bug']);
+    expect(view.needsYou.intake[0].labels).toEqual(['from:tandembike', 'bug']);
+    expect(view.inFlight[0].labels).toEqual(['enhancement']);
+    expect(view.yourWork[0].labels).toEqual(['bug']);
+    expect(view.queued[0].labels).toEqual([]);
+    expect(view.done[0].labels).toEqual(['bug']);
   });
 
   it('counts the Tickets done of all, without Epics or archived ones', () => {
-    const cockpit = cockpitOf(
+    const view = boardOf(
       [
         ticket({ number: 1, status: 'Done' }),
         ticket({ number: 2, status: 'Done' }),
@@ -396,13 +393,13 @@ describe('cockpitOf', () => {
       activity(),
     );
 
-    expect(cockpit.progress).toEqual({ done: 2, total: 4 });
+    expect(view.progress).toEqual({ done: 2, total: 4 });
   });
 
   describe('Epics', () => {
     const link: EpicLink = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal',
       claim: null,
       hasPullRequest: false,
@@ -422,7 +419,7 @@ describe('cockpitOf', () => {
     const epic = (fields: Partial<Ticket> = {}) =>
       ticket({
         number: 50,
-        title: 'Cockpit',
+        title: 'Roadmap',
         type: 'Epic',
         color: 'teal',
         status: 'In progress',
@@ -437,7 +434,7 @@ describe('cockpitOf', () => {
     ];
 
     it('gives an In progress Epic an In flight row with its children, and its children none of their own', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic(),
           ...children,
@@ -446,10 +443,10 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(cockpit.epics).toMatchObject([
+      expect(view.epics).toMatchObject([
         {
           number: 50,
-          title: 'Cockpit',
+          title: 'Roadmap',
           color: 'teal',
           section: 'Running',
           childNeedsYou: false,
@@ -460,7 +457,7 @@ describe('cockpitOf', () => {
           ],
         },
       ]);
-      expect(numbers(cockpit.inFlight)).toEqual([4]);
+      expect(numbers(view.inFlight)).toEqual([4]);
     });
 
     describe("children placed by their Epic's run (T1143)", () => {
@@ -469,7 +466,7 @@ describe('cockpitOf', () => {
       const twoStarted = [child(2, 'In progress'), child(5, 'In progress')];
 
       it('counts an Epic in Review with its two In progress children as one Needs you row', () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             epic({
               claim: null,
@@ -482,10 +479,10 @@ describe('cockpitOf', () => {
           activity(),
         );
 
-        expect(numbers(cockpit.needsYou.review)).toEqual([50]);
-        expect(cockpit.needsYou.actionNeeded).toEqual([]);
-        expect(cockpit.needsYou.count).toBe(1);
-        expect(cockpit.needsYou.review[0]).toMatchObject({
+        expect(numbers(view.needsYou.review)).toEqual([50]);
+        expect(view.needsYou.actionNeeded).toEqual([]);
+        expect(view.needsYou.count).toBe(1);
+        expect(view.needsYou.review[0]).toMatchObject({
           childNeedsYou: false,
           children: [
             { number: 2, state: 'started' },
@@ -495,15 +492,15 @@ describe('cockpitOf', () => {
       });
 
       it("shows children started while their Epic's run goes, with no rows of their own", () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [epic({ claim: null, children: twoStarted }), started(2), started(5)],
           activity({ live: { 50: liveConversation({ state: 'running' }) } }),
         );
 
-        expect(cockpit.needsYou.count).toBe(0);
-        expect(numbers(cockpit.inFlight)).toEqual([]);
+        expect(view.needsYou.count).toBe(0);
+        expect(numbers(view.inFlight)).toEqual([]);
         expect(
-          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+          view.epics[0].children.map(({ number, state }) => [number, state]),
         ).toEqual([
           [2, 'started'],
           [5, 'started'],
@@ -511,14 +508,14 @@ describe('cockpitOf', () => {
       });
 
       it("folds the children of a stalled Epic into the Epic's Action needed row, started, not needing you (T1263)", () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [epic({ claim: null, children: twoStarted }), started(2), started(5)],
           activity(),
         );
 
-        expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([50]);
-        expect(cockpit.needsYou.count).toBe(1);
-        expect(cockpit.needsYou.actionNeeded[0]).toMatchObject({
+        expect(numbers(view.needsYou.actionNeeded)).toEqual([50]);
+        expect(view.needsYou.count).toBe(1);
+        expect(view.needsYou.actionNeeded[0]).toMatchObject({
           childNeedsYou: false,
           children: [
             { number: 2, state: 'started' },
@@ -528,12 +525,12 @@ describe('cockpitOf', () => {
       });
 
       it('shows children started under an Epic whose own Conversation waits on the User (T1263)', () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [epic({ claim: null, children: twoStarted }), started(2), started(5)],
           activity({ live: { 50: liveConversation({ state: 'waiting' }) } }),
         );
 
-        expect(cockpit.needsYou.actionNeeded[0]).toMatchObject({
+        expect(view.needsYou.actionNeeded[0]).toMatchObject({
           number: 50,
           kind: 'waiting',
           childNeedsYou: false,
@@ -545,7 +542,7 @@ describe('cockpitOf', () => {
       });
 
       it('keeps a Needs you row for a child whose own Conversation needs the User', () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             epic({ children: twoStarted }),
             started(2, { ...link, claim }),
@@ -554,10 +551,10 @@ describe('cockpitOf', () => {
           activity({ live: { 5: liveConversation({ state: 'waiting' }) } }),
         );
 
-        expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([5]);
-        expect(cockpit.epics[0].childNeedsYou).toBe(true);
+        expect(numbers(view.needsYou.actionNeeded)).toEqual([5]);
+        expect(view.epics[0].childNeedsYou).toBe(true);
         expect(
-          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+          view.epics[0].children.map(({ number, state }) => [number, state]),
         ).toEqual([
           [2, 'started'],
           [5, 'needs-you'],
@@ -565,10 +562,10 @@ describe('cockpitOf', () => {
       });
 
       it('places a child whose Epic is on another Board by that Epic, in a row of its own', () => {
-        const cockpit = cockpitOf([started(2, { ...link, claim })], activity());
+        const view = boardOf([started(2, { ...link, claim })], activity());
 
-        expect(numbers(cockpit.inFlight)).toEqual([2]);
-        expect(cockpit.needsYou.count).toBe(0);
+        expect(numbers(view.inFlight)).toEqual([2]);
+        expect(view.needsYou.count).toBe(0);
       });
     });
 
@@ -588,7 +585,7 @@ describe('cockpitOf', () => {
         });
 
       it('marks an In progress child with every acceptance criterion checked as built', () => {
-        const [row] = cockpitOf(
+        const [row] = boardOf(
           [
             reviewEpic([
               child(2, 'In progress'),
@@ -622,7 +619,7 @@ describe('cockpitOf', () => {
       });
 
       it("keeps a built child's Lane and section: it still has no row of its own", () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             epic({ claim: null, children: [child(2, 'In progress')] }),
             ticket({
@@ -635,15 +632,15 @@ describe('cockpitOf', () => {
           activity({ live: { 50: liveConversation({ state: 'running' }) } }),
         );
 
-        expect(cockpit.epics[0].children).toMatchObject([
+        expect(view.epics[0].children).toMatchObject([
           { number: 2, state: 'built' },
         ]);
-        expect(numbers(cockpit.inFlight)).toEqual([]);
-        expect(numbers(cockpit.done)).toEqual([]);
+        expect(numbers(view.inFlight)).toEqual([]);
+        expect(numbers(view.done)).toEqual([]);
       });
 
       it("lets a built child's own Conversation outrank built only when it needs the User", () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             epic({
               children: [child(2, 'In progress'), child(5, 'In progress')],
@@ -672,16 +669,16 @@ describe('cockpitOf', () => {
         );
 
         expect(
-          cockpit.epics[0].children.map(({ number, state }) => [number, state]),
+          view.epics[0].children.map(({ number, state }) => [number, state]),
         ).toEqual([
           [2, 'built'],
           [5, 'needs-you'],
         ]);
-        expect(cockpit.epics[0].childNeedsYou).toBe(true);
+        expect(view.epics[0].childNeedsYou).toBe(true);
       });
 
       it('never marks a Todo or Done child built', () => {
-        const [row] = cockpitOf(
+        const [row] = boardOf(
           [
             epic({ children: [child(1, 'Done'), child(3, 'Todo')] }),
             ticket({
@@ -708,7 +705,7 @@ describe('cockpitOf', () => {
     });
 
     it("marks an In progress child started, whatever its own or its Epic's section (T1263)", () => {
-      const [row] = cockpitOf(
+      const [row] = boardOf(
         [
           epic({
             children: [
@@ -738,7 +735,7 @@ describe('cockpitOf', () => {
     });
 
     it('leaves out archived children', () => {
-      const [row] = cockpitOf(
+      const [row] = boardOf(
         [
           epic({
             children: [
@@ -755,7 +752,7 @@ describe('cockpitOf', () => {
     });
 
     it('lists only the children on this Board, counting the unarchived ones elsewhere', () => {
-      const [row] = cockpitOf(
+      const [row] = boardOf(
         [
           epic({
             children: [
@@ -775,7 +772,7 @@ describe('cockpitOf', () => {
     });
 
     it('keeps an Epic row with none of its children on this Board', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({ number: 51, children: [child(9, 'Todo')] }),
           epic({
@@ -789,17 +786,17 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(cockpit.epics).toMatchObject([
+      expect(view.epics).toMatchObject([
         { number: 51, children: [], childrenElsewhere: 1 },
       ]);
       // Its children on another Board count: it stays Queued (T1139).
-      expect(cockpit.queued).toMatchObject([
+      expect(view.queued).toMatchObject([
         { number: 52, children: [], childrenElsewhere: 1 },
       ]);
     });
 
     it('puts a ready-for-agent Epic without unarchived children in Needs you, counted (T1139)', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({
             number: 52,
@@ -819,8 +816,8 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(cockpit.queued).toEqual([]);
-      expect(cockpit.needsYou.intake).toMatchObject([
+      expect(view.queued).toEqual([]);
+      expect(view.needsYou.intake).toMatchObject([
         {
           number: 52,
           kind: 'intake',
@@ -829,13 +826,13 @@ describe('cockpitOf', () => {
           childrenElsewhere: 0,
         },
       ]);
-      expect(cockpit.needsYou.count).toBe(1);
-      expect(cockpit.needsYou.total).toBe(1);
-      expect(numbers(cockpit.yourWork)).toEqual([53]);
+      expect(view.needsYou.count).toBe(1);
+      expect(view.needsYou.total).toBe(1);
+      expect(numbers(view.yourWork)).toEqual([53]);
     });
 
     it('labels such an Epic ready-for-agent in Intake whatever other state label it carries', () => {
-      const [row] = cockpitOf(
+      const [row] = boardOf(
         [
           epic({
             number: 52,
@@ -853,8 +850,8 @@ describe('cockpitOf', () => {
     });
 
     it("sums the Epic's own cost and its children's, and carries its live Conversation", () => {
-      const live = liveConversation({ line: 'Editing cockpit.tsx' });
-      const [row] = cockpitOf(
+      const live = liveConversation({ line: 'Editing board.tsx' });
+      const [row] = boardOf(
         [epic(), children[0], children[1]],
         activity({
           live: { 50: live },
@@ -867,7 +864,7 @@ describe('cockpitOf', () => {
     });
 
     it('puts an Epic in Review or Action needed in Needs you too, in its colour', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({ claim: null, externalReferences: [pullRequest(70)] }),
           ...children,
@@ -875,14 +872,14 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(cockpit.needsYou.review).toMatchObject([
+      expect(view.needsYou.review).toMatchObject([
         { number: 50, color: 'teal', pullRequest: pullRequest(70) },
       ]);
-      expect(cockpit.needsYou.count).toBe(1);
+      expect(view.needsYou.count).toBe(1);
     });
 
     it('lists an Epic in Review or Action needed in Needs you only, not In flight', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({
             number: 50,
@@ -895,14 +892,14 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(numbers(cockpit.needsYou.review)).toEqual([50]);
-      expect(numbers(cockpit.needsYou.actionNeeded)).toEqual([51]);
-      expect(numbers(cockpit.epics)).toEqual([52]);
-      expect(cockpit.needsYou.count).toBe(2);
+      expect(numbers(view.needsYou.review)).toEqual([50]);
+      expect(numbers(view.needsYou.actionNeeded)).toEqual([51]);
+      expect(numbers(view.epics)).toEqual([52]);
+      expect(view.needsYou.count).toBe(2);
     });
 
     it('gives an Epic in Needs you its children', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({ claim: null, externalReferences: [pullRequest(70)] }),
           ...children,
@@ -911,7 +908,7 @@ describe('cockpitOf', () => {
       );
 
       expect(
-        cockpit.needsYou.review[0]?.children?.map(({ number }) => number),
+        view.needsYou.review[0]?.children?.map(({ number }) => number),
       ).toEqual([1, 2, 3]);
     });
 
@@ -926,7 +923,7 @@ describe('cockpitOf', () => {
         });
 
       it('is an Epic row of Needs you > Intake, with its children, and counts', () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             intakeEpic({
               children: [child(1, 'Todo'), child(2, 'Todo')],
@@ -938,7 +935,7 @@ describe('cockpitOf', () => {
           activity(),
         );
 
-        expect(cockpit.needsYou.intake).toMatchObject([
+        expect(view.needsYou.intake).toMatchObject([
           {
             number: 50,
             kind: 'intake',
@@ -948,11 +945,11 @@ describe('cockpitOf', () => {
           },
           { number: 8 },
         ]);
-        expect(cockpit.needsYou.count).toBe(2);
+        expect(view.needsYou.count).toBe(2);
       });
 
       it("takes its Board position among the Board's Intake", () => {
-        const cockpit = cockpitOf(
+        const view = boardOf(
           [
             ticket({ number: 8, position: 1 }),
             intakeEpic({ position: 2, children: [] }),
@@ -961,12 +958,12 @@ describe('cockpitOf', () => {
           activity(),
         );
 
-        expect(numbers(cockpit.needsYou.intake)).toEqual([8, 50, 9]);
+        expect(numbers(view.needsYou.intake)).toEqual([8, 50, 9]);
       });
     });
 
     it('places a Todo Epic by its label, at its Board position among the Tickets', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({ number: 4, labels: ['ready-for-agent'], position: 1 }),
           epic({
@@ -991,17 +988,17 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(numbers(cockpit.queued)).toEqual([4, 50, 5]);
-      expect(cockpit.queued[1]).toMatchObject({
+      expect(numbers(view.queued)).toEqual([4, 50, 5]);
+      expect(view.queued[1]).toMatchObject({
         color: 'teal',
         children: [{ number: 3, state: 'queued' }],
       });
-      expect(numbers(cockpit.yourWork)).toEqual([6, 51]);
-      expect(cockpit.epics).toEqual([]);
+      expect(numbers(view.yourWork)).toEqual([6, 51]);
+      expect(view.epics).toEqual([]);
     });
 
     it('places a Done Epic in Done with its cost and children', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({ status: 'Done', claim: null, children: [child(1, 'Done')] }),
           ticket({ number: 1, status: 'Done', epic: link }),
@@ -1009,13 +1006,13 @@ describe('cockpitOf', () => {
         activity({ cost: { 50: 1, 1: 0.5 } }),
       );
 
-      expect(cockpit.done).toMatchObject([
+      expect(view.done).toMatchObject([
         { number: 50, cost: 1.5, children: [{ number: 1, state: 'done' }] },
       ]);
     });
 
     it("lists an Epic's children only in its row, in every section", () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({
             status: 'Todo',
@@ -1031,14 +1028,14 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(numbers(cockpit.queued)).toEqual([50]);
-      expect(cockpit.yourWork).toEqual([]);
-      expect(cockpit.done).toEqual([]);
-      expect(cockpit.inFlight).toEqual([]);
+      expect(numbers(view.queued)).toEqual([50]);
+      expect(view.yourWork).toEqual([]);
+      expect(view.done).toEqual([]);
+      expect(view.inFlight).toEqual([]);
     });
 
     it("still lists a child in Needs you, in its Epic's colour", () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({
             status: 'Todo',
@@ -1051,16 +1048,14 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(cockpit.needsYou.actionNeeded).toMatchObject([
+      expect(view.needsYou.actionNeeded).toMatchObject([
         { number: 5, epic: { color: 'teal' } },
       ]);
-      expect(cockpit.queued).toMatchObject([
-        { number: 50, childNeedsYou: true },
-      ]);
+      expect(view.queued).toMatchObject([{ number: 50, childNeedsYou: true }]);
     });
 
     it('shows an In progress Epic even when its children are on another Board, but not an archived one', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           epic({ number: 51, children: [child(9, 'In progress')] }),
           epic({ number: 52, archived: true }),
@@ -1068,7 +1063,7 @@ describe('cockpitOf', () => {
         activity(),
       );
 
-      expect(numbers(cockpit.epics)).toEqual([51]);
+      expect(numbers(view.epics)).toEqual([51]);
     });
   });
 
@@ -1094,7 +1089,7 @@ describe('cockpitOf', () => {
     });
 
     it('narrows every section to the Tickets that match', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 1,
@@ -1128,16 +1123,16 @@ describe('cockpitOf', () => {
         filter('fix'),
       );
 
-      expect(numbers(cockpit.inFlight)).toEqual([1]);
-      expect(numbers(cockpit.queued)).toEqual([3]);
-      expect(numbers(cockpit.yourWork)).toEqual([5]);
-      expect(numbers(cockpit.done)).toEqual([7]);
-      expect(numbers(cockpit.needsYou.review)).toEqual([9]);
-      expect(numbers(cockpit.needsYou.intake)).toEqual([11]);
+      expect(numbers(view.inFlight)).toEqual([1]);
+      expect(numbers(view.queued)).toEqual([3]);
+      expect(numbers(view.yourWork)).toEqual([5]);
+      expect(numbers(view.done)).toEqual([7]);
+      expect(numbers(view.needsYou.review)).toEqual([9]);
+      expect(numbers(view.needsYou.intake)).toEqual([11]);
     });
 
     it('narrows by label', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({ number: 1, labels: ['ready-for-agent', 'bug'] }),
           ticket({ number: 2, labels: ['ready-for-agent'] }),
@@ -1146,11 +1141,11 @@ describe('cockpitOf', () => {
         filter('', ['bug']),
       );
 
-      expect(numbers(cockpit.queued)).toEqual([1]);
+      expect(numbers(view.queued)).toEqual([1]);
     });
 
     it('counts the filtered sections, but keeps the whole Needs you count apart', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({ number: 1, title: 'Fix' }),
           ticket({ number: 2, title: 'Other' }),
@@ -1159,12 +1154,12 @@ describe('cockpitOf', () => {
         filter('fix'),
       );
 
-      expect(cockpit.needsYou.count).toBe(1);
-      expect(cockpit.needsYou.total).toBe(2);
+      expect(view.needsYou.count).toBe(1);
+      expect(view.needsYou.total).toBe(2);
     });
 
     it('leaves the progress unfiltered', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({ number: 1, title: 'Fix', status: 'Done' }),
           ticket({ number: 2, title: 'Other' }),
@@ -1173,11 +1168,11 @@ describe('cockpitOf', () => {
         filter('fix'),
       );
 
-      expect(cockpit.progress).toEqual({ done: 1, total: 2 });
+      expect(view.progress).toEqual({ done: 1, total: 2 });
     });
 
     it('keeps an Epic row when a child matches, narrowing its children to the matches', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 50,
@@ -1205,13 +1200,13 @@ describe('cockpitOf', () => {
         filter('login'),
       );
 
-      expect(cockpit.queued).toMatchObject([
+      expect(view.queued).toMatchObject([
         { number: 50, children: [{ number: 1 }] },
       ]);
     });
 
     it('keeps all the children of an Epic that matches itself', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 50,
@@ -1229,11 +1224,11 @@ describe('cockpitOf', () => {
         filter('epic'),
       );
 
-      expect(cockpit.queued[0]?.children).toHaveLength(2);
+      expect(view.queued[0]?.children).toHaveLength(2);
     });
 
     it('drops an Epic row when neither it nor a child matches', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 50,
@@ -1249,11 +1244,11 @@ describe('cockpitOf', () => {
         filter('zzz'),
       );
 
-      expect(cockpit.queued).toEqual([]);
+      expect(view.queued).toEqual([]);
     });
 
     it('narrows the Intake Epic row and an In progress Epic the same way', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 50,
@@ -1271,13 +1266,13 @@ describe('cockpitOf', () => {
         filter('fix'),
       );
 
-      expect(cockpit.epics).toMatchObject([
+      expect(view.epics).toMatchObject([
         { number: 50, children: [{ number: 1 }] },
       ]);
     });
 
     it('keeps an Epic row by its children on this Board only', () => {
-      const cockpit = cockpitOf(
+      const view = boardOf(
         [
           ticket({
             number: 50,
@@ -1299,7 +1294,7 @@ describe('cockpitOf', () => {
         filter('fix'),
       );
 
-      expect(cockpit.queued).toEqual([]);
+      expect(view.queued).toEqual([]);
     });
   });
 });

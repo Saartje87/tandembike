@@ -17,11 +17,11 @@ import {
   isTriageStateLabel,
   readyForAgent,
 } from '../../tickets/triage-labels';
-import { isFiltering, ticketMatches } from '../board/board-filter';
 import { epicCost } from '../conversation-activity/epic-cost';
+import { isFiltering, ticketMatches } from './board-filter';
 
-/** What every Cockpit row shows of its Ticket. */
-export type CockpitTicket = Pick<
+/** What every Board row shows of its Ticket. */
+export type BoardTicket = Pick<
   Ticket,
   'number' | 'title' | 'epic' | 'updatedAt'
 > & {
@@ -40,7 +40,7 @@ export type CockpitTicket = Pick<
 };
 
 /** An In progress Ticket: where it stands and what its run is doing. */
-export type InFlightRow = CockpitTicket & {
+export type InFlightRow = BoardTicket & {
   section: InProgressSection;
   /** Its live Conversation, or `undefined` without one. */
   live: LiveConversation | undefined;
@@ -85,11 +85,11 @@ export type EpicRow = InFlightRow & {
 
 /** An Epic's children, for its row outside In flight. */
 type EpicChildren = Required<
-  Pick<CockpitTicket, 'children' | 'childrenElsewhere' | 'childNeedsYou'>
+  Pick<BoardTicket, 'children' | 'childrenElsewhere' | 'childNeedsYou'>
 >;
 
 /** A ready-for-agent Todo Ticket, in the queue's order. */
-export type QueuedRow = CockpitTicket & {
+export type QueuedRow = BoardTicket & {
   blocked: boolean;
   /**
    * Its Blockers this Board does not show as Done or archived, by number:
@@ -109,7 +109,7 @@ export type NeedKind =
   | 'intake';
 
 /** A Ticket that needs the User, and since when. */
-export type NeedRow = CockpitTicket & {
+export type NeedRow = BoardTicket & {
   kind: NeedKind;
   /** Its live Conversation, or `undefined` without one. */
   live: LiveConversation | undefined;
@@ -124,13 +124,13 @@ export type NeedRow = CockpitTicket & {
 };
 
 /** A Done Ticket, with what it cost and the pull request it ended in. */
-export type DoneRow = CockpitTicket & {
+export type DoneRow = BoardTicket & {
   cost: number;
   pullRequest: string | null;
 };
 
-/** A Board's Tickets as the Cockpit shows them. */
-export type Cockpit = {
+/** A Board's Tickets as it shows them. */
+export type BoardView = {
   /** What waits on the User, each group longest waiting first. */
   needsYou: {
     actionNeeded: NeedRow[];
@@ -150,7 +150,7 @@ export type Cockpit = {
   epics: EpicRow[];
   /** The Running Tickets outside those Epics, in Board order. */
   inFlight: InFlightRow[];
-  yourWork: CockpitTicket[];
+  yourWork: BoardTicket[];
   queued: QueuedRow[];
   done: DoneRow[];
   /** Done Tickets of all of them, Epics and archived Tickets left out. */
@@ -164,7 +164,7 @@ const byPosition = (left: Ticket, right: Ticket) =>
 const epicColorOf = (epic: Ticket): PaletteColor => epic.color ?? 'grey';
 
 /** What every row shows of `ticket`; an archived row too. */
-export const rowOf = (ticket: Ticket): CockpitTicket => ({
+export const rowOf = (ticket: Ticket): BoardTicket => ({
   number: ticket.number,
   title: ticket.title,
   epic: ticket.epic,
@@ -253,7 +253,7 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
   left.since.getTime() - right.since.getTime() || left.number - right.number;
 
 /**
- * The Cockpit of a Board's `tickets`: those of a Cycle or of the Backlog, and
+ * The view of a Board's `tickets`: those of a Cycle or of the Backlog, and
  * nothing else (ADR 0025). It places each Ticket by the Board's own Lane
  * derivation, so the two views never disagree, and reads run state and cost
  * from `activity`. An Epic's row lists only its children on this Board, and
@@ -265,11 +265,11 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
  * itself). `needsYou.count` and the lists follow the filter;
  * `needsYou.total`, and the `progress`, do not.
  */
-export function cockpitOf(
+export function boardOf(
   tickets: Ticket[],
   activity: Pick<ConversationActivity, 'live' | 'cost'>,
   filter: BoardFilter = noBoardFilter,
-): Cockpit {
+): BoardView {
   const onBoard = new Map(tickets.map((ticket) => [ticket.number, ticket]));
   const shown = tickets.filter(isShown);
   // Every Epic is placed by its lane, like a Ticket.
@@ -443,7 +443,7 @@ export function cockpitOf(
     return epic ? { ...row, ...childrenOf(epic.epic) } : row;
   };
 
-  const unfiltered: Cockpit = {
+  const unfiltered: BoardView = {
     needsYou: {
       actionNeeded: actionNeeded.map(needsYouRow),
       review: review.map(needsYouRow),
@@ -497,7 +497,7 @@ export function cockpitOf(
     const ticket = onBoard.get(number);
     return ticket !== undefined && ticketMatches(ticket, filter);
   };
-  const keep = <Row extends CockpitTicket>(rows: Row[]): Row[] =>
+  const keep = <Row extends BoardTicket>(rows: Row[]): Row[] =>
     rows
       .filter(({ number }) => {
         const ticket = onBoard.get(number);

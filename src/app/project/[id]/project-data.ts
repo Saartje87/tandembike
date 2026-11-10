@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
-import { cockpitOf } from '../../../components/cockpit/cockpit-of';
+import { boardOf } from '../../../components/board/board-of';
 import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
 import { startRunLimit } from '../../../conversations/conversations';
@@ -179,7 +179,7 @@ export function needsYouCountOf(projectId: number): number {
   if (!active) {
     return 0;
   }
-  return cockpitOf(
+  return boardOf(
     cycleTicketsWithEpics(projectId, active.id),
     conversationActivity(appConversations().activityRows()),
   ).needsYou.count;
@@ -190,7 +190,7 @@ export function needsYouCountOf(projectId: number): number {
  * Board, unfiltered, counted as the Active Cycle's Needs you is.
  */
 export function backlogIntakeCountOf(projectId: number): number {
-  return cockpitOf(
+  return boardOf(
     appTickets('user').listTickets({ projectId, cycleId: null }),
     conversationActivity(appConversations().activityRows()),
   ).needsYou.intake.length;
@@ -225,12 +225,12 @@ export function ticketPathOf(projectId: number) {
   const active = appTickets('user')
     .listCycles(projectId)
     .find(({ state }) => state === 'Active');
-  const backlog = cockpitOf(
+  const backlog = boardOf(
     appTickets('user').listTickets({ projectId, cycleId: null }),
     activity,
   );
   const cycle = active
-    ? cockpitOf(cycleTicketsWithEpics(projectId, active.id), activity)
+    ? boardOf(cycleTicketsWithEpics(projectId, active.id), activity)
     : null;
   return {
     backlogIntake: backlog.needsYou.intake.length,
