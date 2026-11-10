@@ -44,7 +44,7 @@ Verify each acceptance criterion against the running code or its tests, not agai
 
 ## 6. Review
 
-Commit your work first, then call the `review` skill on the diff against the default branch, with the Ticket's number. Fix the findings you agree with, say in a note on the Ticket (`add_note`) which you did not fix and why, run the Check command again, and commit.
+Commit your work first, then call the `review` skill on the diff against the default branch, with the Ticket's number. The skill runs as a subagent and returns its findings to you. They are input to this step, not the end of the run: without ending your turn, fix the findings you agree with, say in a note on the Ticket (`add_note`) which you did not fix and why, run the Check command again, and commit.
 
 ## 7. Push and open the pull request
 

@@ -66,6 +66,22 @@ describe('The Playbook plugin', () => {
     expect(frontmatter).not.toHaveProperty('disable-model-invocation');
   });
 
+  it('runs the review in a forked subagent, so its findings do not end the calling run (T1382)', () => {
+    expect(frontmatterOf('review').context).toBe('fork');
+    const review = readFileSync(
+      join(playbookPath, 'skills/review/SKILL.md'),
+      'utf8',
+    );
+    expect(review).toMatch(/not a final answer/);
+    for (const skill of ['implement', 'implement-epic']) {
+      const text = readFileSync(
+        join(playbookPath, `skills/${skill}/SKILL.md`),
+        'utf8',
+      );
+      expect(text, skill).toMatch(/without ending your turn/);
+    }
+  });
+
   it('has a spec skill that asks its rounds with choice cards and its recommendation preselected (T1303)', () => {
     const text = readFileSync(
       join(playbookPath, 'skills/spec/SKILL.md'),
