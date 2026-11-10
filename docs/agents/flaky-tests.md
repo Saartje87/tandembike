@@ -1,6 +1,6 @@
 # Flaky component tests
 
-Read this before fixing a flaky test or writing a test for an optimistic save that can be refused.
+Read this before fixing a flaky test, writing a test for an optimistic save that can be refused, or filing a bug on a behaviour seen only in a jsdom test.
 
 ## The usual cause: checking restored state too early
 
@@ -36,6 +36,25 @@ await waitFor(() =>
 ```
 
 Example: T1314 (`ticket-drawer.test.tsx`).
+
+## An interaction ignored only in jsdom: an unflushed render
+
+**Symptom:** an interaction seems to do nothing in a jsdom test, such as Escape not closing a Drawer, but works in a real browser. It fails every run, not only under load.
+
+**Cause:** a synchronous `render()`, or an update the test did not await, left a React update unflushed. A layout effect that schedules a store update while a child below a `Suspense` boundary is suspended is one case: the component never re-renders, so it keeps acting on its first render's state.
+
+**Fix:** await the render or the interaction, so React flushes the update before the test goes on. Render inside an async `act`, as `renderPage` in `src/test/render.tsx` does, or check the result inside `waitFor`:
+
+```tsx
+await act(async () => {
+  renderWithTheme(
+    <TicketDrawerShell number={4}>{suspendedBody}</TicketDrawerShell>,
+  );
+});
+await userEvent.keyboard('{Escape}');
+```
+
+Example: T674, filed on Blocks for this and closed as a test artifact; the fix is in `ticket-drawer-shell.test.tsx`. Fix the test; a library bug needs a real browser to reproduce it ([`browser-checks.md`](browser-checks.md)).
 
 ## Proving the fix
 
