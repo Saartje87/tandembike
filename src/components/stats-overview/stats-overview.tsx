@@ -1,9 +1,11 @@
 import { Box, Heading, Inline, Stack, Text } from '@blockle/blocks';
-import { type FC, Suspense, use } from 'react';
+import { type FC, Suspense, use, useId } from 'react';
 
 import { cyclePath, projectPath } from '../../app/lib/paths';
 import type { StageRunStats } from '../../conversations/conversations';
 import { runResults } from '../../conversations/run-outcome';
+import type { Footprint } from '../../footprint/footprint';
+import { formatFootprint } from '../../footprint/format-footprint';
 import type { ProjectStats, Stats, StatsTotal } from '../../tickets/stats';
 import { AppLink } from '../app-link/app-link';
 import { ProjectIcon } from '../project-icon/project-icon';
@@ -12,9 +14,26 @@ import * as styles from './stats-overview.css';
 /** Each Project's run stats per Stage, by Project id. */
 export type RunStatsByProject = Record<number, StageRunStats[]>;
 
+/** A total Footprint, and how many of its Conversations were not measured (ADR 0050). */
+export type FootprintTotal = { footprint: Footprint; notMeasured: number };
+
+/**
+ * Each Project's total Footprint of all time and per Cycle, by Project id;
+ * a Project without Conversations is left out.
+ */
+export type FootprintsByProject = Record<
+  number,
+  {
+    total: FootprintTotal;
+    /** The Cycles with Conversations counting towards them, newest first. */
+    cycles: (FootprintTotal & { cycle: { id: number; title: string } })[];
+  }
+>;
+
 export type StatsOverviewProps = {
   stats: Promise<Stats>;
   runStats: Promise<RunStatsByProject>;
+  footprints: Promise<FootprintsByProject>;
 };
 
 type StatsTableProps = StatsOverviewProps;
@@ -95,6 +114,66 @@ const RunStatsTable: FC<RunStatsTableProps> = ({ stages }) => (
   </Box>
 );
 
+type FootprintTableProps = {
+  projectId: number;
+  projectName: string;
+  footprints: FootprintsByProject[number];
+};
+
+type FootprintCellsProps = { total: FootprintTotal };
+
+const FootprintCells: FC<FootprintCellsProps> = ({ total }) => (
+  <>
+    <td>{total.footprint.measured ? formatFootprint(total.footprint) : '—'}</td>
+    <td>{total.notMeasured > 0 ? total.notMeasured : ''}</td>
+  </>
+);
+
+/** A Project's Footprint of all time, then per Cycle, each with its not-measured count. */
+const FootprintTable: FC<FootprintTableProps> = ({
+  projectId,
+  projectName,
+  footprints,
+}) => {
+  const headingId = useId();
+  return (
+    <Stack gap={2}>
+      <Heading level={2} id={headingId}>
+        {projectName}: Footprint
+      </Heading>
+      <Box overflowInline="auto">
+        <table className={styles.table} aria-labelledby={headingId}>
+          <thead>
+            <tr>
+              <td />
+              <th scope="col">Footprint</th>
+              <th scope="col">Not measured</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row" className={styles.startCell}>
+                All time
+              </th>
+              <FootprintCells total={footprints.total} />
+            </tr>
+            {footprints.cycles.map(({ cycle, ...total }) => (
+              <tr key={cycle.id}>
+                <th scope="row" className={styles.startCell}>
+                  <AppLink href={cyclePath(projectId, cycle.id)}>
+                    {cycle.title}
+                  </AppLink>
+                </th>
+                <FootprintCells total={total} />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Box>
+    </Stack>
+  );
+};
+
 type CountCellsProps = {
   counts: Pick<StatsTotal, 'todo' | 'inProgress' | 'blocked' | 'claimed'>;
 };
@@ -137,9 +216,11 @@ const ActiveCycleCell: FC<ActiveCycleCellProps> = ({
 const StatsTable: FC<StatsTableProps> = ({
   stats: pending,
   runStats: pendingRunStats,
+  footprints: pendingFootprints,
 }) => {
   const { projects, total } = use(pending);
   const runStats = use(pendingRunStats);
+  const footprints = use(pendingFootprints);
 
   if (projects.length === 0) {
     return (
@@ -211,20 +292,35 @@ const StatsTable: FC<StatsTableProps> = ({
           </Stack>
         ),
       )}
+      {projects.map(({ project }) => {
+        const projectFootprints = footprints[project.id];
+        return projectFootprints ? (
+          <FootprintTable
+            key={project.id}
+            projectId={project.id}
+            projectName={project.name}
+            footprints={projectFootprints}
+          />
+        ) : null;
+      })}
     </Stack>
   );
 };
 
 /**
  * The Stats page (see `GLOSSARY.md`): every non-archived Project's figures
- * side by side, with a Total row. The Total's Active Cycle cell counts the
+ * side by side, with a Total row, then each Project's runs and Footprint. The Total's Active Cycle cell counts the
  * Projects with one, since each Cycle has its own goal.
  */
-export const StatsOverview: FC<StatsOverviewProps> = ({ stats, runStats }) => (
+export const StatsOverview: FC<StatsOverviewProps> = ({
+  stats,
+  runStats,
+  footprints,
+}) => (
   <Stack gap={4}>
     <Heading level={1}>Stats</Heading>
     <Suspense fallback={null}>
-      <StatsTable stats={stats} runStats={runStats} />
+      <StatsTable stats={stats} runStats={runStats} footprints={footprints} />
     </Suspense>
   </Stack>
 );

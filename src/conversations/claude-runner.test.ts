@@ -243,6 +243,52 @@ describe('The Claude runner', () => {
     ]);
   });
 
+  it('reports the tokens per model of a result’s modelUsage with its turn (T1176)', () => {
+    const modelUsage = (input: number, output: number) => ({
+      inputTokens: input,
+      outputTokens: output,
+      cacheReadInputTokens: input * 10,
+      cacheCreationInputTokens: input * 2,
+      webSearchRequests: 0,
+      costUSD: 0.1,
+      contextWindow: 200000,
+      maxOutputTokens: 32000,
+    });
+
+    const events = eventsOf({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      result: 'Done',
+      total_cost_usd: 0.42,
+      modelUsage: {
+        'claude-opus-5-5': modelUsage(100, 50),
+        'claude-haiku-5-5': modelUsage(7, 3),
+      },
+    } as never);
+
+    expect(events).toEqual([
+      {
+        type: 'turn',
+        costUsd: 0.42,
+        usage: {
+          'claude-opus-5-5': {
+            input: 100,
+            output: 50,
+            cacheWrite: 200,
+            cacheRead: 1000,
+          },
+          'claude-haiku-5-5': {
+            input: 7,
+            output: 3,
+            cacheWrite: 14,
+            cacheRead: 70,
+          },
+        },
+      },
+    ]);
+  });
+
   it('reports the Tickets the Agent created from the results of file_tickets', async () => {
     const toolUse = (id: string, name: string) => ({
       type: 'assistant',

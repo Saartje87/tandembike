@@ -58,6 +58,7 @@ const one = (
 ): ConversationWithTranscript => ({
   conversation: conversation(values),
   transcript,
+  footprint: { measured: false },
 });
 
 const ok = (state: Conversation['state'] = 'running') =>
@@ -119,6 +120,34 @@ describe('ConversationChat', () => {
     expect(
       screen.getByText('Triage, working, $0.50, by you'),
     ).toBeInTheDocument();
+  });
+
+  it('shows the Footprint after the meta line, marked as an estimate (T1176)', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={{
+          ...one({ costUsd: 0.5 }),
+          footprint: {
+            measured: true,
+            energyWh: 2400,
+            co2eG: 1140,
+            phoneCharges: 126,
+            carKm: 4.6,
+          },
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText('~2.4 kWh · ~1.1 kg CO₂e est.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says a Conversation without recorded tokens is not measured (T1176)', () => {
+    renderWithTheme(<ConversationChat title="T4" item={one({})} />);
+
+    expect(screen.getByText('Footprint not measured')).toBeInTheDocument();
   });
 
   it('names who started the Conversation in the meta line', () => {

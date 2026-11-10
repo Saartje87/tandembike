@@ -1,3 +1,4 @@
+import type { UsageByModel } from '../footprint/token-usage';
 import type { PermissionAnswer } from './conversation-state';
 import type { Widget, WidgetAnswer } from './widget';
 
@@ -32,6 +33,11 @@ export type RunEvent =
   | {
       type: 'turn';
       costUsd: number;
+      /**
+       * The tokens this run has used per model in total so far, like
+       * `costUsd`; left out when the run reports none (ADR 0050).
+       */
+      usage?: UsageByModel;
       error?: string;
       /** The SDK result subtype an error came with, for classifying it. */
       errorSubtype?: string;

@@ -8,10 +8,13 @@ import type {
   Conversation,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import type { Footprint } from '../../footprint/footprint';
 
 export type ConversationWithTranscript = {
   conversation: Conversation;
   transcript: TranscriptEntry[];
+  /** Its estimated Footprint (ADR 0050). */
+  footprint: Footprint;
 };
 
 export const intentNames: Record<ConversationIntent, string> = {

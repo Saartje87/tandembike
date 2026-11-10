@@ -1,10 +1,12 @@
 import {
+  type ModelUsage,
   type PermissionUpdate,
   query,
   type SDKMessage,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
+import type { UsageByModel } from '../footprint/token-usage';
 import type {
   AgentRunner,
   RunEvent,
@@ -153,6 +155,7 @@ export function eventsOf(
       {
         type: 'turn',
         costUsd: message.total_cost_usd,
+        ...(message.modelUsage ? { usage: usageOf(message.modelUsage) } : {}),
         ...(error === undefined
           ? {}
           : { error, errorSubtype: message.subtype }),
@@ -160,6 +163,21 @@ export function eventsOf(
     ];
   }
   return [];
+}
+
+/** A result's `modelUsage` as tokens per model, by type (ADR 0050). */
+function usageOf(modelUsage: Record<string, ModelUsage>): UsageByModel {
+  return Object.fromEntries(
+    Object.entries(modelUsage).map(([model, usage]) => [
+      model,
+      {
+        input: usage.inputTokens ?? 0,
+        output: usage.outputTokens ?? 0,
+        cacheWrite: usage.cacheCreationInputTokens ?? 0,
+        cacheRead: usage.cacheReadInputTokens ?? 0,
+      },
+    ]),
+  );
 }
 
 /** The allow rules among an SDK call's suggestions; any other kind is dropped. */

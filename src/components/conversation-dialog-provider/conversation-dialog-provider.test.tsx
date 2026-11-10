@@ -199,6 +199,7 @@ describe('ConversationDialogProvider', () => {
       .mockImplementation(async ({ conversationId }) => ({
         ok: true,
         conversation: conversation({ id: conversationId }),
+        footprint: { measured: false },
         transcript: [entry(conversationId, `Hello from ${conversationId}`)],
       }));
     vi.mocked(closeConversation).mockReset();
@@ -663,6 +664,7 @@ describe('ConversationDialogProvider', () => {
         async ({ conversationId }) => ({
           ok: true,
           conversation: conversation({ id: conversationId }),
+          footprint: { measured: false },
           transcript: [
             entry(conversationId, `Hello from ${conversationId}`),
             ...(conversationId === 2
@@ -724,6 +726,7 @@ describe('ConversationDialogProvider', () => {
         async ({ conversationId }) => ({
           ok: true,
           conversation: conversation({ id: conversationId }),
+          footprint: { measured: false },
           transcript: [
             entry(conversationId, `Hello from ${conversationId}`),
             ...(conversationId === 2

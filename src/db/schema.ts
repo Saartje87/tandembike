@@ -557,6 +557,26 @@ export const runOutcomes = sqliteTable(
 );
 
 /**
+ * The tokens a Conversation's runs used, one row per model, as running totals
+ * across its runs (ADR 0050). Written and read only by the Conversations
+ * module. A Conversation without rows is not measured.
+ */
+export const conversationUsage = sqliteTable(
+  'conversation_usage',
+  {
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.conversationId, table.model] })],
+);
+
+/**
  * Triage proposals: what a Triage run recommends for a Ticket, kept as a
  * record after the User decides. Proposals are never deleted, except along
  * with their Ticket.
@@ -599,6 +619,20 @@ export const machineSettings = sqliteTable('machine_settings', {
   maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
   /** Autopilot's most spend per local day across all Projects; null is none. */
   dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
+});
+
+/**
+ * The app-wide Footprint factors (ADR 0050): one row, id 1, written and read
+ * only by the Settings module. No row means the defaults.
+ */
+export const footprintFactors = sqliteTable('footprint_factors', {
+  id: integer('id').primaryKey(),
+  /** Wh per 1M Haiku output tokens, data-centre PUE included. */
+  haikuWhPerMillion: real('haiku_wh_per_million').notNull(),
+  sonnetWhPerMillion: real('sonnet_wh_per_million').notNull(),
+  opusWhPerMillion: real('opus_wh_per_million').notNull(),
+  /** Grid carbon intensity in gCO₂e per kWh. */
+  gridGramsPerKwh: real('grid_grams_per_kwh').notNull(),
 });
 
 /**

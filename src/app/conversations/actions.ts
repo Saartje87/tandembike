@@ -13,6 +13,8 @@ import type {
   StartConversationInput,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import { conversationFootprint } from '../../footprint/app-footprint';
+import type { Footprint } from '../../footprint/footprint';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
 
@@ -237,7 +239,11 @@ export async function listOpenConversations(): Promise<OpenConversation[]> {
 export async function loadConversation(input: {
   conversationId: number;
 }): Promise<
-  ActionResult<{ conversation: Conversation; transcript: TranscriptEntry[] }>
+  ActionResult<{
+    conversation: Conversation;
+    transcript: TranscriptEntry[];
+    footprint: Footprint;
+  }>
 > {
   try {
     const conversations = appConversations();
@@ -246,6 +252,7 @@ export async function loadConversation(input: {
       ok: true,
       conversation: conversations.get(id),
       transcript: conversations.transcript(id),
+      footprint: conversationFootprint(id),
     };
   } catch (error) {
     if (error instanceof TicketsError) {

@@ -68,7 +68,7 @@ const optionsToAnswer = (
  * is kept while another tab is shown (T1100).
  */
 export const ConversationChat: FC<ConversationChatProps> = ({
-  item: { conversation, transcript },
+  item: { conversation, transcript, footprint },
   title,
   error,
   onReply,
@@ -85,7 +85,11 @@ export const ConversationChat: FC<ConversationChatProps> = ({
 
   return (
     <div className={styles.chat}>
-      <ConversationChatHeader conversation={conversation} title={title} />
+      <ConversationChatHeader
+        conversation={conversation}
+        footprint={footprint}
+        title={title}
+      />
       {error && <Alert intent="danger">{error}</Alert>}
       <ConversationMessages transcript={transcript} />
       <div className={styles.replyArea}>

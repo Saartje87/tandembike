@@ -8,11 +8,13 @@ import {
   isNull,
   max,
   ne,
+  or,
   sql,
 } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
+import type { UsageByModel } from '../footprint/token-usage';
 import { playbookPath } from '../playbook/playbook';
 import {
   agentCommandMessage,
@@ -60,6 +62,12 @@ import {
   terminalIdleMinutes,
   terminalIdleMs,
 } from './terminal-shared';
+import {
+  readUsage,
+  totalUsage,
+  type UsageTotal,
+  writeUsage,
+} from './usage-store';
 import {
   checkWidgetAnswer,
   tidyWidget,
@@ -254,6 +262,8 @@ export type ConversationsDeps = {
 type LiveRun = {
   run: AgentRun | null;
   costBefore: number;
+  /** The Conversation's tokens per model when the run started (ADR 0050). */
+  usageBefore: UsageByModel;
   /** Set when the User stopped the run; it still reports its last cost. */
   stopped?: boolean;
   /** The model the run reported in its init message. */
@@ -716,6 +726,9 @@ export function createConversations({
             .run();
         }
         update(id, { costUsd: handle.costBefore + event.costUsd });
+        if (event.usage) {
+          writeUsage(db, id, handle.usageBefore, event.usage);
+        }
         announce(id);
       }
       return;
@@ -765,6 +778,9 @@ export function createConversations({
           state: 'idle',
           costUsd: handle.costBefore + event.costUsd,
         });
+        if (event.usage) {
+          writeUsage(db, id, handle.usageBefore, event.usage);
+        }
         recordOutcome(id, handle, {
           error: event.error,
           errorSubtype: event.errorSubtype,
@@ -1094,6 +1110,7 @@ export function createConversations({
     const handle: LiveRun = {
       run: null,
       costBefore: conversation.costUsd,
+      usageBefore: readUsage(db, id),
       model: null,
       ticketStatus: ticketStatusOf(id),
       pending: {
@@ -1877,6 +1894,45 @@ export function createConversations({
 
   return {
     get,
+
+    /**
+     * The tokens Conversation `id`'s runs used per model, across all its
+     * runs (ADR 0050); empty when it recorded none: not measured.
+     */
+    usage(id: number): UsageByModel {
+      get(id);
+      return readUsage(db, id);
+    },
+
+    /**
+     * The usage of a Project's Conversations of all time, or with `cycleId`
+     * of those counting towards that Cycle: the one Autopilot started them
+     * for, else every Cycle holding their Ticket (ADR 0050). Hand-started
+     * and Autopilot Conversations count alike; `notMeasured` counts those
+     * that recorded no tokens.
+     */
+    usageTotal(input: { projectId: number; cycleId?: number }): UsageTotal {
+      const inProject = eq(conversations.projectId, input.projectId);
+      if (input.cycleId === undefined) {
+        return totalUsage(db, inProject);
+      }
+      const numbers = tickets.getCycle(input.cycleId).ticketNumbers;
+      return totalUsage(
+        db,
+        and(
+          inProject,
+          or(
+            eq(conversations.autopilotCycleId, input.cycleId),
+            numbers.length === 0
+              ? undefined
+              : and(
+                  isNull(conversations.autopilotCycleId),
+                  inArray(conversations.ticketNumber, numbers),
+                ),
+          ),
+        ),
+      );
+    },
 
     autopilotSpendToday,
 

@@ -3,10 +3,13 @@
 import { revalidatePath } from 'next/cache';
 
 import { appConversations } from '../../conversations/app-conversations';
+import type { FootprintFactors } from '../../footprint/footprint';
+import { appSettings } from '../../settings/app-settings';
+import type { FootprintFactor } from '../../settings/settings';
 import { appTickets } from '../../tickets/app-tickets';
 import type { MachineSettings } from '../../tickets/machine-settings';
 import { type ActionResult, actionResult } from '../lib/action-result';
-import { settingsPath } from '../lib/paths';
+import { settingsPath, statsPath } from '../lib/paths';
 
 /**
  * Saves the machine settings (ADR 0041). Only this Server Action sets them:
@@ -28,6 +31,45 @@ export async function saveMachineSettings(input: {
     revalidatePath(settingsPath());
     return { settings };
   });
+}
+
+/**
+ * Saves the Footprint factors (ADR 0050). Every Footprint is computed from
+ * them when read, so the pages that show Footprints are revalidated.
+ */
+export async function saveFootprintFactors(
+  input: FootprintFactors,
+): Promise<ActionResult<{ factors: FootprintFactors }>> {
+  return actionResult(() => {
+    const factors = appSettings().setFootprintFactors({
+      haikuWhPerMillion: numberOrNaN(input?.haikuWhPerMillion),
+      sonnetWhPerMillion: numberOrNaN(input?.sonnetWhPerMillion),
+      opusWhPerMillion: numberOrNaN(input?.opusWhPerMillion),
+      gridGramsPerKwh: numberOrNaN(input?.gridGramsPerKwh),
+    });
+    revalidateFootprints();
+    return { factors };
+  });
+}
+
+/** `value` when it is a number, else NaN, which the Settings module refuses: an empty value is not 0. */
+const numberOrNaN = (value: unknown): number =>
+  typeof value === 'number' ? value : Number.NaN;
+
+/** Sets one Footprint factor back to its ADR 0050 default. */
+export async function resetFootprintFactor(input: {
+  name: FootprintFactor;
+}): Promise<ActionResult<{ factors: FootprintFactors }>> {
+  return actionResult(() => {
+    const factors = appSettings().resetFootprintFactor(input?.name);
+    revalidateFootprints();
+    return { factors };
+  });
+}
+
+function revalidateFootprints() {
+  revalidatePath(settingsPath());
+  revalidatePath(statsPath());
 }
 
 /** What the app header shows of the machine: runs and the Machine ceiling. */
