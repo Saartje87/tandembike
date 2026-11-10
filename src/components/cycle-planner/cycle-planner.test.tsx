@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
+import { anEpicChild } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
 import type { EpicChild } from '../../tickets/tickets';
@@ -36,15 +37,7 @@ const open: CyclePlannerProps['ticket'] = {
 const epicChild = (
   number: number,
   fields: Partial<EpicChild> = {},
-): EpicChild => ({
-  number,
-  title: `Pay ${number}`,
-  status: 'Todo',
-  archived: false,
-  blockedBy: [],
-  blocked: false,
-  ...fields,
-});
+): EpicChild => anEpicChild({ number, title: `Pay ${number}`, ...fields });
 
 const epic = (children: EpicChild[]): CyclePlannerProps['ticket'] => ({
   ...open,

@@ -23,6 +23,7 @@ import {
 import { noConversationActivity } from '../../conversations/conversation-activity';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { keyboardDrag, stubDragAndDrop } from '../../test/drag-and-drop';
+import { anEpicChild } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
@@ -567,14 +568,8 @@ describe('Board', () => {
       claim,
       hasPullRequest: false,
     };
-    const childOf = (number: number, status: Ticket['status']) => ({
-      number,
-      title: `Child ${number}`,
-      status,
-      archived: false,
-      blockedBy: [],
-      blocked: false,
-    });
+    const childOf = (number: number, status: Ticket['status']) =>
+      anEpicChild({ number, status });
     renderBoard([
       ticket({
         number: 50,
@@ -664,14 +659,8 @@ describe('Board', () => {
       claim,
       hasPullRequest: false,
     };
-    const childOf = (number: number, status: Ticket['status']) => ({
-      number,
-      title: `Child ${number}`,
-      status,
-      archived: false,
-      blockedBy: [],
-      blocked: false,
-    });
+    const childOf = (number: number, status: Ticket['status']) =>
+      anEpicChild({ number, status });
     const checked = [{ id: 1, text: 'Works', checked: true }];
     renderBoard([
       ticket({
@@ -739,16 +728,7 @@ describe('Board', () => {
           type: 'Epic',
           color: 'teal',
           labels: ['ready-for-agent'],
-          children: [
-            {
-              number: 30,
-              title: 'Child 30',
-              status: 'Todo',
-              archived: false,
-              blockedBy: [],
-              blocked: false,
-            },
-          ],
+          children: [anEpicChild({ number: 30 })],
         }),
         ticket({
           number: 30,
@@ -795,16 +775,7 @@ describe('Board', () => {
         color: 'teal',
         status: 'In progress',
         externalReferences: ['https://github.com/owner/repo/pull/130'],
-        children: [
-          {
-            number: 30,
-            title: 'Child 30',
-            status: 'Done',
-            archived: false,
-            blockedBy: [],
-            blocked: false,
-          },
-        ],
+        children: [anEpicChild({ number: 30, status: 'Done' })],
       }),
       ticket({ number: 30, title: 'Child 30', status: 'Done', epic: link }),
     ]);
@@ -837,16 +808,7 @@ describe('Board', () => {
         title: 'Big idea',
         type: 'Epic',
         color: 'teal',
-        children: [
-          {
-            number: 30,
-            title: 'Child 30',
-            status: 'Todo',
-            archived: false,
-            blockedBy: [],
-            blocked: false,
-          },
-        ],
+        children: [anEpicChild({ number: 30 })],
       }),
       ticket({ number: 30, title: 'Child 30', epic: link }),
     ]);
@@ -1161,14 +1123,8 @@ describe('Board', () => {
       claim: null,
       hasPullRequest: false,
     };
-    const childOf = (number: number, status: Ticket['status']) => ({
-      number,
-      title: `Child ${number}`,
-      status,
-      archived: false,
-      blockedBy: [],
-      blocked: false,
-    });
+    const childOf = (number: number, status: Ticket['status']) =>
+      anEpicChild({ number, status });
     renderBoard([
       ticket({
         number: 50,
