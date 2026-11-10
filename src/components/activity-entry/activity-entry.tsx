@@ -45,6 +45,12 @@ function describeChange(change: ActivityChange): string {
         : change.to === null
           ? `cleared the Origin T${change.from}`
           : `changed the Origin from T${change.from} to T${change.to}`;
+    case 'epic':
+      return change.from === null
+        ? `added it to Epic T${change.to}`
+        : change.to === null
+          ? `took it out of Epic T${change.from}`
+          : `moved it from Epic T${change.from} to Epic T${change.to}`;
     case 'labelAdded':
       return `added the label ${change.label}`;
     case 'labelRemoved':

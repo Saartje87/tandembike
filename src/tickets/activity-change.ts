@@ -28,6 +28,8 @@ export type ActivityChange =
   | { type: 'description' }
   | { type: 'color'; from: PaletteColor | null; to: PaletteColor | null }
   | { type: 'origin'; from: number | null; to: number | null }
+  /** Joined, left or moved between Epics, by number; `null` is no Epic. */
+  | { type: 'epic'; from: number | null; to: number | null }
   | { type: 'labelAdded'; label: string }
   | { type: 'labelRemoved'; label: string }
   | { type: 'externalReferenceAdded'; reference: string }

@@ -3522,6 +3522,9 @@ export function createTickets(
       .set({ epicNumber: epic, archivedWithEpic: false, updatedAt: new Date() })
       .where(eq(tickets.number, child))
       .run();
+    recordActivity(db, child, actor, [
+      { type: 'epic', from: previous, to: epic },
+    ]);
     touchTicket(db, epic);
     syncEpicStatus(db, epic);
     if (previous !== null) {
@@ -3601,6 +3604,9 @@ export function createTickets(
       .set({ epicNumber: null, archivedWithEpic: false, updatedAt: new Date() })
       .where(eq(tickets.number, number))
       .run();
+    recordActivity(db, number, actor, [
+      { type: 'epic', from: ticket.epicNumber, to: null },
+    ]);
     touchTicket(db, ticket.epicNumber);
     syncEpicStatus(db, ticket.epicNumber);
     return ticket.epicNumber;
