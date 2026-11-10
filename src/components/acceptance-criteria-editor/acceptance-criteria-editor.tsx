@@ -25,7 +25,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { refusalReason } from '../../app/lib/action-result';
+import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
 import {
   checkTicketAcceptanceCriterion,
   setTicketAcceptanceCriteria,
@@ -360,7 +360,9 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
         number: ticketNumber,
         ...change,
       });
-      setError(refusalReason(result, 'acceptanceCriteria'));
+      setError(
+        fieldRefusal(result, 'acceptanceCriteria') ?? rootRefusal(result),
+      );
     });
   };
 
@@ -375,7 +377,7 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
       number: ticketNumber,
       acceptanceCriteria: asReplacement(next),
     });
-    return refusalReason(result, 'acceptanceCriteria');
+    return fieldRefusal(result, 'acceptanceCriteria') ?? rootRefusal(result);
   };
 
   /** Saves `next` as the whole list, saying why when it is refused. */

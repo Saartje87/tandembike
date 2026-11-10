@@ -21,7 +21,11 @@ import {
 } from 'react';
 
 import { approveMerge } from '../../app/conversations/actions';
-import { type ActionResult, refusalReason } from '../../app/lib/action-result';
+import {
+  type ActionResult,
+  fieldRefusal,
+  rootRefusal,
+} from '../../app/lib/action-result';
 import {
   archiveTicket,
   backToTodo,
@@ -269,7 +273,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     startSave(async () => {
       showEdit(edit);
       const result = await updateTicket({ number: ticket.number, ...edit });
-      const reason = refusalReason(result, field);
+      const reason = fieldRefusal(result, field) ?? rootRefusal(result);
       if (reason !== undefined) {
         onRefused(reason);
       }
@@ -280,13 +284,13 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const saveTitle = async (title: string) => {
     showEdit({ title });
     const result = await updateTicket({ number: ticket.number, title });
-    return refusalReason(result, 'title');
+    return fieldRefusal(result, 'title') ?? rootRefusal(result);
   };
 
   const saveDescription = async (description: string) => {
     showEdit({ description });
     const result = await updateTicket({ number: ticket.number, description });
-    return refusalReason(result, 'description');
+    return fieldRefusal(result, 'description') ?? rootRefusal(result);
   };
 
   const saveStatus = (status: Fields['status']) => {
