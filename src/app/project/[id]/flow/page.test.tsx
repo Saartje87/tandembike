@@ -175,7 +175,7 @@ describe('FlowPage', () => {
           { type: 'noActiveCycle' },
           { type: 'overSpendCeiling', spendUsd: 12, ceilingUsd: 10 },
           { type: 'noFreeStartRunSlot', limit: 2 },
-          { type: 'machineCapFull', cap: 3 },
+          { type: 'machineCapFull', cap: 3, waitingOnUser: 2 },
           { type: 'overMachineCeiling', spendUsd: 21, ceilingUsd: 20 },
         ],
       },
@@ -200,7 +200,7 @@ describe('FlowPage', () => {
       'There is no Active Cycle: Autopilot only starts work planned into one.',
       "This Cycle's Autopilot spend, $12.00, has reached the Spend ceiling of $10.00.",
       'All 2 Start run slots are in use.',
-      'The machine cap of 3 runs is full, across all Projects.',
+      'The machine cap of 3 runs is full, across all Projects: 2 of its runs wait on you. Answer or close them to let Autopilot go on.',
       "Today's Autopilot spend across all Projects, $21.00, has reached the machine ceiling of $20.00.",
     ]);
     const triage = screen.getByRole('region', { name: 'Auto-triage' });

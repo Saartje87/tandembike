@@ -13,7 +13,8 @@ export type AutopilotPauseReason =
   | { type: 'noSpendCeiling' }
   | { type: 'overSpendCeiling'; spendUsd: number; ceilingUsd: number }
   | { type: 'noFreeStartRunSlot'; limit: number }
-  | { type: 'machineCapFull'; cap: number }
+  /** `waitingOnUser`: how many of the live runs wait on the User (T1332). */
+  | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
   | { type: 'overMachineCeiling'; spendUsd: number; ceilingUsd: number }
   | { type: 'noEligibleWork' };
 
@@ -24,7 +25,7 @@ export type AutoTriagePauseReason =
   | { type: 'noTriageCeiling' }
   | { type: 'overTriageCeiling'; spendUsd: number; ceilingUsd: number }
   | { type: 'triageRunWorking'; conversationId: number }
-  | { type: 'machineCapFull'; cap: number }
+  | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
   | { type: 'overMachineCeiling'; spendUsd: number; ceilingUsd: number }
   | { type: 'noTriageEligibleWork' };
 

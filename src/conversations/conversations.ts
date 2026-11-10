@@ -838,15 +838,23 @@ export function createConversations({
    * Autopilot started counts only while it works, as its slot does. Nothing
    * is refused by this count.
    */
-  const liveProcessesInUse = (): number => {
-    let alive = 0;
+  const liveProcesses = (): { working: number; waiting: number } => {
+    let working = 0;
+    let waiting = 0;
     for (const id of live.keys()) {
       const conversation = get(id);
       if (
-        holdsMachineSlot(conversation) ||
-        conversation.startedBy !== 'autopilot'
+        !holdsMachineSlot(conversation) &&
+        conversation.startedBy === 'autopilot'
       ) {
-        alive += 1;
+        continue;
+      }
+      // Idle after its turn, or waiting on a permission or a Widget: it
+      // waits on the User (T1332).
+      if (conversation.state === 'idle' || conversation.state === 'waiting') {
+        waiting += 1;
+      } else {
+        working += 1;
       }
     }
     const terminals = db
@@ -859,7 +867,13 @@ export function createConversations({
         ),
       )
       .all();
-    return alive + terminals.length;
+    // A Terminal session works in the User's terminal: it counts as working.
+    return { working: working + terminals.length, waiting };
+  };
+
+  const liveProcessesInUse = (): number => {
+    const { working, waiting } = liveProcesses();
+    return working + waiting;
   };
 
   /**
@@ -1903,6 +1917,15 @@ export function createConversations({
      */
     liveProcessesInUse(): number {
       return liveProcessesInUse();
+    },
+
+    /**
+     * The live Agent processes `liveProcessesInUse` counts, split into those
+     * working and those waiting on the User: idle after a turn, or waiting on
+     * a permission or a Widget (T1332). A Terminal session counts as working.
+     */
+    liveProcesses(): { working: number; waiting: number } {
+      return liveProcesses();
     },
 
     /**

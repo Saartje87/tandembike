@@ -590,3 +590,22 @@ describe('A refusal names the Conversations holding the slots (T1331)', () => {
     );
   });
 });
+
+describe('The live processes split into working and waiting on the User (T1332)', () => {
+  it('counts idle and permission-waiting runs as waiting, the rest as working', async () => {
+    const { conversations, runner, projects, startIn } = setup(9);
+    await startIn(projects[0].id, 'start');
+    await startIn(projects[0].id, 'start');
+    await startIn(projects[1].id, 'ask');
+    await startIn(projects[1].id, 'start', 'terminal');
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    void runner.runs[2].options.askPermission({
+      toolName: 'Bash',
+      input: {},
+      rules: [],
+    });
+
+    expect(conversations.liveProcesses()).toEqual({ working: 2, waiting: 2 });
+    expect(conversations.liveProcessesInUse()).toBe(4);
+  });
+});

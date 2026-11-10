@@ -24,6 +24,5 @@ The cap now bounds the Agent processes alive on the machine:
 
 ## Consequences
 
-- Unanswered Action needed runs, overnight included, stall Autopilot: nothing new starts until the User answers, closes, stops or sends them back. The Pause reason makes that visible.
+- Unanswered Action needed runs, overnight included, stall Autopilot: nothing new starts until the User answers, closes, stops or sends them back. Flow's "Machine cap full" Pause reason names how many of its runs wait on the User, and the app header splits its runs into working and waiting on you (T1332).
 - Ending a process at a handoff costs a session resume on Approve merge or a later reply, as an interrupted Start already did.
-- The "Runs N/M" header counts idle runs waiting on the User.

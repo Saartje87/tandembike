@@ -1601,7 +1601,25 @@ describe('explain (ADR 0044)', () => {
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'machineCapFull', cap: 1 }],
+        reasons: [{ type: 'machineCapFull', cap: 1, waitingOnUser: 0 }],
+      });
+    });
+
+    it('names how many runs holding a full cap wait on the User (T1332)', async () => {
+      const { project, tickets, cycle, autopilot, ready, runner } = setup({
+        parallel: 2,
+      });
+      const a = ready('A');
+      ready('B');
+      ready('C');
+      tickets.startCycle(cycle.id);
+      await autopilot.evaluate();
+      tickets.updateTicket(a.number, { status: 'In progress' });
+      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+      expect(autopilot.explain(project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [{ type: 'machineCapFull', cap: 2, waitingOnUser: 1 }],
       });
     });
 

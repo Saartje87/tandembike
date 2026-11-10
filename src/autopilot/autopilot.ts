@@ -170,6 +170,7 @@ export function createAutopilot({
       reasons.push({
         type: 'machineCapFull',
         cap: tickets.getMachineSettings().maxConcurrentRuns,
+        waitingOnUser: conversations.liveProcesses().waiting,
       });
     }
     const budget = machineBudget();

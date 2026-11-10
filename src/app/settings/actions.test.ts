@@ -10,7 +10,7 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const world = vi.hoisted(() => ({
   tickets: undefined as unknown,
-  slots: 0,
+  processes: { working: 0, waiting: 0 },
   budget: null as unknown,
 }));
 vi.mock('../../tickets/app-tickets', () => ({
@@ -18,14 +18,14 @@ vi.mock('../../tickets/app-tickets', () => ({
 }));
 vi.mock('../../conversations/app-conversations', () => ({
   appConversations: () => ({
-    machineSlotsInUse: () => world.slots,
+    liveProcesses: () => world.processes,
     machineBudget: () => world.budget,
   }),
 }));
 
 beforeEach(() => {
   world.tickets = createTestTickets();
-  world.slots = 0;
+  world.processes = { working: 0, waiting: 0 };
   world.budget = null;
   vi.mocked(revalidatePath).mockReset();
 });
@@ -84,11 +84,12 @@ describe('saveMachineSettings daily ceiling', () => {
 });
 
 describe('currentMachineRuns', () => {
-  it('reports the working runs against the cap', async () => {
-    world.slots = 2;
+  it('reports the runs working and waiting on the User against the cap (T1332)', async () => {
+    world.processes = { working: 1, waiting: 2 };
 
     expect(await currentMachineRuns()).toEqual({
-      inUse: 2,
+      working: 1,
+      waiting: 2,
       cap: 3,
       budget: null,
     });

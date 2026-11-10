@@ -29,8 +29,17 @@ export function pauseReasonText(
       return `This Cycle's Autopilot spend, ${formatCost(reason.spendUsd)}, has reached the Spend ceiling of ${formatCost(reason.ceilingUsd)}.`;
     case 'noFreeStartRunSlot':
       return `${slots(reason.limit, 'Start run')} in use.`;
-    case 'machineCapFull':
-      return `The machine cap of ${reason.cap} ${reason.cap === 1 ? 'run' : 'runs'} is full, across all Projects.`;
+    case 'machineCapFull': {
+      const full = `The machine cap of ${reason.cap} ${reason.cap === 1 ? 'run' : 'runs'} is full, across all Projects`;
+      if (reason.waitingOnUser === 0) {
+        return `${full}.`;
+      }
+      const waiting =
+        reason.waitingOnUser === 1
+          ? '1 of its runs waits on you. Answer or close it'
+          : `${reason.waitingOnUser} of its runs wait on you. Answer or close them`;
+      return `${full}: ${waiting} to let Autopilot go on.`;
+    }
     case 'overMachineCeiling':
       return `Today's Autopilot spend across all Projects, ${formatCost(reason.spendUsd)}, has reached the machine ceiling of ${formatCost(reason.ceilingUsd)}.`;
     case 'noEligibleWork':
