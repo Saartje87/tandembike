@@ -2,7 +2,10 @@
 // into the driver folder next to `playwright-core`; it is not run from here.
 import { chromium } from 'playwright-core';
 
-export const base = 'http://localhost:3100';
+/** The throwaway server's port: `BROWSER_CHECK_PORT`, else 3100. */
+export const port = Number(process.env.BROWSER_CHECK_PORT || 3100);
+
+export const base = `http://localhost:${port}`;
 
 export const launch = () =>
   chromium.launch({
