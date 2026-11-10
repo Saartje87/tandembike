@@ -44,6 +44,28 @@ describe('workflow Ticket tools', () => {
     await client.close();
   });
 
+  it('file_tickets gives one Ticket of the batch an existing Ticket as Origin', async () => {
+    const { tickets, project, client } = await setup();
+    const idea = tickets.createTicket({ projectId: project.id, title: 'Idea' });
+
+    const { numbers } = resultJson(
+      await client.callTool({
+        name: 'file_tickets',
+        arguments: {
+          projectName: 'Website',
+          tickets: [
+            { title: 'Epic', type: 'Epic', originNumber: idea.number },
+            { title: 'Child', epicPosition: 0 },
+          ],
+        },
+      }),
+    ) as { numbers: number[] };
+
+    expect(tickets.getTicket(numbers[0]).origin?.number).toBe(idea.number);
+    expect(tickets.getTicket(numbers[1]).origin).toBeNull();
+    await client.close();
+  });
+
   it('file_tickets and find_tickets default to the folder Project, and allProjects widens find_tickets', async () => {
     const tickets = createTestTickets();
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'tandembike-mcp-')));
