@@ -77,7 +77,7 @@ A narrowing of a Board to the Tickets whose title or Ticket number contains a se
 _Avoid_: Search, view, saved filter
 
 **Stats**:
-The view of every non-archived Project's figures side by side: per Project, how many Tickets are in Todo and In progress, blocked and claimed, the Active Cycle's progress, and how many were done in the last 7 days. Epics are not counted, since their Status follows their children. A Ticket counts as done in the last 7 days when it is Done now and last reached Done within that window, even if archived since.
+The view of every non-archived Project's figures side by side: per Project, how many Tickets are in Todo and In progress, blocked and claimed, the Active Cycle's progress, and how many were done in the last 7 days. Epics are not counted, since their Status follows their children. A Ticket counts as done in the last 7 days when it is Done now and last reached Done within that window, even if archived since. Below them it shows each Project's **Footprint**, all time and per Cycle, with how many Conversations were not measured.
 _Avoid_: Dashboard, report, overview, metrics
 
 **Status**:

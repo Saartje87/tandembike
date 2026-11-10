@@ -8,6 +8,7 @@ import {
   isNull,
   max,
   ne,
+  or,
   sql,
 } from 'drizzle-orm';
 
@@ -61,7 +62,12 @@ import {
   terminalIdleMinutes,
   terminalIdleMs,
 } from './terminal-shared';
-import { readUsage, writeUsage } from './usage-store';
+import {
+  readUsage,
+  totalUsage,
+  type UsageTotal,
+  writeUsage,
+} from './usage-store';
 import {
   checkWidgetAnswer,
   tidyWidget,
@@ -1896,6 +1902,36 @@ export function createConversations({
     usage(id: number): UsageByModel {
       get(id);
       return readUsage(db, id);
+    },
+
+    /**
+     * The usage of a Project's Conversations of all time, or with `cycleId`
+     * of those counting towards that Cycle: the one Autopilot started them
+     * for, else every Cycle holding their Ticket (ADR 0050). Hand-started
+     * and Autopilot Conversations count alike; `notMeasured` counts those
+     * that recorded no tokens.
+     */
+    usageTotal(input: { projectId: number; cycleId?: number }): UsageTotal {
+      const inProject = eq(conversations.projectId, input.projectId);
+      if (input.cycleId === undefined) {
+        return totalUsage(db, inProject);
+      }
+      const numbers = tickets.getCycle(input.cycleId).ticketNumbers;
+      return totalUsage(
+        db,
+        and(
+          inProject,
+          or(
+            eq(conversations.autopilotCycleId, input.cycleId),
+            numbers.length === 0
+              ? undefined
+              : and(
+                  isNull(conversations.autopilotCycleId),
+                  inArray(conversations.ticketNumber, numbers),
+                ),
+          ),
+        ),
+      );
     },
 
     autopilotSpendToday,

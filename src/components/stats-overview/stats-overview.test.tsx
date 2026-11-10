@@ -3,14 +3,23 @@ import { describe, expect, it } from 'vitest';
 
 import { renderWithTheme } from '../../test/render';
 import type { ProjectStats, Stats } from '../../tickets/stats';
-import { type RunStatsByProject, StatsOverview } from './stats-overview';
+import {
+  type FootprintsByProject,
+  type RunStatsByProject,
+  StatsOverview,
+} from './stats-overview';
 
-const renderStats = (stats: Stats, runStats: RunStatsByProject = {}) =>
+const renderStats = (
+  stats: Stats,
+  runStats: RunStatsByProject = {},
+  footprints: FootprintsByProject = {},
+) =>
   act(async () => {
     renderWithTheme(
       <StatsOverview
         stats={Promise.resolve(stats)}
         runStats={Promise.resolve(runStats)}
+        footprints={Promise.resolve(footprints)}
       />,
     );
   });
@@ -173,5 +182,71 @@ describe('StatsOverview', () => {
     await renderStats(stats, { 2: [] });
 
     expect(screen.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+  });
+
+  describe('Footprint (T1177)', () => {
+    const measured = (energyWh: number, co2eG: number) => ({
+      measured: true as const,
+      energyWh,
+      co2eG,
+      phoneCharges: 0,
+      carKm: 0,
+    });
+
+    it("shows each Project's total and each Cycle's, as estimates, with the Conversations not measured", async () => {
+      await renderStats(
+        stats,
+        {},
+        {
+          1: {
+            total: { footprint: measured(2500, 1190), notMeasured: 3 },
+            cycles: [
+              {
+                cycle: { id: 7, title: 'Launch' },
+                footprint: measured(12, 5.7),
+                notMeasured: 0,
+              },
+            ],
+          },
+        },
+      );
+
+      const section = screen.getByRole('table', { name: 'Website: Footprint' });
+      expect(
+        within(section)
+          .getAllByRole('row')
+          .map((row) => row.textContent),
+      ).toEqual([
+        'FootprintNot measured',
+        'All time~2.5 kWh · ~1.2 kg CO₂e est.3',
+        'Launch~12 Wh · ~5.7 g CO₂e est.',
+      ]);
+      expect(
+        within(section).getByRole('link', { name: 'Launch' }),
+      ).toHaveAttribute('href', '/project/1/cycle/7');
+    });
+
+    it('shows a dash for a total with nothing measured', async () => {
+      await renderStats(
+        stats,
+        {},
+        {
+          1: {
+            total: { footprint: { measured: false }, notMeasured: 2 },
+            cycles: [],
+          },
+        },
+      );
+
+      expect(cellsOf('All time')).toEqual(['—', '2']);
+    });
+
+    it('shows no Footprint for a Project without Conversations', async () => {
+      await renderStats(stats);
+
+      expect(
+        screen.queryByRole('table', { name: /Footprint/ }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

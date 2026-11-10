@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { countDistinct, eq, type SQL, sql } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
-import { conversationUsage } from '../db/schema';
+import { conversations, conversationUsage } from '../db/schema';
 import {
   addTokens,
   noTokens,
@@ -61,4 +61,56 @@ export function writeUsage(
       })
       .run();
   }
+}
+
+/** The tokens of a set of Conversations, and how many of them were not measured (ADR 0050). */
+export type UsageTotal = {
+  usage: UsageByModel;
+  /** How many Conversations the total covers, not measured ones included. */
+  conversations: number;
+  /** How many of them recorded no tokens, left out of `usage`. */
+  notMeasured: number;
+};
+
+/** The usage of the Conversations `where` selects, summed per model. */
+export function totalUsage(
+  db: DatabaseConnection,
+  where: SQL | undefined,
+): UsageTotal {
+  const counts = db
+    .select({
+      conversations: countDistinct(conversations.id),
+      measured: countDistinct(conversationUsage.conversationId),
+    })
+    .from(conversations)
+    .leftJoin(
+      conversationUsage,
+      eq(conversationUsage.conversationId, conversations.id),
+    )
+    .where(where)
+    .get();
+  const rows = db
+    .select({
+      model: conversationUsage.model,
+      input: sql<number>`sum(${conversationUsage.inputTokens})`,
+      output: sql<number>`sum(${conversationUsage.outputTokens})`,
+      cacheWrite: sql<number>`sum(${conversationUsage.cacheWriteTokens})`,
+      cacheRead: sql<number>`sum(${conversationUsage.cacheReadTokens})`,
+    })
+    .from(conversationUsage)
+    .innerJoin(
+      conversations,
+      eq(conversations.id, conversationUsage.conversationId),
+    )
+    .where(where)
+    .groupBy(conversationUsage.model)
+    .all();
+  const total = counts?.conversations ?? 0;
+  return {
+    usage: Object.fromEntries(
+      rows.map(({ model, ...tokens }) => [model, tokens]),
+    ),
+    conversations: total,
+    notMeasured: total - (counts?.measured ?? 0),
+  };
 }
