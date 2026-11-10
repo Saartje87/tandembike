@@ -40,6 +40,16 @@ import type {
   RunEvent,
 } from './agent-runner';
 import { batchTriagePrompt } from './batch-triage-prompt';
+import {
+  type Capacity,
+  type CapacityIntent,
+  type CapacitySnapshot,
+  capacityOf,
+  isStartRunIntent,
+  type ProjectCapacity,
+  refusalOf,
+  verdictOf,
+} from './capacity';
 import type { ActivityRow } from './conversation-activity';
 import {
   type ConversationIntent,
@@ -381,43 +391,6 @@ export const sparDisallowedTools = [
 /** The states of a run whose process may be alive. */
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
-/** A Start and a Merge are the intents that count as Start runs (T1221). */
-const isStartRunIntent = (intent: ConversationIntent) =>
-  intent === 'start' || intent === 'merge';
-
-/**
- * Whether a Conversation holds one of its Project's Start run slots: a Start
- * or a Merge whose run is live, running, waiting on a permission or idle
- * waiting for the User's reply (ADR 0049). A Terminal Conversation has no run
- * in the server and holds none (ADR 0039). The module counts only runs whose
- * process is alive: an idle one whose process ended after a handoff holds
- * none, nor does an interrupted one.
- */
-export const holdsStartRunSlot = (conversation: {
-  intent: ConversationIntent;
-  state: ConversationState;
-  startedBy: ConversationStarter;
-}): boolean =>
-  !isTerminal(conversation) &&
-  isStartRunIntent(conversation.intent) &&
-  liveStates.includes(conversation.state);
-
-/**
- * Whether a Conversation holds a machine slot (ADR 0041, ADR 0049): a live
- * Start or Merge, or a working Triage Autopilot started, not a Terminal one.
- * The User's own interactive Conversations hold none.
- */
-export const holdsMachineSlot = (conversation: {
-  intent: ConversationIntent;
-  state: ConversationState;
-  startedBy: ConversationStarter;
-}): boolean =>
-  holdsStartRunSlot(conversation) ||
-  (!isTerminal(conversation) &&
-    conversation.intent === 'triage' &&
-    conversation.startedBy === 'autopilot' &&
-    (conversation.state === 'running' || conversation.state === 'waiting'));
-
 /**
  * Whether a Start Conversation is open for Approve merge to resume: not
  * closed, and its run idle after handing off or interrupted. A stopped one
@@ -432,15 +405,6 @@ const isOpenForMergeResume = (conversation: {
   conversation.intent === 'start' &&
   !conversation.hidden &&
   (conversation.state === 'idle' || conversation.state === 'interrupted');
-
-/**
- * How many slot-holding Start runs a Project allows at once (ADR 0049): one
- * with Parallel runs off, else the Machine cap, the one number for load.
- */
-export const startRunLimit = (
-  settings: { parallelRuns: boolean },
-  machineCap: number,
-) => (settings.parallelRuns ? machineCap : 1);
 
 /**
  * Conversations (ADR 0019): the User's exchanges with Agent runs that
@@ -864,49 +828,13 @@ export function createConversations({
   };
 
   /**
-   * How many runs hold a machine slot across all Projects (see
-   * `holdsMachineSlot`): only runs whose process is alive count (ADR 0049).
-   * `exceptId` is a Conversation about to work, not counted against itself.
+   * The snapshot Run capacity is read from: every Conversation whose run is
+   * alive in this server, and every open Terminal Conversation.
    */
-  const machineSlotsInUse = (exceptId?: number): number => {
-    let working = 0;
-    for (const id of live.keys()) {
-      if (id !== exceptId && holdsMachineSlot(get(id))) {
-        working += 1;
-      }
-    }
-    return working;
-  };
-
-  /**
-   * How many Agent processes are alive on the machine, for Autopilot's
-   * headroom (T1329): the Machine slot holders, the User's own live runs
-   * (Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage, Batch triage),
-   * idle ones included, and every open Terminal Conversation. A Triage
-   * Autopilot started counts only while it works, as its slot does. Nothing
-   * is refused by this count.
-   */
-  const liveProcesses = (): { working: number; waiting: number } => {
-    let working = 0;
-    let waiting = 0;
-    for (const id of live.keys()) {
-      const conversation = get(id);
-      if (
-        !holdsMachineSlot(conversation) &&
-        conversation.startedBy === 'autopilot'
-      ) {
-        continue;
-      }
-      // Idle after its turn, or waiting on a permission or a Widget: it
-      // waits on the User (T1332).
-      if (conversation.state === 'idle' || conversation.state === 'waiting') {
-        waiting += 1;
-      } else {
-        working += 1;
-      }
-    }
+  const capacitySnapshot = (projectId?: number): CapacitySnapshot => {
+    const running = [...live.keys()].map(get);
     const terminals = db
-      .select({ id: conversations.id })
+      .select()
       .from(conversations)
       .where(
         and(
@@ -914,100 +842,42 @@ export function createConversations({
           inArray(conversations.state, liveStates),
         ),
       )
-      .all();
-    // A Terminal session works in the User's terminal: it counts as working.
-    return { working: working + terminals.length, waiting };
+      .all()
+      .filter((row) => !live.has(row.id));
+    return {
+      conversations: [...running, ...terminals],
+      machineCap: tickets.getMachineSettings().maxConcurrentRuns,
+      parallelRuns:
+        projectId === undefined
+          ? false
+          : tickets.getProjectAgentSettings(projectId).parallelRuns,
+    };
   };
 
-  const liveProcessesInUse = (): number => {
-    const { working, waiting } = liveProcesses();
-    return working + waiting;
-  };
-
-  /**
-   * How many of the Project's runs whose process is alive hold a Start run
-   * slot (see `holdsStartRunSlot`). `exceptId` is not counted.
-   */
-  const startRunSlotsInUse = (projectId: number, exceptId?: number): number => {
-    let holding = 0;
-    for (const id of live.keys()) {
-      const other = get(id);
-      if (
-        id !== exceptId &&
-        other.projectId === projectId &&
-        holdsStartRunSlot(other)
-      ) {
-        holding += 1;
-      }
-    }
-    return holding;
-  };
+  function capacity(projectId: number): Capacity<ProjectCapacity>;
+  function capacity(): Capacity<null>;
+  function capacity(projectId?: number): Capacity {
+    const snapshot = capacitySnapshot(projectId);
+    return projectId === undefined
+      ? capacityOf(snapshot)
+      : capacityOf(snapshot, projectId);
+  }
 
   /**
-   * The Conversations that hold slots by `holds`, oldest first, but
-   * `exceptId`: each named by its Ticket (`T12`) or, without one, as
-   * `Conversation 7`, marked when it waits on the User (T1331).
-   */
-  const slotHolderNames = (
-    holds: (conversation: Conversation) => boolean,
-    exceptId?: number,
-  ): string => {
-    const names = [...live.keys()]
-      .filter((id) => id !== exceptId)
-      .map(get)
-      .filter(holds)
-      .sort((a, b) => a.id - b.id)
-      .map((conversation) => {
-        const name =
-          conversation.ticketNumber === null
-            ? `Conversation ${conversation.id}`
-            : `T${conversation.ticketNumber}`;
-        return conversation.state === 'idle' || conversation.state === 'waiting'
-          ? `${name} (waiting on you)`
-          : name;
-      });
-    return names.length <= 1
-      ? (names[0] ?? '')
-      : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
-  };
-
-  /**
-   * Refuses a Start run beyond the Project's limit: a Start is not queued
-   * (ADR 0019). The refusal names the Conversations holding the slots, and
-   * which wait on the User (T1331). A Merge counts like a Start; Triage and Ask are never
-   * limited, and do not count. Slots are counted by `holdsStartRunSlot`.
-   * The machine cap (ADR 0041) limits them in the same way, across Projects.
-   * `exceptId` is the Conversation about to work, not counted against
-   * itself. The User's reply skips this check (ADR 0031).
+   * Refuses a run of `intent` that Run capacity does not allow: a Start or a
+   * Merge beyond the Project's Start run limit or at the Machine cap is not
+   * queued (ADR 0019, ADR 0041). `exceptId` is the Conversation about to
+   * work, not counted against itself; `reply`, the User's, is never refused
+   * (ADR 0031).
    */
   const checkStartLimit = (
     projectId: number,
-    intent: ConversationIntent,
-    settings: { parallelRuns: boolean },
+    intent: CapacityIntent,
     exceptId?: number,
   ) => {
-    if (!isStartRunIntent(intent)) {
-      return;
-    }
-    // With Parallel runs on, the Machine cap is the Project's only limit.
-    if (
-      !settings.parallelRuns &&
-      startRunSlotsInUse(projectId, exceptId) >= 1
-    ) {
-      const held = slotHolderNames(
-        (other) => other.projectId === projectId && holdsStartRunSlot(other),
-        exceptId,
-      );
-      throw new NotAllowedError(
-        `This Project already has a Start run working: ${held}. Answer, stop or close it first, or turn on Parallel runs in the Project settings to allow more.`,
-      );
-    }
-    const cap = tickets.getMachineSettings().maxConcurrentRuns;
-    if (machineSlotsInUse(exceptId) >= cap) {
-      const held = slotHolderNames(holdsMachineSlot, exceptId);
-      throw new NotAllowedError(
-        `The machine runs its cap of ${cap} ${cap === 1 ? 'run' : 'runs'}, held by ${held}. Wait for one to finish, answer or close one, or raise the cap in Settings.`,
-      );
+    const refusal = refusalOf(verdictOf(capacity(projectId), intent, exceptId));
+    if (refusal !== null) {
+      throw new NotAllowedError(refusal);
     }
   };
 
@@ -1130,14 +1000,11 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
-    if (limited) {
-      checkStartLimit(
-        conversation.projectId,
-        conversation.intent,
-        settings,
-        id,
-      );
-    }
+    checkStartLimit(
+      conversation.projectId,
+      limited ? conversation.intent : 'reply',
+      id,
+    );
     const runModel = modelFor(conversation.intent, settings);
     const handle: LiveRun = {
       run: null,
@@ -1384,7 +1251,7 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
-    checkStartLimit(projectId, input.intent, settings);
+    checkStartLimit(projectId, input.intent);
 
     const now = new Date();
     const created = db
@@ -1987,42 +1854,12 @@ export function createConversations({
     },
 
     /**
-     * How many runs hold a machine slot, across all Projects (ADR 0041, ADR
-     * 0049, GLOSSARY: Machine slot): live Start and Merge runs, idle ones
-     * waiting on the User included, and working Triage runs Autopilot
-     * started. Interrupted, Terminal and the User's interactive ones do not
-     * count, nor a run whose process ended after a handoff.
+     * Run capacity now (GLOSSARY: Run capacity): the Machine slots and their
+     * holders, the live Agent processes Autopilot's headroom counts and,
+     * given `projectId`, that Project's Start run slots, their limit and its
+     * working Triage run. Only runs whose process is alive count (ADR 0049).
      */
-    machineSlotsInUse(): number {
-      return machineSlotsInUse();
-    },
-
-    /**
-     * How many Agent processes are alive on the machine (T1329): the Machine
-     * slot holders, the User's own live runs and open Terminal
-     * Conversations. Autopilot's free slots are the Machine cap minus this;
-     * nothing is refused by it.
-     */
-    liveProcessesInUse(): number {
-      return liveProcessesInUse();
-    },
-
-    /**
-     * The live Agent processes `liveProcessesInUse` counts, split into those
-     * working and those waiting on the User: idle after a turn, or waiting on
-     * a permission or a Widget (T1332). A Terminal session counts as working.
-     */
-    liveProcesses(): { working: number; waiting: number } {
-      return liveProcesses();
-    },
-
-    /**
-     * How many of Project `projectId`'s live Start and Merge runs hold one of
-     * its Start run slots (ADR 0019, ADR 0049), idle ones included.
-     */
-    startRunSlotsInUse(projectId: number): number {
-      return startRunSlotsInUse(projectId);
-    },
+    capacity,
 
     /**
      * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
@@ -2608,14 +2445,11 @@ export function createConversations({
       const limited = sentBy !== 'user';
       const handle = live.get(id);
       if (handle?.run) {
-        if (limited) {
-          checkStartLimit(
-            conversation.projectId,
-            conversation.intent,
-            tickets.getProjectAgentSettings(conversation.projectId),
-            id,
-          );
-        }
+        checkStartLimit(
+          conversation.projectId,
+          limited ? conversation.intent : 'reply',
+          id,
+        );
         append(id, sentBy, message);
         update(id, { state: 'running' });
         handle.pending ??= {
@@ -2691,12 +2525,7 @@ export function createConversations({
         // A Start whose process ended takes a slot again for the merge, so
         // the merge is limited as a Merge Conversation is (ADR 0049).
         if (!live.has(startRow.id)) {
-          checkStartLimit(
-            startRow.projectId,
-            'merge',
-            tickets.getProjectAgentSettings(startRow.projectId),
-            startRow.id,
-          );
+          checkStartLimit(startRow.projectId, 'merge', startRow.id);
         }
         return this.reply(
           startRow.id,

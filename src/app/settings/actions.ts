@@ -87,7 +87,7 @@ export type MachineRunsState = {
 export async function currentMachineRuns(): Promise<MachineRunsState> {
   return {
     budget: appConversations().machineBudget(),
-    ...appConversations().liveProcesses(),
+    ...appConversations().capacity().liveProcesses,
     cap: appTickets('user').getMachineSettings().maxConcurrentRuns,
   };
 }

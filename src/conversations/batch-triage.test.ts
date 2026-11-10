@@ -251,7 +251,7 @@ describe('A Batch triage run (T1317)', () => {
     runner.runs.at(-1)?.emit({ type: 'turn', costUsd: 3 });
 
     expect(batch.worktreePath).toBeNull();
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
     expect(conversations.autopilotTriageSpend(project.id, new Date(0))).toBe(0);
     expect(conversations.triageBudget(project.id, new Date())?.paused).toBe(
       false,

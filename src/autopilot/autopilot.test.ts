@@ -315,7 +315,7 @@ describe('Autopilot dispatch', () => {
     await conversations.reply(first.id, 'Go on', 'user');
     await autopilot.evaluate();
     expect(started()).toEqual([a.number]);
-    expect(conversations.startRunSlotsInUse(project.id)).toBe(1);
+    expect(conversations.capacity(project.id).project.slotsHeld).toBe(1);
 
     // A hands off to Review: its process ends and the next Ticket starts.
     tickets.addExternalReferences(a.number, [
@@ -1126,7 +1126,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
     await autopilot.evaluate();
 
-    expect(conversations.machineSlotsInUse()).toBe(3);
+    expect(conversations.capacity().machine.slotsHeld).toBe(3);
     expect(startedIn(projects[0])).toEqual([a.number, b.number]);
     expect(startedIn(projects[1])).toEqual([c.number]);
 
@@ -1149,7 +1149,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     await autopilot.evaluate();
 
     expect(startedIn(projects[1])).toEqual([c.number, d.number]);
-    expect(conversations.machineSlotsInUse()).toBe(3);
+    expect(conversations.capacity().machine.slotsHeld).toBe(3);
   });
 
   it('keeps each Project start run limit inside the machine cap', async () => {
@@ -1164,7 +1164,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
     expect(startedIn(projects[0])).toHaveLength(1);
     expect(startedIn(projects[1])).toEqual([c.number]);
-    expect(conversations.machineSlotsInUse()).toBe(2);
+    expect(conversations.capacity().machine.slotsHeld).toBe(2);
   });
 
   it('counts the User’s interactive and Terminal runs against its free slots (T1329)', async () => {
@@ -1288,7 +1288,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       // Turn 3: P1 has no build left, so it triages.
       expect(intents).toEqual(['start', 'start', 'triage']);
       expect(startedIn(projects[1])).toHaveLength(1);
-      expect(conversations.machineSlotsInUse()).toBe(4);
+      expect(conversations.capacity().machine.slotsHeld).toBe(4);
     });
 
     it("keeps each Project's own Start run limit and one Triage run at a time", async () => {
@@ -1352,7 +1352,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     const stop = autopilot.start();
     await autopilot.idle();
 
-    expect(fresh.machineSlotsInUse()).toBe(1);
+    expect(fresh.capacity().machine.slotsHeld).toBe(1);
     stop();
   });
 
@@ -1383,7 +1383,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     expect(conversations.list({ ticketNumber: a.number })[0].state).toBe(
       'running',
     );
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 });
 

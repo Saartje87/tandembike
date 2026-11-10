@@ -57,23 +57,23 @@ function setup(cap = 2) {
 describe('The machine cap (ADR 0041)', () => {
   it('counts working Start runs across Projects', async () => {
     const { conversations, projects, startIn } = setup();
-    expect(conversations.machineSlotsInUse()).toBe(0);
+    expect(conversations.capacity().machine.slotsHeld).toBe(0);
 
     await startIn(projects[0].id, 'start');
     await startIn(projects[1].id, 'start');
 
-    expect(conversations.machineSlotsInUse()).toBe(2);
+    expect(conversations.capacity().machine.slotsHeld).toBe(2);
   });
 
   it('counts a Merge and a Triage Autopilot started, but not a Triage the User started or an Ask', async () => {
     const { conversations, projects, startIn, tickets } = setup(9);
 
     await startIn(projects[0].id, 'triage', 'autopilot');
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
 
     await startIn(projects[0].id, 'triage', 'user');
     await startIn(projects[0].id, 'ask', 'user');
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
 
     const ticket = tickets.createTicket({
       projectId: projects[1].id,
@@ -84,7 +84,7 @@ describe('The machine cap (ADR 0041)', () => {
       'https://github.com/acme/site/pull/12',
     ]);
     await conversations.approveMerge({ ticketNumber: ticket.number });
-    expect(conversations.machineSlotsInUse()).toBe(2);
+    expect(conversations.capacity().machine.slotsHeld).toBe(2);
   });
 
   it('counts an idle run, waiting on the User, but not a Terminal Conversation', async () => {
@@ -94,7 +94,7 @@ describe('The machine cap (ADR 0041)', () => {
     runner.runs[0].emit({ type: 'turn', costUsd: 1 });
     await startIn(projects[1].id, 'start', 'terminal');
 
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('counts a run waiting on a permission', async () => {
@@ -107,7 +107,7 @@ describe('The machine cap (ADR 0041)', () => {
       rules: [],
     });
 
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('refuses a Start at the cap, whatever Project it is in, naming the cap', async () => {
@@ -155,7 +155,7 @@ describe('The machine cap (ADR 0041)', () => {
     await startIn(projects[1].id, 'triage');
     await startIn(projects[1].id, 'ask');
 
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('never refuses a reply, which keeps the machine at its cap', async () => {
@@ -170,7 +170,7 @@ describe('The machine cap (ADR 0041)', () => {
 
     await conversations.reply(first.id, 'More', 'user');
 
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('frees the slot when the run ends', async () => {
@@ -179,7 +179,7 @@ describe('The machine cap (ADR 0041)', () => {
 
     runner.runs[0].emit({ type: 'exit' });
 
-    expect(conversations.machineSlotsInUse()).toBe(0);
+    expect(conversations.capacity().machine.slotsHeld).toBe(0);
   });
 });
 
@@ -217,7 +217,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
 
     run.emit({ type: 'turn', costUsd: 1 });
 
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
     expect(run.closed).toBe(false);
     await expect(startOn(world, world.projects[1].id)).rejects.toEqual(
       new NotAllowedError(capMessage(1, 'T1 (waiting on you)')),
@@ -232,9 +232,9 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     const { run } = await startOn(world, world.projects[0].id);
     run.emit({ type: 'turn', costUsd: 1 });
 
-    expect(world.conversations.startRunSlotsInUse(world.projects[0].id)).toBe(
-      1,
-    );
+    expect(
+      world.conversations.capacity(world.projects[0].id).project.slotsHeld,
+    ).toBe(1);
     await expect(startOn(world, world.projects[0].id)).rejects.toBeInstanceOf(
       NotAllowedError,
     );
@@ -248,7 +248,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     await world.conversations.reply(conversation.id, 'Yes', 'user');
 
     expect(run.sent).toContain('Yes');
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('ends the process of a turn that leaves the Ticket in Review, freeing the slot', async () => {
@@ -262,7 +262,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     run.emit({ type: 'turn', costUsd: 1 });
 
     expect(run.closed).toBe(true);
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
     expect(world.conversations.get(conversation.id)).toMatchObject({
       state: 'idle',
       hidden: false,
@@ -272,7 +272,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
       laneOf(world.tickets.getTicket(ticket.number), live[ticket.number]),
     ).toEqual({ lane: 'In progress', section: 'Review' });
     await startOn(world, world.projects[1].id);
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('ends the process of a turn that leaves the Ticket Done', async () => {
@@ -283,7 +283,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     run.emit({ type: 'turn', costUsd: 1 });
 
     expect(run.closed).toBe(true);
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
   });
 
   it('keeps the slot of a turn that ends with a PR while its Claim is still held', async () => {
@@ -295,7 +295,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     run.emit({ type: 'turn', costUsd: 1 });
 
     expect(run.closed).toBe(false);
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('resumes the stored session on Approve merge and on a reply after a handoff', async () => {
@@ -315,7 +315,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     expect(merged.id).toBe(conversation.id);
     expect(world.runner.runs).toHaveLength(2);
     expect(world.runner.runs[1].options.resume).toBe('sdk-1');
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
 
     world.runner.runs[1].emit({ type: 'turn', costUsd: 1 });
     await world.conversations.reply(conversation.id, 'And?', 'user');
@@ -341,7 +341,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     const restarted = world.restart();
     restarted.interruptStale();
     expect(restarted.get(conversation.id).state).toBe('interrupted');
-    expect(restarted.machineSlotsInUse()).toBe(0);
+    expect(restarted.capacity().machine.slotsHeld).toBe(0);
     const other = world.tickets.createTicket({
       projectId: world.projects[1].id,
       title: 'Other',
@@ -365,7 +365,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
 
     await world.conversations.close(conversation.id);
 
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
   });
 
   it('frees an idle Start’s slot when the User stops it', async () => {
@@ -375,7 +375,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
 
     await world.conversations.stop(conversation.id);
 
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
   });
 
   it('frees an idle Start’s slot when its Ticket goes Back to Todo', async () => {
@@ -390,7 +390,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     world.tickets.backToTodo(ticket.number);
 
     expect(run.closed).toBe(true);
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
     expect(world.conversations.get(conversation.id).state).toBe('idle');
   });
 
@@ -404,7 +404,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     run.emit({ type: 'turn', costUsd: 1 });
 
     expect(run.closed).toBe(true);
-    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
   });
 });
 
@@ -413,7 +413,7 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
     const world = setup(9);
     const { conversations, runner, tickets, projects, startIn } = world;
     await startIn(projects[0].id, 'start');
-    expect(conversations.liveProcessesInUse()).toBe(1);
+    expect(conversations.capacity().liveProcessCount).toBe(1);
 
     await startIn(projects[0].id, 'ask');
     await startIn(projects[0].id, 'triage');
@@ -429,25 +429,25 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
     });
     // An idle run of the User's own is a live process too.
     runner.runs[1].emit({ type: 'turn', costUsd: 0 });
-    expect(conversations.liveProcessesInUse()).toBe(4);
+    expect(conversations.capacity().liveProcessCount).toBe(4);
 
     await startIn(projects[1].id, 'start', 'terminal');
-    expect(conversations.liveProcessesInUse()).toBe(5);
+    expect(conversations.capacity().liveProcessCount).toBe(5);
     // Only the slot holders count against the cap for refusals.
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('stops counting a Terminal Conversation when the CLI reports its end', async () => {
     const { conversations, projects, startIn } = setup(9);
     const session = await startIn(projects[0].id, 'start', 'terminal');
-    expect(conversations.liveProcessesInUse()).toBe(1);
+    expect(conversations.capacity().liveProcessCount).toBe(1);
 
     await conversations.endTerminal(
       (session as { conversationId: number }).conversationId,
       { exitCode: 0 },
     );
 
-    expect(conversations.liveProcessesInUse()).toBe(0);
+    expect(conversations.capacity().liveProcessCount).toBe(0);
   });
 
   it('stops counting the User’s own run when they close it', async () => {
@@ -456,17 +456,17 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
 
     await conversations.close((ask as { id: number }).id);
 
-    expect(conversations.liveProcessesInUse()).toBe(0);
+    expect(conversations.capacity().liveProcessCount).toBe(0);
   });
 
   it('leaves out a Triage Autopilot started once its turn ends', async () => {
     const { conversations, runner, projects, startIn } = setup(9);
     await startIn(projects[0].id, 'triage', 'autopilot');
-    expect(conversations.liveProcessesInUse()).toBe(1);
+    expect(conversations.capacity().liveProcessCount).toBe(1);
 
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
 
-    expect(conversations.liveProcessesInUse()).toBe(0);
+    expect(conversations.capacity().liveProcessCount).toBe(0);
   });
 
   it('never refuses the User’s own Conversations or a Terminal one at the cap, and refuses a Start only by slot holders', async () => {
@@ -481,8 +481,8 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
     await startIn(projects[1].id, 'ask');
     await startIn(projects[1].id, 'triage');
     await startIn(projects[0].id, 'start', 'terminal');
-    expect(conversations.machineSlotsInUse()).toBe(1);
-    expect(conversations.liveProcessesInUse()).toBe(7);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
+    expect(conversations.capacity().liveProcessCount).toBe(7);
   });
 });
 
@@ -496,7 +496,7 @@ describe('Parallel runs and the Machine cap, the one number (T1330)', () => {
     await expect(startIn(projects[0].id, 'start')).rejects.toEqual(
       new NotAllowedError(capMessage(4, 'T1, T2, T3 and T4')),
     );
-    expect(conversations.startRunSlotsInUse(projects[0].id)).toBe(4);
+    expect(conversations.capacity(projects[0].id).project.slotsHeld).toBe(4);
   });
 
   it('allows one slot-holding Start or Merge with Parallel runs off', async () => {
@@ -603,8 +603,11 @@ describe('The live processes split into working and waiting on the User (T1332)'
       rules: [],
     });
 
-    expect(conversations.liveProcesses()).toEqual({ working: 2, waiting: 2 });
-    expect(conversations.liveProcessesInUse()).toBe(4);
+    expect(conversations.capacity().liveProcesses).toEqual({
+      working: 2,
+      waiting: 2,
+    });
+    expect(conversations.capacity().liveProcessCount).toBe(4);
   });
 });
 
@@ -643,7 +646,7 @@ describe('An Epic’s Start and its children’s moves (ADR 0049)', () => {
     tickets.backToTodo(children[0].number);
 
     expect(run.closed).toBe(false);
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('ends the Epic’s run when the Epic goes Back to Todo', async () => {
@@ -652,7 +655,7 @@ describe('An Epic’s Start and its children’s moves (ADR 0049)', () => {
     tickets.backToTodo(epic.number);
 
     expect(run.closed).toBe(true);
-    expect(conversations.machineSlotsInUse()).toBe(0);
+    expect(conversations.capacity().machine.slotsHeld).toBe(0);
   });
 
   it('ends the Epic’s run when the Epic is Done', async () => {
@@ -661,6 +664,73 @@ describe('An Epic’s Start and its children’s moves (ADR 0049)', () => {
     tickets.completeTicket(epic.number);
 
     expect(run.closed).toBe(true);
-    expect(conversations.machineSlotsInUse()).toBe(0);
+    expect(conversations.capacity().machine.slotsHeld).toBe(0);
+  });
+});
+
+describe('Auto-triage’s working Triage run (T1384)', () => {
+  it('agrees with the Project’s working Triage Conversations read from the database', async () => {
+    const { conversations, runner, projects, tickets } = setup(9);
+    const projectId = projects[0].id;
+    const triage = (inProject: number, startedBy: 'user' | 'autopilot') =>
+      conversations.start({
+        startedBy,
+        ticketNumber: tickets.createTicket({
+          projectId: inProject,
+          title: 'Idea',
+        }).number,
+        intent: 'triage',
+        prompt: 'Go',
+      });
+    const fromList = () =>
+      conversations
+        .list({ projectId })
+        .find(
+          (conversation) =>
+            conversation.intent === 'triage' &&
+            (conversation.state === 'running' ||
+              conversation.state === 'waiting'),
+        )?.id ?? null;
+    const seen: (number | null)[] = [];
+    const agree = () => {
+      const working = conversations.capacity(projectId).project.triageRunning;
+      expect(working).toBe(fromList());
+      seen.push(working);
+    };
+
+    agree();
+    const first = await triage(projectId, 'autopilot');
+    agree();
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    agree();
+    const second = await triage(projectId, 'user');
+    agree();
+    void runner.runs[1].options.askPermission({
+      toolName: 'Bash',
+      input: {},
+      rules: [],
+    });
+    agree();
+    runner.runs[1].emit({ type: 'exit' });
+    agree();
+    const ticket = tickets.createTicket({ projectId, title: 'In a terminal' });
+    const terminal = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'triage',
+    });
+    agree();
+    await triage(projects[1].id, 'user');
+    agree();
+
+    expect(seen).toEqual([
+      null,
+      first.id,
+      null,
+      second.id,
+      second.id,
+      null,
+      terminal.conversationId,
+      terminal.conversationId,
+    ]);
   });
 });

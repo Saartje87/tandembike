@@ -5,7 +5,7 @@ import { createTestConversations } from '../test/conversations';
 import { agentCommandEntries } from '../test/fixtures';
 import { createChangeChannel } from '../tickets/changes';
 import { NotAllowedError } from '../tickets/errors';
-import { holdsStartRunSlot } from './conversations';
+import { holdsStartRunSlot } from './capacity';
 
 async function failure(promise: Promise<unknown>): Promise<Error> {
   try {

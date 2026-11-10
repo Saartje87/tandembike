@@ -1679,7 +1679,7 @@ describe('The Start run limit', () => {
 
     expect(conversations.get(first.id).state).toBe('running');
     expect(runner.runs[0].sent).toContain('More');
-    expect(conversations.startRunSlotsInUse(project.id)).toBe(1);
+    expect(conversations.capacity(project.id).project.slotsHeld).toBe(1);
   });
 
   it('refuses Autopilot’s reply to an interrupted Start while the slots are full', async () => {
