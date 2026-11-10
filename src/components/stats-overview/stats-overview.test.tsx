@@ -1,6 +1,9 @@
 import { act, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
+import { aFootprint } from '../../test/fixtures';
+import { showOpenPopovers } from '../../test/popover';
 import { renderWithTheme } from '../../test/render';
 import type { ProjectStats, Stats } from '../../tickets/stats';
 import {
@@ -185,12 +188,39 @@ describe('StatsOverview', () => {
   });
 
   describe('Footprint (T1177)', () => {
-    const measured = (energyWh: number, co2eG: number) => ({
-      measured: true as const,
-      energyWh,
-      co2eG,
-      phoneCharges: 0,
-      carKm: 0,
+    showOpenPopovers();
+
+    const measured = (energyWh: number, co2eG: number) =>
+      aFootprint({ energyWh, co2eG });
+
+    it('gives the comparisons of each total in its tooltip (T1347)', async () => {
+      await renderStats(
+        stats,
+        {},
+        {
+          1: {
+            total: { footprint: measured(2500, 1190), notMeasured: 0 },
+            cycles: [
+              {
+                cycle: { id: 7, title: 'Launch' },
+                footprint: measured(12, 5.7),
+                notMeasured: 0,
+              },
+            ],
+          },
+        },
+      );
+
+      await userEvent.hover(screen.getByText('~2.5 kWh · ~1.2 kg CO₂e est.'));
+      expect(await screen.findByRole('tooltip')).toHaveTextContent(
+        '≈ 100 phone charges',
+      );
+      await userEvent.unhover(screen.getByText('~2.5 kWh · ~1.2 kg CO₂e est.'));
+
+      await userEvent.hover(screen.getByText('~12 Wh · ~5.7 g CO₂e est.'));
+      expect(
+        await screen.findByText('≈ 0.6 phone charges'),
+      ).toBeInTheDocument();
     });
 
     it("shows each Project's total and each Cycle's, as estimates, with the Conversations not measured", async () => {

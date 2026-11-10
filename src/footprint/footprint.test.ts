@@ -69,17 +69,36 @@ describe('footprintOf (T1176)', () => {
     expect(footprint).toMatchObject({ energyWh: 1100 });
   });
 
-  it('gives the phone charges and km by car it equals', () => {
+  it('gives the five everyday comparisons it equals, from energy and CO₂e (T1347)', () => {
     const footprint = footprintOf(
-      { 'claude-opus-5-5': output(1_900) },
+      { 'claude-opus-5-5': output(19_800) },
       factors,
     );
 
-    // 1.9 Wh is 0.1 phone charges of 19 Wh; 0.95 g is 0.0038 km at 250 g/km.
+    // 19.8 Wh and 9.9 g CO₂e: 19 Wh per phone charge, 9 W LED bulb,
+    // 200 Wh per kettle, 9,900 Wh per EU household-day, 250 g per km.
     expect(footprint).toMatchObject({
-      phoneCharges: expect.closeTo(0.1, 6),
-      carKm: expect.closeTo(0.0038, 6),
+      comparisons: {
+        phoneCharges: expect.closeTo(19.8 / 19, 6),
+        ledBulbHours: expect.closeTo(2.2, 6),
+        kettles: expect.closeTo(0.099, 6),
+        householdDays: expect.closeTo(0.002, 6),
+        carKm: expect.closeTo(0.0396, 6),
+      },
     });
+  });
+
+  it('moves only km by car with the grid intensity (T1347)', () => {
+    const usage = { 'claude-opus-5-5': output(19_800) };
+    const clean = footprintOf(usage, { ...factors, gridGramsPerKwh: 100 });
+    const dirty = footprintOf(usage, { ...factors, gridGramsPerKwh: 1000 });
+
+    if (!clean.measured || !dirty.measured) {
+      throw new Error('expected measured Footprints');
+    }
+    expect(dirty.comparisons.carKm).toBeCloseTo(clean.comparisons.carKm * 10);
+    expect(dirty.comparisons.kettles).toBe(clean.comparisons.kettles);
+    expect(dirty.comparisons.phoneCharges).toBe(clean.comparisons.phoneCharges);
   });
 
   it('is measured at zero when a run reported no tokens', () => {

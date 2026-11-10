@@ -5,9 +5,9 @@ import { cyclePath, projectPath } from '../../app/lib/paths';
 import type { StageRunStats } from '../../conversations/conversations';
 import { runResults } from '../../conversations/run-outcome';
 import type { Footprint } from '../../footprint/footprint';
-import { formatFootprint } from '../../footprint/format-footprint';
 import type { ProjectStats, Stats, StatsTotal } from '../../tickets/stats';
 import { AppLink } from '../app-link/app-link';
+import { FootprintText } from '../footprint-text/footprint-text';
 import { ProjectIcon } from '../project-icon/project-icon';
 import * as styles from './stats-overview.css';
 
@@ -124,7 +124,13 @@ type FootprintCellsProps = { total: FootprintTotal };
 
 const FootprintCells: FC<FootprintCellsProps> = ({ total }) => (
   <>
-    <td>{total.footprint.measured ? formatFootprint(total.footprint) : '—'}</td>
+    <td>
+      {total.footprint.measured ? (
+        <FootprintText footprint={total.footprint} />
+      ) : (
+        '—'
+      )}
+    </td>
     <td>{total.notMeasured > 0 ? total.notMeasured : ''}</td>
   </>
 );
