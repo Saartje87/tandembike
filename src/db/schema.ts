@@ -557,6 +557,26 @@ export const runOutcomes = sqliteTable(
 );
 
 /**
+ * The tokens a Conversation's runs used, one row per model, as running totals
+ * across its runs (ADR 0050). Written and read only by the Conversations
+ * module. A Conversation without rows is not measured.
+ */
+export const conversationUsage = sqliteTable(
+  'conversation_usage',
+  {
+    conversationId: integer('conversation_id')
+      .notNull()
+      .references(() => conversations.id),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens').notNull().default(0),
+    outputTokens: integer('output_tokens').notNull().default(0),
+    cacheWriteTokens: integer('cache_write_tokens').notNull().default(0),
+    cacheReadTokens: integer('cache_read_tokens').notNull().default(0),
+  },
+  (table) => [primaryKey({ columns: [table.conversationId, table.model] })],
+);
+
+/**
  * Triage proposals: what a Triage run recommends for a Ticket, kept as a
  * record after the User decides. Proposals are never deleted, except along
  * with their Ticket.
