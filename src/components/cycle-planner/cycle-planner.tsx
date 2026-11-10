@@ -107,18 +107,16 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
         <AppLink href={cyclePath(current.projectId, current.id)}>
           {current.title}
         </AppLink>
-        {!ticket.archived && (
-          <Button
-            type="button"
-            variant="outline"
-            intent="neutral"
-            size="small"
-            disabled={pending}
-            onClick={() => remove(current)}
-          >
-            Remove from Cycle
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          intent="neutral"
+          size="small"
+          disabled={pending}
+          onClick={() => remove(current)}
+        >
+          Remove from Cycle
+        </Button>
       </Inline>
     );
   } else if (ticket.archived) {

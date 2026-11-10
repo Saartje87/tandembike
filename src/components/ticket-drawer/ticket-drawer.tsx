@@ -238,7 +238,8 @@ const noCycles: Cycle[] = [];
  * value at once, and goes back with an error under it when refused. A field
  * being edited saves as focus leaves it, as when the drawer closes.
  * While the Ticket is archived, from the moment Archive is pressed, its
- * fields show read-only and only Ask of the agent actions is offered: it
+ * fields show read-only, except that it can still leave its Cycle (ADR
+ * 0010), and only Ask of the agent actions is offered: it
  * keeps Restore, comments, Attachments, Clear claim and Delete (T1313).
  */
 export const TicketDrawer: FC<TicketDrawerProps> = ({
@@ -542,7 +543,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
           </Detail>
         )}
         <Detail name={<DetailName>Origin</DetailName>}>
-          <TicketOrigin ticket={ticket} />
+          <TicketOrigin ticket={ticket} readOnly={archived} />
         </Detail>
         <Detail name={<DetailName>Cycle</DetailName>}>
           <CyclePlanner ticket={{ ...ticket, archived }} cycles={cycles} />

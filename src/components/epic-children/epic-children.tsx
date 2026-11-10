@@ -58,8 +58,8 @@ function describeChild(child: EpicChild): string {
  * An Epic's child Tickets in its drawer (ADR 0011), below a diagram of the
  * order to work them in (`EpicOrder`): each with its title linked, over this
  * Board when it is on it and else over its own (ADR 0013), its Status and a
- * button to detach it, which shows at once in both. Below, unless the
- * Epic is archived, a field creates a child and Attach Ticket opens a field
+ * button to detach it, unless the Epic is archived, which shows at once in
+ * both. Below, unless the Epic is archived, a field creates a child and Attach Ticket opens a field
  * for the number of an existing Ticket to attach, which shows once saved.
  */
 export const EpicChildren: FC<EpicChildrenProps> = ({
@@ -149,15 +149,17 @@ export const EpicChildren: FC<EpicChildrenProps> = ({
                     <Text fontSize="xsmall" color="muted">
                       {describeChild(child)}
                     </Text>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="small"
-                      aria-label={`Detach T${child.number}`}
-                      onClick={() => detach(child.number)}
-                    >
-                      <Icon name="x-mark" size="small" />
-                    </Button>
+                    {!epic.archived && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="small"
+                        aria-label={`Detach T${child.number}`}
+                        onClick={() => detach(child.number)}
+                      >
+                        <Icon name="x-mark" size="small" />
+                      </Button>
+                    )}
                   </Inline>
                 </li>
               ))}

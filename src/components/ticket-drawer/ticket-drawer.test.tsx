@@ -1897,7 +1897,7 @@ describe('TicketDrawer', () => {
       const editControls = [
         'Fix the header',
         'Detach from Epic',
-        'Remove from Cycle',
+        'Set Origin',
         'Remove label bug',
         `Remove External reference ${pullRequest}`,
         'Add External reference',
@@ -1909,12 +1909,6 @@ describe('TicketDrawer', () => {
         'Remove criterion: Logo visible',
         'Add criterion',
       ];
-      const editFields = [
-        'Status',
-        'Add a label',
-        'Move to another Epic',
-        'Logo visible',
-      ];
 
       const expectReadOnly = () => {
         for (const name of editControls) {
@@ -1923,16 +1917,15 @@ describe('TicketDrawer', () => {
             name,
           ).not.toBeInTheDocument();
         }
-        for (const name of editFields) {
-          const control = inDrawer().queryByLabelText(name);
-          if (control !== null) {
-            expect(control, name).toBeDisabled();
-          }
+        for (const name of ['Status', 'Add a label', 'Move to another Epic']) {
+          expect(
+            inDrawer().queryByLabelText(name),
+            name,
+          ).not.toBeInTheDocument();
         }
-        expect(inDrawer().queryByLabelText('Status')).not.toBeInTheDocument();
         expect(
-          inDrawer().queryByLabelText('Add a label'),
-        ).not.toBeInTheDocument();
+          inDrawer().getByRole('checkbox', { name: 'Logo visible' }),
+        ).toBeDisabled();
       };
 
       it('shows its fields without edit controls', async () => {
@@ -1952,6 +1945,8 @@ describe('TicketDrawer', () => {
           inDrawer().getByRole('link', { name: 'T8 Checkout' }),
         ).toBeInTheDocument();
         expect(inDrawer().getByRole('link', { name: 'Beta' })).toBeVisible();
+        // ADR 0010: an archived Ticket can still leave its Cycle.
+        expect(button('Remove from Cycle')).toBeEnabled();
         expect(
           inDrawer().getByRole('link', { name: 'owner/repo#87' }),
         ).toBeVisible();
@@ -1969,6 +1964,24 @@ describe('TicketDrawer', () => {
           inDrawer().queryByRole('textbox', { name: 'Description' }),
         ).not.toBeInTheDocument();
         expect(updateTicket).not.toHaveBeenCalled();
+      });
+
+      it("offers no Detach on an archived Epic's children", () => {
+        renderDrawer({
+          ...ticket,
+          type: 'Epic',
+          archived: true,
+          children: [
+            anEpicChild({ number: 9, title: 'Pay by card', archived: true }),
+          ],
+        });
+
+        expect(
+          inDrawer().getByRole('link', { name: 'Pay by card' }),
+        ).toBeInTheDocument();
+        expect(
+          inDrawer().queryByRole('button', { name: 'Detach T9' }),
+        ).not.toBeInTheDocument();
       });
 
       it("shows an archived Epic's colour without a picker", () => {
