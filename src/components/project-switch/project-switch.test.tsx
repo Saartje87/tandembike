@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { setProjectAgentSettings } from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
@@ -85,6 +85,25 @@ describe('ProjectSwitch', () => {
       expect(
         screen.getByRole('switch', { name: 'Auto-triage' }),
       ).not.toBeChecked();
+    });
+  });
+  it('shows a change whose action throws as a refusal and puts the switch back (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(setProjectAgentSettings).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ProjectSwitch projectId={3} setting="autopilot" checked />,
+    );
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Autopilot' }));
+
+    expect(
+      await screen.findByText('The setting could not be saved. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
     });
   });
 });

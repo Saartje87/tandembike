@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startSetup } from '../../app/conversations/actions';
 import {
@@ -81,6 +81,45 @@ describe('AgentSettingsForm', () => {
     ).toHaveAccessibleDescription(
       'This folder is not a git repository: it has no .git inside.',
     );
+  });
+
+  it('shows a detection whose action throws on the path field (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(detectProjectRepository).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Detect' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText('Repository path'),
+      ).toHaveAccessibleDescription(
+        'The repository could not be detected. Try again.',
+      ),
+    );
+    expect(screen.getByLabelText('Repository path')).toHaveValue('/repo');
+    expect(screen.getByRole('button', { name: 'Detect' })).toBeEnabled();
+  });
+
+  it('shows a save whose action throws as an alert and keeps the draft (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(setProjectAgentSettings).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={unset} />);
+
+    await userEvent.type(screen.getByLabelText('Repository path'), '/next');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The agent settings could not be saved. Try again.',
+    );
+    expect(screen.getByLabelText('Repository path')).toHaveValue('/next');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   it('hides the run controls and disables agent mode with a reason while the path is unset', () => {

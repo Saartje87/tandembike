@@ -555,10 +555,12 @@ describe('TicketDrawer', () => {
       });
       await userEvent.click(anyway);
 
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
-      });
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
       await waitFor(() =>
         expect(
           screen.queryByRole('dialog', {
@@ -674,10 +676,12 @@ describe('TicketDrawer', () => {
       });
       await userEvent.click(anyway);
 
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
-      });
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
     });
 
     it.each([

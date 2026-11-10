@@ -14,6 +14,7 @@ import { type FC, useId, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
 import type { ActionResult } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import {
   addReferenceTemplate,
   removeReferenceTemplate,
@@ -73,7 +74,10 @@ const TemplateForm: FC<TemplateFormProps> = ({
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
-    const result = await onSubmit(values);
+    const result: ActionResult = await callAction(
+      () => onSubmit(values),
+      'The Reference template could not be saved. Try again.',
+    );
     if (result.ok) {
       onSaved();
       return;
@@ -158,7 +162,10 @@ export const ReferenceTemplateEditor: FC<ReferenceTemplateEditorProps> = ({
   const remove = (id: number) => {
     setRemoveError(undefined);
     startRemove(async () => {
-      const result = await removeReferenceTemplate({ id });
+      const result = await callAction(
+        () => removeReferenceTemplate({ id }),
+        'The Reference template could not be removed. Try again.',
+      );
       if (!result.ok) {
         setRemoveError(result.error);
       }

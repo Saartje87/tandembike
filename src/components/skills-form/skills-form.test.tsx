@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { setProjectSkills } from '../../app/projects/actions';
 import { renderWithTheme } from '../../test/render';
@@ -66,5 +66,22 @@ describe('SkillsForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The Project "Website" is archived.',
     );
+  });
+  it('shows a save whose action throws as an alert and keeps the text (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(setProjectSkills).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<SkillsForm projectId={3} skills={['/review']} />);
+    const field = screen.getByRole('textbox', { name: 'Skills' });
+
+    await user.type(field, '\n/plan');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Skills could not be saved. Try again.',
+    );
+    expect(field).toHaveValue('/review\n/plan');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });

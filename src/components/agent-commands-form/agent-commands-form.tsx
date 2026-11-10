@@ -4,6 +4,8 @@ import { Alert, Button, Label, Stack, Text, TextInput } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { fieldRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { settingsFieldOfStage } from '../../app/lib/paths';
 import { setProjectAgentCommands } from '../../app/projects/actions';
 import {
@@ -48,14 +50,17 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
-    const result = await setProjectAgentCommands({ projectId, ...values });
+    const result = await callAction(
+      () => setProjectAgentCommands({ projectId, ...values }),
+      'The agent commands could not be saved. Try again.',
+    );
     if (result.ok) {
       reset(valuesOf(result.commands));
       return;
     }
     let named = false;
     for (const { field: name } of agentStages) {
-      const message = result.fieldErrors?.[name];
+      const message = fieldRefusal(result, name);
       if (message) {
         setError(name, { type: 'server', message });
         named = true;

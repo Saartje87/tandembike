@@ -1,7 +1,7 @@
 import { atoms } from '@blockle/blocks';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { styleProject } from '../../app/projects/actions';
 import { showOpenPopovers } from '../../test/popover';
@@ -180,6 +180,23 @@ describe('ProjectHeader', () => {
       ).findByRole('alert'),
     ).toHaveTextContent('There is no Project with id 3.');
     // The alert can show one render before the optimistic pick is undone.
+    await waitFor(() => expect(pressed(picker())).toEqual(['Default']));
+    expect(header()).not.toHaveAttribute('data-color');
+  });
+  it('puts the pick back and explains in the popover when the save throws (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(styleProject).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<ProjectHeader project={project} />);
+
+    await openPicker();
+    await userEvent.click(picker().getByRole('button', { name: 'Teal' }));
+
+    expect(
+      await within(
+        screen.getByRole('dialog', { name: 'Colour and icon' }),
+      ).findByRole('alert'),
+    ).toHaveTextContent('The colour and icon could not be saved. Try again.');
     await waitFor(() => expect(pressed(picker())).toEqual(['Default']));
     expect(header()).not.toHaveAttribute('data-color');
   });

@@ -5,7 +5,7 @@ import {
   useSearchParams,
   useSelectedLayoutSegments,
 } from 'next/navigation';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { createCycle } from '../../app/cycles/actions';
 import { mockRouter } from '../../test/navigation';
@@ -347,6 +347,24 @@ describe('ProjectTabs', () => {
 
     expect(await screen.findByText('Enter a title.')).toBeInTheDocument();
     expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a new Cycle whose action throws as a refusal and keeps the title (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(createCycle).mockRejectedValue(new Error('network down'));
+    renderTabs([]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'New Cycle' }));
+    const input = screen.getByRole('textbox', { name: 'New Cycle title' });
+    await userEvent.type(input, 'Beta{Enter}');
+
+    expect(
+      await screen.findByText('The Cycle could not be created. Try again.'),
+    ).toBeInTheDocument();
+    expect(input).toHaveValue('Beta');
+    expect(input).not.toHaveAttribute('readonly');
     expect(router.push).not.toHaveBeenCalled();
   });
 

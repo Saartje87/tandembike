@@ -9,6 +9,7 @@ import {
   useTransition,
 } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { styleProject } from '../../app/projects/actions';
 import type { Project, StyleProjectInput } from '../../tickets/tickets';
 import { tintBackground } from '../palette/palette.css';
@@ -50,7 +51,10 @@ export const ProjectHeader: FC<ProjectHeaderProps> = ({
     setError(undefined);
     startTransition(async () => {
       showPick(change);
-      const result = await styleProject({ projectId: project.id, ...change });
+      const result = await callAction(
+        () => styleProject({ projectId: project.id, ...change }),
+        'The colour and icon could not be saved. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

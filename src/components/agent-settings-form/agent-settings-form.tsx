@@ -14,6 +14,8 @@ import {
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import type { ActionResult } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import {
   detectProjectRepository,
   setProjectAgentSettings,
@@ -154,9 +156,10 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const detect = async () => {
     setDetecting(true);
     try {
-      const result = await detectProjectRepository({
-        path: getValues('repositoryPath'),
-      });
+      const result = await callAction(
+        () => detectProjectRepository({ path: getValues('repositoryPath') }),
+        'The repository could not be detected. Try again.',
+      );
       if (result.ok) {
         clearErrors('repositoryPath');
         setCandidates(result.repository.checkCommands);
@@ -170,30 +173,37 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   };
 
   const submit = handleSubmit(async (values) => {
-    const result = await setProjectAgentSettings({
-      projectId,
-      repositoryPath: values.repositoryPath,
-      checkCommand:
-        values.checkCommand.trim() === '' ? null : values.checkCommand,
-      prepareCommand:
-        values.prepareCommand.trim() === '' ? null : values.prepareCommand,
-      parallelRuns: values.parallelRuns,
-      maxConcurrentRuns: Number(values.maxConcurrentRuns),
-      agentMode: values.agentMode,
-      runMode: values.runMode,
-      runModel: values.runModel.trim() === '' ? null : values.runModel.trim(),
-      triageModel:
-        values.triageModel.trim() === '' ? null : values.triageModel.trim(),
-      autopilot: values.autopilot,
-      spendCeilingUsd:
-        values.spendCeiling.trim() === '' ? null : Number(values.spendCeiling),
-      autoTriage: values.autoTriage,
-      triageCeilingUsd:
-        values.triageCeiling.trim() === ''
-          ? null
-          : Number(values.triageCeiling),
-      autoMerge: values.autoMerge,
-    });
+    const result: ActionResult = await callAction(
+      () =>
+        setProjectAgentSettings({
+          projectId,
+          repositoryPath: values.repositoryPath,
+          checkCommand:
+            values.checkCommand.trim() === '' ? null : values.checkCommand,
+          prepareCommand:
+            values.prepareCommand.trim() === '' ? null : values.prepareCommand,
+          parallelRuns: values.parallelRuns,
+          maxConcurrentRuns: Number(values.maxConcurrentRuns),
+          agentMode: values.agentMode,
+          runMode: values.runMode,
+          runModel:
+            values.runModel.trim() === '' ? null : values.runModel.trim(),
+          triageModel:
+            values.triageModel.trim() === '' ? null : values.triageModel.trim(),
+          autopilot: values.autopilot,
+          spendCeilingUsd:
+            values.spendCeiling.trim() === ''
+              ? null
+              : Number(values.spendCeiling),
+          autoTriage: values.autoTriage,
+          triageCeilingUsd:
+            values.triageCeiling.trim() === ''
+              ? null
+              : Number(values.triageCeiling),
+          autoMerge: values.autoMerge,
+        }),
+      'The agent settings could not be saved. Try again.',
+    );
     if (result.ok) {
       // Turning agent mode or Parallel runs on offers Setup; it never starts it.
       if (values.agentMode && !saved.agentMode) {

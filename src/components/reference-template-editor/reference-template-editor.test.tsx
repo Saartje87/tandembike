@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   addReferenceTemplate,
@@ -184,6 +184,33 @@ describe('ReferenceTemplateEditor', () => {
     );
   });
 
+  it('keeps an edit open with a reason when its action throws (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(updateReferenceTemplate).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ReferenceTemplateEditor projectId={3} templates={[github, jira]} />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Edit Reference template #' }),
+    );
+    const form = within(
+      screen.getByRole('form', { name: 'Edit Reference template #' }),
+    );
+    await userEvent.clear(form.getByLabelText('Prefix'));
+    await userEvent.type(form.getByLabelText('Prefix'), 'GH-');
+    await userEvent.click(form.getByRole('button', { name: 'Save' }));
+
+    expect(await form.findByRole('alert')).toHaveTextContent(
+      'The Reference template could not be saved. Try again.',
+    );
+    expect(form.getByLabelText('Prefix')).toHaveValue('GH-');
+    expect(form.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
+
   it('cancels an edit without saving', async () => {
     renderWithTheme(
       <ReferenceTemplateEditor projectId={3} templates={[github]} />,
@@ -228,6 +255,45 @@ describe('ReferenceTemplateEditor', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Reference template with id 2.',
+    );
+  });
+  it('shows an add whose action throws as an alert and keeps the draft (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(addReferenceTemplate).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<ReferenceTemplateEditor projectId={3} templates={[]} />);
+    const form = within(addForm());
+
+    await userEvent.type(form.getByLabelText('Prefix'), '#');
+    await userEvent.type(form.getByLabelText('URL'), 'https://e.com/{{n}');
+    await userEvent.click(form.getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Reference template could not be saved. Try again.',
+    );
+    expect(form.getByLabelText('Prefix')).toHaveValue('#');
+    expect(form.getByLabelText('URL')).toHaveValue('https://e.com/{n}');
+    expect(form.getByRole('button', { name: 'Add' })).toBeEnabled();
+  });
+
+  it('shows a removal whose action throws as an alert (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(removeReferenceTemplate).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(
+      <ReferenceTemplateEditor projectId={3} templates={[github, jira]} />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove Reference template ABC-' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Reference template could not be removed. Try again.',
     );
   });
 });
