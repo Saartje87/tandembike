@@ -682,6 +682,13 @@ describe('TicketDrawer', () => {
           confirmed: true,
         }),
       );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', {
+            name: 'Finish T4 with unchecked criteria?',
+          }),
+        ).toBeNull(),
+      );
     });
 
     it.each([
