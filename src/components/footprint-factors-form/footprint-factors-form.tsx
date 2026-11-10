@@ -114,6 +114,9 @@ export const FootprintFactorsForm: FC<FootprintFactorsFormProps> = ({
   factors,
 }) => {
   const [resetting, setResetting] = useState<FootprintFactor | null>(null);
+  // A reset saves one factor, so "Saved." from an earlier submit no longer
+  // speaks for the form.
+  const [showSaved, setShowSaved] = useState(false);
   const {
     formState: { errors, isSubmitting, isSubmitSuccessful },
     handleSubmit,
@@ -130,6 +133,7 @@ export const FootprintFactorsForm: FC<FootprintFactorsFormProps> = ({
       'The Footprint factors could not be saved. Try again.',
     );
     if (result.ok) {
+      setShowSaved(true);
       return;
     }
     const refused = fields
@@ -145,6 +149,7 @@ export const FootprintFactorsForm: FC<FootprintFactorsFormProps> = ({
 
   const reset = async (name: FootprintFactor) => {
     clearErrors(name);
+    setShowSaved(false);
     setResetting(name);
     const result = await callAction(
       () => resetFootprintFactor({ name }),
@@ -184,7 +189,8 @@ export const FootprintFactorsForm: FC<FootprintFactorsFormProps> = ({
           />
         ))}
         {serverError && <Alert intent="danger">{serverError}</Alert>}
-        {isSubmitSuccessful &&
+        {showSaved &&
+          isSubmitSuccessful &&
           !serverError &&
           fields.every(({ name }) => !errors[name]) && (
             <Text tag="p" fontSize="small" color="muted" role="status">

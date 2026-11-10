@@ -702,9 +702,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       />
       <TicketConversationList
         conversations={conversations}
-        {...(conversationFootprints
-          ? { footprints: conversationFootprints }
-          : {})}
+        footprints={conversationFootprints ?? {}}
       />
       <TicketComments
         ticketNumber={ticket.number}

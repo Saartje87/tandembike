@@ -103,6 +103,30 @@ describe('FootprintFactorsForm (T1178)', () => {
     );
   });
 
+  it('no longer says Saved. after a reset, which saves one factor', async () => {
+    vi.mocked(saveFootprintFactors).mockResolvedValue({
+      ok: true,
+      factors: saved,
+    });
+    vi.mocked(resetFootprintFactor).mockResolvedValue({
+      ok: true,
+      factors: defaultFootprintFactors,
+    });
+    renderWithTheme(<FootprintFactorsForm factors={saved} />);
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save Footprint factors' }),
+    );
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Reset Opus to 1000' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByText('Saved.')).not.toBeInTheDocument(),
+    );
+  });
+
   it('shows a refused reset under its field', async () => {
     vi.mocked(resetFootprintFactor).mockResolvedValue({
       ok: false,

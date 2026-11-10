@@ -28,8 +28,9 @@ export type ConversationChatHeaderProps = {
 
 /**
  * The chat's header, one row: its Ticket or Project, then intent, state, cost
- * and starter in muted text, then the Footprint, both cut short with an ellipsis, and Continue in
- * terminal and Stop at the end (a Terminal Conversation has no Stop). The
+ * and starter in muted text, both cut short with an ellipsis, then the
+ * Footprint (ADR 0050), and Continue in terminal and Stop at the end (a
+ * Terminal Conversation has no Stop). The
  * worktree, the Copied status and a refusal show below it, when present.
  */
 export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({

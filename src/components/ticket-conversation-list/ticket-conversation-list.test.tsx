@@ -36,6 +36,7 @@ describe('TicketConversationList', () => {
             batchTriageTickets: [4],
           }),
         ]}
+        footprints={{}}
       />,
     );
 

@@ -20,7 +20,7 @@ export type TicketConversationListProps = {
   /** The Ticket's Conversations, newest first. */
   conversations: Conversation[];
   /** Their estimated Footprints by Conversation id; one left out is not measured (ADR 0050). */
-  footprints?: Record<number, Footprint>;
+  footprints: Record<number, Footprint>;
 };
 
 const footprintLabel = (footprint: Footprint | undefined) =>
@@ -28,12 +28,13 @@ const footprintLabel = (footprint: Footprint | undefined) =>
 
 /**
  * A compact list of a Ticket's Conversations with Agents: intent, state,
- * cost and Footprint, with its comparisons in a tooltip. A row opens the Conversation in the Conversation dialog, reopening it
- * first when the User closed it. Renders nothing for a Ticket without any.
+ * cost and Footprint, with its comparisons in a tooltip. A row opens the
+ * Conversation in the Conversation dialog, reopening it first when the User
+ * closed it. Renders nothing for a Ticket without any.
  */
 export const TicketConversationList: FC<TicketConversationListProps> = ({
   conversations,
-  footprints = {},
+  footprints,
 }) => {
   const dialog = useConversationDialog();
   const [, startOpen] = useTransition();

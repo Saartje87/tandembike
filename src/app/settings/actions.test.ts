@@ -136,6 +136,22 @@ describe('saveFootprintFactors (T1178)', () => {
       fieldErrors: { gridGramsPerKwh: 'Enter a number of 0 or more.' },
     });
   });
+
+  it('refuses an empty or non-number factor, rather than reading it as 0', async () => {
+    expect(
+      await saveFootprintFactors({
+        ...defaultFootprintFactors,
+        haikuWhPerMillion: '' as never,
+        sonnetWhPerMillion: null as never,
+      }),
+    ).toMatchObject({
+      ok: false,
+      fieldErrors: {
+        haikuWhPerMillion: 'Enter a number of 0 or more.',
+        sonnetWhPerMillion: 'Enter a number of 0 or more.',
+      },
+    });
+  });
 });
 
 describe('resetFootprintFactor (T1178)', () => {

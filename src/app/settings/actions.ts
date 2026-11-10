@@ -42,15 +42,19 @@ export async function saveFootprintFactors(
 ): Promise<ActionResult<{ factors: FootprintFactors }>> {
   return actionResult(() => {
     const factors = appSettings().setFootprintFactors({
-      haikuWhPerMillion: Number(input?.haikuWhPerMillion),
-      sonnetWhPerMillion: Number(input?.sonnetWhPerMillion),
-      opusWhPerMillion: Number(input?.opusWhPerMillion),
-      gridGramsPerKwh: Number(input?.gridGramsPerKwh),
+      haikuWhPerMillion: numberOrNaN(input?.haikuWhPerMillion),
+      sonnetWhPerMillion: numberOrNaN(input?.sonnetWhPerMillion),
+      opusWhPerMillion: numberOrNaN(input?.opusWhPerMillion),
+      gridGramsPerKwh: numberOrNaN(input?.gridGramsPerKwh),
     });
     revalidateFootprints();
     return { factors };
   });
 }
+
+/** `value` when it is a number, else NaN, which the Settings module refuses: an empty value is not 0. */
+const numberOrNaN = (value: unknown): number =>
+  typeof value === 'number' ? value : Number.NaN;
 
 /** Sets one Footprint factor back to its ADR 0050 default. */
 export async function resetFootprintFactor(input: {
