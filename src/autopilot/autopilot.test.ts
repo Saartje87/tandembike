@@ -16,13 +16,15 @@ function setup(options: { autopilot?: boolean; parallel?: number } = {}) {
   const project = tickets.createProject({ name: 'Website' });
   tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
-    ...(options.parallel === undefined
-      ? {}
-      : { parallelRuns: true, maxConcurrentRuns: options.parallel }),
+    ...(options.parallel === undefined ? {} : { parallelRuns: true }),
     ...(options.autopilot === false
       ? {}
       : { autopilot: true, spendCeilingUsd: 50 }),
   });
+  // With Parallel runs on, the Machine cap is the Project's limit (T1330).
+  if (options.parallel !== undefined) {
+    tickets.setMachineSettings({ maxConcurrentRuns: options.parallel });
+  }
   const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
   const autopilot = createAutopilot({ tickets, conversations, changes });
   const ready = (title: string, extra: { type?: 'Epic' } = {}) =>
@@ -379,7 +381,6 @@ describe('Autopilot dispatch', () => {
     tickets.setProjectAgentSettings(project.id, {
       autopilot: false,
       parallelRuns: true,
-      maxConcurrentRuns: 5,
     });
     ready('B');
     await autopilot.evaluate();
@@ -523,7 +524,6 @@ describe('Autopilot startup', () => {
     fresh.interruptStale();
     tickets.setProjectAgentSettings(project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: options.parallel ?? 9,
       ...(options.autopilot === undefined
         ? {}
         : { autopilot: options.autopilot }),
@@ -531,6 +531,7 @@ describe('Autopilot startup', () => {
         ? {}
         : { spendCeilingUsd: options.ceiling }),
     });
+    tickets.setMachineSettings({ maxConcurrentRuns: options.parallel ?? 9 });
     const autopilot = createAutopilot({
       tickets,
       conversations: fresh,
@@ -1062,7 +1063,7 @@ describe('Auto-triage', () => {
 describe('Autopilot machine cap (ADR 0041)', () => {
   function machineSetup(
     cap: number,
-    options: { projects?: number; parallel?: number } = {},
+    options: { projects?: number; parallelRuns?: boolean } = {},
   ) {
     const changes = createChangeChannel();
     const world = createTestConversations(changes);
@@ -1077,8 +1078,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
             : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
         autopilot: true,
         spendCeilingUsd: 50,
-        parallelRuns: true,
-        maxConcurrentRuns: options.parallel ?? 9,
+        parallelRuns: options.parallelRuns ?? true,
       });
       const cycle = tickets.createCycle({
         projectId: project.id,
@@ -1156,7 +1156,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
   it('keeps each Project start run limit inside the machine cap', async () => {
     const { projects, ready, autopilot, startedIn, conversations } =
-      machineSetup(5, { parallel: 1 });
+      machineSetup(5, { parallelRuns: false });
     ready(projects[0], 'A');
     ready(projects[0], 'B');
     const c = ready(projects[1], 'C');
@@ -1295,7 +1295,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
     it("keeps each Project's own Start run limit and one Triage run at a time", async () => {
       const { projects, ready, autopilot, startedIn, conversations, tickets } =
-        machineSetup(9, { parallel: 1 });
+        machineSetup(9, { parallelRuns: false });
       tickets.setProjectAgentSettings(projects[0].id, {
         autoTriage: true,
         triageCeilingUsd: 5,
@@ -1405,7 +1405,6 @@ describe('Machine ceiling (ADR 0041)', () => {
         autopilot: true,
         spendCeilingUsd: 500,
         parallelRuns: true,
-        maxConcurrentRuns: 9,
       });
       const cycle = tickets.createCycle({
         projectId: project.id,

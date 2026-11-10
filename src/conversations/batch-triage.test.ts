@@ -233,7 +233,6 @@ describe('A Batch triage run (T1317)', () => {
     const { conversations, runner, tickets, project, cycle } = setup();
     tickets.setProjectAgentSettings(project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: 1,
       autoTriage: true,
       triageCeilingUsd: 1,
     });

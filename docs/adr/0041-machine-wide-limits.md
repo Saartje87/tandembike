@@ -1,6 +1,6 @@
 # Machine-wide limits
 
-Amended by [ADR 0049](0049-a-run-waiting-on-the-user-keeps-its-slot.md): a Machine slot is held by a live Start or Merge, idle ones waiting on the User included, so a User's reply into one no longer adds to the count. Autopilot's headroom is the cap minus every live Agent process: the slot holders, the User's own live Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage and Batch triage runs, and open Terminal Conversations (`liveProcessesInUse()`). Those never hold a slot, so the cap never refuses them, and a Start the User presses is refused only by slot holders.
+Amended by [ADR 0049](0049-a-run-waiting-on-the-user-keeps-its-slot.md): a Machine slot is held by a live Start or Merge, idle ones waiting on the User included, so a User's reply into one no longer adds to the count. Autopilot's headroom is the cap minus every live Agent process: the slot holders, the User's own live Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage and Batch triage runs, and open Terminal Conversations (`liveProcessesInUse()`). Those never hold a slot, so the cap never refuses them, and a Start the User presses is refused only by slot holders. The Project's own run count is gone: Parallel runs off allows one slot-holding Start or Merge in the Project, on allows up to this cap, so the cap is the one number for load.
 
 Amends [ADR 0030](0030-autopilot-dispatches-the-active-cycles-ready-work.md): Autopilot's serialised `evaluate(projectId)` becomes one machine-wide pass.
 

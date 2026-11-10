@@ -228,9 +228,14 @@ export function createAutopilot({
     // A Merge the User approved holds a run slot like a Start (T1221), and
     // an idle one waiting on the User keeps it (ADR 0049).
     const working = conversations.startRunSlotsInUse(projectId);
-    const limit = startRunLimit(settings);
+    const limit = startRunLimit(
+      settings,
+      tickets.getMachineSettings().maxConcurrentRuns,
+    );
     const slots = Math.max(0, limit - working);
-    if (slots === 0) {
+    // With Parallel runs on the limit is the Machine cap, whose own reason
+    // says it is full.
+    if (slots === 0 && !settings.parallelRuns) {
       reasons.push({ type: 'noFreeStartRunSlot', limit });
     }
     return { cycleId: cycle?.id ?? null, slots, reasons };

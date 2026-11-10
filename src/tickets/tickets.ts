@@ -215,10 +215,11 @@ export type ProjectAgentSettings = {
   checkCommand: string | null;
   /** The command run in each new worktree before its run starts, or `null` while unset. */
   prepareCommand: string | null;
-  /** Whether Start runs may overlap, each in a worktree of its own. */
+  /**
+   * Whether Start runs may overlap, each in a worktree of its own: off allows
+   * one at a time, on up to the Machine cap (ADR 0049).
+   */
   parallelRuns: boolean;
-  /** The most Start runs running at once; at least 1. */
-  maxConcurrentRuns: number;
   /** Whether the title fields create through a Conversation. */
   agentMode: boolean;
   /** The permission mode of every run the Project starts (ADR 0029). */
@@ -282,7 +283,6 @@ const agentSettingsColumns = {
   checkCommand: projects.checkCommand,
   prepareCommand: projects.prepareCommand,
   parallelRuns: projects.parallelRuns,
-  maxConcurrentRuns: projects.maxConcurrentRuns,
   agentMode: projects.agentMode,
   runMode: projects.runMode,
   runModel: projects.runModel,
@@ -1732,7 +1732,6 @@ export function createTickets(
         checkCommand,
         prepareCommand,
         parallelRuns,
-        maxConcurrentRuns,
         agentMode,
         runMode,
         runModel,
@@ -1769,11 +1768,6 @@ export function createTickets(
             ? undefined
             : (repositoryPathProblem(nextPath) ??
               repositoryPathTakenProblem(db, nextPath, id)),
-        maxConcurrentRuns:
-          maxConcurrentRuns === undefined ||
-          (Number.isInteger(maxConcurrentRuns) && maxConcurrentRuns >= 1)
-            ? undefined
-            : 'Enter a whole number of at least 1.',
         agentMode:
           agentMode === true && nextPath === null
             ? 'Set a repository path before turning on agent mode.'
@@ -1804,7 +1798,6 @@ export function createTickets(
               ? before.prepareCommand
               : trimmedOrNull(prepareCommand),
           ...(parallelRuns === undefined ? {} : { parallelRuns }),
-          ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
           agentMode:
             nextPath === null ? false : (agentMode ?? before.agentMode),
           ...(runMode === undefined ? {} : { runMode }),

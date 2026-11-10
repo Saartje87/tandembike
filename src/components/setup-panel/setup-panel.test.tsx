@@ -11,7 +11,6 @@ const defaults: ProjectAgentSettings = {
   checkCommand: null,
   prepareCommand: null,
   parallelRuns: false,
-  maxConcurrentRuns: 1,
   agentMode: true,
   runMode: 'default',
   runModel: null,

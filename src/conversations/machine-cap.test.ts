@@ -26,7 +26,6 @@ function setup(cap = 2) {
           ? world.repositoryDir
           : mkdtempSync(join(tmpdir(), 'tandembike-repo-')),
       parallelRuns: true,
-      maxConcurrentRuns: 9,
     });
     return project;
   });
@@ -485,5 +484,41 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
     await startIn(projects[0].id, 'start', 'terminal');
     expect(conversations.machineSlotsInUse()).toBe(1);
     expect(conversations.liveProcessesInUse()).toBe(7);
+  });
+});
+
+describe('Parallel runs and the Machine cap, the one number (T1330)', () => {
+  it('limits a Project with Parallel runs on only by the Machine cap', async () => {
+    const { conversations, projects, startIn } = setup(4);
+    for (let i = 0; i < 4; i += 1) {
+      await startIn(projects[0].id, 'start');
+    }
+
+    await expect(startIn(projects[0].id, 'start')).rejects.toEqual(
+      new NotAllowedError(capMessage(4)),
+    );
+    expect(conversations.startRunSlotsInUse(projects[0].id)).toBe(4);
+  });
+
+  it('allows one slot-holding Start or Merge with Parallel runs off', async () => {
+    const { conversations, runner, projects, startIn, tickets } = setup(9);
+    tickets.setProjectAgentSettings(projects[0].id, { parallelRuns: false });
+    await startIn(projects[0].id, 'start');
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    const ticket = tickets.createTicket({
+      projectId: projects[0].id,
+      title: 'Ship',
+    });
+    tickets.updateTicket(ticket.number, { status: 'In progress' });
+    tickets.addExternalReferences(ticket.number, [
+      'https://github.com/acme/site/pull/12',
+    ]);
+
+    await expect(startIn(projects[0].id, 'start')).rejects.toBeInstanceOf(
+      NotAllowedError,
+    );
+    await expect(
+      conversations.approveMerge({ ticketNumber: ticket.number }),
+    ).rejects.toBeInstanceOf(NotAllowedError);
   });
 });

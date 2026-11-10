@@ -1589,12 +1589,10 @@ describe('The Start run limit', () => {
     expect(error).toBeInstanceOf(NotAllowedError);
   });
 
-  it('allows Starts up to the max concurrent Start runs with Parallel runs on', async () => {
+  it('allows Starts up to the Machine cap with Parallel runs on (T1330)', async () => {
     const { conversations, tickets, project } = setup();
-    tickets.setProjectAgentSettings(project.id, {
-      parallelRuns: true,
-      maxConcurrentRuns: 2,
-    });
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    tickets.setMachineSettings({ maxConcurrentRuns: 2 });
     await startOn(conversations, project.id);
     await startOn(conversations, project.id);
 
@@ -2101,7 +2099,6 @@ describe('Autopilot spend', () => {
     const world = setup();
     world.tickets.setProjectAgentSettings(world.project.id, {
       parallelRuns: true,
-      maxConcurrentRuns: 9,
     });
     world.tickets.setMachineSettings({ maxConcurrentRuns: 9 });
     return world;

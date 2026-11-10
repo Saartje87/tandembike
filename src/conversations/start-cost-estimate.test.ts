@@ -10,7 +10,6 @@ function setup() {
   world.tickets.setProjectAgentSettings(project.id, {
     repositoryPath: world.repositoryDir,
     parallelRuns: true,
-    maxConcurrentRuns: 50,
   });
   let at = new Date('2026-01-01T10:00:00Z').getTime();
   vi.useFakeTimers();

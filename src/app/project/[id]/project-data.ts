@@ -117,17 +117,15 @@ export async function loadProjectCycle(params: CyclePageProps['params']) {
   return { project, cycle };
 }
 
-/** The Project's Start runs working now, and how many it allows at once. */
+/**
+ * The Project's live Start and Merge runs holding a slot now, idle ones
+ * waiting on the User included (ADR 0049), and how many it allows at once.
+ */
 export function runSlotsOf(projectId: number) {
-  const used = appConversations()
-    .list({ projectId })
-    .filter(
-      ({ intent, state }) =>
-        (intent === 'start' || intent === 'merge') &&
-        (state === 'running' || state === 'waiting'),
-    ).length;
+  const used = appConversations().startRunSlotsInUse(projectId);
   const cap = startRunLimit(
     appTickets('user').getProjectAgentSettings(projectId),
+    appTickets('user').getMachineSettings().maxConcurrentRuns,
   );
   return { used, cap };
 }

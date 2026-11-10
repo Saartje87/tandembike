@@ -6,7 +6,7 @@ Amended by [ADR 0038](0038-the-user-approves-each-merge.md): a Start run hands i
 
 Amended by [ADR 0031](0031-a-reply-is-never-refused-by-the-start-run-limit.md): a reply sent by the User is never refused by the Start run cap; only new Starts and Autopilot's replies are.
 
-Amended by [ADR 0049](0049-a-run-waiting-on-the-user-keeps-its-slot.md): a Start or Merge holds its Start run slot while its run is live, idle and waiting on the User included; a handoff to Review or Done ends its process and frees the slot.
+Amended by [ADR 0049](0049-a-run-waiting-on-the-user-keeps-its-slot.md): a Start or Merge holds its Start run slot while its run is live, idle and waiting on the User included; a handoff to Review or Done ends its process and frees the slot. The Project has no run count of its own any more: Parallel runs off allows one Start at a time, on allows up to the Machine cap.
 
 Until now Agents only connected to Tandembike; the User started them in a terminal. To let the User start, triage and talk to an Agent from a Ticket or a Board, the server now launches headless Claude Code runs itself, through the Claude Agent SDK, in the Project's repository path. Each run is a Conversation shown in the UI: the User replies into it, and every permission prompt the run would have shown in a terminal comes to the User as an Allow or Deny in the Conversation. The run reaches the tracker the way every Agent does, as an MCP client of the server (ADR 0002), so Claims, Activity and live updates need no new path.
 
@@ -25,7 +25,7 @@ Starting a process with shell access changes what ADR 0001's missing authenticat
 
 - Only Claude Code runs are started, behind an agent runner seam; GitHub Copilot still connects as before.
 - A repository whose instructions live only in `AGENTS.md` needs a `CLAUDE.md` that includes it, since the SDK loads `CLAUDE.md`.
-- A Project caps its concurrent Start runs; a Start beyond the cap is refused, not queued.
+- A Project caps its concurrent Start runs; a Start beyond the cap is refused, not queued. (Since ADR 0049 the cap is one with Parallel runs off and the Machine cap with it on.)
 - Setup is the one Conversation whose brief says what to check in the repository; see ADR 0020.
 - Triage and Start send the Project's Agent command and the Ticket number as the run's first message (`/tandembike:triage T42` when it has none, by ADR 0032), never in the brief (T621). Many skills, such as `triage` and `implement`, set `disable-model-invocation: true`: the Agent cannot open them with the Skill tool, so a brief line such as "use /triage" does nothing, and only a message that starts with the command runs the skill. Keep the command at the start of the first message. A Retro sends the Project's Retro command, or the Playbook's, and the Cycle reference, its title and id, the same way (T1171).
 - The brief points to the Ticket by its number, title and type (T622): whether it is an Epic changes what Start means, and the type never goes stale. It never copies the Ticket's Status, labels, Epic, Cycle or description, which change during a Conversation and which the Agent reads live with `get_ticket`. Facts in the brief are a shortcut, never a requirement: a skill must still work when started from a terminal without them. Revisit after about 20 Start runs, or when a transcript shows an Agent deciding badly for lack of Epic or Cycle context.

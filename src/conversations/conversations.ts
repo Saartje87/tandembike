@@ -396,11 +396,14 @@ const isOpenForMergeResume = (conversation: {
   !conversation.hidden &&
   (conversation.state === 'idle' || conversation.state === 'interrupted');
 
-/** How many Start runs a Project allows at once (T588 settings). */
-export const startRunLimit = (settings: {
-  parallelRuns: boolean;
-  maxConcurrentRuns: number;
-}) => (settings.parallelRuns ? settings.maxConcurrentRuns : 1);
+/**
+ * How many slot-holding Start runs a Project allows at once (ADR 0049): one
+ * with Parallel runs off, else the Machine cap, the one number for load.
+ */
+export const startRunLimit = (
+  settings: { parallelRuns: boolean },
+  machineCap: number,
+) => (settings.parallelRuns ? machineCap : 1);
 
 /**
  * Conversations (ADR 0019): the User's exchanges with Agent runs that
@@ -889,19 +892,19 @@ export function createConversations({
   const checkStartLimit = (
     projectId: number,
     intent: ConversationIntent,
-    settings: { parallelRuns: boolean; maxConcurrentRuns: number },
+    settings: { parallelRuns: boolean },
     exceptId?: number,
   ) => {
     if (!isStartRunIntent(intent)) {
       return;
     }
-    const limit = startRunLimit(settings);
-    const running = startRunSlotsInUse(projectId, exceptId);
-    if (running >= limit) {
+    // With Parallel runs on, the Machine cap is the Project's only limit.
+    if (
+      !settings.parallelRuns &&
+      startRunSlotsInUse(projectId, exceptId) >= 1
+    ) {
       throw new NotAllowedError(
-        settings.parallelRuns
-          ? `This Project already has ${running} Start runs working, the most it allows at once. Stop one, or raise max concurrent Start runs in the Project settings.`
-          : 'This Project already has a Start run working. Stop it first, or turn on Parallel runs in the Project settings to allow more.',
+        'This Project already has a Start run working. Stop it first, or turn on Parallel runs in the Project settings to allow more.',
       );
     }
     const cap = tickets.getMachineSettings().maxConcurrentRuns;
