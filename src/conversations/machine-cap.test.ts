@@ -11,8 +11,9 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const capMessage = (cap: number) =>
-  `The machine runs its cap of ${cap} runs; wait for one to finish or raise the cap in Settings.`;
+/** The cap's refusal, naming the Conversations holding the slots (T1331). */
+const capMessage = (cap: number, held: string) =>
+  `The machine runs its cap of ${cap} ${cap === 1 ? 'run' : 'runs'}, held by ${held}. Wait for one to finish, answer or close one, or raise the cap in Settings.`;
 
 function setup(cap = 2) {
   const world = createTestConversations(createChangeChannel());
@@ -127,7 +128,7 @@ describe('The machine cap (ADR 0041)', () => {
         intent: 'start',
         prompt: 'Go',
       }),
-    ).rejects.toEqual(new NotAllowedError(capMessage(2)));
+    ).rejects.toEqual(new NotAllowedError(capMessage(2, 'T1 and T2')));
     expect(runner.runs).toHaveLength(2);
     expect(conversations.list({ ticketNumber: ticket.number })).toEqual([]);
   });
@@ -146,7 +147,7 @@ describe('The machine cap (ADR 0041)', () => {
 
     await expect(
       conversations.approveMerge({ ticketNumber: ticket.number }),
-    ).rejects.toEqual(new NotAllowedError(capMessage(1)));
+    ).rejects.toEqual(new NotAllowedError(capMessage(1, 'T1')));
   });
 
   it('does not limit a Triage or an Ask at the cap', async () => {
@@ -166,7 +167,7 @@ describe('The machine cap (ADR 0041)', () => {
     runner.runs[0].emit({ type: 'turn', costUsd: 1 });
     // The idle run keeps its slot, so a second Start is refused.
     await expect(startIn(projects[1].id, 'start')).rejects.toEqual(
-      new NotAllowedError(capMessage(1)),
+      new NotAllowedError(capMessage(1, 'T1 (waiting on you)')),
     );
 
     await conversations.reply(first.id, 'More', 'user');
@@ -221,7 +222,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     expect(world.conversations.machineSlotsInUse()).toBe(1);
     expect(run.closed).toBe(false);
     await expect(startOn(world, world.projects[1].id)).rejects.toEqual(
-      new NotAllowedError(capMessage(1)),
+      new NotAllowedError(capMessage(1, 'T1 (waiting on you)')),
     );
   });
 
@@ -333,7 +334,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
 
     await expect(
       world.conversations.approveMerge({ ticketNumber: ticket.number }),
-    ).rejects.toEqual(new NotAllowedError(capMessage(1)));
+    ).rejects.toEqual(new NotAllowedError(capMessage(1, 'T2')));
   });
 
   it('gives an interrupted Conversation no slot, and resumes it on the User’s reply at the cap', async () => {
@@ -495,7 +496,7 @@ describe('Parallel runs and the Machine cap, the one number (T1330)', () => {
     }
 
     await expect(startIn(projects[0].id, 'start')).rejects.toEqual(
-      new NotAllowedError(capMessage(4)),
+      new NotAllowedError(capMessage(4, 'T1, T2, T3 and T4')),
     );
     expect(conversations.startRunSlotsInUse(projects[0].id)).toBe(4);
   });
@@ -520,5 +521,72 @@ describe('Parallel runs and the Machine cap, the one number (T1330)', () => {
     await expect(
       conversations.approveMerge({ ticketNumber: ticket.number }),
     ).rejects.toBeInstanceOf(NotAllowedError);
+  });
+});
+
+describe('A refusal names the Conversations holding the slots (T1331)', () => {
+  it('names each slot holder’s Ticket at the cap and marks those waiting on the User', async () => {
+    const { conversations, runner, projects, startIn, tickets } = setup(3);
+    await startIn(projects[0].id, 'start');
+    await startIn(projects[1].id, 'start');
+    await startIn(projects[0].id, 'start');
+    // T1 ends its turn waiting on a reply, T3 waits on a permission.
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    void runner.runs[2].options.askPermission({
+      toolName: 'Bash',
+      input: {},
+      rules: [],
+    });
+    const ticket = tickets.createTicket({
+      projectId: projects[1].id,
+      title: 'Next',
+    });
+
+    await expect(
+      conversations.start({
+        startedBy: 'user',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        prompt: 'Go',
+      }),
+    ).rejects.toEqual(
+      new NotAllowedError(
+        capMessage(3, 'T1 (waiting on you), T2 and T3 (waiting on you)'),
+      ),
+    );
+  });
+
+  it('names the Project’s slot holder when Parallel runs is off', async () => {
+    const { runner, projects, startIn, tickets } = setup(9);
+    tickets.setProjectAgentSettings(projects[0].id, { parallelRuns: false });
+    await startIn(projects[0].id, 'start');
+    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+
+    await expect(startIn(projects[0].id, 'start')).rejects.toEqual(
+      new NotAllowedError(
+        'This Project already has a Start run working: T1 (waiting on you). Answer, stop or close it first, or turn on Parallel runs in the Project settings to allow more.',
+      ),
+    );
+  });
+
+  it('names a slot holder without a Ticket by its Conversation', async () => {
+    const { conversations, projects } = setup(1);
+    const held = await conversations.start({
+      startedBy: 'user',
+      projectId: projects[0].id,
+      intent: 'start',
+      prompt: 'Go',
+    });
+
+    await expect(
+      conversations.start({
+        startedBy: 'user',
+        projectId: projects[1].id,
+        intent: 'start',
+        prompt: 'Go',
+      }),
+    ).rejects.toEqual(
+      new NotAllowedError(capMessage(1, `Conversation ${held.id}`)),
+    );
   });
 });

@@ -887,7 +887,8 @@ describe('ConversationDialogProvider', () => {
     it('keeps the draft and its text and shows the reason when the start is refused', async () => {
       vi.mocked(startConversation).mockResolvedValue({
         ok: false,
-        error: 'This Project already has a Start run working.',
+        error:
+          'This Project already has a Start run working: T3 (waiting on you). Answer, stop or close it first, or turn on Parallel runs in the Project settings to allow more.',
       });
       show();
       await userEvent.click(

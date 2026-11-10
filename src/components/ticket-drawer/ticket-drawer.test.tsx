@@ -769,6 +769,17 @@ describe('TicketDrawer', () => {
       ).toBeInTheDocument();
     });
 
+    it('shows the cap refusal naming the Conversations holding the slots (T1331)', async () => {
+      const refusal =
+        'The machine runs its cap of 2 runs, held by T3 (waiting on you) and T7. Wait for one to finish, answer or close one, or raise the cap in Settings.';
+      vi.mocked(approveMerge).mockResolvedValue({ ok: false, error: refusal });
+      renderDrawer(inReview);
+
+      await userEvent.click(button('Approve merge T4 Fix the header'));
+
+      expect(await inDrawer().findByText(refusal)).toBeInTheDocument();
+    });
+
     it('shows nothing while a Conversation is running', () => {
       vi.mocked(useTicketLiveConversation).mockReturnValue(
         liveConversation({ state: 'running' }),

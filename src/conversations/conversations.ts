@@ -882,8 +882,37 @@ export function createConversations({
   };
 
   /**
+   * The Conversations that hold slots by `holds`, oldest first, but
+   * `exceptId`: each named by its Ticket (`T12`) or, without one, as
+   * `Conversation 7`, marked when it waits on the User (T1331).
+   */
+  const slotHolderNames = (
+    holds: (conversation: Conversation) => boolean,
+    exceptId?: number,
+  ): string => {
+    const names = [...live.keys()]
+      .filter((id) => id !== exceptId)
+      .map(get)
+      .filter(holds)
+      .sort((a, b) => a.id - b.id)
+      .map((conversation) => {
+        const name =
+          conversation.ticketNumber === null
+            ? `Conversation ${conversation.id}`
+            : `T${conversation.ticketNumber}`;
+        return conversation.state === 'idle' || conversation.state === 'waiting'
+          ? `${name} (waiting on you)`
+          : name;
+      });
+    return names.length <= 1
+      ? (names[0] ?? '')
+      : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  };
+
+  /**
    * Refuses a Start run beyond the Project's limit: a Start is not queued
-   * (ADR 0019). A Merge counts like a Start; Triage and Ask are never
+   * (ADR 0019). The refusal names the Conversations holding the slots, and
+   * which wait on the User (T1331). A Merge counts like a Start; Triage and Ask are never
    * limited, and do not count. Slots are counted by `holdsStartRunSlot`.
    * The machine cap (ADR 0041) limits them in the same way, across Projects.
    * `exceptId` is the Conversation about to work, not counted against
@@ -903,14 +932,19 @@ export function createConversations({
       !settings.parallelRuns &&
       startRunSlotsInUse(projectId, exceptId) >= 1
     ) {
+      const held = slotHolderNames(
+        (other) => other.projectId === projectId && holdsStartRunSlot(other),
+        exceptId,
+      );
       throw new NotAllowedError(
-        'This Project already has a Start run working. Stop it first, or turn on Parallel runs in the Project settings to allow more.',
+        `This Project already has a Start run working: ${held}. Answer, stop or close it first, or turn on Parallel runs in the Project settings to allow more.`,
       );
     }
     const cap = tickets.getMachineSettings().maxConcurrentRuns;
     if (machineSlotsInUse(exceptId) >= cap) {
+      const held = slotHolderNames(holdsMachineSlot, exceptId);
       throw new NotAllowedError(
-        `The machine runs its cap of ${cap} runs; wait for one to finish or raise the cap in Settings.`,
+        `The machine runs its cap of ${cap} ${cap === 1 ? 'run' : 'runs'}, held by ${held}. Wait for one to finish, answer or close one, or raise the cap in Settings.`,
       );
     }
   };
