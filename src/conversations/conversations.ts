@@ -1565,6 +1565,15 @@ export function createConversations({
       await worktrees.remove(repositoryPath, path);
     }
     update(id, { worktreeKept: null, worktreeRemoved: true });
+    // An idle run would work in a folder that is gone: it ends with its
+    // worktree, and the Conversation stays idle (T1281).
+    const handle = live.get(id);
+    if (handle?.run && !handle.pending) {
+      live.delete(id);
+      expireAsking(handle);
+      expireWidgets(handle);
+      handle.run.close();
+    }
     announce(id);
   };
 
@@ -2250,10 +2259,11 @@ export function createConversations({
       }
       const conversation = get(id);
       refuseTerminal(conversation);
+      // No reply reaches a run whose worktree is gone, live or not (T1281).
       if (
         conversation.worktreePath !== null &&
-        !live.get(id)?.run &&
-        (await worktrees.state(conversation.worktreePath)) === 'missing'
+        (conversation.worktreeRemoved ||
+          (await worktrees.state(conversation.worktreePath)) === 'missing')
       ) {
         throw new ValidationError({
           text: `The worktree of this Conversation is gone (${conversation.worktreePath}), so a reply cannot resume in it.`,
