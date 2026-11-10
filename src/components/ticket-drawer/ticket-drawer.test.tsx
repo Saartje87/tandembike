@@ -545,14 +545,20 @@ describe('TicketDrawer', () => {
         name: 'Merge T4 with unchecked criteria?',
       });
       expect(within(dialog).getByText('T4: Menu opens')).toBeInTheDocument();
-      await userEvent.click(
-        within(dialog).getByRole('button', { name: 'Merged anyway' }),
-      );
-
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
+      // The dialog opens before the transition ends, with Merged anyway
+      // still disabled; a click then is dropped (T1314).
+      const mergedAnyway = within(dialog).getByRole('button', {
+        name: 'Merged anyway',
       });
+      await waitFor(() => expect(mergedAnyway).toBeEnabled());
+      await userEvent.click(mergedAnyway);
+
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
       await waitFor(() =>
         expect(
           screen.queryByRole('dialog', {
@@ -658,14 +664,26 @@ describe('TicketDrawer', () => {
       const dialog = await screen.findByRole('dialog', {
         name: 'Finish T4 with unchecked criteria?',
       });
-      await userEvent.click(
-        within(dialog).getByRole('button', { name: 'Done anyway' }),
-      );
-
-      expect(completeTicket).toHaveBeenLastCalledWith({
-        number: 4,
-        confirmed: true,
+      // As for Merged anyway: wait out the transition first (T1314).
+      const doneAnyway = within(dialog).getByRole('button', {
+        name: 'Done anyway',
       });
+      await waitFor(() => expect(doneAnyway).toBeEnabled());
+      await userEvent.click(doneAnyway);
+
+      await waitFor(() =>
+        expect(completeTicket).toHaveBeenLastCalledWith({
+          number: 4,
+          confirmed: true,
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', {
+            name: 'Finish T4 with unchecked criteria?',
+          }),
+        ).toBeNull(),
+      );
     });
 
     it.each([
