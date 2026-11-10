@@ -26,6 +26,7 @@ import {
   fieldRefusal,
   rootRefusal,
 } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import {
   archiveTicket,
   backToTodo,
@@ -155,6 +156,9 @@ type Fields = Pick<Ticket, 'title' | 'description' | 'status'>;
 type Edit = { [Field in keyof Fields]: Pick<Fields, Field> }[keyof Fields];
 
 /** Saves one field; `onRefused` gets the reason when the server refuses it. */
+/** What a thrown save of the Ticket's fields shows (T1321). */
+const saveFailed = 'The Ticket could not be saved. Try again.';
+
 type SaveField = (edit: Edit, onRefused: (reason: string) => void) => void;
 
 function fieldsOf(ticket: Ticket): Fields {
@@ -277,7 +281,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     const field = fieldOf(edit);
     startSave(async () => {
       showEdit(edit);
-      const result = await updateTicket({ number: ticket.number, ...edit });
+      const result = await callAction(
+        () => updateTicket({ number: ticket.number, ...edit }),
+        saveFailed,
+      );
       const reason = fieldRefusal(result, field) ?? rootRefusal(result);
       if (reason !== undefined) {
         onRefused(reason);
@@ -288,13 +295,19 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   // Runs inside InlineEdit's save, so the drawer's name follows at once too.
   const saveTitle = async (title: string) => {
     showEdit({ title });
-    const result = await updateTicket({ number: ticket.number, title });
+    const result = await callAction(
+      () => updateTicket({ number: ticket.number, title }),
+      saveFailed,
+    );
     return fieldRefusal(result, 'title') ?? rootRefusal(result);
   };
 
   const saveDescription = async (description: string) => {
     showEdit({ description });
-    const result = await updateTicket({ number: ticket.number, description });
+    const result = await callAction(
+      () => updateTicket({ number: ticket.number, description }),
+      saveFailed,
+    );
     return fieldRefusal(result, 'description') ?? rootRefusal(result);
   };
 
@@ -322,8 +335,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     setArchiveError(undefined);
     startArchive(async () => {
       showArchived(next);
-      const action = next ? archiveTicket : restoreTicket;
-      const result = await action({ number: ticket.number });
+      const result = await callAction(
+        () => (next ? archiveTicket : restoreTicket)({ number: ticket.number }),
+        `The Ticket could not be ${next ? 'archived' : 'restored'}. Try again.`,
+      );
       if (!result.ok) {
         setArchiveError(result.error);
       }
@@ -338,10 +353,14 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   // No optimistic display: the live update moves the row on the Board.
   const runAction = (
     action: (input: { number: number }) => Promise<ActionResult>,
+    failed: string,
   ) => {
     setActionError(undefined);
     startAction(async () => {
-      const result = await action({ number: ticket.number });
+      const result = await callAction(
+        () => action({ number: ticket.number }),
+        failed,
+      );
       if (!result.ok) {
         setActionError(result.error);
       }
@@ -356,10 +375,14 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const merge = (confirmed: boolean) => {
     setActionError(undefined);
     startAction(async () => {
-      const result = await completeTicket(
-        confirmed
-          ? { number: ticket.number, confirmed }
-          : { number: ticket.number },
+      const result = await callAction(
+        () =>
+          completeTicket(
+            confirmed
+              ? { number: ticket.number, confirmed }
+              : { number: ticket.number },
+          ),
+        'The Ticket could not be finished. Try again.',
       );
       if (result.ok) {
         setMergedUnchecked(result.unchecked);
@@ -373,7 +396,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const approveThisMerge = () => {
     setActionError(undefined);
     startAction(async () => {
-      const result = await approveMerge({ number: ticket.number });
+      const result = await callAction(
+        () => approveMerge({ number: ticket.number }),
+        'The merge could not be approved. Try again.',
+      );
       if (result.ok) {
         dialog.open(result.conversation.id);
       } else {
@@ -418,7 +444,12 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         {showBackToTodo && (
           <BackToTodoButton
             pending={actionPending}
-            onClick={() => runAction(backToTodo)}
+            onClick={() =>
+              runAction(
+                backToTodo,
+                'The Ticket could not be moved back to Todo. Try again.',
+              )
+            }
           />
         )}
       </Inline>
@@ -430,7 +461,10 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     setClaimError(undefined);
     startClaimClear(async () => {
       showClaim(null);
-      const result = await clearTicketClaim({ number: ticket.number });
+      const result = await callAction(
+        () => clearTicketClaim({ number: ticket.number }),
+        'The claim could not be cleared. Try again.',
+      );
       if (!result.ok) {
         setClaimError(result.error);
       }

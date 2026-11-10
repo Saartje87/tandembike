@@ -1,4 +1,10 @@
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -417,5 +423,68 @@ describe('TicketComments', () => {
     expect(within(item).getByRole('alert')).toHaveTextContent(
       'There is no comment 1.',
     );
+  });
+
+  describe('when the action throws (T1321)', () => {
+    beforeEach(() => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+    });
+
+    it('keeps the draft of a new comment and shows a refusal', async () => {
+      vi.mocked(addTicketComment).mockRejectedValue(new Error('network down'));
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[]} />);
+
+      await userEvent.type(newComment(), 'Looks good');
+      await userEvent.click(screen.getByRole('button', { name: 'Comment' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The comment could not be saved. Try again.',
+      );
+      expect(newComment()).toHaveValue('Looks good');
+      expect(screen.getByRole('button', { name: 'Comment' })).toBeEnabled();
+    });
+
+    it("reopens an edit with the User's text and a refusal", async () => {
+      vi.mocked(editTicketComment).mockRejectedValue(new Error('network down'));
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byAgent]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(within(item).getByText('Fixed in the header.'));
+      await userEvent.clear(within(item).getByRole('textbox'));
+      await userEvent.type(within(item).getByRole('textbox'), 'Fixed it');
+      await userEvent.click(document.body);
+
+      expect(await within(item).findByRole('textbox')).toHaveValue('Fixed it');
+      await waitFor(() =>
+        expect(within(item).getByRole('textbox')).toHaveAccessibleDescription(
+          'The comment could not be saved. Try again.',
+        ),
+      );
+    });
+
+    it('keeps a comment whose removal throws and shows a refusal', async () => {
+      vi.mocked(removeTicketComment).mockRejectedValue(
+        new Error('network down'),
+      );
+      renderWithTheme(<TicketComments ticketNumber={4} comments={[byUser]} />);
+      const [item] = commentItems();
+
+      await userEvent.click(
+        within(item).getByRole('button', { name: 'Remove' }),
+      );
+      await userEvent.click(
+        within(item).getByRole('button', { name: 'Remove comment' }),
+      );
+
+      expect(await within(item).findByRole('alert')).toHaveTextContent(
+        'The comment could not be removed. Try again.',
+      );
+      await waitFor(() =>
+        expect(
+          within(item).getByRole('button', { name: 'Remove comment' }),
+        ).toBeEnabled(),
+      );
+    });
   });
 });

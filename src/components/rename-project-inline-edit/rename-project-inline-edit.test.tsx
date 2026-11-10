@@ -141,4 +141,17 @@ describe('RenameProjectInlineEdit', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+  it('reopens with the text and a reason when the rename throws (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(renameProject).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<RenameProjectInlineEdit project={project} />);
+
+    await rename('Shop');
+
+    const reason = 'The name could not be saved. Try again.';
+    expect(await screen.findByText(reason)).toBeInTheDocument();
+    expect(input()).toHaveValue('Shop');
+    expect(input()).toHaveAccessibleDescription(reason);
+  });
 });

@@ -1,8 +1,22 @@
 import { Dialog, Drawer } from '@blockle/blocks';
-import { createEvent, fireEvent, screen, within } from '@testing-library/react';
+import {
+  createEvent,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { type FC, useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vitest';
 
 import {
   addTicketAttachments,
@@ -212,6 +226,28 @@ describe('TicketAttachments', () => {
         'There is no Attachment 7.',
       );
     });
+
+    it('shows a removal that throws as a refusal in the dialog (T1321)', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(removeTicketAttachment).mockRejectedValue(
+        new Error('network down'),
+      );
+      const dialog = await openDialog();
+
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Remove attachment' }),
+      );
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'The Attachment could not be removed. Try again.',
+      );
+      await waitFor(() =>
+        expect(
+          within(dialog).getByRole('button', { name: 'Remove attachment' }),
+        ).toBeEnabled(),
+      );
+    });
   });
 
   describe('adding', () => {
@@ -265,6 +301,27 @@ describe('TicketAttachments', () => {
       expect(
         await screen.findByText('Keep the file to 10 MB or smaller.'),
       ).toBeInTheDocument();
+    });
+
+    it('shows an add that throws as a refusal and is ready again (T1321)', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(addTicketAttachments).mockRejectedValue(
+        new Error('network down'),
+      );
+      renderWithTheme(<TicketAttachments ticketNumber={4} attachments={[]} />);
+
+      await userEvent.upload(
+        screen.getByLabelText('Files to attach'),
+        new File(['a'], 'a.txt'),
+      );
+
+      expect(
+        await screen.findByText('The files could not be attached. Try again.'),
+      ).toBeInTheDocument();
+      expect(
+        await screen.findByRole('button', { name: 'Add files' }),
+      ).toBeEnabled();
     });
 
     type AddResult = Awaited<ReturnType<typeof addTicketAttachments>>;

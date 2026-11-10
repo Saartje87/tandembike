@@ -14,6 +14,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import {
   parseTicketNumber,
   ticketNumberRule,
@@ -101,7 +102,10 @@ export const EpicChildren: FC<EpicChildrenProps> = ({
     if (child === undefined) {
       return;
     }
-    const result = await attachTicketToEpic({ epic: epic.number, child });
+    const result = await callAction(
+      () => attachTicketToEpic({ epic: epic.number, child }),
+      'The Ticket could not be attached. Try again.',
+    );
     if (!result.ok) {
       setError('root.server', { message: result.error });
       return;
@@ -114,7 +118,10 @@ export const EpicChildren: FC<EpicChildrenProps> = ({
     setDetachError(undefined);
     startDetach(async () => {
       showDetached(child);
-      const result = await detachTicketFromEpic({ number: child });
+      const result = await callAction(
+        () => detachTicketFromEpic({ number: child }),
+        'The Ticket could not be detached. Try again.',
+      );
       if (!result.ok) {
         setDetachError(result.error);
       }

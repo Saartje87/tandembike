@@ -3,6 +3,7 @@
 import { Alert, Button, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { archiveProject } from '../../app/projects/actions';
 import type { Project } from '../../tickets/tickets';
 
@@ -23,7 +24,10 @@ export const ArchiveProjectButton: FC<ArchiveProjectButtonProps> = ({
   const archive = () => {
     setError(undefined);
     startTransition(async () => {
-      const result = await archiveProject({ projectId: project.id });
+      const result = await callAction(
+        () => archiveProject({ projectId: project.id }),
+        'The Project could not be archived. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

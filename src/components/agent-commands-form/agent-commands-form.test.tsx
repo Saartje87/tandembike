@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { setProjectAgentCommands } from '../../app/projects/actions';
 import { agentCommandEntries, agentCommands } from '../../test/fixtures';
@@ -173,5 +173,25 @@ describe('AgentCommandsForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The Project "Website" is archived.',
     );
+  });
+  it('shows a save whose action throws as an alert and keeps the text (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(setProjectAgentCommands).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+    const start = screen.getByRole('textbox', { name: 'Start command' });
+
+    await user.clear(start);
+    await user.type(start, '/implement');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The agent commands could not be saved. Try again.',
+    );
+    expect(start).toHaveValue('/implement');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });

@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { saveMachineSettings } from '../../app/settings/actions';
 import { renderWithTheme } from '../../test/render';
@@ -127,5 +127,26 @@ describe('MachineSettingsForm', () => {
     expect(
       await screen.findByText('Enter an amount in dollars above 0.'),
     ).toBeInTheDocument();
+  });
+  it('shows a save whose action throws as an alert and keeps the draft (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(saveMachineSettings).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <MachineSettingsForm
+        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+      />,
+    );
+    const field = screen.getByLabelText('Max concurrent runs');
+
+    await userEvent.clear(field);
+    await userEvent.type(field, '2');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The machine settings could not be saved. Try again.',
+    );
+    expect(field).toHaveValue(2);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });

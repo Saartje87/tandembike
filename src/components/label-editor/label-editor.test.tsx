@@ -1,6 +1,6 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { addTicketLabel, removeTicketLabel } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
@@ -150,6 +150,24 @@ describe('LabelEditor', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(
       'There is no Ticket T4.',
+    );
+    await waitFor(() => expect(labelsShown()).toEqual(['bug']));
+  });
+
+  it('shows a change whose action throws as a refusal and shows the label again (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(removeTicketLabel).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <LabelEditor ticketNumber={4} labels={['bug']} suggestions={[]} />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove label bug' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The label could not be changed. Try again.',
     );
     await waitFor(() => expect(labelsShown()).toEqual(['bug']));
   });

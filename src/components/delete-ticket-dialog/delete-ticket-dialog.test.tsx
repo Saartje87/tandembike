@@ -1,6 +1,6 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { deleteTicket } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
@@ -192,5 +192,35 @@ describe('DeleteTicketDialog', () => {
         [{ number: 42, withChildren: true }],
       ]);
     });
+  });
+
+  it('shows a delete that throws as a refusal in the dialog (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(deleteTicket).mockRejectedValue(new Error('network down'));
+    const onDeleted = vi.fn();
+    renderWithTheme(
+      <DeleteTicketDialog
+        ticket={ticket}
+        blocks={[]}
+        epicClaim={null}
+        onDeleted={onDeleted}
+      />,
+    );
+    const dialog = await openDialog();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete T42' }),
+    );
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The Ticket could not be deleted. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Delete T42' }),
+      ).toBeEnabled(),
+    );
+    expect(onDeleted).not.toHaveBeenCalled();
   });
 });

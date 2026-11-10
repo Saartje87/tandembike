@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -44,7 +44,9 @@ describe('ConversationPermissionPrompt', () => {
     expect(
       await screen.findByText('The answer could not be sent. Try again.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Allow' })).toBeEnabled(),
+    );
   });
 
   it('offers Allow and Deny, but not Always allow, without rules', async () => {

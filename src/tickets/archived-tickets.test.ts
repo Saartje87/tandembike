@@ -36,6 +36,16 @@ function archivedTicket() {
   };
 }
 
+/** A Ticket claimed by `run-1`, then archived, in a live Project. */
+function claimedArchivedTicket() {
+  const tickets = createTestTickets();
+  const project = tickets.createProject({ name: 'Website' });
+  const created = tickets.createTicket({ projectId: project.id, title: 'A' });
+  tickets.claimTicket(created.number, { agentRunId: 'run-1' });
+  tickets.archiveTicket(created.number);
+  return { tickets, project, ticket: tickets.getTicket(created.number) };
+}
+
 const refused = (number: number) =>
   new NotAllowedError(
     `Ticket T${number} is archived. Restore it before changing it.`,
@@ -80,7 +90,7 @@ describe('An archived Ticket is read-only', () => {
     expect(tickets.getTicket(ticket.number)).toEqual(ticket);
   });
 
-  it('refuses claiming it or changing its Claim', () => {
+  it('refuses claiming it, by another run or its holder', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
@@ -94,12 +104,9 @@ describe('An archived Ticket is read-only', () => {
     ).toEqual(refused(ticket.number));
     expect(
       errorFrom(() =>
-        tickets.releaseTicketClaim(ticket.number, { agentRunId: 'run-1' }),
+        tickets.claimTicket(ticket.number, { agentRunId: 'run-1' }),
       ),
     ).toEqual(refused(ticket.number));
-    expect(errorFrom(() => tickets.clearTicketClaim(ticket.number))).toEqual(
-      refused(ticket.number),
-    );
     expect(tickets.getTicket(ticket.number).claim?.agentRunId).toBe('run-1');
   });
 
@@ -207,6 +214,87 @@ describe('What an archived Ticket still allows', () => {
     expect(
       tickets.getTicket(ticket.number).attachments.map(({ id }) => id),
     ).toEqual([added.id]);
+  });
+
+  it('keeps its Claim when it is archived', () => {
+    const { tickets, ticket } = claimedArchivedTicket();
+
+    expect(ticket.archived).toBe(true);
+    expect(ticket.claim?.agentRunId).toBe('run-1');
+  });
+
+  it('releases its Claim by the holding run, recording the Activity', () => {
+    const { tickets, ticket } = claimedArchivedTicket();
+
+    const released = tickets.releaseTicketClaim(ticket.number, {
+      agentRunId: 'run-1',
+    });
+
+    expect(released).toMatchObject({ archived: true, claim: null });
+    expect(tickets.listActivity(ticket.number).at(-1)?.changes).toEqual([
+      { type: 'claimReleased', agentRunId: 'run-1', agentName: null },
+    ]);
+  });
+
+  it("still refuses releasing another run's Claim", () => {
+    const { tickets, ticket } = claimedArchivedTicket();
+
+    expect(
+      errorFrom(() =>
+        tickets.releaseTicketClaim(ticket.number, { agentRunId: 'run-2' }),
+      ),
+    ).toBeInstanceOf(NotAllowedError);
+    expect(tickets.getTicket(ticket.number).claim?.agentRunId).toBe('run-1');
+  });
+
+  it('clears its Claim for the User, recording the Activity', () => {
+    const { tickets, ticket } = claimedArchivedTicket();
+
+    expect(tickets.clearTicketClaim(ticket.number).claim).toBeNull();
+    expect(tickets.listActivity(ticket.number).at(-1)?.changes).toEqual([
+      { type: 'claimCleared', agentRunId: 'run-1', agentName: null },
+    ]);
+  });
+
+  it('abandons work on it: comments, releases and keeps the Status', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    tickets.startWork(ticket.number, 'run-1');
+    tickets.archiveTicket(ticket.number);
+
+    const result = tickets.abandonWork(ticket.number, 'run-1', 'Archived');
+
+    expect(result).toMatchObject({
+      archived: true,
+      status: 'In progress',
+      claim: null,
+    });
+    expect(tickets.listComments(ticket.number).map(({ body }) => body)).toEqual(
+      ['Archived'],
+    );
+  });
+
+  it('refuses releasing or clearing its Claim in an archived Project', () => {
+    const { tickets, project, ticket } = claimedArchivedTicket();
+    tickets.archiveProject(project.id);
+    const projectRefused = new NotAllowedError(
+      `Ticket T${ticket.number} is in the archived Project "Website". Restore the Project before changing its Tickets.`,
+    );
+
+    expect(
+      errorFrom(() =>
+        tickets.releaseTicketClaim(ticket.number, { agentRunId: 'run-1' }),
+      ),
+    ).toEqual(projectRefused);
+    expect(errorFrom(() => tickets.clearTicketClaim(ticket.number))).toEqual(
+      projectRefused,
+    );
+    expect(
+      errorFrom(() => tickets.abandonWork(ticket.number, 'run-1', 'Gone')),
+    ).toEqual(projectRefused);
+    expect(tickets.getTicket(ticket.number).claim?.agentRunId).toBe('run-1');
+    expect(tickets.listComments(ticket.number)).toEqual([]);
   });
 
   it('deletes it', () => {

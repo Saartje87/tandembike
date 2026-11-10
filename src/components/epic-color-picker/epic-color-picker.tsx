@@ -3,6 +3,7 @@
 import { Alert, Button, Popover, Stack } from '@blockle/blocks';
 import { type FC, useOptimistic, useRef, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { updateTicket } from '../../app/tickets/actions';
 import type { EpicLink } from '../../tickets/epic-link';
 import type { PaletteColor } from '../../tickets/palette';
@@ -37,7 +38,10 @@ export const EpicColorPicker: FC<EpicColorPickerProps> = ({ epic }) => {
     setError(undefined);
     startTransition(async () => {
       showColor(picked);
-      const result = await updateTicket({ number: epic.number, color: picked });
+      const result = await callAction(
+        () => updateTicket({ number: epic.number, color: picked }),
+        'The colour could not be saved. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

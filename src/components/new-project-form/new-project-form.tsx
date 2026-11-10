@@ -13,8 +13,10 @@ import { useRouter } from 'next/navigation';
 import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { projectPath } from '../../app/lib/paths';
 import {
+  type CreateProjectResult,
   createProject,
   type DetectedRepository,
   detectProjectRepository,
@@ -76,7 +78,10 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
   const needsDetection = folder !== '' && !showDetected;
 
   const detect = async () => {
-    const result = await detectProjectRepository({ path: folder });
+    const result = await callAction(
+      () => detectProjectRepository({ path: folder }),
+      'The repository could not be detected. Try again.',
+    );
     if (!result.ok) {
       setError('repositoryPath', { type: 'server', message: result.error });
       return;
@@ -96,18 +101,22 @@ export const NewProjectForm: FC<NewProjectFormProps> = ({ onCreated }) => {
       return;
     }
     const checked = values.checkCommand.trim();
-    const result = await createProject({
-      name: values.name,
-      ...(folder === ''
-        ? {}
-        : {
-            repositoryPath: folder,
-            checkCommand: checked === '' ? null : checked,
-            ...(values.acceptTemplate && detected?.referenceTemplate
-              ? { referenceTemplate: detected.referenceTemplate }
-              : {}),
-          }),
-    });
+    const result: CreateProjectResult = await callAction(
+      () =>
+        createProject({
+          name: values.name,
+          ...(folder === ''
+            ? {}
+            : {
+                repositoryPath: folder,
+                checkCommand: checked === '' ? null : checked,
+                ...(values.acceptTemplate && detected?.referenceTemplate
+                  ? { referenceTemplate: detected.referenceTemplate }
+                  : {}),
+              }),
+        }),
+      'The Project could not be created. Try again.',
+    );
     if (!result.ok) {
       const onFolder = result.fieldErrors?.repositoryPath;
       const onCheck = result.fieldErrors?.checkCommand;

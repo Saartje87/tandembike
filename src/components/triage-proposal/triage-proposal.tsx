@@ -15,6 +15,7 @@ import {
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { modeColors } from '../../app/lib/mode-colors';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import { approveTriage, rejectTriage } from '../../app/tickets/actions';
@@ -83,18 +84,25 @@ export const TriageProposal: FC<TriageProposalProps> = ({ proposal }) => {
 
   const approve = handleSubmit(async ({ category, state }) => {
     // A duplicate is labelled wontfix on approval, so it has no State to pick.
-    const result = await approveTriage({
-      id: proposal.id,
-      category,
-      ...(isDuplicate ? {} : { state }),
-    });
+    const result = await callAction(
+      () =>
+        approveTriage({
+          id: proposal.id,
+          category,
+          ...(isDuplicate ? {} : { state }),
+        }),
+      'The proposal could not be approved. Try again.',
+    );
     if (!result.ok) {
       refuse(result);
     }
   });
 
   const reject = handleSubmit(async ({ reason }) => {
-    const result = await rejectTriage({ id: proposal.id, reason });
+    const result = await callAction(
+      () => rejectTriage({ id: proposal.id, reason }),
+      'The proposal could not be rejected. Try again.',
+    );
     if (!result.ok) {
       refuse(result);
     }

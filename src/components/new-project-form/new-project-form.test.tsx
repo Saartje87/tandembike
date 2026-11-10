@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   createProject,
@@ -65,6 +65,28 @@ describe('NewProjectForm', () => {
       'A Project named "Website" already exists. Choose another name.',
     );
     expect(input).toHaveValue('website');
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a create whose action throws as an alert and keeps the draft (T1322)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(createProject).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<NewProjectForm />);
+    const input = screen.getByRole('textbox', { name: 'Project name' });
+
+    await userEvent.type(input, 'Website');
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Create Project' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Project could not be created. Try again.',
+    );
+    expect(input).toHaveValue('Website');
+    expect(
+      screen.getByRole('button', { name: 'Create Project' }),
+    ).toBeEnabled();
     expect(router.push).not.toHaveBeenCalled();
   });
 
@@ -205,6 +227,31 @@ describe('NewProjectForm', () => {
       expect(folder).toHaveAccessibleDescription(
         'This folder is not a git repository: it has no .git inside.',
       );
+    });
+
+    it('shows a detection whose action throws on the folder field (T1322)', async () => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(detectProjectRepository).mockRejectedValue(
+        new Error('network down'),
+      );
+      renderWithTheme(<NewProjectForm />);
+      const folder = screen.getByRole('textbox', { name: /Repository folder/ });
+
+      await userEvent.type(folder, '/tmp/x');
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Detect repository' }),
+      );
+
+      await waitFor(() =>
+        expect(folder).toHaveAccessibleDescription(
+          'The repository could not be detected. Try again.',
+        ),
+      );
+      expect(folder).toHaveValue('/tmp/x');
+      expect(
+        screen.getByRole('button', { name: 'Detect repository' }),
+      ).toBeEnabled();
     });
 
     it('shows a duplicate repository on the folder field, keeping the draft', async () => {

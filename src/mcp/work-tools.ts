@@ -224,7 +224,7 @@ export const registerWorkTools = ({
     'abandon_work',
     {
       title: 'Abandon work',
-      description: `Give up a Ticket: comment your reason, release your Claim and, if it is In progress with no PR among its External references, move it back to Todo so it is not left Stalled. With a PR it stays In progress. Refused when another run holds the Claim. ${returnsSummary({ extra: 'its claim, now null' })}`,
+      description: `Give up a Ticket: comment your reason, release your Claim and, if it is In progress with no PR among its External references, move it back to Todo so it is not left Stalled. With a PR, or when the Ticket is archived, its Status stays as it is. Refused when another run holds the Claim. ${returnsSummary({ extra: 'its claim, now null' })}`,
       inputSchema: {
         number: ticketNumber,
         reason: commentBody.describe(

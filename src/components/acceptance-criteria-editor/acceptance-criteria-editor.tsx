@@ -26,6 +26,7 @@ import {
 import { useForm } from 'react-hook-form';
 
 import { fieldRefusal, rootRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import {
   checkTicketAcceptanceCriterion,
   setTicketAcceptanceCriteria,
@@ -44,6 +45,9 @@ export type AcceptanceCriteriaEditorProps = {
 };
 
 /** One criterion checked or unchecked. */
+/** What a thrown save of the whole list shows (T1321). */
+const saveFailed = 'The acceptance criteria could not be saved. Try again.';
+
 type CheckChange = Pick<AcceptanceCriterion, 'id' | 'checked'>;
 
 /** A change to the criteria shown before the server confirms it. */
@@ -262,10 +266,14 @@ const NewCriterion: FC<NewCriterionProps> = ({ ticketNumber, criteria }) => {
   };
 
   const add = handleSubmit(async ({ text }) => {
-    const result = await setTicketAcceptanceCriteria({
-      number: ticketNumber,
-      acceptanceCriteria: [...asReplacement(criteria), { text }],
-    });
+    const result = await callAction(
+      () =>
+        setTicketAcceptanceCriteria({
+          number: ticketNumber,
+          acceptanceCriteria: [...asReplacement(criteria), { text }],
+        }),
+      saveFailed,
+    );
     if (!result.ok) {
       const reason = result.fieldErrors?.acceptanceCriteria;
       if (reason) {
@@ -356,10 +364,11 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
     setError(undefined);
     startChange(async () => {
       showChange({ type: 'check', ...change });
-      const result = await checkTicketAcceptanceCriterion({
-        number: ticketNumber,
-        ...change,
-      });
+      const result = await callAction(
+        () =>
+          checkTicketAcceptanceCriterion({ number: ticketNumber, ...change }),
+        'The criterion could not be saved. Try again.',
+      );
       setError(
         fieldRefusal(result, 'acceptanceCriteria') ?? rootRefusal(result),
       );
@@ -373,10 +382,14 @@ export const AcceptanceCriteriaEditor: FC<AcceptanceCriteriaEditorProps> = ({
   const save = async (next: AcceptanceCriterion[]) => {
     setError(undefined);
     showChange({ type: 'replace', criteria: next });
-    const result = await setTicketAcceptanceCriteria({
-      number: ticketNumber,
-      acceptanceCriteria: asReplacement(next),
-    });
+    const result = await callAction(
+      () =>
+        setTicketAcceptanceCriteria({
+          number: ticketNumber,
+          acceptanceCriteria: asReplacement(next),
+        }),
+      saveFailed,
+    );
     return fieldRefusal(result, 'acceptanceCriteria') ?? rootRefusal(result);
   };
 

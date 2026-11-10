@@ -13,6 +13,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import {
   parseTicketNumber,
@@ -63,10 +64,10 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
     if (originNumber === undefined) {
       return;
     }
-    const result = await setTicketOrigin({
-      number: ticket.number,
-      originNumber,
-    });
+    const result = await callAction(
+      () => setTicketOrigin({ number: ticket.number, originNumber }),
+      'The Origin could not be saved. Try again.',
+    );
     if (!result.ok) {
       setError('root.server', { message: result.error });
       return;
@@ -78,10 +79,10 @@ export const TicketOrigin: FC<TicketOriginProps> = ({ ticket }) => {
     setClearError(undefined);
     startClear(async () => {
       showOrigin(null);
-      const result = await setTicketOrigin({
-        number: ticket.number,
-        originNumber: null,
-      });
+      const result = await callAction(
+        () => setTicketOrigin({ number: ticket.number, originNumber: null }),
+        'The Origin could not be cleared. Try again.',
+      );
       if (!result.ok) {
         setClearError(result.error);
       }

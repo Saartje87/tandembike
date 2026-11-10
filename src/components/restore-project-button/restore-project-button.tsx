@@ -3,6 +3,7 @@
 import { Alert, Button, Stack } from '@blockle/blocks';
 import { type FC, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { restoreProject } from '../../app/projects/actions';
 import type { Project } from '../../tickets/tickets';
 
@@ -20,7 +21,10 @@ export const RestoreProjectButton: FC<RestoreProjectButtonProps> = ({
   const restore = () => {
     setError(undefined);
     startTransition(async () => {
-      const result = await restoreProject({ projectId: project.id });
+      const result = await callAction(
+        () => restoreProject({ projectId: project.id }),
+        'The Project could not be restored. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

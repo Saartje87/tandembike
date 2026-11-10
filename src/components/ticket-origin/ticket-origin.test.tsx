@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { setTicketOrigin } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
@@ -128,6 +128,46 @@ describe('TicketOrigin', () => {
     });
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'There is no Ticket T5.',
+    );
+  });
+
+  it('keeps the field open with the number when saving throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(setTicketOrigin).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<TicketOrigin ticket={split} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Change Origin' }),
+    );
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Origin Ticket number' }),
+      '6{Enter}',
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Origin could not be saved. Try again.',
+    );
+    const field = screen.getByRole('textbox', { name: 'Origin Ticket number' });
+    expect(field).toHaveValue('6');
+    expect(field).toBeEnabled();
+  });
+
+  it('shows the Origin again and a refusal when clearing throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(setTicketOrigin).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<TicketOrigin ticket={split} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Origin' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Origin could not be cleared. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Clear Origin' }),
+      ).toBeEnabled(),
     );
   });
 });

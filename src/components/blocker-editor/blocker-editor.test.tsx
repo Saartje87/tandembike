@@ -1,6 +1,6 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   addTicketBlocker,
@@ -314,5 +314,47 @@ describe('BlockerEditor', () => {
       blocker: 4,
       blocked: 5,
     });
+  });
+
+  it('shows an add that throws as a refusal and keeps the number (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(addTicketBlocker).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <BlockerEditor ticketNumber={4} direction="blockedBy" related={[]} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add blocker' }));
+    await userEvent.type(numberInput(), '42{Enter}');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Blocker could not be added. Try again.',
+    );
+    expect(numberInput()).toHaveValue('42');
+    expect(numberInput()).toBeEnabled();
+  });
+
+  it('shows a removal that throws as a refusal and brings the Blocker back (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(removeTicketBlocker).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <BlockerEditor
+        ticketNumber={4}
+        direction="blockedBy"
+        related={[design]}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove Blocker T3' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Blocker could not be removed. Try again.',
+    );
+    await waitFor(() =>
+      expect(shown('Blocked by')).toEqual(['T3 Design the header']),
+    );
   });
 });

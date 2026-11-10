@@ -545,13 +545,15 @@ describe('TicketDrawer', () => {
         name: 'Merge T4 with unchecked criteria?',
       });
       expect(within(dialog).getByText('T4: Menu opens')).toBeInTheDocument();
-      // The dialog opens before the transition ends, with Merged anyway
-      // still disabled; a click then is dropped (T1314).
-      const mergedAnyway = within(dialog).getByRole('button', {
+      const anyway = within(dialog).getByRole('button', {
         name: 'Merged anyway',
       });
-      await waitFor(() => expect(mergedAnyway).toBeEnabled());
-      await userEvent.click(mergedAnyway);
+      // The dialog can open while the first click is still pending, with
+      // the button disabled: a click then does nothing.
+      await waitFor(() => {
+        expect(anyway).toBeEnabled();
+      });
+      await userEvent.click(anyway);
 
       await waitFor(() =>
         expect(completeTicket).toHaveBeenLastCalledWith({
@@ -664,12 +666,15 @@ describe('TicketDrawer', () => {
       const dialog = await screen.findByRole('dialog', {
         name: 'Finish T4 with unchecked criteria?',
       });
-      // As for Merged anyway: wait out the transition first (T1314).
-      const doneAnyway = within(dialog).getByRole('button', {
+      const anyway = within(dialog).getByRole('button', {
         name: 'Done anyway',
       });
-      await waitFor(() => expect(doneAnyway).toBeEnabled());
-      await userEvent.click(doneAnyway);
+      // The dialog can open while the first click is still pending, with
+      // the button disabled: a click then does nothing.
+      await waitFor(() => {
+        expect(anyway).toBeEnabled();
+      });
+      await userEvent.click(anyway);
 
       await waitFor(() =>
         expect(completeTicket).toHaveBeenLastCalledWith({
@@ -2028,6 +2033,162 @@ describe('TicketDrawer', () => {
     expect(updateTicket).toHaveBeenCalledWith({
       number: 4,
       description: `${ticket.description}!`,
+    });
+  });
+
+  describe('when an action throws (T1321)', () => {
+    const pullRequest = 'https://github.com/owner/repo/pull/87';
+    const inReview: Ticket = { ...ticket, externalReferences: [pullRequest] };
+    const thrown = () => Promise.reject(new Error('network down'));
+
+    beforeEach(() => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+    });
+
+    it('goes back to the old Status and shows a refusal', async () => {
+      vi.mocked(updateTicket).mockImplementation(thrown);
+      renderDrawer();
+
+      await userEvent.selectOptions(field('Status'), 'Done');
+
+      await waitFor(() =>
+        expect(field('Status')).toHaveAccessibleDescription(
+          'The Ticket could not be saved. Try again.',
+        ),
+      );
+      await waitFor(() => expect(field('Status')).toHaveValue('In progress'));
+    });
+
+    it("keeps the title input open with the User's text", async () => {
+      vi.mocked(updateTicket).mockImplementation(thrown);
+      renderDrawer();
+
+      await userEvent.click(titleButton());
+      await userEvent.clear(titleInput());
+      await userEvent.type(titleInput(), 'Fix the footer{Enter}');
+
+      expect(
+        await inDrawer().findByRole('textbox', { name: 'Title' }),
+      ).toHaveValue('Fix the footer');
+      await waitFor(() =>
+        expect(titleInput()).toHaveAccessibleDescription(
+          'The Ticket could not be saved. Try again.',
+        ),
+      );
+    });
+
+    it("keeps the User's description text", async () => {
+      vi.mocked(updateTicket).mockImplementation(thrown);
+      renderDrawer();
+
+      await editDescription();
+      await userEvent.type(descriptionInput(), '!');
+      await leaveField();
+
+      expect(
+        await inDrawer().findByRole('textbox', { name: 'Description' }),
+      ).toHaveValue('It overlaps the **logo**.!');
+      await waitFor(() =>
+        expect(descriptionInput()).toHaveAccessibleDescription(
+          'The Ticket could not be saved. Try again.',
+        ),
+      );
+    });
+
+    it('shows an archive as a refusal and the Ticket as not archived', async () => {
+      vi.mocked(archiveTicket).mockImplementation(thrown);
+      renderDrawer();
+
+      await userEvent.click(button('Archive'));
+
+      await waitFor(() =>
+        expect(
+          inDrawer()
+            .getAllByRole('alert')
+            .map((alert) => alert.textContent),
+        ).toContain('The Ticket could not be archived. Try again.'),
+      );
+      await waitFor(() => expect(button('Archive')).toBeEnabled());
+    });
+
+    it('shows a restore as a refusal and the Ticket as archived again', async () => {
+      vi.mocked(restoreTicket).mockImplementation(thrown);
+      renderDrawer({ ...ticket, archived: true });
+
+      await userEvent.click(button('Restore'));
+
+      await waitFor(() =>
+        expect(
+          inDrawer()
+            .getAllByRole('alert')
+            .map((alert) => alert.textContent),
+        ).toContain('The Ticket could not be restored. Try again.'),
+      );
+      await waitFor(() => expect(button('Restore')).toBeEnabled());
+    });
+
+    it('shows Back to Todo as a refusal', async () => {
+      vi.mocked(backToTodo).mockImplementation(thrown);
+      renderDrawer();
+
+      await userEvent.click(button('Back to Todo'));
+
+      expect(
+        await inDrawer().findByText(
+          'The Ticket could not be moved back to Todo. Try again.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(button('Back to Todo')).toBeEnabled());
+    });
+
+    it('shows Merged as a refusal', async () => {
+      vi.mocked(completeTicket).mockImplementation(thrown);
+      renderDrawer(inReview);
+
+      await userEvent.click(button('Merged T4 Fix the header'));
+
+      expect(
+        await inDrawer().findByText(
+          'The Ticket could not be finished. Try again.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(button('Merged T4 Fix the header')).toBeEnabled(),
+      );
+    });
+
+    it('shows Approve merge as a refusal', async () => {
+      vi.mocked(approveMerge).mockImplementation(thrown);
+      renderDrawer(inReview);
+
+      await userEvent.click(button('Approve merge T4 Fix the header'));
+
+      expect(
+        await inDrawer().findByText(
+          'The merge could not be approved. Try again.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() =>
+        expect(button('Approve merge T4 Fix the header')).toBeEnabled(),
+      );
+    });
+
+    it('shows Clear claim as a refusal and the claim again', async () => {
+      vi.mocked(clearTicketClaim).mockImplementation(thrown);
+      renderDrawer({
+        ...ticket,
+        claim: { agentRunId: 'run-1', agentName: 'Frontend Agent' },
+      });
+
+      await userEvent.click(button('Clear claim'));
+
+      expect(
+        await inDrawer().findByText(
+          'The claim could not be cleared. Try again.',
+        ),
+      ).toBeInTheDocument();
+      await waitFor(() => expect(button('Clear claim')).toBeEnabled());
     });
   });
 });

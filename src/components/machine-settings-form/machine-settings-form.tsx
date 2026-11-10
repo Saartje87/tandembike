@@ -4,6 +4,8 @@ import { Alert, Button, Label, Stack, Text, TextInput } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { fieldRefusal } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { saveMachineSettings } from '../../app/settings/actions';
 import type { MachineSettings } from '../../tickets/machine-settings';
 import { FieldError } from '../field-error/field-error';
@@ -48,20 +50,24 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
-    const result = await saveMachineSettings({
-      maxConcurrentRuns: Number(values.maxConcurrentRuns),
-      dailySpendCeilingUsd:
-        values.dailySpendCeiling.trim() === ''
-          ? null
-          : Number(values.dailySpendCeiling),
-    });
+    const result = await callAction(
+      () =>
+        saveMachineSettings({
+          maxConcurrentRuns: Number(values.maxConcurrentRuns),
+          dailySpendCeilingUsd:
+            values.dailySpendCeiling.trim() === ''
+              ? null
+              : Number(values.dailySpendCeiling),
+        }),
+      'The machine settings could not be saved. Try again.',
+    );
     if (result.ok) {
       return;
     }
     const refused = (
       [
-        ['maxConcurrentRuns', result.fieldErrors?.maxConcurrentRuns],
-        ['dailySpendCeiling', result.fieldErrors?.dailySpendCeilingUsd],
+        ['maxConcurrentRuns', fieldRefusal(result, 'maxConcurrentRuns')],
+        ['dailySpendCeiling', fieldRefusal(result, 'dailySpendCeilingUsd')],
       ] as const
     ).filter(([, message]) => message);
     for (const [field, message] of refused) {
