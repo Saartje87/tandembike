@@ -96,7 +96,7 @@ describe('MCP server and Conversations', () => {
 });
 
 describe('MCP server', () => {
-  it('marks only the core tools to load up front, not deferred', async () => {
+  it('marks only the tools every Triage and Start run calls to load up front', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
@@ -108,7 +108,10 @@ describe('MCP server', () => {
         .sort(),
     ).toEqual([
       'add_note',
+      'check_criterion',
+      'finish_work',
       'get_ticket',
+      'open_pr',
       'propose_triage',
       'start_work',
       'update_ticket',
