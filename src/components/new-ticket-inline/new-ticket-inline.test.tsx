@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import { createTicket } from '../../app/tickets/actions';
@@ -149,6 +149,23 @@ describe('NewTicketInline', () => {
     );
     expect(titleField()).not.toBeInvalid();
     expect(titleField()).toHaveValue('Fix the header');
+  });
+
+  it('shows a create that throws as a refusal and keeps the text (T1323)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(createTicket).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<NewTicketInline projectId={3} />);
+
+    await userEvent.type(titleField(), 'Fix the header{Enter}');
+
+    await waitFor(() =>
+      expect(titleField()).toHaveAccessibleDescription(
+        'The Ticket could not be created. Try again.',
+      ),
+    );
+    expect(titleField()).toHaveValue('Fix the header');
+    expect(titleField()).not.toHaveAttribute('readonly');
   });
 
   it('cancels on Escape without creating a Ticket', async () => {

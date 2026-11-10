@@ -15,6 +15,7 @@ import {
   fieldRefusal,
   rootRefusal,
 } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { formatCost } from '../../app/lib/format-cost';
 import { projectPath } from '../../app/lib/paths';
 import type { Conversation } from '../../conversations/conversations';
@@ -52,7 +53,10 @@ type CycleTitleProps = {
  */
 const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
   const saveTitle = async (title: string) => {
-    const result = await renameCycle({ cycleId: cycle.id, title });
+    const result = await callAction(
+      () => renameCycle({ cycleId: cycle.id, title }),
+      'The title could not be saved. Try again.',
+    );
     return fieldRefusal(result, 'title') ?? rootRefusal(result);
   };
 
@@ -87,14 +91,21 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
 
-  /** Runs a Cycle action, showing its refusal, then `onDone` if it succeeded. */
+  /**
+   * Runs a Cycle action, showing its refusal, or `failed` when it throws,
+   * then `onDone` if it succeeded.
+   */
   const run = (
     action: (input: { cycleId: number }) => Promise<ActionResult>,
+    failed: string,
     onDone?: () => void,
   ) => {
     setError(undefined);
     startTransition(async () => {
-      const result = await action({ cycleId: cycle.id });
+      const result = await callAction(
+        () => action({ cycleId: cycle.id }),
+        failed,
+      );
       if (!result.ok) {
         setError(result.error);
         return;
@@ -103,9 +114,11 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
     });
   };
 
+  const startFailed = 'The Cycle could not be started. Try again.';
+
   const start = () => {
     if (!activeCycle) {
-      run(startCycle);
+      run(startCycle, startFailed);
       return;
     }
     if (
@@ -113,19 +126,23 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
         `Start "${cycle.title}" and archive the Active Cycle "${activeCycle.title}"? Its open Tickets move to "${cycle.title}".`,
       )
     ) {
-      run(({ cycleId }) =>
-        startCycle({
-          cycleId,
-          archiveActive: true,
-          activeCycleId: activeCycle.id,
-        }),
+      run(
+        ({ cycleId }) =>
+          startCycle({
+            cycleId,
+            archiveActive: true,
+            activeCycleId: activeCycle.id,
+          }),
+        startFailed,
       );
     }
   };
 
   const archive = () => {
     if (window.confirm(archiveCycleConfirmation(cycle.title))) {
-      run(archiveCycle, () => router.push(projectPath(cycle.projectId)));
+      run(archiveCycle, 'The Cycle could not be archived. Try again.', () =>
+        router.push(projectPath(cycle.projectId)),
+      );
     }
   };
 
@@ -142,7 +159,9 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
         `Discard the Cycle "${cycle.title}"? Its Tickets go back to the Backlog.`,
       )
     ) {
-      run(discardCycle, () => router.push(projectPath(cycle.projectId)));
+      run(discardCycle, 'The Cycle could not be discarded. Try again.', () =>
+        router.push(projectPath(cycle.projectId)),
+      );
     }
   };
 

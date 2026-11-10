@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import { anEpicChild } from '../../test/fixtures';
@@ -178,6 +178,54 @@ describe('CyclePlanner', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Ticket T12 is archived. Restore it before planning it into a Cycle.',
+    );
+  });
+
+  it('shows a planning action that throws as a refusal (T1323)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(planTicket).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <CyclePlanner ticket={open} cycles={[cycle({ id: 7, title: 'Beta' })]} />,
+    );
+
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Plan into a Cycle' }),
+      'Beta',
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Ticket could not be planned. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('combobox', { name: 'Plan into a Cycle' }),
+      ).toBeEnabled(),
+    );
+  });
+
+  it('shows a removing action that throws as a refusal (T1323)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(unplanTicket).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <CyclePlanner
+        ticket={open}
+        cycles={[cycle({ id: 7, title: 'Beta', ticketNumbers: [12] })]}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Remove from Cycle' }),
+    );
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The Ticket could not be taken out of the Cycle. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Remove from Cycle' }),
+      ).toBeEnabled(),
     );
   });
 

@@ -12,6 +12,7 @@ import type { FC } from 'react';
 import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { createTicket } from '../../app/tickets/actions';
 import type { TicketType } from '../../tickets/ticket-type';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -101,13 +102,17 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
   };
 
   const create = async (title: string) => {
-    const result = await createTicket({
-      projectId,
-      title,
-      ...(cycleId === undefined ? {} : { cycleId }),
-      ...(epicNumber === undefined ? {} : { epicNumber }),
-      ...(type === 'Epic' ? { type } : {}),
-    });
+    const result = await callAction(
+      () =>
+        createTicket({
+          projectId,
+          title,
+          ...(cycleId === undefined ? {} : { cycleId }),
+          ...(epicNumber === undefined ? {} : { epicNumber }),
+          ...(type === 'Epic' ? { type } : {}),
+        }),
+      `The ${type === 'Epic' ? 'Epic' : 'Ticket'} could not be created. Try again.`,
+    );
     if (!result.ok) {
       showRefusal(result);
       return;

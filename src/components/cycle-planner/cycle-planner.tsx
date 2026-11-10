@@ -13,6 +13,7 @@ import {
 import { type FC, type ReactNode, useId, useState, useTransition } from 'react';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
+import { callAction } from '../../app/lib/call-action';
 import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
@@ -50,10 +51,18 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     cycle.ticketNumbers.includes(ticket.number),
   );
 
-  const change = (action: typeof planTicket, cycleId: number) => {
+  /** Plans or unplans the Ticket, showing its refusal, or `failed` when it throws. */
+  const change = (
+    action: typeof planTicket,
+    cycleId: number,
+    failed: string,
+  ) => {
     setError(undefined);
     startTransition(async () => {
-      const result = await action({ cycleId, number: ticket.number });
+      const result = await callAction(
+        () => action({ cycleId, number: ticket.number }),
+        failed,
+      );
       if (!result.ok) {
         setError(result.error);
       }
@@ -88,7 +97,11 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     if (dialogChildren(cycle, false).length > 0) {
       setAsking({ mode: 'plan', cycle });
     } else {
-      change(planTicket, cycle.id);
+      change(
+        planTicket,
+        cycle.id,
+        'The Ticket could not be planned. Try again.',
+      );
     }
   };
 
@@ -96,7 +109,11 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
     if (dialogChildren(cycle, true).length > 0) {
       setAsking({ mode: 'unplan', cycle });
     } else {
-      change(unplanTicket, cycle.id);
+      change(
+        unplanTicket,
+        cycle.id,
+        'The Ticket could not be taken out of the Cycle. Try again.',
+      );
     }
   };
 

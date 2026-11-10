@@ -5,6 +5,7 @@ import type { FC } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { startBatchTriage } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 
 export type BatchTriageButtonProps = {
@@ -42,7 +43,10 @@ export const BatchTriageButton: FC<BatchTriageButtonProps> = ({
       dialog.open(openId);
       return;
     }
-    const result = await startBatchTriage({ projectId, cycleId });
+    const result = await callAction(
+      () => startBatchTriage({ projectId, cycleId }),
+      'The Batch triage could not be started. Try again.',
+    );
     if (!result.ok) {
       setError('root.server', { message: result.error });
       return;

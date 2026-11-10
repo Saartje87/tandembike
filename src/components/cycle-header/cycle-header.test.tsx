@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -181,6 +181,57 @@ describe('CycleHeader', () => {
     ).toBeInTheDocument();
     expect(titleInput()).toHaveValue('Launch the beta!');
   });
+
+  it("shows a rename that throws as a refusal and keeps the User's text (T1323)", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(renameCycle).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<CycleHeader cycle={prepared} />);
+
+    await userEvent.click(title());
+    await userEvent.type(titleInput(), '!{Enter}');
+
+    expect(
+      await screen.findByText('The title could not be saved. Try again.'),
+    ).toBeInTheDocument();
+    expect(titleInput()).toHaveValue('Launch the beta!');
+  });
+
+  it.each([
+    {
+      name: 'Start Cycle',
+      cycle: prepared,
+      action: startCycle,
+      reason: 'The Cycle could not be started. Try again.',
+    },
+    {
+      name: 'Discard Cycle',
+      cycle: prepared,
+      action: discardCycle,
+      reason: 'The Cycle could not be discarded. Try again.',
+    },
+    {
+      name: 'Archive Cycle',
+      cycle: { ...prepared, state: 'Active' as const },
+      action: archiveCycle,
+      reason: 'The Cycle could not be archived. Try again.',
+    },
+  ])(
+    'shows $name throwing as a refusal and stays (T1323)',
+    async ({ name, cycle, action, reason }) => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      vi.mocked(action).mockRejectedValue(new Error('network down'));
+      renderWithTheme(<CycleHeader cycle={cycle} />);
+
+      await userEvent.click(screen.getByRole('button', { name }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(reason);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name })).toBeEnabled(),
+      );
+      expect(router.push).not.toHaveBeenCalled();
+    },
+  );
 
   it('cancels a rename with Escape', async () => {
     renderWithTheme(<CycleHeader cycle={prepared} />);
