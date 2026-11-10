@@ -257,7 +257,7 @@ export const registerTicketTools = ({
           .string()
           .optional()
           .describe(
-            'Only list Tickets created or changed at or after this ISO 8601 timestamp with a time zone, such as 2026-11-07T23:05:00Z. An Epic also counts as changed when one of its children was created, attached, detached or changed since. Use it to check what other sessions changed before publishing work, such as find_tickets({ projectName, cycleId, type: "Epic", changedSince }) with the time you started.',
+            'Only list Tickets created or changed at or after this ISO 8601 timestamp with a time zone, such as 2026-11-07T23:05:00Z. Planning a Ticket into, out of or between Cycles counts as a change; rolling a Cycle over or archiving it does not. An Epic also counts as changed when one of its children was created, attached, detached or changed since. Use it to check what other sessions changed before publishing work, such as find_tickets({ projectName, cycleId, type: "Epic", changedSince }) with the time you started.',
           ),
       },
       annotations: { readOnlyHint: true },
