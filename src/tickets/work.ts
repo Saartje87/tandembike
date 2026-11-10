@@ -262,7 +262,8 @@ export function createWork(deps: WorkDeps) {
     /**
      * Gives up Ticket `number` for `runId`: releases its Claim (refused when
      * another run holds it), comments `reason`, and moves In progress back to
-     * Todo unless the Ticket has a PR reference. Returns the Ticket.
+     * Todo unless the Ticket has a PR reference or is archived. Returns the
+     * Ticket.
      */
     abandonWork(number: number, runId: string, reason: string): Ticket {
       const ticket = deps.getTicket(number);
@@ -284,7 +285,9 @@ export function createWork(deps: WorkDeps) {
       return deps.transaction(() => {
         deps.addComment(number, { body: reason, author: 'agent' });
         deps.releaseTicketClaim(number, { agentRunId: runId });
+        // An archived Ticket keeps its Status: it is read-only (T1312).
         return ticket.status === 'In progress' &&
+          !ticket.archived &&
           !ticket.externalReferences.some(isPullRequestReference)
           ? deps.backToTodo(number)
           : deps.getTicket(number);
