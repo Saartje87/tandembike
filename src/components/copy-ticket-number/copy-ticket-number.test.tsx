@@ -131,7 +131,8 @@ describe('CopyTicketNumber, quiet', () => {
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
-  it('shows a warning over the number, with no extra text, when the copy fails', async () => {
+  it('shows a warning over the number for 2 s, with no extra text, when the copy fails', async () => {
+    vi.useFakeTimers();
     stubClipboard({ writeText: vi.fn().mockRejectedValue(new Error('No')) });
     renderWithTheme(<CopyTicketNumber number={42} quiet />);
 
@@ -141,6 +142,11 @@ describe('CopyTicketNumber, quiet', () => {
     expect(numberHidden()).toBe(true);
     expect(iconIn(copyButton())).toBe('exclamation-triangle');
     expect(screen.getByRole('status')).toHaveTextContent("Couldn't copy T42");
+
+    act(() => vi.advanceTimersByTime(2000));
+
+    expect(numberHidden()).toBe(false);
+    expect(iconIn(copyButton())).toBeUndefined();
   });
 
   it.each([['metaKey'], ['ctrlKey'], ['shiftKey']])(

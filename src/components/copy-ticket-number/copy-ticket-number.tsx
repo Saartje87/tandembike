@@ -40,13 +40,14 @@ export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({
   const text = `T${number}`;
   const [state, setState] = useState<CopyState>('idle');
 
+  // The quiet variant's warning hides the number, so it times out too.
   useEffect(() => {
-    if (state !== 'copied') {
+    if (state === 'idle' || (state === 'failed' && !quiet)) {
       return;
     }
     const timer = setTimeout(() => setState('idle'), confirmationMs);
     return () => clearTimeout(timer);
-  }, [state]);
+  }, [state, quiet]);
 
   const copy = async () => {
     setState('idle');
@@ -85,7 +86,11 @@ export const CopyTicketNumber: FC<CopyTicketNumberProps> = ({
             fontFamily="mono"
             fontSize="small"
             color="muted"
-            className={`${styles.stacked} ${state === 'idle' ? '' : styles.hidden}`}
+            className={
+              state === 'idle'
+                ? styles.stacked
+                : `${styles.stacked} ${styles.hidden}`
+            }
           >
             {text}
           </Text>
