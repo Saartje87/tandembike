@@ -1570,6 +1570,8 @@ export function createConversations({
     const handle = live.get(id);
     if (handle?.run && !handle.pending) {
       live.delete(id);
+      expireAsking(handle);
+      expireWidgets(handle);
       handle.run.close();
     }
     announce(id);
