@@ -8,6 +8,11 @@ import type { Ticket } from '../../tickets/tickets';
 
 export type MergedButtonProps = {
   ticket: Pick<Ticket, 'number' | 'title'>;
+  /**
+   * What the click says: Merged for a PR in Review, or Done for a
+   * ready-for-human Ticket with no PR (T1268). Defaults to Merged.
+   */
+  action?: 'Merged' | 'Done';
   /** Called on click with false, and with true once the User confirms. */
   onMerged: (confirmed: boolean) => void;
   /** Closes the confirm step without completing. */
@@ -22,12 +27,14 @@ export type MergedButtonProps = {
 };
 
 /**
- * Says the Ticket's PR is merged, so the User applies the completion rule
- * with one click. It checks nothing on GitHub. When acceptance criteria are
- * unchecked it lists them and completes only once the User confirms.
+ * Says the Ticket's PR is merged, or that the Ticket is done (`action`), so
+ * the User applies the completion rule with one click. It checks nothing on
+ * GitHub. When acceptance criteria are unchecked it lists them and completes
+ * only once the User confirms.
  */
 export const MergedButton: FC<MergedButtonProps> = ({
   ticket,
+  action = 'Merged',
   onMerged,
   onCancel = () => {},
   unchecked,
@@ -42,17 +49,18 @@ export const MergedButton: FC<MergedButtonProps> = ({
         type="button"
         variant="outline"
         size="small"
-        aria-label={`Merged T${ticket.number} ${ticket.title}`}
+        aria-label={`${action} T${ticket.number} ${ticket.title}`}
         disabled={pending}
         onClick={() => onMerged(false)}
       >
-        Merged
+        {action}
       </Button>
       <Dialog open={open} onRequestClose={onCancel} aria-labelledby={headingId}>
         {open && (
           <Stack gap={4}>
             <Heading id={headingId} level={2}>
-              Merge T{ticket.number} with unchecked criteria?
+              {action === 'Merged' ? 'Merge' : 'Finish'} T{ticket.number} with
+              unchecked criteria?
             </Heading>
             <Text tag="p">
               These acceptance criteria are not checked. Finishing anyway
@@ -81,7 +89,7 @@ export const MergedButton: FC<MergedButtonProps> = ({
                 disabled={pending}
                 onClick={() => onMerged(true)}
               >
-                Merged anyway
+                {action} anyway
               </Button>
               <Button type="button" variant="ghost" onClick={onCancel}>
                 Cancel

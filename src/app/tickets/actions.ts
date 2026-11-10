@@ -101,21 +101,25 @@ export async function updateTicket(
   });
 }
 
-/** The Merged button's result: `unchecked` when it needs the User to confirm. */
+/**
+ * The Merged or Done button's result: `unchecked` when it needs the User to
+ * confirm.
+ */
 export type CompleteTicketResult = ActionResult<{
   projectId: number;
   /** Present when nothing was completed: the criteria to confirm. */
   unchecked?: UncheckedCriterion[];
 }>;
 
-/** The override a confirmed Merged records as the User's comment. */
-const confirmedMerged =
-  'The User confirmed Merged in the drawer with these criteria unchecked.';
+/** The override a confirmed Merged or Done records as the User's comment. */
+const confirmedFinish =
+  'The User confirmed finishing it in the drawer with these criteria unchecked.';
 
 /**
  * Applies the completion rule to a Ticket, or to an Epic and its unarchived
- * children, as the User ("Merged" on the Board). There is no MCP tool for it
- * (ADR 0019) and it checks nothing outside the app, such as GitHub. It is
+ * children, as the User ("Merged" in Review, or "Done" on a ready-for-human
+ * Ticket, in the drawer). There is no MCP tool for it (ADR 0019) and it
+ * checks nothing outside the app, such as GitHub. It is
  * never refused for unchecked acceptance criteria (ADR 0043): without
  * `confirmed` it completes nothing and returns them, and with it completes
  * with an override recorded as the User's comment.
@@ -135,7 +139,7 @@ export async function completeTicket(input: {
     }
     const ticket = tickets.completeTicket(
       number,
-      input?.confirmed === true ? { override: confirmedMerged } : {},
+      input?.confirmed === true ? { override: confirmedFinish } : {},
     );
     revalidatePath(projectPath(ticket.projectId));
     revalidatePath(boardRoute, 'page');
