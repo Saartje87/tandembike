@@ -11,12 +11,19 @@ import type { AgentRun, AgentRunner, RunOptions } from './agent-runner';
  * Each message, the first one or a reply, may hold one directive:
  * - `fake:permission`: asks the User a permission request (waiting).
  * - `fake:widget`: asks the User choice cards (waiting).
+ * - `fake:tool`: records one Bash tool call and keeps running (T1386).
  * - `fake:idle`: ends the turn; the Conversation listens for a reply.
  * - `fake:exit`: ends the turn and the run's process.
  * Without one, the run says it got the message and keeps running. An
  * answered request leaves it running again.
  */
-const fakeDirectives = ['permission', 'widget', 'idle', 'exit'] as const;
+const fakeDirectives = [
+  'permission',
+  'widget',
+  'tool',
+  'idle',
+  'exit',
+] as const;
 type FakeDirective = (typeof fakeDirectives)[number];
 
 function directiveOf(text: string): FakeDirective | null {
@@ -30,6 +37,7 @@ export function createScriptedRunner(): AgentRunner {
   return {
     start(options: RunOptions): AgentRun {
       let closed = false;
+      let steps = 0;
       // Deferred, as a real run reports after `start` and `send` return:
       // the Conversation sets its own state right after them.
       const later = (step: () => void) =>
@@ -62,6 +70,19 @@ export function createScriptedRunner(): AgentRunner {
                 later(() => say(`answered ${JSON.stringify(answer)}.`)),
               );
             return;
+          case 'tool': {
+            const input = {
+              command: 'echo fake',
+              description: `Fake step ${++steps}`,
+            };
+            options.onEvent({
+              type: 'tool',
+              text: `Bash ${JSON.stringify(input)}`,
+              name: 'Bash',
+              input,
+            });
+            return;
+          }
           case 'idle':
             options.onEvent({ type: 'turn', costUsd: 0 });
             return;

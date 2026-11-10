@@ -90,6 +90,20 @@ describe('The scripted runner (fake runs on a throwaway server)', () => {
     );
   });
 
+  it('records a tool call and keeps running when a reply says fake:tool', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    await conversations.reply(conversation.id, 'fake:tool', 'user');
+    await settle();
+
+    expect(conversations.get(conversation.id).state).toBe('running');
+    expect(conversations.transcript(conversation.id).at(-1)).toMatchObject({
+      role: 'tool',
+      toolName: 'Bash',
+      toolInput: { command: 'echo fake', description: 'Fake step 1' },
+    });
+  });
+
   it('ends its turn when a reply says fake:idle', async () => {
     const { conversations, conversation } = await startRunning();
 
