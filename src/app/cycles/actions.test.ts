@@ -1,4 +1,4 @@
-import { revalidatePath } from 'next/cache';
+import { refresh } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestTickets } from '../../test/tickets';
@@ -16,7 +16,7 @@ import {
   unplanTickets,
 } from './actions';
 
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ refresh: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 /** A Tickets module with a Project and one Ticket, used by the actions. */
@@ -33,7 +33,7 @@ function appWithTicket() {
 
 describe('Cycle actions', () => {
   beforeEach(() => {
-    vi.mocked(revalidatePath).mockClear();
+    vi.mocked(refresh).mockClear();
   });
 
   it('creates, renames and discards a Cycle, refreshing every Project page', async () => {
@@ -57,11 +57,7 @@ describe('Cycle actions', () => {
       ok: true,
     });
     expect(tickets.listCycles(project.id)).toEqual([]);
-    expect(vi.mocked(revalidatePath).mock.calls).toEqual([
-      ['/project/[id]', 'layout'],
-      ['/project/[id]', 'layout'],
-      ['/project/[id]', 'layout'],
-    ]);
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('plans a Ticket into a Cycle and out again', async () => {
@@ -77,7 +73,7 @@ describe('Cycle actions', () => {
       unplanTicket({ cycleId: cycle.id, number: ticket.number }),
     ).resolves.toEqual({ ok: true });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('plans an Epic with its children only when asked to', async () => {
@@ -142,7 +138,7 @@ describe('Cycle actions', () => {
     });
     expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([ticket.number]);
     expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([other.number]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('takes several Tickets out of a Cycle, reporting the ones it refuses', async () => {
@@ -157,7 +153,7 @@ describe('Cycle actions', () => {
       failed: [{ number: 42, error: 'There is no Ticket T42.' }],
     });
     expect(tickets.getCycle(cycle.id).ticketNumbers).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it("moves a selection to another Cycle or the Backlog within the Board's Project", async () => {
@@ -181,7 +177,7 @@ describe('Cycle actions', () => {
     });
     expect(tickets.getCycle(beta.id).ticketNumbers).toEqual([ticket.number]);
     expect(tickets.getCycle(launch.id).ticketNumbers).toEqual([]);
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+    expect(refresh).toHaveBeenCalled();
 
     await expect(
       moveTicketsToCycle({
@@ -208,7 +204,7 @@ describe('Cycle actions', () => {
       ok: false,
       error: 'The Cycle "Beta" is in another Project.',
     });
-    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('refuses a whole batch for a Cycle that cannot change', async () => {
@@ -223,7 +219,7 @@ describe('Cycle actions', () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(revalidatePath).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
   });
 
   it('starts a Cycle, and returns why a second one may not start', async () => {
@@ -243,7 +239,7 @@ describe('Cycle actions', () => {
       error:
         'The Cycle "Beta" is Active. Starting another archives it, so confirm that first.',
     });
-    expect(revalidatePath).toHaveBeenCalledWith('/project/[id]', 'layout');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('archives an Active Cycle, and returns why a Prepared one may not be', async () => {

@@ -15,7 +15,7 @@ export type RenameProjectInlineEditProps = {
 
 /**
  * A Project's name as its page heading, edited in place. A save shows the
- * new name at once; the Server Action revalidates the layout, so the side
+ * new name at once; the Server Action refreshes the page, so the side
  * navigation and breadcrumbs catch up when it answers. An archived
  * Project's name is plain text.
  */

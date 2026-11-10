@@ -1,15 +1,13 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
 import { appConversations } from '../../conversations/app-conversations';
 import type { FootprintFactors } from '../../footprint/footprint';
 import { appSettings } from '../../settings/app-settings';
 import type { FootprintFactor } from '../../settings/settings';
 import { appTickets } from '../../tickets/app-tickets';
 import type { MachineSettings } from '../../tickets/machine-settings';
-import { type ActionResult, actionResult } from '../lib/action-result';
-import { settingsPath, statsPath } from '../lib/paths';
+import type { ActionResult } from '../lib/action-result';
+import { userAction } from '../lib/user-action';
 
 /**
  * Saves the machine settings (ADR 0041). Only this Server Action sets them:
@@ -19,8 +17,8 @@ export async function saveMachineSettings(input: {
   maxConcurrentRuns: number;
   dailySpendCeilingUsd: number | null;
 }): Promise<ActionResult<{ settings: MachineSettings }>> {
-  return actionResult(() => {
-    const settings = appTickets('user').setMachineSettings({
+  return userAction((tickets) => {
+    const settings = tickets.setMachineSettings({
       maxConcurrentRuns: Number(input?.maxConcurrentRuns),
       dailySpendCeilingUsd:
         input?.dailySpendCeilingUsd === null ||
@@ -28,26 +26,24 @@ export async function saveMachineSettings(input: {
           ? null
           : Number(input.dailySpendCeilingUsd),
     });
-    revalidatePath(settingsPath());
     return { settings };
   });
 }
 
 /**
  * Saves the Footprint factors (ADR 0050). Every Footprint is computed from
- * them when read, so the pages that show Footprints are revalidated.
+ * them when read.
  */
 export async function saveFootprintFactors(
   input: FootprintFactors,
 ): Promise<ActionResult<{ factors: FootprintFactors }>> {
-  return actionResult(() => {
+  return userAction(() => {
     const factors = appSettings().setFootprintFactors({
       haikuWhPerMillion: numberOrNaN(input?.haikuWhPerMillion),
       sonnetWhPerMillion: numberOrNaN(input?.sonnetWhPerMillion),
       opusWhPerMillion: numberOrNaN(input?.opusWhPerMillion),
       gridGramsPerKwh: numberOrNaN(input?.gridGramsPerKwh),
     });
-    revalidateFootprints();
     return { factors };
   });
 }
@@ -60,16 +56,10 @@ const numberOrNaN = (value: unknown): number =>
 export async function resetFootprintFactor(input: {
   name: FootprintFactor;
 }): Promise<ActionResult<{ factors: FootprintFactors }>> {
-  return actionResult(() => {
+  return userAction(() => {
     const factors = appSettings().resetFootprintFactor(input?.name);
-    revalidateFootprints();
     return { factors };
   });
-}
-
-function revalidateFootprints() {
-  revalidatePath(settingsPath());
-  revalidatePath(statsPath());
 }
 
 /** What the app header shows of the machine: runs and the Machine ceiling. */

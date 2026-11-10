@@ -53,7 +53,7 @@ const copy = {
  * Ticket button, and clears for the next one; Escape clears it without
  * creating; both call `onDone`. With `type` Epic it creates an Epic instead.
  * The module validates, and its reason shows under the field. On success
- * the Server Action revalidates the Board, which shows the new Ticket.
+ * the Server Action refreshes the Board, which shows the new Ticket.
  *
  * In a Project with an Agent (`ProjectAgentProvider`, T592) one of Enter and
  * Ctrl/Cmd+Enter creates through a New Ticket Conversation instead: the title

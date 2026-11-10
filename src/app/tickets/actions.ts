@@ -1,8 +1,5 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
-
-import { appTickets } from '../../tickets/app-tickets';
 import type { EpicChildInput, EpicChildrenInput } from '../../tickets/epics';
 import {
   TicketsError,
@@ -16,15 +13,15 @@ import type {
   BlockerInput,
   MoveTicketsInput,
   ReorderTicketsInput,
-  Ticket,
+  Tickets,
   UpdateTicketInput,
 } from '../../tickets/tickets';
 import type {
   TriageCategory,
   TriageState,
 } from '../../tickets/triage-proposal-state';
-import { type ActionResult, actionResult } from '../lib/action-result';
-import { boardRoute, cycleRoute, projectPath } from '../lib/paths';
+import type { ActionResult } from '../lib/action-result';
+import { userAction } from '../lib/user-action';
 
 export type CreateTicketResult = ActionResult<{ number: number }>;
 
@@ -46,8 +43,8 @@ export async function createTicket(input: {
   /** The Epic whose drawer it was created in, to make it a child of. */
   epicNumber?: number;
 }): Promise<CreateTicketResult> {
-  return actionResult(() => {
-    const ticket = appTickets('user').createTicket({
+  return userAction((tickets) => {
+    const ticket = tickets.createTicket({
       projectId: Number(input?.projectId),
       title: String(input?.title ?? ''),
       description: String(input?.description ?? ''),
@@ -60,8 +57,6 @@ export async function createTicket(input: {
         ? {}
         : { epicNumber: Number(input.epicNumber) }),
     });
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
     return { number: ticket.number };
   });
 }
@@ -79,12 +74,12 @@ export async function updateTicket(
     'addLabels' | 'removeLabels' | 'acceptanceCriteria'
   >,
 ): Promise<UpdateTicketResult> {
-  return actionResult(() => {
+  return userAction((tickets) => {
     const { title, description, status, projectId, color } = input ?? {};
     if (status !== undefined && !isStatus(status)) {
       throw new ValidationError({ status: statusRule });
     }
-    const ticket = appTickets('user').updateTicket(Number(input?.number), {
+    const ticket = tickets.updateTicket(Number(input?.number), {
       ...(title === undefined ? {} : { title: String(title) }),
       ...(description === undefined
         ? {}
@@ -95,8 +90,6 @@ export async function updateTicket(
       ...(color === undefined ? {} : { color }),
     });
     // Its card shows on its Board and on the Cycle tab it is planned into.
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return { projectId: ticket.projectId };
   });
 }
@@ -128,8 +121,7 @@ export async function completeTicket(input: {
   number: number;
   confirmed?: boolean;
 }): Promise<CompleteTicketResult> {
-  return actionResult(() => {
-    const tickets = appTickets('user');
+  return userAction((tickets) => {
     const number = Number(input?.number);
     if (input?.confirmed !== true) {
       const unchecked = tickets.uncheckedCriteria(number);
@@ -141,9 +133,6 @@ export async function completeTicket(input: {
       number,
       input?.confirmed === true ? { override: confirmedFinish } : {},
     );
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return { projectId: ticket.projectId };
   });
 }
@@ -155,11 +144,8 @@ export async function completeTicket(input: {
 export async function backToTodo(input: {
   number: number;
 }): Promise<ActionResult<{ projectId: number }>> {
-  return actionResult(() => {
-    const ticket = appTickets('user').backToTodo(Number(input?.number));
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
+  return userAction((tickets) => {
+    const ticket = tickets.backToTodo(Number(input?.number));
     return { projectId: ticket.projectId };
   });
 }
@@ -171,7 +157,7 @@ export async function backToTodo(input: {
 export async function reorderTickets(
   input: ReorderTicketsInput,
 ): Promise<ActionResult> {
-  return actionResult(() => {
+  return userAction((tickets) => {
     if (!isStatus(input?.status)) {
       throw new ValidationError({ status: statusRule });
     }
@@ -199,9 +185,7 @@ export async function reorderTickets(
         ? {}
         : { cycleId: cycleId === null ? null : Number(cycleId) }),
     };
-    appTickets('user').reorderTickets(reorder);
-    revalidatePath(projectPath(projectId));
-    revalidatePath(cycleRoute, 'page');
+    tickets.reorderTickets(reorder);
     return {};
   });
 }
@@ -214,12 +198,12 @@ export async function reorderTickets(
 export async function moveTickets(
   input: MoveTicketsInput,
 ): Promise<ActionResult> {
-  return actionResult(() => {
+  return userAction((tickets) => {
     if (!isStatus(input?.status)) {
       throw new ValidationError({ status: statusRule });
     }
     const projectId = Number(input?.projectId);
-    appTickets('user').moveTickets({
+    tickets.moveTickets({
       projectId,
       ticketNumbers: Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
@@ -227,8 +211,6 @@ export async function moveTickets(
       status: input.status,
       before: input.before == null ? null : Number(input.before),
     });
-    revalidatePath(projectPath(projectId));
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -243,16 +225,15 @@ function setArchived(
   input: { number: number; withChildren?: boolean },
   archived: boolean,
 ): ArchiveTicketResult {
-  return actionResult(() => {
-    const tickets = appTickets('user');
+  return userAction((tickets) => {
     const number = Number(input?.number);
-    const ticket = archived
-      ? tickets.archiveTicket(number, {
-          withChildren: input?.withChildren === true,
-        })
-      : tickets.restoreTicket(number);
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
+    if (archived) {
+      tickets.archiveTicket(number, {
+        withChildren: input?.withChildren === true,
+      });
+    } else {
+      tickets.restoreTicket(number);
+    }
     return {};
   });
 }
@@ -275,15 +256,13 @@ export async function archiveTickets(input: {
   /** Archive the children of the Epics in it too. */
   withChildren?: boolean;
 }): Promise<ArchiveTicketResult> {
-  return actionResult(() => {
-    appTickets('user').archiveTickets(
+  return userAction((tickets) => {
+    tickets.archiveTickets(
       Array.isArray(input?.ticketNumbers)
         ? input.ticketNumbers.map(Number)
         : [],
       { withChildren: input?.withChildren === true },
     );
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -311,15 +290,10 @@ export async function deleteTicket(input: {
   /** For an Epic: delete its children too, instead of detaching them. */
   withChildren?: boolean;
 }): Promise<DeleteTicketResult> {
-  return actionResult(() => {
-    const tickets = appTickets('user');
-    const number = Number(input?.number);
-    const { projectId } = tickets.getTicket(number);
-    tickets.deleteTicket(number, {
+  return userAction((tickets) => {
+    tickets.deleteTicket(Number(input?.number), {
       withChildren: input?.withChildren === true,
     });
-    revalidatePath(projectPath(projectId));
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -330,10 +304,8 @@ export type TicketLabelResult = ActionResult;
 export async function clearTicketClaim(input: {
   number: number;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    const ticket = appTickets('user').clearTicketClaim(Number(input?.number));
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
+  return userAction((tickets) => {
+    tickets.clearTicketClaim(Number(input?.number));
     return {};
   });
 }
@@ -346,16 +318,14 @@ function changeLabel(
   input: { number: number; label: string },
   change: 'add' | 'remove',
 ): TicketLabelResult {
-  return actionResult(() => {
-    const tickets = appTickets('user');
+  return userAction((tickets) => {
     const number = Number(input?.number);
     const labels = [String(input?.label ?? '')];
-    const ticket =
-      change === 'add'
-        ? tickets.addLabels(number, labels)
-        : tickets.removeLabels(number, labels);
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
+    if (change === 'add') {
+      tickets.addLabels(number, labels);
+    } else {
+      tickets.removeLabels(number, labels);
+    }
     return {};
   });
 }
@@ -386,16 +356,14 @@ function changeExternalReference(
   input: { number: number; reference: string },
   change: 'add' | 'remove',
 ): TicketExternalReferenceResult {
-  return actionResult(() => {
-    const tickets = appTickets('user');
+  return userAction((tickets) => {
     const number = Number(input?.number);
     const references = [String(input?.reference ?? '')];
-    const ticket =
-      change === 'add'
-        ? tickets.addExternalReferences(number, references)
-        : tickets.removeExternalReferences(number, references);
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
+    if (change === 'add') {
+      tickets.addExternalReferences(number, references);
+    } else {
+      tickets.removeExternalReferences(number, references);
+    }
     return {};
   });
 }
@@ -422,11 +390,11 @@ export type TicketCommentResult = ActionResult;
  * Runs a comment change written by the User and refreshes the Ticket's
  * drawer. Domain errors come back as `error`, like `createTicket`.
  */
-function changeComment(change: () => void): TicketCommentResult {
-  return actionResult(() => {
-    change();
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
+function changeComment(
+  change: (tickets: Tickets) => void,
+): TicketCommentResult {
+  return userAction((tickets) => {
+    change(tickets);
     return {};
   });
 }
@@ -436,8 +404,8 @@ export async function addTicketComment(input: {
   number: number;
   body: string;
 }): Promise<TicketCommentResult> {
-  return changeComment(() =>
-    appTickets('user').addComment(Number(input?.number), {
+  return changeComment((tickets) =>
+    tickets.addComment(Number(input?.number), {
       body: String(input?.body ?? ''),
       author: 'user',
     }),
@@ -449,8 +417,8 @@ export async function editTicketComment(input: {
   id: number;
   body: string;
 }): Promise<TicketCommentResult> {
-  return changeComment(() =>
-    appTickets('user').editComment(Number(input?.id), {
+  return changeComment((tickets) =>
+    tickets.editComment(Number(input?.id), {
       body: String(input?.body ?? ''),
       by: 'user',
     }),
@@ -461,8 +429,8 @@ export async function editTicketComment(input: {
 export async function removeTicketComment(input: {
   id: number;
 }): Promise<TicketCommentResult> {
-  return changeComment(() =>
-    appTickets('user').removeComment(Number(input?.id), { by: 'user' }),
+  return changeComment((tickets) =>
+    tickets.removeComment(Number(input?.id), { by: 'user' }),
   );
 }
 
@@ -472,8 +440,8 @@ export type TicketAttachmentResult = ActionResult;
 export async function removeTicketAttachment(input: {
   id: number;
 }): Promise<TicketAttachmentResult> {
-  return changeComment(() =>
-    appTickets('user').removeAttachment(Number(input?.id), { by: 'user' }),
+  return changeComment((tickets) =>
+    tickets.removeAttachment(Number(input?.id), { by: 'user' }),
   );
 }
 
@@ -487,8 +455,7 @@ function changeBlocker(
   input: BlockerInput,
   change: 'add' | 'remove',
 ): TicketBlockerResult {
-  return actionResult(() => {
-    const tickets = appTickets('user');
+  return userAction((tickets) => {
     const relationship = {
       blocker: Number(input?.blocker),
       blocked: Number(input?.blocked),
@@ -498,8 +465,6 @@ function changeBlocker(
     } else {
       tickets.removeBlocker(relationship);
     }
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -526,12 +491,10 @@ export type TicketAcceptanceCriteriaResult = ActionResult;
  * `error`, like `createTicket`.
  */
 function changeAcceptanceCriteria(
-  change: () => Ticket,
+  change: (tickets: Tickets) => unknown,
 ): TicketAcceptanceCriteriaResult {
-  return actionResult(() => {
-    const ticket = change();
-    revalidatePath(projectPath(ticket.projectId));
-    revalidatePath(cycleRoute, 'page');
+  return userAction((tickets) => {
+    change(tickets);
     return {};
   });
 }
@@ -545,13 +508,13 @@ export async function setTicketAcceptanceCriteria(input: {
   number: number;
   acceptanceCriteria: Omit<AcceptanceCriterionInput, 'checked'>[];
 }): Promise<TicketAcceptanceCriteriaResult> {
-  return changeAcceptanceCriteria(() => {
+  return changeAcceptanceCriteria((tickets) => {
     if (!Array.isArray(input?.acceptanceCriteria)) {
       throw new ValidationError({
         acceptanceCriteria: 'Give the acceptance criteria as a list.',
       });
     }
-    return appTickets('user').updateTicket(Number(input.number), {
+    return tickets.updateTicket(Number(input.number), {
       acceptanceCriteria: input.acceptanceCriteria.map((criterion) => ({
         ...(criterion?.id === undefined ? {} : { id: Number(criterion.id) }),
         text: String(criterion?.text ?? ''),
@@ -566,8 +529,8 @@ export async function checkTicketAcceptanceCriterion(input: {
   id: number;
   checked: boolean;
 }): Promise<TicketAcceptanceCriteriaResult> {
-  return changeAcceptanceCriteria(() =>
-    appTickets('user').setAcceptanceCriteriaChecked(Number(input?.number), [
+  return changeAcceptanceCriteria((tickets) =>
+    tickets.setAcceptanceCriteriaChecked(Number(input?.number), [
       { id: Number(input?.id), checked: Boolean(input?.checked) },
     ]),
   );
@@ -580,11 +543,9 @@ export type TicketEpicResult = ActionResult;
  * cards show it, and both drawers. Domain errors come back as `error`, like
  * `createTicket`.
  */
-function changeEpic(change: () => void): TicketEpicResult {
-  return actionResult(() => {
-    change();
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
+function changeEpic(change: (tickets: Tickets) => void): TicketEpicResult {
+  return userAction((tickets) => {
+    change(tickets);
     return {};
   });
 }
@@ -596,8 +557,8 @@ function changeEpic(change: () => void): TicketEpicResult {
 export async function attachTicketToEpic(
   input: EpicChildInput,
 ): Promise<TicketEpicResult> {
-  return changeEpic(() =>
-    appTickets('user').moveToEpic({
+  return changeEpic((tickets) =>
+    tickets.moveToEpic({
       epic: Number(input?.epic),
       child: Number(input?.child),
     }),
@@ -611,8 +572,8 @@ export async function attachTicketToEpic(
 export async function moveTicketsToEpic(
   input: EpicChildrenInput,
 ): Promise<TicketEpicResult> {
-  return changeEpic(() =>
-    appTickets('user').moveTicketsToEpic({
+  return changeEpic((tickets) =>
+    tickets.moveTicketsToEpic({
       epic: Number(input?.epic),
       children: Array.isArray(input?.children)
         ? input.children.map(Number)
@@ -625,9 +586,7 @@ export async function moveTicketsToEpic(
 export async function detachTicketFromEpic(input: {
   number: number;
 }): Promise<TicketEpicResult> {
-  return changeEpic(() =>
-    appTickets('user').detachFromEpic(Number(input?.number)),
-  );
+  return changeEpic((tickets) => tickets.detachFromEpic(Number(input?.number)));
 }
 
 export type TicketOriginResult = ActionResult;
@@ -641,13 +600,11 @@ export async function setTicketOrigin(input: {
   number: number;
   originNumber: number | null;
 }): Promise<TicketOriginResult> {
-  return actionResult(() => {
-    appTickets('user').updateTicket(Number(input?.number), {
+  return userAction((tickets) => {
+    tickets.updateTicket(Number(input?.number), {
       originNumber:
         input?.originNumber === null ? null : Number(input?.originNumber),
     });
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -677,34 +634,28 @@ export async function addTicketAttachments(
       content: new Uint8Array(await file.arrayBuffer()),
     })),
   );
-  return actionResult(() => {
+  return userAction((tickets) => {
     if (uploads.length === 0) {
       throw new ValidationError({ files: 'Choose a file to add.' });
     }
-    const tickets = appTickets('user');
     let added = 0;
-    try {
-      for (const upload of uploads) {
-        try {
-          tickets.addAttachment(number, { ...upload, author: 'user' });
-        } catch (error) {
-          if (!(error instanceof TicketsError)) {
-            throw error;
-          }
-          // Name the file and what already went in, as the User chose several.
-          const earlier =
-            added === 0
-              ? ''
-              : ` ${added} earlier ${added === 1 ? 'file was' : 'files were'} added.`;
-          throw new TicketsError(
-            `"${upload.name}" was not added: ${error.message}${earlier}`,
-          );
+    for (const upload of uploads) {
+      try {
+        tickets.addAttachment(number, { ...upload, author: 'user' });
+      } catch (error) {
+        if (!(error instanceof TicketsError)) {
+          throw error;
         }
-        added += 1;
+        // Name the file and what already went in, as the User chose several.
+        const earlier =
+          added === 0
+            ? ''
+            : ` ${added} earlier ${added === 1 ? 'file was' : 'files were'} added.`;
+        throw new TicketsError(
+          `"${upload.name}" was not added: ${error.message}${earlier}`,
+        );
       }
-    } finally {
-      revalidatePath(boardRoute, 'page');
-      revalidatePath(cycleRoute, 'page');
+      added += 1;
     }
     return {};
   });
@@ -720,13 +671,11 @@ export async function approveTriage(input: {
   category?: TriageCategory;
   state?: TriageState;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').approveTriage(Number(input?.id), {
+  return userAction((tickets) => {
+    tickets.approveTriage(Number(input?.id), {
       ...(input?.category === undefined ? {} : { category: input.category }),
       ...(input?.state === undefined ? {} : { state: input.state }),
     });
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }
@@ -736,13 +685,11 @@ export async function rejectTriage(input: {
   id: number;
   reason?: string;
 }): Promise<ActionResult> {
-  return actionResult(() => {
-    appTickets('user').rejectTriage(
+  return userAction((tickets) => {
+    tickets.rejectTriage(
       Number(input?.id),
       input?.reason === undefined ? undefined : String(input.reason),
     );
-    revalidatePath(boardRoute, 'page');
-    revalidatePath(cycleRoute, 'page');
     return {};
   });
 }

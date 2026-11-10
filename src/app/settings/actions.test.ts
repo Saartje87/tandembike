@@ -1,4 +1,4 @@
-import { revalidatePath } from 'next/cache';
+import { refresh } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { defaultFootprintFactors } from '../../footprint/footprint';
@@ -11,7 +11,7 @@ import {
   saveMachineSettings,
 } from './actions';
 
-vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+vi.mock('next/cache', () => ({ refresh: vi.fn() }));
 
 const world = vi.hoisted(() => ({
   tickets: undefined as unknown,
@@ -37,11 +37,11 @@ beforeEach(() => {
   world.settings = createTestSettings();
   world.processes = { working: 0, waiting: 0 };
   world.budget = null;
-  vi.mocked(revalidatePath).mockReset();
+  vi.mocked(refresh).mockReset();
 });
 
 describe('saveMachineSettings', () => {
-  it('saves the cap and revalidates the Settings page', async () => {
+  it('saves the cap and refreshes the page', async () => {
     expect(
       await saveMachineSettings({
         maxConcurrentRuns: 5,
@@ -51,7 +51,7 @@ describe('saveMachineSettings', () => {
       ok: true,
       settings: { maxConcurrentRuns: 5, dailySpendCeilingUsd: 20 },
     });
-    expect(revalidatePath).toHaveBeenCalledWith('/settings');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('comes back with the reason when the cap is below 1', async () => {
@@ -109,7 +109,7 @@ describe('currentMachineRuns', () => {
 });
 
 describe('saveFootprintFactors (T1178)', () => {
-  it('saves the factors and revalidates the pages that show Footprints', async () => {
+  it('saves the factors and refreshes the page', async () => {
     expect(
       await saveFootprintFactors({
         ...defaultFootprintFactors,
@@ -119,8 +119,7 @@ describe('saveFootprintFactors (T1178)', () => {
       ok: true,
       factors: { ...defaultFootprintFactors, opusWhPerMillion: 800 },
     });
-    expect(revalidatePath).toHaveBeenCalledWith('/settings');
-    expect(revalidatePath).toHaveBeenCalledWith('/stats');
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('comes back with the field and reason for a negative factor', async () => {
