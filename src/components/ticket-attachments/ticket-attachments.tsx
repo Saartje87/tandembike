@@ -23,6 +23,7 @@ import {
 } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { modeColors } from '../../app/lib/mode-colors';
 import { attachmentPath } from '../../app/lib/paths';
 import {
@@ -66,7 +67,10 @@ const AttachmentItem: FC<AttachmentItemProps> = ({ attachment }) => {
   const remove = () => {
     setError(undefined);
     startRemove(async () => {
-      const result = await removeTicketAttachment({ id: attachment.id });
+      const result = await callAction(
+        () => removeTicketAttachment({ id: attachment.id }),
+        'The Attachment could not be removed. Try again.',
+      );
       if (result.ok) {
         setConfirming(false);
       } else {
@@ -237,7 +241,10 @@ export const TicketAttachments: FC<TicketAttachmentsProps> = ({
       for (const file of files) {
         form.append('files', file);
       }
-      const result = await addTicketAttachments(form);
+      const result = await callAction(
+        () => addTicketAttachments(form),
+        'The files could not be attached. Try again.',
+      );
       if (!result.ok) {
         setError('root.server', { message: result.error });
       }

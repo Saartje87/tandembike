@@ -6,7 +6,7 @@
 export async function callAction<T extends { ok: boolean }>(
   call: () => Promise<T>,
   fallback: string,
-): Promise<T | { ok: false; error: string }> {
+): Promise<T | { ok: false; error: string; fieldErrors?: undefined }> {
   try {
     return await call();
   } catch (thrown) {

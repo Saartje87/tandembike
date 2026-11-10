@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
 import { renderWithTheme } from '../../test/render';
@@ -111,6 +111,27 @@ describe('EpicCycleDialog', () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
   });
+
+  it('shows an action that throws as a refusal and stays open (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(planTicket).mockRejectedValue(new Error('network down'));
+    const { dialog, onClose } = renderDialog();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+    );
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The Epic could not be planned. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+      ).toBeEnabled(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('EpicCycleDialog removing', () => {
@@ -202,6 +223,27 @@ describe('EpicCycleDialog removing', () => {
 
     await waitFor(() =>
       expect(within(dialog).getByRole('alert').textContent).toBe('No way.'),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('shows an action that throws as a refusal and stays open (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(unplanTicket).mockRejectedValue(new Error('network down'));
+    const { dialog, onClose } = renderRemoval();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+    );
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The Epic could not be taken out of the Cycle. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Epic and 2 children' }),
+      ).toBeEnabled(),
     );
     expect(onClose).not.toHaveBeenCalled();
   });

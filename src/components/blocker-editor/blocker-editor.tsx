@@ -13,6 +13,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { modeColors } from '../../app/lib/mode-colors';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import {
@@ -138,7 +139,10 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
     if (other === undefined) {
       return;
     }
-    const result = await addTicketBlocker(relationshipWith(other));
+    const result = await callAction(
+      () => addTicketBlocker(relationshipWith(other)),
+      'The Blocker could not be added. Try again.',
+    );
     if (!result.ok) {
       // The module names `blocker` or `blocked`; this form has one number.
       const reason = Object.values(result.fieldErrors ?? {})[0];
@@ -157,7 +161,10 @@ export const BlockerEditor: FC<BlockerEditorProps> = ({
     clearErrors();
     startRemove(async () => {
       showRemoved(other);
-      const result = await removeTicketBlocker(relationshipWith(other));
+      const result = await callAction(
+        () => removeTicketBlocker(relationshipWith(other)),
+        'The Blocker could not be removed. Try again.',
+      );
       if (!result.ok) {
         setError('root.server', { message: result.error });
       }

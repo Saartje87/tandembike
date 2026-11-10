@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { archiveTicket } from '../../app/tickets/actions';
 import { renderWithTheme } from '../../test/render';
@@ -166,5 +166,32 @@ describe('ArchiveEpicDialog', () => {
     );
 
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('shows an archive that throws as a refusal in the dialog (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(archiveTicket).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <ArchiveEpicDialog
+        epic={epic}
+        blocks={[]}
+        epicChildren={[child(6, 'Todo')]}
+      />,
+    );
+    const dialog = await openDialog();
+
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Archive T5' }),
+    );
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The Epic could not be archived. Try again.',
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole('button', { name: 'Archive T5' }),
+      ).toBeEnabled(),
+    );
   });
 });

@@ -577,4 +577,90 @@ describe('AcceptanceCriteriaEditor', () => {
       screen.getByRole('heading', { name: 'Acceptance criteria' }),
     ).toHaveFocus();
   });
+
+  describe('when the action throws (T1321)', () => {
+    beforeEach(() => {
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      onTestFinished(() => log.mockRestore());
+      vi.mocked(checkTicketAcceptanceCriterion).mockRejectedValue(
+        new Error('network down'),
+      );
+      vi.mocked(setTicketAcceptanceCriteria).mockRejectedValue(
+        new Error('network down'),
+      );
+    });
+
+    it('puts the checkbox back and shows a refusal', async () => {
+      renderWithTheme(
+        <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo]} />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('checkbox', { name: 'The logo is centred' }),
+      );
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The criterion could not be saved. Try again.',
+      );
+      await waitFor(() =>
+        expect(criteriaShown()).toEqual([
+          { text: 'The logo is centred', checked: true },
+        ]),
+      );
+    });
+
+    it('shows the list again and a refusal after a removal', async () => {
+      renderWithTheme(
+        <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo, menu]} />,
+      );
+
+      await removeCriterion('The logo is centred');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The acceptance criteria could not be saved. Try again.',
+      );
+      await waitFor(() =>
+        expect(criteriaShown().map(({ text }) => text)).toEqual([
+          'The logo is centred',
+          'The menu collapses on phones',
+        ]),
+      );
+    });
+
+    it('keeps the new criterion and shows a refusal', async () => {
+      renderWithTheme(
+        <AcceptanceCriteriaEditor ticketNumber={4} criteria={[]} />,
+      );
+
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Add criterion' }),
+      );
+      await userEvent.type(newCriterionInput(), 'The header is sticky{Enter}');
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The acceptance criteria could not be saved. Try again.',
+      );
+      expect(newCriterionInput()).toHaveValue('The header is sticky');
+      expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
+    });
+
+    it("reopens an edit with the User's text and a refusal", async () => {
+      renderWithTheme(
+        <AcceptanceCriteriaEditor ticketNumber={4} criteria={[logo]} />,
+      );
+
+      await userEvent.click(criterionText('The logo is centred'));
+      await userEvent.clear(editInput());
+      await userEvent.type(editInput(), 'The logo is left{Enter}');
+
+      expect(
+        await screen.findByRole('textbox', { name: 'Acceptance criterion' }),
+      ).toHaveValue('The logo is left');
+      await waitFor(() =>
+        expect(editInput()).toHaveAccessibleDescription(
+          'The acceptance criteria could not be saved. Try again.',
+        ),
+      );
+    });
+  });
 });

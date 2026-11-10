@@ -13,6 +13,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import {
   addTicketExternalReference,
   removeTicketExternalReference,
@@ -119,10 +120,10 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
     stopAdding();
     startChange(async () => {
       showChange({ type: 'add', reference });
-      const result = await addTicketExternalReference({
-        number: ticketNumber,
-        reference,
-      });
+      const result = await callAction(
+        () => addTicketExternalReference({ number: ticketNumber, reference }),
+        'The External reference could not be added. Try again.',
+      );
       if (result.ok) {
         reset();
         return;
@@ -141,10 +142,11 @@ export const ExternalReferenceEditor: FC<ExternalReferenceEditorProps> = ({
     clearErrors();
     startChange(async () => {
       showChange({ type: 'remove', reference });
-      const result = await removeTicketExternalReference({
-        number: ticketNumber,
-        reference,
-      });
+      const result = await callAction(
+        () =>
+          removeTicketExternalReference({ number: ticketNumber, reference }),
+        'The External reference could not be removed. Try again.',
+      );
       if (!result.ok) {
         setError('root.server', { message: result.error });
       }

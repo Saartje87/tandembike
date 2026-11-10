@@ -11,6 +11,7 @@ import {
 } from '@blockle/blocks';
 import { type FC, useId, useState, useTransition } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { archiveTicket } from '../../app/tickets/actions';
 import { claimOwner } from '../../tickets/claim-owner';
 import type { RelatedTicket, Ticket, TicketClaim } from '../../tickets/tickets';
@@ -90,10 +91,10 @@ export const ArchiveEpicDialog: FC<ArchiveEpicDialogProps> = ({
   const confirm = () => {
     setError(undefined);
     startArchive(async () => {
-      const result = await archiveTicket({
-        number: epic.number,
-        withChildren: true,
-      });
+      const result = await callAction(
+        () => archiveTicket({ number: epic.number, withChildren: true }),
+        'The Epic could not be archived. Try again.',
+      );
       if (result.ok) {
         close();
       } else {

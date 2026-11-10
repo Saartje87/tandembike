@@ -13,6 +13,7 @@ import {
 import { type FC, useId, useOptimistic, useState, useTransition } from 'react';
 
 import type { ActionResult } from '../../app/lib/action-result';
+import { callAction } from '../../app/lib/call-action';
 import { ticketByNumberPath } from '../../app/lib/paths';
 import {
   attachTicketToEpic,
@@ -48,7 +49,10 @@ export const TicketEpic: FC<TicketEpicProps> = ({ ticket, epics = [] }) => {
     setError(undefined);
     startTransition(async () => {
       showEpic(shown);
-      const result = await save();
+      const result = await callAction(
+        save,
+        'The Epic could not be changed. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

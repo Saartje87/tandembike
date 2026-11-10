@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import {
   attachTicketToEpic,
@@ -197,6 +197,28 @@ describe('TicketEpic', () => {
       );
 
       expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    });
+  });
+
+  it('puts the Ticket back in its Epic and shows a refusal when detaching throws (T1321)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(detachTicketFromEpic).mockRejectedValue(
+      new Error('network down'),
+    );
+    renderWithTheme(<TicketEpic ticket={child} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Detach from Epic' }),
+    );
+
+    expect(
+      await screen.findByText('The Epic could not be changed. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('link', { name: 'T4 Checkout' }),
+      ).toBeInTheDocument();
     });
   });
 });
