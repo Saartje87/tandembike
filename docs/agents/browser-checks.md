@@ -4,7 +4,7 @@ jsdom cannot run Next's routing, so a bug in navigation, a drawer or dialog, or 
 
 ## Never the User's app or data
 
-Run every check against a throwaway server with its own database, never the User's running app on `localhost:4747` or its `data/` folder: a check creates and deletes Tickets. Keep each check's script in your scratchpad, not the repo: `AGENTS.md` allows one test runner, Vitest. Only the shared helpers in `browser-check/lib.mjs` live here.
+Run every check against a throwaway server with its own database, never the User's running app on `localhost:4747` or its `data/` folder: a check creates and deletes Tickets. Keep each check's script in your scratchpad, not the repo: `AGENTS.md` allows one test runner, Vitest. Only the shared helpers in `browser-check/lib.mjs` live here, with a Vitest test (`browser-check/lib.test.ts`) of their Node-side parts: the port, `throwawayRepository`, and an export for each helper step 5 of the Recipe names in parentheses, so list a new helper there the same way.
 
 ## Recipe
 
