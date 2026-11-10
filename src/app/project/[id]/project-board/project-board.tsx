@@ -1,7 +1,7 @@
 import { Inline } from '@blockle/blocks';
 import type { FC } from 'react';
 
-import { Cockpit } from '../../../../components/cockpit/cockpit';
+import { Board } from '../../../../components/board/board';
 import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
 import { CycleTicketList } from '../../../../components/cycle-ticket-list/cycle-ticket-list';
@@ -137,7 +137,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     return (
       <>
         {budget && <TriageSpend {...budget} />}
-        <Cockpit
+        <Board
           {...shared}
           cycle={null}
           tickets={tickets.listTickets({
@@ -161,7 +161,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
             retro={appConversations().retroOf(tab.id)}
           />
         )}
-        <Cockpit
+        <Board
           {...shared}
           cycle={tab}
           tickets={cycleTicketsWithEpics(project.id, tab.id)}
@@ -180,7 +180,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         activeCycle={tickets.activeCycle(project.id) ?? undefined}
         estimate={cycleEstimate(project.id, tab.id)}
       />
-      <Cockpit
+      <Board
         {...shared}
         cycle={tab}
         tickets={cycleTicketsWithEpics(project.id, tab.id)}

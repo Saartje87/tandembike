@@ -31,7 +31,7 @@ import type { Ticket } from '../../tickets/tickets';
 import { ConversationActivityProvider } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { LiveUpdates } from '../live-updates/live-updates';
-import { Cockpit, emptyText } from './cockpit';
+import { Board, emptyText } from './board';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
@@ -116,10 +116,10 @@ const tickets = [
   ticket({ number: 11, title: 'Old work', status: 'Done' }),
 ];
 
-const renderCockpit = (shown: Ticket[] = tickets, filter?: BoardFilter) =>
+const renderBoard = (shown: Ticket[] = tickets, filter?: BoardFilter) =>
   renderWithTheme(
     <ConversationActivityProvider>
-      <Cockpit
+      <Board
         projectId={3}
         cycle={{ id: 9, title: 'Factory Board' }}
         tickets={shown}
@@ -155,7 +155,7 @@ const actionsIn = (element: HTMLElement) =>
         !button.getAttribute('aria-label')?.startsWith('Copy Ticket number'),
     );
 
-describe('Cockpit', () => {
+describe('Board', () => {
   afterEach(() => {
     dialog.open.mockReset();
     vi.unstubAllGlobals();
@@ -166,7 +166,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     expect(screen.getByText('1/5 done')).toBeVisible();
     expect(
@@ -182,7 +182,7 @@ describe('Cockpit', () => {
         cost: { 7: 1.5 },
       }),
     );
-    renderCockpit();
+    renderBoard();
 
     const inFlight = section('In flight');
     await vi.waitFor(() =>
@@ -199,7 +199,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({ live: { 7: liveConversation({ line: 'Starting' }) } }),
     );
-    renderCockpit();
+    renderBoard();
 
     const inFlight = section('In flight');
     await vi.waitFor(() =>
@@ -214,7 +214,7 @@ describe('Cockpit', () => {
         cost: { 7: 1.5 },
       }),
     );
-    renderCockpit();
+    renderBoard();
 
     const inFlight = section('In flight');
     await vi.waitFor(() =>
@@ -234,7 +234,7 @@ describe('Cockpit', () => {
         },
       }),
     );
-    renderCockpit([
+    renderBoard([
       ...tickets,
       ticket({ number: 12, title: 'Rename lanes', status: 'In progress' }),
     ]);
@@ -270,7 +270,7 @@ describe('Cockpit', () => {
         },
       }),
     );
-    renderCockpit();
+    renderBoard();
 
     const bell = await screen.findByRole('button', {
       name: 'Open the Conversation of T7',
@@ -293,7 +293,7 @@ describe('Cockpit', () => {
         },
       }),
     );
-    renderCockpit();
+    renderBoard();
 
     await screen.findByRole('button', { name: 'Open the Conversation of T7' });
     const [row] = within(section('Action needed')).getAllByRole('listitem');
@@ -309,7 +309,7 @@ describe('Cockpit', () => {
         },
       }),
     );
-    renderCockpit([
+    renderBoard([
       ...tickets,
       ticket({ number: 12, title: 'Rename lanes', status: 'In progress' }),
       ticket({
@@ -335,7 +335,7 @@ describe('Cockpit', () => {
     );
     renderWithTheme(
       <ConversationActivityProvider>
-        <Cockpit
+        <Board
           projectId={3}
           cycle={null}
           tickets={[
@@ -361,7 +361,7 @@ describe('Cockpit', () => {
     );
     renderWithTheme(
       <ConversationActivityProvider>
-        <Cockpit
+        <Board
           projectId={3}
           cycle={{ id: 9, title: 'Factory Board' }}
           tickets={[
@@ -404,7 +404,7 @@ describe('Cockpit', () => {
     );
     renderWithTheme(
       <ConversationActivityProvider>
-        <Cockpit
+        <Board
           projectId={3}
           cycle={{ id: 9, title: 'Factory Board' }}
           tickets={[
@@ -483,7 +483,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 7,
         title: 'Status line',
@@ -508,7 +508,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     expect(
       screen.queryByRole('list', { name: 'Labels' }),
@@ -519,7 +519,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 52,
         title: 'Spec',
@@ -562,7 +562,7 @@ describe('Cockpit', () => {
     );
     const link = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim,
       hasPullRequest: false,
@@ -575,10 +575,10 @@ describe('Cockpit', () => {
       blockedBy: [],
       blocked: false,
     });
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 50,
-        title: 'Cockpit',
+        title: 'Roadmap',
         type: 'Epic',
         color: 'teal',
         status: 'In progress',
@@ -610,7 +610,7 @@ describe('Cockpit', () => {
       expect(within(inFlight).getByText(/\$1\.50/)).toBeVisible(),
     );
     const epicRow = within(inFlight)
-      .getByRole('link', { name: 'Cockpit' })
+      .getByRole('link', { name: 'Roadmap' })
       .closest('li') as HTMLElement;
     expect(
       within(epicRow).getByRole('img', {
@@ -659,7 +659,7 @@ describe('Cockpit', () => {
     );
     const link = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim,
       hasPullRequest: false,
@@ -673,10 +673,10 @@ describe('Cockpit', () => {
       blocked: false,
     });
     const checked = [{ id: 1, text: 'Works', checked: true }];
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 50,
-        title: 'Cockpit',
+        title: 'Roadmap',
         type: 'Epic',
         color: 'teal',
         status: 'In progress',
@@ -704,7 +704,7 @@ describe('Cockpit', () => {
     ]);
 
     const epicRow = within(section('In flight'))
-      .getByRole('link', { name: 'Cockpit' })
+      .getByRole('link', { name: 'Roadmap' })
       .closest('li') as HTMLElement;
     const bar = within(epicRow).getByRole('img', {
       name: '2 of 3 children done or built',
@@ -726,16 +726,16 @@ describe('Cockpit', () => {
     );
     const link = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim: null,
       hasPullRequest: false,
     };
-    renderCockpit(
+    renderBoard(
       [
         ticket({
           number: 50,
-          title: 'Cockpit',
+          title: 'Roadmap',
           type: 'Epic',
           color: 'teal',
           labels: ['ready-for-agent'],
@@ -761,7 +761,7 @@ describe('Cockpit', () => {
     );
 
     const epicRow = within(section('Queued'))
-      .getByRole('link', { name: 'Cockpit' })
+      .getByRole('link', { name: 'Roadmap' })
       .closest('li') as HTMLElement;
     await userEvent.click(
       within(epicRow).getByRole('img', {
@@ -782,15 +782,15 @@ describe('Cockpit', () => {
     );
     const link = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim: null,
       hasPullRequest: false,
     };
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 50,
-        title: 'Cockpit',
+        title: 'Roadmap',
         type: 'Epic',
         color: 'teal',
         status: 'In progress',
@@ -811,12 +811,12 @@ describe('Cockpit', () => {
 
     const review = section('Review');
     expect(
-      within(review).getByRole('link', { name: 'Cockpit' }),
+      within(review).getByRole('link', { name: 'Roadmap' }),
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=50');
     expect(within(review).getByRole('link', { name: 'PR #130' })).toBeVisible();
     expect(actionsIn(review)).toEqual([]);
     // Listed once: In flight holds Running work only.
-    expect(screen.getAllByRole('link', { name: 'Cockpit' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Roadmap' })).toHaveLength(1);
     expect(screen.getByText(emptyText.inFlight)).toBeVisible();
   });
 
@@ -831,7 +831,7 @@ describe('Cockpit', () => {
       claim: null,
       hasPullRequest: false,
     };
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 50,
         title: 'Big idea',
@@ -869,7 +869,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     const needsYou = section('Needs you');
     expect(actionsIn(needsYou)).toEqual([]);
@@ -882,7 +882,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     const review = section('Review');
     await userEvent.click(within(review).getByText('Review'));
@@ -894,7 +894,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([]);
+    renderBoard([]);
 
     expect(
       within(section('Needs you')).getByText(emptyText.needsYou),
@@ -905,36 +905,36 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    document.title = 'Cockpit · Website | Tandembike';
-    const { unmount } = renderCockpit();
+    document.title = 'Board · Website | Tandembike';
+    const { unmount } = renderBoard();
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+      expect(document.title).toBe('(1) Board · Website | Tandembike'),
     );
 
     // Next writes the page's metadata title again, as when a drawer opens.
-    document.title = 'Cockpit · Website | Tandembike';
+    document.title = 'Board · Website | Tandembike';
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+      expect(document.title).toBe('(1) Board · Website | Tandembike'),
     );
     unmount();
-    expect(document.title).toBe('Cockpit · Website | Tandembike');
+    expect(document.title).toBe('Board · Website | Tandembike');
   });
 
   it('puts the Needs you count in the tab title, and drops it at zero', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    document.title = 'Cockpit · Website | Tandembike';
-    const { rerender } = renderCockpit();
+    document.title = 'Board · Website | Tandembike';
+    const { rerender } = renderBoard();
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('(1) Cockpit · Website | Tandembike'),
+      expect(document.title).toBe('(1) Board · Website | Tandembike'),
     );
 
     rerender(
       <ConversationActivityProvider>
-        <Cockpit
+        <Board
           projectId={3}
           cycle={{ id: 9, title: 'Factory Board' }}
           tickets={[]}
@@ -944,15 +944,15 @@ describe('Cockpit', () => {
     );
 
     await vi.waitFor(() =>
-      expect(document.title).toBe('Cockpit · Website | Tandembike'),
+      expect(document.title).toBe('Board · Website | Tandembike'),
     );
   });
 
-  it("opens a row's Ticket in a drawer over the Cockpit", async () => {
+  it("opens a row's Ticket in a drawer over the Board", async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     expect(
       within(section('In flight')).getByRole('link', { name: 'Status line' }),
@@ -963,7 +963,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     const boardSections = [
       'Needs you',
@@ -985,7 +985,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit();
+    renderBoard();
 
     const yourWork = section('Your work');
     expect(yourWork.querySelector('details')).not.toHaveAttribute('open');
@@ -1018,7 +1018,7 @@ describe('Cockpit', () => {
     renderWithTheme(
       <LiveUpdates>
         <ConversationActivityProvider>
-          <Cockpit
+          <Board
             projectId={3}
             cycle={{ id: 9, title: 'Factory Board' }}
             tickets={tickets}
@@ -1067,7 +1067,7 @@ describe('Cockpit', () => {
     renderWithTheme(
       <LiveUpdates>
         <ConversationActivityProvider>
-          <Cockpit
+          <Board
             projectId={3}
             cycle={{ id: 9, title: 'Factory Board' }}
             tickets={shown}
@@ -1115,7 +1115,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([]);
+    renderBoard([]);
 
     expect(
       within(section('Queued')).getByText(
@@ -1132,7 +1132,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([]);
+    renderBoard([]);
 
     expect(
       screen.getByRole('link', { name: 'How this Project runs' }),
@@ -1143,7 +1143,7 @@ describe('Cockpit', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([]);
+    renderBoard([]);
 
     expect(
       within(section('In flight')).getByText(emptyText.inFlight),
@@ -1156,7 +1156,7 @@ describe('Cockpit', () => {
     );
     const link = {
       number: 50,
-      title: 'Cockpit',
+      title: 'Roadmap',
       color: 'teal' as const,
       claim: null,
       hasPullRequest: false,
@@ -1169,10 +1169,10 @@ describe('Cockpit', () => {
       blockedBy: [],
       blocked: false,
     });
-    renderCockpit([
+    renderBoard([
       ticket({
         number: 50,
-        title: 'Cockpit',
+        title: 'Roadmap',
         type: 'Epic',
         color: 'teal',
         labels: ['ready-for-agent'],
@@ -1218,7 +1218,7 @@ describe('Cockpit', () => {
       within(queued).getByRole('checkbox', { name: 'Select T70 Plain queued' }),
     ).toBeInTheDocument();
     const epicRow = within(queued)
-      .getByRole('link', { name: 'Cockpit' })
+      .getByRole('link', { name: 'Roadmap' })
       .closest('li') as HTMLElement;
     await userEvent.click(
       within(epicRow).getByRole('img', {
@@ -1250,7 +1250,7 @@ describe('Cockpit', () => {
       archivedAt: null,
     });
     const epics = [
-      ticket({ number: 20, title: 'Cockpit Epic', type: 'Epic' }),
+      ticket({ number: 20, title: 'Roadmap Epic', type: 'Epic' }),
       ticket({ number: 21, title: 'Other Epic', type: 'Epic' }),
     ];
     const queued = [
@@ -1264,7 +1264,7 @@ describe('Cockpit', () => {
       );
       return renderWithTheme(
         <ConversationActivityProvider>
-          <Cockpit
+          <Board
             projectId={3}
             cycle={{ id: 9, title: 'Factory Board' }}
             tickets={queued}
@@ -1428,7 +1428,7 @@ describe('Cockpit', () => {
       );
       expect(
         screen.getAllByRole('menuitem').map((item) => item.textContent),
-      ).toEqual(['T20 Cockpit Epic', 'T21 Other Epic']);
+      ).toEqual(['T20 Roadmap Epic', 'T21 Other Epic']);
       await user.click(
         screen.getByRole('menuitem', { name: 'T21 Other Epic' }),
       );
@@ -1453,7 +1453,7 @@ describe('Cockpit', () => {
         within(bar()).getByRole('button', { name: 'Add to Epic' }),
       );
       await user.click(
-        screen.getByRole('menuitem', { name: 'T20 Cockpit Epic' }),
+        screen.getByRole('menuitem', { name: 'T20 Roadmap Epic' }),
       );
 
       expect(
@@ -1494,7 +1494,7 @@ describe('Cockpit', () => {
   });
 });
 
-describe('Cockpit drag', () => {
+describe('Board drag', () => {
   const cycle = { id: 9, title: 'Factory Board', state: 'Active' as const };
   const planned = (
     fields: Partial<Ticket> & Pick<Ticket, 'number' | 'title'>,
@@ -1568,7 +1568,7 @@ describe('Cockpit drag', () => {
       noConversationActivity,
     );
     mockRowBounds();
-    renderCockpit(dragged);
+    renderBoard(dragged);
   };
 
   afterEach(() => {
@@ -1613,7 +1613,7 @@ describe('Cockpit drag', () => {
       noConversationActivity,
     );
     mockRowBounds();
-    renderCockpit([
+    renderBoard([
       planned({
         number: 1,
         title: 'First queued',
@@ -1744,7 +1744,7 @@ describe('Cockpit drag', () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       noConversationActivity,
     );
-    renderCockpit([
+    renderBoard([
       ...dragged,
       planned({
         number: 9,
@@ -1761,7 +1761,7 @@ describe('Cockpit drag', () => {
   });
 });
 
-describe('Cockpit New Ticket field and Board filter (T1118)', () => {
+describe('Board New Ticket field and Board filter (T1118)', () => {
   afterEach(() => {
     vi.mocked(createTicket).mockReset();
     window.history.replaceState(null, '', '/');
@@ -1775,7 +1775,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
   it("creates a Ticket in the Board's Cycle with no state label, so it lands in Intake", async () => {
     quiet();
     vi.mocked(createTicket).mockResolvedValue({ ok: true, number: 12 });
-    renderCockpit();
+    renderBoard();
 
     await userEvent.type(
       screen.getByRole('textbox', { name: 'New Ticket title' }),
@@ -1791,7 +1791,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
 
   it('narrows every section to the Tickets matching the search, with filtered counts', async () => {
     quiet();
-    renderCockpit(tickets, { query: 'merge', labels: [] });
+    renderBoard(tickets, { query: 'merge', labels: [] });
 
     expect(within(section('Review')).getByText('Merge button')).toBeVisible();
     expect(screen.queryByText('Status line')).not.toBeInTheDocument();
@@ -1805,7 +1805,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
 
   it('narrows by Label from the URL on load', () => {
     quiet();
-    renderCockpit(tickets, { query: '', labels: ['ready-for-human'] });
+    renderBoard(tickets, { query: '', labels: ['ready-for-human'] });
 
     expect(screen.getByText('Pick a ceiling')).toBeInTheDocument();
     expect(screen.queryByText('Merge button')).not.toBeInTheDocument();
@@ -1813,7 +1813,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
 
   it('filters as the search is typed, and writes it to the URL', async () => {
     quiet();
-    renderCockpit();
+    renderBoard();
 
     await userEvent.type(
       screen.getByRole('searchbox', { name: 'Search Tickets' }),
@@ -1828,7 +1828,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
   it('keeps the Needs you count in the tab title unfiltered', async () => {
     quiet();
     document.title = 'Board | Tandembike';
-    renderCockpit(tickets, { query: 'nothing matches this', labels: [] });
+    renderBoard(tickets, { query: 'nothing matches this', labels: [] });
 
     await vi.waitFor(() =>
       expect(document.title).toBe('(1) Board | Tandembike'),
@@ -1836,7 +1836,7 @@ describe('Cockpit New Ticket field and Board filter (T1118)', () => {
   });
 });
 
-describe('Cockpit as a planning Board (T1119)', () => {
+describe('Board as a planning Board (T1119)', () => {
   const quiet = () =>
     vi
       .mocked(currentConversationActivity)
@@ -1864,10 +1864,10 @@ describe('Cockpit as a planning Board (T1119)', () => {
     }),
   ];
 
-  const renderPlanning = (props: Partial<Parameters<typeof Cockpit>[0]> = {}) =>
+  const renderPlanning = (props: Partial<Parameters<typeof Board>[0]> = {}) =>
     renderWithTheme(
       <ConversationActivityProvider>
-        <Cockpit
+        <Board
           projectId={3}
           cycle={{ id: 9, title: 'Next' }}
           tickets={planning}
@@ -2017,7 +2017,7 @@ describe('Cockpit as a planning Board (T1119)', () => {
 
   it('shows the Archived list on the Active Cycle, even with none', () => {
     quiet();
-    renderCockpit();
+    renderBoard();
 
     expect(section('Archived')).toBeVisible();
   });

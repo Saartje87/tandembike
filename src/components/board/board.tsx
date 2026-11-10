@@ -58,12 +58,6 @@ import {
   AutopilotBar,
   type AutopilotBarProps,
 } from '../autopilot-bar/autopilot-bar';
-import {
-  filteredSelectionDrop,
-  isFiltering,
-  mergeLaneOrder,
-  ticketMatches,
-} from '../board/board-filter';
 import { BoardFilterBar } from '../board-filter-bar/board-filter-bar';
 import {
   useLiveConversations,
@@ -80,10 +74,16 @@ import { tinted } from '../palette/palette.css';
 import { SelectionBar } from '../selection-bar/selection-bar';
 import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
-import * as styles from './cockpit.css';
+import * as styles from './board.css';
 import {
-  type CockpitTicket,
-  cockpitOf,
+  filteredSelectionDrop,
+  isFiltering,
+  mergeLaneOrder,
+  ticketMatches,
+} from './board-filter';
+import {
+  type BoardTicket,
+  boardOf,
   type EpicChildState,
   type EpicRow,
   type InFlightRow,
@@ -91,12 +91,12 @@ import {
   type NeedRow,
   type QueuedRow,
   rowOf,
-} from './cockpit-of';
+} from './board-of';
 import { isSelectClick, type SelectMode, selectModeOf } from './select-click';
 import { useBoardFilter } from './use-board-filter';
 import { type SelectionList, useSelection } from './use-selection';
 
-export type CockpitProps = {
+export type BoardProps = {
   projectId: number;
   /** The Cycle shown, or `null` for the Backlog. */
   cycle: Pick<Cycle, 'id' | 'title'> | null;
@@ -252,7 +252,7 @@ const useCountInTitle = (count: number) => {
 };
 
 type TicketRowProps = {
-  ticket: CockpitTicket;
+  ticket: BoardTicket;
   href: string;
   icon: IconName;
   /** The second line: what the Ticket is doing or where it stands. */
@@ -271,7 +271,7 @@ type TicketRowProps = {
 };
 
 /**
- * One Ticket as a row: the same shape in every list of the Cockpit, edged in
+ * One Ticket as a row: the same shape in every list of the Board, edged in
  * its Epic's colour, or its own for an Epic. With `details`, the row opens
  * and closes on itself to show them. It is highlighted for a moment after
  * the Ticket changes (see `LiveUpdates`).
@@ -502,7 +502,7 @@ const ChildrenBar: FC<ChildrenBarProps> = ({ row }) => {
   );
 };
 
-/** Whose Board a Cockpit is: a Cycle's or the Backlog's. */
+/** Whose Board it is: a Cycle's or the Backlog's. */
 type BoardKind = 'Cycle' | 'Backlog';
 
 const boardName: Record<BoardKind, string> = {
@@ -593,7 +593,7 @@ const EpicChildList: FC<EpicChildListProps> = ({
  * title, and its children listed when opened. Nothing for a normal Ticket.
  */
 const epicParts = (
-  row: CockpitTicket,
+  row: BoardTicket,
   board: BoardKind,
   hrefOf: (number: number) => string,
   emptyText?: string,
@@ -741,16 +741,16 @@ function inFlightLine(row: InFlightRow, now: number): string {
 }
 
 /**
- * A Project's Cockpit: its Active Cycle in one column, by what needs the
- * User first. The header shows the Cycle's progress and the Start runs
+ * A Project's Board: a Cycle's or the Backlog's Tickets in one column, by
+ * what needs the User first. The header shows the Cycle's progress and the Start runs
  * working; Needs you shows what waits on the User on this Board (Action
  * needed, Review, then Intake), in groups that start open,
  * longest waiting first; In flight shows each Running Ticket with what
  * its run is doing; Your work, Queued and Done stay closed until opened
  * on the Active Cycle's Board.
  * Its lists offer no actions: every row's title opens its Ticket in a
- * drawer over the Cockpit. The browser tab's title carries the Needs you
- * count. It follows live Conversations as the Board does.
+ * drawer over the Board. The browser tab's title carries the Needs you
+ * count. It follows live Conversations.
  *
  * Rows can be selected with their checkbox, Cmd-click or Ctrl-click, or a
  * Shift-click range within one list; a bar then moves the selection to
@@ -758,7 +758,7 @@ function inFlightLine(row: InFlightRow, now: number): string {
  * Tickets an action refuses stay selected, with the reason. Epic rows
  * cannot be selected.
  */
-export const Cockpit: FC<CockpitProps> = ({
+export const Board: FC<BoardProps> = ({
   projectId,
   cycle,
   tickets,
@@ -789,8 +789,8 @@ export const Cockpit: FC<CockpitProps> = ({
   const [filter, changeFilter] = useBoardFilter(boardPath, initialFilter);
   // The Board filter narrows every section and its counts; only the tab and
   // the browser title keep the full Needs you count.
-  const cockpit = {
-    ...cockpitOf(shownTickets, { live, cost }, filter),
+  const view = {
+    ...boardOf(shownTickets, { live, cost }, filter),
     archived: isFiltering(filter)
       ? archived.filter((ticket) => ticketMatches(ticket, filter))
       : archived,
@@ -801,10 +801,10 @@ export const Cockpit: FC<CockpitProps> = ({
   const hrefOf = (number: number) =>
     ticketOnBoardPath(boardPath, number, filter);
   const age = (date: Date) => formatElapsed(now - date.getTime());
-  const { done, total } = cockpit.progress;
+  const { done, total } = view.progress;
   const hideEmpty = (count: number) => planning && count === 0;
-  const { needsYou } = cockpit;
-  const inFlightCount = cockpit.epics.length + cockpit.inFlight.length;
+  const { needsYou } = view;
+  const inFlightCount = view.epics.length + view.inFlight.length;
   useCountInTitle(needsYou.total);
 
   /** The Todo Tickets this Cycle orders, over all three sections, in order. */
@@ -822,8 +822,8 @@ export const Cockpit: FC<CockpitProps> = ({
     .map(({ number }) => number);
   /** The rows of a section that a drag orders, in the order shown. */
   const sectionNumbers: Record<ReorderSection, number[]> = {
-    Queued: cockpit.queued.map(({ number }) => number),
-    'Your work': cockpit.yourWork.map(({ number }) => number),
+    Queued: view.queued.map(({ number }) => number),
+    'Your work': view.yourWork.map(({ number }) => number),
     Intake: needsYou.intake.map(({ number }) => number),
   };
   // An Epic of another Cycle shown here is not ordered by this Cycle.
@@ -936,16 +936,16 @@ export const Cockpit: FC<CockpitProps> = ({
 
   // The rows that can be selected, by list, in the order shown. An Epic's row
   // cannot be selected.
-  const numbersOf = (rows: CockpitTicket[]) =>
+  const numbersOf = (rows: BoardTicket[]) =>
     rows.filter(({ children }) => !children).map(({ number }) => number);
   const lists: Record<SelectionList, number[]> = {
     actionNeeded: numbersOf(needsYou.actionNeeded),
     review: numbersOf(needsYou.review),
     intake: numbersOf(needsYou.intake),
-    inFlight: numbersOf(cockpit.inFlight),
-    yourWork: numbersOf(cockpit.yourWork),
-    queued: numbersOf(cockpit.queued),
-    done: numbersOf(cockpit.done),
+    inFlight: numbersOf(view.inFlight),
+    yourWork: numbersOf(view.yourWork),
+    queued: numbersOf(view.queued),
+    done: numbersOf(view.done),
   };
   const {
     selection,
@@ -1107,7 +1107,7 @@ export const Cockpit: FC<CockpitProps> = ({
               ) : (
                 <Stack gap={1} listStyle="none" role="list" asChild>
                   <ul>
-                    {cockpit.epics.map((row) => (
+                    {view.epics.map((row) => (
                       <TicketRow
                         key={row.number}
                         ticket={row}
@@ -1144,7 +1144,7 @@ export const Cockpit: FC<CockpitProps> = ({
                         }
                       />
                     ))}
-                    {cockpit.inFlight.map((row) => (
+                    {view.inFlight.map((row) => (
                       <TicketRow
                         key={row.number}
                         ticket={row}
@@ -1171,15 +1171,15 @@ export const Cockpit: FC<CockpitProps> = ({
           </Stack>
         )}
         <Stack gap={2}>
-          {!hideEmpty(cockpit.yourWork.length) && (
+          {!hideEmpty(view.yourWork.length) && (
             <RowList
               title="Your work"
               empty={emptyText.yourWork}
               id="your-work"
-              count={cockpit.yourWork.length}
+              count={view.yourWork.length}
               open={planning}
             >
-              {cockpit.yourWork.map((row) => (
+              {view.yourWork.map((row) => (
                 <DraggableTicketRow
                   key={row.number}
                   sortable={sortableIn('Your work', row.number)}
@@ -1199,15 +1199,15 @@ export const Cockpit: FC<CockpitProps> = ({
               ))}
             </RowList>
           )}
-          {!hideEmpty(cockpit.queued.length) && (
+          {!hideEmpty(view.queued.length) && (
             <RowList
               title="Queued"
               empty={emptyText.queued}
               id="queued"
-              count={cockpit.queued.length}
+              count={view.queued.length}
               open={planning}
             >
-              {cockpit.queued.map((row, index) => (
+              {view.queued.map((row, index) => (
                 <DraggableTicketRow
                   key={row.number}
                   sortable={sortableIn('Queued', row.number)}
@@ -1233,14 +1233,14 @@ export const Cockpit: FC<CockpitProps> = ({
               ))}
             </RowList>
           )}
-          {!hideEmpty(cockpit.done.length) && (
+          {!hideEmpty(view.done.length) && (
             <RowList
               title="Done"
               empty={emptyText.done}
               id="done"
-              count={cockpit.done.length}
+              count={view.done.length}
             >
-              {cockpit.done.map((row) => (
+              {view.done.map((row) => (
                 <TicketRow
                   key={row.number}
                   muted
@@ -1261,14 +1261,14 @@ export const Cockpit: FC<CockpitProps> = ({
               ))}
             </RowList>
           )}
-          {!hideEmpty(cockpit.archived.length) && (
+          {!hideEmpty(view.archived.length) && (
             <RowList
               title="Archived"
               empty={emptyText.archived}
               id="archived"
-              count={cockpit.archived.length}
+              count={view.archived.length}
             >
-              {cockpit.archived.map((ticket) => (
+              {view.archived.map((ticket) => (
                 <TicketRow
                   key={ticket.number}
                   muted
