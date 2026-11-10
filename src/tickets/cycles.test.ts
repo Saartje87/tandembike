@@ -183,6 +183,7 @@ describe('Planning Tickets into a Cycle', () => {
     ).toEqual(
       new NotAllowedError(
         'Ticket T1 is already planned into the Cycle "Beta". Remove it from that Cycle first.',
+        { code: 'plannedInOtherCycle', number: 1, cycleTitle: 'Beta' },
       ),
     );
     expect(tickets.planTicket({ cycleId: cycle.id, number: 1 })).toEqual(

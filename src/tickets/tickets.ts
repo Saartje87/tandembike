@@ -615,6 +615,35 @@ export type UpdateTicketInput = {
 };
 
 /**
+ * A Ticket's whole change: its fields, then the steps `updateTicket` applies
+ * after them. Missing ones stay as they are.
+ */
+export type TicketChange = UpdateTicketInput & {
+  /** The Epic to make it a child of, or `null` to take it out of its Epic. */
+  epicNumber?: number | null;
+  /** Tickets that must be resolved before it can start. */
+  addBlockers?: number[];
+  /** Tickets to stop blocking it; ones that do not are ignored. */
+  removeBlockers?: number[];
+  /** The Cycle to plan or move it into, or `null` for the Backlog. */
+  cycleId?: number | null;
+  /** With `cycleId`, take an Epic's unarchived children along. */
+  withChildren?: boolean;
+  /** `true` archives it last; `false` restores it first. */
+  archived?: boolean;
+  /** Move it on the Board directly before this Ticket. */
+  before?: number;
+  /** Move it on the Board directly after this Ticket. */
+  after?: number;
+};
+
+/**
+ * A Ticket after `updateTicket`, and with `withChildren` the children whose
+ * Cycle changed with it.
+ */
+export type UpdatedTicket = Ticket & { childrenMoved?: number[] };
+
+/**
  * A criterion in a replacement list: one of the Ticket's by `id`, or a new
  * one without. A kept criterion keeps its checked state when `checked` is
  * left out, unless its text changes, which unchecks it.
@@ -2464,26 +2493,94 @@ export function createTickets(
     },
 
     /**
-     * Changes the given fields of Ticket `number` by the rules for creating
-     * one, and bumps its updated time even when no fields are given. Any
-     * Status may follow any other.
+     * Changes Ticket `number` fully, in one transaction: a restore first
+     * (`archived: false`), so the rest applies to the restored Ticket, then
+     * the core fields, Epic, Blockers, Cycle, Board position and archive
+     * (`archived: true`), in that order. Each step is refused with the
+     * message of the single-purpose function it applies, records Activity
+     * and announces as that function does, and a refusal leaves the Ticket
+     * unchanged. The core fields follow the rules for creating a Ticket and
+     * bump its updated time even when nothing is given; any Status may follow
+     * any other. With `withChildren`, `childrenMoved` names the children
+     * whose Cycle changed with it.
      */
-    updateTicket(number: number, input: UpdateTicketInput): Ticket {
-      const checked = checkTicketChanges(input);
-      checkTicketWritable(db, number);
-      if (checked.values.projectId !== undefined) {
-        checkProjectWritable(db, checked.values.projectId);
-      }
-
-      const { leftCycles, changedEpic, changedOrigins } = applyTicketChanges(
-        number,
-        checked,
-      );
-      publishWith(number, changedEpic, ...changedOrigins);
-      for (const id of leftCycles) {
-        changes.publish({ type: 'cycle', id });
-      }
-      return getTicket(number);
+    updateTicket(number: number, change: TicketChange): UpdatedTicket {
+      const {
+        epicNumber,
+        addBlockers = [],
+        removeBlockers = [],
+        cycleId,
+        withChildren,
+        archived,
+        before,
+        after,
+        ...fields
+      } = change;
+      return db.transaction(() => {
+        if (withChildren && cycleId === undefined) {
+          throw new TicketsError(
+            "withChildren takes an Epic's children along to a Cycle, so give cycleId with it.",
+          );
+        }
+        if (before !== undefined && after !== undefined) {
+          throw new TicketsError(
+            'Give either before or after: a Ticket lands next to one Ticket.',
+          );
+        }
+        const hasFields = Object.values(fields).some(
+          (value) => value !== undefined,
+        );
+        const hasSteps =
+          epicNumber !== undefined ||
+          addBlockers.length > 0 ||
+          removeBlockers.length > 0 ||
+          cycleId !== undefined ||
+          before !== undefined ||
+          after !== undefined ||
+          archived !== undefined;
+        // An archived Ticket is read-only, so restore it before the rest.
+        if (archived === false) {
+          core.restoreTicket(number);
+        }
+        // With nothing to change, the fields step bumps the Ticket.
+        if (hasFields || !hasSteps) {
+          updateFields(number, fields);
+        }
+        if (epicNumber === null) {
+          core.detachFromEpic(number);
+        } else if (epicNumber !== undefined) {
+          core.moveToEpic({ epic: epicNumber, child: number });
+        }
+        for (const blocker of addBlockers) {
+          core.addBlocker({ blocker, blocked: number });
+        }
+        for (const blocker of removeBlockers) {
+          core.removeBlocker({ blocker, blocked: number });
+        }
+        let childrenMoved: number[] | undefined;
+        if (cycleId !== undefined) {
+          const moved = core.moveTicketsToCycle({
+            cycleId,
+            ticketNumbers: [number],
+            withChildren,
+          });
+          if (moved.failed.length > 0) {
+            const [{ error, refusal }] = moved.failed;
+            throw new TicketsError(error, refusal);
+          }
+          childrenMoved = moved.children;
+        }
+        if (before !== undefined) {
+          core.reorderTicket(number, { before });
+        } else if (after !== undefined) {
+          core.reorderTicket(number, { after });
+        }
+        if (archived === true) {
+          core.archiveTicket(number);
+        }
+        const ticket = getTicket(number);
+        return childrenMoved ? { ...ticket, childrenMoved } : ticket;
+      });
     },
 
     /**
@@ -3603,6 +3700,28 @@ export function createTickets(
             .map(({ text }) => ({ number: child.number, text })),
         ),
     ];
+  }
+
+  /**
+   * The core-fields step of `updateTicket`: changes the given fields of
+   * Ticket `number` by the rules for creating one, and bumps its updated
+   * time even when no fields are given.
+   */
+  function updateFields(number: number, input: UpdateTicketInput) {
+    const checked = checkTicketChanges(input);
+    checkTicketWritable(db, number);
+    if (checked.values.projectId !== undefined) {
+      checkProjectWritable(db, checked.values.projectId);
+    }
+
+    const { leftCycles, changedEpic, changedOrigins } = applyTicketChanges(
+      number,
+      checked,
+    );
+    publishWith(number, changedEpic, ...changedOrigins);
+    for (const id of leftCycles) {
+      changes.publish({ type: 'cycle', id });
+    }
   }
 
   /** Adds a comment by the module's actor; run it in a transaction. */

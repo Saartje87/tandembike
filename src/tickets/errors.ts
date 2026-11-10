@@ -2,6 +2,18 @@
 const kindsKey = Symbol.for('ticket.errors.kinds');
 
 /**
+ * A refusal a caller can recognise by `code` rather than by its message, to
+ * word its own remedy, with the facts it needs to: `plannedInOtherCycle` is
+ * the refusal to plan Ticket `number` while it is in the open Cycle titled
+ * `cycleTitle`.
+ */
+export type CodedRefusal = {
+  code: 'plannedInOtherCycle';
+  number: number;
+  cycleTitle: string;
+};
+
+/**
  * Base class for every error the Tickets module throws on purpose. The
  * message is written for people (the User and Agents) and can be shown as-is.
  *
@@ -15,9 +27,14 @@ export class TicketsError extends Error {
   static readonly kind: string = 'TicketsError';
   override name = 'TicketsError';
   readonly [kindsKey]: string[];
+  /** Set on a refusal a caller may recognise by its code. */
+  readonly refusal?: CodedRefusal;
 
-  constructor(message?: string) {
+  constructor(message?: string, refusal?: CodedRefusal) {
     super(message);
+    if (refusal) {
+      this.refusal = refusal;
+    }
     const kinds: string[] = [];
     for (
       let type: unknown = new.target;
@@ -44,8 +61,15 @@ export class TicketsError extends Error {
 
 export type FieldErrors = Record<string, string>;
 
-/** A Ticket a batch left unchanged, and the message saying why. */
-export type BatchFailure = { number: number; error: string };
+/**
+ * A Ticket a batch left unchanged, the message saying why and, for a coded
+ * refusal, its `refusal`.
+ */
+export type BatchFailure = {
+  number: number;
+  error: string;
+  refusal?: CodedRefusal;
+};
 
 /** The input broke one or more rules; `fieldErrors` says which and why. */
 export class ValidationError extends TicketsError {

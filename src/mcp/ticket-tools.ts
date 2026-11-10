@@ -9,11 +9,10 @@ import {
   maxAcceptanceCriteria,
   maxPageSize,
   type Ticket,
-  type Tickets,
   ticketDetails,
   ticketSorts,
   ticketSummary,
-  type UpdateTicketInput,
+  type UpdatedTicket,
 } from '../tickets/tickets';
 import {
   addExternalReferences,
@@ -30,6 +29,7 @@ import {
   newTicketFields,
   originNumber,
   projectId,
+  refusalMessage,
   removeExternalReferences,
   removeLabels,
   respond,
@@ -39,113 +39,9 @@ import {
   type ToolContext,
   ticketNumber,
   withChildren,
-  withMoveHint,
   withoutDescription,
   withPlaceholderNote,
 } from './tool-shared';
-
-type TicketUpdate = Omit<UpdateTicketInput, 'projectId'> & {
-  projectId?: number;
-  epicNumber?: number | null;
-  addBlockers?: number[];
-  removeBlockers?: number[];
-  cycleId?: number | null;
-  withChildren?: boolean;
-  archived?: boolean;
-  before?: number;
-  after?: number;
-};
-
-/**
- * One Ticket's update_ticket change: the Ticket after it, and with
- * `withChildren` the children whose Cycle changed with it.
- */
-type TicketUpdateResult = { ticket: Ticket; childrenMoved?: number[] };
-
-/**
- * One Ticket's update_ticket change: a restore first, so the rest applies
- * to the restored Ticket, then the core fields, Epic, Blockers, Cycle, Board
- * position and archive, in that order, all in one transaction. Each
- * step is refused with the message of the single-purpose rule it applies, and
- * a refusal leaves the Ticket unchanged.
- */
-const applyTicketUpdate = (
-  tickets: Tickets,
-  number: number,
-  {
-    epicNumber,
-    addBlockers = [],
-    removeBlockers = [],
-    cycleId,
-    withChildren,
-    archived,
-    before,
-    after,
-    ...core
-  }: TicketUpdate,
-): TicketUpdateResult =>
-  tickets.transaction(() => {
-    if (withChildren && cycleId === undefined) {
-      throw new TicketsError(
-        "withChildren takes an Epic's children along to a Cycle, so give cycleId with it.",
-      );
-    }
-    if (before !== undefined && after !== undefined) {
-      throw new TicketsError(
-        'Give either before or after: a Ticket lands next to one Ticket.',
-      );
-    }
-    let childrenMoved: number[] | undefined;
-    const hasCore = Object.values(core).some((value) => value !== undefined);
-    const hasSteps =
-      epicNumber !== undefined ||
-      addBlockers.length > 0 ||
-      removeBlockers.length > 0 ||
-      cycleId !== undefined ||
-      before !== undefined ||
-      after !== undefined ||
-      archived !== undefined;
-    // An archived Ticket is read-only, so restore it before the rest.
-    if (archived === false) {
-      tickets.restoreTicket(number);
-    }
-    // With nothing to change, updateTicket gives its own refusal.
-    if (hasCore || !hasSteps) {
-      tickets.updateTicket(number, core);
-    }
-    if (epicNumber === null) {
-      tickets.detachFromEpic(number);
-    } else if (epicNumber !== undefined) {
-      tickets.moveToEpic({ epic: epicNumber, child: number });
-    }
-    for (const blocker of addBlockers) {
-      tickets.addBlocker({ blocker, blocked: number });
-    }
-    for (const blocker of removeBlockers) {
-      tickets.removeBlocker({ blocker, blocked: number });
-    }
-    if (cycleId !== undefined) {
-      const moved = tickets.moveTicketsToCycle({
-        cycleId,
-        ticketNumbers: [number],
-        withChildren,
-      });
-      if (moved.failed.length > 0) {
-        throw new TicketsError(withMoveHint(moved.failed[0].error));
-      }
-      childrenMoved = moved.children;
-    }
-    if (before !== undefined) {
-      tickets.reorderTicket(number, { before });
-    } else if (after !== undefined) {
-      tickets.reorderTicket(number, { after });
-    }
-    if (archived === true) {
-      tickets.archiveTicket(number);
-    }
-    const ticket = tickets.getTicket(number);
-    return childrenMoved ? { ticket, childrenMoved } : { ticket };
-  });
 
 export const registerTicketTools = ({
   tickets,
@@ -566,10 +462,10 @@ export const registerTicketTools = ({
           ? {}
           : { projectId: resolveProjectId({ projectId, projectName }) };
       const apply = (target: number) =>
-        applyTicketUpdate(tickets, target, { ...changes, ...project });
+        tickets.updateTicket(target, { ...changes, ...project });
       /** The Ticket as the result shows it, with the children it moved. */
       const shown = (
-        { ticket, childrenMoved }: TicketUpdateResult,
+        { childrenMoved, ...ticket }: UpdatedTicket,
         // The summary leaves out the fields these steps change.
         changed: Partial<Ticket> = {},
       ) => ({
@@ -581,7 +477,7 @@ export const registerTicketTools = ({
       if (typeof number === 'number') {
         return respond(() => {
           const result = apply(number);
-          const { blockedBy, epic, archived } = result.ticket;
+          const { blockedBy, epic, archived } = result;
           return shown(result, {
             ...(changes.addBlockers || changes.removeBlockers
               ? { blockedBy }
@@ -603,7 +499,7 @@ export const registerTicketTools = ({
         if (refusal) {
           throw new TicketsError(refusal);
         }
-        const updated: TicketUpdateResult[] = [];
+        const updated: UpdatedTicket[] = [];
         const failed: { number: number; error: string }[] = [];
         for (const target of number) {
           try {
@@ -612,7 +508,10 @@ export const registerTicketTools = ({
             if (!(error instanceof TicketsError)) {
               throw error;
             }
-            failed.push({ number: target, error: error.message });
+            failed.push({
+              number: target,
+              error: refusalMessage(error.message, error.refusal),
+            });
           }
         }
         return { updated: updated.map((result) => shown(result)), failed };
