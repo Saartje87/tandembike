@@ -27,7 +27,7 @@ vi.mock('../../settings/app-settings', () => ({
 }));
 vi.mock('../../conversations/app-conversations', () => ({
   appConversations: () => ({
-    liveProcesses: () => world.processes,
+    capacity: () => ({ liveProcesses: world.processes }),
     machineBudget: () => world.budget,
   }),
 }));

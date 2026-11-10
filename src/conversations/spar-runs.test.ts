@@ -92,7 +92,7 @@ describe('A Spar run (ADR 0046)', () => {
 
     expect(conversation.worktreePath).toBeNull();
     expect(world.runner.runs[1].options.cwd).toBe(world.repositoryDir);
-    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
   });
 
   it('is started only by the User', async () => {

@@ -6,8 +6,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appAutopilot } from '../../../../../autopilot/app-autopilot';
 import { appConversations } from '../../../../../conversations/app-conversations';
+import {
+  holdsStartRunSlot,
+  startRunLimit,
+} from '../../../../../conversations/capacity';
 import type { Conversation } from '../../../../../conversations/conversations';
-import { holdsStartRunSlot } from '../../../../../conversations/conversations';
 import { cycleFootprint } from '../../../../../footprint/app-footprint';
 import { aFootprint } from '../../../../../test/fixtures';
 import { showOpenPopovers } from '../../../../../test/popover';
@@ -98,7 +101,15 @@ const conversation = (
 const stubConversations = (list: Conversation[], spendUsd = 0) =>
   vi.mocked(appConversations).mockReturnValue({
     list: () => list,
-    startRunSlotsInUse: () => list.filter(holdsStartRunSlot).length,
+    capacity: (projectId: number) => ({
+      project: {
+        slotsHeld: list.filter(holdsStartRunSlot).length,
+        limit: startRunLimit(
+          appTickets('user').getProjectAgentSettings(projectId),
+          appTickets('user').getMachineSettings().maxConcurrentRuns,
+        ),
+      },
+    }),
     autopilotSpend: () => spendUsd,
     retroOf: () => null,
     startCostEstimate: () => null,

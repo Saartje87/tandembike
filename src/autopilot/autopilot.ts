@@ -1,8 +1,8 @@
+import { verdictOf } from '../conversations/capacity';
 import type { ConversationState } from '../conversations/conversation-state';
-import {
-  type Conversation,
-  type Conversations,
-  startRunLimit,
+import type {
+  Conversation,
+  Conversations,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
@@ -148,14 +148,13 @@ export function createAutopilot({
   /**
    * How many machine slots are free for Autopilot now (ADR 0041): the cap
    * minus every live Agent process, the User's own runs and open Terminal
-   * Conversations included (T1329); never below 0.
+   * Conversations included (T1329); never below 0. Refusals count only the
+   * Machine slots; Run capacity says why the two differ.
    */
-  const machineFree = (): number =>
-    Math.max(
-      0,
-      tickets.getMachineSettings().maxConcurrentRuns -
-        conversations.liveProcessesInUse(),
-    );
+  const machineFree = (): number => {
+    const { machine, liveProcessCount } = conversations.capacity();
+    return Math.max(0, machine.cap - liveProcessCount);
+  };
 
   /** The machine's own Pause reasons (ADR 0041), shared by builds and triage. */
   const machineReasons = (): Extract<
@@ -166,11 +165,13 @@ export function createAutopilot({
       AutopilotPauseReason,
       { type: 'machineCapFull' | 'overMachineCeiling' }
     >[] = [];
-    if (machineFree() === 0) {
+    const { machine, liveProcesses, liveProcessCount } =
+      conversations.capacity();
+    if (liveProcessCount >= machine.cap) {
       reasons.push({
         type: 'machineCapFull',
-        cap: tickets.getMachineSettings().maxConcurrentRuns,
-        waitingOnUser: conversations.liveProcesses().waiting,
+        cap: machine.cap,
+        waitingOnUser: liveProcesses.waiting,
       });
     }
     const budget = machineBudget();
@@ -228,12 +229,8 @@ export function createAutopilot({
     }
     // A Merge the User approved holds a run slot like a Start (T1221), and
     // an idle one waiting on the User keeps it (ADR 0049).
-    const working = conversations.startRunSlotsInUse(projectId);
-    const limit = startRunLimit(
-      settings,
-      tickets.getMachineSettings().maxConcurrentRuns,
-    );
-    const slots = Math.max(0, limit - working);
+    const { limit, slotsHeld } = conversations.capacity(projectId).project;
+    const slots = Math.max(0, limit - slotsHeld);
     // With Parallel runs on the limit is the Machine cap, whose own reason
     // says it is full.
     if (slots === 0 && !settings.parallelRuns) {
@@ -531,15 +528,12 @@ export function createAutopilot({
     if (settings.triageCeilingUsd === null) {
       reasons.push({ type: 'noTriageCeiling' });
     }
-    const working = conversations
-      .list({ projectId })
-      .find(
-        (conversation) =>
-          conversation.intent === 'triage' &&
-          workingStates.includes(conversation.state),
-      );
-    if (working) {
-      reasons.push({ type: 'triageRunWorking', conversationId: working.id });
+    const verdict = verdictOf(conversations.capacity(projectId), 'autoTriage');
+    if (!verdict.ok && verdict.by === 'triageRunning') {
+      reasons.push({
+        type: 'triageRunWorking',
+        conversationId: verdict.conversationId,
+      });
     }
     const budget = conversations.triageBudget(projectId, now());
     if (budget?.paused) {

@@ -5,7 +5,6 @@ import { appAutopilot } from '../../../autopilot/app-autopilot';
 import { boardOf } from '../../../components/board/board-of';
 import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
-import { startRunLimit } from '../../../conversations/conversations';
 import { cycleFootprint } from '../../../footprint/app-footprint';
 import { appTickets } from '../../../tickets/app-tickets';
 import { cycleUnitCount } from '../../../tickets/cycle-units';
@@ -123,12 +122,8 @@ export async function loadProjectCycle(params: CyclePageProps['params']) {
  * waiting on the User included (ADR 0049), and how many it allows at once.
  */
 export function runSlotsOf(projectId: number) {
-  const used = appConversations().startRunSlotsInUse(projectId);
-  const cap = startRunLimit(
-    appTickets('user').getProjectAgentSettings(projectId),
-    appTickets('user').getMachineSettings().maxConcurrentRuns,
-  );
-  return { used, cap };
+  const { slotsHeld, limit } = appConversations().capacity(projectId).project;
+  return { used: slotsHeld, cap: limit };
 }
 
 /**
