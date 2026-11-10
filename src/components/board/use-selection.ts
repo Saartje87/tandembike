@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 
 import { moveTicketsToCycle } from '../../app/cycles/actions';
+import { callAction } from '../../app/lib/call-action';
 import { archiveTickets, moveTicketsToEpic } from '../../app/tickets/actions';
 import type { BatchFailure } from '../../tickets/errors';
 import type { SelectMode } from './select-click';
@@ -113,11 +114,11 @@ export function useSelection(lists: SelectionLists, projectId: number) {
     setError(undefined);
     setRefusals(undefined);
     startChange(async () => {
-      const result = await moveTicketsToCycle({
-        projectId,
-        cycleId,
-        ticketNumbers: numbers,
-      });
+      const result = await callAction(
+        () =>
+          moveTicketsToCycle({ projectId, cycleId, ticketNumbers: numbers }),
+        'The Tickets could not be moved. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
         return;
@@ -134,7 +135,10 @@ export function useSelection(lists: SelectionLists, projectId: number) {
     setError(undefined);
     setRefusals(undefined);
     startChange(async () => {
-      const result = await moveTicketsToEpic({ epic, children: numbers });
+      const result = await callAction(
+        () => moveTicketsToEpic({ epic, children: numbers }),
+        'The Tickets could not be added to the Epic. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
         return;
@@ -147,7 +151,10 @@ export function useSelection(lists: SelectionLists, projectId: number) {
     setError(undefined);
     setRefusals(undefined);
     startChange(async () => {
-      const result = await archiveTickets({ ticketNumbers: numbers });
+      const result = await callAction(
+        () => archiveTickets({ ticketNumbers: numbers }),
+        'The Tickets could not be archived. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
         return;

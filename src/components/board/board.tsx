@@ -37,6 +37,7 @@ import {
   useOptimistic,
 } from 'react';
 
+import { callAction } from '../../app/lib/call-action';
 import { formatCost } from '../../app/lib/format-cost';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
@@ -889,12 +890,11 @@ export const Board: FC<BoardProps> = ({
     setError(undefined);
     startTransition(async () => {
       showOrder(ticketNumbers);
-      const result = await reorderTickets({
-        projectId,
-        status: 'Todo',
-        cycleId,
-        ticketNumbers,
-      });
+      const result = await callAction(
+        () =>
+          reorderTickets({ projectId, status: 'Todo', cycleId, ticketNumbers }),
+        'The order could not be saved. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

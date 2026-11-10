@@ -6,6 +6,7 @@ import { type FC, useState, useTransition } from 'react';
 
 import { startRetro } from '../../app/conversations/actions';
 import { archiveCycle } from '../../app/cycles/actions';
+import { callAction } from '../../app/lib/call-action';
 import { projectPath } from '../../app/lib/paths';
 import type { Conversation } from '../../conversations/conversations';
 import type { Cycle } from '../../tickets/cycles';
@@ -57,7 +58,10 @@ export const CycleCompleteBanner: FC<CycleCompleteBannerProps> = ({
       if (retro) {
         return dialog.reopenAndOpen(retro);
       }
-      const result = await startRetro({ cycleId: cycle.id });
+      const result = await callAction(
+        () => startRetro({ cycleId: cycle.id }),
+        'The Retro could not be started. Try again.',
+      );
       if (!result.ok) {
         return result.error;
       }
@@ -69,7 +73,10 @@ export const CycleCompleteBanner: FC<CycleCompleteBannerProps> = ({
       return;
     }
     run(async () => {
-      const result = await archiveCycle({ cycleId: cycle.id });
+      const result = await callAction(
+        () => archiveCycle({ cycleId: cycle.id }),
+        'The Cycle could not be archived. Try again.',
+      );
       if (!result.ok) {
         return result.error;
       }

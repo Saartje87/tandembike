@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -155,5 +155,46 @@ describe('CycleCompleteBanner', () => {
     );
 
     expect(dialog.reopenAndOpen).toHaveBeenCalledWith(retro);
+  });
+
+  it('shows an archive that throws as a refusal and stays (T1323)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(archiveCycle).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<CycleCompleteBanner cycle={cycle} retro={null} />);
+
+    await act(() =>
+      userEvent.click(screen.getByRole('button', { name: 'Archive Cycle' })),
+    );
+
+    expect(
+      await screen.findByText('The Cycle could not be archived. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Archive Cycle' }),
+      ).toBeEnabled(),
+    );
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('shows a Retro start that throws as a refusal (T1323)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dialog = control();
+    vi.mocked(useConversationDialog).mockReturnValue(dialog);
+    vi.mocked(startRetro).mockRejectedValue(new Error('network down'));
+    renderWithTheme(<CycleCompleteBanner cycle={cycle} retro={null} />);
+
+    await act(() =>
+      userEvent.click(screen.getByRole('button', { name: 'Start Retro' })),
+    );
+
+    expect(
+      await screen.findByText('The Retro could not be started. Try again.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Start Retro' })).toBeEnabled(),
+    );
+    expect(dialog.open).not.toHaveBeenCalled();
   });
 });

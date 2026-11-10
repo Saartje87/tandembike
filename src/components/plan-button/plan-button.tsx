@@ -12,6 +12,7 @@ import { type FC, useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { startPlan } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { FieldError } from '../field-error/field-error';
 
@@ -40,7 +41,10 @@ export const PlanButton: FC<PlanButtonProps> = ({ projectId }) => {
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async ({ goal }) => {
-    const result = await startPlan({ projectId, goal });
+    const result = await callAction(
+      () => startPlan({ projectId, goal }),
+      'The Plan could not be started. Try again.',
+    );
     if (!result.ok) {
       const reason = result.fieldErrors?.goal;
       if (reason) {

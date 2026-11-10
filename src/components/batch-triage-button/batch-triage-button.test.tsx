@@ -1,6 +1,6 @@
 import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startBatchTriage } from '../../app/conversations/actions';
 import { renderWithTheme } from '../../test/render';
@@ -101,6 +101,26 @@ describe('BatchTriageButton (T1318)', () => {
     expect(
       await screen.findByText('This Board has nothing to triage.'),
     ).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('shows an action that throws as a refusal (T1323)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    const user = userEvent.setup();
+    vi.mocked(startBatchTriage).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <BatchTriageButton projectId={3} cycleId={7} count={1} openId={null} />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Triage 1' }));
+
+    expect(
+      await screen.findByText(
+        'The Batch triage could not be started. Try again.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Triage 1' })).toBeEnabled();
     expect(open).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,7 @@ import {
 import { type FC, type ReactNode, useId, useState, useTransition } from 'react';
 
 import { planTicket, unplanTicket } from '../../app/cycles/actions';
+import { callAction } from '../../app/lib/call-action';
 import { cyclePath } from '../../app/lib/paths';
 import type { Cycle } from '../../tickets/cycles';
 import type { Ticket } from '../../tickets/tickets';
@@ -53,7 +54,12 @@ export const CyclePlanner: FC<CyclePlannerProps> = ({ ticket, cycles }) => {
   const change = (action: typeof planTicket, cycleId: number) => {
     setError(undefined);
     startTransition(async () => {
-      const result = await action({ cycleId, number: ticket.number });
+      const result = await callAction(
+        () => action({ cycleId, number: ticket.number }),
+        action === planTicket
+          ? 'The Ticket could not be planned. Try again.'
+          : 'The Ticket could not be taken out of the Cycle. Try again.',
+      );
       if (!result.ok) {
         setError(result.error);
       }

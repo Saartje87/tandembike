@@ -1490,6 +1490,66 @@ describe('Board', () => {
       expect(await screen.findByText('T30 has open children')).toBeVisible();
       expect(bar()).toHaveTextContent('1 selected');
     });
+
+    it.each([
+      {
+        label: 'a move to a Cycle',
+        mock: () =>
+          vi.mocked(moveTicketsToCycle).mockRejectedValue(new Error('down')),
+        act: async (user: ReturnType<typeof userEvent.setup>) => {
+          await user.click(
+            within(bar()).getByRole('button', { name: 'Move to Cycle' }),
+          );
+          await user.click(screen.getByRole('menuitem', { name: 'Next' }));
+        },
+        reason: 'The Tickets could not be moved. Try again.',
+      },
+      {
+        label: 'adding to an Epic',
+        mock: () =>
+          vi.mocked(moveTicketsToEpic).mockRejectedValue(new Error('down')),
+        act: async (user: ReturnType<typeof userEvent.setup>) => {
+          await user.click(
+            within(bar()).getByRole('button', { name: 'Add to Epic' }),
+          );
+          await user.click(
+            screen.getByRole('menuitem', { name: 'T20 Roadmap Epic' }),
+          );
+        },
+        reason: 'The Tickets could not be added to the Epic. Try again.',
+      },
+      {
+        label: 'an archive',
+        mock: () =>
+          vi.mocked(archiveTickets).mockRejectedValue(new Error('down')),
+        act: async (user: ReturnType<typeof userEvent.setup>) => {
+          await user.click(
+            within(bar()).getByRole('button', { name: 'Archive' }),
+          );
+        },
+        reason: 'The Tickets could not be archived. Try again.',
+      },
+    ])(
+      'shows $label that throws as a refusal and keeps the selection (T1323)',
+      async ({ mock, act: perform, reason }) => {
+        const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+        onTestFinished(() => log.mockRestore());
+        const user = userEvent.setup();
+        mock();
+        renderSelectable();
+        await user.click(box(30, 'First queued'));
+
+        await perform(user);
+
+        expect(await screen.findByText(reason)).toBeVisible();
+        expect(bar()).toHaveTextContent('1 selected');
+        await vi.waitFor(() =>
+          expect(
+            within(bar()).getByRole('button', { name: 'Archive' }),
+          ).toBeEnabled(),
+        );
+      },
+    );
   });
 });
 
@@ -1661,6 +1721,26 @@ describe('Board drag', () => {
       expect(rowsIn('Queued')).toEqual([
         'Second queued',
         'First queued',
+        'Third queued',
+      ]),
+    );
+  });
+
+  it('shows a reorder that throws as a refusal and puts the rows back (T1323)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(reorderTickets).mockRejectedValue(new Error('network down'));
+    renderDraggable();
+
+    await keyboardDrag(rowOf(1), '{ArrowDown}');
+
+    expect(
+      await screen.findByText('The order could not be saved. Try again.'),
+    ).toBeVisible();
+    await vi.waitFor(() =>
+      expect(rowsIn('Queued')).toEqual([
+        'First queued',
+        'Second queued',
         'Third queued',
       ]),
     );
