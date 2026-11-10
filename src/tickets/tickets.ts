@@ -659,6 +659,12 @@ export type ReorderTicketsInput = LaneScope & {
   ticketNumbers: number[];
 };
 
+/**
+ * Where `reorderTicket` puts a Ticket: directly before or directly after
+ * another Ticket of its lane.
+ */
+export type ReorderAnchor = { before: number } | { after: number };
+
 export type SortLaneInput = LaneScope & {
   /**
    * The Tickets to put on top of the scope, each once, at most
@@ -2908,6 +2914,77 @@ export function createTickets(
         });
       }
       writeLaneOrder(db, changes, lane, ticketNumbers);
+    },
+
+    /**
+     * Moves active Ticket `number` directly before or after another active
+     * Ticket of its Project and Status lane, by the same rule as a drag on
+     * the Board: the other Tickets keep their order, archived ones their
+     * slots. Records the move in Activity and announces it; a Ticket already
+     * there changes nothing. Refused when the anchor is the Ticket itself,
+     * missing, archived, or in another Project or Status.
+     */
+    reorderTicket(number: number, anchor: ReorderAnchor): void {
+      const [field, other] =
+        'before' in anchor
+          ? (['before', anchor.before] as const)
+          : (['after', anchor.after] as const);
+      if (other === number) {
+        throw new ValidationError({
+          [field]: `Choose another Ticket than T${number} to move it next to.`,
+        });
+      }
+      const laneTicket = (of: number) => {
+        const row = db
+          .select({
+            projectId: tickets.projectId,
+            status: tickets.status,
+            archived: tickets.archived,
+          })
+          .from(tickets)
+          .where(eq(tickets.number, of))
+          .get();
+        if (!row) {
+          throw new NotFoundError(`There is no Ticket T${of}.`);
+        }
+        return row;
+      };
+      db.transaction(() => {
+        const ticket = laneTicket(number);
+        checkTicketWritable(db, number);
+        const target = laneTicket(other);
+        if (target.projectId !== ticket.projectId) {
+          throw new NotAllowedError(
+            `T${other} is in another Project. A Ticket moves only among the Tickets of its own Project.`,
+          );
+        }
+        if (target.archived) {
+          throw new NotAllowedError(
+            `T${other} is archived and not on the Board. Move T${number} next to a Ticket on the Board.`,
+          );
+        }
+        if (target.status !== ticket.status) {
+          throw new NotAllowedError(
+            `T${other} is ${target.status}, not ${ticket.status} like T${number}. A Ticket moves only within its own Status; change its Status with update_ticket status.`,
+          );
+        }
+        const lane = laneOf(db, {
+          projectId: ticket.projectId,
+          status: ticket.status,
+        });
+        const order = lane.scopeOrder.filter((each) => each !== number);
+        const slot = order.indexOf(other) + (field === 'after' ? 1 : 0);
+        order.splice(slot, 0, number);
+        if (order.every((each, index) => each === lane.scopeOrder[index])) {
+          return;
+        }
+        writeLaneOrder(db, changes, lane, order);
+        recordActivity(db, number, actor, [
+          field === 'before'
+            ? { type: 'reordered', before: other }
+            : { type: 'reordered', after: other },
+        ]);
+      });
     },
 
     /**

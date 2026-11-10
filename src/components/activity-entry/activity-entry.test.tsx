@@ -97,6 +97,8 @@ describe('ActivityEntry', () => {
     [{ type: 'blockedByRemoved', number: 7 }, 'removed Blocker T7'],
     [{ type: 'blocksAdded', number: 12 }, 'made it block T12'],
     [{ type: 'blocksRemoved', number: 12 }, 'stopped it blocking T12'],
+    [{ type: 'reordered', before: 4 }, 'moved it before T4 on the Board'],
+    [{ type: 'reordered', after: 4 }, 'moved it after T4 on the Board'],
     [{ type: 'archived' }, 'archived it'],
     [{ type: 'restored' }, 'restored it'],
     [

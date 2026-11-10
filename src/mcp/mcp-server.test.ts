@@ -268,6 +268,9 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/file_tickets/);
     expect(instructions).toMatch(/Epic/);
     expect(instructions).toMatch(/update_ticket \(addBlockers\)/);
+    expect(instructions).toMatch(
+      /Agents may reorder Tickets within a Status on the Board: update_ticket before or after/,
+    );
     expect(instructions).toMatch(/check_criterion/);
     expect(instructions).toMatch(/get_project/);
     expect(instructions).toMatch(/create_cycle/);

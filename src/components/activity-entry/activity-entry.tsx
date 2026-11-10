@@ -65,6 +65,10 @@ function describeChange(change: ActivityChange): string {
       return `made it block T${change.number}`;
     case 'blocksRemoved':
       return `stopped it blocking T${change.number}`;
+    case 'reordered':
+      return 'before' in change
+        ? `moved it before T${change.before} on the Board`
+        : `moved it after T${change.after} on the Board`;
     case 'archived':
       return 'archived it';
     case 'restored':

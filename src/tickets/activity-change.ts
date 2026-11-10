@@ -41,6 +41,13 @@ export type ActivityChange =
   /** On the Blocker: it started blocking Ticket `number`. */
   | { type: 'blocksAdded'; number: number }
   | { type: 'blocksRemoved'; number: number }
+  /**
+   * Moved within its Status lane on the Board, directly before or after
+   * Ticket `before` or `after`. Only `reorderTicket` records it: a drag that
+   * saves the whole lane records none.
+   */
+  | { type: 'reordered'; before: number }
+  | { type: 'reordered'; after: number }
   | { type: 'archived' }
   | { type: 'restored' }
   | ({ type: 'claimTaken' } & ActivityClaim)
