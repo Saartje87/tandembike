@@ -137,7 +137,10 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         (number) => blockersOf(number).blockedBy,
       )}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
-      conversations={conversations.list({ ticketNumber: ticket.number })}
+      conversations={[
+        ...conversations.list({ ticketNumber: ticket.number }),
+        ...conversations.openBatchTriagesOf(ticket.number),
+      ].sort((a, b) => b.id - a.id)}
       agentCommands={tickets.getProjectAgentCommands(ticket.projectId)}
       triageProposal={tickets.pendingTriage(ticket.number)}
       why={

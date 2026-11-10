@@ -554,15 +554,23 @@ export function createAutopilot({
     todo: Ticket[],
     free: boolean,
   ): Map<number, Eligibility<NotTriageEligibleReason>> => {
+    // An open Batch triage holds each Ticket it lists as an open Triage
+    // Conversation does its own (T1316).
     const open = new Map<number, number>();
     for (const conversation of conversations.list({ projectId })) {
-      if (
-        conversation.intent === 'triage' &&
-        !conversation.hidden &&
-        conversation.ticketNumber !== null &&
-        !open.has(conversation.ticketNumber)
-      ) {
-        open.set(conversation.ticketNumber, conversation.id);
+      if (conversation.hidden) {
+        continue;
+      }
+      const held =
+        conversation.intent === 'triage' && conversation.ticketNumber !== null
+          ? [conversation.ticketNumber]
+          : conversation.intent === 'batch_triage'
+            ? (conversation.batchTriageTickets ?? [])
+            : [];
+      for (const number of held) {
+        if (!open.has(number)) {
+          open.set(number, conversation.id);
+        }
       }
     }
     const oldestFirst = [...todo].sort(
@@ -626,6 +634,27 @@ export function createAutopilot({
       reasons.push({ type: 'noTriageEligibleWork' });
     }
     return { state: stateOf(reasons), eligibility, next };
+  };
+
+  /**
+   * A Board's Batch-triage Tickets (T1316): its Triage-eligible Tickets and
+   * Epics, planned in Cycle `cycleId` or, with null, in the Backlog, oldest
+   * first. Triage-eligible already leaves out `needs-info`, which waits on
+   * the User. No Pause reason applies: the User starts a Batch triage.
+   */
+  const batchTriageTickets = (
+    projectId: number,
+    cycleId: number | null,
+  ): number[] => {
+    const onBoard = todoTickets(projectId).filter(
+      (ticket) => (ticket.cycle?.id ?? null) === cycleId,
+    );
+    return [...triageEligibility(projectId, onBoard, false)]
+      .flatMap(([number, entry]) =>
+        entry.eligible ? [{ number, place: entry.place }] : [],
+      )
+      .sort((a, b) => a.place - b.place)
+      .map(({ number }) => number);
   };
 
   /**
@@ -805,6 +834,7 @@ export function createAutopilot({
 
   return {
     explain,
+    batchTriageTickets,
 
     /**
      * Runs a pass over every Project now. Passes are queued, one finishing

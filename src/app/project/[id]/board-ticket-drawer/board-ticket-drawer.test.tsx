@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,6 +55,9 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-epic-children={JSON.stringify(epicChildren)}
       data-outside-blockers={JSON.stringify(outsideBlockers)}
       data-conversations={conversations.length}
+      data-conversation-intents={(conversations as { intent: string }[])
+        .map(({ intent }) => intent)
+        .join(' ')}
       data-agent-commands={JSON.stringify(agentCommands)}
       data-board={JSON.stringify(board)}
     >
@@ -110,6 +113,55 @@ describe('BoardTicketDrawer', () => {
 
     expect(screen.getByRole('dialog')).toHaveTextContent(
       /^In Intake: needs triage\. Auto-triage is off, no Triage ceiling is set\./,
+    );
+  });
+
+  it('lists the open Batch triage that lists the Ticket among its Conversations (T1319)', async () => {
+    const world = createTestConversations();
+    const { tickets, conversations } = world;
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+    });
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const other = tickets.createTicket({ projectId: project.id, title: 'B' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const closed = await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: cycle.id,
+      ticketNumbers: [ticket.number],
+    });
+    await conversations.close(closed.id);
+    await conversations.startBatchTriage({
+      projectId: project.id,
+      cycleId: null,
+      ticketNumbers: [other.number, ticket.number],
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    vi.mocked(appConversations).mockReturnValue(conversations);
+    const drawer = async (number: number) => {
+      cleanup();
+      renderWithTheme(
+        <div>
+          {
+            await BoardTicketDrawer({
+              projectId: project.id,
+              number,
+              cycleId: null,
+            })
+          }
+        </div>,
+      );
+      return screen.getByRole('dialog');
+    };
+
+    expect(await drawer(ticket.number)).toHaveAttribute(
+      'data-conversation-intents',
+      'batch_triage',
+    );
+    expect(await drawer(other.number)).toHaveAttribute(
+      'data-conversation-intents',
+      'batch_triage',
     );
   });
 

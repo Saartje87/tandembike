@@ -2,6 +2,7 @@ import { cleanup, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appAutopilot } from '../../../autopilot/app-autopilot';
 import { appConversations } from '../../../conversations/app-conversations';
 import {
   renderPage,
@@ -23,7 +24,14 @@ vi.mock('../../spars/actions', () => ({ startSpar: vi.fn() }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../conversations/app-conversations', () => ({
-  appConversations: vi.fn(() => ({ list: () => [], triageBudget: () => null })),
+  appConversations: vi.fn(() => ({
+    list: () => [],
+    triageBudget: () => null,
+    openBatchTriage: () => null,
+  })),
+}));
+vi.mock('../../../autopilot/app-autopilot', () => ({
+  appAutopilot: vi.fn(() => ({ batchTriageTickets: () => [] })),
 }));
 vi.mock('../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
@@ -68,6 +76,7 @@ describe('ProjectPage', () => {
     const stub = (spend: number) =>
       vi.mocked(appConversations).mockReturnValue({
         list: () => [],
+        openBatchTriage: () => null,
         triageBudget: () => ({
           spendUsd: spend,
           ceilingUsd: 2,
@@ -90,6 +99,7 @@ describe('ProjectPage', () => {
     vi.mocked(appTickets).mockReturnValue(tickets);
     vi.mocked(appConversations).mockReturnValue({
       list: () => [],
+      openBatchTriage: () => null,
       triageBudget: () => null,
     } as unknown as ReturnType<typeof appConversations>);
     const params = Promise.resolve({ id: String(project.id) });
@@ -135,6 +145,32 @@ describe('ProjectPage', () => {
     await expect(
       generateMetadata({ params, searchParams: noSearch }),
     ).resolves.toEqual({ title: 'Website' });
+  });
+
+  it('offers Triage N on the Backlog with the count of its Batch-triage Tickets, hidden at 0 (T1318)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const batchTriageTickets = vi.fn(() => [] as number[]);
+    vi.mocked(appAutopilot).mockReturnValue({
+      batchTriageTickets,
+    } as unknown as ReturnType<typeof appAutopilot>);
+    const params = Promise.resolve({ id: String(project.id) });
+
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+    expect(screen.queryByRole('button', { name: /^Triage/ })).toBeNull();
+    cleanup();
+
+    batchTriageTickets.mockReturnValue([4, 9]);
+    await renderPage(
+      <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Triage 2' })).toBeVisible();
+    expect(batchTriageTickets).toHaveBeenCalledWith(project.id, null);
   });
 
   it('offers Plan on the Backlog once the Project has a repository (T1248)', async () => {

@@ -59,6 +59,8 @@ const retroConversation = (
   costUsd: 0,
   hidden: false,
   retroCycleId: 7,
+  batchTriageCycleId: null,
+  batchTriageTickets: null,
   defaultCycleId: null,
   defaultEpicNumber: null,
   defaultType: null,
@@ -95,6 +97,18 @@ describe('CycleHeader', () => {
 
   const title = () => screen.getByRole('button', { name: 'Launch the beta' });
   const titleInput = () => screen.getByRole('textbox', { name: 'Cycle title' });
+
+  it('shows the actions it is given beside its own buttons (T1318)', () => {
+    renderWithTheme(
+      <CycleHeader
+        cycle={prepared}
+        actions={<button type="button">Triage 2</button>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Triage 2' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start Cycle' })).toBeVisible();
+  });
 
   it('has no Rename button; the title says it can be edited', () => {
     renderWithTheme(<CycleHeader cycle={prepared} />);

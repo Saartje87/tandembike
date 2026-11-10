@@ -76,6 +76,11 @@ export type ActivityRow = {
   costUsd: number;
   /** Who started it. */
   startedBy: ConversationStarter;
+  /**
+   * A Batch triage's listed Tickets: while its run works, each shows it as a
+   * Triage run shows on its own Ticket (T1319). Null or left out otherwise.
+   */
+  batchTriageTickets?: number[] | null;
 };
 
 const isLive = (row: ActivityRow) =>
@@ -110,15 +115,21 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
     };
   };
   // Rows are newest first. A running or waiting Conversation anywhere is
-  // live, the newest winning; an interrupted or errored one counts only as
-  // the Ticket's newest Conversation, so a clean newer run clears it.
+  // live, the newest winning, on its Ticket or on each Ticket a Batch triage
+  // lists; an interrupted or errored one counts only as the Ticket's newest
+  // Conversation, so a clean newer run clears it.
   for (const row of rows) {
-    if (
-      row.ticketNumber !== null &&
-      isLive(row) &&
-      !(row.ticketNumber in live)
-    ) {
-      show(row, row.ticketNumber, row.state as 'running' | 'waiting');
+    if (!isLive(row)) {
+      continue;
+    }
+    const numbers =
+      row.ticketNumber === null
+        ? (row.batchTriageTickets ?? [])
+        : [row.ticketNumber];
+    for (const number of numbers) {
+      if (!(number in live)) {
+        show(row, number, row.state as 'running' | 'waiting');
+      }
     }
   }
   const seen = new Set<number>();

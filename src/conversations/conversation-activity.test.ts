@@ -279,3 +279,49 @@ describe('conversationActivity cost', () => {
     expect(cost).toEqual({});
   });
 });
+
+describe('conversationActivity of a Batch triage (T1319)', () => {
+  const batch = (
+    state: ActivityRow['state'],
+    batchTriageTickets: number[],
+  ): ActivityRow => ({
+    ...row(null, state, 1, 'tool', 'Read'),
+    id: 300,
+    batchTriageTickets,
+  });
+
+  it.each(['running', 'waiting'] as const)(
+    'shows a %s run on each listed Ticket, as a Triage run on its own Ticket',
+    (state) => {
+      const activity = conversationActivity([batch(state, [4, 5])]);
+
+      expect(activity.live[4]).toMatchObject({ conversationId: 300, state });
+      expect(activity.live[5]).toMatchObject({ conversationId: 300, state });
+    },
+  );
+
+  it('shows nothing on the listed Tickets once its run stops working', () => {
+    const activity = conversationActivity([
+      batch('idle', [4]),
+      batch('interrupted', [5]),
+    ]);
+
+    expect(activity.live).toEqual({});
+  });
+
+  it("leaves a Ticket's own newer live Conversation in place", () => {
+    const activity = conversationActivity([
+      { ...row(4, 'waiting'), id: 400 },
+      batch('running', [4, 5]),
+    ]);
+
+    expect(activity.live[4].conversationId).toBe(400);
+    expect(activity.live[5].conversationId).toBe(300);
+  });
+
+  it('counts a waiting Batch triage once', () => {
+    const activity = conversationActivity([batch('waiting', [4, 5])]);
+
+    expect(activity.waitingCount).toBe(1);
+  });
+});
