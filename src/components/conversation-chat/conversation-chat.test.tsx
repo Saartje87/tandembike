@@ -49,6 +49,7 @@ const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   question: null,
   widget: null,
   createdAt: at,
+  answeredAt: null,
   ...values,
 });
 

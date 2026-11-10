@@ -36,6 +36,8 @@ export type EntryListing = {
   /** Only with `full`. */
   toolInput?: Record<string, unknown>;
   permission?: PermissionStatus;
+  /** When the User answered a permission request; left out while pending, once expired and for older entries. */
+  answeredAt?: Date;
   question?: QuestionEntry;
   widget?: WidgetEntry;
   createdAt: Date;
@@ -178,6 +180,7 @@ export function createConversationReader(
               ? { toolInput: row.toolInput }
               : {}),
             ...(row.permission === null ? {} : { permission: row.permission }),
+            ...(row.answeredAt === null ? {} : { answeredAt: row.answeredAt }),
             ...(row.question === null ? {} : { question: row.question }),
             ...(row.widget === null ? {} : { widget: row.widget }),
             createdAt: row.createdAt,

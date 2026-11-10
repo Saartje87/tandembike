@@ -173,6 +173,32 @@ export type TranscriptEntry = {
   /** For a Widget of the Agent, the Widget, its answer and expired; null for other entries. */
   widget: WidgetEntry | null;
   createdAt: Date;
+  /** For a permission request, when the User answered it; null while pending, once expired, for others and older entries. */
+  answeredAt: Date | null;
+};
+
+/**
+ * How long a Conversation waited on the User's permission answers, in
+ * milliseconds: the union of each answered request's wait from asked to
+ * answered, so overlapping waits count once (T1155).
+ */
+const permissionWait = (
+  waits: { createdAt: Date; answeredAt: Date }[],
+): number => {
+  const sorted = waits
+    .map(({ createdAt, answeredAt }) => [
+      createdAt.getTime(),
+      answeredAt.getTime(),
+    ])
+    .sort(([a], [b]) => a - b);
+  let total = 0;
+  let end = Number.NEGATIVE_INFINITY;
+  for (const [from, to] of sorted) {
+    if (to <= end) continue;
+    total += to - Math.max(from, end);
+    end = to;
+  }
+  return total;
 };
 
 export type StartConversationInput = {
@@ -562,9 +588,14 @@ export function createConversations({
       .returning({ id: conversationEntries.id })
       .get().id;
 
-  const setPermission = (entryId: number, permission: PermissionStatus) => {
+  /** Sets a request's status; `answeredAt` only for the User's answer. */
+  const setPermission = (
+    entryId: number,
+    permission: PermissionStatus,
+    answeredAt: Date | null = null,
+  ) => {
     db.update(conversationEntries)
-      .set({ permission })
+      .set({ permission, answeredAt })
       .where(eq(conversationEntries.id, entryId))
       .run();
   };
@@ -2344,6 +2375,32 @@ export function createConversations({
         .all();
     },
 
+    /**
+     * How long Conversation `id` waited on the User's permission answers, in
+     * milliseconds: answered requests only, overlapping waits counted once.
+     */
+    permissionWaitMs(id: number): number {
+      get(id);
+      const waits = db
+        .select({
+          createdAt: conversationEntries.createdAt,
+          answeredAt: conversationEntries.answeredAt,
+        })
+        .from(conversationEntries)
+        .where(
+          and(
+            eq(conversationEntries.conversationId, id),
+            isNotNull(conversationEntries.answeredAt),
+          ),
+        )
+        .all();
+      return permissionWait(
+        waits.flatMap(({ createdAt, answeredAt }) =>
+          answeredAt ? [{ createdAt, answeredAt }] : [],
+        ),
+      );
+    },
+
     start,
 
     startTerminal,
@@ -2826,7 +2883,7 @@ export function createConversations({
         throw new NotAllowedError('This request proposes no rule to allow.');
       }
       handle.asking.delete(entryId);
-      setPermission(entryId, permissionStatusOf[answer]);
+      setPermission(entryId, permissionStatusOf[answer], new Date());
       if (!waitsOnUser(handle)) {
         update(entry.conversationId, { state: 'running' });
       }
