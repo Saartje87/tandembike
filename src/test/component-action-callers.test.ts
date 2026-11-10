@@ -20,8 +20,6 @@ const allowlist: Record<string, string> = {
     'It calls startConversation only from the onSend it passes to ConversationMessageInput, which runs onSend through callAction (T1186).',
   'conversation-reply-form/conversation-reply-form.tsx':
     'It calls replyToConversation only from the send it passes to ConversationMessageInput, which runs it through callAction (T1186).',
-  'conversation-skill-chips/conversation-skill-chips.tsx':
-    'Its background load of the skills has a .catch that shows no chips; the input works without them.',
   'spar-view/spar-view.tsx':
     'It calls sendSparTurn only from the onReply that reaches ConversationMessageInput, which runs it through callAction (T1186).',
   'machine-runs/machine-runs.tsx':

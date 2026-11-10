@@ -55,16 +55,6 @@ vi.mock(
   }),
 );
 
-vi.mock('../../../../components/skills-form/skills-form', () => ({
-  SkillsForm: ({
-    projectId,
-    skills,
-  }: {
-    projectId: number;
-    skills: string[];
-  }) => <p>{`Skills of ${projectId}: ${skills.join(' ')}`}</p>,
-}));
-
 vi.mock(
   '../../../../components/agent-commands-form/agent-commands-form',
   () => ({
@@ -114,21 +104,21 @@ describe('SettingsPage', () => {
     });
   });
 
-  it("shows the Project's Skills", async () => {
+  it('has no Skills section (T1340)', async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
-    tickets.setProjectSkills(project.id, ['/review', '/plan']);
     vi.mocked(appTickets).mockReturnValue(tickets);
 
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Skills' }),
+      screen.getByRole('heading', { level: 2, name: 'Agent commands' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(`Skills of ${project.id}: /review /plan`),
-    ).toBeInTheDocument();
+      screen.queryByRole('heading', { level: 2, name: 'Skills' }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Skills? chips?/i)).not.toBeInTheDocument();
   });
 
   it("shows the Project's Triage and Start commands", async () => {

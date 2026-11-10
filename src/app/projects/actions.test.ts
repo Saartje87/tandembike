@@ -11,11 +11,9 @@ import {
   addReferenceTemplate,
   createProject,
   detectProjectRepository,
-  loadProjectSkills,
   removeReferenceTemplate,
   setProjectAgentCommands,
   setProjectAgentSettings,
-  setProjectSkills,
   styleProject,
   updateReferenceTemplate,
 } from './actions';
@@ -251,40 +249,7 @@ describe('setProjectAgentSettings Auto-merge', () => {
   });
 });
 
-describe('Skill actions', () => {
-  it("saves a Project's Skills from the textarea's lines and refreshes its pages", async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    vi.mocked(appTickets).mockReturnValue(tickets);
-
-    const result = await setProjectSkills({
-      projectId: project.id,
-      text: '/review\n\nplan\n',
-    });
-
-    expect(result).toEqual({ ok: true, skills: ['/review', '/plan'] });
-    expect(tickets.getProjectSkills(project.id)).toEqual(['/review', '/plan']);
-    expect(revalidatePath).toHaveBeenCalled();
-  });
-
-  it('returns a refusal naming the Skills field', async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    vi.mocked(appTickets).mockReturnValue(tickets);
-
-    const result = await setProjectSkills({
-      projectId: project.id,
-      text: '/to spec',
-    });
-
-    expect(result).toMatchObject({
-      ok: false,
-      fieldErrors: {
-        skills: '"/to spec" has a space. Enter one command per line.',
-      },
-    });
-  });
-
+describe('Agent command actions', () => {
   it("saves a Project's agent commands and returns them as stored", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -322,26 +287,6 @@ describe('Skill actions', () => {
       fieldErrors: {
         startCommand: '"/implement T1" has a space. Enter one command.',
       },
-    });
-  });
-
-  it("loads the Skills of a Project, or of a Ticket's Project", async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
-    tickets.setProjectSkills(project.id, ['/review']);
-    vi.mocked(appTickets).mockReturnValue(tickets);
-
-    expect(await loadProjectSkills({ projectId: project.id })).toEqual({
-      ok: true,
-      skills: ['/review'],
-    });
-    expect(await loadProjectSkills({ ticketNumber: ticket.number })).toEqual({
-      ok: true,
-      skills: ['/review'],
-    });
-    expect(await loadProjectSkills({ projectId: 999 })).toMatchObject({
-      ok: false,
     });
   });
 });

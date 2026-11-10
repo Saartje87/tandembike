@@ -1,4 +1,3 @@
-import { maxSkillLength } from './skills';
 import type { TicketType } from './ticket-type';
 
 /**
@@ -126,12 +125,15 @@ export const noAgentCommands: ProjectAgentCommands = {
   sparCommand: null,
 };
 
+/** The most characters an agent command may have. */
+export const maxAgentCommandLength = 100;
+
 /** The buttons that send an agent command. */
 export type AgentCommandIntent = 'triage' | 'start' | 'spec' | 'merge';
 
 /**
- * `entry` as an agent command, by the rules of a Skill: trimmed, a missing
- * leading `/` added, and `null` when blank. Returns why it cannot be one.
+ * `entry` as an agent command: trimmed, a missing leading `/` added, and
+ * `null` when blank. Returns why it cannot be one.
  */
 export function normalizeAgentCommand(
   entry: string,
@@ -144,9 +146,9 @@ export function normalizeAgentCommand(
   if (/\s/.test(command)) {
     return { problem: `"${command}" has a space. Enter one command.` };
   }
-  if (command.length > maxSkillLength) {
+  if (command.length > maxAgentCommandLength) {
     return {
-      problem: `"${command}" is longer than ${maxSkillLength} characters.`,
+      problem: `"${command}" is longer than ${maxAgentCommandLength} characters.`,
     };
   }
   return { command };

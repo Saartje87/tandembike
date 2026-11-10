@@ -6,7 +6,6 @@ import { AgentCommandsForm } from '../../../../components/agent-commands-form/ag
 import { AgentSettingsForm } from '../../../../components/agent-settings-form/agent-settings-form';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { ReferenceTemplateEditor } from '../../../../components/reference-template-editor/reference-template-editor';
-import { SkillsForm } from '../../../../components/skills-form/skills-form';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { loadProject, type ProjectPageProps } from '../project-data';
@@ -41,24 +40,6 @@ async function settingsTab(params: ProjectPageProps['params']) {
                 .list({ projectId: project.id })
                 .find(({ intent }) => intent === 'setup') ?? null
             }
-          />
-        </section>
-      </Stack>
-      <Stack gap={3} aria-labelledby="skills" asChild>
-        <section>
-          <Stack gap={1}>
-            <Heading level={2} id="skills">
-              Skills
-            </Heading>
-            <Text tag="p" fontSize="small" color="muted">
-              Claude Code commands kept for this Project, one per line, such as
-              /tandembike:spec. Conversations no longer offer them as chips;
-              type a command in the message instead. Only you can change them.
-            </Text>
-          </Stack>
-          <SkillsForm
-            projectId={project.id}
-            skills={appTickets('user').getProjectSkills(project.id)}
           />
         </section>
       </Stack>
@@ -107,7 +88,7 @@ async function settingsTab(params: ProjectPageProps['params']) {
 }
 
 /**
- * A Project's Settings tab: its agent settings, Skills, agent commands and
+ * A Project's Settings tab: its agent settings, agent commands and
  * Reference templates, under the Project's layout. It streams in behind its own
  * boundary, as the Backlog tab does.
  */
