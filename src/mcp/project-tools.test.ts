@@ -1,9 +1,10 @@
 // @vitest-environment node
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
+import { createChangeChannel } from '../tickets/changes';
 import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -279,13 +280,106 @@ describe('create_cycle withChildren', () => {
   });
 });
 
+describe('update_cycle', () => {
+  it("renames a Prepared Cycle by create_cycle's title rules and returns it", async () => {
+    const { tickets, root, website } = setup();
+    const cycle = tickets.createCycle({ projectId: website.id, title: 'Beta' });
+    tickets.planTickets({ cycleId: cycle.id, ticketNumbers: [2] });
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const renamed = resultJson(
+      await client.callTool({
+        name: 'update_cycle',
+        arguments: { cycleId: cycle.id, title: '  Public beta ' },
+      }),
+    );
+
+    expect(renamed).toMatchObject({
+      id: cycle.id,
+      title: 'Public beta',
+      state: 'Prepared',
+      ticketNumbers: [2],
+    });
+    expect(tickets.getCycle(cycle.id).title).toBe('Public beta');
+    const empty = await client.callTool({
+      name: 'update_cycle',
+      arguments: { cycleId: cycle.id, title: ' ' },
+    });
+    expect(empty.isError).toBe(true);
+    expect(resultText(empty)).toMatch(/Enter a title/);
+    await client.close();
+  });
+
+  it('refuses an Active or an Archived Cycle, naming its state', async () => {
+    const { tickets, root, website } = setup();
+    const archived = tickets.createCycle({
+      projectId: website.id,
+      title: 'Old',
+    });
+    tickets.startCycle(archived.id);
+    tickets.archiveCycle(archived.id);
+    const active = tickets.createCycle({ projectId: website.id, title: 'Now' });
+    tickets.startCycle(active.id);
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    for (const [cycle, state] of [
+      [active, 'Active'],
+      [archived, 'Archived'],
+    ] as const) {
+      const result = await client.callTool({
+        name: 'update_cycle',
+        arguments: { cycleId: cycle.id, title: 'Renamed' },
+      });
+
+      expect(result.isError, state).toBe(true);
+      expect(resultText(result)).toBe(
+        `The Cycle "${cycle.title}" is ${state}. An Agent may rename only a Prepared Cycle; the User renames an ${state} one.`,
+      );
+      expect(tickets.getCycle(cycle.id).title).toBe(cycle.title);
+    }
+    await client.close();
+  });
+
+  it('announces the rename, so open Boards show it live', async () => {
+    const changes = createChangeChannel();
+    const tickets = createTestTickets(changes, 'agent');
+    const project = tickets.createProject({ name: 'Website' });
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const listener = vi.fn();
+    changes.subscribe(listener);
+    const client = await connectMcpClient(tickets);
+
+    await client.callTool({
+      name: 'update_cycle',
+      arguments: { cycleId: cycle.id, title: 'Launch' },
+    });
+
+    expect(listener).toHaveBeenCalledWith({ type: 'cycle', id: cycle.id });
+    await client.close();
+  });
+
+  it('refuses a Cycle that does not exist', async () => {
+    const { tickets, root } = setup();
+    const client = await connectMcpClient(tickets, { cwd: root });
+
+    const result = await client.callTool({
+      name: 'update_cycle',
+      arguments: { cycleId: 99, title: 'Beta' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toMatch(/There is no Cycle with id 99/);
+    await client.close();
+  });
+});
+
 describe('project tool descriptions', () => {
   it('stay under the limit', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     const { tools } = await client.listTools();
 
-    for (const name of ['get_project', 'create_cycle']) {
+    for (const name of ['get_project', 'create_cycle', 'update_cycle']) {
       const tool = tools.find((candidate) => candidate.name === name);
       expect(tool?.description?.length, name).toBeLessThan(descriptionLimit);
     }

@@ -17,7 +17,7 @@ A named group of Tickets. Every Ticket belongs to exactly one Project. A Project
 _Avoid_: Workspace, sub-project
 
 **Cycle**:
-A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time. An Active Cycle is **complete** when it has at least one unarchived Ticket planned in it and every one is Done, an Epic by its derived Status; its Board then shows a banner offering to archive it, and archiving stays the User's click (ADR 0010). Starting and archiving a Cycle, like renaming one and ordering a Lane, are the User's, in the UI only; an Agent proposes a Prepared Cycle with `create_cycle` (ADR 0037).
+A goal-led set of Tickets within one Project, not defined by a fixed duration. A Cycle is Prepared, Active, or Archived; a Project may have multiple Prepared Cycles but at most one Active Cycle, and a Ticket can be planned in only one non-archived Cycle at a time. An Active Cycle is **complete** when it has at least one unarchived Ticket planned in it and every one is Done, an Epic by its derived Status; its Board then shows a banner offering to archive it, and archiving stays the User's click (ADR 0010). Starting and archiving a Cycle, like renaming an Active or Archived one and ordering a Lane, are the User's, in the UI only; an Agent proposes a Prepared Cycle with `create_cycle` and may rename a Prepared one with `update_cycle` (ADR 0037).
 _Avoid_: Sprint
 
 **Backlog**:

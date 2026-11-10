@@ -30,7 +30,7 @@ The brief gives the Project's estimated cost per Ticket, or says there are not e
 
 Show the User the Cycle you would propose: its title, the Tickets in order with a line each on why, and what you left out. Wait for their answer, then adjust.
 
-Call `create_cycle` with a title taken from the goal and the Tickets' numbers in the order you chose. It makes a Prepared Cycle and never starts it. If it refuses, fix what it names and call it again.
+Call `create_cycle` with a title taken from the goal and the Tickets' numbers in the order you chose. It makes a Prepared Cycle and never starts it. If it refuses, fix what it names and call it again. When the User wants the title changed afterwards, rename the Prepared Cycle with `update_cycle`; once it is Active or Archived, only the User renames it.
 
 ## 5. Finish
 

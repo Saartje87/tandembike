@@ -101,6 +101,7 @@ const tandembike: Record<string, [line: string, without: string]> = {
   get_ticket: ['Reading {T}', 'Reading a Ticket'],
   update_ticket: ['Updating {T}', 'Updating a Ticket'],
   create_cycle: ['Creating a Cycle', 'Creating a Cycle'],
+  update_cycle: ['Renaming a Cycle', 'Renaming a Cycle'],
 };
 
 const humanise = (name: string) => {

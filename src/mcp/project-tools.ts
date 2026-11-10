@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
-import { TicketsError } from '../tickets/errors';
+import { NotAllowedError, TicketsError } from '../tickets/errors';
 import { maxBatchSize } from '../tickets/rules';
 import {
   agentProject,
   batchTicketNumbers,
+  cycleId,
   cycleTitle,
   hasProject,
   projectId,
@@ -122,6 +123,32 @@ export const registerProjectTools = ({
           return planned.children
             ? { ...planned.cycle, childrenPlanned: planned.children }
             : planned.cycle;
+        }),
+      ),
+  );
+
+  registerTool(
+    'update_cycle',
+    {
+      title: 'Update Cycle',
+      description: `Rename a Prepared Cycle: its title is its goal, which planning may sharpen. Returns the Cycle with its ticketNumbers. Only a Prepared Cycle: renaming an Active or an Archived Cycle stays with the User, as do starting and archiving one, and the refusal names the Cycle's state. To change which Tickets are in it, use update_ticket (cycleId).`,
+      inputSchema: {
+        cycleId: cycleId.describe(
+          'The Prepared Cycle to rename (id from get_project or create_cycle).',
+        ),
+        title: cycleTitle,
+      },
+    },
+    ({ cycleId, title }) =>
+      respond(() =>
+        tickets.transaction(() => {
+          const cycle = tickets.getCycle(cycleId);
+          if (cycle.state !== 'Prepared') {
+            throw new NotAllowedError(
+              `The Cycle "${cycle.title}" is ${cycle.state}. An Agent may rename only a Prepared Cycle; the User renames an ${cycle.state} one.`,
+            );
+          }
+          return tickets.renameCycle(cycleId, { title });
         }),
       ),
   );
