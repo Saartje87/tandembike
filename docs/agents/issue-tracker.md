@@ -95,9 +95,9 @@ When the Ticket being triaged is an Epic with no children, or the User names an 
 When the User names an existing Epic that already has children while running `/to-spec`, for example after a grilling session filed its children before the spec was written, it becomes the spec the same way: replace its description with the spec and give it `ready-for-agent`, and it keeps its number, its other labels, its Origin and its children. Do not publish a new Epic: that duplicates the Epic and orphans its children (T1358). `/to-tickets` on that Epic then **reconciles** its children against the spec instead of filing a second set. Read each unarchived child with `get_ticket`, then:
 
 - **Keep** a child the spec covers as it is.
-- **Reword** a child where the spec sharpens it: its title, description or `acceptanceCriteria`, with `update_ticket`.
-- **Add** each slice the spec needs that no child covers: `file_tickets` with the Epic's `epicNumber`, and `addBlockers` with `update_ticket` for Blockers on the existing children.
-- **Flag** a child the spec does not cover: comment on it with `add_note`, naming the spec's Epic and what the spec leaves out, and leave it as it is. The User decides whether it goes; the run never archives it. List the flagged children to the User at the end.
+- **Reword** a Todo child where the spec sharpens it: its title, description or `acceptanceCriteria`, with `update_ticket`. A child that is In progress or Done and differs from the spec is flagged instead.
+- **Add** each slice the spec needs that no child covers: `file_tickets` with the Epic's `epicNumber`, and `addBlockers` with `update_ticket` for Blockers between new and existing children, in either direction.
+- **Flag** a child the spec does not cover, or does not match and cannot be reworded: comment on it with `add_note`, naming the spec's Epic and what the spec leaves out, and leave it as it is. The User decides whether it goes; the run never archives it. List the flagged children to the User at the end.
 
 Show the reconciled breakdown, marked keep, reword, add or flag, when you quiz the User, and change nothing until they approve it.
 
