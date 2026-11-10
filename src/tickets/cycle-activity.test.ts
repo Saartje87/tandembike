@@ -75,7 +75,10 @@ describe('Planning a Ticket counts as a change to it', () => {
     const { tickets, alpha } = setUp(1, 'agent');
     tickets.planTickets({ cycleId: alpha.id, ticketNumbers: [1] });
 
-    expect(tickets.listActivity(1).at(-1)?.actor).toBe('agent');
+    expect(tickets.listActivity(1).at(-1)).toMatchObject({
+      actor: 'agent',
+      changes: [{ type: 'cycle', from: null }],
+    });
   });
 
   it('lists a Ticket unplanned from a Cycle since then, and records it', () => {
