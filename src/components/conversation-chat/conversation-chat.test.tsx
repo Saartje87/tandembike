@@ -61,6 +61,10 @@ const one = (
 const ok = (state: Conversation['state'] = 'running') =>
   ({ ok: true, conversation: conversation({ state }) }) as const;
 
+/** A tool group's summary by its whole text: its count and phrase are apart (T1391). */
+const summary = (text: string) => (_: string, element: Element | null) =>
+  element?.tagName === 'SUMMARY' && element.textContent === text;
+
 describe('ConversationChat', () => {
   beforeEach(() => {
     vi.mocked(answerConversationPermission).mockReset();
@@ -101,7 +105,9 @@ describe('ConversationChat', () => {
     expect(lines[0]).toHaveAttribute('data-side', 'end');
     expect(lines[1]).toHaveAttribute('data-side', 'start');
     expect(within(lines[1]).getByText('Agent')).toBeInTheDocument();
-    expect(within(lines[2]).getByText('Reading a')).toBeVisible();
+    expect(
+      within(lines[2]).getByText(summary('1 step · Reading a')),
+    ).toBeVisible();
     expect(within(lines[3]).getByText('Went wrong')).toBeInTheDocument();
   });
 
@@ -544,7 +550,7 @@ describe('ConversationChat', () => {
       ).getAllByRole('listitem');
       expect(lines).toHaveLength(3);
       expect(
-        within(lines[1]).getByText('3 steps · Editing b.ts'),
+        within(lines[1]).getByText(summary('3 steps · Editing b.ts')),
       ).toBeVisible();
       expect(within(lines[1]).getByText('Reading a.ts')).not.toBeVisible();
       expect(within(lines[1]).getByRole('group')).not.toHaveAttribute('open');
@@ -554,11 +560,11 @@ describe('ConversationChat', () => {
       const user = userEvent.setup();
       renderWithTheme(chat(steps));
 
-      await user.click(screen.getByText('3 steps · Editing b.ts'));
+      await user.click(screen.getByText(summary('3 steps · Editing b.ts')));
 
       expect(screen.getByText('Reading a.ts')).toBeVisible();
       expect(screen.getByText('Running Run tests')).toBeVisible();
-      expect(screen.getByText('Editing b.ts')).toBeVisible();
+      expect(screen.getAllByText('Editing b.ts').at(-1)).toBeVisible();
       expect(
         screen.getByText(
           '{"command":"npx vitest run","description":"Run tests"}',
@@ -569,7 +575,8 @@ describe('ConversationChat', () => {
       );
     });
 
-    it('shows a single tool call as its phrase and raw input, with no toggle', () => {
+    it('collapses a single tool call like a group, its raw input shown once opened (T1393)', async () => {
+      const user = userEvent.setup();
       renderWithTheme(
         chat([
           entry({ id: 1, text: 'Looking' }),
@@ -578,10 +585,15 @@ describe('ConversationChat', () => {
         ]),
       );
 
-      expect(screen.getByText('Reading a.ts')).toBeVisible();
-      expect(screen.getByText('{"file_path":"/wt/src/a.ts"}')).toBeVisible();
-      expect(screen.queryByRole('group')).toBeNull();
-      expect(screen.queryByText(/steps ·/)).toBeNull();
+      expect(screen.getByText(summary('1 step · Reading a.ts'))).toBeVisible();
+      expect(screen.getByRole('group')).not.toHaveAttribute('open');
+      const raw = screen.getByText('{"file_path":"/wt/src/a.ts"}');
+      expect(raw).not.toBeVisible();
+
+      await user.click(screen.getByText(summary('1 step · Reading a.ts')));
+
+      expect(raw).toBeVisible();
+      expect(screen.getAllByText('Reading a.ts').at(-1)).toBeVisible();
     });
 
     it('ends a group at a created, error, permission or Agent entry, which stay visible', () => {
@@ -605,23 +617,29 @@ describe('ConversationChat', () => {
         ]),
       );
 
-      expect(screen.getByText('2 steps · Running Run tests')).toBeVisible();
+      expect(
+        screen.getByText(summary('2 steps · Running Run tests')),
+      ).toBeVisible();
       expect(screen.getByRole('link', { name: 'T41' })).toBeVisible();
-      expect(screen.getByText('2 steps · Searching foo')).toBeVisible();
+      expect(
+        screen.getByText(summary('2 steps · Searching foo')),
+      ).toBeVisible();
       expect(screen.getByText('Went wrong')).toBeVisible();
-      expect(screen.getByText('2 steps · Reading c.ts')).toBeVisible();
-      expect(screen.getByText('Reading d.ts')).toBeVisible();
-      expect(screen.getAllByRole('group')).toHaveLength(3);
+      expect(screen.getByText(summary('2 steps · Reading c.ts'))).toBeVisible();
+      expect(screen.getByText(summary('1 step · Reading d.ts'))).toBeVisible();
+      expect(screen.getAllByRole('group')).toHaveLength(4);
     });
 
     it('keeps a group the User opened open as new steps arrive, with the latest step in its summary', async () => {
       const user = userEvent.setup();
       const { rerender } = renderWithTheme(chat(steps.slice(0, 2)));
 
-      await user.click(screen.getByText('2 steps · Running Run tests'));
+      await user.click(
+        screen.getByText(summary('2 steps · Running Run tests')),
+      );
       rerender(chat(steps));
 
-      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByText(summary('3 steps · Editing b.ts'))).toBeVisible();
       expect(screen.getByRole('group')).toHaveAttribute('open');
       expect(screen.getByText('Reading a.ts')).toBeVisible();
     });
@@ -631,7 +649,7 @@ describe('ConversationChat', () => {
 
       rerender(chat(steps));
 
-      expect(screen.getByText('3 steps · Editing b.ts')).toBeVisible();
+      expect(screen.getByText(summary('3 steps · Editing b.ts'))).toBeVisible();
       expect(screen.getByRole('group')).not.toHaveAttribute('open');
     });
 
@@ -647,13 +665,16 @@ describe('ConversationChat', () => {
         ]),
       );
 
-      expect(screen.getByText('2 steps · Starting T12')).toBeVisible();
+      expect(screen.getByText(summary('2 steps · Starting T12'))).toBeVisible();
     });
 
-    it('shows the raw input as plain text, not Markdown or links', () => {
+    it('shows the raw input as plain text, not Markdown or links', async () => {
+      const user = userEvent.setup();
       renderWithTheme(
         chat([entry({ id: 1, role: 'tool', text: 'Mystery **x** T12' })]),
       );
+
+      await user.click(screen.getByText(summary('1 step · Mystery')));
 
       expect(screen.getByText('**x** T12')).toBeVisible();
       expect(screen.queryByRole('link')).toBeNull();
