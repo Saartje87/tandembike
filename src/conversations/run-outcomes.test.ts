@@ -163,6 +163,16 @@ describe('Run outcomes', () => {
       );
     });
 
+    it('is needs_reply for a Triage whose run exits while it waits on the User', async () => {
+      const { conversations, runner, startOnTicket } = setup();
+      const triage = await startOnTicket('triage');
+      runner.runs[0].emit({ type: 'waiting', waiting: true });
+      runner.runs[0].emit({ type: 'exit' });
+      expect(conversations.latestRunOutcome(triage.id)?.result).toBe(
+        'needs_reply',
+      );
+    });
+
     it('is needs_reply while the Ticket is In progress', async () => {
       const { conversations, runner, tickets, ticket, startOnTicket } = setup();
       const conversation = await startOnTicket();
