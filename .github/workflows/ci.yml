@@ -39,8 +39,14 @@ jobs:
       - run: npm run ts
 
   test:
+    name: test (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      # Let every shard finish, so one failure shows all the others too.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -48,7 +54,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm test -- --shard=${{ matrix.shard }}/4
 
   # The production build catches errors only the bundler sees, such as a
   # client component importing a server-only module or a Node built-in.
