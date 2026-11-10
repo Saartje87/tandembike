@@ -320,11 +320,19 @@ describe('offersDone (T1268)', () => {
     expect(offersDone({ ...base, status: 'Done' })).toBe(false);
   });
 
-  it('is false with a live Conversation', () => {
-    expect(offersDone(base, liveConversation({ state: 'running' }))).toBe(
-      false,
-    );
-  });
+  it.each(['running', 'waiting'] as const)(
+    'is false while a Conversation is %s',
+    (state) => {
+      expect(offersDone(base, liveConversation({ state }))).toBe(false);
+    },
+  );
+
+  it.each(['idle', 'interrupted', 'error'] as const)(
+    'is true beside an %s Conversation, which works on nothing',
+    (state) => {
+      expect(offersDone(base, liveConversation({ state }))).toBe(true);
+    },
+  );
 
   it('is false in Review, where Merged finishes it', () => {
     const inReview = {

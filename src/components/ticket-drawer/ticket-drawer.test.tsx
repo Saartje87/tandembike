@@ -620,6 +620,30 @@ describe('TicketDrawer', () => {
       expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
     });
 
+    it('finishes a ready-for-human Epic', async () => {
+      vi.mocked(completeTicket).mockResolvedValue({ ok: true, projectId: 1 });
+      renderDrawer({ ...forHuman, type: 'Epic', title: 'Login' });
+
+      await userEvent.click(button('Done T4 Login'));
+
+      expect(completeTicket).toHaveBeenCalledExactlyOnceWith({ number: 4 });
+    });
+
+    it('shows beside an idle Conversation, not while one runs', () => {
+      vi.mocked(useTicketLiveConversation).mockReturnValue(
+        liveConversation({ state: 'idle' }),
+      );
+      const { unmount } = renderDrawer(forHuman);
+      expect(button('Done T4 Fix the header')).toBeInTheDocument();
+      unmount();
+
+      vi.mocked(useTicketLiveConversation).mockReturnValue(
+        liveConversation({ state: 'running' }),
+      );
+      renderDrawer(forHuman);
+      expect(done()).toBeNull();
+    });
+
     it('asks to confirm unchecked criteria, then finishes with confirmed', async () => {
       vi.mocked(completeTicket)
         .mockResolvedValueOnce({
