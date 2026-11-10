@@ -126,9 +126,10 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open, kept }) => {
 /**
  * The one modal dialog every Conversation is held in (ADR 0019, T608): a tab
  * per open Conversation, and the shown tab's chat below. Escape, the Hide
- * button at the end of the tab row and a click on the backdrop hide it and keep every tab; a tab's close button
- * closes that Conversation. Mount it once, through
- * `ConversationDialogProvider`.
+ * button at the end of the tab row and a click on the backdrop hide it and
+ * keep every tab; a tab's close button closes that Conversation. Its
+ * "Conversations" heading is visually hidden but still names it. Mount it
+ * once, through `ConversationDialogProvider`.
  */
 export const ConversationDialog: FC<ConversationDialogProps> = ({
   tabs,

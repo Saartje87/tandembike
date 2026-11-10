@@ -54,8 +54,8 @@ export type ConversationMessageInputProps = {
  * The text input and Send button of a Conversation message, shared by the
  * chat's reply form and a draft: the input starts at one row and grows with
  * its text to about eight, then scrolls, with Send beside it. Enter sends and
- * Shift+Enter starts a new line. A refused send keeps its text and shows the reason; a sent one
- * clears the input.
+ * Shift+Enter starts a new line. A refused send keeps its text and shows the
+ * reason; a sent one clears the input.
  */
 export const ConversationMessageInput: FC<ConversationMessageInputProps> = ({
   onSend,
