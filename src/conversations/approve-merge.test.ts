@@ -114,7 +114,9 @@ describe('Approve merge', () => {
     });
 
     expect(resumed.id).toBe(start.id);
-    expect(runner.runs[0].sent).toContain(
+    // The handoff ended the Start's process (ADR 0049): the merge resumes it.
+    expect(runner.runs[0].closed).toBe(true);
+    expect(runner.runs[1].options.prompt).toBe(
       `Approved: merge T${ticket.number} now by the Playbook's merge steps, then finish_work.`,
     );
     expect(conversations.get(start.id).state).toBe('running');
@@ -273,7 +275,7 @@ describe('Approve merge', () => {
     void handedOff;
 
     await conversations.approveMerge({ ticketNumber: ticket.number });
-    runner.runs[0].emit({ type: 'turn', costUsd: 5 });
+    runner.runs[1].emit({ type: 'turn', costUsd: 3 });
 
     expect(conversations.get(start.id).costUsd).toBe(5);
     expect(
@@ -298,7 +300,7 @@ describe('Approve merge', () => {
     runner.runs[0].emit({ type: 'turn', costUsd: 2 });
 
     await conversations.reply(start.id, 'Also fix the typo', 'user');
-    runner.runs[0].emit({ type: 'turn', costUsd: 5 });
+    runner.runs[1].emit({ type: 'turn', costUsd: 3 });
 
     expect(
       conversations.autopilotSpend({

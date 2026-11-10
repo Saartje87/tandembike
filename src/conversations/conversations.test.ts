@@ -1536,30 +1536,35 @@ describe('The Start run limit', () => {
     expect(conversations.list({ projectId: project.id })).toHaveLength(1);
   });
 
-  it('does not count a Start that waits idle for a reply', async () => {
+  it('counts a Start that waits idle for a reply (ADR 0049)', async () => {
     const { conversations, runner, project } = setup();
     await startOn(conversations, project.id);
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
 
-    await startOn(conversations, project.id);
+    const error = await failure(startOn(conversations, project.id));
+
+    expect(error).toBeInstanceOf(NotAllowedError);
   });
 
-  it('lets the User reply to an idle Start while the slots are full (T1185)', async () => {
+  it('lets the User reply to an idle Start while the slots are full, in the slot it holds (T1185)', async () => {
     const { conversations, runner, project } = setup();
     const first = await startOn(conversations, project.id);
     runner.runs[0].emit({ type: 'turn', costUsd: 0 });
-    await startOn(conversations, project.id);
+    expect(await failure(startOn(conversations, project.id))).toBeInstanceOf(
+      NotAllowedError,
+    );
 
     await conversations.reply(first.id, 'More', 'user');
 
     expect(conversations.get(first.id).state).toBe('running');
     expect(runner.runs[0].sent).toContain('More');
+    expect(conversations.startRunSlotsInUse(project.id)).toBe(1);
   });
 
-  it('refuses Autopilot’s reply to an idle Start while the slots are full', async () => {
+  it('refuses Autopilot’s reply to an interrupted Start while the slots are full', async () => {
     const { conversations, runner, project } = setup();
     const first = await startOn(conversations, project.id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'exit' });
     await startOn(conversations, project.id);
 
     const error = await failure(
@@ -1567,7 +1572,7 @@ describe('The Start run limit', () => {
     );
 
     expect(error).toBeInstanceOf(NotAllowedError);
-    expect(conversations.get(first.id).state).toBe('idle');
+    expect(conversations.get(first.id).state).toBe('interrupted');
   });
 
   it('counts a Start that waits for a permission', async () => {
@@ -2091,8 +2096,19 @@ describe('Started by', () => {
 });
 
 describe('Autopilot spend', () => {
+  /** Idle Starts keep their slots (ADR 0049): room for every Start here. */
+  const roomy = () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      parallelRuns: true,
+      maxConcurrentRuns: 9,
+    });
+    world.tickets.setMachineSettings({ maxConcurrentRuns: 9 });
+    return world;
+  };
+
   it("sums the cost of the Autopilot-started Conversations of the Cycle they were started for, resumes included, not hand-started ones or other Cycles'", async () => {
-    const { conversations, runner, tickets, project } = setup();
+    const { conversations, runner, tickets, project } = roomy();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
     const other = tickets.createCycle({ projectId: project.id, title: 'B' });
     const ticket = (title: string, cycleId: number) =>
@@ -2141,7 +2157,7 @@ describe('Autopilot spend', () => {
   });
 
   it("counts what Autopilot's replies cost on a hand-started Conversation of the Cycle, for those runs only", async () => {
-    const { conversations, runner, tickets, project } = setup();
+    const { conversations, runner, tickets, project } = roomy();
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
     const other = tickets.createCycle({ projectId: project.id, title: 'B' });
     const ticket = tickets.createTicket({

@@ -3,7 +3,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
+import { createChangeChannel } from '../tickets/changes';
 import { NotAllowedError } from '../tickets/errors';
+import { laneOf } from '../tickets/ticket-lanes';
+import { conversationActivity } from './conversation-activity';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,7 +15,7 @@ const capMessage = (cap: number) =>
   `The machine runs its cap of ${cap} runs; wait for one to finish or raise the cap in Settings.`;
 
 function setup(cap = 2) {
-  const world = createTestConversations();
+  const world = createTestConversations(createChangeChannel());
   const { tickets } = world;
   tickets.setMachineSettings({ maxConcurrentRuns: cap });
   const projects = ['Website', 'Shop'].map((name, index) => {
@@ -86,14 +89,14 @@ describe('The machine cap (ADR 0041)', () => {
     expect(conversations.machineSlotsInUse()).toBe(2);
   });
 
-  it('leaves out an idle run and a Terminal Conversation', async () => {
+  it('counts an idle run, waiting on the User, but not a Terminal Conversation', async () => {
     const { conversations, runner, projects, startIn } = setup(9);
 
     await startIn(projects[0].id, 'start');
     runner.runs[0].emit({ type: 'turn', costUsd: 1 });
     await startIn(projects[1].id, 'start', 'terminal');
 
-    expect(conversations.machineSlotsInUse()).toBe(0);
+    expect(conversations.machineSlotsInUse()).toBe(1);
   });
 
   it('counts a run waiting on a permission', async () => {
@@ -157,26 +160,252 @@ describe('The machine cap (ADR 0041)', () => {
     expect(conversations.machineSlotsInUse()).toBe(1);
   });
 
-  it('never refuses a reply, which may take the machine over its cap', async () => {
-    const { conversations, runner, projects, startIn, tickets } = setup(1);
+  it('never refuses a reply, which keeps the machine at its cap', async () => {
+    const { conversations, runner, projects, startIn } = setup(1);
     await startIn(projects[0].id, 'start');
     const [first] = conversations.list({ projectId: projects[0].id });
     runner.runs[0].emit({ type: 'turn', costUsd: 1 });
-    await startIn(projects[1].id, 'start');
-    expect(conversations.machineSlotsInUse()).toBe(1);
+    // The idle run keeps its slot, so a second Start is refused.
+    await expect(startIn(projects[1].id, 'start')).rejects.toEqual(
+      new NotAllowedError(capMessage(1)),
+    );
 
     await conversations.reply(first.id, 'More', 'user');
 
-    expect(conversations.machineSlotsInUse()).toBe(2);
-    expect(tickets.getMachineSettings().maxConcurrentRuns).toBe(1);
+    expect(conversations.machineSlotsInUse()).toBe(1);
   });
 
   it('frees the slot when the run ends', async () => {
     const { conversations, runner, projects, startIn } = setup();
     await startIn(projects[0].id, 'start');
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'exit' });
 
     expect(conversations.machineSlotsInUse()).toBe(0);
+  });
+});
+
+describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
+  const pullRequest = 'https://github.com/acme/site/pull/12';
+
+  /** A Start of the User's on a fresh Ticket of `projectId`, and its Ticket. */
+  const startOn = async (
+    world: ReturnType<typeof setup>,
+    projectId: number,
+  ) => {
+    const ticket = world.tickets.createTicket({ projectId, title: 'Work' });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+    return {
+      ticket,
+      conversation,
+      run: world.runner.runs[world.runner.runs.length - 1],
+    };
+  };
+
+  /** Puts the Ticket in Review: In progress with a PR and no Claim. */
+  const handOff = (world: ReturnType<typeof setup>, number: number) => {
+    world.tickets.updateTicket(number, { status: 'In progress' });
+    world.tickets.addExternalReferences(number, [pullRequest]);
+  };
+
+  it('keeps the slot of an idle Start, and refuses a Start beyond the cap while it waits', async () => {
+    const world = setup(1);
+    const { run } = await startOn(world, world.projects[0].id);
+
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(world.conversations.machineSlotsInUse()).toBe(1);
+    expect(run.closed).toBe(false);
+    await expect(startOn(world, world.projects[1].id)).rejects.toEqual(
+      new NotAllowedError(capMessage(1)),
+    );
+  });
+
+  it('counts an idle Start against its Project limit', async () => {
+    const world = setup(9);
+    world.tickets.setProjectAgentSettings(world.projects[0].id, {
+      parallelRuns: false,
+    });
+    const { run } = await startOn(world, world.projects[0].id);
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(world.conversations.startRunSlotsInUse(world.projects[0].id)).toBe(
+      1,
+    );
+    await expect(startOn(world, world.projects[0].id)).rejects.toBeInstanceOf(
+      NotAllowedError,
+    );
+  });
+
+  it('accepts the User’s reply into an idle run at the cap without raising the count', async () => {
+    const world = setup(1);
+    const { conversation, run } = await startOn(world, world.projects[0].id);
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    await world.conversations.reply(conversation.id, 'Yes', 'user');
+
+    expect(run.sent).toContain('Yes');
+    expect(world.conversations.machineSlotsInUse()).toBe(1);
+  });
+
+  it('ends the process of a turn that leaves the Ticket in Review, freeing the slot', async () => {
+    const world = setup(1);
+    const { ticket, conversation, run } = await startOn(
+      world,
+      world.projects[0].id,
+    );
+    handOff(world, ticket.number);
+
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(run.closed).toBe(true);
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.get(conversation.id)).toMatchObject({
+      state: 'idle',
+      hidden: false,
+    });
+    const { live } = conversationActivity(world.conversations.activityRows());
+    expect(
+      laneOf(world.tickets.getTicket(ticket.number), live[ticket.number]),
+    ).toEqual({ lane: 'In progress', section: 'Review' });
+    await startOn(world, world.projects[1].id);
+    expect(world.conversations.machineSlotsInUse()).toBe(1);
+  });
+
+  it('ends the process of a turn that leaves the Ticket Done', async () => {
+    const world = setup(1);
+    const { ticket, run } = await startOn(world, world.projects[0].id);
+    world.tickets.completeTicket(ticket.number);
+
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(run.closed).toBe(true);
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
+  });
+
+  it('keeps the slot of a turn that ends with a PR while its Claim is still held', async () => {
+    const world = setup(1);
+    const { ticket, run } = await startOn(world, world.projects[0].id);
+    handOff(world, ticket.number);
+    world.tickets.claimTicket(ticket.number, { agentRunId: 'r1' });
+
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(run.closed).toBe(false);
+    expect(world.conversations.machineSlotsInUse()).toBe(1);
+  });
+
+  it('resumes the stored session on Approve merge and on a reply after a handoff', async () => {
+    const world = setup(9);
+    const { ticket, conversation, run } = await startOn(
+      world,
+      world.projects[0].id,
+    );
+    run.emit({ type: 'session', sessionId: 'sdk-1' });
+    handOff(world, ticket.number);
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    const merged = await world.conversations.approveMerge({
+      ticketNumber: ticket.number,
+    });
+
+    expect(merged.id).toBe(conversation.id);
+    expect(world.runner.runs).toHaveLength(2);
+    expect(world.runner.runs[1].options.resume).toBe('sdk-1');
+    expect(world.conversations.machineSlotsInUse()).toBe(1);
+
+    world.runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+    await world.conversations.reply(conversation.id, 'And?', 'user');
+    expect(world.runner.runs).toHaveLength(3);
+    expect(world.runner.runs[2].options.resume).toBe('sdk-1');
+  });
+
+  it('refuses Approve merge at the cap when the Start it resumes has no process', async () => {
+    const world = setup(1);
+    const { ticket, run } = await startOn(world, world.projects[0].id);
+    handOff(world, ticket.number);
+    run.emit({ type: 'turn', costUsd: 1 });
+    await startOn(world, world.projects[1].id);
+
+    await expect(
+      world.conversations.approveMerge({ ticketNumber: ticket.number }),
+    ).rejects.toEqual(new NotAllowedError(capMessage(1)));
+  });
+
+  it('gives an interrupted Conversation no slot, and resumes it on the User’s reply at the cap', async () => {
+    const world = setup(1);
+    const { conversation } = await startOn(world, world.projects[0].id);
+    const restarted = world.restart();
+    restarted.interruptStale();
+    expect(restarted.get(conversation.id).state).toBe('interrupted');
+    expect(restarted.machineSlotsInUse()).toBe(0);
+    const other = world.tickets.createTicket({
+      projectId: world.projects[1].id,
+      title: 'Other',
+    });
+    await restarted.start({
+      startedBy: 'user',
+      ticketNumber: other.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+
+    await restarted.reply(conversation.id, 'Go on', 'user');
+
+    expect(restarted.get(conversation.id).state).toBe('running');
+  });
+
+  it('frees an idle Start’s slot when the User closes it', async () => {
+    const world = setup(1);
+    const { conversation, run } = await startOn(world, world.projects[0].id);
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    await world.conversations.close(conversation.id);
+
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
+  });
+
+  it('frees an idle Start’s slot when the User stops it', async () => {
+    const world = setup(1);
+    const { conversation, run } = await startOn(world, world.projects[0].id);
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    await world.conversations.stop(conversation.id);
+
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
+  });
+
+  it('frees an idle Start’s slot when its Ticket goes Back to Todo', async () => {
+    const world = setup(1);
+    const { ticket, conversation, run } = await startOn(
+      world,
+      world.projects[0].id,
+    );
+    world.tickets.updateTicket(ticket.number, { status: 'In progress' });
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    world.tickets.backToTodo(ticket.number);
+
+    expect(run.closed).toBe(true);
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
+    expect(world.conversations.get(conversation.id).state).toBe('idle');
+  });
+
+  it('ends the process at the turn’s end when its Ticket goes Back to Todo mid-turn', async () => {
+    const world = setup(1);
+    const { ticket, run } = await startOn(world, world.projects[0].id);
+    world.tickets.updateTicket(ticket.number, { status: 'In progress' });
+    world.tickets.backToTodo(ticket.number);
+    expect(run.closed).toBe(false);
+
+    run.emit({ type: 'turn', costUsd: 1 });
+
+    expect(run.closed).toBe(true);
+    expect(world.conversations.machineSlotsInUse()).toBe(0);
   });
 });

@@ -2,7 +2,6 @@ import type { ConversationState } from '../conversations/conversation-state';
 import {
   type Conversation,
   type Conversations,
-  holdsStartRunSlot,
   startRunLimit,
 } from '../conversations/conversations';
 import { agentCommandMessage } from '../tickets/agent-commands';
@@ -35,7 +34,7 @@ const readyLabel = 'ready-for-agent';
 const transientBackoffMs = 60_000;
 const transientResumeText =
   'The last run ended on a transient error. Continue where you left off.';
-/** Its run is doing something, or waiting on an answer, and holds a slot. */
+/** Its run is doing something, or waiting on an answer: it holds its Ticket. */
 const workingStates: ConversationState[] = ['running', 'waiting'];
 
 /** Running without a reason, else paused with every one of them. */
@@ -222,10 +221,9 @@ export function createAutopilot({
         });
       }
     }
-    // A Merge the User approved holds a run slot like a Start (T1221).
-    const working = conversations
-      .list({ projectId })
-      .filter(holdsStartRunSlot).length;
+    // A Merge the User approved holds a run slot like a Start (T1221), and
+    // an idle one waiting on the User keeps it (ADR 0049).
+    const working = conversations.startRunSlotsInUse(projectId);
     const limit = startRunLimit(settings);
     const slots = Math.max(0, limit - working);
     if (slots === 0) {

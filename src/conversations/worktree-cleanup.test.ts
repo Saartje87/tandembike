@@ -397,7 +397,7 @@ describe('A reply after the worktree is released (T1281)', () => {
     expect(runner.runs[0].closed).toBe(true);
   });
 
-  it('keeps the live run open while the worktree is kept', async () => {
+  it('keeps the worktree, and a reply resumes in it, when the run ends at Done (ADR 0049)', async () => {
     const {
       conversations,
       tickets,
@@ -415,9 +415,13 @@ describe('A reply after the worktree is released (T1281)', () => {
       expect(conversations.get(conversation.id).worktreeKept).toBe('dirty'),
     );
 
-    expect(runner.runs[0].closed).toBe(false);
+    // Its Ticket is Done, so the idle run's process ends and frees its slot.
+    expect(runner.runs[0].closed).toBe(true);
     await conversations.reply(conversation.id, 'Commit it.', 'user');
-    expect(runner.runs[0].sent).toEqual(['Commit it.']);
+    expect(runner.runs[1].options).toMatchObject({
+      cwd: path,
+      prompt: 'Commit it.',
+    });
   });
 
   it('still accepts replies in a Conversation with no worktree, after its Ticket reaches Done', async () => {
@@ -443,7 +447,8 @@ describe('A reply after the worktree is released (T1281)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     await world.conversations.reply(conversation.id, 'Thanks.', 'user');
 
-    expect(world.runner.runs[0].closed).toBe(false);
-    expect(world.runner.runs[0].sent).toEqual(['Thanks.']);
+    // The run ended at Done (ADR 0049); the reply resumes it.
+    expect(world.runner.runs[0].closed).toBe(true);
+    expect(world.runner.runs[1].options.prompt).toBe('Thanks.');
   });
 });

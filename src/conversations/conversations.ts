@@ -263,6 +263,13 @@ type LiveRun = {
   /** Its Ticket reached Done while it was alive: release the worktree when it ends. */
   releaseWhenEnded?: boolean;
   /**
+   * Its Ticket's Status as this run last saw it, to tell a move to Todo or
+   * Done (ADR 0049). Null for a Conversation without a Ticket.
+   */
+  ticketStatus: string | null;
+  /** Its Ticket went Back to Todo or Done mid-turn: end the process when the turn ends. */
+  endWhenTurnEnds?: boolean;
+  /**
    * The message the run is working on, until it ends (a turn, an exit or a
    * stop): what its Run outcome is recorded from. Null between runs.
    */
@@ -287,8 +294,6 @@ type PendingRun = {
    */
   stage?: ConversationIntent;
 };
-
-const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
 const noRepositoryPath = {
   repositoryPath:
@@ -336,15 +341,20 @@ export const sparDisallowedTools = [
   'mcp__tandembike__create_cycle',
 ];
 
+/** The states of a run whose process may be alive. */
+const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
+
 /** A Start and a Merge are the intents that count as Start runs (T1221). */
 const isStartRunIntent = (intent: ConversationIntent) =>
   intent === 'start' || intent === 'merge';
 
 /**
  * Whether a Conversation holds one of its Project's Start run slots: a Start
- * or a Merge whose run is working, running or waiting on a permission. An
- * idle one waits for a reply and holds none (ADR 0019). A Terminal
- * Conversation has no run in the server and holds none (ADR 0039).
+ * or a Merge whose run is live, running, waiting on a permission or idle
+ * waiting for the User's reply (ADR 0049). A Terminal Conversation has no run
+ * in the server and holds none (ADR 0039). The module counts only runs whose
+ * process is alive: an idle one whose process ended after a handoff holds
+ * none, nor does an interrupted one.
  */
 export const holdsStartRunSlot = (conversation: {
   intent: ConversationIntent;
@@ -353,12 +363,12 @@ export const holdsStartRunSlot = (conversation: {
 }): boolean =>
   !isTerminal(conversation) &&
   isStartRunIntent(conversation.intent) &&
-  (conversation.state === 'running' || conversation.state === 'waiting');
+  liveStates.includes(conversation.state);
 
 /**
- * Whether a Conversation holds a machine slot (ADR 0041): a working run, not
- * a Terminal one, of a Start, a Merge or a Triage Autopilot started. The
- * User's own interactive Conversations hold none.
+ * Whether a Conversation holds a machine slot (ADR 0041, ADR 0049): a live
+ * Start or Merge, or a working Triage Autopilot started, not a Terminal one.
+ * The User's own interactive Conversations hold none.
  */
 export const holdsMachineSlot = (conversation: {
   intent: ConversationIntent;
@@ -592,6 +602,53 @@ export function createConversations({
   const waitsOnUser = (handle: LiveRun) =>
     handle.asking.size > 0 || handle.widgets.size > 0;
 
+  /**
+   * Ends the process of a run between turns, freeing its slot (ADR 0049): the
+   * Conversation stays open in its state, and a reply resumes its stored
+   * session. A run mid-turn is left alone.
+   */
+  const endProcess = (id: number) => {
+    const handle = live.get(id);
+    if (!handle?.run || handle.pending) {
+      return;
+    }
+    live.delete(id);
+    expireAsking(handle);
+    expireWidgets(handle);
+    handle.run.close();
+  };
+
+  /**
+   * Whether a Start or Merge has handed its Ticket off as its turn ends, so
+   * nothing waits on its process (ADR 0049): the Ticket is Done, or in Review
+   * with a pull request and no Claim.
+   */
+  const handedOff = (conversation: Conversation): boolean => {
+    if (
+      !isStartRunIntent(conversation.intent) ||
+      conversation.ticketNumber === null
+    ) {
+      return false;
+    }
+    const ticket = tickets.getTicket(conversation.ticketNumber);
+    return (
+      ticket.status === 'Done' || (isInReview(ticket) && ticket.claim === null)
+    );
+  };
+
+  /** The Status of Conversation `id`'s Ticket now, null without one. */
+  const ticketStatusOf = (id: number): string | null => {
+    const number = get(id).ticketNumber;
+    if (number === null) {
+      return null;
+    }
+    try {
+      return tickets.getTicket(number).status;
+    } catch {
+      return null;
+    }
+  };
+
   const askWidget = (
     id: number,
     handle: LiveRun,
@@ -717,6 +774,13 @@ export function createConversations({
           handle.releaseWhenEnded = false;
           void tryRelease(id);
         }
+        // A run that handed off, or whose Ticket went Back to Todo, waits on
+        // nobody: its process ends and frees its slot (ADR 0049).
+        handle.ticketStatus = ticketStatusOf(id);
+        if (handle.endWhenTurnEnds || handedOff(get(id))) {
+          handle.endWhenTurnEnds = false;
+          endProcess(id);
+        }
         break;
       }
       case 'waiting':
@@ -750,8 +814,8 @@ export function createConversations({
 
   /**
    * How many runs hold a machine slot across all Projects (see
-   * `holdsMachineSlot`). `exceptId` is a Conversation about to work, not
-   * counted against itself.
+   * `holdsMachineSlot`): only runs whose process is alive count (ADR 0049).
+   * `exceptId` is a Conversation about to work, not counted against itself.
    */
   const machineSlotsInUse = (exceptId?: number): number => {
     let working = 0;
@@ -761,6 +825,25 @@ export function createConversations({
       }
     }
     return working;
+  };
+
+  /**
+   * How many of the Project's runs whose process is alive hold a Start run
+   * slot (see `holdsStartRunSlot`). `exceptId` is not counted.
+   */
+  const startRunSlotsInUse = (projectId: number, exceptId?: number): number => {
+    let holding = 0;
+    for (const id of live.keys()) {
+      const other = get(id);
+      if (
+        id !== exceptId &&
+        other.projectId === projectId &&
+        holdsStartRunSlot(other)
+      ) {
+        holding += 1;
+      }
+    }
+    return holding;
   };
 
   /**
@@ -781,17 +864,7 @@ export function createConversations({
       return;
     }
     const limit = startRunLimit(settings);
-    let running = 0;
-    for (const id of live.keys()) {
-      const other = get(id);
-      if (
-        id !== exceptId &&
-        other.projectId === projectId &&
-        holdsStartRunSlot(other)
-      ) {
-        running += 1;
-      }
-    }
+    const running = startRunSlotsInUse(projectId, exceptId);
     if (running >= limit) {
       throw new NotAllowedError(
         settings.parallelRuns
@@ -939,6 +1012,7 @@ export function createConversations({
       run: null,
       costBefore: conversation.costUsd,
       model: null,
+      ticketStatus: ticketStatusOf(id),
       pending: {
         startedAt: new Date(),
         costAtStart: conversation.costUsd,
@@ -1567,18 +1641,42 @@ export function createConversations({
     update(id, { worktreeKept: null, worktreeRemoved: true });
     // An idle run would work in a folder that is gone: it ends with its
     // worktree, and the Conversation stays idle (T1281).
-    const handle = live.get(id);
-    if (handle?.run && !handle.pending) {
-      live.delete(id);
-      expireAsking(handle);
-      expireWidgets(handle);
-      handle.run.close();
-    }
+    endProcess(id);
     announce(id);
   };
 
   /** Releases quietly: a failure leaves the worktree for the User's button. */
   const tryRelease = (id: number) => releaseWorktree(id).catch(() => undefined);
+
+  /**
+   * Ends the process of each live Start or Merge on Ticket `number` that has
+   * just moved to Todo (Back to Todo) or Done: nothing waits on it, so it
+   * frees its slot (ADR 0049). One mid-turn ends when its turn does.
+   */
+  const endRunsOfMovedTicket = (number: number, status: string) => {
+    for (const [id, handle] of [...live]) {
+      const conversation = get(id);
+      if (
+        conversation.ticketNumber !== number ||
+        !isStartRunIntent(conversation.intent)
+      ) {
+        continue;
+      }
+      const moved =
+        handle.ticketStatus !== status &&
+        (status === 'Todo' || status === 'Done');
+      handle.ticketStatus = status;
+      if (!moved) {
+        continue;
+      }
+      if (handle.pending) {
+        handle.endWhenTurnEnds = true;
+      } else {
+        endProcess(id);
+        announce(id);
+      }
+    }
+  };
 
   // A Ticket reaching Done, by `finish_work` or the Merged button, frees
   // the worktrees of its Conversations.
@@ -1587,6 +1685,13 @@ export function createConversations({
       return;
     }
     const numbers = change.type === 'ticket' ? [change.number] : change.numbers;
+    for (const number of numbers) {
+      try {
+        endRunsOfMovedTicket(number, tickets.getTicket(number).status);
+      } catch {
+        // A deleted Ticket has no runs to end.
+      }
+    }
     for (const number of numbers) {
       let status: string;
       try {
@@ -1711,13 +1816,22 @@ export function createConversations({
     },
 
     /**
-     * How many working runs hold a machine slot, across all Projects (ADR
-     * 0041, GLOSSARY: Machine slot): Start and Merge runs and Triage runs
-     * Autopilot started. Idle, Terminal and the User's interactive ones do
-     * not count.
+     * How many runs hold a machine slot, across all Projects (ADR 0041, ADR
+     * 0049, GLOSSARY: Machine slot): live Start and Merge runs, idle ones
+     * waiting on the User included, and working Triage runs Autopilot
+     * started. Interrupted, Terminal and the User's interactive ones do not
+     * count, nor a run whose process ended after a handoff.
      */
     machineSlotsInUse(): number {
       return machineSlotsInUse();
+    },
+
+    /**
+     * How many of Project `projectId`'s live Start and Merge runs hold one of
+     * its Start run slots (ADR 0019, ADR 0049), idle ones included.
+     */
+    startRunSlotsInUse(projectId: number): number {
+      return startRunSlotsInUse(projectId);
     },
 
     /**
@@ -2358,6 +2472,16 @@ export function createConversations({
       }
       const startRow = own.find((row) => row.intent === 'start' && !row.hidden);
       if (startRow && isOpenForMergeResume(startRow)) {
+        // A Start whose process ended takes a slot again for the merge, so
+        // the merge is limited as a Merge Conversation is (ADR 0049).
+        if (!live.has(startRow.id)) {
+          checkStartLimit(
+            startRow.projectId,
+            'merge',
+            tickets.getProjectAgentSettings(startRow.projectId),
+            startRow.id,
+          );
+        }
         return this.reply(
           startRow.id,
           `Approved: merge ${label} now by the Playbook's merge steps, then finish_work.`,

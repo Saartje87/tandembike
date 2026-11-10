@@ -7,7 +7,7 @@ import { throwFieldErrors } from './rules';
 
 /** The settings of the whole machine, not of one Project (ADR 0041). */
 export type MachineSettings = {
-  /** The most working runs the factory holds at once, across Projects; at least 1. */
+  /** The most live runs the factory holds at once, across Projects, idle ones waiting on the User included (ADR 0049); at least 1. */
   maxConcurrentRuns: number;
   /**
    * The most USD Autopilot may spend per local day across all Projects, or
