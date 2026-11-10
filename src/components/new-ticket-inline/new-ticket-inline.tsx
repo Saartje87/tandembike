@@ -111,7 +111,7 @@ export const NewTicketInline: FC<NewTicketInlineProps> = ({
           ...(epicNumber === undefined ? {} : { epicNumber }),
           ...(type === 'Epic' ? { type } : {}),
         }),
-      'The Ticket could not be created. Try again.',
+      `The ${type === 'Epic' ? 'Epic' : 'Ticket'} could not be created. Try again.`,
     );
     if (!result.ok) {
       showRefusal(result);
