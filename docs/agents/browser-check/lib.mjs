@@ -78,6 +78,26 @@ export async function openDrawer(page, projectId, number) {
   await page.waitForTimeout(1200);
 }
 
+/** The Conversation dialog, which the app labels "Conversations". */
+export const conversationDialog = (page) =>
+  page.getByRole('dialog', { name: 'Conversations' });
+
+/**
+ * Opens the Conversation dialog on T`number`: opens its drawer, presses Ask
+ * and returns the dialog's locator once it shows. Ask only opens a draft tab
+ * ("Draft · Ask T`number`") and starts no run, unlike Start, Triage and Spec,
+ * which do; nothing starts until the draft's Question is sent.
+ */
+export async function openConversationDialog(page, projectId, number) {
+  await openDrawer(page, projectId, number);
+  await drawerOf(page, number)
+    .getByRole('button', { name: 'Ask', exact: true })
+    .click();
+  const dialog = conversationDialog(page);
+  await dialog.waitFor();
+  return dialog;
+}
+
 /** The accessible names of the buttons inside `locator`, to find what to drive. */
 export const buttonNames = (locator) =>
   locator
