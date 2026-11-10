@@ -16,7 +16,7 @@ import type { AgentRun, AgentRunner, RunOptions } from './agent-runner';
  * Without one, the run says it got the message and keeps running. An
  * answered request leaves it running again.
  */
-export const fakeDirectives = ['permission', 'widget', 'idle', 'exit'] as const;
+const fakeDirectives = ['permission', 'widget', 'idle', 'exit'] as const;
 type FakeDirective = (typeof fakeDirectives)[number];
 
 function directiveOf(text: string): FakeDirective | null {
@@ -97,27 +97,33 @@ export function createScriptedRunner(): AgentRunner {
   };
 }
 
+/** Where scripted worktrees seem to be; nothing is ever made there. */
+const fakeWorktreesRoot = '/fake-worktrees/';
+
 /**
  * Worktrees that run no git, for fake runs: a Conversation gets a path that
  * is never made, so a check needs no repository and leaves the shared
- * worktrees folder alone.
+ * worktrees folder alone. Such a path reads clean until removed, across
+ * server restarts too, so a reply can resume in it.
  */
 export function createScriptedWorktrees(): Worktrees {
-  const states = new Map<string, WorktreeState>();
+  const removed = new Set<string>();
   return {
     async create({ projectId, conversationId }) {
-      const path = `/fake-worktrees/${projectId}/c${conversationId}`;
-      states.set(path, 'clean');
+      const path = `${fakeWorktreesRoot}${projectId}/c${conversationId}`;
+      removed.delete(path);
       return { path, base: 'origin/main' };
     },
-    async state(path) {
-      return states.get(path) ?? 'missing';
+    async state(path): Promise<WorktreeState> {
+      return path.startsWith(fakeWorktreesRoot) && !removed.has(path)
+        ? 'clean'
+        : 'missing';
     },
     async runPrepare() {
       return { exitCode: 0, output: '' };
     },
     async remove(_repositoryPath, path) {
-      states.delete(path);
+      removed.add(path);
     },
     async repositoryOf() {
       return null;

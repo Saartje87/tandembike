@@ -114,4 +114,32 @@ describe('The scripted runner (fake runs on a throwaway server)', () => {
 
     expect(conversations.get(conversation.id).state).toBe('waiting');
   });
+
+  it('ends the run when a reply says fake:exit, and a later reply resumes it', async () => {
+    const { conversations, conversation } = await startRunning();
+
+    await conversations.reply(conversation.id, 'fake:exit', 'user');
+    await settle();
+    expect(conversations.get(conversation.id).state).not.toBe('running');
+
+    await conversations.reply(conversation.id, 'go on', 'user');
+    await settle();
+    expect(conversations.get(conversation.id).state).toBe('running');
+  });
+});
+
+describe('The scripted worktrees', () => {
+  it('keep a made worktree after a restart, as a fresh module, until it is removed', async () => {
+    const made = await createScriptedWorktrees().create({
+      repositoryPath: '/tmp',
+      projectId: 1,
+      conversationId: 7,
+    });
+    const afterRestart = createScriptedWorktrees();
+
+    expect(await afterRestart.state(made.path)).toBe('clean');
+    await afterRestart.remove('/tmp', made.path);
+    expect(await afterRestart.state(made.path)).toBe('missing');
+    expect(await afterRestart.state('/elsewhere/c7')).toBe('missing');
+  });
 });
