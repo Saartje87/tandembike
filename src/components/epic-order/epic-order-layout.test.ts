@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { anEpicChild } from '../../test/fixtures';
 import type { EpicChild, RelatedTicket } from '../../tickets/tickets';
 import {
   layoutEpicOrder,
@@ -12,15 +13,13 @@ function child(
   blockedBy: number[] = [],
   extra: Partial<EpicChild> = {},
 ): EpicChild {
-  return {
+  return anEpicChild({
     number,
     title: `Ticket ${number}`,
-    status: 'Todo',
-    archived: false,
     blockedBy,
     blocked: blockedBy.length > 0,
     ...extra,
-  };
+  });
 }
 
 /** Each node as `T<number>@<row>:<column>`, in the order returned. */

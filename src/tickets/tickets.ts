@@ -462,7 +462,13 @@ export type Ticket = {
 export type EpicChild = Pick<
   Ticket,
   'number' | 'title' | 'status' | 'archived' | 'blockedBy' | 'blocked'
->;
+> & {
+  /**
+   * How many of its acceptance criteria are not checked, so a run can see
+   * what is left before finishing the Epic without reading each child (T1226).
+   */
+  uncheckedCriteria: number;
+};
 
 export type AcceptanceCriterion = {
   id: number;
@@ -4757,6 +4763,11 @@ function withChildren<Row extends { number: number }>(
         title: tickets.title,
         status: tickets.status,
         archived: tickets.archived,
+        uncheckedCriteria: sql<number>`(
+          select count(*) from ${ticketAcceptanceCriteria}
+          where ${ticketAcceptanceCriteria.ticketNumber} = ${tickets.number}
+            and ${ticketAcceptanceCriteria.checked} = 0
+        )`,
       })
       .from(tickets)
       .where(inArray(tickets.epicNumber, [...childrenByNumber.keys()]))

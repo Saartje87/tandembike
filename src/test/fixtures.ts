@@ -3,6 +3,7 @@ import {
   agentStages,
   type ProjectAgentCommands,
 } from '../tickets/agent-commands';
+import type { EpicChild } from '../tickets/tickets';
 
 const createdAt = new Date('2026-03-01T09:00:00Z');
 
@@ -58,5 +59,21 @@ export const agentCommandEntries = (
   overrides: Partial<Record<keyof ProjectAgentCommands, string>> = {},
 ): Record<keyof ProjectAgentCommands, string> => ({
   ...everyStage(''),
+  ...overrides,
+});
+
+/**
+ * A child as its Epic lists it: Todo, unblocked, not archived and with no
+ * unchecked criteria, but for `overrides`. A new field on `EpicChild` gets
+ * its default here, once (T1226).
+ */
+export const anEpicChild = (overrides: Partial<EpicChild> = {}): EpicChild => ({
+  number: 1,
+  title: `Child ${overrides.number ?? 1}`,
+  status: 'Todo',
+  archived: false,
+  blockedBy: [],
+  blocked: false,
+  uncheckedCriteria: 0,
   ...overrides,
 });

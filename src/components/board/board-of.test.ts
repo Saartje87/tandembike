@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { activity, liveConversation } from '../../test/conversation-activity';
+import { anEpicChild } from '../../test/fixtures';
 import type { EpicLink } from '../../tickets/epic-link';
 import type { Ticket } from '../../tickets/tickets';
 import { boardOf } from './board-of';
@@ -408,14 +409,7 @@ describe('boardOf', () => {
       number: number,
       status: Ticket['status'],
       title = `Child ${number}`,
-    ) => ({
-      number,
-      title,
-      status,
-      archived: false,
-      blockedBy: [],
-      blocked: false,
-    });
+    ) => anEpicChild({ number, title, status });
     const epic = (fields: Partial<Ticket> = {}) =>
       ticket({
         number: 50,
@@ -1079,14 +1073,8 @@ describe('boardOf', () => {
       claim: null,
       hasPullRequest: false,
     };
-    const child = (number: number, title: string) => ({
-      number,
-      title,
-      status: 'Todo' as const,
-      archived: false,
-      blockedBy: [],
-      blocked: false,
-    });
+    const child = (number: number, title: string) =>
+      anEpicChild({ number, title });
 
     it('narrows every section to the Tickets that match', () => {
       const view = boardOf(
