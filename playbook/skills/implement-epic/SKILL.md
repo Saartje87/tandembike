@@ -47,8 +47,20 @@ Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, 
 
 Follow the Epic's `merge` from step 1, the Project's Auto-merge setting when you took the Claim; only the User sets it.
 
-- **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work`.
-- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, and the pull request's checks are green. Before merging, read the red-run list, as the `implement` skill's "Merge" says. Then run the "Merge" steps of the `implement` skill on the Epic's pull request, ending with `finish_work` on the Epic, which finishes its unarchived children with it. When a condition does not hold, or the merge cannot be done, call `add_note` on the Epic saying why and hand off as for `approve`, without `finish_work`. Never push to the default branch.
+- **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work` unless the User approves (see "Merge").
+- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, you have read the red-run list (see "Merge"), and the pull request's checks are green. Then merge it by "Merge". When a condition does not hold, call `add_note` on the Epic saying which and why, then hand off as for `approve`, without `finish_work`.
+
+## Merge
+
+Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. First read the red-run list per child in the pull request body. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Epic (`add_note`). The list is self-reported and nothing checks it automatically; it does not block the merge by itself. Then merge the Epic's pull request, from the worktree you are in:
+
+1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: continue, and say so in a note on the Epic.
+2. When the branch is behind the default branch or conflicts, rebase onto it (`git fetch origin`, `git rebase origin/<default>`), resolve conflicts keeping the intent of both sides without losing the Epic's changes, run the Check command when it is cheap, push with `git push --force-with-lease`, and go back to step 1. Rebase and push at most twice.
+3. When the checks are green, merge with the host CLI (`gh pr merge <number> --merge`, unless the repository's instructions name another method). When it refuses, read why and go back to step 1 or 2 once.
+4. Call `finish_work` on the Epic. It finishes its unarchived children with it, and refuses while an acceptance criterion of the Epic or a child is unchecked: pass `override` with the reason only for a criterion you deliberately left unmet and explained.
+5. When you cannot (a check fails, a conflict you cannot resolve with confidence, a refusal after one retry), call `add_note` on the Epic saying what stopped you, with the pull request URL, and do not call `finish_work`. With `merge: "auto"` and your Claim still held, hand off with `open_pr` on the Epic and `handOff: true`, so the Epic waits at the Merge gate.
+
+Never push to the default branch, and never merge with failing checks.
 
 ## 7. Feedback
 

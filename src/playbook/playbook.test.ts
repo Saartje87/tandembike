@@ -174,6 +174,26 @@ describe('The Playbook plugin', () => {
     }
   });
 
+  it('has implement and implement-epic skills that each carry the merge steps an approval reply resumes them with (T1233)', () => {
+    for (const skill of ['implement', 'implement-epic']) {
+      const text = readFileSync(
+        join(playbookPath, 'skills', skill, 'SKILL.md'),
+        'utf8',
+      );
+      const section = /\n## Merge\n([\s\S]*?)\n## /.exec(text)?.[1];
+      expect(section, `${skill} has a "Merge" section`).toBeDefined();
+      expect(section).toContain('Approved: merge T42 now');
+      expect(section).toContain('gh pr checks <number> --watch');
+      expect(section).toContain('git push --force-with-lease');
+      expect(section).toContain('gh pr merge <number> --merge');
+      expect(section).toContain('`finish_work`');
+      expect(text).toMatch(
+        /do not call `finish_work` unless the User approves \(see "Merge"\)/,
+      );
+      expect(text).not.toMatch(/of the `implement` skill/);
+    }
+  });
+
   it('names no MCP tool that was removed', () => {
     const mentions = findRemovedToolMentions(process.cwd(), ['playbook']);
     expect(
