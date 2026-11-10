@@ -78,6 +78,12 @@ Check what changed in the target Project before you publish, since a spec sessio
 - **What to read.** Read each Epic that comes back with `get_ticket`, except the spec's own Epic.
 - **What to do.** If one removes, renames or rebuilds something the spec relies on, stop and tell the User before publishing. Otherwise go ahead.
 
+When the spec removes or moves a UI surface (a page, a panel, a card, a menu, a drawer section), check that its actions survive before you publish. Removing a surface without this check is how the five-Lane Board's Merged and Back to Todo were lost (T1151):
+
+- **List the actions.** Read the surface's code and write down every action it offers: buttons, menu items, links, keyboard shortcuts, drag targets.
+- **Give each a home.** For each action, name where it lives afterwards: another surface that already has it, a build Ticket in this breakdown that adds it, or an explicit decision in the spec's Out of Scope to drop it. Put the list in the spec's Implementation Decisions, and give the Ticket that removes the surface a criterion that each action has its home. An action with none: stop and ask the User.
+- **Re-triage what targets it.** Search with `find_tickets` for open Tickets that change the surface (its name, its component, its actions). Each one that comes back is built for something that will be gone: comment on it naming the spec's Epic and what changes, and swap its triage state label for `needs-triage` with `update_ticket`, so `/triage` reworks it against the new home. Tell the User which you flagged.
+
 When the spec refines an idea Ticket, for example one grilled in `/triage`:
 
 1. Stop triaging it, tell the User, and continue in the same session with `/to-spec`, then `/to-tickets`.

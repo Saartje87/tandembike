@@ -81,6 +81,12 @@ Split the spec into tracer-bullet Tickets.
 - Give each Ticket its Blockers: only the Tickets that genuinely gate it. One with none can start at once.
 - A spec of one Ticket's worth is an Epic with one child.
 
+When the spec removes or moves a UI surface (a page, panel, card, menu or drawer section), check that its actions survive before you show the breakdown. A surface removed without this check once left its actions with nowhere in the app and no Ticket to bring them back:
+
+- **List the actions.** Read the surface's code and list every action the surface offered: buttons, menu items, links, shortcuts, drag targets.
+- **Give each a home.** Name where each goes: another surface that already has it, a Ticket in the breakdown that adds it, or an explicit drop in Out of Scope. Put the list in Implementation Decisions, and give the Ticket that removes the surface a criterion that each action has its home. Ask the User about an action with no home.
+- **Find what targets it.** Search with `find_tickets` for open Tickets that change the surface, and list them with the breakdown: step 7 flags them for re-triage.
+
 Show the User the spec and the breakdown as a numbered list. For each Ticket give its title, what it delivers end to end, its Blockers and its acceptance criteria (one line each, checkable). A Ticket that changes a rule or guidance gets a criterion that every place stating the rule says the same afterwards.
 
 Ask whether the granularity is right, whether each Blocker really gates its Ticket, and whether any Tickets should merge or split. Iterate until the User clearly approves, in words in this Conversation, both the spec and the breakdown. Silence, or approval of only part, is not approval: ask again.
@@ -94,6 +100,8 @@ Then publish, with only the approved breakdown:
 - **An idea Ticket.** Call `file_tickets` once with the spec as an Epic (`type: "Epic"`, the spec as its description, label `ready-for-agent`, `originNumber` the idea's number) and its children (each with `epicPosition`, `ready-for-agent`, the acceptance criteria in `acceptanceCriteria` and Blockers in `blockedByPositions`; leave both out of the description). Then, on the idea Ticket: `add_note` "Refined into Epic T<number>", `update_ticket` to remove its triage state label (`needs-triage`, `needs-info`) and `archived: true`. Keep it out of the Epic.
 - **A childless Epic.** Call `update_ticket` to replace its description with the spec and add `ready-for-agent`, removing any other triage state label in the same call. It keeps its number, labels and Origin. Then `file_tickets` the children with `epicNumber` set to it, as above. Archive nothing.
 
-Report the Epic's number and the children's numbers, with their Blockers, and say that the Epic is ready for an implementation run. Do not start any work on them yourself.
+Then flag each open Ticket step 6 found that targets a removed or moved surface for re-triage: it is built for something that will be gone. `add_note` on it naming the new Epic and what changes, and with `update_ticket` swap its triage state label for `needs-triage`.
+
+Report the Epic's number and the children's numbers, with their Blockers, and the Tickets you flagged for re-triage, and say that the Epic is ready for an implementation run. Do not start any work on them yourself.
 
 If the User asks you to publish before approving a breakdown, or to leave out the `ready-for-agent` label, follow what they say about the label, but never apply the label without approval.

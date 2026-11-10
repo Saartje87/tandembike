@@ -15,6 +15,7 @@ Review the changes on the current branch as a reviewer who did not write them. T
 
 - **The Ticket.** Does the diff do what each acceptance criterion asked, and nothing more? Is a criterion met only on paper?
 - **The repository.** Does it follow the instructions and the code around it: layout, naming, test setup, no barrel files or leftovers the instructions forbid?
+- **Removed surfaces.** When the diff removes or moves a UI surface (a page, panel, card, menu or drawer section), list every action it offered (buttons, menu items, links, shortcuts, drag targets) and find where each one lives now: elsewhere in the diff, elsewhere in the app, or in an open Ticket that adds it (`find_tickets`). Flag as a defect each action with no new home, unless the Ticket says to drop it.
 - **Defects.** Edge cases, error paths, concurrency, leftover debugging, missing tests for new behaviour, files that should not be committed.
 
 Run the repository's Check command when you doubt a claim; do not trust the author's word that it passes.
