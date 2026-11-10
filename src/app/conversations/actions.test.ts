@@ -2,9 +2,12 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appAutopilot } from '../../autopilot/app-autopilot';
+import { createAutopilot } from '../../autopilot/autopilot';
 import { appConversations } from '../../conversations/app-conversations';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { createTestConversations } from '../../test/conversations';
+import { createChangeChannel } from '../../tickets/changes';
 import {
   answerConversationPermission,
   approveMerge,
@@ -15,6 +18,7 @@ import {
   removeConversationWorktree,
   reopenConversation,
   replyToConversation,
+  startBatchTriage,
   startConversation,
   startPlan,
   startRetro,
@@ -25,6 +29,7 @@ import {
 vi.mock('../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
+vi.mock('../../autopilot/app-autopilot', () => ({ appAutopilot: vi.fn() }));
 
 function setup(withRepository = true) {
   const world = createTestConversations();
@@ -35,6 +40,13 @@ function setup(withRepository = true) {
     });
   }
   vi.mocked(appConversations).mockReturnValue(world.conversations);
+  vi.mocked(appAutopilot).mockReturnValue(
+    createAutopilot({
+      tickets: world.tickets,
+      conversations: world.conversations,
+      changes: createChangeChannel(),
+    }),
+  );
   return { ...world, project };
 }
 
@@ -138,6 +150,54 @@ describe('Conversation actions', () => {
     });
     expect(second).toMatchObject({ ok: false });
     expect(runner.runs).toHaveLength(1);
+  });
+
+  it("startBatchTriage starts a Batch triage of the Board's Batch-triage Tickets, then opens the open one (T1318)", async () => {
+    const { project, runner, tickets } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'Beta' });
+    const a = tickets.createTicket({
+      projectId: project.id,
+      title: 'A',
+      cycleId: cycle.id,
+    });
+    tickets.createTicket({ projectId: project.id, title: 'In the Backlog' });
+
+    const started = await startBatchTriage({
+      projectId: project.id,
+      cycleId: cycle.id,
+    });
+    const again = await startBatchTriage({
+      projectId: project.id,
+      cycleId: cycle.id,
+    });
+
+    expect(started).toMatchObject({
+      ok: true,
+      conversation: {
+        intent: 'batch_triage',
+        batchTriageCycleId: cycle.id,
+        batchTriageTickets: [a.number],
+      },
+    });
+    expect(again.ok && started.ok && again.conversation.id).toBe(
+      started.ok && started.conversation.id,
+    );
+    expect(runner.runs).toHaveLength(1);
+  });
+
+  it('startBatchTriage refuses a Board with nothing to triage (T1318)', async () => {
+    const { project, runner } = setup();
+
+    const result = await startBatchTriage({
+      projectId: project.id,
+      cycleId: null,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'This Board has nothing to triage.',
+    });
+    expect(runner.runs).toHaveLength(0);
   });
 
   it('startPlan starts a Plan on the goal, and refuses a blank one (T1248)', async () => {

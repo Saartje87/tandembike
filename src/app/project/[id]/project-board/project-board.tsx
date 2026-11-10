@@ -1,6 +1,7 @@
 import { Inline } from '@blockle/blocks';
 import type { FC } from 'react';
 
+import { BatchTriageButton } from '../../../../components/batch-triage-button/batch-triage-button';
 import { Board } from '../../../../components/board/board';
 import { CycleCompleteBanner } from '../../../../components/cycle-complete-banner/cycle-complete-banner';
 import { CycleHeader } from '../../../../components/cycle-header/cycle-header';
@@ -23,6 +24,7 @@ import {
 import { BoardTicketDrawer } from '../board-ticket-drawer/board-ticket-drawer';
 import {
   autopilotOf,
+  batchTriageOf,
   cycleEstimate,
   cycleTicketsWithEpics,
   runSlotsOf,
@@ -73,6 +75,11 @@ export const ProjectBoard: FC<ProjectBoardProps> = ({
         <Inline gap={2} alignY="start">
           <PlanButton projectId={project.id} />
           <SparButton projectId={project.id} />
+          <BatchTriageButton
+            projectId={project.id}
+            cycleId={null}
+            {...batchTriageOf(project.id, null)}
+          />
         </Inline>
       )}
       <BoardTab
@@ -123,6 +130,16 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     .filter((ticket) => ticket.archived);
   const epics = tickets.listTickets({ projectId: project.id, type: 'Epic' });
   // What every Board gets alike.
+  // Triage N (T1318) needs a repository for its run, as Plan does.
+  const batchTriage =
+    tab !== 'backlog' &&
+    tickets.getProjectAgentSettings(project.id).repositoryPath !== null ? (
+      <BatchTriageButton
+        projectId={project.id}
+        cycleId={tab.id}
+        {...batchTriageOf(project.id, tab.id)}
+      />
+    ) : undefined;
   const shared = {
     projectId: project.id,
     archived,
@@ -153,7 +170,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     // The Active Cycle's Board is one column, by what needs the User.
     return (
       <>
-        <CycleHeader key={tab.id} cycle={tab} />
+        <CycleHeader key={tab.id} cycle={tab} actions={batchTriage} />
         {tickets.isCycleComplete(tab.id) && (
           <CycleCompleteBanner
             key={tab.id}
@@ -179,6 +196,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
         cycle={tab}
         activeCycle={tickets.activeCycle(project.id) ?? undefined}
         estimate={cycleEstimate(project.id, tab.id)}
+        actions={batchTriage}
       />
       <Board
         {...shared}

@@ -1,5 +1,6 @@
 'use server';
 
+import { appAutopilot } from '../../autopilot/app-autopilot';
 import type { PermissionAnswer } from '../../conversations/agent-runner';
 import { appConversations } from '../../conversations/app-conversations';
 import {
@@ -121,6 +122,27 @@ export async function startPlan(input: {
     appConversations().startPlan({
       projectId: Number(input?.projectId),
       goal: String(input?.goal ?? ''),
+    }),
+  );
+}
+
+/**
+ * Starts a Batch triage of a Board, a Cycle's id or null for the Backlog
+ * (T1318): its Batch-triage Tickets, as Autopilot's rule reads them now,
+ * become the Conversation's fixed list. With one open for the Board, returns
+ * it and starts nothing (ADR 0047).
+ */
+export async function startBatchTriage(input: {
+  projectId: number;
+  cycleId: number | null;
+}): Promise<ActionResult<{ conversation: Conversation }>> {
+  const projectId = Number(input?.projectId);
+  const cycleId = input?.cycleId == null ? null : Number(input.cycleId);
+  return conversationResult(() =>
+    appConversations().startBatchTriage({
+      projectId,
+      cycleId,
+      ticketNumbers: appAutopilot().batchTriageTickets(projectId, cycleId),
     }),
   );
 }

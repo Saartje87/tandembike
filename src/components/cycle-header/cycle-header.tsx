@@ -2,7 +2,7 @@
 
 import { Alert, Button, Heading, Inline, Stack, Text } from '@blockle/blocks';
 import { useRouter } from 'next/navigation';
-import { type FC, useState, useTransition } from 'react';
+import { type FC, type ReactNode, useState, useTransition } from 'react';
 
 import {
   archiveCycle,
@@ -38,6 +38,8 @@ export type CycleHeaderProps = {
    * left out when it has none.
    */
   retro?: Conversation | null;
+  /** More buttons beside the Cycle's own, such as Triage N (T1318). */
+  actions?: ReactNode;
 };
 
 type CycleTitleProps = {
@@ -78,6 +80,7 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
   activeCycle,
   estimate,
   retro,
+  actions,
 }) => {
   const router = useRouter();
   const dialog = useConversationDialog();
@@ -158,52 +161,55 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
             )}
           </Text>
         </Inline>
-        {cycle.state === 'Prepared' && (
-          <Inline gap={2} alignY="center">
+        <Inline gap={2} alignY="center">
+          {actions}
+          {cycle.state === 'Prepared' && (
+            <Inline gap={2} alignY="center">
+              <Button
+                type="button"
+                variant="outline"
+                intent="neutral"
+                size="small"
+                disabled={pending}
+                onClick={discard}
+              >
+                Discard Cycle
+              </Button>
+              <Button
+                type="button"
+                size="small"
+                disabled={pending}
+                onClick={start}
+              >
+                Start Cycle
+              </Button>
+            </Inline>
+          )}
+          {cycle.state === 'Active' && (
             <Button
               type="button"
               variant="outline"
               intent="neutral"
               size="small"
               disabled={pending}
-              onClick={discard}
+              onClick={archive}
             >
-              Discard Cycle
+              Archive Cycle
             </Button>
+          )}
+          {cycle.state === 'Archived' && retro && (
             <Button
               type="button"
+              variant="outline"
+              intent="neutral"
               size="small"
               disabled={pending}
-              onClick={start}
+              onClick={() => openRetro(retro)}
             >
-              Start Cycle
+              Open Retro
             </Button>
-          </Inline>
-        )}
-        {cycle.state === 'Active' && (
-          <Button
-            type="button"
-            variant="outline"
-            intent="neutral"
-            size="small"
-            disabled={pending}
-            onClick={archive}
-          >
-            Archive Cycle
-          </Button>
-        )}
-        {cycle.state === 'Archived' && retro && (
-          <Button
-            type="button"
-            variant="outline"
-            intent="neutral"
-            size="small"
-            disabled={pending}
-            onClick={() => openRetro(retro)}
-          >
-            Open Retro
-          </Button>
-        )}
+          )}
+        </Inline>
       </Inline>
       {cycle.state === 'Prepared' && estimate && (
         <Text fontSize="small" color="muted">

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { appAutopilot } from '../../../../../autopilot/app-autopilot';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import type { Conversation } from '../../../../../conversations/conversations';
 import { showOpenPopovers } from '../../../../../test/popover';
@@ -33,18 +34,24 @@ vi.mock('../../../../../conversations/app-conversations', () => ({
 vi.mock('../../../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
 }));
+vi.mock('../../../../../autopilot/app-autopilot', () => ({
+  appAutopilot: vi.fn(() => ({ batchTriageTickets: () => [] })),
+}));
 vi.mock('../../../../../components/cycle-header/cycle-header', () => ({
   CycleHeader: ({
     cycle,
     activeCycle,
+    actions,
   }: {
     cycle: { title: string; state: string };
     activeCycle?: { title: string };
+    actions?: ReactNode;
   }) => (
     <header>
       <h2>{cycle.title}</h2>
       {`Active: ${activeCycle?.title ?? 'none'}`}
       {cycle.state === 'Prepared' && <button type="button">Start Cycle</button>}
+      {actions}
     </header>
   ),
 }));
@@ -87,6 +94,7 @@ const stubConversations = (list: Conversation[], spendUsd = 0) =>
     autopilotSpend: () => spendUsd,
     retroOf: () => null,
     startCostEstimate: () => null,
+    openBatchTriage: () => null,
   } as unknown as ReturnType<typeof appConversations>);
 
 describe('CyclePage', () => {
@@ -94,6 +102,48 @@ describe('CyclePage', () => {
     notFound.mockClear();
     stubConversations([]);
   });
+
+  it.each(['Active', 'Prepared'] as const)(
+    'offers Triage N in the header of a Cycle that is %s, with the count of its Batch-triage Tickets (T1318)',
+    async (state) => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Beta',
+      });
+      if (state === 'Active') {
+        tickets.startCycle(cycle.id);
+      }
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      const batchTriageTickets = vi.fn(() => [1, 2, 3]);
+      vi.mocked(appAutopilot).mockReturnValue({
+        batchTriageTickets,
+      } as unknown as ReturnType<typeof appAutopilot>);
+
+      await renderPage(
+        <main>
+          {
+            await CyclePage({
+              params: Promise.resolve({
+                id: String(project.id),
+                cycleId: String(cycle.id),
+              }),
+              searchParams: noSearch,
+            })
+          }
+        </main>,
+      );
+
+      expect(
+        within(screen.getByRole('banner')).getByRole('button', {
+          name: 'Triage 3',
+        }),
+      ).toBeVisible();
+      expect(batchTriageTickets).toHaveBeenCalledWith(project.id, cycle.id);
+    },
+  );
 
   describe('an Active Cycle', () => {
     it("shows its Tickets in one column, with the Cycle's progress and run slots, instead of the five Lanes", async () => {

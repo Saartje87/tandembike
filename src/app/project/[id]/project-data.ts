@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { connection } from 'next/server';
 
+import { appAutopilot } from '../../../autopilot/app-autopilot';
 import { boardOf } from '../../../components/board/board-of';
 import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
@@ -142,6 +143,18 @@ export function autopilotOf(projectId: number, cycleId: number) {
     autopilot,
     spendCeilingUsd,
     spendUsd: appConversations().autopilotSpend({ projectId, cycleId }),
+  };
+}
+
+/**
+ * What a Board's Triage N button needs (T1318): how many Tickets a Batch
+ * triage of the Board, a Cycle's id or null for the Backlog, would list now,
+ * and the one open for it, if any (ADR 0047).
+ */
+export function batchTriageOf(projectId: number, cycleId: number | null) {
+  return {
+    count: appAutopilot().batchTriageTickets(projectId, cycleId).length,
+    openId: appConversations().openBatchTriage(projectId, cycleId)?.id ?? null,
   };
 }
 
