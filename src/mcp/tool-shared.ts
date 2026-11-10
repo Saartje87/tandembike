@@ -400,10 +400,11 @@ export type StrictInput<Shape extends z.ZodRawShape> = z.ZodObject<
 /**
  * The tools a client loads up front rather than deferring behind a tool
  * search (`_meta["anthropic/alwaysLoad"]`, T623). Without it, Claude Code
- * spent about three ToolSearch calls per Triage run loading these schemas
- * before its first `get_ticket`. Keep the set small: every tool in it costs
- * context in every request, whether the run uses it or not. It holds the
- * tools every stored Triage transcript called; leave the rest deferred.
+ * spent ToolSearch turns loading these schemas: about three per Triage run
+ * before its first `get_ticket`, and two more near the end of each Start run
+ * (T1159). Keep the set small: every tool in it costs context in every
+ * request, whether the run uses it or not. It holds only the tools every
+ * Triage run or every Start run calls; leave the rest deferred.
  */
 export const alwaysLoadedTools = new Set([
   'get_ticket',
@@ -411,6 +412,9 @@ export const alwaysLoadedTools = new Set([
   'propose_triage',
   'update_ticket',
   'start_work',
+  'check_criterion',
+  'open_pr',
+  'finish_work',
 ]);
 
 export const hasProject = ({

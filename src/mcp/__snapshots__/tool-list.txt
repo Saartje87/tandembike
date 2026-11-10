@@ -161,6 +161,9 @@
     },
     "execution": {
       "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   {
@@ -825,6 +828,9 @@
     },
     "execution": {
       "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   {
@@ -1051,6 +1057,9 @@
     },
     "execution": {
       "taskSupport": "forbidden"
+    },
+    "_meta": {
+      "anthropic/alwaysLoad": true
     }
   },
   {
