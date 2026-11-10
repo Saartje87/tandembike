@@ -1259,6 +1259,35 @@
     }
   },
   {
+    "name": "update_cycle",
+    "title": "Update Cycle",
+    "description": "Rename a Prepared Cycle: its title is its goal, which planning may sharpen. Returns the Cycle with its ticketNumbers. Only a Prepared Cycle: renaming an Active or an Archived Cycle stays with the User, as do starting and archiving one, and the refusal names the Cycle's state. To change which Tickets are in it, use update_ticket (cycleId).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cycleId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Prepared Cycle to rename (id from get_project or create_cycle)."
+        },
+        "title": {
+          "type": "string",
+          "description": "The Cycle's goal as its title: one line of at most 200 characters. It is trimmed and may not be empty."
+        }
+      },
+      "required": [
+        "cycleId",
+        "title"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "update_ticket",
     "title": "Update Ticket",
     "description": "Change any subset of a Ticket's title, description, Status, an Epic's color, Project (by projectId or projectName), Origin, labels, External references, acceptance criteria, Epic (epicNumber attaches, null detaches), Blockers (addBlockers, removeBlockers), Cycle (cycleId plans or moves it, null unplans it to the Backlog; withChildren takes an Epic's children along) and archived (true archives, false restores). Fields left out stay as they are. An archived Ticket refuses every change until it is restored, so archived: false restores it first; then the core fields change, then the Epic, Blockers, Cycle and archived: true steps in that order, all or nothing: a refusal leaves that Ticket unchanged. Give number as a list of up to 50 numbers to apply the same change to each: each Ticket's change is as above, the batch is not atomic, and the result is { updated, failed } with the number and error of each Ticket left unchanged, an error when any failed. Use it to swap a triage state label with removeLabels and addLabels together. To finish a Ticket or an Epic, with a PR or without, use finish_work, which applies the whole completion rule and checks the acceptance criteria; setting Done here is for the User's own edits and leaves the labels as they are. Returns the Ticket's summary: number, title, status, labels and blocked, plus blockedBy, epicNumber or archived when the call changes them. detail: \"full\" returns the whole Ticket instead, as get_ticket does.",

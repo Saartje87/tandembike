@@ -149,6 +149,7 @@ describe('MCP server', () => {
       'propose_triage',
       'read_attachment',
       'start_work',
+      'update_cycle',
       'update_ticket',
       'update_write_up',
     ]);
@@ -270,6 +271,9 @@ describe('MCP server', () => {
     expect(instructions).toMatch(/check_criterion/);
     expect(instructions).toMatch(/get_project/);
     expect(instructions).toMatch(/create_cycle/);
+    expect(instructions).toMatch(
+      /create_cycle proposes a Prepared Cycle with Tickets and update_cycle renames one; only the User renames an Active or Archived Cycle/,
+    );
     expect(instructions).toMatch(/find_tickets/);
     expect(instructions).toMatch(/originNumber/);
     await client.close();

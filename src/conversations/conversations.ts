@@ -375,6 +375,7 @@ export const sparDisallowedTools = [
   'mcp__tandembike__attach',
   'mcp__tandembike__propose_triage',
   'mcp__tandembike__create_cycle',
+  'mcp__tandembike__update_cycle',
 ];
 
 /** The states of a run whose process may be alive. */

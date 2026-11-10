@@ -96,6 +96,7 @@ describe('statusLine', () => {
       ['find_tickets', {}, 'Listing Tickets'],
       ['check_criterion', { number: 3 }, 'Checking criteria of T3'],
       ['create_cycle', { title: 'A' }, 'Creating a Cycle'],
+      ['update_cycle', { cycleId: 7, title: 'A' }, 'Renaming a Cycle'],
     ])('maps the Tandembike tool %s %j to "%s"', (name, input, line) => {
       expect(statusLine(tool(`mcp__tandembike__${name}`, input))).toBe(line);
     });
