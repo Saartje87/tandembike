@@ -382,6 +382,38 @@ describe('Conversation actions', () => {
     });
   });
 
+  it('load a Conversation with its Footprint, not measured until a run reports tokens (T1176)', async () => {
+    const { project, runner } = setup();
+    const started = await startConversation({
+      projectId: project.id,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+    if (!started.ok) throw new Error(started.error);
+    const conversationId = started.conversation.id;
+    expect(await loadConversation({ conversationId })).toMatchObject({
+      footprint: { measured: false },
+    });
+
+    runner.runs[0].emit({
+      type: 'turn',
+      costUsd: 0.1,
+      usage: {
+        'claude-opus-5-5': {
+          input: 0,
+          output: 1_000_000,
+          cacheWrite: 0,
+          cacheRead: 0,
+        },
+      },
+    });
+
+    // The ADR 0050 defaults: 1,000 Wh per 1M Opus output tokens, 475 g/kWh.
+    expect(await loadConversation({ conversationId })).toMatchObject({
+      footprint: { measured: true, energyWh: 1000, co2eG: 475 },
+    });
+  });
+
   it('report which Tickets have running or waiting Conversations', async () => {
     const { project, tickets, runner } = setup();
     const running = tickets.createTicket({

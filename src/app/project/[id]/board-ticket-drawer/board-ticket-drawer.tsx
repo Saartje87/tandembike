@@ -9,6 +9,7 @@ import { WhyHere } from '../../../../components/why-here/why-here';
 import { whyHereOf } from '../../../../components/why-here/why-here-of';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { conversationActivity } from '../../../../conversations/conversation-activity';
+import { conversationFootprint } from '../../../../footprint/app-footprint';
 import { appTickets } from '../../../../tickets/app-tickets';
 import { boardCycleOf, type Cycle } from '../../../../tickets/cycles';
 import { epicLinkOf } from '../../../../tickets/epic-link';
@@ -99,6 +100,10 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
   }
   const tickets = appTickets('user');
   const conversations = appConversations();
+  const ticketConversations = [
+    ...conversations.list({ ticketNumber: ticket.number }),
+    ...conversations.openBatchTriagesOf(ticket.number),
+  ].sort((a, b) => b.id - a.id);
   const cycles = tickets.listCycles(ticket.projectId);
   const childBlockers = new Map(
     ticket.children.map((child) => [
@@ -137,10 +142,10 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
         (number) => blockersOf(number).blockedBy,
       )}
       referenceTemplates={tickets.listReferenceTemplates(ticket.projectId)}
-      conversations={[
-        ...conversations.list({ ticketNumber: ticket.number }),
-        ...conversations.openBatchTriagesOf(ticket.number),
-      ].sort((a, b) => b.id - a.id)}
+      conversations={ticketConversations}
+      conversationFootprints={Object.fromEntries(
+        ticketConversations.map(({ id }) => [id, conversationFootprint(id)]),
+      )}
       agentCommands={tickets.getProjectAgentCommands(ticket.projectId)}
       triageProposal={tickets.pendingTriage(ticket.number)}
       why={

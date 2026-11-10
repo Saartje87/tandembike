@@ -11,6 +11,7 @@ import { SparHandOffCard } from '../../../../../components/spar-hand-off-card/sp
 import { SparView } from '../../../../../components/spar-view/spar-view';
 import { SparWriteUp } from '../../../../../components/spar-write-up/spar-write-up';
 import { appConversations } from '../../../../../conversations/app-conversations';
+import { conversationFootprint } from '../../../../../footprint/app-footprint';
 import { appSpars } from '../../../../../spars/app-spars';
 import type { Spar } from '../../../../../spars/spars';
 import { appTickets } from '../../../../../tickets/app-tickets';
@@ -99,6 +100,7 @@ async function sparPage(params: SparPageProps['params']) {
         item={{
           conversation: conversations.get(spar.id),
           transcript: conversations.transcript(spar.id),
+          footprint: conversationFootprint(spar.id),
         }}
         canvas={
           <SparCanvas

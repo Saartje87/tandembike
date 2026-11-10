@@ -292,6 +292,15 @@ describe('TicketDrawer', () => {
           conversationWithId(2, { intent: 'ask', costUsd: 1.234 }),
           conversationWithId(1, { state: 'stopped', hidden: true }),
         ]}
+        conversationFootprints={{
+          2: {
+            measured: true,
+            energyWh: 12,
+            co2eG: 5.7,
+            phoneCharges: 0.63,
+            carKm: 0.023,
+          },
+        }}
       />,
     );
 
@@ -299,8 +308,8 @@ describe('TicketDrawer', () => {
       inDrawer().getByRole('list', { name: 'Conversations' }),
     ).getAllByRole('button');
     expect(rows.map((row) => row.textContent)).toEqual([
-      'Ask · waiting for you · $1.23',
-      'Start · closed · $0.00',
+      'Ask · waiting for you · $1.23 · ~12 Wh · ~5.7 g CO₂e est.',
+      'Start · closed · $0.00 · Footprint not measured',
     ]);
     expect(
       inDrawer().queryByRole('textbox', { name: 'Reply' }),

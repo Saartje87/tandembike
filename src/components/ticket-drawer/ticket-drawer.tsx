@@ -36,6 +36,7 @@ import {
   updateTicket,
 } from '../../app/tickets/actions';
 import type { Conversation } from '../../conversations/conversations';
+import type { Footprint } from '../../footprint/footprint';
 import type { ActivityEntry } from '../../tickets/activity';
 import {
   noAgentCommands,
@@ -130,6 +131,8 @@ export type TicketDrawerProps = {
   referenceTemplates?: ReferenceTemplateLink[];
   /** The Ticket's Conversations with Agents, newest first. Defaults to none. */
   conversations?: Conversation[];
+  /** Their estimated Footprints by Conversation id (ADR 0050). Defaults to none: not measured. */
+  conversationFootprints?: Record<number, Footprint>;
   /**
    * The commands of the Ticket's Project that Triage and Start send.
    * Defaults to none, which sends the Playbook's commands.
@@ -259,6 +262,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   outsideBlockers,
   referenceTemplates,
   conversations = [],
+  conversationFootprints,
   agentCommands = noAgentCommands,
   triageProposal = null,
   board,
@@ -696,7 +700,12 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         focusTicketNumber={ticket.number}
         label="Spar about this"
       />
-      <TicketConversationList conversations={conversations} />
+      <TicketConversationList
+        conversations={conversations}
+        {...(conversationFootprints
+          ? { footprints: conversationFootprints }
+          : {})}
+      />
       <TicketComments
         ticketNumber={ticket.number}
         comments={comments}

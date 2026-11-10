@@ -8,6 +8,7 @@ import { callAction } from '../../app/lib/call-action';
 import { formatCost } from '../../app/lib/format-cost';
 import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
+import type { Footprint } from '../../footprint/footprint';
 import {
   hasRun,
   intentNames,
@@ -15,21 +16,25 @@ import {
   stateNames,
 } from '../conversation-labels/conversation-labels';
 import { ConversationWorktree } from '../conversation-worktree/conversation-worktree';
+import { FootprintText } from '../footprint-text/footprint-text';
 
 export type ConversationChatHeaderProps = {
   conversation: Conversation;
+  /** Its estimated Footprint, shown after the cost (ADR 0050). */
+  footprint: Footprint;
   /** What the Conversation is about: its Ticket, or its Project. */
   title: string;
 };
 
 /**
  * The chat's header, one row: its Ticket or Project, then intent, state, cost
- * and starter in muted text, both cut short with an ellipsis, and Continue in
+ * and starter in muted text, then the Footprint, both cut short with an ellipsis, and Continue in
  * terminal and Stop at the end (a Terminal Conversation has no Stop). The
  * worktree, the Copied status and a refusal show below it, when present.
  */
 export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
   conversation,
+  footprint,
   title,
 }) => {
   const [pending, startStop] = useTransition();
@@ -70,6 +75,7 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
               `by ${starterNames[conversation.startedBy]}`,
             ].join(', ')}
           </Text>
+          <FootprintText footprint={footprint} />
         </Inline>
         {canContinue && (
           <Button
