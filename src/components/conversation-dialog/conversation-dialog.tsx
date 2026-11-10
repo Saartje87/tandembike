@@ -4,6 +4,7 @@ import { Alert, Button, Dialog, Heading, Inline } from '@blockle/blocks';
 import { type FC, useEffect, useId, useState } from 'react';
 
 import { loadConversation } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type {
   Conversation,
   OpenConversation,
@@ -78,26 +79,27 @@ const ConversationPanel: FC<ConversationPanelProps> = ({ open, kept }) => {
   useEffect(() => {
     let current = true;
     const before = kept.loaded;
-    loadConversation({ conversationId })
-      .then((result) => {
-        // Kept even when the tab was switched away meanwhile, unless a later
-        // load has kept a newer one.
-        if (result.ok && (current || kept.loaded === before)) {
-          kept.loaded = result;
-        }
-        if (!current) {
-          return;
-        }
-        if (result.ok) {
-          setItem(result);
-          setError(undefined);
-        } else {
-          setError(result.error);
-        }
-      })
-      .catch(() => {
-        // Keep what was shown; the next change loads it again.
-      });
+    // A throw becomes a refusal: shown while nothing is, else the last load
+    // stays and the next change loads it again (T1324).
+    callAction(
+      () => loadConversation({ conversationId }),
+      'The Conversation could not be loaded. Try again.',
+    ).then((result) => {
+      // Kept even when the tab was switched away meanwhile, unless a later
+      // load has kept a newer one.
+      if (result.ok && (current || kept.loaded === before)) {
+        kept.loaded = result;
+      }
+      if (!current) {
+        return;
+      }
+      if (result.ok) {
+        setItem(result);
+        setError(undefined);
+      } else {
+        setError(result.error);
+      }
+    });
     return () => {
       current = false;
     };

@@ -12,6 +12,7 @@ import {
 import { type FC, useId, useState, useTransition } from 'react';
 
 import { removeConversationWorktree } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import type { Conversation } from '../../conversations/conversations';
 
 export type ConversationWorktreeProps = {
@@ -53,9 +54,10 @@ export const ConversationWorktree: FC<ConversationWorktreeProps> = ({
   const confirm = () => {
     setError(undefined);
     startRemove(async () => {
-      const result = await removeConversationWorktree({
-        conversationId: conversation.id,
-      });
+      const result = await callAction(
+        () => removeConversationWorktree({ conversationId: conversation.id }),
+        'The worktree could not be removed. Try again.',
+      );
       if (result.ok) {
         close();
       } else {

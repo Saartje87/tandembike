@@ -19,6 +19,7 @@ import {
   listOpenConversations,
   reopenConversation,
 } from '../../app/conversations/actions';
+import { callAction } from '../../app/lib/call-action';
 import {
   conversationOnPath,
   openConversationId,
@@ -235,9 +236,10 @@ export const ConversationDialogProvider: FC<
         return undefined;
       }
       if (conversation.hidden) {
-        const result = await reopenConversation({
-          conversationId: conversation.id,
-        });
+        const result = await callAction(
+          () => reopenConversation({ conversationId: conversation.id }),
+          'The Conversation could not be reopened. Try again.',
+        );
         if (!result.ok) {
           return result.error;
         }
@@ -291,7 +293,10 @@ export const ConversationDialogProvider: FC<
 
   const close = async (id: number) => {
     setError(undefined);
-    const result = await closeConversation({ conversationId: id });
+    const result = await callAction(
+      () => closeConversation({ conversationId: id }),
+      'The Conversation could not be closed. Try again.',
+    );
     if (!result.ok) {
       setError(result.error);
       return;

@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { closeConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
@@ -75,6 +75,28 @@ describe('ConversationTerminalNotice', () => {
 
     expect(
       await screen.findByText('The Conversation is already closed.'),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled();
+    });
+  });
+
+  it('shows a Close that throws as a refusal (T1324)', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    onTestFinished(() => log.mockRestore());
+    vi.mocked(closeConversation).mockRejectedValue(new Error('network down'));
+    renderWithTheme(
+      <ConversationTerminalNotice
+        conversation={conversation({ state: 'stopped' })}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(
+      await screen.findByText(
+        'The Conversation could not be closed. Try again.',
+      ),
     ).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled();

@@ -16,6 +16,7 @@ import {
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { callAction } from '../../app/lib/call-action';
 import { modeColors } from '../../app/lib/mode-colors';
 import { handOffSpar } from '../../app/spars/actions';
 import type { HandOffDraft, HandOffPath } from '../../spars/spar-moves';
@@ -63,7 +64,10 @@ export const SparHandOffCard: FC<SparHandOffCardProps> = ({
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
-    const result = await handOffSpar({ sparId, ...values });
+    const result = await callAction(
+      () => handOffSpar({ sparId, ...values }),
+      'The Hand-off could not be saved. Try again.',
+    );
     if (!result.ok) {
       const field = (['title', 'description', 'path'] as const).find(
         (name) => result.fieldErrors?.[name],
