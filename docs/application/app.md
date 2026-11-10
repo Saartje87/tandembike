@@ -10,7 +10,7 @@ A Project holds the Tickets of one repository. Its tabs are the **Backlog**, its
 
 ## Tickets and the Board
 
-A Ticket has a Status: Todo, In progress or Done. An **Epic** groups child Tickets of the same Project and is built as one unit, in one run on one branch. A Ticket can be blocked by other Tickets until they are Done or archived.
+A Ticket has a Status: Todo, In progress or Done. An **Epic** groups child Tickets of the same Project and is built as one unit, in one run on one branch. A Ticket can be blocked by other Tickets until they are Done or archived, or, for an Epic's child, until a sibling blocking it is In progress while the Epic is claimed.
 
 The Board shows a Backlog's or a Cycle's Tickets in sections:
 

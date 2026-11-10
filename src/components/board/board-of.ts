@@ -93,8 +93,8 @@ type EpicChildren = Required<
 export type TodoRow = BoardTicket & {
   blocked: boolean;
   /**
-   * Its Blockers this Board does not show as Done or archived, by number:
-   * those still open here, and those on another Board.
+   * Its Blockers the Blocker rule leaves unresolved, by number: those still
+   * open here, and those on another Board.
    */
   blockers: number[];
 };
