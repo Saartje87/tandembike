@@ -24,7 +24,7 @@ Create one branch off the repository's default branch, named after the Epic: `t<
 Repeat until every child is Done, taking `nextChild` each time:
 
 1. Call `start_work` on the child. A child under your own Epic Claim moves to In progress.
-2. Build it test-first in small vertical slices: one test through the public interface, watch it fail for the right reason, write the least code to pass, repeat; refactor only while green. Mock only at system boundaries and follow the repository's test conventions. Pure styling, copy or documentation needs no test.
+2. Build it test-first in small vertical slices: one test through the public interface, watch it fail for the right reason, write the least code to pass, repeat; refactor only while green. Mock only at system boundaries and follow the repository's test conventions. Pure styling, copy or documentation needs no test. Keep the red-run list as you go: each behaviour test's name and the failing line of its red run, or written after when it came after the code, leaving off tests that cover only styling or copy. When a subagent builds a child, ask for the same list in its report.
 3. Run the Check command from the `start_work` bundle (or the repository's own test and lint commands) and fix everything until it passes.
 4. Verify each acceptance criterion of the child against the running code or its tests, and call `check_criterion` for each as you verify it. A criterion you leave unmet needs an `add_note` saying why.
 5. Commit on the shared branch. Commit messages name the child (`T43`).
@@ -39,7 +39,7 @@ When all children are built and the Check command passes, call the `review` skil
 
 ## 5. Push and open one pull request
 
-When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open one pull request for the Epic. The body says what changed per child (`T43`, `T44`), how you checked it, and which Epic it is for. When there is none, push the branch if a remote exists and say so in a note on the Epic with `add_note`.
+When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open one pull request for the Epic. The body says what changed per child (`T43`, `T44`), how you checked it, the red-run list per child, and which Epic it is for. When there is none, push the branch if a remote exists and say so in a note on the Epic with `add_note`.
 
 Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, to record the reference.
 
@@ -48,11 +48,11 @@ Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, 
 Follow the Epic's `merge` from step 1, the Project's Auto-merge setting when you took the Claim; only the User sets it.
 
 - **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work` unless the User approves (see "Merge").
-- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, and the pull request's checks are green. Then merge it by "Merge". When a condition does not hold, call `add_note` on the Epic saying which and why, then hand off as for `approve`, without `finish_work`.
+- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, you have read the red-run list (see "Merge"), and the pull request's checks are green. Then merge it by "Merge". When a condition does not hold, call `add_note` on the Epic saying which and why, then hand off as for `approve`, without `finish_work`.
 
 ## Merge
 
-Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. Merge the Epic's pull request, from the worktree you are in:
+Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. First read the red-run list per child in the pull request body. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Epic (`add_note`). The list is self-reported and nothing checks it automatically; it does not block the merge by itself. Then merge the Epic's pull request, from the worktree you are in:
 
 1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: continue, and say so in a note on the Epic.
 2. When the branch is behind the default branch or conflicts, rebase onto it (`git fetch origin`, `git rebase origin/<default>`), resolve conflicts keeping the intent of both sides without losing the Epic's changes, run the Check command when it is cheap, push with `git push --force-with-lease`, and go back to step 1. Rebase and push at most twice.
