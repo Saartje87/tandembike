@@ -146,6 +146,15 @@ vi.mocked(useConversationDialog).mockReturnValue(
   dialog as unknown as ReturnType<typeof useConversationDialog>,
 );
 
+/** A section's buttons, but for each row's button that copies its number. */
+const actionsIn = (element: HTMLElement) =>
+  within(element)
+    .queryAllByRole('button')
+    .filter(
+      (button) =>
+        !button.getAttribute('aria-label')?.startsWith('Copy Ticket number'),
+    );
+
 describe('Cockpit', () => {
   afterEach(() => {
     dialog.open.mockReset();
@@ -533,8 +542,8 @@ describe('Cockpit', () => {
       within(section('Queued')).queryByRole('link', { name: 'Spec' }),
     ).toBeNull();
     const [spec, handMade] = within(intake).getAllByRole('listitem');
-    await userEvent.click(within(spec).getByText('T52'));
-    await userEvent.click(within(handMade).getByText('T53'));
+    await userEvent.click(spec.querySelector('summary') as HTMLElement);
+    await userEvent.click(handMade.querySelector('summary') as HTMLElement);
 
     expect(
       within(spec).getByText(
@@ -805,7 +814,7 @@ describe('Cockpit', () => {
       within(review).getByRole('link', { name: 'Cockpit' }),
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=50');
     expect(within(review).getByRole('link', { name: 'PR #130' })).toBeVisible();
-    expect(within(review).queryAllByRole('button')).toEqual([]);
+    expect(actionsIn(review)).toEqual([]);
     // Listed once: In flight holds Running work only.
     expect(screen.getAllByRole('link', { name: 'Cockpit' })).toHaveLength(1);
     expect(screen.getByText(emptyText.inFlight)).toBeVisible();
@@ -863,7 +872,7 @@ describe('Cockpit', () => {
     renderCockpit();
 
     const needsYou = section('Needs you');
-    expect(within(needsYou).queryAllByRole('button')).toEqual([]);
+    expect(actionsIn(needsYou)).toEqual([]);
     expect(
       within(needsYou).getByRole('link', { name: 'Merge button' }),
     ).toHaveAttribute('href', '/project/3/cycle/9?ticket=8');
@@ -1305,6 +1314,47 @@ describe('Cockpit', () => {
 
       await user.click(within(bar()).getByRole('button', { name: 'Clear' }));
       expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+
+    it("copies a row's number on a plain click, without opening the drawer", async () => {
+      const user = userEvent.setup();
+      const router = mockRouter();
+      vi.mocked(useRouter).mockReturnValue(router);
+      renderSelectable();
+      const { href } = window.location;
+
+      const copyButton = screen.getByRole('button', {
+        name: 'Copy Ticket number T31',
+      });
+      await user.click(copyButton);
+
+      expect(await navigator.clipboard.readText()).toBe('T31');
+      const row = copyButton.closest('li') as HTMLElement;
+      expect(within(row).getByRole('status')).toHaveTextContent('Copied T31');
+      expect(window.location.href).toBe(href);
+      expect(router.push).not.toHaveBeenCalled();
+      expect(screen.queryByRole('toolbar')).toBeNull();
+    });
+
+    it('selects a row by a Cmd-click or Shift-click on its number, without copying', async () => {
+      const user = userEvent.setup();
+      renderSelectable();
+      const writeText = vi.spyOn(navigator.clipboard, 'writeText');
+
+      await user.keyboard('{Meta>}');
+      await user.click(
+        screen.getByRole('button', { name: 'Copy Ticket number T30' }),
+      );
+      await user.keyboard('{/Meta}');
+      expect(box(30, 'First queued')).toBeChecked();
+
+      await user.keyboard('{Shift>}');
+      await user.click(
+        screen.getByRole('button', { name: 'Copy Ticket number T32' }),
+      );
+      await user.keyboard('{/Shift}');
+      expect(bar()).toHaveTextContent('3 selected');
+      expect(writeText).not.toHaveBeenCalled();
     });
 
     it('moves the selection to a Cycle and clears it', async () => {
