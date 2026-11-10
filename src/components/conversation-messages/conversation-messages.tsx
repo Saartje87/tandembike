@@ -36,8 +36,8 @@ function chatItems(transcript: TranscriptEntry[]): ChatItem[] {
 
 /**
  * The scrolling message list of the chat, centred in its reading column while
- * the scroller spans the chat. Consecutive tool calls show as one group. It scrolls to the newest message when one
- * arrives.
+ * the scroller spans the chat. Consecutive tool calls show as one group
+ * (T1386). It scrolls to the newest message when one arrives.
  */
 export const ConversationMessages: FC<ConversationMessagesProps> = ({
   transcript,
