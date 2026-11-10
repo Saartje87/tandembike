@@ -13,9 +13,7 @@ import { loadProject, type ProjectPageProps } from '../project-data';
  */
 const RetiredCockpitAddress: FC<ProjectPageProps> = async ({ params }) => {
   const project = await loadProject(params);
-  const active = appTickets('user')
-    .listCycles(project.id)
-    .find(({ state }) => state === 'Active');
+  const active = appTickets('user').activeCycle(project.id);
   redirect(active ? cyclePath(project.id, active.id) : projectPath(project.id));
 };
 

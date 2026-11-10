@@ -203,9 +203,7 @@ export function createAutopilot({
     if (!settings.autopilot) {
       reasons.push({ type: 'switchedOff' });
     }
-    const cycle = tickets
-      .listCycles(projectId)
-      .find((candidate) => candidate.state === 'Active');
+    const cycle = tickets.activeCycle(projectId);
     if (!cycle) {
       reasons.push({ type: 'noActiveCycle' });
     }

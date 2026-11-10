@@ -784,6 +784,20 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     },
 
     /**
+     * Project `projectId`'s Active Cycle, of which it has at most one, or
+     * `null` when none is.
+     */
+    activeCycle(projectId: number): Cycle | null {
+      checkProjectExists(db, projectId);
+      const rows = db
+        .select(cycleColumns)
+        .from(cycles)
+        .where(and(eq(cycles.projectId, projectId), eq(cycles.state, 'Active')))
+        .all();
+      return withTicketNumbers(db, rows)[0] ?? null;
+    },
+
+    /**
      * Counts the open Tickets, not Done and not archived, of Project
      * `projectId`'s Backlog and of each of its Prepared and Active Cycles.
      */

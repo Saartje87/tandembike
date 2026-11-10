@@ -173,7 +173,7 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
       <CycleHeader
         key={tab.id}
         cycle={tab}
-        activeCycle={cycles.find(({ state }) => state === 'Active')}
+        activeCycle={tickets.activeCycle(project.id) ?? undefined}
         estimate={cycleEstimate(project.id, tab.id)}
       />
       <Cockpit
