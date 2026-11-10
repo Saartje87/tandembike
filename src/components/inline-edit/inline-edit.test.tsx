@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, fireEvent, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { describe, expect, it, onTestFinished, vi } from 'vitest';

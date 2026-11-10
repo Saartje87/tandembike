@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act, screen } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import type { FC } from 'react';

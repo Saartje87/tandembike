@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { revalidatePath } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

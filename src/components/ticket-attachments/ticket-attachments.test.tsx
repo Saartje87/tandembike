@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Dialog, Drawer } from '@blockle/blocks';
 import {
   createEvent,

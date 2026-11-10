@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Text } from '@blockle/blocks';
 import { describe, expect, it } from 'vitest';
 

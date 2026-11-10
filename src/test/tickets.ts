@@ -6,7 +6,6 @@ import { createTickets } from '../tickets/tickets';
 /**
  * A Tickets module backed by a fresh in-memory database with the real
  * migrations applied. Call it in each test; nothing is shared between calls.
- * Test files that use it need `// @vitest-environment node` on line 1.
  * It acts as the User unless `actor` says otherwise.
  */
 export function createTestTickets(

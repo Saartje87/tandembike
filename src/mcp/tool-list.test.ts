@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { expect, it } from 'vitest';
 
 import { connectMcpClient } from '../test/mcp';
