@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { detectRepository } from './detect-repository';

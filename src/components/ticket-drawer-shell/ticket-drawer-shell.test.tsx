@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { Dialog } from '@blockle/blocks';
 import { act, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';

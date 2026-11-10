@@ -6,7 +6,8 @@ export default defineConfig({
   plugins: [react(), vanillaExtractPlugin()],
   resolve: { tsconfigPaths: true },
   test: {
-    environment: 'jsdom',
+    // Test files that need a DOM start with `// @vitest-environment jsdom`.
+    environment: 'node',
     // The shell may export these for the installed app. Emptied, the app's
     // `||` fallbacks use this checkout's migrations and Playbook (T1266).
     env: { TANDEMBIKE_PACKAGE_DIR: '', TANDEMBIKE_DATA_DIR: '' },

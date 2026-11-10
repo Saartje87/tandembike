@@ -8,7 +8,6 @@ import type { Tickets } from '../tickets/tickets';
  * A real MCP SDK client connected in-process to the MCP request handler
  * (no running server), backed by `tickets` and, for get_conversations,
  * `conversations`. Close it at the end of the test.
- * Test files that use it need `// @vitest-environment node` on line 1.
  */
 export async function connectMcpClient(
   tickets: Tickets,

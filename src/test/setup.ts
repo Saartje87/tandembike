@@ -2,7 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
-// Node-environment test files (`// @vitest-environment node`) have no DOM.
+// Test files run in node, with no DOM, unless they start with
+// `// @vitest-environment jsdom`.
 if (typeof window !== 'undefined') {
   afterEach(cleanup);
 

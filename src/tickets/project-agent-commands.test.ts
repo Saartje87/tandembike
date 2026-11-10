@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { describe, expect, it } from 'vitest';
 
 import { agentCommandEntries, agentCommands } from '../test/fixtures';

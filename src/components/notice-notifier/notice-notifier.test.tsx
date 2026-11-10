@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { act } from '@testing-library/react';
 import { useRouter } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

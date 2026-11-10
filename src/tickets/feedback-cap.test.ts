@@ -1,4 +1,3 @@
-// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 
 import { createTestTickets, errorFrom as rawErrorFrom } from '../test/tickets';

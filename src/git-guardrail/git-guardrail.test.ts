@@ -1,5 +1,3 @@
-// @vitest-environment node
-
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { checkCommand, gitBranch, hookDecision } from './git-guardrail';
