@@ -545,9 +545,15 @@ describe('TicketDrawer', () => {
         name: 'Merge T4 with unchecked criteria?',
       });
       expect(within(dialog).getByText('T4: Menu opens')).toBeInTheDocument();
-      await userEvent.click(
-        within(dialog).getByRole('button', { name: 'Merged anyway' }),
-      );
+      const anyway = within(dialog).getByRole('button', {
+        name: 'Merged anyway',
+      });
+      // The dialog can open while the first click is still pending, with
+      // the button disabled: a click then does nothing.
+      await waitFor(() => {
+        expect(anyway).toBeEnabled();
+      });
+      await userEvent.click(anyway);
 
       expect(completeTicket).toHaveBeenLastCalledWith({
         number: 4,
@@ -658,9 +664,15 @@ describe('TicketDrawer', () => {
       const dialog = await screen.findByRole('dialog', {
         name: 'Finish T4 with unchecked criteria?',
       });
-      await userEvent.click(
-        within(dialog).getByRole('button', { name: 'Done anyway' }),
-      );
+      const anyway = within(dialog).getByRole('button', {
+        name: 'Done anyway',
+      });
+      // The dialog can open while the first click is still pending, with
+      // the button disabled: a click then does nothing.
+      await waitFor(() => {
+        expect(anyway).toBeEnabled();
+      });
+      await userEvent.click(anyway);
 
       expect(completeTicket).toHaveBeenLastCalledWith({
         number: 4,
