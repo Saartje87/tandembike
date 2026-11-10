@@ -6,6 +6,7 @@ import { boardOf } from '../../../components/board/board-of';
 import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
 import { startRunLimit } from '../../../conversations/conversations';
+import { cycleFootprint } from '../../../footprint/app-footprint';
 import { appTickets } from '../../../tickets/app-tickets';
 import { cycleUnitCount } from '../../../tickets/cycle-units';
 import { NotFoundError } from '../../../tickets/errors';
@@ -131,8 +132,9 @@ export function runSlotsOf(projectId: number) {
 }
 
 /**
- * The Project's Autopilot switch and Spend ceiling, and what Autopilot has
- * spent on Cycle `cycleId`, for the Active Cycle's Board header.
+ * The Project's Autopilot switch and Spend ceiling, what Autopilot has spent
+ * on Cycle `cycleId` and the whole Cycle's Footprint, for the Active Cycle's
+ * Board header, which the live Board refresh keeps current.
  */
 export function autopilotOf(projectId: number, cycleId: number) {
   const { autopilot, spendCeilingUsd } =
@@ -141,6 +143,7 @@ export function autopilotOf(projectId: number, cycleId: number) {
     autopilot,
     spendCeilingUsd,
     spendUsd: appConversations().autopilotSpend({ projectId, cycleId }),
+    cycleFootprint: cycleFootprint(projectId, cycleId),
   };
 }
 

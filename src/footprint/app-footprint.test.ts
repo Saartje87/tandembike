@@ -7,7 +7,11 @@ import { appSettings } from '../settings/app-settings';
 import { createTestConversations } from '../test/conversations';
 import { createTestSettings } from '../test/settings';
 import { appTickets } from '../tickets/app-tickets';
-import { conversationFootprint, projectFootprints } from './app-footprint';
+import {
+  conversationFootprint,
+  cycleFootprint,
+  projectFootprints,
+} from './app-footprint';
 
 vi.mock('../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
@@ -108,5 +112,65 @@ describe('conversationFootprint (T1178)', () => {
       energyWh: 40,
       co2eG: 4,
     });
+  });
+});
+
+describe('cycleFootprint (T1348)', () => {
+  it('is null for a Cycle without Conversations', () => {
+    const { tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+
+    expect(cycleFootprint(project.id, cycle.id)).toBeNull();
+  });
+
+  it('is not measured when its Conversations recorded no tokens', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix',
+      cycleId: cycle.id,
+    });
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go',
+    });
+
+    expect(cycleFootprint(project.id, cycle.id)).toEqual({ measured: false });
+  });
+
+  it('counts hand-started and Autopilot Conversations alike, as the Stats per-Cycle figure does', async () => {
+    const { conversations, tickets, runner, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
+    for (const [startedBy, output] of [
+      ['user', 1_000_000],
+      ['autopilot', 2_000_000],
+    ] as const) {
+      const ticket = tickets.createTicket({
+        projectId: project.id,
+        title: startedBy,
+        cycleId: cycle.id,
+      });
+      await conversations.start({
+        startedBy,
+        ticketNumber: ticket.number,
+        intent: 'start',
+        prompt: 'Go',
+        ...(startedBy === 'autopilot' ? { cycleId: cycle.id } : {}),
+      });
+      runner.runs[runner.runs.length - 1].emit({
+        type: 'turn',
+        costUsd: 0.1,
+        usage: opusOutput(output),
+      });
+    }
+
+    const footprint = cycleFootprint(project.id, cycle.id);
+    expect(footprint).toMatchObject({ measured: true, energyWh: 3000 });
+    expect(footprint).toEqual(
+      projectFootprints(project.id)?.cycles[0].footprint,
+    );
   });
 });

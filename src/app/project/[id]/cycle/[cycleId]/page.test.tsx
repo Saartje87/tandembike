@@ -7,6 +7,8 @@ import { appAutopilot } from '../../../../../autopilot/app-autopilot';
 import { appConversations } from '../../../../../conversations/app-conversations';
 import type { Conversation } from '../../../../../conversations/conversations';
 import { holdsStartRunSlot } from '../../../../../conversations/conversations';
+import { cycleFootprint } from '../../../../../footprint/app-footprint';
+import { aFootprint } from '../../../../../test/fixtures';
 import { showOpenPopovers } from '../../../../../test/popover';
 import {
   renderPage,
@@ -34,6 +36,9 @@ vi.mock('../../../../../conversations/app-conversations', () => ({
 }));
 vi.mock('../../../../conversations/actions', () => ({
   currentConversationActivity: vi.fn(() => new Promise(() => {})),
+}));
+vi.mock('../../../../../footprint/app-footprint', () => ({
+  cycleFootprint: vi.fn(() => null),
 }));
 vi.mock('../../../../../autopilot/app-autopilot', () => ({
   appAutopilot: vi.fn(() => ({ batchTriageTickets: () => [] })),
@@ -265,6 +270,31 @@ describe('CyclePage', () => {
       expect(screen.getByRole('switch', { name: 'Autopilot' })).toBeChecked();
       expect(screen.getByText('$5.50 of $5.00')).toBeVisible();
       expect(screen.getByText('paused: over ceiling ($5.50)')).toBeVisible();
+    });
+
+    it("shows the whole Cycle's Footprint after the spend in its header (T1348)", async () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const cycle = tickets.createCycle({
+        projectId: project.id,
+        title: 'Factory Board',
+      });
+      tickets.startCycle(cycle.id);
+      vi.mocked(appTickets).mockReturnValue(tickets);
+      vi.mocked(cycleFootprint).mockReturnValueOnce(
+        aFootprint({ energyWh: 1200, co2eG: 570 }),
+      );
+      const params = Promise.resolve({
+        id: String(project.id),
+        cycleId: String(cycle.id),
+      });
+
+      await renderPage(
+        <main>{await CyclePage({ params, searchParams: noSearch })}</main>,
+      );
+
+      expect(cycleFootprint).toHaveBeenCalledWith(project.id, cycle.id);
+      expect(screen.getByText('~1.2 kWh · ~570 g CO₂e est.')).toBeVisible();
     });
 
     it("shows only its own Intake in Needs you, none of the Backlog's", async () => {

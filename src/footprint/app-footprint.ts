@@ -51,3 +51,16 @@ export function projectFootprints(projectId: number) {
     }));
   return { total: totalOf(total), cycles };
 }
+
+/**
+ * Cycle `cycleId`'s whole Footprint, for the Autopilot bar: every
+ * Conversation counting towards it by the Stats per-Cycle rule, hand-started
+ * ones included; null when it has none (ADR 0050). Information only.
+ */
+export function cycleFootprint(
+  projectId: number,
+  cycleId: number,
+): Footprint | null {
+  const total = appConversations().usageTotal({ projectId, cycleId });
+  return total.conversations === 0 ? null : totalOf(total).footprint;
+}
