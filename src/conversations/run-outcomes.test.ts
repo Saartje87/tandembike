@@ -128,7 +128,7 @@ describe('Run outcomes', () => {
       );
     });
 
-    it('is abandoned for a Start whose Ticket is Todo, needs_reply for a Triage', async () => {
+    it('is abandoned for a Start whose Ticket is Todo, completed for a Triage that ends cleanly', async () => {
       const { conversations, runner, startOnTicket } = setup();
       const start = await startOnTicket('start');
       const triage = await startOnTicket('triage');
@@ -138,6 +138,27 @@ describe('Run outcomes', () => {
         'abandoned',
       );
       expect(conversations.latestRunOutcome(triage.id)?.result).toBe(
+        'completed',
+      );
+    });
+
+    it('is needs_reply for a Triage that ends waiting on a permission', async () => {
+      const { conversations, runner, startOnTicket } = setup();
+      const turnEnd = await startOnTicket('triage');
+      const exitEnd = await startOnTicket('triage');
+      for (const run of runner.runs) {
+        void run.options.askPermission({
+          toolName: 'Bash',
+          input: { command: 'ls' },
+          rules: [],
+        });
+      }
+      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[1].emit({ type: 'exit' });
+      expect(conversations.latestRunOutcome(turnEnd.id)?.result).toBe(
+        'needs_reply',
+      );
+      expect(conversations.latestRunOutcome(exitEnd.id)?.result).toBe(
         'needs_reply',
       );
     });
@@ -187,7 +208,7 @@ describe('Run outcomes', () => {
       );
     });
 
-    it('uses only the error and stopped rules for a Conversation without a Ticket', async () => {
+    it('is completed for an Ask without a Ticket that ends cleanly', async () => {
       const { conversations, runner, project } = setup();
       const ask = await conversations.start({
         startedBy: 'user',
@@ -199,7 +220,7 @@ describe('Run outcomes', () => {
       expect(conversations.latestRunOutcome(ask.id)).toMatchObject({
         ticketNumber: null,
         stage: 'ask',
-        result: 'needs_reply',
+        result: 'completed',
       });
     });
 

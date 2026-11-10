@@ -50,6 +50,7 @@ describe('runResultOf', () => {
     error: undefined,
     ticketStatus: null,
     hasPullRequest: false,
+    waitingOnUser: false,
     intent: 'start',
   } as const;
 
@@ -99,14 +100,66 @@ describe('runResultOf', () => {
 
   it('does not call a Todo Ticket abandoned for other intents', () => {
     expect(
-      runResultOf({ ...base, intent: 'triage', ticketStatus: 'Todo' }),
+      runResultOf({
+        ...base,
+        intent: 'triage',
+        ticketStatus: 'Todo',
+        waitingOnUser: true,
+      }),
     ).toBe('needs_reply');
   });
 
-  it('uses only the error and stopped rules without a Ticket', () => {
+  it('uses only the error and stopped rules for a Start without a Ticket', () => {
     expect(runResultOf({ ...base })).toBe('needs_reply');
     expect(runResultOf({ ...base, error: 'socket hang up' })).toBe(
       'failed_transient',
     );
+  });
+
+  describe.each([
+    'triage',
+    'spec',
+    'plan',
+    'retro',
+    'ask',
+    'new_ticket',
+    'setup',
+  ] as const)('a %s run, which never ends in Done or a PR', (intent) => {
+    it('is completed when it ends cleanly, with or without a Ticket', () => {
+      expect(runResultOf({ ...base, intent })).toBe('completed');
+      expect(runResultOf({ ...base, intent, ticketStatus: 'Todo' })).toBe(
+        'completed',
+      );
+      expect(
+        runResultOf({ ...base, intent, ticketStatus: 'In progress' }),
+      ).toBe('completed');
+    });
+
+    it('is needs_reply when it ends waiting on the User', () => {
+      expect(runResultOf({ ...base, intent, waitingOnUser: true })).toBe(
+        'needs_reply',
+      );
+    });
+
+    it('still puts stopped and an error first', () => {
+      expect(runResultOf({ ...base, intent, stopped: true })).toBe('stopped');
+      expect(runResultOf({ ...base, intent, error: 'error_max_turns' })).toBe(
+        'failed',
+      );
+    });
+  });
+
+  it.each(['start', 'merge'] as const)(
+    'leaves a clean %s end that is not Done, PR or Todo at needs_reply',
+    (intent) => {
+      expect(
+        runResultOf({ ...base, intent, ticketStatus: 'In progress' }),
+      ).toBe('needs_reply');
+      expect(runResultOf({ ...base, intent })).toBe('needs_reply');
+    },
+  );
+
+  it("leaves a Spar, the User's own thinking turn by turn, at needs_reply", () => {
+    expect(runResultOf({ ...base, intent: 'spar' })).toBe('needs_reply');
   });
 });

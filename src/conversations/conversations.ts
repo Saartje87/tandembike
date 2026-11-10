@@ -447,6 +447,8 @@ export function createConversations({
       stopped?: boolean;
       error?: string;
       errorSubtype?: string;
+      /** The run still waits on a permission or a Widget as it ends. */
+      waitingOnUser?: boolean;
       cost: number;
     },
   ) => {
@@ -469,6 +471,7 @@ export function createConversations({
         ticket !== null &&
         (ticket.externalReferences.some(isPullRequestReference) ||
           ticket.epic?.hasPullRequest === true),
+      waitingOnUser: end.waitingOnUser ?? false,
       intent: conversation.intent,
     });
     return db
@@ -680,7 +683,9 @@ export function createConversations({
           `Created ${event.numbers.map((number) => `T${number}`).join(', ')}`,
         );
         break;
-      case 'turn':
+      case 'turn': {
+        const waitingOnUser =
+          waitsOnUser(handle) || get(id).state === 'waiting';
         if (event.error) {
           append(id, 'error', event.error);
         }
@@ -691,6 +696,7 @@ export function createConversations({
         recordOutcome(id, handle, {
           error: event.error,
           errorSubtype: event.errorSubtype,
+          waitingOnUser,
           cost: handle.costBefore + event.costUsd,
         });
         // The run stays alive for replies, but no longer works in the
@@ -700,10 +706,13 @@ export function createConversations({
           void tryRelease(id);
         }
         break;
+      }
       case 'waiting':
         update(id, { state: event.waiting ? 'waiting' : 'running' });
         break;
       case 'exit': {
+        const waitingOnUser =
+          waitsOnUser(handle) || get(id).state === 'waiting';
         live.delete(id);
         expireAsking(handle);
         expireWidgets(handle);
@@ -715,6 +724,7 @@ export function createConversations({
         update(id, { state: 'interrupted' });
         recordOutcome(id, handle, {
           error: event.error,
+          waitingOnUser,
           cost: get(id).costUsd,
         });
         if (handle.releaseWhenEnded) {

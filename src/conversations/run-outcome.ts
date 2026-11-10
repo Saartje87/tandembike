@@ -60,8 +60,25 @@ export type RunEnd = {
   ticketStatus: Status | null;
   /** The Ticket, or its Epic, has a PR reference. */
   hasPullRequest: boolean;
+  /** The run ended with a permission request or a Widget still unanswered. */
+  waitingOnUser: boolean;
   intent: ConversationIntent;
 };
+
+/**
+ * Stages whose work never ends in Done or a PR: a clean end of one, not
+ * waiting on the User, is its completion. A Start and a Merge end in Done or
+ * a PR; a Spar answers the User turn by turn.
+ */
+const completesOnCleanEnd: ReadonlySet<ConversationIntent> = new Set([
+  'triage',
+  'spec',
+  'plan',
+  'retro',
+  'ask',
+  'new_ticket',
+  'setup',
+]);
 
 /** The result of a run end, first match wins (GLOSSARY: Run outcome). */
 export function runResultOf(end: RunEnd): RunResult {
@@ -81,6 +98,9 @@ export function runResultOf(end: RunEnd): RunResult {
   }
   if (end.intent === 'start' && end.ticketStatus === 'Todo') {
     return 'abandoned';
+  }
+  if (completesOnCleanEnd.has(end.intent) && !end.waitingOnUser) {
+    return 'completed';
   }
   return 'needs_reply';
 }
