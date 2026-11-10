@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { startRetro } from '../../app/conversations/actions';
 import { archiveCycle } from '../../app/cycles/actions';
 import type { Conversation } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -22,27 +23,16 @@ const cycle = { id: 7, projectId: 3, title: 'Launch the beta' };
 
 const retroConversation = (
   overrides: Partial<Conversation> = {},
-): Conversation => ({
-  id: 21,
-  projectId: 3,
-  ticketNumber: null,
-  intent: 'retro',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: 7,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+): Conversation =>
+  aConversation({
+    id: 21,
+    projectId: 3,
+    intent: 'retro',
+    retroCycleId: 7,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
 
 const control = () => ({
   conversations: [],

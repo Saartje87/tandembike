@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
+import { agentCommandEntries } from '../test/fixtures';
 import { NotAllowedError } from '../tickets/errors';
 
 const pullRequest = 'https://github.com/acme/site/pull/12';
@@ -92,16 +93,10 @@ describe('Approve merge', () => {
 
   it('sends the Project’s merge command when it set one', async () => {
     const { conversations, runner, tickets, project, inReview } = setup();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '/ship',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({ mergeCommand: '/ship' }),
+    );
     const ticket = inReview();
 
     await conversations.approveMerge({ ticketNumber: ticket.number });

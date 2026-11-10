@@ -3,6 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
+import { agentCommandEntries } from '../test/fixtures';
 import { NotAllowedError, ValidationError } from '../tickets/errors';
 
 function setup() {
@@ -50,16 +51,10 @@ describe('A Plan Conversation (T1248)', () => {
 
   it("sends the Project's own Plan command when it set one", async () => {
     const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: 'my:plan',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({ planCommand: 'my:plan' }),
+    );
 
     await conversations.startPlan({ projectId: project.id, goal: 'Ship it' });
 

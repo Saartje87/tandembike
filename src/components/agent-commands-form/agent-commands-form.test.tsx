@@ -3,6 +3,7 @@ import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { setProjectAgentCommands } from '../../app/projects/actions';
+import { agentCommandEntries, agentCommands } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { AgentCommandsForm } from './agent-commands-form';
 
@@ -10,16 +11,10 @@ vi.mock('../../app/projects/actions', () => ({
   setProjectAgentCommands: vi.fn(),
 }));
 
-const commands = {
+const commands = agentCommands({
   triageCommand: '/mattpocock-skills:triage',
   startCommand: '/mattpocock-skills:implement',
-  startEpicCommand: null,
-  retroCommand: null,
-  specCommand: null,
-  mergeCommand: null,
-  planCommand: null,
-  sparCommand: null,
-};
+});
 
 describe('AgentCommandsForm', () => {
   beforeEach(() => {
@@ -70,16 +65,14 @@ describe('AgentCommandsForm', () => {
     const user = userEvent.setup();
     vi.mocked(setProjectAgentCommands).mockResolvedValue({
       ok: true,
-      commands: {
+      commands: agentCommands({
         triageCommand: '/triage',
         startCommand: '/mattpocock-skills:implement',
         startEpicCommand: '/implement-spec',
         retroCommand: '/retro',
         specCommand: '/spec',
         mergeCommand: '/merge',
-        planCommand: '',
-        sparCommand: '',
-      },
+      }),
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
     const triage = screen.getByRole('textbox', { name: 'Triage command' });
@@ -105,14 +98,13 @@ describe('AgentCommandsForm', () => {
 
     expect(setProjectAgentCommands).toHaveBeenCalledWith({
       projectId: 3,
-      triageCommand: 'triage',
-      startCommand: '/mattpocock-skills:implement',
-      startEpicCommand: 'implement-spec',
-      retroCommand: 'retro',
-      specCommand: 'my:spec',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
+      ...agentCommandEntries({
+        triageCommand: 'triage',
+        startCommand: '/mattpocock-skills:implement',
+        startEpicCommand: 'implement-spec',
+        retroCommand: 'retro',
+        specCommand: 'my:spec',
+      }),
     });
     expect(triage).toHaveValue('/triage');
     expect(startEpic).toHaveValue('/implement-spec');

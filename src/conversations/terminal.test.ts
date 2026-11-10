@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createAutopilot } from '../autopilot/autopilot';
 import { createTestConversations } from '../test/conversations';
+import { agentCommandEntries } from '../test/fixtures';
 import { createChangeChannel } from '../tickets/changes';
 import { NotAllowedError } from '../tickets/errors';
 import { holdsStartRunSlot } from './conversations';
@@ -79,16 +80,10 @@ describe('Starting a Terminal Conversation (T1237)', () => {
 
   it('sends the Start command for Epics on an Epic and the Project’s own command when set', async () => {
     const { conversations, tickets, project } = setup();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '/my:epic',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({ startEpicCommand: '/my:epic' }),
+    );
     const epic = tickets.createTicket({
       projectId: project.id,
       title: 'Big',

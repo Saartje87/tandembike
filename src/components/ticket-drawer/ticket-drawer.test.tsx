@@ -25,6 +25,7 @@ import {
 } from '../../app/tickets/actions';
 import type { Conversation } from '../../conversations/conversations';
 import { liveConversation } from '../../test/conversation-activity';
+import { aConversation } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { EpicLink } from '../../tickets/epic-link';
@@ -188,30 +189,17 @@ const dialog = {
 
 const at = new Date('2026-03-03T09:00:00Z');
 
-const aConversation = (
+const conversationWithId = (
   id: number,
   values: Partial<Conversation> = {},
-): Conversation => ({
-  id,
-  projectId: 1,
-  ticketNumber: 4,
-  intent: 'start',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: at,
-  updatedAt: at,
-  ...values,
-});
+): Conversation =>
+  aConversation({
+    id,
+    ticketNumber: 4,
+    createdAt: at,
+    updatedAt: at,
+    ...values,
+  });
 
 describe('TicketDrawer', () => {
   let router: ReturnType<typeof mockRouter>;
@@ -301,8 +289,8 @@ describe('TicketDrawer', () => {
       <InShell
         ticket={ticket}
         conversations={[
-          aConversation(2, { intent: 'ask', costUsd: 1.234 }),
-          aConversation(1, { state: 'stopped', hidden: true }),
+          conversationWithId(2, { intent: 'ask', costUsd: 1.234 }),
+          conversationWithId(1, { state: 'stopped', hidden: true }),
         ]}
       />,
     );
@@ -334,7 +322,7 @@ describe('TicketDrawer', () => {
   it('opens the dialog on the new Conversation when Start, Triage or Ask begins one', async () => {
     vi.mocked(startConversation).mockResolvedValue({
       ok: true,
-      conversation: aConversation(12),
+      conversation: conversationWithId(12),
     });
     renderDrawer(ticket);
 
@@ -396,8 +384,8 @@ describe('TicketDrawer', () => {
           claim: { agentRunId: '7', agentName: 'Claude' },
         }}
         conversations={[
-          aConversation(8),
-          aConversation(7, { state: 'stopped', hidden: true }),
+          conversationWithId(8),
+          conversationWithId(7, { state: 'stopped', hidden: true }),
         ]}
       />,
     );

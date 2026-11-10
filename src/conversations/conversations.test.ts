@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { playbookPath } from '../playbook/playbook';
 import { createTestConversations } from '../test/conversations';
+import { agentCommandEntries } from '../test/fixtures';
 import { errorFrom } from '../test/tickets';
 import { createChangeChannel } from '../tickets/changes';
 import {
@@ -2242,16 +2243,7 @@ describe('A Spec Conversation (T1222)', () => {
 describe('A Retro Conversation', () => {
   it('records its Cycle and the User, and sends the Playbook Retro command when the Retro command is blank', async () => {
     const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '',
-      retroCommand: '',
-      specCommand: '',
-      mergeCommand: '',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(project.id, agentCommandEntries());
     const cycle = tickets.createCycle({
       projectId: project.id,
       title: 'Launch the beta',
@@ -2282,16 +2274,14 @@ describe('A Retro Conversation', () => {
 
   it('sends the Retro command with the Cycle’s title and id when it is set', async () => {
     const { conversations, runner, tickets, project } = setup();
-    tickets.setProjectAgentCommands(project.id, {
-      triageCommand: '',
-      startCommand: '',
-      startEpicCommand: '',
-      retroCommand: 'retro',
-      specCommand: '/spec',
-      mergeCommand: 'merge',
-      planCommand: '',
-      sparCommand: '',
-    });
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({
+        retroCommand: 'retro',
+        specCommand: '/spec',
+        mergeCommand: 'merge',
+      }),
+    );
     const cycle = tickets.createCycle({
       projectId: project.id,
       title: 'Launch the beta',
