@@ -32,7 +32,7 @@ When a conflict is not one you can resolve with confidence, or the checks fail a
 
 ## 5. Merge
 
-Read the red-run list in the pull request body first: each behaviour test's name and the failing line of its red run. A new behaviour test missing from it, or listed as written after the code: say which in your note. Nothing checks the list automatically, and it does not block the merge by itself.
+Read the red-run list in the pull request body first: each behaviour test's name and the failing line of its red run. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Ticket (`add_note`). Nothing checks the list automatically, and it does not block the merge by itself.
 
 Merge with the repository's host CLI (`gh pr merge <number> --merge` for GitHub, unless the repository's instructions name another merge method). When it refuses, read why and go back to step 3 or 4 once; otherwise go to "When you cannot merge".
 
