@@ -73,6 +73,52 @@ describe('The Playbook plugin', () => {
     expect(frontmatter).not.toHaveProperty('disable-model-invocation');
   });
 
+  it('has a spec skill that asks its rounds with choice cards and its recommendation preselected (T1303)', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/spec/SKILL.md'),
+      'utf8',
+    );
+    expect(text).toContain('`ask_choice`');
+    expect(text).toContain('`recommended`');
+    expect(text).toMatch(/Ask in text only an open question/);
+  });
+
+  it('has a spar skill that opens with the mode Widget and covers the Canvas, the Write-up, the buttons and the Hand-off (T1309)', () => {
+    const text = readFileSync(
+      join(playbookPath, 'skills/spar/SKILL.md'),
+      'utf8',
+    );
+    for (const phrase of [
+      'Generate options',
+      'Pressure-test an idea',
+      'Decide between options',
+      'Untangle a problem',
+      'Challenge me',
+      'Diverge',
+      'Converge',
+      'Summarise',
+      'Your move',
+      'We agree',
+      'Canvas changes since your last turn',
+    ]) {
+      expect(text).toContain(phrase);
+    }
+    for (const tool of [
+      'ask_choice',
+      'ask_rank',
+      'ask_matrix',
+      'ask_scale',
+      'get_canvas',
+      'edit_canvas',
+      'update_write_up',
+      'propose_hand_off',
+    ]) {
+      expect(text).toContain(`\`${tool}\``);
+    }
+    expect(text).toContain('read-only');
+    expect(text).not.toMatch(/file_tickets|update_ticket|add_note/);
+  });
+
   it('has a plan skill that proposes a Prepared Cycle and never starts one (T1248)', () => {
     const text = readFileSync(
       join(playbookPath, 'skills/plan/SKILL.md'),
@@ -83,7 +129,7 @@ describe('The Playbook plugin', () => {
     }
     expect(text).toContain('ready-for-agent');
     expect(text).toContain('Blockers come first');
-    expect(text).toContain('AskUserQuestion');
+    expect(text).toContain('ask_choice');
     expect(text).toMatch(/never start a Cycle/);
     expect(text).not.toContain('propose_cycle');
   });

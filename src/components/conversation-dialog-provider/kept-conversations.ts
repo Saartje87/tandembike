@@ -4,11 +4,6 @@ import { createContext, use } from 'react';
 
 import type { ConversationWithTranscript } from '../conversation-labels/conversation-labels';
 
-/** What a pending question form holds: per question, its choice, choices and Other text. */
-export type QuestionAnswers = {
-  answers: { choice: string; choices: string[]; other: string }[];
-};
-
 /**
  * What the Conversation dialog keeps of one open Conversation while its tab
  * is not shown, since only the shown tab is mounted (T1100). Its parts read
@@ -18,8 +13,8 @@ export type QuestionAnswers = {
 export type KeptConversation = {
   /** The text typed in the reply input and not sent. */
   reply: string;
-  /** Unsent answers to pending question forms, by transcript entry id. */
-  answers: Map<number, QuestionAnswers>;
+  /** Unsent drafts of pending Widget forms, by transcript entry id. */
+  widgets: Map<number, unknown>;
   /** The Conversation as last loaded, shown at once when its tab is shown again. */
   loaded: ConversationWithTranscript | undefined;
 };
@@ -39,7 +34,7 @@ export const createKeptConversations = (): KeptConversations => {
     of: (conversationId) => {
       let entry = kept.get(conversationId);
       if (!entry) {
-        entry = { reply: '', answers: new Map(), loaded: undefined };
+        entry = { reply: '', widgets: new Map(), loaded: undefined };
         kept.set(conversationId, entry);
       }
       return entry;

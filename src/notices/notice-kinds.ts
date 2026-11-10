@@ -4,6 +4,7 @@ import {
   conversationOnPath,
   projectPath,
   settingsPath,
+  sparPath,
   ticketOnBoardPath,
 } from '../app/lib/paths';
 import { conversationActivity } from '../conversations/conversation-activity';
@@ -37,11 +38,14 @@ const subject = (open: OpenConversation): string =>
     ? open.projectName
     : `T${open.conversation.ticketNumber}`;
 
+/** Where a Notice opens its Conversation: in the dialog, or a Spar's own page. */
 const conversationPath = (open: OpenConversation): string =>
-  conversationOnPath(
-    projectPath(open.conversation.projectId),
-    open.conversation.id,
-  );
+  open.conversation.intent === 'spar'
+    ? sparPath(open.conversation.projectId, open.conversation.id)
+    : conversationOnPath(
+        projectPath(open.conversation.projectId),
+        open.conversation.id,
+      );
 
 /** `body` after the Ticket's title, when it has one. */
 const bodyOf = (open: OpenConversation, detail?: string): string =>
@@ -49,7 +53,7 @@ const bodyOf = (open: OpenConversation, detail?: string): string =>
 
 const firstLine = (text: string): string => text.split('\n')[0].slice(0, 200);
 
-/** A run waiting on a permission request or a question, keyed by that entry. */
+/** A run waiting on a permission request, a question or a Widget, keyed by that entry. */
 const waiting: NoticeDetector = ({ conversations }) =>
   conversations
     .listOpen()
@@ -65,7 +69,10 @@ const waiting: NoticeDetector = ({ conversations }) =>
             entry.permission === 'pending' ||
             (entry.question !== null &&
               entry.question.answers === null &&
-              !entry.question.expired),
+              !entry.question.expired) ||
+            (entry.widget !== null &&
+              entry.widget.answer === null &&
+              !entry.widget.expired),
         );
       if (!pending) {
         return [];

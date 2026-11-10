@@ -24,6 +24,7 @@ export const intentNames: Record<ConversationIntent, string> = {
   merge: 'Merge',
   spec: 'Spec',
   plan: 'Plan',
+  spar: 'Spar',
 };
 
 /** Who started a Conversation, as the header says it. */
@@ -42,6 +43,7 @@ export const roleNames: Record<TranscriptRole, string> = {
   error: 'Error',
   permission: 'Permission',
   question: 'Question',
+  widget: 'Agent',
   created: 'Created',
   session: 'Session',
 };

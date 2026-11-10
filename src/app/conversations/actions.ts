@@ -161,20 +161,20 @@ export async function answerConversationPermission(input: {
   );
 }
 
-/** Answers an Agent's question a run is waiting on, by question text. */
-export async function answerConversationQuestion(input: {
+/**
+ * Answers a Widget a run is waiting on (ADR 0045): its own kind of answer,
+ * `{ other }` or `{ skipped: true }`, which the Conversations module checks.
+ */
+export async function answerConversationWidget(input: {
+  conversationId: number;
   entryId: number;
-  answers: Record<string, string>;
+  answer: unknown;
 }): Promise<ActionResult<{ conversation: Conversation }>> {
   return conversationResult(() =>
-    appConversations().answerQuestion(
+    appConversations().answerWidget(
+      Number(input?.conversationId),
       Number(input?.entryId),
-      Object.fromEntries(
-        Object.entries(input?.answers ?? {}).map(([question, answer]) => [
-          question,
-          String(answer),
-        ]),
-      ),
+      input?.answer,
     ),
   );
 }

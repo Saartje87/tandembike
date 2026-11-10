@@ -11,6 +11,8 @@ export type Change =
   | { type: 'ticket'; number: number }
   | { type: 'tickets'; numbers: number[] }
   | { type: 'conversation'; id: number }
+  /** A Spar's Canvas, Write-up or state changed; its id is its Conversation's. */
+  | { type: 'spar'; id: number }
   /** The machine settings changed (ADR 0041). */
   | { type: 'machine' }
   /** A Notice the Notices module raised (ADR 0042); only the browser reads it. */

@@ -1,4 +1,5 @@
 import type { PermissionAnswer } from './conversation-state';
+import type { Widget, WidgetAnswer } from './widget';
 
 /**
  * The seam between Conversations and the Agent that does the work (ADR 0019).
@@ -57,20 +58,7 @@ export type PermissionRequest = {
  * `allow-always` also saves the request's `rules`, so the run need not ask
  * again. It is only a valid answer to a request that has rules.
  */
-export type { PermissionAnswer };
-
-/** One question of the Agent's AskUserQuestion, with its choices. */
-export type Question = {
-  question: string;
-  /** A very short label for the question. */
-  header: string;
-  options: { label: string; description: string }[];
-  /** Whether several choices may be picked. */
-  multiSelect: boolean;
-};
-
-/** The User's answers, by question text; several choices are comma-separated. */
-export type QuestionAnswers = Record<string, string>;
+export type { PermissionAnswer, Widget, WidgetAnswer };
 
 export type RunOptions = {
   /**
@@ -79,10 +67,11 @@ export type RunOptions = {
    */
   askPermission(request: PermissionRequest): Promise<PermissionAnswer>;
   /**
-   * Asks the User the Agent's questions; the run waits for the answers.
-   * Resolves empty when the Conversation ends first.
+   * Asks the User a Widget (ADR 0045), such as AskUserQuestion's choices or
+   * an `ask_choice` call; the run waits for the answer. Resolves
+   * `{ expired: true }` when the Conversation ends first.
    */
-  askQuestion(questions: Question[]): Promise<QuestionAnswers>;
+  askWidget(widget: Widget): Promise<WidgetAnswer>;
   /** The Project's repository path. */
   cwd: string;
   /** The run's Agent-run ID (its Conversation id), sent as `X-Tandembike-Run`. */

@@ -18,7 +18,8 @@ const { notFound } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('next/navigation', () => ({ notFound, useRouter: vi.fn() }));
+vi.mock('../../spars/actions', () => ({ startSpar: vi.fn() }));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 vi.mock('../../../conversations/app-conversations', () => ({
@@ -145,6 +146,7 @@ describe('ProjectPage', () => {
       <main>{await ProjectPage({ params, searchParams: noSearch })}</main>,
     );
     expect(screen.queryByRole('button', { name: 'Plan' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Spar' })).toBeNull();
     cleanup();
 
     tickets.setProjectAgentSettings(project.id, { repositoryPath: '/tmp' });
@@ -153,6 +155,7 @@ describe('ProjectPage', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Plan' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Spar' })).toBeInTheDocument();
   });
 
   it("lists only an Epic's children in the Backlog, saying when the rest are elsewhere", async () => {

@@ -9,7 +9,8 @@ import type { TranscriptEntry } from '../../conversations/conversations';
 import { AppLink } from '../app-link/app-link';
 import { roleNames } from '../conversation-labels/conversation-labels';
 import { ConversationPermissionPrompt } from '../conversation-permission-prompt/conversation-permission-prompt';
-import { ConversationQuestionForm } from '../conversation-question-form/conversation-question-form';
+import { ConversationQuestion } from '../conversation-question/conversation-question';
+import { ConversationWidget } from '../conversation-widget/conversation-widget';
 import { Markdown } from '../markdown/markdown';
 import * as styles from './conversation-message.css';
 
@@ -78,11 +79,14 @@ export const ConversationMessage: FC<ConversationMessageProps> = ({
           <Text fontSize="small" fontWeight="strong" color="muted">
             {roleNames[entry.role]}
           </Text>
-          {entry.question !== null ? (
-            <ConversationQuestionForm
+          {entry.widget !== null ? (
+            <ConversationWidget
+              conversationId={entry.conversationId}
               entryId={entry.id}
-              question={entry.question}
+              entry={entry.widget}
             />
+          ) : entry.question !== null ? (
+            <ConversationQuestion question={entry.question} />
           ) : entry.role === 'agent' ||
             entry.role === 'user' ||
             entry.role === 'autopilot' ? (

@@ -27,11 +27,13 @@ Read the code, glossary and ADRs around the idea so you ask about what the code 
 
 Interview the User about the idea until you share an understanding of it. Ask one round of at most three questions, each with your recommended answer, then stop and wait. Do not send the next round before the answer comes. Where the code can answer a question, read it instead of asking.
 
+Ask each question that has sensible options with the `ask_choice` Widget tool: the options as choice cards, your recommended answer in `recommended`, so the User agrees with one click. It waits for the answer and returns `{ "selected": [...] }`, `{ "other": "..." }` when the User wrote their own, or `{ "skipped": true }`; a skip is not agreement, so ask again or leave the point open. Use `ask_rank` when the question is an order of priorities. Ask in text only an open question with no sensible options. Where the Widget tools are missing, such as in a terminal, ask the same with AskUserQuestion, or in text.
+
 Walk down the branches of the design: who it is for, what changes for them, edge cases, what stays out, and how it fits what exists. Stop when another round would not change the spec.
 
 ## 4. Check the test seams
 
-Sketch the seams at which the feature will be tested. Prefer existing seams to new ones and the highest seam you can; the fewer seams, the better, and one is ideal. Check in one question that the User agrees with them, and wait for the answer before drafting.
+Sketch the seams at which the feature will be tested. Prefer existing seams to new ones and the highest seam you can; the fewer seams, the better, and one is ideal. Check in one question that the User agrees with them, with `ask_choice` where you can, and wait for the answer before drafting.
 
 ## 5. Draft the spec
 

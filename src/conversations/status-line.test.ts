@@ -176,6 +176,16 @@ describe('statusLine', () => {
     ).toBe('Which one?');
   });
 
+  it('gives the prompt of a Widget entry', () => {
+    expect(
+      statusLine({
+        role: 'widget',
+        text: 'Which library?',
+        permissionRules: null,
+      }),
+    ).toBe('Which library?');
+  });
+
   it('gives the error of an error entry', () => {
     expect(
       statusLine({

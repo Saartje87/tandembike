@@ -19,6 +19,7 @@ const commands = {
   specCommand: '/spec',
   mergeCommand: '/merge',
   planCommand: '',
+  sparCommand: '',
 };
 
 const none = {
@@ -29,6 +30,7 @@ const none = {
   specCommand: null,
   mergeCommand: null,
   planCommand: null,
+  sparCommand: null,
 };
 
 const started = {

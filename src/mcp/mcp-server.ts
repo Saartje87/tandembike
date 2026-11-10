@@ -7,6 +7,7 @@ import type { Tickets } from '../tickets/tickets';
 import { registerAttachmentTools } from './attachment-tools';
 import { registerConversationTools } from './conversation-tools';
 import { registerProjectTools } from './project-tools';
+import { registerSparTools, type SparTools } from './spar-tools';
 import { registerTicketTools } from './ticket-tools';
 import { type ToolContext, toolRegistrar } from './tool-shared';
 import { registerWorkTools } from './work-tools';
@@ -53,6 +54,8 @@ export type McpServerOptions = {
   onToolCall?: ToolCallHook;
   /** Read-only Conversations for get_conversations; without it that tool refuses. */
   conversations?: ConversationReader;
+  /** The Spars of Spar runs' tools; without it those tools refuse. */
+  spars?: SparTools;
 };
 
 /**
@@ -64,7 +67,7 @@ export function createMcpServer(
   origin = 'http://localhost:4747',
   cwd?: string,
   runId?: string,
-  { onToolCall, conversations }: McpServerOptions = {},
+  { onToolCall, conversations, spars }: McpServerOptions = {},
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -89,6 +92,7 @@ export function createMcpServer(
   registerProjectTools(context);
   registerAttachmentTools(context);
   registerConversationTools(context, conversations);
+  registerSparTools(context, spars);
 
   return server;
 }

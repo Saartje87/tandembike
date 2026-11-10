@@ -12,7 +12,7 @@ Call `get_project` for the Project's Cycles and labels. Call `find_tickets` for 
 
 ## 2. Ask when the goal and the work do not meet
 
-Stop and ask the User, offering the choices with the AskUserQuestion tool or a short question, when:
+Stop and ask the User, offering the choices with the `ask_choice` Widget tool (AskUserQuestion where it is missing, such as in a terminal) or a short question, when:
 
 - the goal is ambiguous, and two readings would pick different Tickets;
 - the ready work does not cover the goal: say what is missing and ask whether to plan what exists, or to wait until it is triaged or specced;

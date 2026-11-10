@@ -132,18 +132,22 @@ describe('MCP server', () => {
       'attach',
       'check_criterion',
       'create_cycle',
+      'edit_canvas',
       'file_tickets',
       'find_tickets',
       'finish_work',
+      'get_canvas',
       'get_conversations',
       'get_project',
       'get_ticket',
       'next_work',
       'open_pr',
+      'propose_hand_off',
       'propose_triage',
       'read_attachment',
       'start_work',
       'update_ticket',
+      'update_write_up',
     ]);
     for (const tool of tools) {
       expect(tool.description, tool.name).toMatch(/\w{3,}/);

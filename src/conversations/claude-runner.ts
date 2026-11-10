@@ -5,12 +5,61 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
-import type { AgentRunner, Question, RunEvent } from './agent-runner';
+import type {
+  AgentRunner,
+  RunEvent,
+  Widget,
+  WidgetAnswer,
+} from './agent-runner';
+import {
+  createWidgetServer,
+  isWidgetTool,
+  widgetServerName,
+} from './widget-server';
 
 const maxToolTextLength = 300;
 
-/** The tool the Agent asks the User questions with; the chat shows it as a form. */
+/** The tool the Agent asks the User questions with; the chat shows each as a choice Widget. */
 const askTool = 'AskUserQuestion';
+
+/** One question of AskUserQuestion's input. */
+type AskQuestion = {
+  question: string;
+  options: { label: string; description?: string }[];
+  multiSelect?: boolean;
+};
+
+/**
+ * AskUserQuestion's answers by question text, from one choice Widget per
+ * question asked in turn (ADR 0045): the choices comma-separated, or the
+ * Other text. A skipped question is left out. Null when the run ended first.
+ */
+async function askQuestions(
+  questions: AskQuestion[],
+  askWidget: (widget: Widget) => Promise<WidgetAnswer>,
+): Promise<Record<string, string> | null> {
+  const answers: Record<string, string> = {};
+  for (const { question, options, multiSelect } of questions) {
+    const answer = await askWidget({
+      kind: 'choice',
+      prompt: question,
+      options: options.map(({ label, description }) => ({
+        label,
+        ...(description ? { description } : {}),
+      })),
+      multiSelect: multiSelect === true,
+    });
+    if ('expired' in answer) {
+      return null;
+    }
+    if ('selected' in answer) {
+      answers[question] = answer.selected.join(', ');
+    } else if ('other' in answer) {
+      answers[question] = answer.other;
+    }
+  }
+  return answers;
+}
 
 const createToolName = /(^|__)file_tickets$/;
 
@@ -56,7 +105,11 @@ export function eventsOf(
     for (const block of message.message.content) {
       if (block.type === 'text' && block.text.trim() !== '') {
         events.push({ type: 'agent', text: block.text });
-      } else if (block.type === 'tool_use' && block.name !== askTool) {
+      } else if (
+        block.type === 'tool_use' &&
+        block.name !== askTool &&
+        !isWidgetTool(block.name)
+      ) {
         if (createToolName.test(block.name)) {
           createCalls.add(block.id);
         }
@@ -188,7 +241,7 @@ export function createClaudeRunner(): AgentRunner {
       model,
       disallowedTools,
       askPermission,
-      askQuestion,
+      askWidget,
       onEvent,
     }) {
       const input = createInput();
@@ -206,30 +259,24 @@ export function createClaudeRunner(): AgentRunner {
           // defaultMode, so bypassPermissions cannot skip the relay below;
           // calls the auto classifier cannot decide still reach canUseTool.
           permissionMode: runMode,
-          // The server injected below is ours, so its tools never prompt (ADR 0021).
-          allowedTools: ['mcp__tandembike'],
+          // The servers injected below are ours, so their tools never prompt
+          // (ADR 0021, ADR 0045).
+          allowedTools: ['mcp__tandembike', `mcp__${widgetServerName}`],
           // What a terminal would ask the User comes to the Conversation.
           canUseTool: async (toolName, toolInput, { suggestions }) => {
             if (toolName === askTool) {
-              const answers = await askQuestion(
-                (toolInput as { questions: Question[] }).questions.map(
-                  ({ question, header, options, multiSelect }) => ({
-                    question,
-                    header,
-                    options: options.map(({ label, description }) => ({
-                      label,
-                      description,
-                    })),
-                    multiSelect: multiSelect === true,
-                  }),
-                ),
+              const answers = await askQuestions(
+                (toolInput as { questions: AskQuestion[] }).questions,
+                askWidget,
               );
-              return Object.keys(answers).length === 0
+              return answers === null
                 ? { behavior: 'deny', message: 'The User did not answer.' }
-                : {
-                    behavior: 'allow',
-                    updatedInput: { ...toolInput, answers },
-                  };
+                : Object.keys(answers).length === 0
+                  ? { behavior: 'deny', message: 'The User skipped this.' }
+                  : {
+                      behavior: 'allow',
+                      updatedInput: { ...toolInput, answers },
+                    };
             }
             const proposed = allowRules(suggestions);
             const answer = await askPermission({
@@ -256,6 +303,7 @@ export function createClaudeRunner(): AgentRunner {
           // The run's folder as the literal path: the SDK expands ${PWD} against
           // its own process, not the run's cwd (T1199); the run ID is literal too.
           mcpServers: {
+            [widgetServerName]: createWidgetServer(askWidget),
             tandembike: {
               type: 'http',
               url: mcpUrl,

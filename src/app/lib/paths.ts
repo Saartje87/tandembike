@@ -101,6 +101,16 @@ export function projectSettingsFieldPath(
   return `${projectSettingsPath(projectId)}#${field}`;
 }
 
+/** A Project's Spars: the list of its Spars, with the Spar button. */
+export function sparsPath(projectId: number): string {
+  return `${projectPath(projectId)}/spars`;
+}
+
+/** One Spar's own page (GLOSSARY: Spar); a Spar's id is its Conversation's. */
+export function sparPath(projectId: number, sparId: number): string {
+  return `${projectPath(projectId)}/spar/${sparId}`;
+}
+
 /** A Project's Flow: how its factory runs, and why work waits (ADR 0044). */
 export function projectFlowPath(projectId: number): string {
   return `${projectPath(projectId)}/flow`;

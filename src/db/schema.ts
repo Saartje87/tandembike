@@ -20,6 +20,9 @@ import {
   transcriptRoles,
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
+import type { WidgetEntry } from '../conversations/widget';
+import { type Canvas, stickyAuthors } from '../spars/canvas';
+import type { HandOffDraft } from '../spars/spar-moves';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
@@ -135,6 +138,8 @@ export const projects = sqliteTable('projects', {
   mergeCommand: text('merge_command'),
   /** The command a Plan Conversation sends before the goal; null runs the Playbook's. */
   planCommand: text('plan_command'),
+  /** The command a Spar sends before its topic and focus; null runs the Playbook's. */
+  sparCommand: text('spar_command'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 
@@ -490,6 +495,8 @@ export const conversationEntries = sqliteTable(
     >(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
+    /** For a Widget of the Agent: the Widget, the answer and expired; null for other entries. */
+    widget: text('widget', { mode: 'json' }).$type<WidgetEntry>(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (table) => [
@@ -583,3 +590,76 @@ export const machineSettings = sqliteTable('machine_settings', {
   /** Autopilot's most spend per local day across all Projects; null is none. */
   dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
 });
+
+/**
+ * A Spar (GLOSSARY): the User thinks an idea through with an Agent on its own
+ * page. One-to-one with its Conversation of intent `spar`, whose id is the
+ * Spar's id; the Conversation holds the run, cost, transcript and focus
+ * Ticket. Only the Spars module reads or writes it.
+ */
+export const spars = sqliteTable('spars', {
+  id: integer('id')
+    .primaryKey()
+    .references(() => conversations.id),
+  projectId: integer('project_id')
+    .notNull()
+    .references(() => projects.id),
+  /** The one-line topic the User gave; null for none. */
+  topic: text('topic'),
+  /** Closed by the User: read-only until reopened. */
+  closed: integer('closed', { mode: 'boolean' }).notNull().default(false),
+  /** The Ticket its Hand-off filed; null before. */
+  outcomeTicketNumber: integer('outcome_ticket_number'),
+  /**
+   * The Canvas as of the Agent's last turn, with the Agent's own edits since:
+   * what the next message tells the Agent changed. Null before the first.
+   */
+  baseline: text('baseline', { mode: 'json' }).$type<Canvas>(),
+  /** Close was asked: closed once the Summarise turn it sent ends. */
+  closing: integer('closing', { mode: 'boolean' }).notNull().default(false),
+  /** The Write-up's sections, Markdown, empty for none. */
+  decisions: text('decisions').notNull().default(''),
+  openQuestions: text('open_questions').notNull().default(''),
+  nextSteps: text('next_steps').notNull().default(''),
+  /** The Agent's Hand-off draft, until the User approves it; null for none. */
+  handOffDraft: text('hand_off_draft', { mode: 'json' }).$type<HandOffDraft>(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+/** A Column of a Spar's Canvas (GLOSSARY: Column), in order. */
+export const sparColumns = sqliteTable(
+  'spar_columns',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sparId: integer('spar_id')
+      .notNull()
+      .references(() => spars.id),
+    /** Its place on the Canvas, from 0. */
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+  },
+  (table) => [index('spar_columns_spar_id').on(table.sparId)],
+);
+
+/** A Sticky on a Spar's Canvas (GLOSSARY: Sticky), in its Column's order. */
+export const sparStickies = sqliteTable(
+  'spar_stickies',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sparId: integer('spar_id')
+      .notNull()
+      .references(() => spars.id),
+    columnId: integer('column_id')
+      .notNull()
+      .references(() => sparColumns.id),
+    /** Its place in its Column, from 0. */
+    position: integer('position').notNull(),
+    title: text('title').notNull(),
+    note: text('note'),
+    author: text('author', { enum: stickyAuthors }).notNull(),
+    /** A Ticket the idea already has work in; null for none. */
+    ticketNumber: integer('ticket_number'),
+  },
+  (table) => [index('spar_stickies_spar_id').on(table.sparId)],
+);

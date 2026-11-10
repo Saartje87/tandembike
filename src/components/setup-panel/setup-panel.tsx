@@ -23,6 +23,7 @@ const stageNames = {
   startEpic: 'Start on an Epic',
   spec: 'Spec',
   plan: 'Plan',
+  spar: 'Spar',
   retro: 'Retro',
   merge: 'Merge',
 } as const;
@@ -33,6 +34,7 @@ const stageOrder = [
   'startEpic',
   'spec',
   'plan',
+  'spar',
   'retro',
   'merge',
 ] as const;

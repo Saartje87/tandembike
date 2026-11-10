@@ -11,7 +11,7 @@ import type { FC } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  answerConversationQuestion,
+  answerConversationWidget,
   closeConversation,
   listOpenConversations,
   loadConversation,
@@ -19,12 +19,12 @@ import {
   replyToConversation,
   startConversation,
 } from '../../app/conversations/actions';
-import type { QuestionEntry } from '../../conversations/conversation-state';
 import type {
   Conversation,
   OpenConversation,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import type { WidgetEntry } from '../../conversations/widget';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { TicketDrawerShell } from '../ticket-drawer-shell/ticket-drawer-shell';
@@ -40,7 +40,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('../../app/conversations/actions', () => ({
   answerConversationPermission: vi.fn(),
-  answerConversationQuestion: vi.fn(),
+  answerConversationWidget: vi.fn(),
   closeConversation: vi.fn(),
   listOpenConversations: vi.fn(),
   loadConversation: vi.fn(),
@@ -94,6 +94,7 @@ const entry = (conversationId: number, text: string): TranscriptEntry => ({
   toolName: null,
   toolInput: null,
   question: null,
+  widget: null,
   createdAt: at,
 });
 
@@ -185,29 +186,15 @@ const showSwitching = async (id: number) => {
 
 const shownPanel = () => screen.getByRole('tabpanel');
 
-/** A question with one choice and several choices, which takes a Submit. */
-const pendingQuestion: QuestionEntry = {
-  questions: [
-    {
-      question: 'Which colour?',
-      header: 'Colour',
-      options: [
-        { label: 'Red', description: 'Warm' },
-        { label: 'Blue', description: 'Cool' },
-      ],
-      multiSelect: false,
-    },
-    {
-      question: 'Which sizes?',
-      header: 'Sizes',
-      options: [
-        { label: 'Small', description: 'S' },
-        { label: 'Medium', description: 'M' },
-      ],
-      multiSelect: true,
-    },
-  ],
-  answers: null,
+/** A multi-select choice Widget waiting on the User. */
+const pendingWidget: WidgetEntry = {
+  widget: {
+    kind: 'choice',
+    prompt: 'Which sizes?',
+    options: [{ label: 'Small' }, { label: 'Medium' }],
+    multiSelect: true,
+  },
+  answer: null,
   expired: false,
 };
 
@@ -229,6 +216,49 @@ describe('ConversationDialogProvider', () => {
     vi.mocked(closeConversation).mockReset();
     vi.mocked(startConversation).mockReset();
     vi.mocked(reopenConversation).mockReset();
+  });
+
+  describe('a Spar (GLOSSARY: Spar)', () => {
+    const withSpar = [
+      ...tabs,
+      tab({ id: 12, ticketNumber: 42, intent: 'spar', state: 'waiting' }),
+    ];
+
+    it('gets no tab, and opening it opens its own page', async () => {
+      vi.mocked(listOpenConversations).mockResolvedValue(withSpar);
+      at$('/project/3', 'conversation=2');
+      show();
+      const dialog = await screen.findByRole('dialog', {
+        name: 'Conversations',
+      });
+      expect(within(dialog).getAllByRole('tab')).toHaveLength(3);
+
+      opener?.open(12);
+
+      expect(router.push).toHaveBeenCalledWith('/project/3/spar/12');
+    });
+
+    it('opens its page from reopenAndOpen, without reopening it', async () => {
+      show();
+      await waitFor(() => expect(listOpenConversations).toHaveBeenCalled());
+
+      await opener?.reopenAndOpen(
+        conversation({ id: 12, intent: 'spar', hidden: true }),
+      );
+
+      expect(router.push).toHaveBeenCalledWith('/project/3/spar/12');
+      expect(reopenConversation).not.toHaveBeenCalled();
+    });
+
+    it('turns a ?conversation= naming it into its page', async () => {
+      vi.mocked(listOpenConversations).mockResolvedValue(withSpar);
+      at$('/project/3', 'conversation=12');
+      show();
+
+      await waitFor(() =>
+        expect(router.replace).toHaveBeenCalledWith('/project/3/spar/12'),
+      );
+    });
   });
 
   it('never opens by itself, even when a Conversation needs the User', async () => {
@@ -479,7 +509,7 @@ describe('ConversationDialogProvider', () => {
 
     beforeEach(() => {
       vi.mocked(replyToConversation).mockReset();
-      vi.mocked(answerConversationQuestion).mockReset();
+      vi.mocked(answerConversationWidget).mockReset();
     });
 
     it("mounts only the shown tab's chat, and still marks the others", async () => {
@@ -581,7 +611,7 @@ describe('ConversationDialogProvider', () => {
       expect(replyBox()).toHaveValue('');
     });
 
-    it("keeps a question form's unsent answers across a switch, and drops them once answered", async () => {
+    it("keeps a Widget's unsent draft across a switch, and drops it once answered", async () => {
       vi.mocked(loadConversation).mockImplementation(
         async ({ conversationId }) => ({
           ok: true,
@@ -589,58 +619,60 @@ describe('ConversationDialogProvider', () => {
           transcript: [
             entry(conversationId, `Hello from ${conversationId}`),
             ...(conversationId === 2
-              ? [{ ...entry(20, 'Asked'), question: pendingQuestion }]
+              ? [
+                  {
+                    ...entry(20, 'Asked'),
+                    conversationId: 2,
+                    widget: pendingWidget,
+                  },
+                ]
               : []),
           ],
         }),
       );
-      vi.mocked(answerConversationQuestion)
+      vi.mocked(answerConversationWidget)
         .mockResolvedValueOnce({ ok: false, error: 'Not now.' })
         .mockResolvedValue({ ok: true, conversation: conversation({ id: 2 }) });
-      const other = () =>
-        screen.getByRole('textbox', { name: 'Other answer to Which sizes?' });
       const switchTo = await showSwitching(2);
-      await screen.findByText('Which colour?');
-      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      await screen.findByText('Which sizes?');
       fireEvent.click(screen.getByRole('checkbox', { name: 'Medium' }));
-      fireEvent.change(other(), { target: { value: 'Huge' } });
 
       switchTo(1);
       await screen.findByText('Hello from 1');
-      expect(screen.queryByText('Which colour?')).toBeNull();
+      expect(screen.queryByText('Which sizes?')).toBeNull();
       switchTo(2);
-      await screen.findByText('Which colour?');
-      expect(screen.getByRole('radio', { name: 'Blue' })).toBeChecked();
+      await screen.findByText('Which sizes?');
       expect(screen.getByRole('checkbox', { name: 'Medium' })).toBeChecked();
-      expect(other()).toHaveValue('Huge');
 
-      // A refused submit keeps the answers.
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+      // A refused send keeps the draft.
+      fireEvent.click(screen.getByRole('button', { name: 'Send answer' }));
       expect(await screen.findByText('Not now.')).toBeInTheDocument();
       switchTo(1);
       await screen.findByText('Hello from 1');
       switchTo(2);
-      await screen.findByText('Which colour?');
-      expect(screen.getByRole('radio', { name: 'Blue' })).toBeChecked();
+      await screen.findByText('Which sizes?');
+      expect(screen.getByRole('checkbox', { name: 'Medium' })).toBeChecked();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send answer' }));
       await waitFor(() =>
-        expect(answerConversationQuestion).toHaveBeenLastCalledWith({
+        expect(answerConversationWidget).toHaveBeenLastCalledWith({
+          conversationId: 2,
           entryId: 20,
-          answers: { 'Which colour?': 'Blue', 'Which sizes?': 'Medium, Huge' },
+          answer: { selected: ['Medium'] },
         }),
       );
-      // Here the transcript still shows it pending, so a kept answer would show.
+      // Here the transcript still shows it pending, so a kept draft would show.
       switchTo(1);
       await screen.findByText('Hello from 1');
       switchTo(2);
-      await screen.findByText('Which colour?');
-      expect(screen.getByRole('radio', { name: 'Blue' })).not.toBeChecked();
-      expect(other()).toHaveValue('');
+      await screen.findByText('Which sizes?');
+      expect(
+        screen.getByRole('checkbox', { name: 'Medium' }),
+      ).not.toBeChecked();
     });
 
-    it("drops a question form's kept answers once the question expires", async () => {
-      let question = pendingQuestion;
+    it("drops a Widget's kept draft once it expires", async () => {
+      let widget = pendingWidget;
       vi.mocked(loadConversation).mockImplementation(
         async ({ conversationId }) => ({
           ok: true,
@@ -648,28 +680,28 @@ describe('ConversationDialogProvider', () => {
           transcript: [
             entry(conversationId, `Hello from ${conversationId}`),
             ...(conversationId === 2
-              ? [{ ...entry(20, 'Asked'), question }]
+              ? [{ ...entry(20, 'Asked'), conversationId: 2, widget }]
               : []),
           ],
         }),
       );
       const switchTo = await showSwitching(2);
-      await screen.findByText('Which colour?');
-      fireEvent.click(screen.getByRole('radio', { name: 'Blue' }));
+      await screen.findByText('Which sizes?');
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Medium' }));
 
-      question = { ...pendingQuestion, expired: true };
+      widget = { ...pendingWidget, expired: true };
       switchTo(1);
       await screen.findByText('Hello from 1');
       switchTo(2);
-      expect(await screen.findByText('Not answered')).toBeInTheDocument();
+      expect(await screen.findByText(/Expired/)).toBeInTheDocument();
 
-      // Even shown as pending again, the answers it had are gone.
-      question = pendingQuestion;
+      // Even shown as pending again, the draft it had is gone.
+      widget = pendingWidget;
       switchTo(1);
       await screen.findByText('Hello from 1');
       switchTo(2);
       expect(
-        await screen.findByRole('radio', { name: 'Blue' }),
+        await screen.findByRole('checkbox', { name: 'Medium' }),
       ).not.toBeChecked();
     });
 

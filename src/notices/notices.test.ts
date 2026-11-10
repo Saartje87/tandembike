@@ -420,19 +420,42 @@ describe('Notices', () => {
     expect(new Set(keys).size).toBe(2);
   });
 
-  it('raises waiting for a question of the Agent', async () => {
+  it("opens a Spar's own page from its waiting Notice", async () => {
+    const world = setup();
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      projectId: world.project.id,
+      intent: 'spar',
+      prompt: '/tandembike:spar',
+    });
+    world.notices.start();
+
+    void world.runner.runs[0].options.askWidget({
+      kind: 'choice',
+      prompt: 'Which mode?',
+      options: [{ label: 'Diverge' }, { label: 'Converge' }],
+      multiSelect: false,
+    });
+
+    expect(world.raised).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'waiting',
+        path: `/project/${world.project.id}/spar/${conversation.id}`,
+      }),
+    );
+  });
+
+  it('raises waiting for a Widget of the Agent', async () => {
     const world = setup();
     const { run } = await world.startRun();
     world.notices.start();
 
-    void run.options.askQuestion([
-      {
-        question: 'Which colour?',
-        header: 'Colour',
-        options: [{ label: 'Red', description: 'Red' }],
-        multiSelect: false,
-      },
-    ]);
+    void run.options.askWidget({
+      kind: 'choice',
+      prompt: 'Which colour?',
+      options: [{ label: 'Red' }],
+      multiSelect: false,
+    });
 
     expect(world.raised).toHaveBeenCalledWith(
       expect.objectContaining({

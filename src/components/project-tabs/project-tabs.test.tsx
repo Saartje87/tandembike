@@ -91,6 +91,7 @@ describe('ProjectTabs', () => {
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'Launch', href: '/project/3/cycle/8', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
@@ -107,6 +108,7 @@ describe('ProjectTabs', () => {
       '/project/3?q=fix+it&label=bug&label=ui',
       '/project/3/cycle/7?q=fix+it&label=bug&label=ui',
       '/project/3/cycles',
+      '/project/3/spars',
       '/project/3/flow',
       '/project/3/settings',
     ]);
@@ -124,6 +126,7 @@ describe('ProjectTabs', () => {
       'Launch',
       'Beta',
       'History',
+      'Spars',
       'Flow',
       'Settings',
     ]);
@@ -135,6 +138,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
@@ -153,6 +157,7 @@ describe('ProjectTabs', () => {
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'Beta', href: '/project/3/cycle/7', current: null },
       { name: 'History', href: '/project/3/cycles', current: 'page' },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
@@ -164,6 +169,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: 'page' },
     ]);
@@ -175,9 +181,18 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: null },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: 'page' },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
+  });
+
+  it('marks the Spars tab current on the Spars and on a Spar page', () => {
+    for (const segments of [['spars'], ['spar', '12']]) {
+      const { unmount } = renderTabs([], segments);
+      expect(tabs().find(({ name }) => name === 'Spars')?.current).toBe('page');
+      unmount();
+    }
   });
 
   it('marks the Backlog tab current on the Backlog', () => {
@@ -186,6 +201,7 @@ describe('ProjectTabs', () => {
     expect(tabs()).toEqual([
       { name: 'Backlog', href: '/project/3', current: 'page' },
       { name: 'History', href: '/project/3/cycles', current: null },
+      { name: 'Spars', href: '/project/3/spars', current: null },
       { name: 'Flow', href: '/project/3/flow', current: null },
       { name: 'Settings', href: '/project/3/settings', current: null },
     ]);
@@ -214,6 +230,7 @@ describe('ProjectTabs', () => {
       { name: 'Launch', badge: null },
       { name: 'Beta', badge: '0 open Tickets' },
       { name: 'History', badge: null },
+      { name: 'Spars', badge: null },
       { name: 'Flow', badge: null },
       { name: 'Settings', badge: null },
     ]);

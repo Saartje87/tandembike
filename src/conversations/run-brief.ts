@@ -51,6 +51,7 @@ const intentLines: Record<ConversationIntent, string> = {
     'The User approved the merge of the Ticket (Approve merge) and started this Conversation to merge its pull request.',
   spec: 'The User started this Conversation to turn the Ticket, an idea or an Epic without children, into a spec and its build Tickets (Spec).',
   plan: 'The User started this Conversation to plan a Cycle toward a goal (Plan). Their first message names the goal.',
+  spar: "The User started this Conversation to think an idea through with you on a Spar page (Spar). Their first message gives the topic and the focus Ticket, if any. This run is read-only (ADR 0046): you may read and search the code and read Tickets, but not edit files or create or change Tickets; any command you run asks the User first. The Spar page shows a Canvas of Columns and Stickies beside the chat: read it with get_canvas and change it with edit_canvas. Below it, keep the Write-up (Decisions, Open questions, Next steps) current with update_write_up. When you agree, propose the Hand-off with propose_hand_off; only the User files it. The User's edits of it send you nothing; each of their messages ends with what they changed since your last turn. Prefer Widgets to questions in text.",
 };
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;
@@ -93,7 +94,7 @@ export function runBrief(brief: RunBrief): string {
     intentLines[brief.intent],
     brief.terminal
       ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
-      : 'A human answers in the Tandembike UI, not in a terminal: when you need a decision, offer the choices with the AskUserQuestion tool, which shows the User a form; ask open questions in your messages.',
+      : 'A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: `ask_choice` for choice cards (put your recommendation in `recommended`), `ask_rank` for an order, `ask_matrix` to place items on a 2×2 you label, and `ask_scale` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount; AskUserQuestion also works and shows as choice cards. Every Widget may come back as `{ "other": text }` or `{ "skipped": true }`. Ask open questions in your messages.',
     `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};

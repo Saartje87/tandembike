@@ -71,6 +71,7 @@ import { InlineEdit } from '../inline-edit/inline-edit';
 import { LabelEditor } from '../label-editor/label-editor';
 import { Markdown } from '../markdown/markdown';
 import { MergedButton } from '../merged-button/merged-button';
+import { SparButton } from '../spar-button/spar-button';
 import { SplitOffTickets } from '../split-off-tickets/split-off-tickets';
 import { StatusSelect } from '../status-select/status-select';
 import { TicketAgentActions } from '../ticket-agent-actions/ticket-agent-actions';
@@ -610,6 +611,11 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
         onAsk={() =>
           dialog.openDraft({ intent: 'ask', ticketNumber: ticket.number })
         }
+      />
+      <SparButton
+        projectId={ticket.projectId}
+        focusTicketNumber={ticket.number}
+        label="Spar about this"
       />
       <TicketConversationList conversations={conversations} />
       <TicketComments

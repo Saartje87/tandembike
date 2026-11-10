@@ -9,7 +9,17 @@ const { query, controls } = vi.hoisted(() => ({
   controls: { interrupt: vi.fn(), close: vi.fn() },
 }));
 
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query }));
+// The in-process server is kept as its options, so a test can call a tool's handler.
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+  query,
+  createSdkMcpServer: (options: unknown) => ({ type: 'sdk', options }),
+  tool: (
+    name: string,
+    description: string,
+    inputSchema: unknown,
+    handler: unknown,
+  ) => ({ name, description, inputSchema, handler }),
+}));
 
 import { createClaudeRunner, eventsOf } from './claude-runner';
 
@@ -44,7 +54,7 @@ describe('The Claude runner', () => {
       prompt: 'Hi',
       resume: 'sess-1',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
 
@@ -88,13 +98,13 @@ describe('The Claude runner', () => {
       prompt: 'Hi',
       runMode: 'auto',
       askPermission,
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
 
     const { options } = query.mock.calls[0][0];
     expect(options.permissionMode).toBe('auto');
-    expect(options.allowedTools).toEqual(['mcp__tandembike']);
+    expect(options.allowedTools).toEqual(['mcp__tandembike', 'mcp__widgets']);
     await options.canUseTool(
       'Bash',
       { command: 'ls' },
@@ -116,7 +126,7 @@ describe('The Claude runner', () => {
         runMode: 'default',
         ...(model === undefined ? {} : { model }),
         askPermission: async () => 'deny',
-        askQuestion: async () => ({}),
+        askWidget: async () => ({ expired: true }),
         onEvent: () => {},
       });
 
@@ -127,7 +137,7 @@ describe('The Claude runner', () => {
     expect(query.mock.calls[1][0].options).not.toHaveProperty('model');
   });
 
-  it('pre-allows the Tandembike MCP server it injects, and nothing else', () => {
+  it('pre-allows the Tandembike and Widget MCP servers it injects, and nothing else', () => {
     query.mockReturnValue(fakeQuery([]));
 
     createClaudeRunner().start({
@@ -138,12 +148,12 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
 
     const { options } = query.mock.calls[0][0];
-    expect(options.allowedTools).toEqual(['mcp__tandembike']);
+    expect(options.allowedTools).toEqual(['mcp__tandembike', 'mcp__widgets']);
   });
 
   it('feeds the first message and every later reply into the streaming input', async () => {
@@ -156,7 +166,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'First',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
     const input: AsyncIterator<{ message: { content: string } }> =
@@ -208,7 +218,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -275,7 +285,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -307,7 +317,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
     });
     await settle();
@@ -325,7 +335,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission: async () => 'deny',
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
 
@@ -350,7 +360,7 @@ describe('The Claude runner', () => {
       systemPrompt: '',
       prompt: 'Hi',
       askPermission,
-      askQuestion: async () => ({}),
+      askWidget: async () => ({ expired: true }),
       onEvent: () => {},
     });
     const { canUseTool } = query.mock.calls[0][0].options;
@@ -389,7 +399,7 @@ describe('The Claude runner', () => {
         systemPrompt: '',
         prompt: 'Hi',
         askPermission,
-        askQuestion: async () => ({}),
+        askWidget: async () => ({ expired: true }),
         onEvent: () => {},
       });
       return {
@@ -495,7 +505,7 @@ describe('The Claude runner', () => {
       ],
     };
 
-    const startWith = (askQuestion: (questions: unknown[]) => unknown) => {
+    const startWith = (askWidget: (widget: unknown) => unknown) => {
       query.mockReturnValue(fakeQuery([]));
       const askPermission = vi.fn();
       createClaudeRunner().start({
@@ -506,7 +516,7 @@ describe('The Claude runner', () => {
         systemPrompt: '',
         prompt: 'Hi',
         askPermission,
-        askQuestion: askQuestion as never,
+        askWidget: askWidget as never,
         onEvent: () => {},
       });
       return {
@@ -515,45 +525,192 @@ describe('The Claude runner', () => {
       };
     };
 
-    it('routes it to askQuestion, not askPermission, and returns the answers as the tool input', async () => {
-      const askQuestion = vi.fn().mockResolvedValue({ 'Which library?': 'A' });
-      const { askPermission, canUseTool } = startWith(askQuestion);
+    it('asks it as a choice Widget, not a permission, and returns the answers as the tool input', async () => {
+      const askWidget = vi.fn().mockResolvedValue({ selected: ['A'] });
+      const { askPermission, canUseTool } = startWith(askWidget);
 
       const result = await canUseTool('AskUserQuestion', askInput, {});
 
       expect(askPermission).not.toHaveBeenCalled();
-      expect(askQuestion).toHaveBeenCalledWith([
-        {
-          question: 'Which library?',
-          header: 'Library',
-          multiSelect: false,
-          options: [
-            { label: 'A', description: 'The first' },
-            { label: 'B', description: 'The second' },
-          ],
-        },
-      ]);
+      expect(askWidget).toHaveBeenCalledWith({
+        kind: 'choice',
+        prompt: 'Which library?',
+        multiSelect: false,
+        options: [
+          { label: 'A', description: 'The first' },
+          { label: 'B', description: 'The second' },
+        ],
+      });
       expect(result).toEqual({
         behavior: 'allow',
         updatedInput: { ...askInput, answers: { 'Which library?': 'A' } },
       });
     });
 
-    it('denies when nothing was answered', async () => {
-      const { canUseTool } = startWith(async () => ({}));
+    it('asks several questions in turn, with Other as the answer text and a skip left out', async () => {
+      const askWidget = vi
+        .fn()
+        .mockResolvedValueOnce({ selected: ['A', 'B'] })
+        .mockResolvedValueOnce({ other: 'My own' })
+        .mockResolvedValueOnce({ skipped: true });
+      const { canUseTool } = startWith(askWidget);
+      const question = askInput.questions[0];
+      const input = {
+        questions: [
+          { ...question, question: 'One?', multiSelect: true },
+          { ...question, question: 'Two?' },
+          { ...question, question: 'Three?' },
+        ],
+      };
 
-      expect(await canUseTool('AskUserQuestion', askInput, {})).toMatchObject({
-        behavior: 'deny',
+      const result = await canUseTool('AskUserQuestion', input, {});
+
+      expect(askWidget).toHaveBeenCalledTimes(3);
+      expect(result.updatedInput.answers).toEqual({
+        'One?': 'A, B',
+        'Two?': 'My own',
       });
     });
 
-    it('reports no tool line for the call, as the chat shows a form', () => {
+    it('denies when the run ended before an answer, or every question was skipped', async () => {
+      for (const answer of [{ expired: true }, { skipped: true }]) {
+        const { canUseTool } = startWith(async () => answer);
+        expect(await canUseTool('AskUserQuestion', askInput, {})).toMatchObject(
+          { behavior: 'deny' },
+        );
+        query.mockReset();
+      }
+    });
+
+    it('reports no tool line for the call, as the chat shows a Widget', () => {
       expect(
         eventsOf({
           type: 'assistant',
           message: {
             content: [
               { type: 'tool_use', name: 'AskUserQuestion', input: askInput },
+            ],
+          },
+        } as never),
+      ).toEqual([]);
+    });
+  });
+
+  describe('The Widget tools', () => {
+    const startWith = (askWidget: (widget: unknown) => unknown) => {
+      query.mockReturnValue(fakeQuery([]));
+      createClaudeRunner().start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        prompt: 'Hi',
+        askPermission: vi.fn(),
+        askWidget: askWidget as never,
+        onEvent: () => {},
+      });
+      const server = query.mock.calls[0][0].options.mcpServers.widgets;
+      return (name: string) =>
+        server.options.tools.find(
+          (tool: { name: string }) => tool.name === name,
+        );
+    };
+
+    it('serves ask_choice in-process; its handler blocks on askWidget and returns the answer as JSON', async () => {
+      let answer: (value: unknown) => void = () => {};
+      const askWidget = vi.fn(
+        () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      );
+      const tool = startWith(askWidget)('ask_choice');
+
+      let result: unknown;
+      void tool
+        .handler({
+          prompt: 'Which?',
+          options: [{ label: 'A' }, { label: 'B' }],
+          recommended: ['B'],
+        })
+        .then((value: unknown) => {
+          result = value;
+        });
+      await settle();
+
+      expect(askWidget).toHaveBeenCalledWith({
+        kind: 'choice',
+        prompt: 'Which?',
+        options: [{ label: 'A' }, { label: 'B' }],
+        multiSelect: false,
+        recommended: ['B'],
+      });
+      expect(result).toBeUndefined();
+
+      answer({ selected: ['B'] });
+      await settle();
+
+      expect(result).toEqual({
+        content: [{ type: 'text', text: '{"selected":["B"]}' }],
+      });
+    });
+
+    it.each([
+      [
+        'ask_rank',
+        { prompt: 'Order', items: ['A', 'B'] },
+        { kind: 'rank', prompt: 'Order', items: ['A', 'B'] },
+      ],
+      [
+        'ask_scale',
+        { prompt: 'How much?', items: ['A'], min: 1, max: 5, maxLabel: 'Lots' },
+        {
+          kind: 'scale',
+          prompt: 'How much?',
+          items: ['A'],
+          min: 1,
+          max: 5,
+          maxLabel: 'Lots',
+        },
+      ],
+      [
+        'ask_matrix',
+        {
+          prompt: 'Place',
+          items: ['A'],
+          xAxis: { low: 'l', high: 'h' },
+          yAxis: { low: 'd', high: 'u' },
+        },
+        {
+          kind: 'matrix',
+          prompt: 'Place',
+          items: ['A'],
+          xAxis: { low: 'l', high: 'h' },
+          yAxis: { low: 'd', high: 'u' },
+        },
+      ],
+    ])('serves %s, asking its Widget', async (name, input, widget) => {
+      const askWidget = vi.fn(async () => ({ skipped: true }));
+      const tool = startWith(askWidget)(name);
+
+      const result = await tool.handler(input);
+
+      expect(askWidget).toHaveBeenCalledWith(widget);
+      expect(result.content[0].text).toBe('{"skipped":true}');
+    });
+
+    it('reports no tool line for a Widget tool call', () => {
+      expect(
+        eventsOf({
+          type: 'assistant',
+          message: {
+            content: [
+              {
+                type: 'tool_use',
+                name: 'mcp__widgets__ask_choice',
+                input: {},
+              },
             ],
           },
         } as never),

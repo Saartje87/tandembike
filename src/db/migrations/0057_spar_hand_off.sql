@@ -1,0 +1,1 @@
+ALTER TABLE `spars` ADD `hand_off_draft` text;

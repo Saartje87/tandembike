@@ -19,7 +19,11 @@ import {
   listOpenConversations,
   reopenConversation,
 } from '../../app/conversations/actions';
-import { conversationOnPath, openConversationId } from '../../app/lib/paths';
+import {
+  conversationOnPath,
+  openConversationId,
+  sparPath,
+} from '../../app/lib/paths';
 import type {
   Conversation,
   OpenConversation,
@@ -118,7 +122,12 @@ export const ConversationDialogProvider: FC<
 > = ({ children }) => {
   const router = useRouter();
   const revision = useConversationRevision();
-  const [conversations, setConversations] = useState<OpenConversation[]>([]);
+  const [allOpen, setConversations] = useState<OpenConversation[]>([]);
+  // A Spar has its own page, never a tab here (GLOSSARY: Spar).
+  const conversations = useMemo(
+    () => allOpen.filter(({ conversation }) => conversation.intent !== 'spar'),
+    [allOpen],
+  );
   const [url, setUrl] = useState<UrlState>({ id: undefined, href: '' });
   const [error, setError] = useState<string>();
   const drafts = useDrafts();
@@ -165,8 +174,37 @@ export const ConversationDialogProvider: FC<
     [router, url.href],
   );
 
+  /** Opens the page of Spar `id` in place of a tab, when it is one; says whether it was. */
+  const openSpar = useCallback(
+    (conversation: Pick<Conversation, 'id' | 'intent' | 'projectId'>) => {
+      if (conversation.intent !== 'spar') {
+        return false;
+      }
+      router.push(sparPath(conversation.projectId, conversation.id));
+      return true;
+    },
+    [router],
+  );
+
+  // A `?conversation=` naming a Spar, such as an older link, opens its page.
+  useEffect(() => {
+    const spar = allOpen.find(
+      ({ conversation }) =>
+        conversation.id === url.id && conversation.intent === 'spar',
+    );
+    if (spar) {
+      router.replace(
+        sparPath(spar.conversation.projectId, spar.conversation.id),
+      );
+    }
+  }, [allOpen, url.id, router]);
+
   const open = useCallback(
     (id: number) => {
+      const spar = allOpen.find(({ conversation }) => conversation.id === id);
+      if (spar && openSpar(spar.conversation)) {
+        return;
+      }
       setError(undefined);
       drafts.deselect();
       lastShown.current = id;
@@ -174,7 +212,7 @@ export const ConversationDialogProvider: FC<
       load();
       go(id, false);
     },
-    [drafts.deselect, go, load],
+    [allOpen, openSpar, drafts.deselect, go, load],
   );
 
   const show = useCallback(() => {
@@ -193,6 +231,9 @@ export const ConversationDialogProvider: FC<
 
   const reopenAndOpen = useCallback(
     async (conversation: Conversation) => {
+      if (openSpar(conversation)) {
+        return undefined;
+      }
       if (conversation.hidden) {
         const result = await reopenConversation({
           conversationId: conversation.id,
@@ -204,7 +245,7 @@ export const ConversationDialogProvider: FC<
       open(conversation.id);
       return undefined;
     },
-    [open],
+    [open, openSpar],
   );
 
   const openDraft = useCallback(
