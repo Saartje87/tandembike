@@ -22,7 +22,12 @@ export type ConversationChatHeaderProps = {
   title: string;
 };
 
-/** The chat's header: its Ticket or Project, intent, state and cost, and Stop while a run is alive (a Terminal Conversation has no Stop). */
+/**
+ * The chat's header, one row: its Ticket or Project, then intent, state, cost
+ * and starter in muted text, both cut short with an ellipsis, and Continue in
+ * terminal and Stop at the end (a Terminal Conversation has no Stop). The
+ * worktree, the Copied status and a refusal show below it, when present.
+ */
 export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
   conversation,
   title,
@@ -43,9 +48,17 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
         justifyContent="space-between"
         flexWrap="nowrap"
       >
-        <Stack gap={0}>
-          <Text fontWeight="strong">{title}</Text>
-          <Text fontSize="small" color="muted">
+        <Inline
+          gap={2}
+          alignY="center"
+          flexWrap="nowrap"
+          flexGrow={1}
+          minInlineSize={0}
+        >
+          <Text fontWeight="strong" truncate>
+            {title}
+          </Text>
+          <Text fontSize="small" color="muted" truncate>
             {[
               intentNames[conversation.intent],
               stateNames[conversation.state],
@@ -54,12 +67,10 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
               ...(isTerminal(conversation) && conversation.costUsd <= 0
                 ? []
                 : [formatCost(conversation.costUsd)]),
+              `by ${starterNames[conversation.startedBy]}`,
             ].join(', ')}
           </Text>
-          <Text fontSize="small" color="muted">
-            {`Started by ${starterNames[conversation.startedBy]}`}
-          </Text>
-        </Stack>
+        </Inline>
         {canContinue && (
           <Button
             type="button"

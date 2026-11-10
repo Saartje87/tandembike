@@ -107,7 +107,7 @@ describe('ConversationChat', () => {
     expect(within(lines[3]).getByText('Went wrong')).toBeInTheDocument();
   });
 
-  it('shows the title, intent, state and cost in the header', () => {
+  it('shows the title, then intent, state, cost and starter as one meta line', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
@@ -116,22 +116,37 @@ describe('ConversationChat', () => {
     );
 
     expect(screen.getByText('T4 A Ticket')).toBeInTheDocument();
-    expect(screen.getByText('Triage, working, $0.50')).toBeInTheDocument();
+    expect(
+      screen.getByText('Triage, working, $0.50, by you'),
+    ).toBeInTheDocument();
   });
 
-  it('shows who started the Conversation in the header', () => {
-    const { rerender } = renderWithTheme(
-      <ConversationChat title="T4 A Ticket" item={one({})} />,
-    );
-    expect(screen.getByText('Started by you')).toBeInTheDocument();
-
-    rerender(
+  it('names who started the Conversation in the meta line', () => {
+    renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
-        item={one({ startedBy: 'autopilot' })}
+        item={one({ startedBy: 'autopilot', costUsd: 1.15 })}
       />,
     );
-    expect(screen.getByText('Started by Autopilot')).toBeInTheDocument();
+    expect(screen.getByText(/, \$1\.15, by Autopilot$/)).toBeInTheDocument();
+  });
+
+  it('offers Stop after the title and meta, at the end of the header row', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({ state: 'running', sdkSessionId: 'session-1' })}
+      />,
+    );
+
+    const meta = screen.getByText(/by you$/);
+    const following = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const resume = screen.getByRole('button', { name: 'Continue in terminal' });
+    const stop = screen.getByRole('button', { name: 'Stop' });
+    expect(following(screen.getByText('T4 A Ticket'), meta)).toBe(true);
+    expect(following(meta, resume)).toBe(true);
+    expect(following(resume, stop)).toBe(true);
   });
 
   it("shows an Autopilot message apart from the User's", () => {
@@ -658,7 +673,7 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
     vi.mocked(closeConversation).mockReset();
   });
 
-  it('shows Terminal under Started by, no cost, no Stop and no reply box while open', () => {
+  it('shows Terminal as the starter, no cost, no Stop and no reply box while open', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
@@ -666,8 +681,7 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
       />,
     );
 
-    expect(screen.getByText('Started by Terminal')).toBeInTheDocument();
-    expect(screen.getByText('Start, working')).toBeInTheDocument();
+    expect(screen.getByText('Start, working, by Terminal')).toBeInTheDocument();
     expect(screen.getByText('Running in a terminal')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -682,7 +696,9 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
       />,
     );
 
-    expect(screen.getByText('Start, working, $0.75')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start, working, $0.75, by Terminal'),
+    ).toBeInTheDocument();
   });
 
   it('offers Close once the session has ended, and closes the Conversation', async () => {
