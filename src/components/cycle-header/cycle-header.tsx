@@ -17,8 +17,10 @@ import {
 } from '../../app/lib/action-result';
 import { formatCost } from '../../app/lib/format-cost';
 import { projectPath } from '../../app/lib/paths';
+import type { Conversation } from '../../conversations/conversations';
 import type { Cycle } from '../../tickets/cycles';
 import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
+import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { DateTime } from '../date-time/date-time';
 import { InlineEdit } from '../inline-edit/inline-edit';
 
@@ -31,6 +33,11 @@ export type CycleHeaderProps = {
    * null without enough Run outcomes, and the units of work planned.
    */
   estimate?: { totalUsd: number | null; units: number };
+  /**
+   * An Archived Cycle's Retro, closed or not, which Open Retro opens; null or
+   * left out when it has none.
+   */
+  retro?: Conversation | null;
 };
 
 type CycleTitleProps = {
@@ -63,14 +70,17 @@ const CycleTitle: FC<CycleTitleProps> = ({ cycle }) => {
  * A Prepared Cycle can be started, after the User confirms archiving the
  * Active one if there is one, or discarded. An Active one can be archived.
  * Discarding or archiving goes back to the Backlog; an Archived Cycle is
- * read-only.
+ * read-only, but offers Open Retro when it has a Retro, so a Retro whose tab
+ * was closed stays reachable (T1189).
  */
 export const CycleHeader: FC<CycleHeaderProps> = ({
   cycle,
   activeCycle,
   estimate,
+  retro,
 }) => {
   const router = useRouter();
+  const dialog = useConversationDialog();
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
 
@@ -114,6 +124,13 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
     if (window.confirm(archiveCycleConfirmation(cycle.title))) {
       run(archiveCycle, () => router.push(projectPath(cycle.projectId)));
     }
+  };
+
+  const openRetro = (closedOrOpen: Conversation) => {
+    setError(undefined);
+    startTransition(async () => {
+      setError(await dialog.reopenAndOpen(closedOrOpen));
+    });
   };
 
   const discard = () => {
@@ -173,6 +190,18 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
             onClick={archive}
           >
             Archive Cycle
+          </Button>
+        )}
+        {cycle.state === 'Archived' && retro && (
+          <Button
+            type="button"
+            variant="outline"
+            intent="neutral"
+            size="small"
+            disabled={pending}
+            onClick={() => openRetro(retro)}
+          >
+            Open Retro
           </Button>
         )}
       </Inline>
