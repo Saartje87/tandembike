@@ -118,20 +118,98 @@ export async function press(page, locator, mode) {
 }
 
 /**
- * Gives Project `projectId` a fresh empty folder as its repository path,
- * through its settings form as the User does, so a Start can run there. Only
- * for a server with fake runs on (browser-checks.md, "Conversations in a
- * given state"): a real run would work in that folder.
+ * Sets Project `projectId`'s repository path to `path` through its settings
+ * form, as the User does. Throws at once with the form's reason when the Save
+ * is refused (such as a path another Project already uses), or when the path
+ * did not stick, rather than letting a later step time out far from the cause.
+ */
+export async function setRepositoryPath(page, projectId, path) {
+  await page.goto(`${base}/project/${projectId}/settings`);
+  const form = page.getByRole('form', { name: 'Agent settings' });
+  const field = form.getByLabel('Repository path', { exact: true });
+  await field.fill(path);
+  // The Server Action posts to the page itself; its reply carries the result.
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      new URL(response.url()).pathname.endsWith('/settings'),
+  );
+  await form.getByRole('button', { name: 'Save' }).click();
+  await saved;
+  await page.waitForTimeout(500);
+  const refusal = [
+    (await field.getAttribute('aria-invalid')) === 'true'
+      ? await form.locator(`#${await field.getAttribute('aria-describedby')}`).textContent()
+      : null,
+    ...(await form.getByRole('alert').allTextContents()),
+  ].filter(Boolean);
+  if (refusal.length > 0) {
+    throw new Error(
+      `Settings refused repository path ${path} for Project ${projectId}: ${refusal.join(' ')}`,
+    );
+  }
+  await page.reload();
+  const kept = await form
+    .getByLabel('Repository path', { exact: true })
+    .inputValue();
+  if (kept !== path) {
+    throw new Error(
+      `Repository path ${path} did not save for Project ${projectId}: Settings shows "${kept}".`,
+    );
+  }
+}
+
+/**
+ * A new throwaway git repository: a fresh folder under /tmp with `git init`,
+ * one commit and the branch `main`, so the app detects a default branch to
+ * make run worktrees from. Returns its path.
+ */
+export async function throwawayRepository() {
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { execFileSync } = await import('node:child_process');
+  const folder = mkdtempSync('/tmp/check-repo-');
+  const git = (...args) =>
+    execFileSync('git', args, { cwd: folder, stdio: 'pipe' });
+  git('init', '--quiet', '--initial-branch=main');
+  writeFileSync(`${folder}/README.md`, '# Browser check repository\n');
+  git('add', 'README.md');
+  git(
+    '-c',
+    'user.name=Browser check',
+    '-c',
+    'user.email=browser-check@example.com',
+    'commit',
+    '--quiet',
+    '--no-verify',
+    '-m',
+    'First commit',
+  );
+  return folder;
+}
+
+/**
+ * A fresh Project with its own new throwaway repository (`throwawayRepository`)
+ * as its repository path, for a check that starts an Agent run (a Start, a
+ * Spar, a Triage). Every call makes a new folder, so runs against one server
+ * never share a repository, which belongs to one Project. Throws at once if
+ * Settings refuses the path. Returns { id, name, repository }.
+ */
+export async function freshProjectWithRepository(page) {
+  const project = await freshProject(page);
+  const repository = await throwawayRepository();
+  await setRepositoryPath(page, project.id, repository);
+  return { ...project, repository };
+}
+
+/**
+ * Gives Project `projectId` a fresh empty folder as its repository path, for
+ * a Start on a server with fake runs on (browser-checks.md, "Conversations in
+ * a given state"), which runs nothing there. Throws if Settings refuses it.
+ * A check that needs a git repository uses `freshProjectWithRepository`.
  */
 export async function fakeRepository(page, projectId) {
   const { mkdtempSync } = await import('node:fs');
-  await page.goto(`${base}/project/${projectId}/settings`);
-  const form = page.getByRole('form', { name: 'Agent settings' });
-  await form
-    .getByLabel('Repository path', { exact: true })
-    .fill(mkdtempSync('/tmp/fake-repo-'));
-  await form.getByRole('button', { name: 'Save' }).click();
-  await page.waitForTimeout(1500);
+  await setRepositoryPath(page, projectId, mkdtempSync('/tmp/fake-repo-'));
 }
 
 /** Sends `text` as the User's reply in the open Conversation and lets it settle. */
