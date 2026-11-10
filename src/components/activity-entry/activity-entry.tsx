@@ -2,7 +2,10 @@ import { Box, Text } from '@blockle/blocks';
 import type { FC } from 'react';
 
 import type { ActivityEntry as Entry } from '../../tickets/activity';
-import type { ActivityChange } from '../../tickets/activity-change';
+import type {
+  ActivityChange,
+  ActivityCycle,
+} from '../../tickets/activity-change';
 import { claimOwner } from '../../tickets/claim-owner';
 import { RelativeTime } from '../relative-time/relative-time';
 
@@ -11,6 +14,11 @@ export const actorNames: Record<Entry['actor'], string> = {
   user: 'User',
   agent: 'Agent',
 };
+
+/** A Cycle an Activity entry names, or the Backlog for `null`. */
+function placeName(cycle: ActivityCycle | null): string {
+  return cycle === null ? 'the Backlog' : `the Cycle “${cycle.title}”`;
+}
 
 /** One change as a phrase that follows who made it. */
 function describeChange(change: ActivityChange): string {
@@ -21,6 +29,10 @@ function describeChange(change: ActivityChange): string {
       return `changed the Status from ${change.from} to ${change.to}`;
     case 'project':
       return `moved it from ${change.from.name} to ${change.to.name}`;
+    case 'cycle':
+      return change.from === null
+        ? `planned it into ${placeName(change.to)}`
+        : `moved it from ${placeName(change.from)} to ${placeName(change.to)}`;
     case 'title':
       return `renamed it from “${change.from}” to “${change.to}”`;
     case 'description':

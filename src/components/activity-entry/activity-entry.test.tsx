@@ -69,6 +69,22 @@ describe('ActivityEntry', () => {
       },
       'moved it from Website to Shop',
     ],
+    [
+      { type: 'cycle', from: null, to: { id: 3, title: 'Launch' } },
+      'planned it into the Cycle “Launch”',
+    ],
+    [
+      { type: 'cycle', from: { id: 3, title: 'Launch' }, to: null },
+      'moved it from the Cycle “Launch” to the Backlog',
+    ],
+    [
+      {
+        type: 'cycle',
+        from: { id: 3, title: 'Launch' },
+        to: { id: 4, title: 'Polish' },
+      },
+      'moved it from the Cycle “Launch” to the Cycle “Polish”',
+    ],
     [{ type: 'description' }, 'edited the description'],
     [
       { type: 'color', from: 'red', to: 'blue' },

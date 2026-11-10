@@ -1528,7 +1528,7 @@ export function createTickets(
      * thrown refusal undoes every write made inside.
      */
     transaction: <T>(run: () => T): T => db.transaction(run),
-    ...createCycles(db, changes),
+    ...createCycles(db, changes, actor),
     ...createReferenceTemplates(db, changes),
     ...createStats(db),
 

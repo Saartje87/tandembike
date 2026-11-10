@@ -2,6 +2,8 @@ import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
+import { type Actor, recordActivity } from './activity';
+import type { ActivityCycle } from './activity-change';
 import { checkProjectWritable } from './archived-projects';
 import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
@@ -419,9 +421,13 @@ export function leaveAllCycles(
 
 /**
  * The Tickets module's Cycle functions, spread into `createTickets`: they
- * share its database and change channel.
+ * share its database, change channel and actor.
  */
-export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
+export function createCycles(
+  db: DatabaseConnection,
+  changes: ChangeChannel,
+  actor: Actor,
+) {
   function cycleRow(id: number): CycleRow {
     const cycle = db
       .select(cycleColumns)
@@ -476,6 +482,31 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
     return { ticket, current };
   }
 
+  /**
+   * Records that `actor` moved Ticket `number` from Cycle `from` to Cycle
+   * `to`, `null` being the Backlog, as a change to the Ticket: it bumps its
+   * `updatedAt`, so `changedSince` finds it, and writes one Activity entry.
+   * Run it in the transaction that moves it. Rollover and archiving a Cycle
+   * do not call it (T1167).
+   */
+  function recordCycleChange(
+    number: number,
+    from: ActivityCycle | null,
+    to: ActivityCycle | null,
+  ) {
+    db.update(tickets)
+      .set({ updatedAt: new Date() })
+      .where(eq(tickets.number, number))
+      .run();
+    recordActivity(db, number, actor, [
+      {
+        type: 'cycle',
+        from: from && { id: from.id, title: from.title },
+        to: to && { id: to.id, title: to.title },
+      },
+    ]);
+  }
+
   /** Throws unless Ticket `number`, as `ticket`, may join `cycle`. */
   function checkPlannable(
     ticket: { projectId: number; archived: boolean },
@@ -510,6 +541,7 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       db.insert(cycleTickets)
         .values({ cycleId: cycle.id, ticketNumber: number })
         .run();
+      recordCycleChange(number, null, cycle);
     });
   }
 
@@ -619,28 +651,31 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
 
   /** Takes Ticket `number` out of changeable `cycle`, which must hold it. */
   function unplanFrom(cycle: CycleRow, number: number) {
-    const removed = db
-      .delete(cycleTickets)
-      .where(
-        and(
-          eq(cycleTickets.cycleId, cycle.id),
-          eq(cycleTickets.ticketNumber, number),
-        ),
-      )
-      .returning({ number: cycleTickets.ticketNumber })
-      .get();
-    if (!removed) {
-      const ticket = db
-        .select({ number: tickets.number })
-        .from(tickets)
-        .where(eq(tickets.number, number))
+    db.transaction(() => {
+      const removed = db
+        .delete(cycleTickets)
+        .where(
+          and(
+            eq(cycleTickets.cycleId, cycle.id),
+            eq(cycleTickets.ticketNumber, number),
+          ),
+        )
+        .returning({ number: cycleTickets.ticketNumber })
         .get();
-      throw ticket
-        ? new NotAllowedError(
-            `Ticket T${number} is not planned into the Cycle "${cycle.title}".`,
-          )
-        : new NotFoundError(`There is no Ticket T${number}.`);
-    }
+      if (!removed) {
+        const ticket = db
+          .select({ number: tickets.number })
+          .from(tickets)
+          .where(eq(tickets.number, number))
+          .get();
+        throw ticket
+          ? new NotAllowedError(
+              `Ticket T${number} is not planned into the Cycle "${cycle.title}".`,
+            )
+          : new NotFoundError(`There is no Ticket T${number}.`);
+      }
+      recordCycleChange(number, cycle, null);
+    });
   }
 
   /**
@@ -697,13 +732,16 @@ export function createCycles(db: DatabaseConnection, changes: ChangeChannel) {
       }
       if (target === null) {
         checkProjectWritable(db, ticket.projectId);
-        return leaveOpenCycles(db, number);
+        const left = leaveOpenCycles(db, number);
+        recordCycleChange(number, current ?? null, null);
+        return left;
       }
       checkPlannable(ticket, number, target);
       const left = leaveOpenCycles(db, number);
       db.insert(cycleTickets)
         .values({ cycleId: target.id, ticketNumber: number })
         .run();
+      recordCycleChange(number, current ?? null, target);
       return [...left, target.id];
     });
   }

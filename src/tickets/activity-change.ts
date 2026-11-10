@@ -4,6 +4,9 @@ import type { Status } from './status';
 /** A Project as an Activity entry names it: by id, and by name at the time. */
 export type ActivityProject = { id: number; name: string };
 
+/** A Cycle as an Activity entry names it: by id, and by title at the time. */
+export type ActivityCycle = { id: number; title: string };
+
 /** The Agent run a Claim entry names. */
 export type ActivityClaim = { agentRunId: string; agentName: string | null };
 
@@ -15,6 +18,11 @@ export type ActivityChange =
   | { type: 'created' }
   | { type: 'status'; from: Status; to: Status }
   | { type: 'project'; from: ActivityProject; to: ActivityProject }
+  /**
+   * Planned into, unplanned from or moved between Cycles; `null` is the
+   * Backlog. Rollover and archiving a Cycle record none.
+   */
+  | { type: 'cycle'; from: ActivityCycle | null; to: ActivityCycle | null }
   | { type: 'title'; from: string; to: string }
   /** Only that it was edited: the text is not kept. */
   | { type: 'description' }
