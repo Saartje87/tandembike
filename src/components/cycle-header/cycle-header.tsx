@@ -126,10 +126,10 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
     }
   };
 
-  const openRetro = (retro: Conversation) => {
+  const openRetro = (closedOrOpen: Conversation) => {
     setError(undefined);
     startTransition(async () => {
-      setError(await dialog.reopenAndOpen(retro));
+      setError(await dialog.reopenAndOpen(closedOrOpen));
     });
   };
 
