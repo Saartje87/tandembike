@@ -100,6 +100,14 @@ export const ProjectSettings: FC<ProjectSettingsProps> = ({
   const [selected, setSelected] = useState<SettingsSectionId>(
     isSectionId(asked) ? asked : hasRepository ? 'general' : 'repository',
   );
+  // A navigation that changes ?section= while the page is open opens it.
+  const [lastAsked, setLastAsked] = useState(asked);
+  if (asked !== lastAsked) {
+    setLastAsked(asked);
+    if (isSectionId(asked)) {
+      setSelected(asked);
+    }
+  }
   const [dirty, setDirtySections] = useState<
     Partial<Record<SettingsSectionId, boolean>>
   >({});

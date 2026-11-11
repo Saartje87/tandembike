@@ -119,6 +119,15 @@ describe('ProjectSettings', () => {
     expect(window.location.search).toBe('?section=commands');
   });
 
+  it('follows a navigation that changes ?section= while open', () => {
+    const { rerender } = renderSettings();
+
+    at('/project/3/settings?section=automation');
+    rerender(<ProjectSettings hasRepository panels={panels} />);
+
+    expect(selectedTab()).toBe('Automation');
+  });
+
   it('lets a section open another tab', async () => {
     renderSettings();
 

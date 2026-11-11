@@ -67,8 +67,10 @@ const valuesOf = (settings: ProjectAgentSettings): AutomationValues => ({
   holdAutoTriage: false,
 });
 
+type CeilingsProps = { children: ReactNode };
+
 /** A switch's ceilings, under it and set in from it. */
-const Ceilings: FC<{ children: ReactNode }> = ({ children }) => (
+const Ceilings: FC<CeilingsProps> = ({ children }) => (
   <Box paddingInlineStart={[0, 6]}>
     <Grid rowGap={3} columnGap={[0, 3]}>
       {children}
