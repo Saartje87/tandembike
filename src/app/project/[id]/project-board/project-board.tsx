@@ -170,10 +170,14 @@ const BoardTab: FC<ProjectBoardProps> = ({ project, tab, filter }) => {
     // The Active Cycle's Board is one column, by what needs the User.
     return (
       <>
-        <CycleHeader key={tab.id} cycle={tab} actions={batchTriage} />
+        <CycleHeader
+          key={`header-${tab.id}`}
+          cycle={tab}
+          actions={batchTriage}
+        />
         {tickets.isCycleComplete(tab.id) && (
           <CycleCompleteBanner
-            key={tab.id}
+            key={`complete-${tab.id}`}
             cycle={tab}
             retro={appConversations().retroOf(tab.id)}
           />
