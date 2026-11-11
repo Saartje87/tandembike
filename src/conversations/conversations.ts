@@ -381,7 +381,6 @@ const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
     ? settings.triageModel
     : settings.runModel;
 
-/** The states of a run whose process may be alive. */
 /**
  * The live map these server checks place a Ticket with: none. The Spec
  * refusal, the run's `inReview` flag and the Approve merge gate judge by the
@@ -390,6 +389,7 @@ const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
  */
 const byOwnState: LiveMap = {};
 
+/** The states of a run whose process may be alive. */
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
 /**
