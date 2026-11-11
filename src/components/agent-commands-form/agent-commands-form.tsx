@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Label, Stack, Text, TextInput } from '@blockle/blocks';
+import { Alert, Label, Stack, Text, TextInput } from '@blockle/blocks';
 import { type FC, useId } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -14,6 +14,7 @@ import {
   playbookCommand,
 } from '../../tickets/agent-commands';
 import { FieldError } from '../field-error/field-error';
+import { SettingsSection } from '../settings-section/settings-section';
 
 export type AgentCommandsFormProps = {
   projectId: number;
@@ -31,8 +32,9 @@ const valuesOf = (commands: ProjectAgentCommands): AgentCommandsFormValues =>
 /**
  * A Project's agent commands (T621), one field for each Stage in
  * `agentStages`, each a single line. A blank field shows the Playbook command
- * it runs. Save shows them as stored; a refusal shows
- * under the field it names and keeps the text.
+ * it runs. They save with the Commands section's Save (ADR 0053), which
+ * shows them as stored; a refusal shows under the field it names and keeps
+ * the text.
  */
 export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
   projectId,
@@ -40,7 +42,7 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
 }) => {
   const idPrefix = useId();
   const {
-    formState: { errors, isSubmitting },
+    formState: { errors, isDirty, isSubmitting },
     handleSubmit,
     register,
     watch,
@@ -73,39 +75,61 @@ export const AgentCommandsForm: FC<AgentCommandsFormProps> = ({
 
   return (
     <form aria-label="Agent commands" onSubmit={submit}>
-      <Stack gap={3}>
-        {agentStages.map(({ field: name, label, skill }) => {
-          const fieldId = `${idPrefix}-${name}`;
-          const errorId = `${fieldId}-error`;
-          const fieldError = errors[name]?.message;
-          const blank = watch(name).trim() === '';
-          return (
-            <Stack key={name} gap={1} id={settingsFieldOfStage(name)}>
-              <Label htmlFor={fieldId}>{label}</Label>
-              <TextInput
-                {...register(name)}
-                id={fieldId}
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={fieldError ? true : undefined}
-                aria-describedby={fieldError ? errorId : undefined}
-              />
-              {blank && (
-                <Text tag="p" fontSize="small" color="muted">
-                  Blank runs {playbookCommand(skill)}
-                </Text>
-              )}
-              <FieldError id={errorId} reason={fieldError} />
-            </Stack>
-          );
-        })}
+      <SettingsSection
+        section="commands"
+        title="Commands"
+        description="Replace the Playbook command a Stage sends, per Stage."
+        help={
+          <>
+            <Text tag="p" fontSize="small" color="muted">
+              A Stage sends its command before the Ticket number, such as
+              /tandembike:implement T42. A blank field runs the Playbook command
+              shown under it; a command you set replaces it for that Stage only.
+            </Text>
+            <Text tag="p" fontSize="small" color="muted">
+              Start on an Epic does not fall back to the Start command. The
+              Retro command is followed by the Cycle's title and id. The Merge
+              command runs when you approve a merge.
+            </Text>
+            <Text tag="p" fontSize="small" color="muted">
+              They apply to Claude Code runs only: a run on another agent always
+              runs the Playbook's skill for its Stage.
+            </Text>
+          </>
+        }
+        dirty={isDirty}
+        saving={isSubmitting}
+        onDiscard={() => reset()}
+      >
+        <Stack gap={3} id="agent-commands">
+          {agentStages.map(({ field: name, label, skill }) => {
+            const fieldId = `${idPrefix}-${name}`;
+            const errorId = `${fieldId}-error`;
+            const fieldError = errors[name]?.message;
+            const blank = watch(name).trim() === '';
+            return (
+              <Stack key={name} gap={1} id={settingsFieldOfStage(name)}>
+                <Label htmlFor={fieldId}>{label}</Label>
+                <TextInput
+                  {...register(name)}
+                  id={fieldId}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={fieldError ? true : undefined}
+                  aria-describedby={fieldError ? errorId : undefined}
+                />
+                {blank && (
+                  <Text tag="p" fontSize="small" color="muted">
+                    Blank runs {playbookCommand(skill)}
+                  </Text>
+                )}
+                <FieldError id={errorId} reason={fieldError} />
+              </Stack>
+            );
+          })}
+        </Stack>
         {serverError && <Alert intent="danger">{serverError}</Alert>}
-        <div>
-          <Button type="submit" size="small" loading={isSubmitting}>
-            Save
-          </Button>
-        </div>
-      </Stack>
+      </SettingsSection>
     </form>
   );
 };

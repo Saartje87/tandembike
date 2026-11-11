@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
@@ -20,6 +20,33 @@ const commands = agentCommands({
 describe('AgentCommandsForm', () => {
   beforeEach(() => {
     vi.mocked(setProjectAgentCommands).mockReset();
+  });
+
+  it('sits in the Commands card with one sentence, the longer rules under "How this works", and Save only while edited (T1438)', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
+    const card = screen.getByRole('region', { name: 'Commands' });
+
+    expect(
+      within(card).getByText(
+        'Replace the Playbook command a Stage sends, per Stage.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText(/Start on an Epic does not fall back/),
+    ).not.toBeVisible();
+    expect(
+      within(card).getByText(/They apply to Claude Code runs only/),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('How this works')).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Save' })).toBeNull();
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Retro command' }),
+      '/retro',
+    );
+
+    expect(within(card).getByRole('button', { name: 'Save' })).toBeVisible();
   });
 
   it('shows the Plan command override and the Playbook command it replaces (T1248)', async () => {
@@ -169,6 +196,10 @@ describe('AgentCommandsForm', () => {
     });
     renderWithTheme(<AgentCommandsForm projectId={3} commands={commands} />);
 
+    await user.type(
+      screen.getByRole('textbox', { name: 'Retro command' }),
+      '/retro',
+    );
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
