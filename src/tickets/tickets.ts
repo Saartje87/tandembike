@@ -6,14 +6,12 @@ import {
   eq,
   inArray,
   isNotNull,
-  isNull,
   ne,
   sql,
 } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
-  projects,
   ticketAcceptanceCriteria,
   ticketAttachments,
   ticketBlockers,
@@ -43,7 +41,7 @@ import {
   type StoredAttachment,
 } from './attachments';
 import { type ChangeChannel, createChangeChannel } from './changes';
-import { claimOwner } from './claim-owner';
+import { createClaims } from './claims';
 import {
   type CycleLink,
   createCycles,
@@ -55,7 +53,6 @@ import {
   checkChildrenArchived,
   checkEpic,
   checkEpicChild,
-  checkEpicClaimable,
   checkEpicNotArchived,
   checkNoBlockerBetween,
   type EpicChildInput,
@@ -97,7 +94,6 @@ import {
   writeLaneOrder,
 } from './lanes';
 import { createMachineSettings } from './machine-settings';
-import { type MergeMode, mergeModeOf } from './merge-mode';
 import { checkOrigin, type OriginLink, type SplitOffTicket } from './origins';
 import {
   isPaletteColor,
@@ -783,17 +779,6 @@ function overrideComment(
   ].join('\n');
 }
 
-function checkedAgentRunId(rawAgentRunId: string): string {
-  const agentRunId = rawAgentRunId.trim();
-  throwFieldErrors({
-    agentRunId:
-      agentRunId === ''
-        ? 'Enter an Agent run id to claim a Ticket.'
-        : undefined,
-  });
-  return agentRunId;
-}
-
 /**
  * The cleaned-up fields of a new Ticket, or a `ValidationError` with a
  * reason for every field that breaks the rules.
@@ -1291,179 +1276,7 @@ export function createTickets(
     /** Calls `listener` after every change; returns an unsubscribe. */
     subscribe: changes.subscribe,
     ...createTicketReads(ctx),
-
-    /**
-     * Claims Ticket `number` for one Agent run. Repeating a claim by that
-     * run is idempotent; another run cannot replace the existing claim.
-     */
-    claimTicket(number: number, input: ClaimTicketInput): Ticket {
-      const agentRunId = checkedAgentRunId(input.agentRunId);
-      const agentName = input.agentName?.trim() || null;
-
-      const changed = db.transaction(() => {
-        checkTicketWritable(number);
-        checkEpicClaimable(db, number, agentRunId);
-        const claimed = db
-          .update(tickets)
-          .set({
-            claimAgentRunId: agentRunId,
-            claimAgentName: agentName,
-            // The mode is fixed when the Claim is taken (ADR 0043).
-            claimMerge: projectMergeMode(number),
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(tickets.number, number), isNull(tickets.claimAgentRunId)),
-          )
-          .returning({ number: tickets.number })
-          .get();
-        if (claimed) {
-          recordActivity(
-            number,
-            claimChanges('claimTaken', {
-              claimAgentRunId: agentRunId,
-              claimAgentName: agentName,
-            }),
-          );
-          return true;
-        }
-
-        const existing = db
-          .select({
-            claimAgentRunId: tickets.claimAgentRunId,
-            claimAgentName: tickets.claimAgentName,
-          })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        if (!existing) {
-          throw new NotFoundError(`There is no Ticket T${number}.`);
-        }
-        if (existing.claimAgentRunId === agentRunId) {
-          return false;
-        }
-
-        const owner = claimOwner(
-          existing.claimAgentRunId,
-          existing.claimAgentName,
-        );
-        throw new NotAllowedError(
-          `Ticket T${number} is already claimed by ${owner}.`,
-        );
-      });
-
-      if (changed) {
-        changes.publish({ type: 'ticket', number });
-      }
-      return getTicket(number);
-    },
-
-    /** Releases Ticket `number` when `agentRunId` is its current claimant. */
-    releaseTicketClaim(
-      number: number,
-      input: Pick<ClaimTicketInput, 'agentRunId'>,
-    ): Ticket {
-      const agentRunId = checkedAgentRunId(input.agentRunId);
-      const changed = db.transaction(() => {
-        // An archived Ticket still lets its Claim go (T1312).
-        checkTicketProjectWritable(number);
-        const claim = db
-          .select({
-            claimAgentRunId: tickets.claimAgentRunId,
-            claimAgentName: tickets.claimAgentName,
-          })
-          .from(tickets)
-          .where(
-            and(
-              eq(tickets.number, number),
-              eq(tickets.claimAgentRunId, agentRunId),
-            ),
-          )
-          .get();
-        const released = db
-          .update(tickets)
-          .set({
-            claimAgentRunId: null,
-            claimAgentName: null,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(tickets.number, number),
-              eq(tickets.claimAgentRunId, agentRunId),
-            ),
-          )
-          .returning({ number: tickets.number })
-          .get();
-        if (released) {
-          if (claim) {
-            recordActivity(number, claimChanges('claimReleased', claim));
-          }
-          return true;
-        }
-
-        const existing = db
-          .select({
-            claimAgentRunId: tickets.claimAgentRunId,
-            claimAgentName: tickets.claimAgentName,
-          })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        if (!existing) {
-          throw new NotFoundError(`There is no Ticket T${number}.`);
-        }
-        if (existing.claimAgentRunId === null) {
-          return false;
-        }
-
-        const owner = claimOwner(
-          existing.claimAgentRunId,
-          existing.claimAgentName,
-        );
-        throw new NotAllowedError(
-          `Ticket T${number} is claimed by ${owner}; only that Agent run can release it.`,
-        );
-      });
-
-      if (changed) {
-        changes.publish({ type: 'ticket', number });
-      }
-      return getTicket(number);
-    },
-
-    /** Clears any claim on Ticket `number` for the User. */
-    clearTicketClaim(number: number): Ticket {
-      // An archived Ticket still lets its Claim go (T1312).
-      checkTicketProjectWritable(number);
-      const cleared = db.transaction(() => {
-        const claim = db
-          .select({
-            claimAgentRunId: tickets.claimAgentRunId,
-            claimAgentName: tickets.claimAgentName,
-          })
-          .from(tickets)
-          .where(eq(tickets.number, number))
-          .get();
-        if (!claim || claim.claimAgentRunId === null) {
-          return false;
-        }
-        db.update(tickets)
-          .set({
-            claimAgentRunId: null,
-            claimAgentName: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(tickets.number, number))
-          .run();
-        recordActivity(number, claimChanges('claimCleared', claim));
-        return true;
-      });
-      if (cleared) {
-        changes.publish({ type: 'ticket', number });
-      }
-      return getTicket(number);
-    },
+    ...createClaims(ctx),
 
     createTicket(input: CreateTicketInput): Ticket {
       const checked = checkNewTicket(input);
@@ -1867,26 +1680,6 @@ export function createTickets(
      */
     autoMergesSince(since: Date): AutoMerge[] {
       return autoMergesSince(db, since);
-    },
-
-    /**
-     * The merge mode Ticket `number`'s Claim was taken with (ADR 0043), or
-     * `null` while it has no Claim. A child under an Epic Claim has none of
-     * its own: read the Epic's.
-     */
-    claimMergeMode(number: number): MergeMode | null {
-      getTicket(number);
-      const row = db
-        .select({
-          claimAgentRunId: tickets.claimAgentRunId,
-          claimMerge: tickets.claimMerge,
-        })
-        .from(tickets)
-        .where(eq(tickets.number, number))
-        .get();
-      return row?.claimAgentRunId == null
-        ? null
-        : (row.claimMerge ?? 'approve');
     },
 
     /**
@@ -2853,17 +2646,6 @@ export function createTickets(
       getTicket(number).externalReferences.findLast(isPullRequestReference) ??
       null
     );
-  }
-
-  /** The merge mode Ticket `number`'s Project gives a Claim taken now. */
-  function projectMergeMode(number: number): MergeMode {
-    const row = db
-      .select({ autoMerge: projects.autoMerge })
-      .from(tickets)
-      .innerJoin(projects, eq(projects.id, tickets.projectId))
-      .where(eq(tickets.number, number))
-      .get();
-    return mergeModeOf(row?.autoMerge ?? false);
   }
 
   /**
