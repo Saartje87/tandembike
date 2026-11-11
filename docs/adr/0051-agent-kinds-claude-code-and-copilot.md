@@ -57,7 +57,7 @@ A Copilot run uses the User's own Copilot sign-in and `~/.copilot`, where Copilo
 ## Out of scope
 
 - The Copilot coding agent on GitHub, which works in the cloud from issue to PR.
-- Copilot Terminal Conversations: `tandembike start` stays Claude Code only for now (ADR 0039, T1369).
+- Copilot Terminal Conversations: `tandembike implement` (then `tandembike start`, ADR 0052) stays Claude Code only for now (ADR 0039, T1369).
 - Agent command overrides for Copilot, and a third Agent kind or a plugin registry for runners.
 
 ## Considered Options

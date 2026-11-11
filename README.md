@@ -33,14 +33,35 @@ npm run setup
 ```
 
 This runs `npm ci`, `npm run build` and `npm link`, which adds a global
-`tandembike` command. From then on, `tandembike` in any folder serves the app
-on [http://localhost:4747](http://localhost:4747), with its database in
-`~/.tandembike/`. On the first run, when `~/.tandembike/ticket.db` is missing
-and the checkout has `data/ticket.db`, the command copies that database (with
-any `-wal` and `-shm` files) and says so. It never moves, deletes or
-overwrites a database. Pass `-p <port>` to use another port.
+`tandembike` command. From then on, `tandembike start` in any folder starts the
+app in the background on [http://localhost:4747](http://localhost:4747), with
+its database in `~/.tandembike/`, and returns once it answers. On the first
+run, when `~/.tandembike/ticket.db` is missing and the checkout has
+`data/ticket.db`, the command copies that database (with any `-wal` and `-shm`
+files) and says so. It never moves, deletes or overwrites a database.
 
-See `docs/adr/0035-tandembike-installs-from-its-checkout.md`.
+| Command                         | Does                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| `tandembike start [-p <port>]`  | Start the server in the background; says "already running" when it is          |
+| `tandembike start --foreground` | Serve in this terminal instead, to watch or debug it                           |
+| `tandembike stop [--force]`     | Stop the server `tandembike start` started, and wait until it is gone          |
+| `tandembike restart`            | Stop, then start on the same port (after `git pull` and `npm run build`)       |
+| `tandembike status`             | pid, URL, uptime and log path; exits 1 when nothing runs                       |
+| `tandembike logs [-f]`          | The last 100 lines of `~/.tandembike/server.log`; `-f` follows it until Ctrl+C |
+| `tandembike help`               | Every command                                                                  |
+
+`start` records the server in `~/.tandembike/server.json` (pid, port and start
+time) and appends its output to `~/.tandembike/server.log`. On each start the log
+gets a "started at …" line, after rolling over to `server.log.1` once it passes
+5 MB. Pass `-p <port>` to
+use another port; the other commands find it from `server.json` (or
+`TANDEMBIKE_URL` when set). `start` refuses with "run `npm run build` first"
+when the checkout has no production build. `stop` and `status` never touch a
+server they did not start, such as `npm run dev`: `status` reports it as
+running, not started by `tandembike start`, and `stop` refuses it.
+
+See `docs/adr/0035-tandembike-installs-from-its-checkout.md` and
+`docs/adr/0052-the-cli-runs-the-server-in-the-background.md`.
 
 ## Getting started (development)
 
@@ -65,9 +86,36 @@ port (`http://localhost:<port>/api/mcp`).
 
 ## Work a Ticket in your terminal
 
-With Tandembike running, `tandembike start T42` (or `tandembike start 42`) in
-any folder opens interactive `claude` on that Ticket, whatever the folder is:
-the Ticket's Project says where. Tandembike makes the run's worktree and runs
+### The wizard
+
+Run `tandembike` alone in a terminal and it asks instead of making you
+remember the commands. When the current folder is in no Project's repository
+it first asks **Which Project?**; otherwise it uses the folder's Project. Then
+it offers **Implement**, **Triage**, **Spec**, **Plan**, **Resume** and a
+**Server** entry labelled with the server's state (`Server: running on
+:4747`), which offers start, stop, restart and status. Each action lists what
+fits it in that Project:
+
+- **Implement**: the Active Cycle's ready, open items, with the `next_work`
+  pick first.
+- **Triage**: the untriaged Todo Tickets (labelled `needs-triage`, or with no
+  triage state label).
+- **Spec**: the ideas in Intake and the Epics without children.
+- **Resume**: the Conversations **Continue in terminal** would accept.
+
+Every list ends with **Type a number…** for a Ticket it leaves out (for
+Implement, `next` also works); an empty list says so and still offers it.
+**Plan** asks for the goal as text. The wizard then opens exactly the session
+the typed command would and exits with `claude`'s exit code; Ctrl+C at any
+prompt leaves with exit 130. It starts the server first when it is down.
+Without a terminal (piped, in a script) `tandembike` prints the help, as
+`tandembike help` always does.
+
+### The commands
+
+With Tandembike running, `tandembike implement T42` (or `tandembike implement
+42`) in any folder opens interactive `claude` on that Ticket or Epic, whatever
+the folder is: the Ticket's Project says where. Tandembike makes the run's worktree and runs
 the Prepare command as for a Start from the UI (with Parallel runs on), then
 opens `claude` there with the Stage's command (`/tandembike:implement T42`
 unless the Project sets its own), the run brief, the bundled Playbook, the
@@ -80,16 +128,20 @@ with the Stage's command. Spec is refused unless the Ticket is an idea in
 Intake or an Epic without children. `tandembike plan "<goal>"` takes the Project whose repository holds the
 current folder and opens a Plan session in its main checkout, with the Plan
 command and the goal as the first message; from a folder in no Project's
-repository it names the known Projects. `tandembike next` takes the Project whose
-repository holds the current folder and starts a Terminal Start on the top
+repository it names the known Projects. `tandembike implement` without a
+Ticket takes the Project whose repository holds the current folder and starts
+a Terminal Start on the top
 Eligible item of its Active Cycle, the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
 
 The Conversation shows on the Board as In flight, **Started by Terminal**. It
 holds no Start run slot and counts against no Spend ceiling, and Autopilot does
 not start a second run on its Ticket. It ends when `claude` exits, and
-`tandembike start` exits with `claude`'s exit code. If Tandembike is not
-running, it says so and exits 1. See
+the command exits with `claude`'s exit code. When Tandembike is not running, the
+command starts it in the background first (without the MCP and plugin offers)
+and says so in one line, `Started Tandembike on :4747 (logs: …)`; when that
+start fails it prints why, the log path and the `tandembike start` hint, and
+exits 1. The same holds for `triage`, `spec`, `plan` and `resume`. See
 `docs/adr/0039-terminal-conversations.md`.
 
 ### Continue a Conversation in your terminal
@@ -111,7 +163,7 @@ removed.
 The checkout is also a Claude Code marketplace named `tandembike`
 (`.claude-plugin/marketplace.json`) whose one plugin is the bundled Playbook
 (`./playbook`), so installing needs no network. The offer is made only when
-`tandembike` starts the server: on the first run, and on any later start where
+`tandembike start` starts the server: on the first run, and on any later start where
 the installed plugin is older than the bundled Playbook. It offers to run:
 
 ```bash
@@ -124,14 +176,14 @@ claude plugin install tandembike@tandembike --scope user
 `claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
 again at any time. Afterwards `/tandembike:implement T42` and the other
 Playbook commands work in a bare `claude` session in any repository. The
-session subcommands (`start`, `triage`, `spec`, `plan`, `next`, `resume`) never make
+session subcommands (`implement`, `triage`, `spec`, `plan`, `resume`) never make
 the offer: they load the bundled Playbook themselves, so they do not depend on
 this install.
 
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:4747/api/mcp`. The `tandembike` command offers to register it
+`http://localhost:4747/api/mcp`. `tandembike start` offers to register it
 for Claude Code at user level on its first start, so every repository reaches
 it; to register it yourself, or for other clients, see the next section. This
 repository's own `.mcp.json` registers it only for development in this

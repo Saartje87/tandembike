@@ -9,12 +9,74 @@ import {
 } from './session';
 
 describe('parseCommand', () => {
-  it('starts the server with no subcommand, passing its arguments on', () => {
-    expect(parseCommand([])).toEqual({ command: 'server', args: [] });
-    expect(parseCommand(['-p', '4000'])).toEqual({
-      command: 'server',
-      args: ['-p', '4000'],
+  it('opens the wizard with no subcommand (T1355)', () => {
+    expect(parseCommand([])).toEqual({ command: 'wizard' });
+  });
+
+  it('prints the help for help and --help (T1350)', () => {
+    for (const argv of [['help'], ['--help']]) {
+      expect(parseCommand(argv)).toEqual({ command: 'help', text: usageText });
+    }
+  });
+
+  it('knows start with its port and --foreground (T1350)', () => {
+    expect(parseCommand(['start'])).toEqual({
+      command: 'start',
+      port: null,
+      foreground: false,
     });
+    expect(parseCommand(['start', '-p', '4848'])).toEqual({
+      command: 'start',
+      port: 4848,
+      foreground: false,
+    });
+    expect(parseCommand(['start', '--port', '4848', '--foreground'])).toEqual({
+      command: 'start',
+      port: 4848,
+      foreground: true,
+    });
+    expect(parseCommand(['start', '--port=4848'])).toEqual({
+      command: 'start',
+      port: 4848,
+      foreground: false,
+    });
+  });
+
+  it('knows stop, stop --force, restart and status (T1350)', () => {
+    expect(parseCommand(['stop'])).toEqual({ command: 'stop', force: false });
+    expect(parseCommand(['stop', '--force'])).toEqual({
+      command: 'stop',
+      force: true,
+    });
+    expect(parseCommand(['restart'])).toEqual({ command: 'restart' });
+    expect(parseCommand(['status'])).toEqual({ command: 'status' });
+  });
+
+  it('knows logs and logs -f (T1351)', () => {
+    expect(parseCommand(['logs'])).toEqual({ command: 'logs', follow: false });
+    expect(parseCommand(['logs', '-f'])).toEqual({
+      command: 'logs',
+      follow: true,
+    });
+    expect(parseCommand(['logs', '--follow'])).toEqual({
+      command: 'logs',
+      follow: true,
+    });
+    expect(parseCommand(['logs', 'x'])).toMatchObject({ command: 'usage' });
+    expect(usageText).toContain('tandembike logs [-f]');
+  });
+
+  it('lists the server commands in the help (T1350)', () => {
+    for (const line of [
+      'tandembike start',
+      '--foreground',
+      'tandembike stop',
+      'tandembike restart',
+      'tandembike status',
+      'tandembike help',
+    ]) {
+      expect(usageText).toContain(line);
+    }
   });
 
   it('knows plugin', () => {
@@ -29,22 +91,26 @@ describe('parseCommand', () => {
     expect(parseCommand(['mcp'])).toEqual({ command: 'mcp' });
   });
 
-  it('accepts start with T42 or 42', () => {
-    expect(parseCommand(['start', 'T42'])).toEqual({
-      command: 'start',
+  it('accepts implement with T42 or 42, and alone (T1353)', () => {
+    expect(parseCommand(['implement', 'T42'])).toEqual({
+      command: 'implement',
       ticketNumber: 42,
     });
-    expect(parseCommand(['start', '42'])).toEqual({
-      command: 'start',
+    expect(parseCommand(['implement', '42'])).toEqual({
+      command: 'implement',
       ticketNumber: 42,
     });
-    expect(parseCommand(['start', 't7'])).toEqual({
-      command: 'start',
+    expect(parseCommand(['implement', 't7'])).toEqual({
+      command: 'implement',
       ticketNumber: 7,
+    });
+    expect(parseCommand(['implement'])).toEqual({
+      command: 'implement',
+      ticketNumber: null,
     });
   });
 
-  it('accepts triage and spec with a Ticket, and next alone (T1240)', () => {
+  it('accepts triage and spec with a Ticket (T1240)', () => {
     expect(parseCommand(['triage', 'T42'])).toEqual({
       command: 'triage',
       ticketNumber: 42,
@@ -53,7 +119,6 @@ describe('parseCommand', () => {
       command: 'spec',
       ticketNumber: 7,
     });
-    expect(parseCommand(['next'])).toEqual({ command: 'next' });
   });
 
   it('accepts plan with a goal and refuses a missing one (T1249)', () => {
@@ -75,12 +140,20 @@ describe('parseCommand', () => {
     [['triage']],
     [['spec', 'abc']],
     [['spec', 'T1', 'extra']],
+    [['next']],
     [['next', 'T1']],
-    [['start']],
-    [['start', 'abc']],
-    [['start', '0']],
-    [['start', '1.5']],
-    [['start', 'T42', 'extra']],
+    [['implement', 'abc']],
+    [['implement', '0']],
+    [['implement', '1.5']],
+    [['implement', 'T42', 'extra']],
+    [['start', 'T42']],
+    [['start', '-p']],
+    [['start', '-p', 'abc']],
+    [['start', '--verbose']],
+    [['stop', 'now']],
+    [['restart', '-p', '4848']],
+    [['status', 'x']],
+    [['help', 'x']],
     [['frobnicate']],
     [['mcp', 'extra']],
   ])('returns usage for %j', (argv) => {
@@ -90,11 +163,12 @@ describe('parseCommand', () => {
     });
   });
 
-  it('prints the usage with the start command', () => {
-    expect(usageText).toContain('tandembike start <ticket>');
+  it('prints the usage with the session commands (T1353)', () => {
+    expect(usageText).toContain('tandembike implement [ticket]');
+    expect(usageText).not.toContain('tandembike next');
+    expect(usageText).not.toContain('start <ticket>');
     expect(usageText).toContain('tandembike triage <ticket>');
     expect(usageText).toContain('tandembike spec <ticket>');
-    expect(usageText).toContain('tandembike next');
   });
 
   it('words each reason next_work gives for no work (T1240)', () => {

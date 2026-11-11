@@ -103,3 +103,24 @@ describe('POST /api/terminal start (T1342)', () => {
     },
   );
 });
+
+describe('POST /api/terminal sessions (T1352)', () => {
+  beforeEach(() => {
+    vi.mocked(appConversations).mockReset();
+  });
+
+  it('answers with the open Terminal Conversations', async () => {
+    const { conversations, ticket } = setup();
+    const session = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'start',
+    });
+
+    const response = await post({ action: 'sessions' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([
+      { conversationId: session.conversationId, ticketNumber: ticket.number },
+    ]);
+  });
+});

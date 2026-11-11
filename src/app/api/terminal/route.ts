@@ -1,4 +1,9 @@
 import { appConversations } from '../../../conversations/app-conversations';
+import type { TerminalProjectRef } from '../../../conversations/conversations';
+import {
+  choiceIntents,
+  isChoiceIntent,
+} from '../../../conversations/terminal-choices';
 import {
   isTerminalIntent,
   type TerminalIntent,
@@ -18,11 +23,22 @@ type TerminalAction =
       ticketNumber: number;
       intent?: unknown;
     }
-  | { action: 'next'; folder: string }
-  | { action: 'plan'; folder: string; goal: string }
+  | ({ action: 'next' } & ProjectRefBody)
+  | ({ action: 'plan'; goal: string } & ProjectRefBody)
+  | { action: 'projects'; folder: string }
+  | ({ action: 'list'; intent: unknown } & ProjectRefBody)
   | { action: 'resume'; conversationId: number }
   | { action: 'end'; conversationId: number; exitCode: number }
-  | { action: 'heartbeat'; conversationId: number };
+  | { action: 'heartbeat'; conversationId: number }
+  | { action: 'sessions' };
+
+/** A folder, or a Project id, which wins when both are sent. */
+type ProjectRefBody = { folder?: string; projectId?: number };
+
+const projectRefOf = (body: ProjectRefBody): TerminalProjectRef =>
+  body.projectId === undefined || body.projectId === null
+    ? { folder: String(body.folder) }
+    : { projectId: Number(body.projectId) };
 
 const text = (message: string, status: number) =>
   new Response(message, {
@@ -63,15 +79,33 @@ export const POST = async (request: Request): Promise<Response> => {
       }
       case 'next':
         return Response.json(
-          await conversations.startTerminalNext(String(body.folder)),
+          await conversations.startTerminalNext(projectRefOf(body)),
         );
       case 'plan':
         return Response.json(
           await conversations.startTerminalPlan({
-            folder: String(body.folder),
+            ...projectRefOf(body),
             goal: String(body.goal ?? ''),
           }),
         );
+      case 'projects':
+        return Response.json(
+          conversations.terminalProjects(String(body.folder)),
+        );
+      case 'list': {
+        if (!isChoiceIntent(body.intent)) {
+          return text(
+            `Unknown intent. Use one of: ${choiceIntents.join(', ')}.`,
+            400,
+          );
+        }
+        return Response.json(
+          conversations.terminalChoices({
+            ...projectRefOf(body),
+            intent: body.intent,
+          }),
+        );
+      }
       case 'resume':
         return Response.json(
           await conversations.handOffToTerminal(Number(body.conversationId)),
@@ -84,6 +118,8 @@ export const POST = async (request: Request): Promise<Response> => {
       case 'heartbeat':
         conversations.heartbeatTerminal(Number(body.conversationId));
         return Response.json({ ok: true });
+      case 'sessions':
+        return Response.json(conversations.openTerminals());
       default:
         return text('Unknown action.', 400);
     }

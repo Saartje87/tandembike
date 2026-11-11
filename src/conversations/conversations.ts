@@ -88,6 +88,11 @@ import {
 import { type RunResult, runResults } from './run-outcome';
 import { messageRoles, type StatusEntry } from './status-line';
 import {
+  type ChoiceIntent,
+  type ChoicesOf,
+  terminalChoicesOf,
+} from './terminal-choices';
+import {
   type TerminalIntent,
   terminalIdleMinutes,
   terminalIdleMs,
@@ -301,7 +306,7 @@ export type TerminalSession = {
   model: string | null;
 };
 
-/** What `tandembike next` gets: a session, or why there is no work. */
+/** What `tandembike implement` without a Ticket gets: a session, or why there is no work. */
 export type TerminalNext =
   | { started: true; session: TerminalSession }
   | { started: false; reason: NoWorkReason };
@@ -310,6 +315,24 @@ export type TerminalNext =
 export type TerminalHandOff = Omit<TerminalSession, 'firstMessage'> & {
   /** The SDK session `claude --resume` opens. */
   sessionId: string;
+};
+
+/** An open Terminal Conversation, as `tandembike stop` names it. */
+export type OpenTerminal = {
+  conversationId: number;
+  /** Its Ticket; null for a Plan, which is about its Project. */
+  ticketNumber: number | null;
+};
+
+/** Where a folder-less session command or list applies: a folder, or a Project. */
+export type TerminalProjectRef = { folder: string } | { projectId: number };
+
+/** What the wizard's Project step needs (T1356). */
+export type TerminalProjects = {
+  /** The Projects that are not archived. */
+  projects: { id: number; name: string }[];
+  /** The Project whose repository holds the folder; null for none. */
+  folderProjectId: number | null;
 };
 
 export type StartTerminalInput = {
@@ -1542,6 +1565,12 @@ export function createConversations({
     };
   };
 
+  /** The Project of `ref`: its id, or the Project whose repository holds its folder. */
+  const projectIdOfRef = (ref: TerminalProjectRef): number =>
+    'projectId' in ref
+      ? tickets.getProject(ref.projectId).id
+      : projectIdOfFolder(ref.folder);
+
   /** The Project whose repository holds `folder`, else a refusal naming the known ones. */
   const projectIdOfFolder = (folder: string): number => {
     const projectId = tickets.findProjectIdOfFolder(folder);
@@ -1567,15 +1596,14 @@ export function createConversations({
    * the goal as the first message. Like `startPlan`, it holds no slot and
    * records no Cycle.
    */
-  const startTerminalPlan = async (input: {
-    folder: string;
-    goal: string;
-  }): Promise<TerminalSession> => {
+  const startTerminalPlan = async (
+    input: TerminalProjectRef & { goal: string },
+  ): Promise<TerminalSession> => {
     const goal = input.goal.trim();
     if (goal === '') {
       throw new ValidationError({ goal: 'Describe the goal to plan for.' });
     }
-    const projectId = projectIdOfFolder(input.folder);
+    const projectId = projectIdOfRef(input);
     const settings = tickets.getProjectAgentSettings(projectId);
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
@@ -1610,12 +1638,14 @@ export function createConversations({
   };
 
   /**
-   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * `tandembike implement` without a Ticket (T1240, T1353): starts a Terminal Start on the top Eligible
    * item of the Active Cycle of the Project whose repository holds `folder`,
    * by the `next_work` rule. With no work it returns `next_work`'s reason.
    */
-  const startTerminalNext = async (folder: string): Promise<TerminalNext> => {
-    const projectId = projectIdOfFolder(folder);
+  const startTerminalNext = async (
+    ref: TerminalProjectRef,
+  ): Promise<TerminalNext> => {
+    const projectId = projectIdOfRef(ref);
     const next = tickets.nextWork({ projectId });
     if (next.ticket === null) {
       return { started: false, reason: next.reason };
@@ -2455,6 +2485,65 @@ export function createConversations({
     endTerminal,
     heartbeatTerminal,
     endIdleTerminals,
+
+    /**
+     * The wizard's Project step (T1356): the Projects that are not archived,
+     * and the one whose repository holds `folder`, if any.
+     */
+    terminalProjects(folder: string): TerminalProjects {
+      return {
+        projects: tickets
+          .listProjects()
+          .filter(({ archived }) => !archived)
+          .map(({ id, name }) => ({ id, name })),
+        folderProjectId: tickets.findProjectIdOfFolder(folder) ?? null,
+      };
+    },
+
+    /**
+     * The wizard's list for an action in a Project (T1357), in display order:
+     * see `terminal-choices.ts`. A folder in no Project is refused, naming
+     * the known ones.
+     */
+    terminalChoices<I extends ChoiceIntent>(
+      input: TerminalProjectRef & { intent: I },
+    ): ChoicesOf<I> {
+      return terminalChoicesOf(
+        {
+          tickets,
+          conversationsOf: (projectId) =>
+            db
+              .select()
+              .from(conversations)
+              .where(eq(conversations.projectId, projectId))
+              .orderBy(desc(conversations.id))
+              .all(),
+        },
+        input.intent,
+        projectIdOfRef(input),
+      );
+    },
+
+    /**
+     * The Terminal Conversations whose session is open, newest first: what
+     * `tandembike stop` warns about before it cuts them off (T1352).
+     */
+    openTerminals(): OpenTerminal[] {
+      return db
+        .select({
+          conversationId: conversations.id,
+          ticketNumber: conversations.ticketNumber,
+        })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.startedBy, 'terminal'),
+            inArray(conversations.state, liveStates),
+          ),
+        )
+        .orderBy(desc(conversations.id))
+        .all();
+    },
 
     recordTerminalCall,
 

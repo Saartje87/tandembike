@@ -2,6 +2,7 @@ import {
   isTerminalIntent,
   type TerminalIntent,
 } from '../conversations/terminal-shared';
+import { serverPort } from '../http/server-port';
 import { playbookPath } from '../playbook/playbook';
 
 /**
@@ -11,45 +12,100 @@ import { playbookPath } from '../playbook/playbook';
 
 export const usageText = [
   'Usage:',
-  '  tandembike                    start the server',
-  '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
+  '  tandembike                    in a terminal, a wizard: pick an action and a Ticket',
+  '  tandembike start [-p <port>] [--foreground]',
+  '                                start the server in the background (or in this terminal)',
+  '  tandembike stop [--force]     stop the server `tandembike start` started',
+  '  tandembike restart            stop, then start the server on the same port',
+  '  tandembike status             whether the server runs: pid, URL, uptime, log',
+  '  tandembike logs [-f]          the last 100 lines of the server log; -f follows it',
+  '  tandembike implement [ticket] work a Ticket or Epic in this terminal (T42 or 42);',
+  '                                without one, the next Eligible item of this Project',
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
-  '  tandembike next               start the next Eligible item of this Project',
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
   '  tandembike plugin             install the Playbook plugin in Claude Code',
+  '  tandembike help               this help',
 ].join('\n');
 
 export type ParsedCommand =
-  | { command: 'server'; args: string[] }
+  | { command: 'wizard' }
+  | { command: 'help'; text: string }
+  | { command: 'start'; port: number | null; foreground: boolean }
+  | { command: 'stop'; force: boolean }
+  | { command: 'restart' }
+  | { command: 'status' }
+  | { command: 'logs'; follow: boolean }
   | { command: 'mcp' }
   | { command: 'plugin' }
-  | { command: TerminalIntent; ticketNumber: number }
-  | { command: 'next' }
-  | { command: 'plan'; goal: string }
+  | { command: Exclude<TerminalIntent, 'start'>; ticketNumber: number }
+  | {
+      command: 'implement';
+      ticketNumber: number | null;
+      /** The wizard's Project for the next Eligible item; else the folder's. */
+      projectId?: number;
+    }
+  | {
+      command: 'plan';
+      goal: string;
+      /** The wizard's Project; else the folder's. */
+      projectId?: number;
+    }
   | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
+
+/** A command that runs: everything but the wizard, which returns one. */
+export type RunnableCommand = Exclude<ParsedCommand, { command: 'wizard' }>;
 
 const usage: ParsedCommand = { command: 'usage', text: usageText };
 
 /** A Ticket as typed, `T42` or `42`; null for anything else. */
-const ticketNumberOf = (text: string | undefined): number | null => {
+export const ticketNumberOf = (text: string | undefined): number | null => {
   const match = /^T?(\d+)$/i.exec(text ?? '');
   const number = match ? Number(match[1]) : 0;
   return number > 0 ? number : null;
 };
 
+/** `start`'s flags: `-p`/`--port <port>` and `--foreground`; null when wrong. */
+const parseStart = (args: string[]): ParsedCommand | null => {
+  const foreground = args.includes('--foreground');
+  const portArgs = args.filter((arg) => arg !== '--foreground');
+  if (portArgs.length === 0)
+    return { command: 'start', port: null, foreground };
+  try {
+    return { command: 'start', port: serverPort(portArgs), foreground };
+  } catch {
+    return null;
+  }
+};
+
 /**
- * What `tandembike <argv>` does. No subcommand (or only flags) starts the
- * server with those arguments; other subcommands are added here, one per
- * Stage the terminal can open.
+ * What `tandembike <argv>` does: the wizard with no subcommand, a server
+ * command (ADR 0052), or a session command (ADR 0039).
  */
 export function parseCommand(argv: string[]): ParsedCommand {
   const [first, ...rest] = argv;
-  if (first === undefined || first.startsWith('-')) {
-    return { command: 'server', args: argv };
+  if (first === undefined) return { command: 'wizard' };
+  if (rest.length === 0 && /^(--)?help$/.test(first)) {
+    return { command: 'help', text: usageText };
+  }
+  if (first === 'start') return parseStart(rest) ?? usage;
+  if (first === 'stop') {
+    if (rest.length === 0) return { command: 'stop', force: false };
+    return rest.length === 1 && rest[0] === '--force'
+      ? { command: 'stop', force: true }
+      : usage;
+  }
+  if (first === 'logs') {
+    if (rest.length === 0) return { command: 'logs', follow: false };
+    return rest.length === 1 && (rest[0] === '-f' || rest[0] === '--follow')
+      ? { command: 'logs', follow: true }
+      : usage;
+  }
+  if (first === 'restart' || first === 'status') {
+    return rest.length === 0 ? { command: first } : usage;
   }
   if (first === 'mcp') {
     return rest.length === 0 ? { command: 'mcp' } : usage;
@@ -57,14 +113,18 @@ export function parseCommand(argv: string[]): ParsedCommand {
   if (first === 'plugin') {
     return rest.length === 0 ? { command: 'plugin' } : usage;
   }
-  if (first === 'next') {
-    return rest.length === 0 ? { command: 'next' } : usage;
+  if (first === 'implement') {
+    if (rest.length === 0) return { command: 'implement', ticketNumber: null };
+    const ticketNumber = ticketNumberOf(rest[0]);
+    return rest.length === 1 && ticketNumber !== null
+      ? { command: 'implement', ticketNumber }
+      : usage;
   }
   if (first === 'plan') {
     const goal = rest.join(' ').trim();
     return goal === '' ? usage : { command: 'plan', goal };
   }
-  if (isTerminalIntent(first)) {
+  if (isTerminalIntent(first) && first !== 'start') {
     const ticketNumber = ticketNumberOf(rest[0]);
     return rest.length === 1 && ticketNumber !== null
       ? { command: first, ticketNumber }
@@ -80,7 +140,7 @@ export function parseCommand(argv: string[]): ParsedCommand {
   return usage;
 }
 
-/** What `tandembike next` prints when `next_work` finds nothing (T1240). */
+/** What `tandembike implement` prints when `next_work` finds nothing (T1240). */
 export function noWorkMessage(
   reason: 'no-active-cycle' | 'nothing-ready' | 'all-blocked-or-claimed',
 ): string {

@@ -10,7 +10,7 @@ import { appDatabase, appTickets } from '../../../tickets/app-tickets';
 export const POST = (request: Request): Promise<Response> => {
   const tickets = appTickets('agent');
   return handleMcpRequest(request, tickets, {
-    // A `tandembike start` session's calls feed its Status line (T1238).
+    // A `tandembike implement` session's calls feed its Status line (T1238).
     onToolCall: (runId, toolName, input) =>
       appConversations().recordTerminalCall(runId, toolName, input),
     // get_conversations reads them without the live module (T1265).

@@ -34,7 +34,7 @@ export type ConversationState = (typeof conversationStates)[number];
 
 /**
  * Who started a Conversation (GLOSSARY: Started by). `terminal` is the
- * User's `tandembike start` in a terminal (ADR 0039).
+ * User's `tandembike implement` (or another session command) in a terminal (ADR 0039).
  */
 export const conversationStarters = ['user', 'autopilot', 'terminal'] as const;
 export type ConversationStarter = (typeof conversationStarters)[number];

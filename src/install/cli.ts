@@ -18,64 +18,204 @@ import {
   shouldOfferPlugin,
 } from './install';
 import {
+  findServerUrl,
+  isLocalUrl,
+  lastLines,
+  liveRecord,
+  logTailLines,
+  type OpenSession,
+  restartServer,
+  type ServerEffects,
+  type ServerRecord,
+  type StopOptions,
+  serverLabel,
+  serverState,
+  serverStatus,
+  startServer,
+  stopServer,
+} from './server-lifecycle';
+import {
   noWorkMessage,
   parseCommand,
   planClaudeSession,
+  type RunnableCommand,
   type TerminalResumeResult,
   type TerminalStartResult,
+  usageText,
 } from './session';
+import { cancelled, type Prompter, runWizard } from './wizard';
 import { spawn, spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir, constants as osConstants } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
 /**
  * The `tandembike` command (bin/tandembike.mjs runs it from the checkout).
- * `parseCommand` picks the subcommand: none runs the first-run steps and then
- * the production server with its data in `~/.tandembike`; `mcp` offers the MCP
- * registration; `plugin` offers the Playbook plugin (first run and when the
- * install is older too); `start` opens a terminal session on a Ticket (ADR 0039). The
- * decisions live in `install.ts` and `session.ts`; this only does the I/O.
+ * `parseCommand` picks the subcommand: `start`, `stop`, `restart` and
+ * `status` run the server in the background (ADR 0052) with its data in
+ * `~/.tandembike`; `mcp` and `plugin` make the Claude Code offers; the session
+ * commands open a Terminal Conversation (ADR 0039). The decisions live in
+ * `install.ts`, `server-lifecycle.ts` and `session.ts`; this only does the I/O.
  */
 
 const checkout = process.env.TANDEMBIKE_PACKAGE_DIR ?? process.cwd();
+/** The folder the User ran `tandembike` in (bin/tandembike.mjs runs this from the checkout). */
+const callerFolder = process.env.TANDEMBIKE_CWD ?? process.cwd();
 const home = process.env.TANDEMBIKE_DATA_DIR || join(homedir(), '.tandembike');
+const recordPath = join(home, 'server.json');
+const logPath = join(home, 'server.log');
 
 // tsx loads this file as CommonJS (package.json has no "type": "module"), so
 // it cannot use top-level await: the async steps run in main().
 async function main(): Promise<void> {
   const parsed = parseCommand(process.argv.slice(2));
-  if (parsed.command === 'usage') {
-    console.log(parsed.text);
-    process.exit(1);
+  if (parsed.command === 'wizard') {
+    // Without a terminal there is no one to answer the prompts.
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.log(usageText);
+      return process.exit(0);
+    }
+    return process.exit(await wizard());
   }
-  if ('ticketNumber' in parsed) {
-    return process.exit(
-      await startSession({
+  process.exit(await runCommand(parsed));
+}
+
+/** Where a session command's Project comes from: the wizard's pick, else this folder. */
+const projectRef = (projectId: number | undefined) =>
+  projectId === undefined ? { folder: callerFolder } : { projectId };
+
+/**
+ * Runs a typed command, or the one the wizard returned, and returns its exit
+ * code: one path for both, so they cannot drift (ADR 0052).
+ */
+async function runCommand(parsed: RunnableCommand): Promise<number> {
+  switch (parsed.command) {
+    case 'usage':
+      console.log(parsed.text);
+      return 1;
+    case 'help':
+      console.log(parsed.text);
+      return 0;
+    case 'start':
+      return startServer(serverEffects, {
+        port: parsed.port,
+        foreground: parsed.foreground,
+        prepare: () => firstRunSteps({ offers: true }),
+      });
+    case 'stop':
+      return stopServer(serverEffects, stopOptions(parsed.force));
+    case 'restart':
+      return restartServer(serverEffects, stopOptions(false), {
+        prepare: () => firstRunSteps({ offers: true }),
+      });
+    case 'status':
+      return serverStatus(serverEffects);
+    case 'logs':
+      return showLogs(parsed.follow);
+    case 'mcp':
+      await firstRunSteps({ offers: false });
+      console.log(`Tandembike data: ${home}`);
+      if (await offerMcp()) markMcpOffered();
+      return 0;
+    case 'plugin':
+      await firstRunSteps({ offers: false });
+      console.log(`Tandembike data: ${home}`);
+      if (await offerPlugin()) markOffersMade(home, 'plugin');
+      return 0;
+    case 'triage':
+    case 'spec':
+      if (!(await ensureServer())) return 1;
+      return startSession({
         action: 'start',
         ticketNumber: parsed.ticketNumber,
         intent: parsed.command,
-      }),
-    );
-  }
-  if (parsed.command === 'plan') {
-    return process.exit(
-      await startSession({
+      });
+    case 'plan':
+      if (!(await ensureServer())) return 1;
+      return startSession({
         action: 'plan',
-        folder: process.cwd(),
+        ...projectRef(parsed.projectId),
         goal: parsed.goal,
-      }),
-    );
+      });
+    case 'implement':
+      if (!(await ensureServer())) return 1;
+      return parsed.ticketNumber === null
+        ? startNext(parsed.projectId)
+        : startSession({
+            action: 'start',
+            ticketNumber: parsed.ticketNumber,
+            intent: 'start',
+          });
+    case 'resume':
+      if (!(await ensureServer())) return 1;
+      return resumeSession(parsed.conversationId);
   }
-  if (parsed.command === 'next') {
-    return process.exit(await startNext());
-  }
+}
 
-  if (parsed.command === 'resume') {
-    process.exit(await resumeSession(parsed.conversationId));
+/**
+ * Bare `tandembike` in a terminal: starts the server when it is down, so the
+ * lists can load, then runs the wizard's pick through `runCommand`.
+ */
+async function wizard(): Promise<number> {
+  if (!(await ensureServer())) return 1;
+  try {
+    const outcome = await runWizard({
+      prompter: await clackPrompter(),
+      serverLabel: serverLabel(await serverState(serverEffects)),
+      projects: () => callServer({ action: 'projects', folder: callerFolder }),
+      choices: (intent, projectId) =>
+        callServer({ action: 'list', intent, projectId }),
+    });
+    if ('exit' in outcome) {
+      if (outcome.message) console.log(outcome.message);
+      return outcome.exit;
+    }
+    return runCommand(outcome.run);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
   }
+}
 
+/** The wizard's prompts, by `@clack/prompts` (an ES module, so imported here). */
+async function clackPrompter(): Promise<Prompter> {
+  const clack = await import('@clack/prompts');
+  return {
+    select: async (message, options) => {
+      const value = await clack.select({
+        message,
+        // Clack types each option by its value; the wizard's are plain.
+        options: options as never,
+      });
+      return clack.isCancel(value) ? cancelled : (value as never);
+    },
+    text: async (message, validate) => {
+      const value = await clack.text({
+        message,
+        validate: (v) => validate(v ?? ''),
+      });
+      return clack.isCancel(value) ? cancelled : value;
+    },
+  };
+}
+
+/**
+ * The first-run steps: copy the checkout's database into a new data folder,
+ * and with `offers`, make the MCP and plugin offers that are due.
+ */
+async function firstRunSteps({ offers }: { offers: boolean }): Promise<void> {
   const blocker = firstRunCopyBlocker(join(checkout, 'data'), home);
   if (blocker) console.log(blocker);
   const copied = copyFirstRunDatabase(join(checkout, 'data'), home);
@@ -84,19 +224,8 @@ async function main(): Promise<void> {
       `Copied your existing database (${copied.join(', ')}) from ${join(checkout, 'data')} to ${home}. The originals are untouched.`,
     );
   }
-
+  if (!offers) return;
   console.log(`Tandembike data: ${home}`);
-
-  if (parsed.command === 'mcp') {
-    if (await offerMcp()) markMcpOffered();
-    process.exit(0);
-  }
-
-  if (parsed.command === 'plugin') {
-    if (await offerPlugin()) markOffersMade(home, 'plugin');
-    process.exit(0);
-  }
-
   const registration = mcpRegistration(readClaudeJson());
   if (shouldOfferMcp(offersMade(home), false, registration)) {
     if (await offerMcp()) markMcpOffered();
@@ -104,21 +233,203 @@ async function main(): Promise<void> {
   if (shouldOfferPlugin(offersMade(home), installedPluginState(), false)) {
     if (await offerPlugin()) markOffersMade(home, 'plugin');
   }
-
-  startServer(parsed.args);
 }
 
-const serverUrl = process.env.TANDEMBIKE_URL ?? 'http://localhost:4747';
-const notRunning = 'Tandembike is not running. Start it with `tandembike`.';
+function readRecord(): ServerRecord | null {
+  try {
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'));
+    return Number.isInteger(record?.pid) && Number.isInteger(record?.port)
+      ? record
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether `pid` is still the server `start` spawned: alive and running
+ * `server.ts`, so a pid the system reused after a crash or reboot is not
+ * taken for it (and never signalled).
+ */
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EPERM') return false;
+  }
+  const ps = spawnSync('ps', ['-o', 'command=', '-p', String(pid)], {
+    encoding: 'utf8',
+  });
+  return ps.status === 0 && ps.stdout.includes('server.ts');
+}
+
+const serverEnv = (): NodeJS.ProcessEnv => ({
+  ...process.env,
+  NODE_ENV: 'production' as const,
+  TANDEMBIKE_DATA_DIR: home,
+  TANDEMBIKE_PACKAGE_DIR: checkout,
+});
+
+const tsxBin = () => join(checkout, 'node_modules', '.bin', 'tsx');
+
+/** The real effects of the server lifecycle. */
+const serverEffects: ServerEffects = {
+  readRecord,
+  writeRecord: (record) => {
+    mkdirSync(home, { recursive: true });
+    writeFileSync(recordPath, `${JSON.stringify(record, null, 2)}\n`);
+  },
+  removeRecord: () => rmSync(recordPath, { force: true }),
+  isAlive,
+  signal: (pid, signal) => {
+    // The server was spawned detached, as the leader of its own process
+    // group: signal the group, so tsx's Node child gets it too.
+    try {
+      process.kill(-pid, signal);
+    } catch {
+      try {
+        process.kill(pid, signal);
+      } catch {
+        // Already gone.
+      }
+    }
+  },
+  probe: async (url) => {
+    try {
+      await fetch(`${url}${terminalApiPath()}`, {
+        signal: AbortSignal.timeout(1000),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  buildExists: () => existsSync(join(checkout, '.next', 'BUILD_ID')),
+  spawnServer: (port) => {
+    mkdirSync(home, { recursive: true });
+    const log = openSync(logPath, 'a');
+    const server = spawn(tsxBin(), ['server.ts', '-p', String(port)], {
+      cwd: checkout,
+      detached: true,
+      stdio: ['ignore', log, log],
+      env: serverEnv(),
+    });
+    server.unref();
+    closeSync(log);
+    if (server.pid === undefined)
+      throw new Error('Could not spawn the server.');
+    return server.pid;
+  },
+  serveInForeground,
+  logSize: () => {
+    try {
+      return statSync(logPath).size;
+    } catch {
+      return null;
+    }
+  },
+  rollLog: () => renameSync(logPath, `${logPath}.1`),
+  appendLog: (line) => {
+    mkdirSync(home, { recursive: true });
+    appendFileSync(logPath, `${line}\n`);
+  },
+  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  now: () => new Date(),
+  say: (line) => console.log(line),
+  logPath,
+  envUrl: process.env.TANDEMBIKE_URL,
+};
+
+/**
+ * `tandembike logs`: the log's last lines; with `follow`, `tail -F` prints
+ * them and follows the log until Ctrl+C.
+ */
+async function showLogs(follow: boolean): Promise<number> {
+  if (!existsSync(logPath)) {
+    console.log(`There is no server log yet at ${logPath}.`);
+    return 0;
+  }
+  if (!follow) {
+    for (const line of lastLines(readFileSync(logPath, 'utf8'), logTailLines)) {
+      console.log(line);
+    }
+    return 0;
+  }
+  return new Promise((resolve) => {
+    const tail = spawn('tail', ['-n', String(logTailLines), '-F', logPath], {
+      stdio: 'inherit',
+    });
+    // In a terminal Ctrl+C reaches tail with the foreground group; leave
+    // quietly with it. Without one nothing else delivers it, so forward.
+    process.on('SIGINT', () => {
+      if (!process.stdin.isTTY) tail.kill('SIGINT');
+    });
+    tail.on('error', (error) => {
+      console.error(`Could not run tail: ${error.message}`);
+      resolve(1);
+    });
+    tail.on('exit', (code, signal) => resolve(signal ? 130 : (code ?? 0)));
+  });
+}
+
+/**
+ * The automatic start of a session command (T1354): with no server running,
+ * start it in the background without the MCP and plugin offers, on the port
+ * clients look for. Returns whether a server runs now.
+ */
+async function ensureServer(): Promise<boolean> {
+  const state = await serverState(serverEffects);
+  // A server on another host is not ours to start: the call reports it down.
+  if (state.state !== 'stopped' || !isLocalUrl(state.url)) return true;
+  const exitCode = await startServer(serverEffects, {
+    port: Number(new URL(state.url).port) || null,
+    automatic: true,
+    prepare: () => firstRunSteps({ offers: false }),
+  });
+  return exitCode === 0;
+}
+
+/** `stop`'s question, asked only in a terminal. */
+function stopOptions(force: boolean): StopOptions {
+  return {
+    force,
+    openSessions: async (url) => {
+      // A server that cannot say has no sessions to warn about.
+      try {
+        return await callServer<OpenSession[]>({ action: 'sessions' }, url);
+      } catch {
+        return [];
+      }
+    },
+    confirm: process.stdin.isTTY ? askYesNo : null,
+  };
+}
+
+async function askYesNo(question: string): Promise<boolean> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  // Ctrl+D or Ctrl+C at the prompt rejects the question: treat it as a no.
+  const answer = await rl.question(question).catch(() => '');
+  rl.close();
+  return /^y(es)?$/i.test(answer.trim());
+}
+
+/** Where the server is: `TANDEMBIKE_URL`, else `server.json`'s port, else 4747. */
+const serverUrl = () =>
+  findServerUrl(process.env.TANDEMBIKE_URL, liveRecord(serverEffects));
+const notRunning =
+  'Tandembike is not running. Start it with `tandembike start`.';
 
 /** A refusal or failure of the server's terminal route, as text. */
 class ServerRefusal extends Error {}
 
 /** Calls the server's terminal route; throws `ServerRefusal` with its text. */
-async function callServer<T>(body: object): Promise<T> {
+async function callServer<T>(
+  body: object,
+  url: string = serverUrl(),
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${serverUrl}${terminalApiPath()}`, {
+    response = await fetch(`${url}${terminalApiPath()}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -146,7 +457,7 @@ async function callServerOrReport<T>(body: object): Promise<T | null> {
 }
 
 /**
- * `tandembike start`: asks the server for a Terminal Conversation, opens
+ * A session command: asks the server for a Terminal Conversation, opens
  * interactive `claude` in it with inherited stdio, and reports the end.
  * Returns `claude`'s exit code.
  */
@@ -156,14 +467,14 @@ async function startSession(request: object): Promise<number> {
 }
 
 /**
- * `tandembike next`: the Project is the one whose repository holds this
+ * `tandembike implement` without a Ticket: the Project is the one whose repository holds this
  * folder; the server starts its next Eligible item, or says why there is none.
  */
-async function startNext(): Promise<number> {
+async function startNext(projectId?: number): Promise<number> {
   const next = await callServerOrReport<
     | { started: true; session: TerminalStartResult }
     | { started: false; reason: Parameters<typeof noWorkMessage>[0] }
-  >({ action: 'next', folder: process.cwd() });
+  >({ action: 'next', ...projectRef(projectId) });
   if (!next) return 1;
   if (!next.started) {
     console.log(noWorkMessage(next.reason));
@@ -308,11 +619,7 @@ async function runOffer(plan: OfferPlan, words: OfferWords): Promise<boolean> {
   }
   console.log(`${words.intro}\n\n${plan.text}\n`);
   if (decision.mode === 'print') return decision.markMade;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  // Ctrl+D or Ctrl+C at the prompt rejects the question: treat it as a no.
-  const answer = await rl.question('Run it now? [y/N] ').catch(() => '');
-  rl.close();
-  if (!/^y(es)?$/i.test(answer.trim())) {
+  if (!(await askYesNo('Run it now? [y/N] '))) {
     console.log(`Skipped. Run \`${words.again}\` to be asked again.`);
     return true;
   }
@@ -325,25 +632,19 @@ async function runOffer(plan: OfferPlan, words: OfferWords): Promise<boolean> {
   return true;
 }
 
-function startServer(args: string[]): void {
-  const server = spawn(
-    join(checkout, 'node_modules', '.bin', 'tsx'),
-    ['server.ts', ...args],
-    {
-      cwd: checkout,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        NODE_ENV: 'production',
-        TANDEMBIKE_DATA_DIR: home,
-        TANDEMBIKE_PACKAGE_DIR: checkout,
-      },
-    },
-  );
+/** `start --foreground`: the server in this terminal, until it exits. */
+function serveInForeground(port: number): Promise<number> {
+  const server = spawn(tsxBin(), ['server.ts', '-p', String(port)], {
+    cwd: checkout,
+    stdio: 'inherit',
+    env: serverEnv(),
+  });
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => server.kill(signal));
   }
-  server.on('exit', (code) => process.exit(code ?? 1));
+  return new Promise((resolve) => {
+    server.on('exit', (code) => resolve(code ?? 1));
+  });
 }
 
 void main();

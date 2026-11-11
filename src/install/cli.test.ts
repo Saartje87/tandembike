@@ -1,14 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Resolve tsx the way Node does, so a worktree without its own node_modules
 // finds the main checkout's install (T1224).
 const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
+
+// A home, data folder and checkout of its own for every run, so no test
+// reads the User's ~/.tandembike or starts a server from a real build: the
+// temp checkout has none.
+let sandbox: string;
+beforeEach(() => {
+  sandbox = mkdtempSync(join(tmpdir(), 'tandembike-cli-sandbox-'));
+});
+afterEach(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
 
 // Runs the CLI from source in this checkout. Node runs tsx directly, so PATH
 // can leave out `claude` (and node).
@@ -20,7 +33,14 @@ const runCli = (args: string[], env: Record<string, string> = {}) =>
       cwd: process.cwd(),
       encoding: 'utf8',
       input: '',
-      env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
+      env: {
+        NODE_ENV: 'test',
+        PATH: '/usr/bin:/bin',
+        HOME: sandbox,
+        TANDEMBIKE_DATA_DIR: join(sandbox, '.tandembike'),
+        TANDEMBIKE_PACKAGE_DIR: join(sandbox, 'checkout'),
+        ...env,
+      },
     },
   );
 
@@ -52,42 +72,121 @@ describe('tandembike mcp', () => {
   }, 30_000);
 });
 
-describe('tandembike start', () => {
-  it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = runCli(['start', 'T1'], {
+describe('tandembike help and status (T1350)', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'tandembike-cli-'));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('prints the help and exits 0 for a bare tandembike without a terminal', () => {
+    const result = runCli([]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('tandembike start');
+    expect(result.stdout).toContain('tandembike stop');
+  }, 30_000);
+
+  it('exits 1 from status with nothing running', () => {
+    const result = runCli(['status'], {
+      HOME: home,
+      TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
       TANDEMBIKE_URL: 'http://127.0.0.1:1',
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Tandembike is not running. Start it with `tandembike`.',
-    );
+    expect(result.stdout).toContain('Tandembike is not running.');
   }, 30_000);
 
-  it('prints the usage and exits 1 for a start without a Ticket', () => {
-    const result = runCli(['start']);
+  it('refuses start with no production build, exit 1', () => {
+    const result = runCli(['start'], {
+      HOME: home,
+      TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
+      TANDEMBIKE_PACKAGE_DIR: join(home, 'checkout'),
+    });
 
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('tandembike start <ticket>');
+    expect(result.stdout).toContain('run `npm run build` first');
   }, 30_000);
 });
 
+describe('session commands with the server down (T1354)', () => {
+  it.each([[['implement', '42']], [['resume', '3']]])(
+    '%j exits 1 with the log path and the tandembike start hint when the automatic start fails',
+    (argv) => {
+      const result = runCli(argv, { TANDEMBIKE_URL: 'http://127.0.0.1:1' });
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('run `npm run build` first');
+      expect(result.stdout).toContain(
+        `Logs: ${join(sandbox, '.tandembike', 'server.log')}`,
+      );
+      expect(result.stdout).toContain('`tandembike start`');
+    },
+    30_000,
+  );
+});
+
 describe('tandembike resume (T1241)', () => {
-  it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = runCli(['resume', '3'], {
-      TANDEMBIKE_URL: 'http://127.0.0.1:1',
-    });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Tandembike is not running. Start it with `tandembike`.',
-    );
-  }, 30_000);
-
   it('prints the usage and exits 1 for a resume without a Conversation', () => {
     const result = runCli(['resume']);
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('tandembike resume <conversation>');
+  }, 30_000);
+});
+
+describe('bin/tandembike.mjs', () => {
+  it('sends the folder the command was typed in, not the checkout', async () => {
+    const bodies: { action?: string; folder?: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        if (body) bodies.push(JSON.parse(body));
+        res.writeHead(409, { 'content-type': 'text/plain' });
+        res.end('Refused.');
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+    const folder = realpathSync(
+      mkdtempSync(join(tmpdir(), 'tandembike-folder-')),
+    );
+    try {
+      const status = await new Promise<number | null>((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [join(process.cwd(), 'bin', 'tandembike.mjs'), 'plan', 'Ship'],
+          {
+            cwd: folder,
+            stdio: 'ignore',
+            env: {
+              // The checkout's tsx runs under `#!/usr/bin/env node`.
+              NODE_ENV: 'test',
+              PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+              HOME: sandbox,
+              TANDEMBIKE_DATA_DIR: join(sandbox, '.tandembike'),
+              TANDEMBIKE_URL: `http://127.0.0.1:${port}`,
+            },
+          },
+        );
+        child.on('exit', resolve);
+      });
+
+      expect(status).toBe(1);
+      expect(bodies).toEqual([{ action: 'plan', folder, goal: 'Ship' }]);
+    } finally {
+      server.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
   }, 30_000);
 });

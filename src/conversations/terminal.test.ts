@@ -470,7 +470,9 @@ describe('Terminal next (T1240)', () => {
     ready('Second');
     tickets.startCycle(cycle.id);
 
-    const next = await conversations.startTerminalNext(repositoryDir);
+    const next = await conversations.startTerminalNext({
+      folder: repositoryDir,
+    });
 
     expect(next).toMatchObject({
       started: true,
@@ -480,12 +482,16 @@ describe('Terminal next (T1240)', () => {
 
   it('returns next_work’s reason when there is no work', async () => {
     const { conversations, tickets, cycle, repositoryDir } = nextSetup();
-    expect(await conversations.startTerminalNext(repositoryDir)).toEqual({
+    expect(
+      await conversations.startTerminalNext({ folder: repositoryDir }),
+    ).toEqual({
       started: false,
       reason: 'no-active-cycle',
     });
     tickets.startCycle(cycle.id);
-    expect(await conversations.startTerminalNext(repositoryDir)).toEqual({
+    expect(
+      await conversations.startTerminalNext({ folder: repositoryDir }),
+    ).toEqual({
       started: false,
       reason: 'nothing-ready',
     });
@@ -495,7 +501,9 @@ describe('Terminal next (T1240)', () => {
     const { conversations, tickets } = nextSetup();
     tickets.createProject({ name: 'Blog' });
 
-    const error = await failure(conversations.startTerminalNext('/nowhere'));
+    const error = await failure(
+      conversations.startTerminalNext({ folder: '/nowhere' }),
+    );
 
     expect(error.message).toContain('/nowhere');
     expect(error.message).toContain('"Website"');
@@ -729,5 +737,246 @@ describe('Idle Terminal Conversations (T1239)', () => {
 
     expect(count).toBe(0);
     expect(conversations.get(ui.id).state).toBe('running');
+  });
+});
+
+describe('Open Terminal Conversations (T1352)', () => {
+  it('lists the running Terminal Conversations with their Ticket, newest first', async () => {
+    const { conversations, tickets, project, ticket, repositoryDir } = setup();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Other',
+    });
+    const first = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'start',
+    });
+    const ended = await conversations.startTerminal({
+      ticketNumber: other.number,
+      intent: 'triage',
+    });
+    await conversations.endTerminal(ended.conversationId, { exitCode: 0 });
+    const plan = await conversations.startTerminalPlan({
+      folder: repositoryDir,
+      goal: 'Ship',
+    });
+
+    expect(conversations.openTerminals()).toEqual([
+      { conversationId: plan.conversationId, ticketNumber: null },
+      { conversationId: first.conversationId, ticketNumber: ticket.number },
+    ]);
+  });
+
+  it('leaves out UI Conversations', async () => {
+    const { conversations, ticket } = setup();
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+
+    expect(conversations.openTerminals()).toEqual([]);
+  });
+});
+
+describe('The wizard’s Project step (T1356)', () => {
+  it('lists the known Projects and the folder’s Project', () => {
+    const { conversations, tickets, project, repositoryDir } = setup();
+    const blog = tickets.createProject({ name: 'Blog' });
+    const old = tickets.createProject({ name: 'Old' });
+    tickets.archiveProject(old.id);
+
+    expect(conversations.terminalProjects(repositoryDir)).toEqual({
+      projects: [
+        { id: project.id, name: 'Website' },
+        { id: blog.id, name: 'Blog' },
+      ],
+      folderProjectId: project.id,
+    });
+    expect(conversations.terminalProjects('/nowhere').folderProjectId).toBe(
+      null,
+    );
+  });
+
+  it('starts a Terminal next and a Terminal Plan by Project id', async () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const ready = tickets.createTicket({
+      projectId: project.id,
+      title: 'Ready',
+      labels: ['ready-for-agent'],
+      cycleId: cycle.id,
+    });
+    tickets.startCycle(cycle.id);
+
+    expect(
+      await conversations.startTerminalNext({ projectId: project.id }),
+    ).toMatchObject({
+      started: true,
+      session: { firstMessage: `/tandembike:implement T${ready.number}` },
+    });
+    const plan = await conversations.startTerminalPlan({
+      projectId: project.id,
+      goal: 'Ship',
+    });
+    expect(conversations.get(plan.conversationId).projectId).toBe(project.id);
+  });
+});
+
+describe('The wizard’s lists (T1357)', () => {
+  it('lists the Active Cycle’s ready, open items for start, with the next_work pick first', async () => {
+    const { conversations, tickets, project, repositoryDir } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const ready = (title: string, extra = {}) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+        ...extra,
+      });
+    const blocker = ready('Blocker');
+    const blocked = ready('Blocked');
+    tickets.updateTicket(blocked.number, { addBlockers: [blocker.number] });
+    const second = ready('Second');
+    const held = ready('Held');
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Not ready',
+      cycleId: cycle.id,
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Outside',
+      labels: ['ready-for-agent'],
+    });
+    tickets.startCycle(cycle.id);
+    await conversations.startTerminal({
+      ticketNumber: held.number,
+      intent: 'start',
+    });
+
+    expect(
+      conversations.terminalChoices({ intent: 'start', folder: repositoryDir }),
+    ).toEqual([
+      { number: blocker.number, title: 'Blocker' },
+      { number: second.number, title: 'Second' },
+    ]);
+  });
+
+  it('follows the Board order', () => {
+    const { conversations, tickets, project } = setup();
+    const cycle = tickets.createCycle({ projectId: project.id, title: 'B' });
+    const make = (title: string) =>
+      tickets.createTicket({
+        projectId: project.id,
+        title,
+        labels: ['ready-for-agent'],
+        cycleId: cycle.id,
+      });
+    const first = make('First');
+    const second = make('Second');
+    tickets.startCycle(cycle.id);
+    tickets.updateTicket(second.number, { before: first.number });
+
+    expect(
+      conversations
+        .terminalChoices({ intent: 'start', projectId: project.id })
+        .map(({ number }) => number),
+    ).toEqual([second.number, first.number]);
+  });
+
+  it('lists the untriaged Todo Tickets for triage: no triage state label, or needs-triage', () => {
+    const { conversations, tickets, project, ticket } = setup();
+    const needs = tickets.createTicket({
+      projectId: project.id,
+      title: 'Needs',
+      labels: ['needs-triage', 'bug'],
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Triaged',
+      labels: ['ready-for-agent'],
+    });
+    const done = tickets.createTicket({ projectId: project.id, title: 'Done' });
+    tickets.updateTicket(done.number, { status: 'Done' });
+
+    expect(
+      conversations.terminalChoices({
+        intent: 'triage',
+        projectId: project.id,
+      }),
+    ).toEqual([
+      { number: ticket.number, title: 'Fix it' },
+      { number: needs.number, title: 'Needs' },
+    ]);
+  });
+
+  it('lists Intake ideas and Epics without children for spec', () => {
+    const { conversations, tickets, project, ticket } = setup();
+    const empty = tickets.createTicket({
+      projectId: project.id,
+      title: 'Empty',
+      type: 'Epic',
+    });
+    const full = tickets.createTicket({
+      projectId: project.id,
+      title: 'Full',
+      type: 'Epic',
+    });
+    const child = tickets.createTicket({
+      projectId: project.id,
+      title: 'Child',
+      labels: ['ready-for-agent'],
+    });
+    tickets.updateTicket(child.number, { epicNumber: full.number });
+
+    expect(
+      conversations.terminalChoices({ intent: 'spec', projectId: project.id }),
+    ).toEqual([
+      { number: ticket.number, title: 'Fix it' },
+      { number: empty.number, title: 'Empty' },
+    ]);
+  });
+
+  it('lists the Conversations Continue in terminal would accept for resume, newest first', async () => {
+    const { conversations, runner, project, ticket } = setup();
+    const start = async () => {
+      const { id } = await conversations.start({
+        startedBy: 'user',
+        projectId: project.id,
+        intent: 'ask',
+        ticketNumber: ticket.number,
+        prompt: 'Go',
+      });
+      return id;
+    };
+    const withSession = await start();
+    runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
+    await start();
+    const terminal = await start();
+    runner.runs[2].emit({ type: 'session', sessionId: 'sess-3' });
+    await conversations.handOffToTerminal(terminal);
+
+    expect(
+      conversations.terminalChoices({
+        intent: 'resume',
+        projectId: project.id,
+      }),
+    ).toEqual([
+      {
+        conversationId: withSession,
+        ticketNumber: ticket.number,
+        title: 'Fix it',
+      },
+    ]);
+  });
+
+  it('refuses a folder in no Project, naming the known Projects', () => {
+    const { conversations } = setup();
+    expect(() =>
+      conversations.terminalChoices({ intent: 'triage', folder: '/nowhere' }),
+    ).toThrow(/"Website"/);
   });
 });

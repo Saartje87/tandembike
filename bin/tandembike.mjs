@@ -18,7 +18,13 @@ const child = spawn(
   {
     cwd: checkout,
     stdio: 'inherit',
-    env: { ...process.env, TANDEMBIKE_PACKAGE_DIR: checkout },
+    // The CLI runs from the checkout; TANDEMBIKE_CWD keeps the folder the
+    // User typed the command in, which picks the Project.
+    env: {
+      ...process.env,
+      TANDEMBIKE_PACKAGE_DIR: checkout,
+      TANDEMBIKE_CWD: process.cwd(),
+    },
   },
 );
 for (const signal of ['SIGINT', 'SIGTERM']) {

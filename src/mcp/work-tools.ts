@@ -22,7 +22,7 @@ const runIdField = z
   .string()
   .optional()
   .describe(
-    "This Agent run's unique ID. Runs Tandembike started, and `tandembike start` sessions, need not pass it; in another terminal session pass one of your own.",
+    "This Agent run's unique ID. Runs Tandembike started, and `tandembike implement` sessions, need not pass it; in another terminal session pass one of your own.",
   );
 
 export const registerWorkTools = ({
