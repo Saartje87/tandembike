@@ -12,7 +12,11 @@ import { appPort } from '../http/server-port';
 export type ServerRecord = { pid: number; port: number; startedAt: string };
 
 /** A Terminal Conversation open in a terminal, named for `stop`'s question. */
-export type OpenSession = { conversationId: number; ticketNumber: number };
+export type OpenSession = {
+  conversationId: number;
+  /** Null for a Plan, which is about its Project. */
+  ticketNumber: number | null;
+};
 
 export type ServerEffects = {
   readRecord(): ServerRecord | null;
@@ -235,7 +239,9 @@ export async function stopServer(
   if (!options.force) {
     const sessions = await options.openSessions(state.url);
     if (sessions.length > 0) {
-      const named = sessions.map((s) => `T${s.ticketNumber}`).join(', ');
+      const named = sessions
+        .map((s) => (s.ticketNumber === null ? 'a Plan' : `T${s.ticketNumber}`))
+        .join(', ');
       effects.say(
         `${sessions.length === 1 ? 'A Terminal session is' : `${sessions.length} Terminal sessions are`} open: ${named}. Stopping Tandembike cuts them off.`,
       );

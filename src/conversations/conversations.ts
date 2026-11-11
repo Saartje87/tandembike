@@ -312,6 +312,13 @@ export type TerminalHandOff = Omit<TerminalSession, 'firstMessage'> & {
   sessionId: string;
 };
 
+/** An open Terminal Conversation, as `tandembike stop` names it. */
+export type OpenTerminal = {
+  conversationId: number;
+  /** Its Ticket; null for a Plan, which is about its Project. */
+  ticketNumber: number | null;
+};
+
 export type StartTerminalInput = {
   ticketNumber: number;
   intent: TerminalIntent;
@@ -2455,6 +2462,27 @@ export function createConversations({
     endTerminal,
     heartbeatTerminal,
     endIdleTerminals,
+
+    /**
+     * The Terminal Conversations whose session is open, newest first: what
+     * `tandembike stop` warns about before it cuts them off (T1352).
+     */
+    openTerminals(): OpenTerminal[] {
+      return db
+        .select({
+          conversationId: conversations.id,
+          ticketNumber: conversations.ticketNumber,
+        })
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.startedBy, 'terminal'),
+            inArray(conversations.state, liveStates),
+          ),
+        )
+        .orderBy(desc(conversations.id))
+        .all();
+    },
 
     recordTerminalCall,
 

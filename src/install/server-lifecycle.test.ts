@@ -414,6 +414,19 @@ describe('stopServer with open Terminal sessions (T1352)', () => {
     expect(world.record?.pid).toBe(42);
   });
 
+  it('names a Plan session, which has no Ticket, as a Plan', async () => {
+    const { world, effects } = fakeEffects(ours());
+
+    await stopServer(
+      effects,
+      stopOptions({
+        openSessions: async () => [{ conversationId: 9, ticketNumber: null }],
+        confirm: null,
+      }),
+    );
+    expect(world.said[0]).toContain('A Terminal session is open: a Plan.');
+  });
+
   it('stops without asking with --force', async () => {
     const { world, effects } = fakeEffects(ours());
     let asked = false;

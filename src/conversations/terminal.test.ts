@@ -731,3 +731,43 @@ describe('Idle Terminal Conversations (T1239)', () => {
     expect(conversations.get(ui.id).state).toBe('running');
   });
 });
+
+describe('Open Terminal Conversations (T1352)', () => {
+  it('lists the running Terminal Conversations with their Ticket, newest first', async () => {
+    const { conversations, tickets, project, ticket, repositoryDir } = setup();
+    const other = tickets.createTicket({
+      projectId: project.id,
+      title: 'Other',
+    });
+    const first = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'start',
+    });
+    const ended = await conversations.startTerminal({
+      ticketNumber: other.number,
+      intent: 'triage',
+    });
+    await conversations.endTerminal(ended.conversationId, { exitCode: 0 });
+    const plan = await conversations.startTerminalPlan({
+      folder: repositoryDir,
+      goal: 'Ship',
+    });
+
+    expect(conversations.openTerminals()).toEqual([
+      { conversationId: plan.conversationId, ticketNumber: null },
+      { conversationId: first.conversationId, ticketNumber: ticket.number },
+    ]);
+  });
+
+  it('leaves out UI Conversations', async () => {
+    const { conversations, ticket } = setup();
+    await conversations.start({
+      startedBy: 'user',
+      ticketNumber: ticket.number,
+      intent: 'ask',
+      prompt: 'Hi',
+    });
+
+    expect(conversations.openTerminals()).toEqual([]);
+  });
+});

@@ -22,7 +22,8 @@ type TerminalAction =
   | { action: 'plan'; folder: string; goal: string }
   | { action: 'resume'; conversationId: number }
   | { action: 'end'; conversationId: number; exitCode: number }
-  | { action: 'heartbeat'; conversationId: number };
+  | { action: 'heartbeat'; conversationId: number }
+  | { action: 'sessions' };
 
 const text = (message: string, status: number) =>
   new Response(message, {
@@ -84,6 +85,8 @@ export const POST = async (request: Request): Promise<Response> => {
       case 'heartbeat':
         conversations.heartbeatTerminal(Number(body.conversationId));
         return Response.json({ ok: true });
+      case 'sessions':
+        return Response.json(conversations.openTerminals());
       default:
         return text('Unknown action.', 400);
     }

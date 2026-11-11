@@ -22,6 +22,7 @@ import {
   lastLines,
   liveRecord,
   logTailLines,
+  type OpenSession,
   restartServer,
   type ServerEffects,
   type ServerRecord,
@@ -290,7 +291,14 @@ async function showLogs(follow: boolean): Promise<number> {
 function stopOptions(force: boolean): StopOptions {
   return {
     force,
-    openSessions: async () => [],
+    openSessions: async (url) => {
+      // A server that cannot say has no sessions to warn about.
+      try {
+        return await callServer<OpenSession[]>({ action: 'sessions' }, url);
+      } catch {
+        return [];
+      }
+    },
     confirm: process.stdin.isTTY ? askYesNo : null,
   };
 }
@@ -313,10 +321,13 @@ const notRunning =
 class ServerRefusal extends Error {}
 
 /** Calls the server's terminal route; throws `ServerRefusal` with its text. */
-async function callServer<T>(body: object): Promise<T> {
+async function callServer<T>(
+  body: object,
+  url: string = serverUrl(),
+): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${serverUrl()}${terminalApiPath()}`, {
+    response = await fetch(`${url}${terminalApiPath()}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
