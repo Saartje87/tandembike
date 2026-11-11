@@ -3,7 +3,6 @@ import { and, asc, eq, ne } from 'drizzle-orm';
 import type { DatabaseConnection } from '../db/connection';
 import { referenceTemplates } from '../db/schema';
 import { checkProjectWritable } from './archived-projects';
-import type { ChangeChannel } from './changes';
 import { NotFoundError } from './errors';
 import {
   httpUrl,
@@ -14,6 +13,7 @@ import {
   maxExternalReferenceUrlLength,
 } from './external-references';
 import { throwFieldErrors } from './rules';
+import type { TicketRowContext } from './ticket-row-context';
 
 /**
  * A Project's rule that turns External reference keys starting with
@@ -132,10 +132,7 @@ function templateProjectId(db: DatabaseConnection, id: number): number {
 }
 
 /** The Tickets module's Reference template functions. Only the User calls them. */
-export function createReferenceTemplates(
-  db: DatabaseConnection,
-  changes: ChangeChannel,
-) {
+export function createReferenceTemplates({ db, changes }: TicketRowContext) {
   return {
     /** Project `projectId`'s Reference templates, in the order added. */
     listReferenceTemplates(projectId: number): ReferenceTemplate[] {

@@ -1,12 +1,12 @@
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
-import type { DatabaseConnection } from '../db/connection';
 import { tickets, triageProposals } from '../db/schema';
-import { type Actor, recordActivity } from './activity';
+import { recordActivity } from './activity';
 import { checkTicketWritable } from './archived-projects';
-import type { ChangeChannel } from './changes';
 import { NotAllowedError, NotFoundError } from './errors';
 import { throwFieldErrors } from './rules';
+import type { TicketRowContext } from './ticket-row-context';
+import { checkAcceptanceCriteria } from './ticket-rules';
 import type {
   AddCommentInput,
   Comment,
@@ -78,13 +78,10 @@ const columns = {
 
 /** The Tickets module's functions the triage proposals build on. */
 export type TriageDeps = {
-  getTicket: (number: number) => Ticket;
   updateTicket: (number: number, input: UpdateTicketInput) => Ticket;
   addComment: (number: number, input: AddCommentInput) => Comment;
   createTicketBatch: (input: CreateTicketBatchInput) => Ticket[];
   archiveTicket: (number: number) => Ticket;
-  checkCriteria: (texts: readonly string[]) => string | undefined;
-  transaction: <T>(run: () => T) => T;
 };
 
 const trimSplits = (splits: readonly TriageSplit[]): TriageSplit[] =>
@@ -118,9 +115,7 @@ function labelChanges(
 
 /** Triage proposals (T1243): propose, Approve, Reject and the reads. */
 export function createTriageProposals(
-  db: DatabaseConnection,
-  actor: Actor,
-  changes: ChangeChannel,
+  { db, actor, changes, getTicket, transaction }: TicketRowContext,
   deps: TriageDeps,
 ) {
   function find(id: number): TriageProposal {
@@ -148,7 +143,7 @@ export function createTriageProposals(
   }
 
   function checkTodo(number: number) {
-    const ticket = deps.getTicket(number);
+    const ticket = getTicket(number);
     checkTicketWritable(db, number);
     if (ticket.status !== 'Todo') {
       throw new NotAllowedError(
@@ -170,7 +165,7 @@ export function createTriageProposals(
       return `T${number} cannot be a duplicate of itself.`;
     }
     try {
-      deps.getTicket(target);
+      getTicket(target);
     } catch (error) {
       if (error instanceof NotFoundError) {
         return `There is no Ticket T${target} to be a duplicate of.`;
@@ -192,14 +187,14 @@ export function createTriageProposals(
     if (splits.length === 0) {
       return 'Give at least one split, or leave splits out.';
     }
-    if (deps.getTicket(number).type === 'Epic') {
+    if (getTicket(number).type === 'Epic') {
       return `T${number} is an Epic; an Epic cannot be split.`;
     }
     for (const [position, split] of splits.entries()) {
       if (String(split?.title ?? '').trim() === '') {
         return `Split ${position + 1} needs a title.`;
       }
-      const problem = deps.checkCriteria(
+      const problem = checkAcceptanceCriteria(
         (split.acceptanceCriteria ?? []).map((text) => text.trim()),
       );
       if (problem) {
@@ -226,11 +221,11 @@ export function createTriageProposals(
           ? undefined
           : `Choose a state: ${triageStates.join(', ')}.`,
         reasoning: reasoning === '' ? 'Enter the reasoning.' : undefined,
-        acceptanceCriteria: criteria && deps.checkCriteria(criteria),
+        acceptanceCriteria: criteria && checkAcceptanceCriteria(criteria),
         duplicateOf: checkDuplicate(number, input),
         splits: checkSplits(number, input),
       });
-      const made = deps.transaction(() => {
+      const made = transaction(() => {
         checkTodo(number);
         db.update(triageProposals)
           .set({ status: 'superseded', decidedAt: new Date() })
@@ -295,11 +290,11 @@ export function createTriageProposals(
             ? undefined
             : `Choose a state: ${triageStates.join(', ')}.`,
       });
-      const { approved, ticketNumber } = deps.transaction(() => {
+      const { approved, ticketNumber } = transaction(() => {
         const found = decidable(id);
         const category = input.category ?? found.category;
         const state = input.state ?? found.state;
-        const ticket = deps.getTicket(found.ticketNumber);
+        const ticket = getTicket(found.ticketNumber);
         const isDuplicate = found.duplicateOf !== null;
         deps.updateTicket(found.ticketNumber, {
           ...labelChanges(
@@ -356,7 +351,7 @@ export function createTriageProposals(
 
     /** Rejects pending proposal `id`, commenting `reason` when given. */
     rejectTriage(id: number, reason?: string): TriageProposal {
-      const rejected = deps.transaction(() => {
+      const rejected = transaction(() => {
         const found = decidable(id);
         db.update(triageProposals)
           .set({ status: 'rejected', decidedAt: new Date() })

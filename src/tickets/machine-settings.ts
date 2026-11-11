@@ -1,9 +1,8 @@
 import { eq } from 'drizzle-orm';
 
-import type { DatabaseConnection } from '../db/connection';
 import { machineSettings } from '../db/schema';
-import type { ChangeChannel } from './changes';
 import { throwFieldErrors } from './rules';
+import type { TicketRowContext } from './ticket-row-context';
 
 /** The settings of the whole machine, not of one Project (ADR 0041). */
 export type MachineSettings = {
@@ -40,10 +39,7 @@ const ceilingProblem = (
 /** The single row of machine settings is stored under this id. */
 const rowId = 1;
 
-export function createMachineSettings(
-  db: DatabaseConnection,
-  changes: ChangeChannel,
-) {
+export function createMachineSettings({ db, changes }: TicketRowContext) {
   const read = (): MachineSettings => {
     const row = db
       .select({

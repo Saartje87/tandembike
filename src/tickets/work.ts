@@ -2,6 +2,7 @@ import type { Cycle, CycleLink } from './cycles';
 import { NotAllowedError } from './errors';
 import { isPullRequestReference } from './external-reference-display';
 import { type MergeMode, mergeModeOf } from './merge-mode';
+import type { TicketRowContext } from './ticket-row-context';
 import type {
   AddCommentInput,
   Blockers,
@@ -60,7 +61,6 @@ export type WorkBundle = {
 
 /** The Tickets module's public functions the work functions build on. */
 export type WorkDeps = {
-  getTicket: (number: number) => Ticket;
   resolveProjectId: (ref: ProjectRef) => number;
   activeCycle: (projectId: number) => Cycle | null;
   findTickets: (input: FindTicketsInput) => TicketPage;
@@ -77,8 +77,6 @@ export type WorkDeps = {
   getProjectAgentSettings: (id: number) => ProjectAgentSettings;
   claimMergeMode: (number: number) => MergeMode | null;
   addExternalReferences: (number: number, references: string[]) => Ticket;
-  /** Runs `run` all or nothing: a thrown refusal undoes every write in it. */
-  transaction: <T>(run: () => T) => T;
 };
 
 const readyLabel = 'ready-for-agent';
@@ -87,7 +85,10 @@ const readyLabel = 'ready-for-agent';
  * The workflow functions behind the work tools (T1194): they combine the
  * module's public functions, so they follow the same rules.
  */
-export function createWork(deps: WorkDeps) {
+export function createWork(
+  { getTicket, transaction }: TicketRowContext,
+  deps: WorkDeps,
+) {
   /**
    * Ticket `number`'s unresolved Blockers, by the Blocker rule: an In
    * progress sibling under the Epic's Claim is worked on the Epic branch, so
@@ -106,7 +107,7 @@ export function createWork(deps: WorkDeps) {
         ? ticket
         : ticket.epic === null
           ? null
-          : deps.getTicket(ticket.epic.number);
+          : getTicket(ticket.epic.number);
     if (epic === null) {
       return null;
     }
@@ -171,7 +172,7 @@ export function createWork(deps: WorkDeps) {
           .filter((n): n is number => n !== undefined && !here.has(n)),
       );
       for (const number of elsewhere) {
-        const epic = deps.getTicket(number);
+        const epic = getTicket(number);
         if (
           !epic.archived &&
           epic.type === 'Epic' &&
@@ -208,9 +209,8 @@ export function createWork(deps: WorkDeps) {
      * and for a Claim another run holds. Returns the bundle.
      */
     startWork(number: number, runId: string): WorkBundle {
-      const before = deps.getTicket(number);
-      const epic =
-        before.epic === null ? null : deps.getTicket(before.epic.number);
+      const before = getTicket(number);
+      const epic = before.epic === null ? null : getTicket(before.epic.number);
       const epicClaim = epic?.claim?.agentRunId;
       // The Claim holder is named before the Blockers (stories 8, 9).
       if (
@@ -228,7 +228,7 @@ export function createWork(deps: WorkDeps) {
           `Ticket T${number} is blocked by ${unresolved.join(', ')}. Finish ${unresolved.length === 1 ? 'it' : 'them'} first.`,
         );
       }
-      deps.transaction(() => {
+      transaction(() => {
         if (epicClaim !== runId) {
           deps.claimTicket(number, { agentRunId: runId });
         }
@@ -236,7 +236,7 @@ export function createWork(deps: WorkDeps) {
           deps.updateTicket(number, { status: 'In progress' });
         }
       });
-      const ticket = deps.getTicket(number);
+      const ticket = getTicket(number);
       const settings = deps.getProjectAgentSettings(ticket.projectId);
       return {
         ticket,
@@ -259,13 +259,13 @@ export function createWork(deps: WorkDeps) {
      * Ticket.
      */
     abandonWork(number: number, runId: string, reason: string): Ticket {
-      const ticket = deps.getTicket(number);
+      const ticket = getTicket(number);
       if (ticket.claim?.agentRunId !== runId) {
         if (ticket.claim) {
           // Another run's Claim: the release refuses, naming the holder.
           deps.releaseTicketClaim(number, { agentRunId: runId });
         }
-        const epic = ticket.epic && deps.getTicket(ticket.epic.number);
+        const epic = ticket.epic && getTicket(ticket.epic.number);
         if (epic && epic.claim?.agentRunId === runId) {
           throw new NotAllowedError(
             `Ticket T${number} is covered by your Claim on Epic T${epic.number}: abandon the Epic instead.`,
@@ -275,7 +275,7 @@ export function createWork(deps: WorkDeps) {
           `Ticket T${number} has no Claim of Agent run ${runId} to abandon.`,
         );
       }
-      return deps.transaction(() => {
+      return transaction(() => {
         deps.addComment(number, { body: reason, author: 'agent' });
         deps.releaseTicketClaim(number, { agentRunId: runId });
         // An archived Ticket keeps its Status: it is read-only (T1312).
@@ -283,7 +283,7 @@ export function createWork(deps: WorkDeps) {
           !ticket.archived &&
           !ticket.externalReferences.some(isPullRequestReference)
           ? deps.backToTodo(number)
-          : deps.getTicket(number);
+          : getTicket(number);
       });
     },
 
@@ -293,7 +293,7 @@ export function createWork(deps: WorkDeps) {
      * refused release (another run holds it) leaves no reference behind.
      */
     linkPullRequest(number: number, url: string, runId?: string): Ticket {
-      return deps.transaction(() => {
+      return transaction(() => {
         const linked = deps.addExternalReferences(number, [url]);
         return runId === undefined
           ? linked
