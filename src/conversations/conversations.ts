@@ -36,7 +36,7 @@ import {
 } from '../tickets/errors';
 import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { Status } from '../tickets/status';
-import { canSpec, isInReview } from '../tickets/ticket-lanes';
+import { type LiveMap, placementOf } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
 import type { AgentModel, Tickets } from '../tickets/tickets';
 import type { NoWorkReason } from '../tickets/work';
@@ -381,6 +381,14 @@ const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
     ? settings.triageModel
     : settings.runModel;
 
+/**
+ * The live map these server checks place a Ticket with: none. The Spec
+ * refusal, the run's `inReview` flag and the Approve merge gate judge by the
+ * Ticket's own state, its Status, labels, Claim and PR reference, as they
+ * always have; the Conversation they act on is checked on its own.
+ */
+const byOwnState: LiveMap = {};
+
 /** The states of a run whose process may be alive. */
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
@@ -604,7 +612,7 @@ export function createConversations({
         hasPullRequest:
           ticket.externalReferences.some(isPullRequestReference) ||
           ticket.epic?.hasPullRequest === true,
-        inReview: isInReview(ticket),
+        inReview: placementOf(ticket, byOwnState).offers.merged,
         claimed: ticket.claim !== null,
       };
     } catch {
@@ -1460,7 +1468,10 @@ export function createConversations({
     if (settings.repositoryPath === null) {
       throw new ValidationError(noRepositoryPath);
     }
-    if (input.intent === 'spec' && !canSpec(ticket)) {
+    if (
+      input.intent === 'spec' &&
+      !placementOf(ticket, byOwnState).offers.spec
+    ) {
       throw new NotAllowedError(
         `${label} is not an idea in Intake or an Epic without children, so it cannot be specced.`,
       );
@@ -2685,7 +2696,7 @@ export function createConversations({
       if (ticket.status === 'Done') {
         throw new NotAllowedError(`${label} is already Done.`);
       }
-      if (!isInReview(ticket)) {
+      if (!placementOf(ticket, byOwnState).offers.merged) {
         throw new NotAllowedError(
           ticket.status !== 'In progress'
             ? `${label} is not in Review: only a Ticket whose work is handed off can be approved for a merge.`

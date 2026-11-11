@@ -15,7 +15,7 @@ import {
   type UpdateTicketResult,
   updateTicket,
 } from '../app/tickets/actions';
-import { useTicketLiveConversation } from '../components/conversation-activity/conversation-activity';
+import { useLiveConversations } from '../components/conversation-activity/conversation-activity';
 import { useConversationDialog } from '../components/conversation-dialog-provider/conversation-dialog-provider';
 import {
   TicketDrawer,
@@ -167,7 +167,7 @@ export const resetDrawerMocks = () => {
   vi.mocked(completeTicket).mockReset();
   vi.mocked(backToTodo).mockReset();
   vi.mocked(approveMerge).mockReset();
-  vi.mocked(useTicketLiveConversation).mockReset().mockReturnValue(undefined);
+  vi.mocked(useLiveConversations).mockReset().mockReturnValue({});
   vi.mocked(useConversationDialog).mockReturnValue(dialog);
   dialog.open.mockReset();
   dialog.reopenAndOpen.mockReset().mockResolvedValue(undefined);

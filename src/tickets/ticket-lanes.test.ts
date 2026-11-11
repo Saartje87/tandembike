@@ -4,16 +4,70 @@ import type { LiveConversation } from '../conversations/conversation-activity';
 import { liveConversation } from '../test/conversation-activity';
 import { anEpicChild } from '../test/fixtures';
 import type { Status } from './status';
-import {
-  canSpec,
-  inheritsSection,
-  isInReview,
-  isParked,
-  isStalled,
-  laneOf,
-  offersDone,
-} from './ticket-lanes';
+import { type LiveMap, type PlacementInput, placementOf } from './ticket-lanes';
 import type { Ticket } from './tickets';
+
+/** The Ticket the tests place, and the Epic a child of it links to. */
+const ticketNumber = 7;
+const epicNumber = 50;
+
+/**
+ * The live map of a Board with `own` on the Ticket and `epicLive` on its
+ * Epic, as `ConversationActivity.live` holds it.
+ */
+const liveMap = (
+  own?: LiveConversation,
+  epicLive?: LiveConversation,
+): LiveMap => {
+  const live: Record<number, LiveConversation> = {};
+  if (own) {
+    live[ticketNumber] = own;
+  }
+  if (epicLive) {
+    live[epicNumber] = epicLive;
+  }
+  return live;
+};
+
+/** `placementOf` for `ticket`, numbered `ticketNumber`. */
+const place = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+  epicLive?: LiveConversation,
+) => placementOf({ number: ticketNumber, ...ticket }, liveMap(own, epicLive));
+
+// The placement's parts, one per question a consumer asks.
+const laneAndSection = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+  epicLive?: LiveConversation,
+) => {
+  const { lane, section } = place(ticket, own, epicLive);
+  return { lane, section };
+};
+const stalledOf = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+  epicLive?: LiveConversation,
+) => place(ticket, own, epicLive).stalled;
+const placedByEpicOf = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+) => place(ticket, own).placedByEpic;
+const offersMerged = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+) => place(ticket, own).offers.merged;
+const offersBackToTodo = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+) => place(ticket, own).offers.backToTodo;
+const offersDoneOf = (
+  ticket: Omit<PlacementInput, 'number'>,
+  own?: LiveConversation,
+) => place(ticket, own).offers.done;
+const offersSpec = (ticket: Omit<PlacementInput, 'number'>) =>
+  place(ticket).offers.spec;
 
 const placed = (
   status: Status,
@@ -23,7 +77,7 @@ const placed = (
   > = {},
   live?: LiveConversation,
 ) =>
-  laneOf(
+  laneAndSection(
     {
       status,
       labels,
@@ -42,7 +96,7 @@ const child = (number: number, archived = false) =>
 const claim = { agentRunId: 'run-1', agentName: null };
 const pullRequest = 'https://github.com/owner/repo/pull/87';
 
-describe('laneOf', () => {
+describe('placementOf: lane and section', () => {
   it('puts a Todo Ticket with needs-triage in Intake', () => {
     expect(placed('Todo', ['needs-triage']).lane).toBe('Intake');
   });
@@ -202,7 +256,7 @@ describe('placing a Ticket', () => {
   });
 });
 
-describe('isStalled and isInReview', () => {
+describe('placementOf: stalled and the Merged offer', () => {
   const base = {
     status: 'In progress' as const,
     labels: [],
@@ -214,12 +268,12 @@ describe('isStalled and isInReview', () => {
   const live = liveConversation();
 
   it('does not stall a Ticket whose Conversation is idle: it still has one to answer', () => {
-    expect(isStalled(base, liveConversation({ state: 'idle' }))).toBe(false);
+    expect(stalledOf(base, liveConversation({ state: 'idle' }))).toBe(false);
   });
 
   it('puts an idle Ticket with a PR and no Claim in Review', () => {
     expect(
-      isInReview(
+      offersMerged(
         { ...base, externalReferences: [pullRequest] },
         liveConversation({ state: 'idle' }),
       ),
@@ -227,25 +281,25 @@ describe('isStalled and isInReview', () => {
   });
 
   it('stalls an In progress Ticket with no Claim, PR or live Conversation', () => {
-    expect(isStalled(base)).toBe(true);
-    expect(isStalled({ ...base, claim })).toBe(false);
-    expect(isStalled({ ...base, externalReferences: [pullRequest] })).toBe(
+    expect(stalledOf(base)).toBe(true);
+    expect(stalledOf({ ...base, claim })).toBe(false);
+    expect(stalledOf({ ...base, externalReferences: [pullRequest] })).toBe(
       false,
     );
-    expect(isStalled(base, live)).toBe(false);
-    expect(isStalled({ ...base, status: 'Todo' })).toBe(false);
+    expect(stalledOf(base, live)).toBe(false);
+    expect(stalledOf({ ...base, status: 'Todo' })).toBe(false);
   });
 
   it('puts a Ticket in Review for a PR reference without a live Conversation', () => {
     const withPullRequest = { ...base, externalReferences: [pullRequest] };
-    expect(isInReview(withPullRequest)).toBe(true);
-    expect(isInReview(withPullRequest, live)).toBe(false);
-    expect(isInReview(base)).toBe(false);
-    expect(isInReview({ ...withPullRequest, status: 'Done' })).toBe(false);
+    expect(offersMerged(withPullRequest)).toBe(true);
+    expect(offersMerged(withPullRequest, live)).toBe(false);
+    expect(offersMerged(base)).toBe(false);
+    expect(offersMerged({ ...withPullRequest, status: 'Done' })).toBe(false);
   });
 });
 
-describe('isParked', () => {
+describe('placementOf: the Back to Todo offer', () => {
   const base = {
     status: 'In progress' as const,
     labels: [],
@@ -260,18 +314,18 @@ describe('isParked', () => {
     ['Running', { ...base, claim }],
     ['Review', { ...base, externalReferences: [pullRequest] }],
   ])('is true in %s without a live Conversation', (_section, ticket) => {
-    expect(isParked(ticket)).toBe(true);
+    expect(offersBackToTodo(ticket)).toBe(true);
   });
 
   it.each([
     ['running', 'running' as const],
     ['idle', 'idle' as const],
   ])('is false with a %s Conversation', (_name, state) => {
-    expect(isParked(base, liveConversation({ state }))).toBe(false);
+    expect(offersBackToTodo(base, liveConversation({ state }))).toBe(false);
   });
 
   it.each(['Todo', 'Done'] as const)('is false for a %s Ticket', (status) => {
-    expect(isParked({ ...base, status })).toBe(false);
+    expect(offersBackToTodo({ ...base, status })).toBe(false);
   });
 
   it.each([
@@ -279,17 +333,19 @@ describe('isParked', () => {
     ['Running', { claim }],
     ['Review', { externalReferences: [pullRequest] }],
   ])('is true for an Epic in %s without a live Conversation', (_s, rest) => {
-    expect(isParked({ ...base, type: 'Epic', ...rest })).toBe(true);
+    expect(offersBackToTodo({ ...base, type: 'Epic', ...rest })).toBe(true);
   });
 
   it('is false for an Epic with a live Conversation or not In progress', () => {
     const epic = { ...base, type: 'Epic' as const };
-    expect(isParked(epic, liveConversation({ state: 'running' }))).toBe(false);
-    expect(isParked({ ...epic, status: 'Todo' })).toBe(false);
+    expect(offersBackToTodo(epic, liveConversation({ state: 'running' }))).toBe(
+      false,
+    );
+    expect(offersBackToTodo({ ...epic, status: 'Todo' })).toBe(false);
   });
 });
 
-describe('offersDone (T1268)', () => {
+describe('placementOf: the Done offer (T1268)', () => {
   const base = {
     status: 'Todo' as const,
     labels: ['enhancement', 'ready-for-human'],
@@ -308,29 +364,29 @@ describe('offersDone (T1268)', () => {
     ],
     ['an Epic', { ...base, type: 'Epic' as const }],
   ])('is true for %s labelled ready-for-human', (_name, ticket) => {
-    expect(offersDone(ticket)).toBe(true);
+    expect(offersDoneOf(ticket)).toBe(true);
   });
 
   it('is false without ready-for-human', () => {
-    expect(offersDone({ ...base, labels: ['ready-for-agent'] })).toBe(false);
-    expect(offersDone({ ...base, labels: [] })).toBe(false);
+    expect(offersDoneOf({ ...base, labels: ['ready-for-agent'] })).toBe(false);
+    expect(offersDoneOf({ ...base, labels: [] })).toBe(false);
   });
 
   it('is false for a Done Ticket', () => {
-    expect(offersDone({ ...base, status: 'Done' })).toBe(false);
+    expect(offersDoneOf({ ...base, status: 'Done' })).toBe(false);
   });
 
   it.each(['running', 'waiting'] as const)(
     'is false while a Conversation is %s',
     (state) => {
-      expect(offersDone(base, liveConversation({ state }))).toBe(false);
+      expect(offersDoneOf(base, liveConversation({ state }))).toBe(false);
     },
   );
 
   it.each(['idle', 'interrupted', 'error'] as const)(
     'is true beside an %s Conversation, which works on nothing',
     (state) => {
-      expect(offersDone(base, liveConversation({ state }))).toBe(true);
+      expect(offersDoneOf(base, liveConversation({ state }))).toBe(true);
     },
   );
 
@@ -340,7 +396,7 @@ describe('offersDone (T1268)', () => {
       status: 'In progress' as const,
       externalReferences: [pullRequest],
     };
-    expect(offersDone(inReview)).toBe(false);
+    expect(offersDoneOf(inReview)).toBe(false);
   });
 });
 
@@ -348,7 +404,7 @@ describe('a child of an Epic (T1143)', () => {
   const epic = (
     rest: { claim?: typeof claim | null; hasPullRequest?: boolean } = {},
   ) => ({
-    number: 50,
+    number: epicNumber,
     title: 'Epic',
     color: 'blue' as const,
     claim: null,
@@ -370,17 +426,20 @@ describe('a child of an Epic (T1143)', () => {
   });
 
   it("takes its section from its Epic's Claim, PR reference and live Conversation", () => {
-    expect(laneOf(childOf(epic({ claim }))).section).toBe('Running');
-    expect(laneOf(childOf(epic({ hasPullRequest: true }))).section).toBe(
-      'Review',
-    );
-    expect(laneOf(childOf(epic())).section).toBe('Action needed');
+    expect(laneAndSection(childOf(epic({ claim }))).section).toBe('Running');
     expect(
-      laneOf(childOf(epic()), undefined, liveConversation({ state: 'running' }))
-        .section,
+      laneAndSection(childOf(epic({ hasPullRequest: true }))).section,
+    ).toBe('Review');
+    expect(laneAndSection(childOf(epic())).section).toBe('Action needed');
+    expect(
+      laneAndSection(
+        childOf(epic()),
+        undefined,
+        liveConversation({ state: 'running' }),
+      ).section,
     ).toBe('Running');
     expect(
-      laneOf(
+      laneAndSection(
         childOf(epic({ hasPullRequest: true })),
         undefined,
         liveConversation({ state: 'waiting' }),
@@ -390,47 +449,51 @@ describe('a child of an Epic (T1143)', () => {
 
   it('is placed by its own Claim, PR reference or live Conversation first', () => {
     const inReview = epic({ hasPullRequest: true });
-    expect(laneOf(childOf(inReview, { claim })).section).toBe('Running');
+    expect(laneAndSection(childOf(inReview, { claim })).section).toBe(
+      'Running',
+    );
     expect(
-      laneOf(childOf(epic({ claim }), { externalReferences: [pullRequest] }))
-        .section,
+      laneAndSection(
+        childOf(epic({ claim }), { externalReferences: [pullRequest] }),
+      ).section,
     ).toBe('Review');
     expect(
-      laneOf(childOf(inReview), liveConversation({ state: 'waiting' })).section,
+      laneAndSection(childOf(inReview), liveConversation({ state: 'waiting' }))
+        .section,
     ).toBe('Action needed');
   });
 
   it('says whether its section is inherited', () => {
-    expect(inheritsSection(childOf(epic({ claim })))).toBe(true);
-    expect(inheritsSection(childOf(epic(), { claim }))).toBe(false);
+    expect(placedByEpicOf(childOf(epic({ claim })))).toBe(true);
+    expect(placedByEpicOf(childOf(epic(), { claim }))).toBe(false);
     expect(
-      inheritsSection(childOf(epic()), liveConversation({ state: 'idle' })),
+      placedByEpicOf(childOf(epic()), liveConversation({ state: 'idle' })),
     ).toBe(false);
-    expect(inheritsSection({ ...childOf(epic()), epic: null })).toBe(false);
-    expect(inheritsSection({ ...childOf(epic()), status: 'Todo' })).toBe(false);
+    expect(placedByEpicOf({ ...childOf(epic()), epic: null })).toBe(false);
+    expect(placedByEpicOf({ ...childOf(epic()), status: 'Todo' })).toBe(false);
   });
 
   it('is not stalled while its Epic runs, and stalled when its Epic is', () => {
-    expect(isStalled(childOf(epic({ claim })))).toBe(false);
+    expect(stalledOf(childOf(epic({ claim })))).toBe(false);
     expect(
-      isStalled(
+      stalledOf(
         childOf(epic()),
         undefined,
         liveConversation({ state: 'running' }),
       ),
     ).toBe(false);
-    expect(isStalled(childOf(epic()))).toBe(true);
+    expect(stalledOf(childOf(epic()))).toBe(true);
   });
 
   it("is not in Review for its Epic's PR: Merged belongs to the Epic", () => {
-    expect(isInReview(childOf(epic({ hasPullRequest: true })))).toBe(false);
+    expect(offersMerged(childOf(epic({ hasPullRequest: true })))).toBe(false);
     expect(
-      isInReview(childOf(epic(), { externalReferences: [pullRequest] })),
+      offersMerged(childOf(epic(), { externalReferences: [pullRequest] })),
     ).toBe(true);
   });
 });
 
-describe('canSpec (T1222)', () => {
+describe('placementOf: the Spec offer (T1222)', () => {
   const input = (
     status: Status,
     labels: string[],
@@ -446,32 +509,166 @@ describe('canSpec (T1222)', () => {
   });
 
   it('is true for a Todo Ticket in Intake', () => {
-    expect(canSpec(input('Todo', []))).toBe(true);
-    expect(canSpec(input('Todo', ['needs-triage']))).toBe(true);
-    expect(canSpec(input('Todo', ['needs-info']))).toBe(true);
+    expect(offersSpec(input('Todo', []))).toBe(true);
+    expect(offersSpec(input('Todo', ['needs-triage']))).toBe(true);
+    expect(offersSpec(input('Todo', ['needs-info']))).toBe(true);
   });
 
   it('is false for a Ticket in another Lane or Status', () => {
-    expect(canSpec(input('Todo', ['ready-for-agent']))).toBe(false);
-    expect(canSpec(input('Todo', ['ready-for-human']))).toBe(false);
-    expect(canSpec(input('In progress', []))).toBe(false);
-    expect(canSpec(input('Done', []))).toBe(false);
+    expect(offersSpec(input('Todo', ['ready-for-agent']))).toBe(false);
+    expect(offersSpec(input('Todo', ['ready-for-human']))).toBe(false);
+    expect(offersSpec(input('In progress', []))).toBe(false);
+    expect(offersSpec(input('Done', []))).toBe(false);
   });
 
   it('is true for a Todo Epic without children, whatever its label', () => {
-    expect(canSpec(input('Todo', [], { type: 'Epic' }))).toBe(true);
-    expect(canSpec(input('Todo', ['ready-for-human'], { type: 'Epic' }))).toBe(
-      true,
-    );
+    expect(offersSpec(input('Todo', [], { type: 'Epic' }))).toBe(true);
     expect(
-      canSpec(input('Todo', [], { type: 'Epic', children: [child(1, true)] })),
+      offersSpec(input('Todo', ['ready-for-human'], { type: 'Epic' })),
+    ).toBe(true);
+    expect(
+      offersSpec(
+        input('Todo', [], { type: 'Epic', children: [child(1, true)] }),
+      ),
     ).toBe(true);
   });
 
   it('is false for an Epic with a child, or one that is not Todo', () => {
     expect(
-      canSpec(input('Todo', [], { type: 'Epic', children: [child(1)] })),
+      offersSpec(input('Todo', [], { type: 'Epic', children: [child(1)] })),
     ).toBe(false);
-    expect(canSpec(input('In progress', [], { type: 'Epic' }))).toBe(false);
+    expect(offersSpec(input('In progress', [], { type: 'Epic' }))).toBe(false);
+  });
+});
+
+describe('placementOf: which run places a child, and what the drawer offers on it', () => {
+  const epicLink = (
+    rest: { claim?: typeof claim | null; hasPullRequest?: boolean } = {},
+  ) => ({
+    number: epicNumber,
+    title: 'Epic',
+    color: 'blue' as const,
+    claim: null,
+    hasPullRequest: false,
+    ...rest,
+  });
+  const childOf = (
+    link: ReturnType<typeof epicLink>,
+    rest: Partial<
+      Pick<Ticket, 'claim' | 'externalReferences' | 'labels' | 'status'>
+    > = {},
+  ) => ({
+    status: 'In progress' as const,
+    labels: [],
+    claim: null,
+    externalReferences: [],
+    type: 'Ticket' as const,
+    children: [],
+    epic: link,
+    ...rest,
+  });
+  const running = liveConversation({ state: 'running', conversationId: 9 });
+  const waiting = liveConversation({ state: 'waiting', conversationId: 3 });
+
+  it("is placed by its Epic's live Conversation when it has no run state of its own", () => {
+    const placement = place(childOf(epicLink()), undefined, running);
+    expect(placement).toMatchObject({
+      lane: 'In progress',
+      section: 'Running',
+      placedByEpic: true,
+      placedBy: running,
+      stalled: false,
+    });
+  });
+
+  it("is placed by its Epic's Claim, with no live Conversation placing it", () => {
+    expect(place(childOf(epicLink({ claim })))).toMatchObject({
+      section: 'Running',
+      placedByEpic: true,
+      placedBy: undefined,
+      stalled: false,
+    });
+  });
+
+  it("is placed by its own live Conversation, not its Epic's", () => {
+    expect(place(childOf(epicLink()), waiting, running)).toMatchObject({
+      section: 'Action needed',
+      placedByEpic: false,
+      placedBy: waiting,
+      stalled: false,
+    });
+  });
+
+  it('is stalled with its Epic when neither has a run', () => {
+    expect(place(childOf(epicLink()))).toMatchObject({
+      section: 'Action needed',
+      placedByEpic: true,
+      placedBy: undefined,
+      stalled: true,
+    });
+  });
+
+  it("is placed by its own live Conversation outside an Epic, and ignores another Ticket's", () => {
+    const ticket = {
+      status: 'In progress' as const,
+      labels: [],
+      claim: null,
+      externalReferences: [],
+      type: 'Ticket' as const,
+      children: [],
+    };
+    expect(place(ticket, running)).toMatchObject({
+      placedByEpic: false,
+      placedBy: running,
+    });
+    // A live Conversation on Ticket 50 is not this one's Epic's: it has none.
+    expect(place(ticket, undefined, running)).toMatchObject({
+      section: 'Action needed',
+      placedBy: undefined,
+      stalled: true,
+    });
+  });
+
+  it("offers Back to Todo and not Merged by its own run, whatever its Epic's", () => {
+    // Its Epic's Conversation runs, its own run is none: parked, by its own.
+    expect(place(childOf(epicLink()), undefined, running).offers).toEqual({
+      spec: false,
+      merged: false,
+      done: false,
+      backToTodo: true,
+    });
+    // In Review by its Epic's PR: Merged is the Epic's.
+    expect(
+      place(childOf(epicLink({ hasPullRequest: true }))).offers.merged,
+    ).toBe(false);
+  });
+
+  it("offers Merged by its own PR while its Epic's Conversation runs", () => {
+    const own = childOf(epicLink(), { externalReferences: [pullRequest] });
+    expect(place(own, undefined, running).offers).toMatchObject({
+      merged: true,
+      backToTodo: true,
+    });
+    expect(place(own, waiting, running).offers).toMatchObject({
+      merged: false,
+      backToTodo: false,
+    });
+  });
+
+  it("offers Done on a ready-for-human child by its own Conversation, not its Epic's", () => {
+    const forHuman = childOf(epicLink(), { labels: ['ready-for-human'] });
+    expect(place(forHuman, undefined, running).offers.done).toBe(true);
+    expect(place(forHuman, running).offers.done).toBe(false);
+  });
+
+  it('offers Spec on a Todo idea in Intake only, whatever runs', () => {
+    const idea = childOf(epicLink(), { status: 'Todo' });
+    expect(place(idea, running, running).offers.spec).toBe(true);
+    expect(place(idea, running, running)).toMatchObject({
+      lane: 'Intake',
+      section: null,
+      placedByEpic: false,
+      stalled: false,
+    });
   });
 });

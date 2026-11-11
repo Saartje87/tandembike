@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestConversations } from '../test/conversations';
 import { createChangeChannel } from '../tickets/changes';
 import { NotAllowedError } from '../tickets/errors';
-import { laneOf } from '../tickets/ticket-lanes';
+import { placementOf } from '../tickets/ticket-lanes';
 import { conversationActivity } from './conversation-activity';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -307,8 +307,8 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     });
     const { live } = conversationActivity(world.conversations.activityRows());
     expect(
-      laneOf(world.tickets.getTicket(ticket.number), live[ticket.number]),
-    ).toEqual({ lane: 'In progress', section: 'Review' });
+      placementOf(world.tickets.getTicket(ticket.number), live),
+    ).toMatchObject({ lane: 'In progress', section: 'Review' });
     await startOn(world, world.projects[1].id);
     expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
   });

@@ -36,14 +36,14 @@ import {
   ticket,
 } from '../../test/ticket-drawer';
 import type { Ticket } from '../../tickets/tickets';
-import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
+import { useLiveConversations } from '../conversation-activity/conversation-activity';
 
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 vi.mock('../conversation-activity/conversation-activity', async (original) => ({
   ...(await original<
     typeof import('../conversation-activity/conversation-activity')
   >()),
-  useTicketLiveConversation: vi.fn(),
+  useLiveConversations: vi.fn(),
 }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
@@ -455,9 +455,9 @@ describe('TicketDrawer', () => {
     });
 
     it('shows nothing while a Conversation is live', () => {
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'running' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
       renderDrawer(inReview);
 
       expect(merged()).toBeNull();
@@ -522,16 +522,16 @@ describe('TicketDrawer', () => {
     });
 
     it('shows beside an idle Conversation, not while one runs', () => {
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'idle' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'idle' }),
+      });
       const { unmount } = renderDrawer(forHuman);
       expect(button('Done T4 Fix the header')).toBeInTheDocument();
       unmount();
 
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'running' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
       renderDrawer(forHuman);
       expect(done()).toBeNull();
     });
@@ -631,9 +631,9 @@ describe('TicketDrawer', () => {
     });
 
     it('shows on an Epic in Review and for an idle Start Conversation', () => {
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'idle' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'idle' }),
+      });
       renderDrawer({ ...inReview, type: 'Epic', title: 'Login' });
 
       expect(button('Approve merge T4 Login')).toBeInTheDocument();
@@ -665,9 +665,9 @@ describe('TicketDrawer', () => {
     });
 
     it('shows nothing while a Conversation is running', () => {
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'running' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
       renderDrawer(inReview);
 
       expect(approve()).toBeNull();
@@ -727,9 +727,9 @@ describe('TicketDrawer', () => {
     it.each(['running', 'idle'] as const)(
       'does not show while a %s Conversation is live',
       (state) => {
-        vi.mocked(useTicketLiveConversation).mockReturnValue(
-          liveConversation({ state }),
-        );
+        vi.mocked(useLiveConversations).mockReturnValue({
+          4: liveConversation({ state }),
+        });
         renderDrawer(ticket);
 
         expect(backToTodoButton()).toBeNull();
@@ -758,9 +758,9 @@ describe('TicketDrawer', () => {
     });
 
     it('does not show on an Epic while a Conversation is live', () => {
-      vi.mocked(useTicketLiveConversation).mockReturnValue(
-        liveConversation({ state: 'running' }),
-      );
+      vi.mocked(useLiveConversations).mockReturnValue({
+        4: liveConversation({ state: 'running' }),
+      });
       renderDrawer({ ...ticket, type: 'Epic', title: 'Login' });
 
       expect(backToTodoButton()).toBeNull();

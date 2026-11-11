@@ -197,34 +197,6 @@ describe('Board', () => {
     expect(within(running).getByText('Running')).toBeVisible();
   });
 
-  it('shows a Terminal run In flight with its elapsed time and no cost (T1237)', async () => {
-    vi.mocked(currentConversationActivity).mockResolvedValue(
-      activity({ live: { 7: liveConversation({ line: 'Starting' }) } }),
-    );
-    renderBoard();
-
-    const inFlight = section('In flight');
-    await vi.waitFor(() =>
-      expect(within(inFlight).getByText(/^Starting · [^$]+$/)).toBeVisible(),
-    );
-  });
-
-  it('hides the cost of a handed-over Terminal run In flight (T1196)', async () => {
-    vi.mocked(currentConversationActivity).mockResolvedValue(
-      activity({
-        live: { 7: liveConversation({ line: 'Starting', terminal: true }) },
-        cost: { 7: 1.5 },
-      }),
-    );
-    renderBoard();
-
-    const inFlight = section('In flight');
-    await vi.waitFor(() =>
-      expect(within(inFlight).getByText(/^Starting · [^$]+$/)).toBeVisible(),
-    );
-    expect(within(inFlight).queryByText(/\$1\.50/)).not.toBeInTheDocument();
-  });
-
   it('shows Action needed and Review under Needs you, open, saying what each waits on', async () => {
     vi.mocked(currentConversationActivity).mockResolvedValue(
       activity({
@@ -1662,51 +1634,6 @@ describe('Board drag', () => {
       );
     },
   );
-
-  it('leaves an Epic of another Cycle out of the order it saves', async () => {
-    const { promise, resolve } = Promise.withResolvers<{ ok: true }>();
-    vi.mocked(reorderTickets).mockReturnValue(promise);
-    onTestFinished(async () => {
-      await act(async () => resolve({ ok: true }));
-    });
-    vi.mocked(currentConversationActivity).mockResolvedValue(
-      noConversationActivity,
-    );
-    mockRowBounds();
-    renderBoard([
-      planned({
-        number: 1,
-        title: 'First queued',
-        labels: ['ready-for-agent'],
-      }),
-      ticket({
-        number: 50,
-        title: 'Foreign epic',
-        type: 'Epic',
-        color: 'teal',
-        position: 1,
-        labels: ['ready-for-agent'],
-        cycle: { id: 10, title: 'Elsewhere', state: 'Prepared' },
-      }),
-      planned({
-        number: 2,
-        title: 'Second queued',
-        position: 2,
-        labels: ['ready-for-agent'],
-      }),
-    ]);
-
-    await keyboardDrag(rowOf(1), '{ArrowDown}');
-
-    await vi.waitFor(() =>
-      expect(reorderTickets).toHaveBeenCalledExactlyOnceWith({
-        projectId: 3,
-        status: 'Todo',
-        cycleId: 9,
-        ticketNumbers: [2, 1],
-      }),
-    );
-  });
 
   it('shows a reordered row in its new place at once', async () => {
     const { promise, resolve } = Promise.withResolvers<{ ok: true }>();

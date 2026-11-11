@@ -15,7 +15,7 @@ import type {
 } from '../conversations/conversations';
 import { costUnits } from '../tickets/cost-unit';
 import { isPullRequestReference } from '../tickets/external-reference-display';
-import { inheritsSection, isStalled, laneOf } from '../tickets/ticket-lanes';
+import { placementOf } from '../tickets/ticket-lanes';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import type { Notice } from './notice';
 
@@ -158,13 +158,12 @@ const ticketNotice = (
   path: ticketPath(ticket),
 });
 
-/** The In progress Tickets, each with what the Board's Lane derivation needs. */
+/** The In progress Tickets, each with its placement on the Board. */
 function inProgress({ tickets, conversations }: NoticeWorld) {
   const { live } = conversationActivity(conversations.activityRows());
   return tickets.listTickets({ status: 'In progress' }).map((ticket) => ({
     ticket,
-    own: live[ticket.number],
-    epicLive: ticket.epic ? live[ticket.epic.number] : undefined,
+    placement: placementOf(ticket, live),
   }));
 }
 
@@ -174,14 +173,14 @@ function inProgress({ tickets, conversations }: NoticeWorld) {
  * Epic's PR is the Epic's to merge.
  */
 const merge: NoticeDetector = (world) =>
-  inProgress(world).flatMap(({ ticket, own, epicLive }) => {
+  inProgress(world).flatMap(({ ticket, placement }) => {
     const pullRequest = ticket.externalReferences.findLast(
       isPullRequestReference,
     );
     if (
       pullRequest === undefined ||
-      laneOf(ticket, own, epicLive).section !== 'Review' ||
-      inheritsSection(ticket, own)
+      placement.section !== 'Review' ||
+      placement.placedByEpic
     ) {
       return [];
     }
@@ -251,7 +250,7 @@ function stalledCause(
  */
 const stalled: NoticeDetector = (world) =>
   inProgress(world)
-    .filter(({ ticket, own, epicLive }) => isStalled(ticket, own, epicLive))
+    .filter(({ placement }) => placement.stalled)
     .flatMap(({ ticket }) => {
       const cause = stalledCause(world, ticket);
       return cause.byUser

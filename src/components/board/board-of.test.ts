@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { noBoardFilter } from '../../app/lib/paths';
 import { activity, liveConversation } from '../../test/conversation-activity';
 import { anEpicChild } from '../../test/fixtures';
 import type { EpicLink } from '../../tickets/epic-link';
@@ -913,7 +914,7 @@ describe('boardOf', () => {
         activity(),
       ).needsYou.intake;
 
-      // As laneOf reads it: ready-for-agent decides first.
+      // As placementOf reads it: ready-for-agent decides first.
       expect(row).toMatchObject({ number: 52, triageLabel: 'ready-for-agent' });
     });
 
@@ -1358,5 +1359,169 @@ describe('boardOf', () => {
 
       expect(view.queued).toEqual([]);
     });
+  });
+});
+
+describe('boardOf: what the Board renders without deriving', () => {
+  const cycle = { id: 9, title: 'Factory Board', state: 'Active' as const };
+  const elsewhere = { id: 10, title: 'Elsewhere', state: 'Prepared' as const };
+  const live = (state: 'running' | 'waiting') => liveConversation({ state });
+  const board = [
+    // Needs you: Action needed (waiting) and Review.
+    ticket({ number: 1, status: 'In progress', claim, cycle }),
+    ticket({
+      number: 2,
+      status: 'In progress',
+      externalReferences: [pullRequest(2)],
+      cycle,
+    }),
+    // Your work: one unblocked, one blocked; counted as rows both.
+    ticket({
+      number: 3,
+      title: 'Check by hand',
+      labels: ['ready-for-human'],
+      position: 3,
+      cycle,
+    }),
+    ticket({
+      number: 4,
+      title: 'Fix by hand',
+      labels: ['ready-for-human'],
+      position: 1,
+      blockedBy: [1],
+      blocked: true,
+      cycle,
+    }),
+    // Intake.
+    ticket({ number: 5, title: 'Fix idea', position: 2, cycle }),
+    // Queued, and an Epic of another Cycle queued here for its child.
+    ticket({
+      number: 6,
+      title: 'Fix queued',
+      labels: ['ready-for-agent'],
+      position: 5,
+      cycle,
+    }),
+    ticket({
+      number: 50,
+      title: 'Foreign epic',
+      type: 'Epic',
+      color: 'teal',
+      labels: ['ready-for-agent'],
+      position: 4,
+      children: [anEpicChild({ number: 7, title: 'Child' })],
+      cycle: elsewhere,
+    }),
+    ticket({
+      number: 7,
+      title: 'Child',
+      labels: ['ready-for-agent'],
+      position: 6,
+      epic: {
+        number: 50,
+        title: 'Foreign epic',
+        color: 'teal',
+        claim: null,
+        hasPullRequest: false,
+      },
+      cycle,
+    }),
+    // In flight: a running Ticket.
+    ticket({ number: 8, status: 'In progress', claim, cycle }),
+    // Done, and an archived Todo Ticket.
+    ticket({ number: 11, status: 'Done', cycle }),
+    ticket({ number: 12, archived: true, position: 0, cycle }),
+  ];
+  const liveOn = activity({ live: { 1: live('waiting'), 8: live('running') } });
+
+  it('counts the rows of Needs you, blocked ones too, and the rows In flight', () => {
+    const view = boardOf(board, liveOn, noBoardFilter, cycle.id);
+
+    expect(view.counts).toEqual({
+      needsYouRows: 5,
+      actionNeeded: 1,
+      review: 1,
+      yourWork: 2,
+      intake: 1,
+      inFlight: 1,
+      queued: 2,
+      done: 1,
+    });
+    // The blocked Your work row is listed but not counted as waiting.
+    expect(view.needsYou.count).toBe(4);
+  });
+
+  it('counts an In progress Epic In flight with the Tickets', () => {
+    const view = boardOf(
+      [
+        ticket({
+          number: 50,
+          type: 'Epic',
+          color: 'teal',
+          status: 'In progress',
+          claim,
+        }),
+        ticket({ number: 8, status: 'In progress', claim }),
+      ],
+      activity(),
+      noBoardFilter,
+      null,
+    );
+
+    expect(view.counts.inFlight).toBe(2);
+  });
+
+  it("orders the Board's Todo Tickets over all three sections, leaving out another Cycle's Epic and the archived", () => {
+    const view = boardOf(board, liveOn, noBoardFilter, cycle.id);
+
+    expect(view.todoOrder).toEqual([4, 5, 3, 6, 7]);
+  });
+
+  it('orders an Epic of no Cycle on the Backlog', () => {
+    const epic = ticket({
+      number: 50,
+      type: 'Epic',
+      color: 'teal',
+      labels: ['ready-for-agent'],
+      children: [anEpicChild({ number: 1 })],
+    });
+    const view = boardOf(
+      [epic, ticket({ number: 1, labels: ['ready-for-agent'], position: 1 })],
+      activity(),
+      noBoardFilter,
+      null,
+    );
+
+    expect(view.todoOrder).toEqual([50, 1]);
+    expect(view.reorderScopes.Queued).toEqual([50, 1]);
+  });
+
+  it("gives each section a drag orders its rows in the order shown, another Cycle's Epic left out", () => {
+    const view = boardOf(board, liveOn, noBoardFilter, cycle.id);
+
+    expect(numbers(view.queued)).toEqual([50, 6]);
+    expect(view.reorderScopes).toEqual({
+      Queued: [6],
+      'Your work': [4, 3],
+      Intake: [5],
+    });
+  });
+
+  it('narrows the counts and the reorder scopes by the Board filter, not the Todo order', () => {
+    const view = boardOf(board, liveOn, { query: 'fix', labels: [] }, cycle.id);
+
+    expect(view.counts).toMatchObject({
+      needsYouRows: 2,
+      yourWork: 1,
+      intake: 1,
+      queued: 1,
+      inFlight: 0,
+    });
+    expect(view.reorderScopes).toEqual({
+      Queued: [6],
+      'Your work': [4],
+      Intake: [5],
+    });
+    expect(view.todoOrder).toEqual([4, 5, 3, 6, 7]);
   });
 });
