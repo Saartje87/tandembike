@@ -5,7 +5,7 @@ import { epicStatusRule } from './epics';
 import { NotAllowedError, NotFoundError, ValidationError } from './errors';
 import {
   checkLaneCycle,
-  laneOf,
+  statusLaneOf,
   throwOutOfScope,
   writeLaneOrder,
 } from './lanes';
@@ -57,7 +57,7 @@ export function createTicketOrder(ctx: TicketRowContext) {
 
       checkProjectWritable(projectId);
 
-      const lane = laneOf(db, input);
+      const lane = statusLaneOf(db, input);
       if (
         lane.scopeOrder.length !== ticketNumbers.length ||
         lane.scopeOrder.some((number) => !ticketNumbers.includes(number))
@@ -121,7 +121,7 @@ export function createTicketOrder(ctx: TicketRowContext) {
             `T${other} is ${target.status}, not ${ticket.status} like T${number}. A Ticket moves only within its own Status; change its Status with update_ticket status.`,
           );
         }
-        const lane = laneOf(db, {
+        const lane = statusLaneOf(db, {
           projectId: ticket.projectId,
           status: ticket.status,
         });
@@ -161,7 +161,7 @@ export function createTicketOrder(ctx: TicketRowContext) {
           ? undefined
           : checkLaneCycle(db, projectId, cycleId);
 
-      const lane = laneOf(db, input);
+      const lane = statusLaneOf(db, input);
       for (const number of ticketNumbers) {
         if (!lane.scopeOrder.includes(number)) {
           throwOutOfScope(db, input, number, cycle?.title);

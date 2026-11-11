@@ -451,7 +451,7 @@ const sensors = [
   KeyboardSensor,
 ];
 
-const sectionOf = (
+const dragSectionOf = (
   item: { data: Record<string, unknown> } | null | undefined,
 ) => item?.data.section;
 
@@ -872,7 +872,7 @@ export const Board: FC<BoardProps> = ({
     const { source } = event.operation;
     if (
       isSortable(source) &&
-      !carriedBy(Number(source.id), sectionOf(source) as ReorderSection)
+      !carriedBy(Number(source.id), dragSectionOf(source) as ReorderSection)
     ) {
       event.preventDefault();
     }
@@ -882,7 +882,7 @@ export const Board: FC<BoardProps> = ({
     const { source, target } = event.operation;
     // dnd-kit would move the row's element into the other section's list,
     // which React then fails to remove from its own list on the drop.
-    if (target && sectionOf(target) !== sectionOf(source)) {
+    if (target && dragSectionOf(target) !== dragSectionOf(source)) {
       event.preventDefault();
     }
   };
@@ -907,9 +907,9 @@ export const Board: FC<BoardProps> = ({
     if (event.canceled || !isSortable(source)) {
       return;
     }
-    const section = sectionOf(source) as ReorderSection;
+    const section = dragSectionOf(source) as ReorderSection;
     // A drop in another section changes nothing.
-    if (sectionOf(target) !== section) {
+    if (dragSectionOf(target) !== section) {
       return;
     }
     const numbers = sectionNumbers[section];
