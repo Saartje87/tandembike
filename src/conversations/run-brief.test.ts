@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { conversationIntents } from './conversation-state';
 import { runBrief } from './run-brief';
 
 describe('runBrief for a Retro', () => {
@@ -9,6 +10,7 @@ describe('runBrief for a Retro', () => {
     ticketTitle: null,
     ticketType: null,
     projectName: 'Website',
+    agentKind: 'claude-code' as const,
     intent: 'retro',
     retroCycle: { id: 44, title: 'Factory p2' },
     parallelRuns: false,
@@ -38,6 +40,7 @@ describe('runBrief and the Check command', () => {
     ticketTitle: 'Fix it',
     ticketType: 'Ticket' as const,
     projectName: 'Website',
+    agentKind: 'claude-code' as const,
     parallelRuns: false,
     runMode: 'default' as const,
   };
@@ -76,6 +79,7 @@ describe('runBrief and the worktree', () => {
     ticketTitle: 'Fix it',
     ticketType: 'Ticket' as const,
     projectName: 'Website',
+    agentKind: 'claude-code' as const,
     intent: 'start' as const,
     parallelRuns: true,
     runMode: 'default' as const,
@@ -110,5 +114,62 @@ describe('runBrief and the worktree', () => {
 
     expect(brief).toContain('Other runs may work in this repository');
     expect(brief).not.toContain('Tandembike made for this Conversation');
+  });
+});
+
+describe('runBrief per Agent kind (ADR 0051)', () => {
+  const situations = conversationIntents.flatMap((intent) =>
+    [false, true].flatMap((parallelRuns) =>
+      [false, true].map((terminal) => ({
+        conversationId: 5,
+        ticketNumber: 7,
+        ticketTitle: 'Fix it',
+        ticketType: 'Ticket' as const,
+        projectName: 'Website',
+        agentKind: 'claude-code' as const,
+        intent,
+        parallelRuns,
+        terminal,
+        runMode: 'auto' as const,
+        checkCommand: 'npm run check',
+        planEstimateUsd: 1.5,
+        retroCycle: { id: 44, title: 'Factory p2' },
+      })),
+    ),
+  );
+
+  it("keeps a Claude Code run's brief word for word", () => {
+    expect(
+      situations.map((situation) =>
+        runBrief({ ...situation, agentKind: 'claude-code' }),
+      ),
+    ).toMatchSnapshot();
+  });
+
+  it('gives the Claude-only lines to Claude Code runs only', () => {
+    const claudeOnly = /EnterWorktree|ExitWorktree|AskUserQuestion|CLAUDE\.md/;
+    for (const situation of situations) {
+      expect(runBrief({ ...situation, agentKind: 'copilot' })).not.toMatch(
+        claudeOnly,
+      );
+    }
+    expect(
+      situations.some((situation) =>
+        claudeOnly.test(runBrief({ ...situation, agentKind: 'claude-code' })),
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps the shared parts for every kind', () => {
+    const brief = runBrief({
+      ...situations[0],
+      intent: 'start',
+      agentKind: 'copilot',
+    });
+
+    expect(brief).toContain('Ticket T7, "Fix it"');
+    expect(brief).toContain('ask_choice');
+    expect(brief).toContain('Your Agent-run ID: 5.');
+    expect(brief).toContain('`npm run check`');
   });
 });

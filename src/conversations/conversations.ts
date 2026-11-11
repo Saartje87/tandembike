@@ -898,6 +898,7 @@ export function createConversations({
       ticketType: ticket?.type ?? null,
       projectName: tickets.getProject(conversation.projectId).name,
       intent: conversation.intent,
+      agentKind: conversation.agentKind,
       retroCycle:
         conversation.retroCycleId === null
           ? null
