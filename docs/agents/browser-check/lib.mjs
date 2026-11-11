@@ -121,7 +121,9 @@ export async function press(page, locator, mode) {
  * Whether Playwright's `request` is the Save of Project `projectId`'s Agent
  * settings with `path` as its repository path. Settings also polls other
  * Server Actions on the same URL (T1384), so the save is the POST whose body
- * carries the path, not the first POST to the page (T1394).
+ * carries the path, not the first POST to the page (T1394). It reads the body
+ * as the JSON text a Server Action sends for plain arguments; a multipart
+ * body would never match, and the wait would time out.
  */
 export function savesRepositoryPath(request, projectId, path) {
   return (
@@ -166,8 +168,10 @@ export async function setRepositoryPath(page, projectId, path) {
   const deadline = Date.now() + 10_000;
   let kept;
   for (;;) {
-    await page.reload();
-    kept = await field.inputValue();
+    kept = await page
+      .reload()
+      .then(() => field.inputValue())
+      .catch((error) => `(reload failed: ${error.message.split('\n')[0]})`);
     if (kept === path || Date.now() > deadline) break;
     await page.waitForTimeout(500);
   }
