@@ -1,5 +1,7 @@
 # A Spar runs read-only
 
+Amended by [ADR 0051](0051-agent-kinds-claude-code-and-copilot.md): the read-only rule is an agent-neutral tool policy that each runner translates. Claude Code gets the disallowed lists below. Copilot gets `availableTools` and `excludedTools`, since its permission handler never sees read-only calls.
+
 Builds on [ADR 0019](0019-tandembike-starts-agent-runs.md), [ADR 0029](0029-agent-run-mode-is-a-project-setting.md) and [ADR 0045](0045-widgets-are-typed-tools-that-block-the-run.md).
 
 A **Spar** is a Conversation in which the User thinks an idea through with an Agent, on a page of its own with a shared Canvas and Write-up. Brainstorming should never change the repository or the tracker behind the User's back: the only way a Spar files work is the User's approved Hand-off, a Server Action.

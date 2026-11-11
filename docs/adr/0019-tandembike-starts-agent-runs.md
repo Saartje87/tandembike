@@ -23,7 +23,7 @@ Starting a process with shell access changes what ADR 0001's missing authenticat
 
 ## Consequences
 
-- Only Claude Code runs are started, behind an agent runner seam; GitHub Copilot still connects as before.
+- Only Claude Code runs are started, behind an agent runner seam; GitHub Copilot still connects as before. (Superseded by [ADR 0051](0051-agent-kinds-claude-code-and-copilot.md): each Conversation runs on an Agent kind, Claude Code or Copilot, through a runner per kind.)
 - A repository whose instructions live only in `AGENTS.md` needs a `CLAUDE.md` that includes it, since the SDK loads `CLAUDE.md`.
 - A Project caps its concurrent Start runs; a Start beyond the cap is refused, not queued. (Since ADR 0049 the cap is one with Parallel runs off and the Machine cap with it on.)
 - Setup is the one Conversation whose brief says what to check in the repository; see ADR 0020.
