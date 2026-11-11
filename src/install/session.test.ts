@@ -87,7 +87,26 @@ describe('parseCommand', () => {
     expect(parseCommand(['mcp'])).toEqual({ command: 'mcp' });
   });
 
-  it('accepts triage and spec with a Ticket, and next alone (T1240)', () => {
+  it('accepts implement with T42 or 42, and alone (T1353)', () => {
+    expect(parseCommand(['implement', 'T42'])).toEqual({
+      command: 'implement',
+      ticketNumber: 42,
+    });
+    expect(parseCommand(['implement', '42'])).toEqual({
+      command: 'implement',
+      ticketNumber: 42,
+    });
+    expect(parseCommand(['implement', 't7'])).toEqual({
+      command: 'implement',
+      ticketNumber: 7,
+    });
+    expect(parseCommand(['implement'])).toEqual({
+      command: 'implement',
+      ticketNumber: null,
+    });
+  });
+
+  it('accepts triage and spec with a Ticket (T1240)', () => {
     expect(parseCommand(['triage', 'T42'])).toEqual({
       command: 'triage',
       ticketNumber: 42,
@@ -96,7 +115,6 @@ describe('parseCommand', () => {
       command: 'spec',
       ticketNumber: 7,
     });
-    expect(parseCommand(['next'])).toEqual({ command: 'next' });
   });
 
   it('accepts plan with a goal and refuses a missing one (T1249)', () => {
@@ -118,7 +136,12 @@ describe('parseCommand', () => {
     [['triage']],
     [['spec', 'abc']],
     [['spec', 'T1', 'extra']],
+    [['next']],
     [['next', 'T1']],
+    [['implement', 'abc']],
+    [['implement', '0']],
+    [['implement', '1.5']],
+    [['implement', 'T42', 'extra']],
     [['start', 'T42']],
     [['start', '-p']],
     [['start', '-p', 'abc']],
@@ -136,10 +159,12 @@ describe('parseCommand', () => {
     });
   });
 
-  it('prints the usage with the session commands', () => {
+  it('prints the usage with the session commands (T1353)', () => {
+    expect(usageText).toContain('tandembike implement [ticket]');
+    expect(usageText).not.toContain('tandembike next');
+    expect(usageText).not.toContain('start <ticket>');
     expect(usageText).toContain('tandembike triage <ticket>');
     expect(usageText).toContain('tandembike spec <ticket>');
-    expect(usageText).toContain('tandembike next');
   });
 
   it('words each reason next_work gives for no work (T1240)', () => {

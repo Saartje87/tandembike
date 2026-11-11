@@ -86,9 +86,9 @@ port (`http://localhost:<port>/api/mcp`).
 
 ## Work a Ticket in your terminal
 
-With Tandembike running, `tandembike start T42` (or `tandembike start 42`) in
-any folder opens interactive `claude` on that Ticket, whatever the folder is:
-the Ticket's Project says where. Tandembike makes the run's worktree and runs
+With Tandembike running, `tandembike implement T42` (or `tandembike implement
+42`) in any folder opens interactive `claude` on that Ticket or Epic, whatever
+the folder is: the Ticket's Project says where. Tandembike makes the run's worktree and runs
 the Prepare command as for a Start from the UI (with Parallel runs on), then
 opens `claude` there with the Stage's command (`/tandembike:implement T42`
 unless the Project sets its own), the run brief, the bundled Playbook, the
@@ -101,15 +101,16 @@ with the Stage's command. Spec is refused unless the Ticket is an idea in
 Intake or an Epic without children. `tandembike plan "<goal>"` takes the Project whose repository holds the
 current folder and opens a Plan session in its main checkout, with the Plan
 command and the goal as the first message; from a folder in no Project's
-repository it names the known Projects. `tandembike next` takes the Project whose
-repository holds the current folder and starts a Terminal Start on the top
+repository it names the known Projects. `tandembike implement` without a
+Ticket takes the Project whose repository holds the current folder and starts
+a Terminal Start on the top
 Eligible item of its Active Cycle, the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
 
 The Conversation shows on the Board as In flight, **Started by Terminal**. It
 holds no Start run slot and counts against no Spend ceiling, and Autopilot does
 not start a second run on its Ticket. It ends when `claude` exits, and
-`tandembike start` exits with `claude`'s exit code. If Tandembike is not
+the command exits with `claude`'s exit code. If Tandembike is not
 running, it says so and exits 1. See
 `docs/adr/0039-terminal-conversations.md`.
 
@@ -145,7 +146,7 @@ claude plugin install tandembike@tandembike --scope user
 `claude` on `PATH` it prints the steps. `tandembike plugin` makes the offer
 again at any time. Afterwards `/tandembike:implement T42` and the other
 Playbook commands work in a bare `claude` session in any repository. The
-session subcommands (`start`, `triage`, `spec`, `plan`, `next`, `resume`) never make
+session subcommands (`implement`, `triage`, `spec`, `plan`, `resume`) never make
 the offer: they load the bundled Playbook themselves, so they do not depend on
 this install.
 

@@ -301,7 +301,7 @@ export type TerminalSession = {
   model: string | null;
 };
 
-/** What `tandembike next` gets: a session, or why there is no work. */
+/** What `tandembike implement` without a Ticket gets: a session, or why there is no work. */
 export type TerminalNext =
   | { started: true; session: TerminalSession }
   | { started: false; reason: NoWorkReason };
@@ -1617,7 +1617,7 @@ export function createConversations({
   };
 
   /**
-   * `tandembike next` (T1240): starts a Terminal Start on the top Eligible
+   * `tandembike implement` without a Ticket (T1240, T1353): starts a Terminal Start on the top Eligible
    * item of the Active Cycle of the Project whose repository holds `folder`,
    * by the `next_work` rule. With no work it returns `next_work`'s reason.
    */

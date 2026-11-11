@@ -17,7 +17,7 @@
           "description": "Why you stopped, in Markdown. It becomes a comment on the Ticket."
         },
         "agentRunId": {
-          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike start` sessions, need not pass it; in another terminal session pass one of your own.",
+          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike implement` sessions, need not pass it; in another terminal session pass one of your own.",
           "type": "string"
         },
         "detail": {
@@ -1049,7 +1049,7 @@
           "type": "boolean"
         },
         "agentRunId": {
-          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike start` sessions, need not pass it; in another terminal session pass one of your own.",
+          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike implement` sessions, need not pass it; in another terminal session pass one of your own.",
           "type": "string"
         },
         "detail": {
@@ -1248,7 +1248,7 @@
           "description": "The Ticket number, e.g. 42 for T42."
         },
         "agentRunId": {
-          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike start` sessions, need not pass it; in another terminal session pass one of your own.",
+          "description": "This Agent run's unique ID. Runs Tandembike started, and `tandembike implement` sessions, need not pass it; in another terminal session pass one of your own.",
           "type": "string"
         }
       },

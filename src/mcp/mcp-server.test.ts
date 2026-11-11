@@ -407,11 +407,11 @@ describe('MCP server', () => {
     await client.close();
   });
 
-  it('says that a tandembike start session needs no agentRunId (T1238)', async () => {
+  it('says that a tandembike implement session needs no agentRunId (T1238, T1353)', async () => {
     const client = await connectMcpClient(createTestTickets());
 
     expect(client.getInstructions()).toContain(
-      'A `tandembike start` session needs no agentRunId',
+      'A `tandembike implement` session needs no agentRunId',
     );
     await client.close();
   });

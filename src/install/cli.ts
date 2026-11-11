@@ -127,8 +127,16 @@ async function main(): Promise<void> {
           goal: parsed.goal,
         }),
       );
-    case 'next':
-      return process.exit(await startNext());
+    case 'implement':
+      return process.exit(
+        parsed.ticketNumber === null
+          ? await startNext()
+          : await startSession({
+              action: 'start',
+              ticketNumber: parsed.ticketNumber,
+              intent: 'start',
+            }),
+      );
     case 'resume':
       return process.exit(await resumeSession(parsed.conversationId));
   }
@@ -355,7 +363,7 @@ async function callServerOrReport<T>(body: object): Promise<T | null> {
 }
 
 /**
- * `tandembike start`: asks the server for a Terminal Conversation, opens
+ * A session command: asks the server for a Terminal Conversation, opens
  * interactive `claude` in it with inherited stdio, and reports the end.
  * Returns `claude`'s exit code.
  */
@@ -365,7 +373,7 @@ async function startSession(request: object): Promise<number> {
 }
 
 /**
- * `tandembike next`: the Project is the one whose repository holds this
+ * `tandembike implement` without a Ticket: the Project is the one whose repository holds this
  * folder; the server starts its next Eligible item, or says why there is none.
  */
 async function startNext(): Promise<number> {

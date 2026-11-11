@@ -18,10 +18,11 @@ export const usageText = [
   '  tandembike restart            stop, then start the server on the same port',
   '  tandembike status             whether the server runs: pid, URL, uptime, log',
   '  tandembike logs [-f]          the last 100 lines of the server log; -f follows it',
+  '  tandembike implement [ticket] work a Ticket or Epic in this terminal (T42 or 42);',
+  '                                without one, the next Eligible item of this Project',
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
-  '  tandembike next               start the next Eligible item of this Project',
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
   '  tandembike plugin             install the Playbook plugin in Claude Code',
@@ -38,7 +39,7 @@ export type ParsedCommand =
   | { command: 'mcp' }
   | { command: 'plugin' }
   | { command: Exclude<TerminalIntent, 'start'>; ticketNumber: number }
-  | { command: 'next' }
+  | { command: 'implement'; ticketNumber: number | null }
   | { command: 'plan'; goal: string }
   | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
@@ -96,8 +97,12 @@ export function parseCommand(argv: string[]): ParsedCommand {
   if (first === 'plugin') {
     return rest.length === 0 ? { command: 'plugin' } : usage;
   }
-  if (first === 'next') {
-    return rest.length === 0 ? { command: 'next' } : usage;
+  if (first === 'implement') {
+    if (rest.length === 0) return { command: 'implement', ticketNumber: null };
+    const ticketNumber = ticketNumberOf(rest[0]);
+    return rest.length === 1 && ticketNumber !== null
+      ? { command: 'implement', ticketNumber }
+      : usage;
   }
   if (first === 'plan') {
     const goal = rest.join(' ').trim();
@@ -119,7 +124,7 @@ export function parseCommand(argv: string[]): ParsedCommand {
   return usage;
 }
 
-/** What `tandembike next` prints when `next_work` finds nothing (T1240). */
+/** What `tandembike implement` prints when `next_work` finds nothing (T1240). */
 export function noWorkMessage(
   reason: 'no-active-cycle' | 'nothing-ready' | 'all-blocked-or-claimed',
 ): string {
