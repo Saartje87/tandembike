@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
@@ -18,7 +18,6 @@ import {
   autoMergesSince,
   deleteActivity,
 } from './activity';
-import type { ActivityChange } from './activity-change';
 import type { AgentKind } from './agent-kind';
 import type { AgentRunMode } from './agent-run-mode';
 import {
@@ -36,32 +35,20 @@ import { type CycleLink, createCycles, leaveAllCycles } from './cycles';
 import type { EpicLink } from './epic-link';
 import {
   checkChildrenArchived,
-  checkEpic,
-  checkEpicChild,
   checkEpicNotArchived,
-  checkNoBlockerBetween,
-  type EpicChildInput,
-  type EpicChildrenInput,
+  createEpics,
   epicStatusRule,
 } from './epics';
 import {
   type BatchFailure,
   NotAllowedError,
   NotFoundError,
-  TicketsError,
   UncheckedCriteriaError,
   type UncheckedCriterion,
   ValidationError,
 } from './errors';
 import { isPullRequestReference } from './external-reference-display';
-import {
-  checkExternalReferenceCount,
-  checkedExternalReferences,
-  deleteExternalReferences,
-  externalReferenceChanges,
-  externalReferencesOf,
-  insertExternalReferences,
-} from './external-references';
+import { deleteExternalReferences } from './external-references';
 import {
   checkLaneCycle,
   type LaneScope,
@@ -80,31 +67,17 @@ import {
 } from './reference-templates';
 import {
   checkBatchNumbers,
-  eachOrNone,
   maxCommentLength,
   maxOverrideLength,
   throwFieldErrors,
 } from './rules';
 import { createStats } from './stats';
 import { isStatus, type Status, statusRule } from './status';
+import { createTicketChanges } from './ticket-changes';
 import { createTicketCreation } from './ticket-creation';
 import { createTicketReads } from './ticket-reads';
-import {
-  blockedTicket,
-  claimChanges,
-  createTicketRowContext,
-  labelChanges,
-  resolvedBlocker,
-  resolvedTicket,
-  type TicketRowContext,
-} from './ticket-row-context';
-import {
-  checkCriterionIds,
-  checkLabels,
-  checkTicketChanges,
-  normalizeLabels,
-  noSuchCriterion,
-} from './ticket-rules';
+import { claimChanges, createTicketRowContext } from './ticket-row-context';
+import { checkTicketChanges } from './ticket-rules';
 import type { TicketType } from './ticket-type';
 import { triageStateLabels } from './triage-labels';
 import { createTriageProposals } from './triage-proposals';
@@ -745,14 +718,6 @@ function overrideComment(
   ].join('\n');
 }
 
-const relatedTicketColumns = {
-  number: tickets.number,
-  title: tickets.title,
-  status: tickets.status,
-  projectId: tickets.projectId,
-  archived: tickets.archived,
-};
-
 const commentColumns = {
   id: ticketComments.id,
   ticketNumber: ticketComments.ticketNumber,
@@ -785,124 +750,20 @@ export function createTickets(
     getTicket,
     publishWith,
     applyTicketChanges,
-    checkBlocker,
     recordActivity,
     touchTicket,
     syncEpicStatus,
     checkTicketWritable,
     checkTicketProjectWritable,
     checkProjectWritable,
-    labelsOf,
-    insertLabels,
-    deleteLabels,
   } = ctx;
+  const cycles = createCycles(ctx);
   const referenceTemplates = createReferenceTemplates(ctx);
-  const core = {
-    transaction,
-    ...createCycles(ctx),
-    ...referenceTemplates,
-    ...createStats(ctx),
-    ...createProjects(ctx, {
-      addReferenceTemplate: referenceTemplates.addReferenceTemplate,
-    }),
-
-    /** Calls `listener` after every change; returns an unsubscribe. */
-    subscribe: changes.subscribe,
-    ...createTicketReads(ctx),
-    ...createClaims(ctx),
-    ...createTicketCreation(ctx),
-
-    /**
-     * Changes Ticket `number` fully, in one transaction: a restore first
-     * (`archived: false`), so the rest applies to the restored Ticket, then
-     * the core fields, Epic, Blockers, Cycle, Board position and archive
-     * (`archived: true`), in that order. Each step is refused with the
-     * message of the single-purpose function it applies, records Activity
-     * and announces as that function does, and a refusal leaves the Ticket
-     * unchanged. The core fields follow the rules for creating a Ticket and
-     * bump its updated time even when nothing is given; any Status may follow
-     * any other. With `withChildren`, `childrenMoved` names the children
-     * whose Cycle changed with it.
-     */
-    updateTicket(number: number, change: TicketChange): UpdatedTicket {
-      const {
-        epicNumber,
-        addBlockers = [],
-        removeBlockers = [],
-        cycleId,
-        withChildren,
-        archived,
-        before,
-        after,
-        ...fields
-      } = change;
-      return db.transaction(() => {
-        if (withChildren && cycleId === undefined) {
-          throw new TicketsError(
-            "withChildren takes an Epic's children along to a Cycle, so give cycleId with it.",
-          );
-        }
-        if (before !== undefined && after !== undefined) {
-          throw new TicketsError(
-            'Give either before or after: a Ticket lands next to one Ticket.',
-          );
-        }
-        const hasFields = Object.values(fields).some(
-          (value) => value !== undefined,
-        );
-        const hasSteps =
-          epicNumber !== undefined ||
-          addBlockers.length > 0 ||
-          removeBlockers.length > 0 ||
-          cycleId !== undefined ||
-          before !== undefined ||
-          after !== undefined ||
-          archived !== undefined;
-        // An archived Ticket is read-only, so restore it before the rest.
-        if (archived === false) {
-          core.restoreTicket(number);
-        }
-        // With nothing to change, the fields step bumps the Ticket.
-        if (hasFields || !hasSteps) {
-          updateFields(number, fields);
-        }
-        if (epicNumber === null) {
-          core.detachFromEpic(number);
-        } else if (epicNumber !== undefined) {
-          core.moveToEpic({ epic: epicNumber, child: number });
-        }
-        for (const blocker of addBlockers) {
-          core.addBlocker({ blocker, blocked: number });
-        }
-        for (const blocker of removeBlockers) {
-          core.removeBlocker({ blocker, blocked: number });
-        }
-        let childrenMoved: number[] | undefined;
-        if (cycleId !== undefined) {
-          const moved = core.moveTicketsToCycle({
-            cycleId,
-            ticketNumbers: [number],
-            withChildren,
-          });
-          if (moved.failed.length > 0) {
-            const [{ error, refusal }] = moved.failed;
-            throw new TicketsError(error, refusal);
-          }
-          childrenMoved = moved.children;
-        }
-        if (before !== undefined) {
-          core.reorderTicket(number, { before });
-        } else if (after !== undefined) {
-          core.reorderTicket(number, { after });
-        }
-        if (archived === true) {
-          core.archiveTicket(number);
-        }
-        const ticket = getTicket(number);
-        return childrenMoved ? { ...ticket, childrenMoved } : ticket;
-      });
-    },
-
+  const projectsArea = createProjects(ctx, {
+    addReferenceTemplate: referenceTemplates.addReferenceTemplate,
+  });
+  const epics = createEpics(ctx);
+  const rest = {
     /**
      * Back to Todo, the User's action on a parked Ticket (ADR 0024): Status
      * becomes Todo at the end of the Todo order and any Claim is released,
@@ -1001,333 +862,6 @@ export function createTickets(
     uncheckedCriteria(number: number): UncheckedCriterion[] {
       getTicket(number);
       return uncheckedCriteriaOf(number);
-    },
-
-    /**
-     * Applies the same Status and label change to each Ticket in
-     * `ticketNumbers`, by the rules of `updateTicket`. Each Ticket's change is
-     * atomic, but the batch is not: a Ticket that cannot be changed is
-     * reported in `failed` and the others are still changed. An invalid batch
-     * or change is refused as a whole. The changed Tickets are announced once.
-     */
-    updateTickets(input: UpdateTicketsInput): UpdateTicketsResult {
-      const { ticketNumbers, status, color, addLabels, removeLabels } = input;
-      const checked = checkTicketChanges({
-        status,
-        color,
-        addLabels,
-        removeLabels,
-      });
-      throwFieldErrors({
-        ticketNumbers: checkBatchNumbers(ticketNumbers),
-        change:
-          checked.values.status === undefined &&
-          checked.values.color === undefined &&
-          checked.addLabels.length === 0 &&
-          checked.removeLabels.length === 0
-            ? 'Give a Status, color, addLabels or removeLabels to change.'
-            : undefined,
-      });
-
-      const changed: number[] = [];
-      const changedEpics = new Set<number>();
-      const failed: BatchFailure[] = [];
-      try {
-        for (const number of ticketNumbers) {
-          try {
-            const { changedEpic } = applyTicketChanges(number, checked);
-            changed.push(number);
-            if (changedEpic !== null) {
-              changedEpics.add(changedEpic);
-            }
-          } catch (error) {
-            if (!(error instanceof TicketsError)) {
-              throw error;
-            }
-            failed.push({ number, error: error.message });
-          }
-        }
-      } finally {
-        if (changed.length > 0) {
-          changes.publish({
-            type: 'tickets',
-            numbers: [
-              ...changed,
-              ...[...changedEpics].filter((epic) => !changed.includes(epic)),
-            ],
-          });
-        }
-      }
-      return { updated: changed.map(getTicket), failed };
-    },
-
-    /**
-     * Adds `labels` to Ticket `number`, trimmed and lower-cased; ones it
-     * already has are kept once. Bumps its updated time.
-     */
-    addLabels(number: number, labels: string[]): Ticket {
-      const added = checkedLabels(labels);
-      db.transaction(() => {
-        checkTicketWritable(number);
-        touchTicket(number);
-        const before = labelsOf(number);
-        insertLabels(number, added);
-        recordActivity(number, labelChanges(before, { added }));
-      });
-      changes.publish({ type: 'ticket', number });
-      return getTicket(number);
-    },
-
-    /**
-     * Removes `labels` from Ticket `number`, ignoring case and ones it does
-     * not have. Bumps its updated time.
-     */
-    removeLabels(number: number, labels: string[]): Ticket {
-      const removed = checkedLabels(labels);
-      db.transaction(() => {
-        checkTicketWritable(number);
-        touchTicket(number);
-        const before = labelsOf(number);
-        deleteLabels(number, removed);
-        recordActivity(number, labelChanges(before, { removed }));
-      });
-      changes.publish({ type: 'ticket', number });
-      return getTicket(number);
-    },
-
-    /**
-     * Adds `references` to Ticket `number` after the ones it has, trimmed;
-     * ones it already has are kept once, where they were. Refused past
-     * `maxExternalReferences`. Bumps its updated time.
-     */
-    addExternalReferences(number: number, references: string[]): Ticket {
-      const added = checkedExternalReferences(references);
-      db.transaction(() => {
-        checkTicketWritable(number);
-        touchTicket(number);
-        const before = externalReferencesOf(db, number);
-        insertExternalReferences(db, number, added);
-        checkExternalReferenceCount(db, number);
-        recordActivity(number, externalReferenceChanges(before, { added }));
-      });
-      changes.publish({ type: 'ticket', number });
-      return getTicket(number);
-    },
-
-    /**
-     * Removes `references` from Ticket `number`, trimmed and matched
-     * exactly; ones it does not have are ignored. Bumps its updated time.
-     */
-    removeExternalReferences(number: number, references: string[]): Ticket {
-      const removed = checkedExternalReferences(references);
-      db.transaction(() => {
-        checkTicketWritable(number);
-        touchTicket(number);
-        const before = externalReferencesOf(db, number);
-        deleteExternalReferences(db, number, removed);
-        recordActivity(number, externalReferenceChanges(before, { removed }));
-      });
-      changes.publish({ type: 'ticket', number });
-      return getTicket(number);
-    },
-
-    /**
-     * Checks or unchecks each given acceptance criterion of Ticket `number`,
-     * leaving its other criteria and their order alone, and bumps its updated
-     * time. The Status does not change (ADR 0007).
-     */
-    setAcceptanceCriteriaChecked(
-      number: number,
-      criteria: AcceptanceCriterionCheckedInput[],
-    ): Ticket {
-      throwFieldErrors({
-        acceptanceCriteria:
-          criteria.length === 0
-            ? 'Choose at least one acceptance criterion.'
-            : checkCriterionIds(criteria),
-      });
-      db.transaction(() => {
-        checkTicketWritable(number);
-        touchTicket(number);
-        const activity: ActivityChange[] = [];
-        for (const { id, checked } of criteria) {
-          const criterion = db
-            .select({
-              text: ticketAcceptanceCriteria.text,
-              checked: ticketAcceptanceCriteria.checked,
-            })
-            .from(ticketAcceptanceCriteria)
-            .where(
-              and(
-                eq(ticketAcceptanceCriteria.id, id),
-                eq(ticketAcceptanceCriteria.ticketNumber, number),
-              ),
-            )
-            .get();
-          throwFieldErrors({
-            acceptanceCriteria: criterion
-              ? undefined
-              : noSuchCriterion(number, id),
-          });
-          if (criterion?.checked === checked) {
-            continue;
-          }
-          db.update(ticketAcceptanceCriteria)
-            .set({ checked })
-            .where(eq(ticketAcceptanceCriteria.id, id))
-            .run();
-          activity.push({
-            type: checked ? 'criterionChecked' : 'criterionUnchecked',
-            text: criterion?.text ?? '',
-          });
-        }
-        recordActivity(number, activity);
-      });
-      changes.publish({ type: 'ticket', number });
-      return getTicket(number);
-    },
-
-    /**
-     * Makes Ticket `blocker` a Blocker of Ticket `blocked`, which bumps the
-     * blocked Ticket's updated time. Adding one it already has changes
-     * nothing else. Either Ticket may be in any Project. A Ticket blocking
-     * itself, or a Blocker that would close a cycle, is refused. Returns the
-     * blocked Ticket.
-     */
-    addBlocker({ blocker, blocked }: BlockerInput): Ticket {
-      throwFieldErrors({
-        blocker:
-          blocker === blocked ? 'A Ticket cannot block itself.' : undefined,
-      });
-      db.transaction(() => {
-        checkTicketWritable(blocked);
-        checkBlocker({ blocker, blocked });
-        touchTicket(blocked);
-        const added = db
-          .insert(ticketBlockers)
-          .values({ blockerNumber: blocker, blockedNumber: blocked })
-          .onConflictDoNothing()
-          .returning({ blocked: ticketBlockers.blockedNumber })
-          .get();
-        if (added) {
-          recordBlocker(ctx, { blocker, blocked }, 'Added');
-        }
-      });
-      changes.publish({ type: 'tickets', numbers: [blocker, blocked] });
-      return getTicket(blocked);
-    },
-
-    /**
-     * Stops Ticket `blocker` blocking Ticket `blocked`, ignoring a Blocker it
-     * does not have, and bumps the blocked Ticket's updated time. Both
-     * Tickets must exist. Returns the blocked Ticket.
-     */
-    removeBlocker({ blocker, blocked }: BlockerInput): Ticket {
-      db.transaction(() => {
-        getTicket(blocker);
-        checkTicketWritable(blocked);
-        touchTicket(blocked);
-        const removed = db
-          .delete(ticketBlockers)
-          .where(
-            and(
-              eq(ticketBlockers.blockerNumber, blocker),
-              eq(ticketBlockers.blockedNumber, blocked),
-            ),
-          )
-          .returning({ blocked: ticketBlockers.blockedNumber })
-          .get();
-        if (removed) {
-          recordBlocker(ctx, { blocker, blocked }, 'Removed');
-        }
-      });
-      changes.publish({ type: 'tickets', numbers: [blocker, blocked] });
-      return getTicket(blocked);
-    },
-
-    attachTicketsToEpic,
-
-    /**
-     * Makes normal Ticket `child` a child of Epic `epic` in the same Project
-     * (ADR 0011), by the rules of `attachTicketsToEpic`, but a Ticket in
-     * another Epic leaves it for `epic`, and that Epic's Status follows too.
-     * Returns the child.
-     */
-    moveToEpic(input: EpicChildInput): Ticket {
-      return joinEpic(input, { move: true });
-    },
-
-    /**
-     * `moveToEpic` for each of `children`, all or nothing: if any cannot
-     * join `epic`, none does. Their Statuses and positions stay as they are.
-     * The change is announced once, or not at all when every Ticket was in
-     * `epic` already.
-     */
-    moveTicketsToEpic(input: EpicChildrenInput): void {
-      const { epic, children } = input;
-      throwFieldErrors({ children: checkBatchNumbers(children) });
-
-      const joined = db.transaction(() =>
-        children.flatMap((child) => {
-          const changed = joinEpicStep({ epic, child }, { move: true });
-          return changed ? [{ child, ...changed }] : [];
-        }),
-      );
-      if (joined.length === 0) {
-        return;
-      }
-      const left = joined.flatMap(({ previous }) =>
-        previous === null ? [] : [previous],
-      );
-      changes.publish({
-        type: 'tickets',
-        numbers: [
-          ...new Set([...left, epic, ...joined.map(({ child }) => child)]),
-        ],
-      });
-    },
-
-    /**
-     * Takes Ticket `number` out of its Epic, if it has one, and bumps both
-     * updated times. Returns the Ticket.
-     */
-    detachFromEpic(number: number): Ticket {
-      return detachTicketsFromEpic([number])[0];
-    },
-
-    detachTicketsFromEpic,
-
-    /**
-     * The Tickets that block Ticket `number` and the Tickets it blocks, each
-     * by number, archived ones included.
-     */
-    listBlockers(number: number): Blockers {
-      getTicket(number);
-      const related = (direction: keyof Blockers) => {
-        const [side, other] =
-          direction === 'blockedBy'
-            ? [ticketBlockers.blockedNumber, ticketBlockers.blockerNumber]
-            : [ticketBlockers.blockerNumber, ticketBlockers.blockedNumber];
-        // A Blocker is resolved by the Blocker rule; a Ticket it blocks,
-        // when it is Done or archived itself.
-        return db
-          .select({
-            ...relatedTicketColumns,
-            resolved: sql`${
-              direction === 'blockedBy' ? resolvedBlocker : resolvedTicket
-            }`.mapWith(Boolean),
-          })
-          .from(ticketBlockers)
-          .innerJoin(tickets, eq(tickets.number, other))
-          .innerJoin(
-            blockedTicket,
-            eq(blockedTicket.number, ticketBlockers.blockedNumber),
-          )
-          .where(eq(side, number))
-          .orderBy(asc(tickets.number))
-          .all();
-      };
-      return { blockedBy: related('blockedBy'), blocks: related('blocks') };
     },
 
     /**
@@ -1877,6 +1411,30 @@ export function createTickets(
       }
     },
   };
+  const ticketChanges = createTicketChanges(ctx, {
+    restoreTicket: rest.restoreTicket,
+    archiveTicket: rest.archiveTicket,
+    moveToEpic: epics.moveToEpic,
+    detachFromEpic: epics.detachFromEpic,
+    moveTicketsToCycle: cycles.moveTicketsToCycle,
+    reorderTicket: rest.reorderTicket,
+  });
+  const core = {
+    transaction,
+    ...cycles,
+    ...referenceTemplates,
+    ...createStats(ctx),
+    ...projectsArea,
+
+    /** Calls `listener` after every change; returns an unsubscribe. */
+    subscribe: changes.subscribe,
+    ...createTicketReads(ctx),
+    ...createClaims(ctx),
+    ...createTicketCreation(ctx),
+    ...epics,
+    ...ticketChanges,
+    ...rest,
+  };
   return {
     ...core,
     ...createTriageProposals(ctx, {
@@ -1984,28 +1542,6 @@ export function createTickets(
     ];
   }
 
-  /**
-   * The core-fields step of `updateTicket`: changes the given fields of
-   * Ticket `number` by the rules for creating one, and bumps its updated
-   * time even when no fields are given.
-   */
-  function updateFields(number: number, input: UpdateTicketInput) {
-    const checked = checkTicketChanges(input);
-    checkTicketWritable(number);
-    if (checked.values.projectId !== undefined) {
-      checkProjectWritable(checked.values.projectId);
-    }
-
-    const { leftCycles, changedEpic, changedOrigins } = applyTicketChanges(
-      number,
-      checked,
-    );
-    publishWith(number, changedEpic, ...changedOrigins);
-    for (const id of leftCycles) {
-      changes.publish({ type: 'cycle', id });
-    }
-  }
-
   /** Adds a comment by the module's actor; run it in a transaction. */
   function insertComment(number: number, body: string) {
     db.insert(ticketComments)
@@ -2016,154 +1552,6 @@ export function createTickets(
         createdAt: new Date(),
       })
       .run();
-  }
-
-  /**
-   * The change of `joinEpic`, without its transaction or announcement: run
-   * it in the transaction that makes the change. Returns `null` when `child`
-   * was in `epic` already, and otherwise the Epic it left, if any.
-   */
-  function joinEpicStep(
-    { epic, child }: EpicChildInput,
-    { move }: { move: boolean },
-  ): { previous: number | null } | null {
-    checkTicketWritable(child);
-    const ticket = db
-      .select({
-        type: tickets.type,
-        projectId: tickets.projectId,
-        epicNumber: tickets.epicNumber,
-      })
-      .from(tickets)
-      .where(eq(tickets.number, child))
-      .get();
-    if (!ticket) {
-      throw new NotFoundError(`There is no Ticket T${child}.`);
-    }
-    const previous = ticket.epicNumber;
-    checkEpicChild(db, epic, {
-      number: child,
-      ...ticket,
-      epicNumber: move ? null : previous,
-    });
-    if (previous === epic) {
-      return null;
-    }
-    checkNoBlockerBetween(db, { epic, child });
-    db.update(tickets)
-      .set({ epicNumber: epic, archivedWithEpic: false, updatedAt: new Date() })
-      .where(eq(tickets.number, child))
-      .run();
-    recordActivity(child, [{ type: 'epic', from: previous, to: epic }]);
-    touchTicket(epic);
-    syncEpicStatus(epic);
-    if (previous !== null) {
-      touchTicket(previous);
-      syncEpicStatus(previous);
-    }
-    return { previous };
-  }
-
-  /**
-   * Makes each of normal Tickets `children` a child of Epic `epic` in the
-   * same Project (ADR 0011), and bumps both updated times, all or nothing:
-   * if any cannot join `epic`, none does, and the refusal names every one that cannot and
-   * why. A Ticket in another Epic is refused, not moved. Returns the
-   * children in the order given. The change is announced once, or not at
-   * all when every Ticket was in `epic` already.
-   */
-  function attachTicketsToEpic({ epic, children }: EpicChildrenInput) {
-    throwFieldErrors({ children: checkBatchNumbers(children) });
-
-    const joined = db.transaction(() => {
-      checkEpic(db, epic);
-      return eachOrNone(children, (child) =>
-        joinEpicStep({ epic, child }, { move: false }),
-      );
-    });
-    const changed = children.filter((_, index) => joined[index] !== null);
-    if (changed.length > 0) {
-      changes.publish({ type: 'tickets', numbers: [epic, ...changed] });
-    }
-    return children.map((child) => getTicket(child));
-  }
-
-  /**
-   * `detachFromEpic` for each of `ticketNumbers`, all or nothing: if any
-   * cannot leave its Epic, none does, and the refusal names every one. They
-   * may come from different Epics, and each one's Status follows. A Ticket
-   * in no Epic stays as it is. Returns the Tickets in the order given. The
-   * change is announced once, or not at all when none was in an Epic.
-   */
-  function detachTicketsFromEpic(ticketNumbers: number[]): Ticket[] {
-    throwFieldErrors({ ticketNumbers: checkBatchNumbers(ticketNumbers) });
-
-    const left = db.transaction(() => eachOrNone(ticketNumbers, leaveEpicStep));
-    const epics = left.filter((epic) => epic !== null);
-    if (epics.length > 0) {
-      changes.publish({
-        type: 'tickets',
-        numbers: [
-          ...new Set(epics),
-          ...ticketNumbers.filter((_, index) => left[index] !== null),
-        ],
-      });
-    }
-    return ticketNumbers.map((number) => getTicket(number));
-  }
-
-  /**
-   * Takes Ticket `number` out of its Epic, without a transaction or an
-   * announcement, and bumps both updated times. Returns the Epic it left,
-   * or `null` when it was in none.
-   */
-  function leaveEpicStep(number: number): number | null {
-    checkTicketWritable(number);
-    const ticket = db
-      .select({ epicNumber: tickets.epicNumber })
-      .from(tickets)
-      .where(eq(tickets.number, number))
-      .get();
-    if (!ticket) {
-      throw new NotFoundError(`There is no Ticket T${number}.`);
-    }
-    if (ticket.epicNumber === null) {
-      return null;
-    }
-    db.update(tickets)
-      .set({ epicNumber: null, archivedWithEpic: false, updatedAt: new Date() })
-      .where(eq(tickets.number, number))
-      .run();
-    recordActivity(number, [
-      { type: 'epic', from: ticket.epicNumber, to: null },
-    ]);
-    touchTicket(ticket.epicNumber);
-    syncEpicStatus(ticket.epicNumber);
-    return ticket.epicNumber;
-  }
-
-  /**
-   * Makes `child` a child of `epic`, by the rules of `attachTicketsToEpic`; with
-   * `move`, a child of another Epic leaves that one first.
-   */
-  function joinEpic(
-    { epic, child }: EpicChildInput,
-    { move }: { move: boolean },
-  ): Ticket {
-    const changed = db.transaction(() =>
-      joinEpicStep({ epic, child }, { move }),
-    );
-    if (changed) {
-      changes.publish({
-        type: 'tickets',
-        numbers: [
-          ...(changed.previous === null ? [] : [changed.previous]),
-          epic,
-          child,
-        ],
-      });
-    }
-    return getTicket(child);
   }
 
   /**
@@ -2291,16 +1679,6 @@ export function createTickets(
   }
 }
 
-/** Normalized `labels` for adding or removing, at least one, or a `ValidationError`. */
-function checkedLabels(labels: readonly string[]): string[] {
-  const normalized = normalizeLabels(labels);
-  throwFieldErrors({
-    labels:
-      normalized.length === 0 ? 'Enter a label.' : checkLabels(normalized),
-  });
-  return normalized;
-}
-
 /**
  * Deletes Ticket `number`'s row with everything attached to it: labels,
  * External references, Activity, Comments, acceptance criteria, Blockers on both sides and Cycle
@@ -2346,17 +1724,4 @@ function removeTicket(db: DatabaseConnection, number: number) {
     .returning({ originNumber: tickets.originNumber })
     .get();
   return { unblocked, leftCycles, unlinked, origin: removed?.originNumber };
-}
-
-/**
- * Records a Blocker added or removed between `blocker` and `blocked` on both
- * Tickets, by `actor`. Run it in the transaction that makes the change.
- */
-function recordBlocker(
-  { recordActivity }: TicketRowContext,
-  { blocker, blocked }: BlockerInput,
-  change: 'Added' | 'Removed',
-) {
-  recordActivity(blocked, [{ type: `blockedBy${change}`, number: blocker }]);
-  recordActivity(blocker, [{ type: `blocks${change}`, number: blocked }]);
 }
