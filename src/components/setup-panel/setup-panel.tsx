@@ -80,10 +80,10 @@ const Group: FC<GroupProps> = ({ title, children }) => (
   </Stack>
 );
 
-const ceilingText = (ceilingUsd: number | null, spent: string) =>
-  ceilingUsd === null
+const ceilingText = (ceiling: number | null, spent: string) =>
+  ceiling === null
     ? `None set · ${spent}`
-    : `${formatCost(ceilingUsd)} · ${spent}`;
+    : `${formatCost(ceiling, 'usd')} · ${spent}`;
 
 /**
  * Flow's Setup (ADR 0044): what this Project runs at each Stage, its Check
@@ -144,8 +144,8 @@ export const SetupPanel: FC<SetupPanelProps> = ({
             ? 'Auto: a classifier decides, so runs wait less.'
             : 'Default: asks before each tool call the repository has not allowed.'}
         </Item>
-        <Item label="Run model" href={field('run-model')}>
-          {settings.runModel ?? 'Your default model'}
+        <Item label="Claude Code run model" href={field('run-model')}>
+          {settings.models['claude-code'].runModel ?? 'Your default model'}
         </Item>
       </Group>
       <Group title="Ceilings">
@@ -154,13 +154,13 @@ export const SetupPanel: FC<SetupPanelProps> = ({
             settings.spendCeilingUsd,
             cycleSpendUsd === null
               ? 'no Active Cycle'
-              : `${formatCost(cycleSpendUsd)} spent this Cycle`,
+              : `${formatCost(cycleSpendUsd, 'usd')} spent this Cycle`,
           )}
         </Item>
         <Item label="Triage ceiling" href={field('triage-ceiling')}>
           {ceilingText(
             settings.triageCeilingUsd,
-            `${formatCost(triageSpendUsd)} spent today`,
+            `${formatCost(triageSpendUsd, 'usd')} spent today`,
           )}
         </Item>
         <Item label="Machine cap and ceiling" href={settingsPath()}>

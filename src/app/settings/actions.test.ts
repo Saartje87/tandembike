@@ -103,7 +103,7 @@ describe('currentMachineRuns', () => {
       cap: 3,
       budget: null,
     });
-    world.budget = { spendUsd: 4, ceilingUsd: 10, paused: false };
+    world.budget = { spend: 4, ceiling: 10, paused: false };
     expect((await currentMachineRuns()).budget).toEqual(world.budget);
   });
 });

@@ -13,11 +13,15 @@ import type {
   Widget,
   WidgetAnswer,
 } from './agent-runner';
+import { claudeInvocationText } from './claude-invocation';
+import { isTransientClaudeError } from './claude-run-error';
+import { claudeToolActivity } from './claude-tool-activity';
+import { claudeDisallowedTools } from './claude-tool-policy';
 import {
   createWidgetServer,
   isWidgetTool,
   widgetServerName,
-} from './widget-server';
+} from './claude-widget-server';
 
 const maxToolTextLength = 300;
 
@@ -123,6 +127,10 @@ export function eventsOf(
           ),
           name: block.name,
           input: block.input as Record<string, unknown>,
+          activity: claudeToolActivity(
+            block.name,
+            block.input as Record<string, unknown>,
+          ),
         });
       }
     }
@@ -154,11 +162,14 @@ export function eventsOf(
     return [
       {
         type: 'turn',
-        costUsd: message.total_cost_usd,
+        cost: message.total_cost_usd,
         ...(message.modelUsage ? { usage: usageOf(message.modelUsage) } : {}),
         ...(error === undefined
           ? {}
-          : { error, errorSubtype: message.subtype }),
+          : {
+              error,
+              transient: isTransientClaudeError(error, message.subtype),
+            }),
       },
     ];
   }
@@ -247,23 +258,37 @@ function createInput() {
  */
 export function createClaudeRunner(): AgentRunner {
   return {
+    // The SDK ships with the app, so Claude Code can always run (ADR 0051).
+    availability: () => ({ available: true }),
+    // Claude's classifier serves `auto`; Allow-always saves Claude Code rules.
+    capabilities: {
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    },
+    invocationText: claudeInvocationText,
     start({
       cwd,
       agentRunId,
       mcpUrl,
       systemPrompt,
-      prompt,
+      message,
+      agentCommands,
       resume,
       plugins,
       runMode = 'default',
       model,
-      disallowedTools,
+      toolPolicy,
       askPermission,
       askWidget,
       onEvent,
     }) {
       const input = createInput();
-      input.push(prompt);
+      input.push(
+        'text' in message
+          ? message.text
+          : claudeInvocationText(message.invocation, agentCommands),
+      );
 
       const run = query({
         prompt: input.messages(),
@@ -272,7 +297,9 @@ export function createClaudeRunner(): AgentRunner {
           plugins,
           ...(resume === undefined ? {} : { resume }),
           ...(model === undefined ? {} : { model }),
-          ...(disallowedTools === undefined ? {} : { disallowedTools }),
+          ...(toolPolicy === undefined
+            ? {}
+            : { disallowedTools: claudeDisallowedTools(toolPolicy) }),
           // The Project's run mode, never the repository's or the user's
           // defaultMode, so bypassPermissions cannot skip the relay below;
           // calls the auto classifier cannot decide still reach canUseTool.
@@ -349,9 +376,11 @@ export function createClaudeRunner(): AgentRunner {
           }
           onEvent({ type: 'exit' });
         } catch (error) {
+          const text = error instanceof Error ? error.message : String(error);
           onEvent({
             type: 'exit',
-            error: error instanceof Error ? error.message : String(error),
+            error: text,
+            transient: isTransientClaudeError(text),
           });
         }
       })();

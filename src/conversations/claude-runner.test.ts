@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RunEvent } from './agent-runner';
+import { agentCommands } from '../test/fixtures';
+import { noAgentCommands } from '../tickets/agent-commands';
+import type { RunEvent, StageInvocation } from './agent-runner';
+import { widgetTools } from './widget-tools';
 
 const { query, controls } = vi.hoisted(() => ({
   query: vi.fn(),
@@ -49,7 +52,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: 'Your situation.',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       resume: 'sess-1',
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
@@ -93,7 +97,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: 'Your situation.',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       runMode: 'auto',
       askPermission,
       askWidget: async () => ({ expired: true }),
@@ -120,7 +125,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://localhost:4747/api/mcp',
         plugins: [{ type: 'local', path: '/app/playbook' }],
         systemPrompt: 'Your situation.',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         runMode: 'default',
         ...(model === undefined ? {} : { model }),
         askPermission: async () => 'deny',
@@ -144,7 +150,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -162,7 +169,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'First',
+      message: { text: 'First' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -174,6 +182,167 @@ describe('The Claude runner', () => {
 
     expect((await input.next()).value?.message.content).toBe('First');
     expect((await input.next()).value?.message.content).toBe('Second');
+  });
+
+  it.each<[StageInvocation, string]>([
+    [
+      { stage: 'start', ticket: { number: 42, type: 'Ticket' } },
+      '/tandembike:implement T42',
+    ],
+    [
+      { stage: 'start', ticket: { number: 7, type: 'Epic' } },
+      '/tandembike:implement-epic T7',
+    ],
+    [
+      { stage: 'triage', ticket: { number: 42, type: 'Ticket' } },
+      '/tandembike:triage T42',
+    ],
+    [
+      { stage: 'spec', ticket: { number: 5, type: 'Ticket' } },
+      '/tandembike:spec T5',
+    ],
+    [
+      { stage: 'merge', ticket: { number: 9, type: 'Epic' } },
+      '/tandembike:merge T9',
+    ],
+    [
+      { stage: 'retro', cycle: { id: 3, title: 'Beta' } },
+      '/tandembike:retro "Beta" (Cycle 3)',
+    ],
+    [{ stage: 'plan', goal: 'Ship it' }, '/tandembike:plan Ship it'],
+    [
+      { stage: 'spar', topic: 'Faster triage', focusTicketNumber: 42 },
+      '/tandembike:spar "Faster triage" T42',
+    ],
+    [
+      { stage: 'spar', topic: null, focusTicketNumber: null },
+      '/tandembike:spar',
+    ],
+  ])(
+    'sends a Stage as its Playbook slash command: %o',
+    async (invocation, text) => {
+      query.mockReturnValue(fakeQuery([]));
+      const runner = createClaudeRunner();
+      runner.start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        message: { invocation },
+        agentCommands: noAgentCommands,
+        askPermission: async () => 'deny',
+        askWidget: async () => ({ expired: true }),
+        onEvent: () => {},
+      });
+      const input: AsyncIterator<{ message: { content: string } }> =
+        query.mock.calls[0][0].prompt[Symbol.asyncIterator]();
+
+      expect((await input.next()).value?.message.content).toBe(text);
+      expect(runner.invocationText(invocation, noAgentCommands)).toBe(text);
+    },
+  );
+
+  it("sends the Project's agent command override for a Stage", async () => {
+    query.mockReturnValue(fakeQuery([]));
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: {
+        invocation: { stage: 'start', ticket: { number: 42, type: 'Ticket' } },
+      },
+      agentCommands: agentCommands({ startCommand: '/ship' }),
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: () => {},
+    });
+    const input: AsyncIterator<{ message: { content: string } }> =
+      query.mock.calls[0][0].prompt[Symbol.asyncIterator]();
+
+    expect((await input.next()).value?.message.content).toBe('/ship T42');
+  });
+
+  it.each([
+    [
+      'read-only',
+      [
+        'Edit',
+        'Write',
+        'NotebookEdit',
+        'mcp__tandembike__file_tickets',
+        'mcp__tandembike__update_ticket',
+        'mcp__tandembike__start_work',
+        'mcp__tandembike__finish_work',
+        'mcp__tandembike__abandon_work',
+        'mcp__tandembike__open_pr',
+        'mcp__tandembike__add_note',
+        'mcp__tandembike__check_criterion',
+        'mcp__tandembike__attach',
+        'mcp__tandembike__propose_triage',
+        'mcp__tandembike__create_cycle',
+        'mcp__tandembike__update_cycle',
+      ],
+    ],
+    [
+      'no-ticket-writes',
+      ['mcp__tandembike__update_ticket', 'mcp__tandembike__file_tickets'],
+    ],
+  ] as const)(
+    'turns the tool policy %s into the same disallowed tools as before',
+    (toolPolicy, disallowed) => {
+      query.mockReturnValue(fakeQuery([]));
+      createClaudeRunner().start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
+        toolPolicy,
+        askPermission: async () => 'deny',
+        askWidget: async () => ({ expired: true }),
+        onEvent: () => {},
+      });
+
+      expect(query.mock.calls[0][0].options.disallowedTools).toEqual(
+        disallowed,
+      );
+    },
+  );
+
+  it('disallows nothing without a tool policy', () => {
+    query.mockReturnValue(fakeQuery([]));
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: () => {},
+    });
+
+    expect(query.mock.calls[0][0].options).not.toHaveProperty(
+      'disallowedTools',
+    );
+  });
+
+  it('can always run, in default and auto mode, and honours Allow-always (ADR 0051)', () => {
+    const runner = createClaudeRunner();
+
+    expect(runner.availability()).toEqual({ available: true });
+    expect(runner.capabilities).toEqual({
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    });
   });
 
   it('turns SDK messages into run events and ends with an exit', async () => {
@@ -214,7 +383,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
@@ -229,17 +399,60 @@ describe('The Claude runner', () => {
         text: 'Read {"file_path":"a.md"}',
         name: 'Read',
         input: { file_path: 'a.md' },
+        activity: { verb: 'Reading', target: 'a.md' },
       },
-      { type: 'turn', costUsd: 0.42 },
+      { type: 'turn', cost: 0.42 },
       {
         type: 'turn',
-        costUsd: 0.5,
+        cost: 0.5,
         error: 'error_max_turns',
-        errorSubtype: 'error_max_turns',
+        transient: false,
       },
       { type: 'exit' },
     ]);
   });
+
+  it.each([
+    [
+      'Read',
+      { file_path: '/repo/src/board.tsx' },
+      { verb: 'Reading', target: 'board.tsx' },
+    ],
+    ['Edit', { file_path: 'a.ts' }, { verb: 'Editing', target: 'a.ts' }],
+    [
+      'Bash',
+      { command: 'ls', description: 'List files' },
+      { verb: 'Running', target: 'List files' },
+    ],
+    ['Grep', { pattern: 'foo' }, { verb: 'Searching', target: 'foo' }],
+    ['Skill', { skill: 'tdd' }, { verb: 'Using', target: 'tdd' }],
+    [
+      'Agent',
+      { description: 'Explore' },
+      { verb: 'Delegating', target: 'Explore' },
+    ],
+    [
+      'mcp__tandembike__get_ticket',
+      { number: 7 },
+      { tandembike: 'get_ticket', ticketNumber: 7 },
+    ],
+    [
+      'mcp__tandembike__find_tickets',
+      { query: 'x' },
+      { tandembike: 'find_tickets' },
+    ],
+    ['TodoWrite', { todos: 'x' }, { verb: 'TodoWrite', target: 'x' }],
+  ])(
+    'maps its tool %s to the status line activity (ADR 0051)',
+    (name, input, activity) => {
+      expect(
+        eventsOf({
+          type: 'assistant',
+          message: { content: [{ type: 'tool_use', id: 't', name, input }] },
+        } as never),
+      ).toEqual([expect.objectContaining({ type: 'tool', name, activity })]);
+    },
+  );
 
   it('reports the tokens per model of a result’s modelUsage with its turn (T1176)', () => {
     const modelUsage = (input: number, output: number) => ({
@@ -268,7 +481,7 @@ describe('The Claude runner', () => {
     expect(events).toEqual([
       {
         type: 'turn',
-        costUsd: 0.42,
+        cost: 0.42,
         usage: {
           'claude-opus-5-5': {
             input: 100,
@@ -327,7 +540,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
@@ -359,14 +573,79 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
     });
     await settle();
 
-    expect(events).toEqual([{ type: 'exit', error: 'boom' }]);
+    expect(events).toEqual([{ type: 'exit', error: 'boom', transient: false }]);
+  });
+
+  it('reports a network failure of the query as a transient exit (ADR 0034)', async () => {
+    query.mockReturnValue(
+      Object.assign(
+        // biome-ignore lint/correctness/useYield: it fails before yielding.
+        (async function* () {
+          throw new Error('socket hang up');
+        })(),
+        controls,
+      ),
+    );
+    const events: RunEvent[] = [];
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: (event) => events.push(event),
+    });
+    await settle();
+
+    expect(events).toEqual([
+      { type: 'exit', error: 'socket hang up', transient: true },
+    ]);
+  });
+
+  it('reports an API overload of a result as a transient turn end, by its text or subtype', () => {
+    expect(
+      eventsOf({
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        total_cost_usd: 0.1,
+      } as never),
+    ).toEqual([
+      {
+        type: 'turn',
+        cost: 0.1,
+        error: 'error_during_execution',
+        transient: false,
+      },
+    ]);
+    expect(
+      eventsOf({
+        type: 'result',
+        subtype: 'success',
+        is_error: true,
+        result: 'API Error: 529 overloaded',
+        total_cost_usd: 0.1,
+      } as never),
+    ).toEqual([
+      {
+        type: 'turn',
+        cost: 0.1,
+        error: 'API Error: 529 overloaded',
+        transient: true,
+      },
+    ]);
   });
 
   it('interrupts and closes the query', async () => {
@@ -377,7 +656,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -402,7 +682,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission,
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -441,7 +722,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission,
         askWidget: async () => ({ expired: true }),
         onEvent: () => {},
@@ -558,7 +840,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission,
         askWidget: askWidget as never,
         onEvent: () => {},
@@ -649,7 +932,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission: vi.fn(),
         askWidget: askWidget as never,
         onEvent: () => {},
@@ -660,6 +944,18 @@ describe('The Claude runner', () => {
           (tool: { name: string }) => tool.name === name,
         );
     };
+
+    it('serves every shared Widget definition, by its name, description and input schema (ADR 0051)', () => {
+      const toolNamed = startWith(vi.fn());
+
+      for (const definition of widgetTools) {
+        expect(toolNamed(definition.name)).toMatchObject({
+          name: definition.name,
+          description: definition.description,
+          inputSchema: definition.inputSchema.shape,
+        });
+      }
+    });
 
     it('serves ask_choice in-process; its handler blocks on askWidget and returns the answer as JSON', async () => {
       let answer: (value: unknown) => void = () => {};

@@ -130,3 +130,43 @@ describe('Migration 0063: Project Skills go (T1340)', () => {
     rmSync(folder, { recursive: true, force: true });
   });
 });
+
+describe('Migration 0065: run and triage models per Agent kind (T1364)', () => {
+  it("moves each Project's models to Claude Code's", () => {
+    const folder = mkdtempSync(join(tmpdir(), 'ticket-migrations-'));
+    const source = join(process.cwd(), 'src', 'db', 'migrations');
+    cpSync(source, folder, { recursive: true });
+    const journalPath = join(folder, 'meta', '_journal.json');
+    const journal = JSON.parse(readFileSync(journalPath, 'utf8'));
+    const upTo = journal.entries.findIndex(
+      (entry: { tag: string }) => entry.tag === '0065_agent_models',
+    );
+    expect(upTo).toBeGreaterThan(0);
+    writeFileSync(
+      journalPath,
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, upTo) }),
+    );
+    const sqlite = new Database(':memory:');
+    const db = drizzle(sqlite);
+    migrate(db, { migrationsFolder: folder });
+    sqlite
+      .prepare(
+        "insert into projects (name, name_key, run_model, triage_model, created_at) values ('Website', 'website', 'opus', 'haiku', 0), ('Shop', 'shop', null, null, 0)",
+      )
+      .run();
+
+    migrate(db, { migrationsFolder: source });
+
+    const tickets = createTickets(drizzle(sqlite, { schema }), 'user');
+    const [website, shop] = tickets.listProjects();
+    expect(tickets.getProjectAgentSettings(website.id).models).toEqual({
+      'claude-code': { runModel: 'opus', triageModel: 'haiku' },
+      copilot: { runModel: null, triageModel: null },
+    });
+    expect(tickets.getProjectAgentSettings(shop.id).models).toEqual({
+      'claude-code': { runModel: null, triageModel: null },
+      copilot: { runModel: null, triageModel: null },
+    });
+    rmSync(folder, { recursive: true, force: true });
+  });
+});

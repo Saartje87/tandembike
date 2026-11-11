@@ -79,8 +79,8 @@ describe('ProjectPage', () => {
         list: () => [],
         openBatchTriage: () => null,
         triageBudget: () => ({
-          spendUsd: spend,
-          ceilingUsd: 2,
+          spend: spend,
+          ceiling: 2,
           paused: spend >= 2,
         }),
       } as unknown as ReturnType<typeof appConversations>);

@@ -141,11 +141,12 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       agentMode: true,
       runMode: 'auto',
-      runModel: 'claude-opus-5-5',
+      models: { 'claude-code': { runModel: 'claude-opus-5-5' } },
       checkCommand: ' npm run check ',
       prepareCommand: ' npm ci ',
       autoTriage: true,
       triageCeilingUsd: 3,
+      defaultAgentKind: 'copilot',
     });
 
     expect(result).toEqual({ ok: true });
@@ -156,13 +157,16 @@ describe('setProjectAgentSettings', () => {
       parallelRuns: true,
       agentMode: true,
       runMode: 'auto',
-      runModel: 'claude-opus-5-5',
-      triageModel: null,
+      models: {
+        'claude-code': { runModel: 'claude-opus-5-5', triageModel: null },
+        copilot: { runModel: null, triageModel: null },
+      },
       autopilot: false,
       spendCeilingUsd: null,
       autoTriage: true,
       triageCeilingUsd: 3,
       autoMerge: false,
+      defaultAgentKind: 'copilot',
     });
     expect(refresh).toHaveBeenCalled();
   });

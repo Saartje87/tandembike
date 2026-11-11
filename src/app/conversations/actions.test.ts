@@ -216,7 +216,7 @@ describe('Conversation actions', () => {
       ok: true,
       conversation: { intent: 'plan', startedBy: 'user' },
     });
-    expect(runner.runs[0].options.prompt).toBe('/tandembike:plan Ship');
+    expect(runner.runs[0].firstMessage).toBe('/tandembike:plan Ship');
   });
 
   it('send a reply and stop the run', async () => {
@@ -399,7 +399,7 @@ describe('Conversation actions', () => {
 
     runner.runs[0].emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: {
         'claude-opus-5-5': {
           input: 0,
@@ -436,7 +436,7 @@ describe('Conversation actions', () => {
       intent: 'ask',
       prompt: 'Go',
     });
-    runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[1]?.emit({ type: 'turn', cost: 0.1 });
 
     expect(await currentConversationActivity()).toEqual(
       activity({

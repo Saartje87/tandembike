@@ -4,8 +4,8 @@ import type {
   Conversation,
   Conversations,
 } from '../conversations/conversations';
-import { agentCommandMessage } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
+import { dollarCeiling } from '../tickets/cost-unit';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
@@ -178,8 +178,9 @@ export function createAutopilot({
     if (budget?.paused) {
       reasons.push({
         type: 'overMachineCeiling',
-        spendUsd: budget.spendUsd,
-        ceilingUsd: budget.ceilingUsd,
+        spend: budget.spend,
+        ceiling: budget.ceiling,
+        unit: budget.unit,
       });
     }
     return reasons;
@@ -212,7 +213,10 @@ export function createAutopilot({
     if (!cycle) {
       reasons.push({ type: 'noActiveCycle' });
     }
-    if (settings.spendCeilingUsd === null) {
+    // Ceilings are kept per unit: one in the unit of the agent Autopilot
+    // would start, or none (ADR 0051).
+    const unit = conversations.defaultCostUnit(projectId);
+    if (dollarCeiling(settings.spendCeilingUsd)[unit] === null) {
       reasons.push({ type: 'noSpendCeiling' });
     } else if (cycle) {
       const budget = conversations.spendBudget({
@@ -222,8 +226,9 @@ export function createAutopilot({
       if (budget?.paused) {
         reasons.push({
           type: 'overSpendCeiling',
-          spendUsd: budget.spendUsd,
-          ceilingUsd: budget.ceilingUsd,
+          spend: budget.spend,
+          ceiling: budget.ceiling,
+          unit: budget.unit,
         });
       }
     }
@@ -478,11 +483,7 @@ export function createAutopilot({
         ticketNumber: ticket.number,
         intent: 'start',
         cycleId: builds.cycleId as number,
-        prompt: agentCommandMessage(
-          'start',
-          ticket,
-          tickets.getProjectAgentCommands(projectId),
-        ),
+        stage: { stage: 'start' },
       });
       return true;
     } catch (error) {
@@ -525,7 +526,11 @@ export function createAutopilot({
     if (!settings.autoTriage) {
       reasons.push({ type: 'switchedOff' });
     }
-    if (settings.triageCeilingUsd === null) {
+    if (
+      dollarCeiling(settings.triageCeilingUsd)[
+        conversations.defaultCostUnit(projectId)
+      ] === null
+    ) {
       reasons.push({ type: 'noTriageCeiling' });
     }
     const verdict = verdictOf(conversations.capacity(projectId), 'autoTriage');
@@ -539,8 +544,9 @@ export function createAutopilot({
     if (budget?.paused) {
       reasons.push({
         type: 'overTriageCeiling',
-        spendUsd: budget.spendUsd,
-        ceilingUsd: budget.ceilingUsd,
+        spend: budget.spend,
+        ceiling: budget.ceiling,
+        unit: budget.unit,
       });
     }
     reasons.push(...machineReasons());
@@ -680,11 +686,7 @@ export function createAutopilot({
         startedBy: 'autopilot',
         ticketNumber: ticket.number,
         intent: 'triage',
-        prompt: agentCommandMessage(
-          'triage',
-          ticket,
-          tickets.getProjectAgentCommands(projectId),
-        ),
+        stage: { stage: 'triage' },
       });
       return true;
     } catch (error) {

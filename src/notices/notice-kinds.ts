@@ -341,7 +341,7 @@ const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
         kind: 'ceiling',
         key: `ceiling:machine:${day}`,
         title: 'Autopilot paused on the machine ceiling',
-        body: `${formatCost(machine.spendUsd)} spent today of ${formatCost(machine.ceilingUsd)}`,
+        body: `${formatCost(machine.spend, machine.unit)} spent today of ${formatCost(machine.ceiling, machine.unit)}`,
         path: settingsPath(),
       }),
     );
@@ -364,7 +364,7 @@ const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
           kind: 'ceiling',
           key: `ceiling:spend:${cycle.id}:${day}`,
           title: `Autopilot paused on ${project.name}'s Spend ceiling`,
-          body: `${formatCost(spend.spendUsd)} spent of ${formatCost(spend.ceilingUsd)} on ${cycle.title}`,
+          body: `${formatCost(spend.spend, spend.unit)} spent of ${formatCost(spend.ceiling, spend.unit)} on ${cycle.title}`,
           path: projectPath(project.id),
         }),
       );
@@ -376,7 +376,7 @@ const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
           kind: 'ceiling',
           key: `ceiling:triage:${project.id}:${day}`,
           title: `Auto-triage paused on ${project.name}'s triage ceiling`,
-          body: `${formatCost(triageBudget.spendUsd)} spent today of ${formatCost(triageBudget.ceilingUsd)}`,
+          body: `${formatCost(triageBudget.spend, triageBudget.unit)} spent today of ${formatCost(triageBudget.ceiling, triageBudget.unit)}`,
           path: projectPath(project.id),
         }),
       );

@@ -70,9 +70,9 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
               stateNames[conversation.state],
               // Tandembike sees no cost of an interactive session, but keeps
               // what a UI run spent before the hand-off (ADR 0039).
-              ...(isTerminal(conversation) && conversation.costUsd <= 0
+              ...(isTerminal(conversation) && conversation.cost <= 0
                 ? []
-                : [formatCost(conversation.costUsd)]),
+                : [formatCost(conversation.cost, conversation.costUnit)]),
               `by ${starterNames[conversation.startedBy]}`,
             ].join(', ')}
           </Text>

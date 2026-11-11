@@ -5,24 +5,12 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
-import { agentCommands } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { TicketAgentActions } from './ticket-agent-actions';
 
 vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
 }));
-
-const commands = agentCommands({
-  triageCommand: '/mattpocock-skills:triage',
-  startCommand: '/mattpocock-skills:implement',
-  startEpicCommand: '/mattpocock-skills:implement-spec',
-  retroCommand: '/retro',
-  specCommand: '/spec',
-  mergeCommand: '/merge',
-});
-
-const none = agentCommands();
 
 const started = {
   ok: true,
@@ -34,120 +22,17 @@ describe('TicketAgentActions', () => {
     vi.mocked(startConversation).mockReset();
   });
 
-  it("sends the Project's Start command with the Ticket number", async () => {
-    vi.mocked(startConversation).mockResolvedValue(started);
-    renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={commands}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
-
-    expect(startConversation).toHaveBeenCalledWith({
-      ticketNumber: 42,
-      intent: 'start',
-      prompt: '/mattpocock-skills:implement T42',
-    });
-  });
-
-  it('sends the Start command for Epics on an Epic, and the Playbook one when it is blank', async () => {
-    vi.mocked(startConversation).mockResolvedValue(started);
-    const { rerender } = renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={7}
-        ticketType="Epic"
-        commands={commands}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
-    expect(startConversation).toHaveBeenLastCalledWith({
-      ticketNumber: 7,
-      intent: 'start',
-      prompt: '/mattpocock-skills:implement-spec T7',
-    });
-
-    rerender(
-      <TicketAgentActions
-        ticketNumber={7}
-        ticketType="Epic"
-        commands={{ ...commands, startEpicCommand: null }}
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
-    expect(startConversation).toHaveBeenLastCalledWith({
-      ticketNumber: 7,
-      intent: 'start',
-      prompt: '/tandembike:implement-epic T7',
-    });
-
-    rerender(
-      <TicketAgentActions
-        ticketNumber={7}
-        ticketType="Epic"
-        commands={{ ...none, triageCommand: '/triage' }}
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
-    expect(startConversation).toHaveBeenLastCalledWith({
-      ticketNumber: 7,
-      intent: 'start',
-      prompt: '/tandembike:implement-epic T7',
-    });
-  });
-
-  it("sends the Project's Triage command on a Ticket and an Epic alike", async () => {
-    vi.mocked(startConversation).mockResolvedValue(started);
-    const { rerender } = renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={commands}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Triage' }));
-    expect(startConversation).toHaveBeenLastCalledWith({
-      ticketNumber: 42,
-      intent: 'triage',
-      prompt: '/mattpocock-skills:triage T42',
-    });
-
-    rerender(
-      <TicketAgentActions
-        ticketNumber={7}
-        ticketType="Epic"
-        commands={commands}
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Triage' }));
-    expect(startConversation).toHaveBeenLastCalledWith({
-      ticketNumber: 7,
-      intent: 'triage',
-      prompt: '/mattpocock-skills:triage T7',
-    });
-  });
-
-  it('shows Spec only when specAvailable, and sends /tandembike:spec when blank', async () => {
+  it('shows Spec only when specAvailable, and starts the Spec Stage', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     const onStarted = vi.fn();
     const { rerender } = renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={5}
-        ticketType="Ticket"
-        commands={none}
-      />,
+      <TicketAgentActions ticketNumber={5} />,
     );
     expect(screen.queryByRole('button', { name: 'Spec' })).toBeNull();
 
     rerender(
       <TicketAgentActions
         ticketNumber={5}
-        ticketType="Ticket"
-        commands={none}
         specAvailable
         onStarted={onStarted}
       />,
@@ -157,39 +42,16 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenCalledWith({
       ticketNumber: 5,
       intent: 'spec',
-      prompt: '/tandembike:spec T5',
+      stage: { stage: 'spec' },
     });
     expect(onStarted).toHaveBeenCalledWith(9);
   });
 
-  it('sends the Spec command override when set', async () => {
-    vi.mocked(startConversation).mockResolvedValue(started);
-    renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={5}
-        ticketType="Epic"
-        commands={{ ...none, specCommand: '/my:spec' }}
-        specAvailable
-      />,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Spec' }));
-    expect(startConversation).toHaveBeenCalledWith({
-      ticketNumber: 5,
-      intent: 'spec',
-      prompt: '/my:spec T5',
-    });
-  });
-
-  it('starts a Start Conversation with /tandembike:implement when the Project has no command', async () => {
+  it("starts the Start Stage on the Ticket, which the runner words with the Project's command (ADR 0051)", async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
     const onStarted = vi.fn();
     renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={none}
-        onStarted={onStarted}
-      />,
+      <TicketAgentActions ticketNumber={42} onStarted={onStarted} />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
@@ -197,40 +59,27 @@ describe('TicketAgentActions', () => {
     expect(startConversation).toHaveBeenCalledWith({
       ticketNumber: 42,
       intent: 'start',
-      prompt: '/tandembike:implement T42',
+      stage: { stage: 'start' },
     });
     expect(onStarted).toHaveBeenCalledWith(9);
   });
 
-  it('starts a Triage Conversation with /tandembike:triage when the Project has no command', async () => {
+  it('starts the Triage Stage on the Ticket', async () => {
     vi.mocked(startConversation).mockResolvedValue(started);
-    renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={none}
-      />,
-    );
+    renderWithTheme(<TicketAgentActions ticketNumber={42} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Triage' }));
 
     expect(startConversation).toHaveBeenCalledWith({
       ticketNumber: 42,
       intent: 'triage',
-      prompt: '/tandembike:triage T42',
+      stage: { stage: 'triage' },
     });
   });
 
   it('asks through onAsk, starting nothing and showing no field', async () => {
     const onAsk = vi.fn();
-    renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={none}
-        onAsk={onAsk}
-      />,
-    );
+    renderWithTheme(<TicketAgentActions ticketNumber={42} onAsk={onAsk} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Ask' }));
 
@@ -245,13 +94,7 @@ describe('TicketAgentActions', () => {
       error:
         'This Project already has a Start run working: T3 (waiting on you). Answer, stop or close it first, or turn on Parallel runs in the Project settings to allow more.',
     });
-    renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={none}
-      />,
-    );
+    renderWithTheme(<TicketAgentActions ticketNumber={42} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
 
@@ -266,12 +109,7 @@ describe('TicketAgentActions', () => {
     vi.mocked(startConversation).mockRejectedValue(new Error('network down'));
     const onStarted = vi.fn();
     renderWithTheme(
-      <TicketAgentActions
-        ticketNumber={42}
-        ticketType="Ticket"
-        commands={none}
-        onStarted={onStarted}
-      />,
+      <TicketAgentActions ticketNumber={42} onStarted={onStarted} />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));

@@ -26,10 +26,10 @@ function setup() {
       intent: 'start',
       prompt: 'Go',
     });
-  const finish = (costUsd: number) =>
+  const finish = (cost: number) =>
     world.runner.runs[world.runner.runs.length - 1].emit({
       type: 'turn',
-      costUsd,
+      cost,
     });
   return { ...world, project, ticket, start, finish };
 }
@@ -78,8 +78,9 @@ describe('autopilotSpendToday', () => {
     expect(conversations.machineBudget()).toBeNull();
     tickets.setMachineSettings({ dailySpendCeilingUsd: 2 });
     expect(conversations.machineBudget()).toEqual({
-      spendUsd: 2,
-      ceilingUsd: 2,
+      spend: 2,
+      ceiling: 2,
+      unit: 'usd',
       paused: true,
     });
     tickets.setMachineSettings({ dailySpendCeilingUsd: 3 });

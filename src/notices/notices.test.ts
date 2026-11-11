@@ -478,7 +478,7 @@ describe('Notices', () => {
     const { run, conversation, ticket } = await world.startRun();
     world.notices.start();
 
-    run.emit({ type: 'turn', costUsd: 0.1 });
+    run.emit({ type: 'turn', cost: 0.1 });
     run.emit({ type: 'agent', text: 'late' });
     world.changes.publish({ type: 'conversation', id: conversation.id });
 
@@ -500,7 +500,7 @@ describe('Notices', () => {
     const { run, ticket } = await world.startRun();
     world.notices.start();
 
-    run.emit({ type: 'turn', costUsd: 0, error: 'Hit the max turns' });
+    run.emit({ type: 'turn', cost: 0, error: 'Hit the max turns' });
     expect(world.raised).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'needs_reply',
@@ -515,7 +515,12 @@ describe('Notices', () => {
     const { run } = await world.startRun();
     world.notices.start();
 
-    run.emit({ type: 'turn', costUsd: 0, error: 'API Error: 529 overloaded' });
+    run.emit({
+      type: 'turn',
+      cost: 0,
+      error: 'API Error: 529 overloaded',
+      transient: true,
+    });
 
     expect(world.raised).not.toHaveBeenCalled();
   });
@@ -527,11 +532,11 @@ describe('Notices', () => {
     const stopped = await world.startRun('Stop it');
     world.notices.start();
 
-    triage.run.emit({ type: 'turn', costUsd: 0 });
+    triage.run.emit({ type: 'turn', cost: 0 });
     await world.conversations.stop(stopped.conversation.id);
     expect(notStalled(world)).toEqual([]);
 
-    merge.run.emit({ type: 'turn', costUsd: 0 });
+    merge.run.emit({ type: 'turn', cost: 0 });
     expect(notStalled(world)).toHaveLength(1);
   });
 
@@ -540,9 +545,9 @@ describe('Notices', () => {
     const { run, conversation } = await world.startRun();
     world.notices.start();
 
-    run.emit({ type: 'turn', costUsd: 0 });
+    run.emit({ type: 'turn', cost: 0 });
     await world.conversations.reply(conversation.id, 'More', 'user');
-    world.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    world.runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     expect(world.raised).toHaveBeenCalledTimes(2);
   });
@@ -553,7 +558,7 @@ describe('Notices', () => {
     world.notices.start();
 
     await world.conversations.close(conversation.id);
-    run.emit({ type: 'turn', costUsd: 0 });
+    run.emit({ type: 'turn', cost: 0 });
 
     // Closing leaves the Ticket Stalled, which is news of another kind.
     expect(notStalled(world)).toEqual([]);
@@ -584,8 +589,9 @@ describe('ceiling Notices', () => {
     const world = setup(() => clock);
     world.notices.start();
     vi.spyOn(world.conversations, 'machineBudget').mockReturnValue({
-      spendUsd: 5,
-      ceilingUsd: 4,
+      spend: 5,
+      ceiling: 4,
+      unit: 'usd',
       paused: true,
     });
 
@@ -613,8 +619,9 @@ describe('ceiling Notices', () => {
     const world = setup();
     world.notices.start();
     vi.spyOn(world.conversations, 'triageBudget').mockReturnValue({
-      spendUsd: 3,
-      ceilingUsd: 2,
+      spend: 3,
+      ceiling: 2,
+      unit: 'usd',
       paused: true,
     });
 

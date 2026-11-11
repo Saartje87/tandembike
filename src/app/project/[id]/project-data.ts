@@ -7,6 +7,7 @@ import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
 import { cycleFootprint } from '../../../footprint/app-footprint';
 import { appTickets } from '../../../tickets/app-tickets';
+import type { CostUnit } from '../../../tickets/cost-unit';
 import { cycleUnitCount } from '../../../tickets/cycle-units';
 import { NotFoundError } from '../../../tickets/errors';
 import { openTicketNumber } from '../../lib/paths';
@@ -137,7 +138,12 @@ export function autopilotOf(projectId: number, cycleId: number) {
   return {
     autopilot,
     spendCeilingUsd,
-    spendUsd: appConversations().autopilotSpend({ projectId, cycleId }),
+    // Shown against the dollar Spend ceiling, so in dollars (ADR 0051).
+    spend: appConversations().autopilotSpend({
+      projectId,
+      cycleId,
+      unit: 'usd',
+    }),
     cycleFootprint: cycleFootprint(projectId, cycleId),
   };
 }
@@ -211,13 +217,15 @@ export function backlogIntakeCountOf(projectId: number): number {
 export function cycleEstimate(
   projectId: number,
   cycleId: number,
-): { totalUsd: number | null; units: number } {
-  const perTicketUsd = appConversations().startCostEstimate(projectId);
+): { total: number | null; unit: CostUnit; units: number } {
+  // The Project's default agent's history, in its unit (ADR 0051).
+  const perTicket = appConversations().startCostEstimate(projectId);
   const units = cycleUnitCount(
     appTickets('user').listTickets({ projectId, cycleId }),
   );
   return {
-    totalUsd: perTicketUsd === null ? null : perTicketUsd * units,
+    total: perTicket === null ? null : perTicket * units,
+    unit: appConversations().defaultCostUnit(projectId),
     units,
   };
 }

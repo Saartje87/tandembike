@@ -20,13 +20,59 @@ describe("A Project's agent settings", () => {
       parallelRuns: false,
       agentMode: false,
       runMode: 'auto',
-      runModel: null,
-      triageModel: null,
+      models: {
+        'claude-code': { runModel: null, triageModel: null },
+        copilot: { runModel: null, triageModel: null },
+      },
       autopilot: false,
       spendCeilingUsd: null,
       autoTriage: false,
       triageCeilingUsd: null,
       autoMerge: false,
+      defaultAgentKind: 'claude-code',
+    });
+  });
+
+  describe('default Agent kind (ADR 0051)', () => {
+    it('is Claude Code for a new Project', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      expect(tickets.getProjectAgentSettings(project.id).defaultAgentKind).toBe(
+        'claude-code',
+      );
+    });
+
+    it('changes to another Agent kind, and back, without refusal', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'copilot',
+        }).defaultAgentKind,
+      ).toBe('copilot');
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'claude-code',
+        }).defaultAgentKind,
+      ).toBe('claude-code');
+    });
+
+    it('refuses a kind that is not an Agent kind, naming the field', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'cursor' as never,
+        }),
+      );
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).fieldErrors).toHaveProperty(
+        'defaultAgentKind',
+      );
     });
   });
 
@@ -249,49 +295,81 @@ describe("A Project's agent settings", () => {
     expect(
       tickets.setProjectAgentSettings(project.id, {
         runMode: 'auto',
-        runModel: ' claude-opus-5-5 ',
+        models: { 'claude-code': { runModel: ' claude-opus-5-5 ' } },
       }),
-    ).toMatchObject({ runMode: 'auto', runModel: 'claude-opus-5-5' });
+    ).toMatchObject({
+      runMode: 'auto',
+      models: { 'claude-code': { runModel: 'claude-opus-5-5' } },
+    });
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
     expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
       runMode: 'auto',
-      runModel: 'claude-opus-5-5',
+      models: { 'claude-code': { runModel: 'claude-opus-5-5' } },
     });
     tickets.setProjectAgentSettings(project.id, {
       runMode: 'default',
-      runModel: null,
+      models: { 'claude-code': { runModel: null } },
     });
     expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
       runMode: 'default',
-      runModel: null,
+      models: { 'claude-code': { runModel: null } },
     });
-    tickets.setProjectAgentSettings(project.id, { runModel: 'x' });
-    tickets.setProjectAgentSettings(project.id, { runModel: '  ' });
-    expect(tickets.getProjectAgentSettings(project.id).runModel).toBe(null);
+    tickets.setProjectAgentSettings(project.id, {
+      models: { 'claude-code': { runModel: 'x' } },
+    });
+    tickets.setProjectAgentSettings(project.id, {
+      models: { 'claude-code': { runModel: '  ' } },
+    });
+    expect(
+      tickets.getProjectAgentSettings(project.id).models['claude-code']
+        .runModel,
+    ).toBe(null);
+  });
+
+  it('keep run and triage models per Agent kind, each blank for its own default (ADR 0051)', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    tickets.setProjectAgentSettings(project.id, {
+      models: {
+        'claude-code': { runModel: 'claude-opus-5-5', triageModel: 'haiku' },
+        copilot: { runModel: 'gpt-5' },
+      },
+    });
+    tickets.setProjectAgentSettings(project.id, {
+      models: { copilot: { triageModel: 'gpt-5-mini' } },
+    });
+
+    expect(tickets.getProjectAgentSettings(project.id).models).toEqual({
+      'claude-code': { runModel: 'claude-opus-5-5', triageModel: 'haiku' },
+      copilot: { runModel: 'gpt-5', triageModel: 'gpt-5-mini' },
+    });
   });
 
   it('set, trim and clear the triage model, and refuse one with spaces', () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
+    const triageModel = () =>
+      tickets.getProjectAgentSettings(project.id).models['claude-code']
+        .triageModel;
 
-    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
-    expect(
-      tickets.setProjectAgentSettings(project.id, {
-        triageModel: ' claude-haiku-5 ',
-      }).triageModel,
-    ).toBe('claude-haiku-5');
-    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
-    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(
-      'claude-haiku-5',
-    );
+    expect(triageModel()).toBe(null);
+    tickets.setProjectAgentSettings(project.id, {
+      models: { 'claude-code': { triageModel: ' claude-haiku-5 ' } },
+    });
+    expect(triageModel()).toBe('claude-haiku-5');
     const error = errorFrom(() =>
-      tickets.setProjectAgentSettings(project.id, { triageModel: 'two words' }),
+      tickets.setProjectAgentSettings(project.id, {
+        models: { 'claude-code': { triageModel: 'two words' } },
+      }),
     );
-    expect((error as ValidationError).fieldErrors).toHaveProperty(
-      'triageModel',
-    );
-    tickets.setProjectAgentSettings(project.id, { triageModel: null });
-    expect(tickets.getProjectAgentSettings(project.id).triageModel).toBe(null);
+    expect((error as ValidationError).fieldErrors).toHaveProperty([
+      'models.claude-code.triageModel',
+    ]);
+    tickets.setProjectAgentSettings(project.id, {
+      models: { 'claude-code': { triageModel: null } },
+    });
+    expect(triageModel()).toBe(null);
   });
 
   it('refuse an unknown run mode or a run model with spaces, naming the field', () => {
@@ -305,12 +383,16 @@ describe("A Project's agent settings", () => {
     );
     expect((mode as ValidationError).fieldErrors).toHaveProperty('runMode');
     const model = errorFrom(() =>
-      tickets.setProjectAgentSettings(project.id, { runModel: 'two words' }),
+      tickets.setProjectAgentSettings(project.id, {
+        models: { copilot: { runModel: 'two words' } },
+      }),
     );
-    expect((model as ValidationError).fieldErrors).toHaveProperty('runModel');
+    expect((model as ValidationError).fieldErrors).toHaveProperty([
+      'models.copilot.runModel',
+    ]);
     expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
       runMode: 'auto',
-      runModel: null,
+      models: { copilot: { runModel: null } },
     });
   });
 
@@ -319,11 +401,11 @@ describe("A Project's agent settings", () => {
     const project = tickets.createProject({ name: 'Website' });
     tickets.setProjectAgentSettings(project.id, {
       runMode: 'auto',
-      runModel: 'm',
+      models: { 'claude-code': { runModel: 'm' } },
     });
 
     expect(tickets.getProject(project.id)).not.toHaveProperty('runMode');
-    expect(tickets.getProject(project.id)).not.toHaveProperty('runModel');
+    expect(tickets.getProject(project.id)).not.toHaveProperty('models');
   });
 
   it('set, change and clear the repository path', () => {

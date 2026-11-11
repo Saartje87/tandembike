@@ -35,6 +35,7 @@ async function settingsTab(params: ProjectPageProps['params']) {
           <AgentSettingsForm
             projectId={project.id}
             settings={appTickets('user').getProjectAgentSettings(project.id)}
+            agentKinds={appConversations().agentKinds()}
             latestSetup={
               appConversations()
                 .list({ projectId: project.id })
@@ -56,7 +57,8 @@ async function settingsTab(params: ProjectPageProps['params']) {
               replaces it for that Stage only. Start on an Epic does not fall
               back to the Start command. The Retro command is followed by the
               Cycle's title and id. The Merge command runs when you approve a
-              merge.
+              merge. They apply to Claude Code runs only: a run on another agent
+              always runs the Playbook's skill for its Stage.
             </Text>
           </Stack>
           <AgentCommandsForm

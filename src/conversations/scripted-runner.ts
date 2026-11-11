@@ -1,5 +1,6 @@
 import type { WorktreeState, Worktrees } from '../worktrees/worktrees';
 import type { AgentRun, AgentRunner, RunOptions } from './agent-runner';
+import { claudeInvocationText } from './claude-invocation';
 
 /**
  * Fake runs for browser checks (T678): an `AgentRunner` that starts no Agent
@@ -36,6 +37,13 @@ let sessions = 0;
 
 export function createScriptedRunner(): AgentRunner {
   return {
+    availability: () => ({ available: true }),
+    capabilities: {
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    },
+    invocationText: claudeInvocationText,
     start(options: RunOptions): AgentRun {
       let closed = false;
       let steps = 0;
@@ -82,6 +90,7 @@ export function createScriptedRunner(): AgentRunner {
                 text: `Bash ${JSON.stringify(input)}`,
                 name: 'Bash',
                 input,
+                activity: { verb: 'Running', target: input.description },
               });
               if (left > 1) {
                 setTimeout(() => {
@@ -93,10 +102,10 @@ export function createScriptedRunner(): AgentRunner {
             return;
           }
           case 'idle':
-            options.onEvent({ type: 'turn', costUsd: 0 });
+            options.onEvent({ type: 'turn', cost: 0 });
             return;
           case 'exit':
-            options.onEvent({ type: 'turn', costUsd: 0 });
+            options.onEvent({ type: 'turn', cost: 0 });
             options.onEvent({ type: 'exit' });
             return;
           case null:
@@ -110,14 +119,14 @@ export function createScriptedRunner(): AgentRunner {
           sessionId: options.resume ?? `fake-session-${++sessions}`,
           model: 'fake',
         });
-        act(options.prompt);
+        act('text' in options.message ? options.message.text : '');
       });
       return {
         send(text) {
           later(() => act(text));
         },
         async interrupt() {
-          later(() => options.onEvent({ type: 'turn', costUsd: 0 }));
+          later(() => options.onEvent({ type: 'turn', cost: 0 }));
         },
         close() {
           closed = true;

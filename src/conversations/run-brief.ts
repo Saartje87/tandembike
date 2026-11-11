@@ -1,3 +1,6 @@
+import { formatCost } from '../app/lib/format-cost';
+import type { AgentKind } from '../tickets/agent-kind';
+import type { CostUnit } from '../tickets/cost-unit';
 import type { TicketType } from '../tickets/ticket-type';
 import type { ConversationIntent } from './conversation-state';
 import { cycleReference, type RetroCycle } from './retro-prompt';
@@ -17,6 +20,8 @@ export type RunBrief = {
   ticketType: TicketType | null;
   projectName: string;
   intent: ConversationIntent;
+  /** The Agent kind the Conversation runs on: some lines are its own (ADR 0051). */
+  agentKind: AgentKind;
   /** Retro only: the Cycle it looks back on. */
   retroCycle?: RetroCycle | null;
   parallelRuns: boolean;
@@ -29,10 +34,11 @@ export type RunBrief = {
   /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
   terminal?: boolean;
   /**
-   * Plan only: the Project's cost of one Start in dollars, from its Run
-   * outcomes, or null when there are too few to estimate (T1248).
+   * Plan only: the Project's cost of one Start on this Conversation's Agent
+   * kind, in its unit, from its Run outcomes, or null when there are too few
+   * to estimate (T1248, ADR 0051).
    */
-  planEstimateUsd?: number | null;
+  planEstimate?: { amount: number; unit: CostUnit } | null;
   defaults?: NewTicketDefaults;
 };
 
@@ -56,12 +62,43 @@ const intentLines: Record<ConversationIntent, string> = {
   spar: "The User started this Conversation to think an idea through with you on a Spar page (Spar). Their first message gives the topic and the focus Ticket, if any. This run is read-only (ADR 0046): you may read and search the code and read Tickets, but not edit files or create or change Tickets; any command you run asks the User first. The Spar page shows a Canvas of Columns and Stickies beside the chat: read it with get_canvas and change it with edit_canvas. Below it, keep the Write-up (Decisions, Open questions, Next steps) current with update_write_up. When you agree, propose the Hand-off with propose_hand_off; only the User files it. The User's edits of it send you nothing; each of their messages ends with what they changed since your last turn. Prefer Widgets to questions in text.",
 };
 
-const dollars = (usd: number) => `$${usd.toFixed(2)}`;
+/**
+ * The lines of the brief that name one agent's own tools and files (ADR
+ * 0051), the one place they live: every other line is shared by all kinds.
+ */
+type AgentBriefLines = {
+  /** Ends the UI note's Widget sentence: another way the agent can ask. */
+  askAlso: string;
+  /** A Start with Parallel runs on and no Tandembike worktree. */
+  ownWorktree: string;
+  /** Setup's first check: the agent loads the repository's instructions. */
+  instructionsCheck: string;
+};
+
+/** The shared wording, for a kind that has no lines of its own yet (T601). */
+const anyAgent: AgentBriefLines = {
+  askAlso: '',
+  ownWorktree:
+    "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
+  instructionsCheck:
+    'The repository has instructions this agent loads, such as AGENTS.md.',
+};
+
+const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
+  'claude-code': {
+    askAlso: '; AskUserQuestion also works and shows as choice cards',
+    ownWorktree:
+      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
+    instructionsCheck:
+      "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
+  },
+  copilot: anyAgent,
+};
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
   const items = [
-    "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
+    agentBriefLines[brief.agentKind].instructionsCheck,
     'The permission allowlist covers the Tandembike MCP tools.',
   ];
   items.push(
@@ -81,6 +118,16 @@ const setupChecklist = (brief: RunBrief): string[] => {
   ];
 };
 
+/** An estimate in its unit: dollars to the cent, as the brief always read. */
+const estimateText = ({
+  amount,
+  unit,
+}: {
+  amount: number;
+  unit: CostUnit;
+}): string =>
+  unit === 'usd' ? `$${amount.toFixed(2)}` : formatCost(amount, unit);
+
 /**
  * What Tandembike tells a run (ADR 0019): only its situation. How to do the
  * work stays with the repository's own instructions. It points to the Ticket
@@ -88,6 +135,7 @@ const setupChecklist = (brief: RunBrief): string[] => {
  * may change meanwhile: its Status, labels, Epic, Cycle or description.
  */
 export function runBrief(brief: RunBrief): string {
+  const own = agentBriefLines[brief.agentKind];
   const lines = [
     `You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "${brief.projectName}".`,
     brief.ticketNumber === null
@@ -96,7 +144,7 @@ export function runBrief(brief: RunBrief): string {
     intentLines[brief.intent],
     brief.terminal
       ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
-      : 'A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: `ask_choice` for choice cards (put your recommendation in `recommended`), `ask_rank` for an order, `ask_matrix` to place items on a 2×2 you label, and `ask_scale` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount; AskUserQuestion also works and shows as choice cards. Every Widget may come back as `{ "other": text }` or `{ "skipped": true }`. Ask open questions in your messages.',
+      : `A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: \`ask_choice\` for choice cards (put your recommendation in \`recommended\`), \`ask_rank\` for an order, \`ask_matrix\` to place items on a 2×2 you label, and \`ask_scale\` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount${own.askAlso}. Every Widget may come back as \`{ "other": text }\` or \`{ "skipped": true }\`. Ask open questions in your messages.`,
     `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};
@@ -121,9 +169,7 @@ export function runBrief(brief: RunBrief): string {
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
   } else if (brief.parallelRuns && brief.intent === 'start') {
-    lines.push(
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
-    );
+    lines.push(own.ownWorktree);
   }
   if (brief.intent === 'start' || brief.intent === 'merge') {
     lines.push(
@@ -139,9 +185,9 @@ export function runBrief(brief: RunBrief): string {
   }
   if (brief.intent === 'plan') {
     lines.push(
-      brief.planEstimateUsd == null
+      brief.planEstimate == null
         ? 'There are not enough runs to estimate what a Ticket costs, so size the Cycle by the work, not by a budget.'
-        : `A Start in this Project has cost about ${dollars(brief.planEstimateUsd)} per Ticket, the median of its recent runs. Multiply it by the number of Tickets to size the Cycle against a budget the User names. It is an estimate, not a limit.`,
+        : `A Start in this Project has cost about ${estimateText(brief.planEstimate)} per Ticket, the median of its recent runs. Multiply it by the number of Tickets to size the Cycle against a budget the User names. It is an estimate, not a limit.`,
     );
   }
   if (brief.intent === 'setup') {

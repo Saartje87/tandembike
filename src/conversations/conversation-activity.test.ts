@@ -21,7 +21,7 @@ const row = (
   latest: { role, text, permissionRules: null },
   message: role === 'tool' ? null : { role, text, permissionRules: null },
   startedAt: '2026-11-07T10:00:00.000Z',
-  costUsd: 0,
+  cost: 0,
   startedBy: 'user',
 });
 
@@ -190,9 +190,7 @@ describe('conversationActivity', () => {
     });
 
     it("carries the live Conversation's own cost as the running cost", () => {
-      expect(liveOf({ ...row(4, 'running'), costUsd: 0.42 })[4].cost).toBe(
-        0.42,
-      );
+      expect(liveOf({ ...row(4, 'running'), cost: 0.42 })[4].cost).toBe(0.42);
     });
 
     it('reports a newest idle Conversation as idle, and nothing for a stopped one', () => {
@@ -259,9 +257,9 @@ describe('conversationActivity', () => {
 describe('conversationActivity cost', () => {
   it("sums the cost of all of a Ticket's Conversations, live or not", () => {
     const { cost } = conversationActivity([
-      { ...row(4, 'running'), costUsd: 0.5 },
-      { ...row(4, 'stopped'), costUsd: 1.1 },
-      { ...row(5, 'idle'), costUsd: 0.25 },
+      { ...row(4, 'running'), cost: 0.5 },
+      { ...row(4, 'stopped'), cost: 1.1 },
+      { ...row(5, 'idle'), cost: 0.25 },
     ]);
 
     expect(cost[4]).toBeCloseTo(1.6);
@@ -271,7 +269,7 @@ describe('conversationActivity cost', () => {
   it('leaves out Tickets that cost nothing and Conversations without a Ticket', () => {
     const { cost } = conversationActivity([
       row(4, 'running'),
-      { ...row(null, 'running'), costUsd: 3 },
+      { ...row(null, 'running'), cost: 3 },
     ]);
 
     expect(cost).toEqual({});

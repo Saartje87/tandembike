@@ -1,4 +1,5 @@
 import type { UsageByModel } from '../footprint/token-usage';
+import type { CostUnit } from '../tickets/cost-unit';
 import type { Status } from '../tickets/status';
 import type { RunEvent } from './agent-runner';
 import { isStartRunIntent } from './capacity';
@@ -9,6 +10,7 @@ import type {
   TranscriptRole,
 } from './conversation-state';
 import { type RunResult, runResultOf } from './run-outcome';
+import type { ToolActivity } from './tool-activity';
 
 /**
  * The run lifecycle (T1387): one pure step for every input that changes a
@@ -78,7 +80,8 @@ export type RunConversation = {
   ticketNumber: number | null;
   intent: ConversationIntent;
   state: ConversationState;
-  costUsd: number;
+  cost: number;
+  costUnit: CostUnit;
   worktreePath: string | null;
   worktreeRemoved: boolean;
 };
@@ -128,7 +131,7 @@ export type LifecycleInput =
 export type ConversationPatch = Partial<{
   state: ConversationState;
   sdkSessionId: string;
-  costUsd: number;
+  cost: number;
   hidden: boolean;
 }>;
 
@@ -140,7 +143,9 @@ export type NewRunOutcome = {
   result: RunResult;
   startedAt: Date;
   endedAt: Date;
-  costUsd: number;
+  /** In its Conversation's `costUnit` (ADR 0051). */
+  cost: number;
+  costUnit: CostUnit;
   model: string | null;
   command: string | null;
   startedByAutopilot: boolean;
@@ -153,12 +158,16 @@ export type RunEffect =
       type: 'append';
       role: TranscriptRole;
       text: string;
-      tool?: { name: string; input?: Record<string, unknown> };
+      tool?: {
+        name: string;
+        input?: Record<string, unknown>;
+        activity?: ToolActivity;
+      };
     }
   | { type: 'writeUsage'; before: UsageByModel; run: UsageByModel }
   | { type: 'recordOutcome'; outcome: NewRunOutcome }
   /** Sets the cost of the run's stopped outcome (T587). */
-  | { type: 'setStoppedOutcomeCost'; costUsd: number }
+  | { type: 'setStoppedOutcomeCost'; cost: number }
   /** Puts a message into the run's process. */
   | { type: 'send'; text: string }
   /** The run no longer speaks for its Conversation, and frees its slot. */
@@ -233,7 +242,7 @@ const outcomeOf = (
   end: {
     stopped?: boolean;
     error?: string;
-    errorSubtype?: string;
+    transient?: boolean;
     waitingOnUser?: boolean;
     ticket: TicketFacts | null;
     cost: number;
@@ -246,7 +255,7 @@ const outcomeOf = (
   result: runResultOf({
     stopped: end.stopped ?? false,
     error: end.error,
-    errorSubtype: end.errorSubtype,
+    transient: end.transient ?? false,
     ticketStatus: end.ticket?.status ?? null,
     hasPullRequest: end.ticket?.hasPullRequest ?? false,
     waitingOnUser: end.waitingOnUser ?? false,
@@ -254,7 +263,8 @@ const outcomeOf = (
   }),
   startedAt: pending.startedAt,
   endedAt: now,
-  costUsd: Math.max(0, end.cost - pending.costAtStart),
+  cost: Math.max(0, end.cost - pending.costAtStart),
+  costUnit: conversation.costUnit,
   model: run.model,
   command: pending.command,
   startedByAutopilot: pending.startedByAutopilot,
@@ -270,13 +280,13 @@ const stoppedEvent = (
   if (event.type !== 'turn') {
     return unchanged(run);
   }
-  const cost = run.costBefore + event.costUsd;
+  const cost = run.costBefore + event.cost;
   const effects: RunEffect[] = [];
   // The stopped outcome takes the first cost the stopped turn reports.
   if (phase.lateCost) {
     effects.push({
       type: 'setStoppedOutcomeCost',
-      costUsd: Math.max(0, cost - phase.lateCost.costAtStart),
+      cost: Math.max(0, cost - phase.lateCost.costAtStart),
     });
   }
   if (event.usage) {
@@ -289,7 +299,7 @@ const stoppedEvent = (
   effects.push({ type: 'announce' });
   return {
     run: { ...run, phase: { name: 'stopped', lateCost: null } },
-    patch: { costUsd: cost },
+    patch: { cost },
     effects,
   };
 };
@@ -334,7 +344,15 @@ const liveEvent = (
         text: event.text,
         ...(event.name === undefined
           ? {}
-          : { tool: { name: event.name, input: event.input } }),
+          : {
+              tool: {
+                name: event.name,
+                input: event.input,
+                ...(event.activity === undefined
+                  ? {}
+                  : { activity: event.activity }),
+              },
+            }),
       });
       break;
     case 'created':
@@ -348,12 +366,12 @@ const liveEvent = (
       patch.state = event.waiting ? 'waiting' : 'running';
       break;
     case 'turn': {
-      const cost = run.costBefore + event.costUsd;
+      const cost = run.costBefore + event.cost;
       if (event.error) {
         effects.push({ type: 'append', role: 'error', text: event.error });
       }
       patch.state = 'idle';
-      patch.costUsd = cost;
+      patch.cost = cost;
       if (event.usage) {
         effects.push({
           type: 'writeUsage',
@@ -370,7 +388,7 @@ const liveEvent = (
             conversation,
             {
               error: event.error,
-              errorSubtype: event.errorSubtype,
+              transient: event.transient,
               waitingOnUser,
               ticket: input.ticket,
               cost,
@@ -416,9 +434,10 @@ const liveEvent = (
             conversation,
             {
               error: event.error,
+              transient: event.transient,
               waitingOnUser,
               ticket: input.ticket,
-              cost: conversation.costUsd,
+              cost: conversation.cost,
             },
             now,
           ),
@@ -448,7 +467,7 @@ const reply = (
       run.pending ??
       pendingRunOf(
         input.text,
-        { ...input, costAtStart: conversation.costUsd },
+        { ...input, costAtStart: conversation.cost },
         now,
       ),
   },
@@ -489,7 +508,7 @@ const stop = (
         run,
         pending,
         conversation,
-        { stopped: true, ticket: null, cost: conversation.costUsd },
+        { stopped: true, ticket: null, cost: conversation.cost },
         now,
       ),
     });

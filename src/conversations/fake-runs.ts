@@ -1,6 +1,6 @@
 import { appPort } from '../http/server-port';
 import type { Worktrees } from '../worktrees/worktrees';
-import type { AgentRunner } from './agent-runner';
+import type { AgentRunners } from './agent-runner';
 import {
   createScriptedRunner,
   createScriptedWorktrees,
@@ -8,7 +8,7 @@ import {
 
 type Env = Record<string, string | undefined>;
 
-export type AgentBackends = { runner: AgentRunner; worktrees: Worktrees };
+export type AgentBackends = { runners: AgentRunners; worktrees: Worktrees };
 
 /**
  * Fake runs (T678): with `TANDEMBIKE_FAKE_RUNS=1`, a throwaway server runs
@@ -18,7 +18,7 @@ export type AgentBackends = { runner: AgentRunner; worktrees: Worktrees };
 const fakeRunsOn = (env: Env): boolean => env.TANDEMBIKE_FAKE_RUNS === '1';
 
 /**
- * The runner and worktrees the app's Conversations use: the scripted ones
+ * The runners and worktrees the app's Conversations use: the scripted ones
  * with fake runs on, else the `real` ones, built only then.
  */
 export function agentBackends(
@@ -29,7 +29,8 @@ export function agentBackends(
     return real();
   }
   return {
-    runner: createScriptedRunner(),
+    // Fake runs stand in for Claude Code, the one kind that runs today.
+    runners: { 'claude-code': createScriptedRunner() },
     worktrees: createScriptedWorktrees(),
   };
 }

@@ -8,10 +8,6 @@ import type {
 } from '../conversations/conversations';
 import type { DatabaseConnection } from '../db/connection';
 import { sparColumns, sparStickies, spars } from '../db/schema';
-import {
-  agentCommandMessage,
-  sparCommandMessage,
-} from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -79,7 +75,7 @@ export type SparListing = Spar & {
   outcomeTitle: string | null;
   /** Its Conversation's state. */
   state: ConversationState;
-  costUsd: number;
+  cost: number;
   /** The later of its Conversation's and its own last change. */
   lastActivity: Date;
 };
@@ -512,11 +508,7 @@ export function createSpars({
         projectId: project.id,
         ...(focus === null ? {} : { ticketNumber: focus }),
         intent: 'spar',
-        prompt: sparCommandMessage(
-          topic,
-          focus,
-          tickets.getProjectAgentCommands(project.id),
-        ),
+        stage: { stage: 'spar', topic },
       });
       const now = new Date();
       db.insert(spars)
@@ -743,11 +735,7 @@ export function createSpars({
             startedBy: 'user',
             ticketNumber: ticket.number,
             intent: 'spec',
-            prompt: agentCommandMessage(
-              'spec',
-              ticket,
-              tickets.getProjectAgentCommands(spar.projectId),
-            ),
+            stage: { stage: 'spec' },
           });
         } catch (error) {
           if (!(error instanceof TicketsError)) {
@@ -797,7 +785,7 @@ export function createSpars({
                 ? null
                 : tickets.getTicket(spar.outcomeTicketNumber).title,
             state: conversation.state,
-            costUsd: conversation.costUsd,
+            cost: conversation.cost,
             lastActivity: new Date(
               Math.max(
                 conversation.updatedAt.getTime(),

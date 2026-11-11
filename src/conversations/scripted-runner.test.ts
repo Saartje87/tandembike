@@ -20,7 +20,7 @@ function setup() {
   const conversations = createConversations({
     db,
     tickets,
-    runner: createScriptedRunner(),
+    runners: { 'claude-code': createScriptedRunner() },
     worktrees: createScriptedWorktrees(),
     mcpUrl: 'http://localhost:3100/api/mcp',
   });

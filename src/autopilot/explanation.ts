@@ -1,3 +1,4 @@
+import type { CostUnit } from '../tickets/cost-unit';
 /**
  * What Autopilot's rule answers (ADR 0044): why Autopilot and Auto-triage
  * start nothing now, and for each Todo Ticket or Epic, why it is or is not
@@ -11,11 +12,16 @@ export type AutopilotPauseReason =
   | { type: 'switchedOff' }
   | { type: 'noActiveCycle' }
   | { type: 'noSpendCeiling' }
-  | { type: 'overSpendCeiling'; spendUsd: number; ceilingUsd: number }
+  | { type: 'overSpendCeiling'; spend: number; ceiling: number; unit: CostUnit }
   | { type: 'noFreeStartRunSlot'; limit: number }
   /** `waitingOnUser`: how many of the live runs wait on the User (T1332). */
   | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
-  | { type: 'overMachineCeiling'; spendUsd: number; ceilingUsd: number }
+  | {
+      type: 'overMachineCeiling';
+      spend: number;
+      ceiling: number;
+      unit: CostUnit;
+    }
   | { type: 'noEligibleWork' };
 
 /** A Pause reason (GLOSSARY): why Auto-triage starts no Triage run now. */
@@ -23,10 +29,20 @@ export type AutoTriagePauseReason =
   | { type: 'projectArchived' }
   | { type: 'switchedOff' }
   | { type: 'noTriageCeiling' }
-  | { type: 'overTriageCeiling'; spendUsd: number; ceilingUsd: number }
+  | {
+      type: 'overTriageCeiling';
+      spend: number;
+      ceiling: number;
+      unit: CostUnit;
+    }
   | { type: 'triageRunWorking'; conversationId: number }
   | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
-  | { type: 'overMachineCeiling'; spendUsd: number; ceilingUsd: number }
+  | {
+      type: 'overMachineCeiling';
+      spend: number;
+      ceiling: number;
+      unit: CostUnit;
+    }
   | { type: 'noTriageEligibleWork' };
 
 /** Running: the next pass starts work. Paused: every reason it does not. */

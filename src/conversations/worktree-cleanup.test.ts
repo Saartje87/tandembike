@@ -111,7 +111,7 @@ describe('Worktree cleanup', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(worktrees.removed).toEqual([]);
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
     expect(conversations.get(conversation.id)).toMatchObject({
@@ -135,7 +135,7 @@ describe('Worktree cleanup', () => {
       worktrees.states.set(path, state);
 
       tickets.completeTicket(ticket.number);
-      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+      runner.runs[0].emit({ type: 'turn', cost: 0 });
 
       await vi.waitFor(() =>
         expect(conversations.get(conversation.id).worktreeKept).toBe(state),
@@ -156,13 +156,13 @@ describe('Worktree cleanup', () => {
       path,
     } = await setup();
     const stateChecks = vi.spyOn(worktrees, 'state');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     tickets.completeTicket(ticket.number);
     await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
 
     // A later turn end, exit and close find nothing more to release.
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     runner.runs[0].emit({ type: 'exit' });
     await conversations.close(conversation.id);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -180,7 +180,7 @@ describe('Worktree cleanup', () => {
     });
 
     tickets.completeTicket(other.number);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(worktrees.removed).toEqual([]);
@@ -336,7 +336,7 @@ describe('A reply after the worktree is released (T1281)', () => {
       path,
     } = await setup();
     tickets.completeTicket(ticket.number);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
 
     await expect(
@@ -363,7 +363,7 @@ describe('A reply after the worktree is released (T1281)', () => {
   it('is refused while the worktree path is missing, though a run is alive', async () => {
     const { conversations, worktrees, runner, conversation, path } =
       await setup();
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     worktrees.states.set(path, 'missing');
 
     await expect(
@@ -374,7 +374,7 @@ describe('A reply after the worktree is released (T1281)', () => {
 
   it('closes an idle live run when its Ticket reaches Done and the worktree is released', async () => {
     const { tickets, worktrees, runner, ticket, path } = await setup();
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     tickets.completeTicket(ticket.number);
 
@@ -389,7 +389,7 @@ describe('A reply after the worktree is released (T1281)', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(runner.runs[0].closed).toBe(false);
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     await vi.waitFor(() => expect(worktrees.removed).toEqual([path]));
     expect(runner.runs[0].closed).toBe(true);
@@ -406,7 +406,7 @@ describe('A reply after the worktree is released (T1281)', () => {
       path,
     } = await setup();
     worktrees.states.set(path, 'dirty');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     tickets.completeTicket(ticket.number);
     await vi.waitFor(() =>
@@ -418,7 +418,7 @@ describe('A reply after the worktree is released (T1281)', () => {
     await conversations.reply(conversation.id, 'Commit it.', 'user');
     expect(runner.runs[1].options).toMatchObject({
       cwd: path,
-      prompt: 'Commit it.',
+      message: { text: 'Commit it.' },
     });
   });
 
@@ -439,7 +439,7 @@ describe('A reply after the worktree is released (T1281)', () => {
       prompt: 'Go.',
     });
     expect(conversation.worktreePath).toBeNull();
-    world.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    world.runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     world.tickets.completeTicket(ticket.number);
     await new Promise((resolve) => setTimeout(resolve, 20));
@@ -447,6 +447,6 @@ describe('A reply after the worktree is released (T1281)', () => {
 
     // The run ended at Done (ADR 0049); the reply resumes it.
     expect(world.runner.runs[0].closed).toBe(true);
-    expect(world.runner.runs[1].options.prompt).toBe('Thanks.');
+    expect(world.runner.runs[1].firstMessage).toBe('Thanks.');
   });
 });

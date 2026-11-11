@@ -27,7 +27,7 @@ describe('AutopilotBar', () => {
         projectId={3}
         autopilot
         spendCeilingUsd={5}
-        spendUsd={0.75}
+        spend={0.75}
         cycleFootprint={null}
       />,
     );
@@ -43,7 +43,7 @@ describe('AutopilotBar', () => {
         projectId={3}
         autopilot
         spendCeilingUsd={5}
-        spendUsd={5.2}
+        spend={5.2}
         cycleFootprint={null}
       />,
     );
@@ -60,7 +60,7 @@ describe('AutopilotBar', () => {
         projectId={3}
         autopilot={false}
         spendCeilingUsd={5}
-        spendUsd={9}
+        spend={9}
         cycleFootprint={null}
       />,
     );
@@ -74,7 +74,7 @@ describe('AutopilotBar', () => {
         projectId={3}
         autopilot={false}
         spendCeilingUsd={5}
-        spendUsd={0}
+        spend={0}
         cycleFootprint={null}
       />,
     );
@@ -98,7 +98,7 @@ describe('AutopilotBar', () => {
         projectId={3}
         autopilot={false}
         spendCeilingUsd={null}
-        spendUsd={0}
+        spend={0}
         cycleFootprint={null}
       />,
     );
@@ -122,7 +122,7 @@ describe('AutopilotBar', () => {
           projectId={3}
           autopilot
           spendCeilingUsd={5}
-          spendUsd={0.75}
+          spend={0.75}
           cycleFootprint={aFootprint({ energyWh: 1200, co2eG: 570 })}
         />,
       );
@@ -149,7 +149,7 @@ describe('AutopilotBar', () => {
           projectId={3}
           autopilot
           spendCeilingUsd={5}
-          spendUsd={0}
+          spend={0}
           cycleFootprint={null}
         />,
       );
@@ -164,7 +164,7 @@ describe('AutopilotBar', () => {
           projectId={3}
           autopilot
           spendCeilingUsd={5}
-          spendUsd={0}
+          spend={0}
           cycleFootprint={{ measured: false }}
         />,
       );
@@ -180,7 +180,7 @@ describe('AutopilotBar', () => {
           projectId={3}
           autopilot
           spendCeilingUsd={5}
-          spendUsd={1}
+          spend={1}
           cycleFootprint={aFootprint({ energyWh: 9e9, co2eG: 9e9 })}
         />,
       );

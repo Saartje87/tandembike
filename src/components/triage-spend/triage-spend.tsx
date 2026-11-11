@@ -5,9 +5,9 @@ import { formatCost } from '../../app/lib/format-cost';
 
 export type TriageSpendProps = {
   /** What Auto-triage spent today, in USD. */
-  spendUsd: number;
+  spend: number;
   /** The Project's Triage ceiling per day, in USD. */
-  ceilingUsd: number;
+  ceiling: number;
   /** Whether the spend has reached the ceiling, as Autopilot decides it. */
   paused: boolean;
 };
@@ -17,13 +17,13 @@ export type TriageSpendProps = {
  * against the Triage ceiling, and a note while triage is paused over it.
  */
 export const TriageSpend: FC<TriageSpendProps> = ({
-  spendUsd,
-  ceilingUsd,
+  spend,
+  ceiling,
   paused,
 }) => (
   <Inline gap={2} alignY="center">
     <Text fontSize="small" color="muted">
-      {`Triage today: ${formatCost(spendUsd)} of ${formatCost(ceilingUsd)}`}
+      {`Triage today: ${formatCost(spend, 'usd')} of ${formatCost(ceiling, 'usd')}`}
     </Text>
     {paused && (
       <Text fontSize="small" color="muted" fontWeight="bold">

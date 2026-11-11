@@ -58,7 +58,7 @@ export const MachineRuns: FC = () => {
           color="white"
           fontSize="small"
           title="Autopilot's spend today against the machine ceiling"
-        >{`Spend ${usd(budget.spendUsd)}/${usd(budget.ceilingUsd)}`}</Text>
+        >{`Spend ${usd(budget.spend)}/${usd(budget.ceiling)}`}</Text>
       )}
       {budget?.paused && (
         <Text color="white" fontSize="small" role="status">

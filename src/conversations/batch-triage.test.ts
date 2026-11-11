@@ -165,7 +165,7 @@ describe('A Batch triage run (T1317)', () => {
       ticketNumbers: [12, 4],
     });
 
-    const { prompt } = runner.runs[0].options;
+    const prompt = runner.runs[0].firstMessage;
     expect(prompt).toContain(
       `Batch triage the Cycle "Beta" (Cycle ${cycle.id})`,
     );
@@ -185,7 +185,7 @@ describe('A Batch triage run (T1317)', () => {
       ticketNumbers: [7],
     });
 
-    expect(runner.runs[0].options.prompt).toContain(
+    expect(runner.runs[0].firstMessage).toContain(
       'Batch triage the Backlog: T7.',
     );
   });
@@ -203,10 +203,7 @@ describe('A Batch triage run (T1317)', () => {
     await conversations.reply(batch.id, 'Label them yourself', 'user');
 
     for (const run of runner.runs) {
-      expect(run.options.disallowedTools).toEqual([
-        'mcp__tandembike__update_ticket',
-        'mcp__tandembike__file_tickets',
-      ]);
+      expect(run.options.toolPolicy).toBe('no-ticket-writes');
     }
     expect(runner.runs).toHaveLength(2);
   });
@@ -214,8 +211,12 @@ describe('A Batch triage run (T1317)', () => {
   it("starts on the Project's triage model when set", async () => {
     const { conversations, runner, tickets, project } = setup();
     tickets.setProjectAgentSettings(project.id, {
-      runModel: 'claude-opus-5-5',
-      triageModel: 'claude-haiku-5',
+      models: {
+        'claude-code': {
+          runModel: 'claude-opus-5-5',
+          triageModel: 'claude-haiku-5',
+        },
+      },
     });
 
     await conversations.startBatchTriage({
@@ -248,7 +249,7 @@ describe('A Batch triage run (T1317)', () => {
       cycleId: cycle.id,
       ticketNumbers: [ticket.number],
     });
-    runner.runs.at(-1)?.emit({ type: 'turn', costUsd: 3 });
+    runner.runs.at(-1)?.emit({ type: 'turn', cost: 3 });
 
     expect(batch.worktreePath).toBeNull();
     expect(conversations.capacity().machine.slotsHeld).toBe(1);

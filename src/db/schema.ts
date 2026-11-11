@@ -20,11 +20,14 @@ import {
   transcriptRoles,
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
+import type { ToolActivity } from '../conversations/tool-activity';
 import type { WidgetEntry } from '../conversations/widget';
 import { type Canvas, stickyAuthors } from '../spars/canvas';
 import type { HandOffDraft } from '../spars/spar-moves';
 import type { ActivityChange } from '../tickets/activity-change';
+import { agentKinds } from '../tickets/agent-kind';
 import { agentRunModes } from '../tickets/agent-run-mode';
+import { costUnits } from '../tickets/cost-unit';
 import { cycleStates } from '../tickets/cycle-state';
 import { mergeModes } from '../tickets/merge-mode';
 import { paletteColors } from '../tickets/palette';
@@ -82,10 +85,10 @@ export const projects = sqliteTable('projects', {
   runMode: text('run_mode', { enum: agentRunModes })
     .notNull()
     .default('default'),
-  /** The model its runs start on; null is the User's default model. */
-  runModel: text('run_model'),
-  /** The model Triage runs start on; null uses the run model. */
-  triageModel: text('triage_model'),
+  /** The Agent kind new Conversations start on (ADR 0051); only the User sets it. */
+  defaultAgentKind: text('default_agent_kind', { enum: agentKinds })
+    .notNull()
+    .default('claude-code'),
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
@@ -396,7 +399,7 @@ export const ticketAttachments = sqliteTable(
 /**
  * A Conversation (ADR 0019): an exchange between the User and an Agent run
  * that Tandembike starts, about a Project and optionally one of its Tickets.
- * `costUsd` adds up every run of it.
+ * `cost` adds up every run of it.
  */
 export const conversations = sqliteTable(
   'conversations',
@@ -412,9 +415,16 @@ export const conversations = sqliteTable(
     startedBy: text('started_by', { enum: conversationStarters })
       .notNull()
       .default('user'),
-    /** The Claude Agent SDK session a reply resumes; set by the first run. */
+    /** The Agent kind it runs on for life (ADR 0051); older rows are Claude Code. */
+    agentKind: text('agent_kind', { enum: agentKinds })
+      .notNull()
+      .default('claude-code'),
+    /** The runner's opaque session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
-    costUsd: real('cost_usd').notNull().default(0),
+    /** In `costUnit`; the column keeps its old name (ADR 0051). */
+    cost: real('cost_usd').notNull().default(0),
+    /** The unit of `cost`, its runner's; older rows are dollars. */
+    costUnit: text('cost_unit', { enum: costUnits }).notNull().default('usd'),
     /** Closed by the User: stopped and left out of the Project's list. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     /**
@@ -486,6 +496,8 @@ export const conversationEntries = sqliteTable(
     toolInput: text('tool_input', { mode: 'json' }).$type<
       Record<string, unknown>
     >(),
+    /** For a tool entry: what it did, as its runner mapped it (ADR 0051); null for older entries. */
+    toolActivity: text('tool_activity', { mode: 'json' }).$type<ToolActivity>(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     /** For a Widget of the Agent: the Widget, the answer and expired; null for other entries. */
@@ -523,8 +535,10 @@ export const runOutcomes = sqliteTable(
     result: text('result', { enum: runResults }).notNull(),
     startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
     endedAt: integer('ended_at', { mode: 'timestamp_ms' }).notNull(),
-    /** What this run cost in USD, not the Conversation's total. */
-    costUsd: real('cost_usd').notNull(),
+    /** What this run cost in `costUnit`, not the Conversation's total. */
+    cost: real('cost_usd').notNull(),
+    /** The unit of `cost`, its Conversation's; older rows are dollars. */
+    costUnit: text('cost_unit', { enum: costUnits }).notNull().default('usd'),
     /** The model from the SDK's init message; null when the run never reported one. */
     model: text('model'),
     /** The `/command` the run's first message started with; null for none. */
@@ -601,6 +615,25 @@ export const triageProposals = sqliteTable(
  * The settings of the whole machine (ADR 0041): one row, id 1, written only
  * through a Server Action. No row means the defaults.
  */
+/**
+ * A Project's run and triage models for one Agent kind (ADR 0051); a kind
+ * without a row has neither. Only the User sets them.
+ */
+export const projectAgentModels = sqliteTable(
+  'project_agent_models',
+  {
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    agentKind: text('agent_kind', { enum: agentKinds }).notNull(),
+    /** The model its runs start on; null is that agent's own default. */
+    runModel: text('run_model'),
+    /** The model Triage runs start on; null uses the run model. */
+    triageModel: text('triage_model'),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.agentKind] })],
+);
+
 export const machineSettings = sqliteTable('machine_settings', {
   id: integer('id').primaryKey(),
   /** The most working runs across all Projects at once. */

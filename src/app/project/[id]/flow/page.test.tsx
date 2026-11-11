@@ -174,17 +174,17 @@ describe('FlowPage', () => {
         reasons: [
           { type: 'switchedOff' },
           { type: 'noActiveCycle' },
-          { type: 'overSpendCeiling', spendUsd: 12, ceilingUsd: 10 },
+          { type: 'overSpendCeiling', spend: 12, ceiling: 10, unit: 'usd' },
           { type: 'noFreeStartRunSlot', limit: 2 },
           { type: 'machineCapFull', cap: 3, waitingOnUser: 2 },
-          { type: 'overMachineCeiling', spendUsd: 21, ceilingUsd: 20 },
+          { type: 'overMachineCeiling', spend: 21, ceiling: 20, unit: 'usd' },
         ],
       },
       autoTriage: {
         state: 'paused',
         reasons: [
           { type: 'noTriageCeiling' },
-          { type: 'overTriageCeiling', spendUsd: 2, ceilingUsd: 1.5 },
+          { type: 'overTriageCeiling', spend: 2, ceiling: 1.5, unit: 'usd' },
           { type: 'triageRunWorking', conversationId: 4 },
         ],
       },

@@ -11,6 +11,7 @@ import {
   startCycle,
 } from '../../app/cycles/actions';
 import type { Conversation } from '../../conversations/conversations';
+import { aConversation } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import type { Cycle } from '../../tickets/cycles';
@@ -49,29 +50,16 @@ const dialogControl = () => ({
 
 const retroConversation = (
   overrides: Partial<Conversation> = {},
-): Conversation => ({
-  id: 21,
-  projectId: 3,
-  ticketNumber: null,
-  intent: 'retro',
-  state: 'idle',
-  startedBy: 'user',
-  sdkSessionId: null,
-  costUsd: 0,
-  hidden: false,
-  retroCycleId: 7,
-  batchTriageCycleId: null,
-  batchTriageTickets: null,
-  defaultCycleId: null,
-  defaultEpicNumber: null,
-  defaultType: null,
-  worktreePath: null,
-  worktreeKept: null,
-  worktreeRemoved: false,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+): Conversation =>
+  aConversation({
+    id: 21,
+    projectId: 3,
+    intent: 'retro',
+    retroCycleId: 7,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  });
 
 describe('CycleHeader', () => {
   let router: ReturnType<typeof mockRouter>;
@@ -473,7 +461,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={prepared}
-          estimate={{ totalUsd: 12.6, units: 3 }}
+          estimate={{ total: 12.6, unit: 'usd', units: 3 }}
         />,
       );
 
@@ -484,7 +472,10 @@ describe('CycleHeader', () => {
 
     it('counts one Ticket in the singular', () => {
       renderWithTheme(
-        <CycleHeader cycle={prepared} estimate={{ totalUsd: 4, units: 1 }} />,
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ total: 4, unit: 'usd', units: 1 }}
+        />,
       );
 
       expect(
@@ -496,7 +487,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={prepared}
-          estimate={{ totalUsd: null, units: 3 }}
+          estimate={{ total: null, unit: 'usd', units: 3 }}
         />,
       );
 
@@ -509,7 +500,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={{ ...prepared, state: 'Active' }}
-          estimate={{ totalUsd: 4, units: 1 }}
+          estimate={{ total: 4, unit: 'usd', units: 1 }}
         />,
       );
 

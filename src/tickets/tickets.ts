@@ -22,6 +22,7 @@ import { alias } from 'drizzle-orm/sqlite-core';
 
 import type { DatabaseConnection } from '../db/connection';
 import {
+  projectAgentModels,
   projects,
   ticketAcceptanceCriteria,
   ticketAttachments,
@@ -51,6 +52,7 @@ import {
   normalizeAgentCommands,
   type ProjectAgentCommands,
 } from './agent-commands';
+import { type AgentKind, agentKinds, isAgentKind } from './agent-kind';
 import { type AgentRunMode, agentRunModes } from './agent-run-mode';
 import {
   checkProjectWritable,
@@ -224,10 +226,8 @@ export type ProjectAgentSettings = {
   agentMode: boolean;
   /** The permission mode of every run the Project starts (ADR 0029). */
   runMode: AgentRunMode;
-  /** The model its runs start on, or `null` for the User's default model. */
-  runModel: string | null;
-  /** The model Triage runs start on, or `null` for the run model. */
-  triageModel: string | null;
+  /** The run and triage models of each Agent kind (ADR 0051). */
+  models: AgentModels;
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: boolean;
   /** What Autopilot may spend on one Cycle, in dollars; `null` while unset. */
@@ -238,9 +238,26 @@ export type ProjectAgentSettings = {
   triageCeilingUsd: number | null;
   /** Whether the run that opened a PR merges it itself (ADR 0043). */
   autoMerge: boolean;
+  /** The Agent kind new Conversations start on (ADR 0051). */
+  defaultAgentKind: AgentKind;
 };
 
-export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
+/** One Agent kind's models; a blank is that agent's own default. */
+export type AgentModel = {
+  /** The model its runs start on, or `null` for the agent's own default. */
+  runModel: string | null;
+  /** The model Triage runs start on, or `null` for the run model. */
+  triageModel: string | null;
+};
+
+export type AgentModels = Record<AgentKind, AgentModel>;
+
+export type SetProjectAgentSettingsInput = Partial<
+  Omit<ProjectAgentSettings, 'models'>
+> & {
+  /** Models to change, by Agent kind; a field left out stays as it is. */
+  models?: { [Kind in AgentKind]?: Partial<AgentModel> };
+};
 
 /**
  * A Project by its id, its name (ignoring case and surrounding spaces) or
@@ -285,13 +302,12 @@ const agentSettingsColumns = {
   parallelRuns: projects.parallelRuns,
   agentMode: projects.agentMode,
   runMode: projects.runMode,
-  runModel: projects.runModel,
-  triageModel: projects.triageModel,
   autopilot: projects.autopilot,
   spendCeilingUsd: projects.spendCeilingUsd,
   autoTriage: projects.autoTriage,
   triageCeilingUsd: projects.triageCeilingUsd,
   autoMerge: projects.autoMerge,
+  defaultAgentKind: projects.defaultAgentKind,
 };
 
 /** A trimmed text setting; blank reads as not set. */
@@ -307,6 +323,13 @@ function runModeProblem(
   return runMode === undefined || agentRunModes.includes(runMode)
     ? undefined
     : 'Choose default or auto.';
+}
+
+/** Why `kind` is not an Agent kind, or `undefined` when it is or is left out. */
+function agentKindProblem(kind: unknown): string | undefined {
+  return kind === undefined || isAgentKind(kind)
+    ? undefined
+    : 'Choose an Agent kind Tandembike knows.';
 }
 
 /** Why a model name is refused, or `undefined` when it can be stored. */
@@ -1797,7 +1820,24 @@ export function createTickets(
       if (!settings) {
         throw new NotFoundError(`There is no Project with id ${id}.`);
       }
-      return settings;
+      const rows = db
+        .select()
+        .from(projectAgentModels)
+        .where(eq(projectAgentModels.projectId, id))
+        .all();
+      const models = Object.fromEntries(
+        agentKinds.map((kind) => {
+          const row = rows.find(({ agentKind }) => agentKind === kind);
+          return [
+            kind,
+            {
+              runModel: row?.runModel ?? null,
+              triageModel: row?.triageModel ?? null,
+            },
+          ];
+        }),
+      ) as AgentModels;
+      return { ...settings, models };
     },
 
     /**
@@ -1819,13 +1859,13 @@ export function createTickets(
         parallelRuns,
         agentMode,
         runMode,
-        runModel,
-        triageModel,
+        models,
         autopilot,
         spendCeilingUsd,
         autoTriage,
         triageCeilingUsd,
         autoMerge,
+        defaultAgentKind,
       } = input;
       const nextTriageCeiling =
         triageCeilingUsd === undefined
@@ -1837,12 +1877,39 @@ export function createTickets(
           ? before.spendCeilingUsd
           : spendCeilingUsd;
       const nextAutopilot = autopilot ?? before.autopilot;
-      const nextModel =
-        runModel === undefined ? before.runModel : trimmedOrNull(runModel);
-      const nextTriageModel =
-        triageModel === undefined
-          ? before.triageModel
-          : trimmedOrNull(triageModel);
+      const nextModels = Object.fromEntries(
+        agentKinds.map((kind) => {
+          const given = models?.[kind] ?? {};
+          const was = before.models[kind];
+          return [
+            kind,
+            {
+              runModel:
+                given.runModel === undefined
+                  ? was.runModel
+                  : trimmedOrNull(given.runModel),
+              triageModel:
+                given.triageModel === undefined
+                  ? was.triageModel
+                  : trimmedOrNull(given.triageModel),
+            },
+          ];
+        }),
+      ) as AgentModels;
+      const modelProblems = Object.fromEntries(
+        agentKinds.flatMap((kind) =>
+          (['runModel', 'triageModel'] as const).flatMap((field) =>
+            models?.[kind]?.[field] === undefined
+              ? []
+              : [
+                  [
+                    `models.${kind}.${field}`,
+                    runModelProblem(nextModels[kind][field]),
+                  ],
+                ],
+          ),
+        ),
+      );
       const nextPath =
         repositoryPath === undefined
           ? before.repositoryPath
@@ -1858,20 +1925,15 @@ export function createTickets(
             ? 'Set a repository path before turning on agent mode.'
             : undefined,
         runMode: runModeProblem(runMode),
-        runModel:
-          runModel === undefined ? undefined : runModelProblem(nextModel),
-        triageModel:
-          triageModel === undefined
-            ? undefined
-            : runModelProblem(nextTriageModel),
+        defaultAgentKind: agentKindProblem(defaultAgentKind),
+        ...modelProblems,
         spendCeilingUsd: spendCeilingProblem(nextCeiling, nextAutopilot),
         triageCeilingUsd: triageCeilingProblem(
           nextTriageCeiling,
           nextAutoTriage,
         ),
       });
-      const settings = db
-        .update(projects)
+      db.update(projects)
         .set({
           repositoryPath: nextPath,
           checkCommand:
@@ -1886,19 +1948,30 @@ export function createTickets(
           agentMode:
             nextPath === null ? false : (agentMode ?? before.agentMode),
           ...(runMode === undefined ? {} : { runMode }),
-          runModel: nextModel,
-          triageModel: nextTriageModel,
           autopilot: nextAutopilot,
           spendCeilingUsd: nextCeiling,
           autoTriage: nextAutoTriage,
           triageCeilingUsd: nextTriageCeiling,
           ...(autoMerge === undefined ? {} : { autoMerge }),
+          ...(defaultAgentKind === undefined ? {} : { defaultAgentKind }),
         })
         .where(eq(projects.id, id))
-        .returning(agentSettingsColumns)
-        .get();
+        .run();
+      for (const kind of agentKinds) {
+        if (models?.[kind] === undefined) continue;
+        db.insert(projectAgentModels)
+          .values({ projectId: id, agentKind: kind, ...nextModels[kind] })
+          .onConflictDoUpdate({
+            target: [
+              projectAgentModels.projectId,
+              projectAgentModels.agentKind,
+            ],
+            set: nextModels[kind],
+          })
+          .run();
+      }
       changes.publish({ type: 'project', id });
-      return settings;
+      return this.getProjectAgentSettings(id);
     },
 
     /**

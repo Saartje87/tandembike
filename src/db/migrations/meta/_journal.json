@@ -449,6 +449,34 @@
       "when": 1794329056447,
       "tag": "0063_drop_project_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1794388015049,
+      "tag": "0064_agent_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1794389136731,
+      "tag": "0065_agent_models",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "6",
+      "when": 1794389493034,
+      "tag": "0066_cost_unit",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1794390122341,
+      "tag": "0067_tool_activity",
+      "breakpoints": true
     }
   ]
 }

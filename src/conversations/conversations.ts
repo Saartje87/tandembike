@@ -18,10 +18,15 @@ import type { UsageByModel } from '../footprint/token-usage';
 import { playbookPath } from '../playbook/playbook';
 import {
   agentCommandMessage,
-  commandForStage,
   planCommandMessage,
 } from '../tickets/agent-commands';
+import {
+  type AgentKind,
+  agentKindLabels,
+  agentKinds,
+} from '../tickets/agent-kind';
 import type { ChangeChannel } from '../tickets/changes';
+import { type CostUnit, dollarCeiling } from '../tickets/cost-unit';
 import {
   NotAllowedError,
   NotFoundError,
@@ -31,14 +36,18 @@ import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { Status } from '../tickets/status';
 import { canSpec, isInReview } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
-import type { Tickets } from '../tickets/tickets';
+import type { AgentModel, Tickets } from '../tickets/tickets';
 import type { NoWorkReason } from '../tickets/work';
 import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
   AgentRunner,
+  AgentRunners,
   PermissionRequest,
   RunEvent,
+  RunMessage,
+  RunnerAvailability,
+  StageInvocation,
 } from './agent-runner';
 import { batchTriagePrompt } from './batch-triage-prompt';
 import {
@@ -63,7 +72,6 @@ import {
   type QuestionEntry,
   type TranscriptRole,
 } from './conversation-state';
-import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 import {
   type ConversationSender,
@@ -82,6 +90,7 @@ import {
   terminalIdleMinutes,
   terminalIdleMs,
 } from './terminal-shared';
+import type { ToolActivity } from './tool-activity';
 import {
   readUsage,
   totalUsage,
@@ -107,8 +116,14 @@ export type Conversation = {
   state: ConversationState;
   /** Who started it: the User, Autopilot or a Terminal session. */
   startedBy: ConversationStarter;
+  /** The Agent kind it runs on for life (ADR 0051). */
+  agentKind: AgentKind;
+  /** The runner's opaque session a reply resumes. */
   sdkSessionId: string | null;
-  costUsd: number;
+  /** What all its runs cost, in `costUnit`. */
+  cost: number;
+  /** Its runner's cost unit (ADR 0051). */
+  costUnit: CostUnit;
   /** Closed by the User: stopped, and left out of the open Conversations. */
   hidden: boolean;
   /** Retro: the Cycle it looks back on; null for other intents. */
@@ -141,8 +156,9 @@ export type RunOutcome = {
   result: RunResult;
   startedAt: Date;
   endedAt: Date;
-  /** What this run cost in USD, not the Conversation's total. */
-  costUsd: number;
+  /** What this run cost in `costUnit`, not the Conversation's total. */
+  cost: number;
+  costUnit: CostUnit;
   model: string | null;
   /** The `/command` the run's first message started with; null for none. */
   command: string | null;
@@ -152,6 +168,14 @@ export type RunOutcome = {
 };
 
 /** How one Stage of a Project ended over the last 30 days. */
+/** Spend against a ceiling, both in `unit`, and whether it is reached. */
+export type Budget = {
+  spend: number;
+  ceiling: number;
+  unit: CostUnit;
+  paused: boolean;
+};
+
 export type StageRunStats = {
   stage: ConversationIntent;
   runs: number;
@@ -183,6 +207,8 @@ export type TranscriptEntry = {
   toolName: string | null;
   /** For a tool or permission entry, its input; null for others, older entries and an input over the cap. */
   toolInput: Record<string, unknown> | null;
+  /** For a tool entry, what it did, as its runner mapped it (ADR 0051); null for others and older entries. */
+  toolActivity: ToolActivity | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
   /** For a Widget of the Agent, the Widget, its answer and expired; null for other entries. */
@@ -223,8 +249,14 @@ export type StartConversationInput = {
   projectId?: number;
   ticketNumber?: number;
   intent: ConversationIntent;
-  /** The User's first message. */
-  prompt: string;
+  /** The starter's first message; left out when `stage` invokes the Stage. */
+  prompt?: string;
+  /**
+   * The Stage the first message invokes, which must be the intent: the run
+   * gets it with its Ticket, Cycle, goal or topic, and its runner words it
+   * (ADR 0051). The Ticket Stages need `ticketNumber`, a Retro its Cycle.
+   */
+  stage?: StageRequest;
   /**
    * Autopilot only: the Active Cycle it starts the Conversation for, whose
    * Spend ceiling the cost counts against.
@@ -238,6 +270,15 @@ export type StartConversationInput = {
   defaults?: NewTicketDefaults;
 };
 
+/**
+ * A Stage to invoke, with what only the starter knows: a Plan's goal, a
+ * Spar's topic. The Ticket, focus and Cycle come from the Conversation.
+ */
+export type StageRequest =
+  | { stage: 'triage' | 'start' | 'spec' | 'merge' | 'retro' }
+  | { stage: 'plan'; goal: string }
+  | { stage: 'spar'; topic: string | null };
+
 /** What the CLI needs to open `claude` for a Terminal Conversation. */
 export type TerminalSession = {
   /** The Conversation's id, which is the session's Agent-run ID. */
@@ -249,7 +290,7 @@ export type TerminalSession = {
   /** The run brief, saying the run is in a terminal. */
   brief: string;
   runMode: 'default' | 'auto';
-  /** The Project's run model; null for Claude Code's own default. */
+  /** The Project's Claude Code run model; null for Claude Code's own default. */
   model: string | null;
 };
 
@@ -292,7 +333,8 @@ export type ConversationsDeps = {
   /** Where Projects and Tickets are read; this module never writes them. */
   tickets: Tickets;
   changes?: ChangeChannel;
-  runner: AgentRunner;
+  /** The runner of each Agent kind that can run here (ADR 0051). */
+  runners: AgentRunners;
   /** The only code that runs git: makes and inspects the worktrees of Start runs. */
   worktrees: Worktrees;
   /** The Tandembike MCP server the runs connect to. */
@@ -321,47 +363,16 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
-/** The model a run of `intent` starts on: Triage's own when set, Batch triage's too, else the run model. */
-const modelFor = (
-  intent: ConversationIntent,
-  settings: { runModel: string | null; triageModel: string | null },
-) =>
+/**
+ * The model a run of `intent` starts on, from its Agent kind's models (ADR
+ * 0051): Triage's own when set, Batch triage's too, else the run model; null
+ * for the agent's own default.
+ */
+const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
   (intent === 'triage' || intent === 'batch_triage') &&
   settings.triageModel !== null
     ? settings.triageModel
     : settings.runModel;
-
-/**
- * What an Autopilot Triage run and every Batch triage run may not use: their
- * only writes are a proposal and a note (ADR 0040, ADR 0047).
- */
-const autopilotTriageDisallowedTools = [
-  'mcp__tandembike__update_ticket',
-  'mcp__tandembike__file_tickets',
-];
-
-/**
- * What a Spar run may not use, whatever the Agent run mode (ADR 0046): file
- * edits and every Tandembike tool that creates or changes Tickets or Cycles.
- * Reading, the Widget tools and the Spar tools stay.
- */
-export const sparDisallowedTools = [
-  'Edit',
-  'Write',
-  'NotebookEdit',
-  'mcp__tandembike__file_tickets',
-  'mcp__tandembike__update_ticket',
-  'mcp__tandembike__start_work',
-  'mcp__tandembike__finish_work',
-  'mcp__tandembike__abandon_work',
-  'mcp__tandembike__open_pr',
-  'mcp__tandembike__add_note',
-  'mcp__tandembike__check_criterion',
-  'mcp__tandembike__attach',
-  'mcp__tandembike__propose_triage',
-  'mcp__tandembike__create_cycle',
-  'mcp__tandembike__update_cycle',
-];
 
 /** The states of a run whose process may be alive. */
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
@@ -391,13 +402,46 @@ export function createConversations({
   db,
   tickets,
   changes,
-  runner,
+  runners,
   worktrees,
   mcpUrl,
   clock = () => new Date(),
 }: ConversationsDeps) {
   /** The runs alive in this process, by Conversation id. */
   const live = new Map<number, RunHandle>();
+
+  /** Whether Agent kind `kind` can run now: a registered runner says so. */
+  const availabilityOf = (kind: AgentKind): RunnerAvailability =>
+    runners[kind]?.availability() ?? {
+      available: false,
+      reason: `${agentKindLabels[kind]} cannot run here yet.`,
+    };
+
+  /** The unit `kind` reports cost in; dollars for a kind with no runner. */
+  const costUnitOf = (kind: AgentKind): CostUnit =>
+    runners[kind]?.capabilities.costUnit ?? 'usd';
+
+  /** The cost unit of the agent Autopilot would start in Project `projectId`. */
+  const defaultUnitOf = (projectId: number): CostUnit =>
+    costUnitOf(tickets.getProjectAgentSettings(projectId).defaultAgentKind);
+
+  /** An estimate with its unit, or null when there is none. */
+  const estimateIn = (amount: number | null, unit: CostUnit) =>
+    amount === null ? null : { amount, unit };
+
+  /** The runner of `kind`, refused with its reason when it cannot run now. */
+  const runnerOf = (kind: AgentKind): AgentRunner => {
+    const availability = availabilityOf(kind);
+    const runner = runners[kind];
+    if (!availability.available || !runner) {
+      throw new NotAllowedError(
+        availability.available
+          ? `${agentKindLabels[kind]} cannot run here yet.`
+          : availability.reason,
+      );
+    }
+    return runner;
+  };
 
   const announce = (id: number) =>
     changes?.publish({ type: 'conversation', id });
@@ -422,7 +466,7 @@ export function createConversations({
         | 'state'
         | 'startedBy'
         | 'sdkSessionId'
-        | 'costUsd'
+        | 'cost'
         | 'worktreePath'
         | 'worktreeKept'
         | 'worktreeRemoved'
@@ -452,7 +496,11 @@ export function createConversations({
       permission?: PermissionStatus;
       widget?: WidgetEntry;
       permissionRules?: string[] | null;
-      tool?: { name: string; input?: Record<string, unknown> };
+      tool?: {
+        name: string;
+        input?: Record<string, unknown>;
+        activity?: ToolActivity;
+      };
     } = {},
   ): number =>
     db
@@ -465,6 +513,7 @@ export function createConversations({
         permissionRules: extra.permissionRules ?? null,
         toolName: extra.tool?.name ?? null,
         toolInput: cappedInput(extra.tool?.input),
+        toolActivity: extra.tool?.activity ?? null,
         widget: extra.widget ?? null,
         createdAt: clock(),
       })
@@ -551,6 +600,24 @@ export function createConversations({
     }
   };
 
+  /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
+  const noteOnce = (id: number, text: string) => {
+    const noted = db
+      .select({ id: conversationEntries.id })
+      .from(conversationEntries)
+      .where(
+        and(
+          eq(conversationEntries.conversationId, id),
+          eq(conversationEntries.role, 'session'),
+          eq(conversationEntries.text, text),
+        ),
+      )
+      .get();
+    if (!noted) {
+      append(id, 'session', text);
+    }
+  };
+
   /** Applies one effect of the run lifecycle; an async one returns its promise. */
   const applyEffect = (
     id: number,
@@ -583,7 +650,7 @@ export function createConversations({
       case 'setStoppedOutcomeCost':
         if (handle?.stoppedOutcomeId != null) {
           db.update(runOutcomes)
-            .set({ costUsd: effect.costUsd })
+            .set({ cost: effect.cost })
             .where(eq(runOutcomes.id, handle.stoppedOutcomeId))
             .run();
         }
@@ -694,17 +761,20 @@ export function createConversations({
     id: number,
     handle: RunHandle,
     request: PermissionRequest,
+    allowAlways: boolean,
   ): Promise<PermissionAnswer> => {
     if (live.get(id) !== handle) {
       return Promise.resolve('deny');
     }
+    // Without rules there is no Always allow to offer (ADR 0051).
     const entryId = append(
       id,
       'permission',
       `${request.toolName} ${JSON.stringify(request.input)}`,
       {
         permission: 'pending',
-        permissionRules: request.rules.length === 0 ? null : request.rules,
+        permissionRules:
+          !allowAlways || request.rules.length === 0 ? null : request.rules,
         tool: { name: request.toolName, input: request.input },
       },
     );
@@ -808,26 +878,42 @@ export function createConversations({
    * such Conversations. Only this module reads Run outcomes, so the
    * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
    */
-  const startCostEstimate = (projectId: number): number | null => {
+  const startCostEstimate = (
+    projectId: number,
+    agentKind: AgentKind = tickets.getProjectAgentSettings(
+      projectId,
+    ).defaultAgentKind,
+  ): number | null => {
+    // Only one Agent kind's history, so the estimate is in its unit and
+    // never mixes two agents' prices (ADR 0051).
     const rows = db
-      .select()
+      .select({
+        conversationId: runOutcomes.conversationId,
+        cost: runOutcomes.cost,
+        endedAt: runOutcomes.endedAt,
+        result: runOutcomes.result,
+      })
       .from(runOutcomes)
+      .innerJoin(
+        conversations,
+        eq(conversations.id, runOutcomes.conversationId),
+      )
       .where(
         and(
           eq(runOutcomes.projectId, projectId),
           eq(runOutcomes.stage, 'start'),
+          eq(conversations.agentKind, agentKind),
         ),
       )
       .orderBy(runOutcomes.id)
       .all();
     const byConversation = new Map<
       number,
-      { costUsd: number; endedAt: number; result: RunResult }
+      { cost: number; endedAt: number; result: RunResult }
     >();
     for (const row of rows) {
       byConversation.set(row.conversationId, {
-        costUsd:
-          (byConversation.get(row.conversationId)?.costUsd ?? 0) + row.costUsd,
+        cost: (byConversation.get(row.conversationId)?.cost ?? 0) + row.cost,
         endedAt: row.endedAt.getTime(),
         result: row.result,
       });
@@ -836,7 +922,7 @@ export function createConversations({
       .filter(({ result }) => result === 'completed' || result === 'pr_open')
       .sort((a, b) => b.endedAt - a.endedAt)
       .slice(0, startEstimateSample)
-      .map(({ costUsd }) => costUsd)
+      .map(({ cost }) => cost)
       .sort((a, b) => a - b);
     if (costs.length < startEstimateMinimum) {
       return null;
@@ -862,6 +948,7 @@ export function createConversations({
       ticketType: ticket?.type ?? null,
       projectName: tickets.getProject(conversation.projectId).name,
       intent: conversation.intent,
+      agentKind: conversation.agentKind,
       retroCycle:
         conversation.retroCycleId === null
           ? null
@@ -878,7 +965,12 @@ export function createConversations({
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
       ...(conversation.intent === 'plan'
-        ? { planEstimateUsd: startCostEstimate(conversation.projectId) }
+        ? {
+            planEstimate: estimateIn(
+              startCostEstimate(conversation.projectId, conversation.agentKind),
+              conversation.costUnit,
+            ),
+          }
         : {}),
       defaults: {
         cycleId: conversation.defaultCycleId,
@@ -894,7 +986,7 @@ export function createConversations({
    */
   const startRun = (
     id: number,
-    prompt: string,
+    message: RunMessage,
     resume?: string,
     limited = true,
     sentBy: ConversationSender = 'user',
@@ -911,19 +1003,28 @@ export function createConversations({
       limited ? conversation.intent : 'reply',
       id,
     );
-    const runModel = modelFor(conversation.intent, settings);
+    const runner = runnerOf(conversation.agentKind);
+    const agentCommands = tickets.getProjectAgentCommands(
+      conversation.projectId,
+    );
+    const runModel = modelFor(
+      conversation.intent,
+      settings.models[conversation.agentKind],
+    );
     const handle: RunHandle = {
       process: null,
       run: {
         phase: { name: 'alive', releaseWorktree: false },
-        costBefore: conversation.costUsd,
+        costBefore: conversation.cost,
         usageBefore: readUsage(db, id),
         model: null,
         ticketStatus: ticketFactsOf(conversation)?.status ?? null,
         pending: pendingRunOf(
-          prompt,
+          'text' in message
+            ? message.text
+            : runner.invocationText(message.invocation, agentCommands),
           {
-            costAtStart: conversation.costUsd,
+            costAtStart: conversation.cost,
             sentBy,
             transientResume,
             stage,
@@ -936,6 +1037,19 @@ export function createConversations({
       widgets: new Map(),
     };
     live.set(id, handle);
+    // A Spar is read-only whatever the Project's run mode (ADR 0046); a mode
+    // the runner cannot honour falls back to default, and says so (ADR 0051).
+    const wanted =
+      conversation.intent === 'spar' ? 'default' : settings.runMode;
+    const runMode = runner.capabilities.runModes.includes(wanted)
+      ? wanted
+      : 'default';
+    if (runMode !== wanted) {
+      noteOnce(
+        id,
+        `${agentKindLabels[conversation.agentKind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`,
+      );
+    }
     try {
       handle.process = runner.start({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
@@ -943,20 +1057,22 @@ export function createConversations({
         mcpUrl,
         plugins: [{ type: 'local', path: playbookPath }],
         systemPrompt: briefOf(id),
-        prompt,
-        // A Spar is read-only whatever the Project's run mode (ADR 0046).
-        runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
+        message,
+        agentCommands,
+        runMode,
         ...(runModel === null ? {} : { model: runModel }),
-        ...((conversation.intent === 'triage' &&
-          conversation.startedBy === 'autopilot') ||
-        conversation.intent === 'batch_triage'
-          ? { disallowedTools: autopilotTriageDisallowedTools }
-          : {}),
+        // A Spar is read-only (ADR 0046); Autopilot Triage and Batch triage
+        // only propose and note (ADR 0040, ADR 0047).
         ...(conversation.intent === 'spar'
-          ? { disallowedTools: sparDisallowedTools }
-          : {}),
+          ? { toolPolicy: 'read-only' as const }
+          : (conversation.intent === 'triage' &&
+                conversation.startedBy === 'autopilot') ||
+              conversation.intent === 'batch_triage'
+            ? { toolPolicy: 'no-ticket-writes' as const }
+            : {}),
         ...(resume === undefined ? {} : { resume }),
-        askPermission: (request) => askPermission(id, handle, request),
+        askPermission: (request) =>
+          askPermission(id, handle, request, runner.capabilities.allowAlways),
         askWidget: (widget) => askWidget(id, handle, widget),
         onEvent: (event) => handleEvent(id, handle, event),
       });
@@ -1036,6 +1152,50 @@ export function createConversations({
       .get() ?? null;
 
   /**
+   * The Stage invocation of a start: the request with the Conversation's
+   * Ticket, focus or Retro Cycle. Refused when the Stage lacks what it needs.
+   */
+  const invocationOf = (
+    request: StageRequest,
+    input: { ticketNumber?: number; retroCycleId?: number },
+  ): StageInvocation => {
+    switch (request.stage) {
+      case 'triage':
+      case 'start':
+      case 'spec':
+      case 'merge': {
+        if (input.ticketNumber === undefined) {
+          throw new ValidationError({
+            ticketNumber: `The ${request.stage} Stage is about a Ticket.`,
+          });
+        }
+        const ticket = tickets.getTicket(input.ticketNumber);
+        return {
+          stage: request.stage,
+          ticket: { number: ticket.number, type: ticket.type },
+        };
+      }
+      case 'retro': {
+        const cycle = tickets.getCycle(input.retroCycleId as number);
+        return { stage: 'retro', cycle: { id: cycle.id, title: cycle.title } };
+      }
+      case 'plan': {
+        const goal = request.goal.trim();
+        if (goal === '') {
+          throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+        }
+        return { stage: 'plan', goal };
+      }
+      case 'spar':
+        return {
+          stage: 'spar',
+          topic: request.topic,
+          focusTicketNumber: input.ticketNumber ?? null,
+        };
+    }
+  };
+
+  /**
    * Starts a Conversation on a Ticket or a Project and its first run.
    * Refused when the Project has no repository path.
    */
@@ -1043,8 +1203,13 @@ export function createConversations({
     input: StartConversationInput,
   ): Promise<Conversation> => {
     const prompt = (input.prompt ?? '').trim();
-    if (prompt === '') {
+    if (input.stage === undefined && prompt === '') {
       throw new ValidationError({ prompt: 'Write a message for the Agent.' });
+    }
+    if (input.stage !== undefined && input.stage.stage !== input.intent) {
+      throw new ValidationError({
+        stage: `A ${input.intent} Conversation cannot invoke the ${input.stage.stage} Stage.`,
+      });
     }
     let projectId = input.projectId;
     if (input.ticketNumber !== undefined) {
@@ -1164,6 +1329,21 @@ export function createConversations({
       throw new ValidationError(noRepositoryPath);
     }
     checkStartLimit(projectId, input.intent);
+    // Every start takes the Project's default (ADR 0051); a kind that
+    // cannot run is refused here, before anything is stored.
+    const agentKind = settings.defaultAgentKind;
+    const runner = runnerOf(agentKind);
+    const message: RunMessage =
+      input.stage === undefined
+        ? { text: prompt }
+        : { invocation: invocationOf(input.stage, input) };
+    const firstText =
+      'text' in message
+        ? message.text
+        : runner.invocationText(
+            message.invocation,
+            tickets.getProjectAgentCommands(projectId),
+          );
 
     const now = clock();
     const created = db
@@ -1172,6 +1352,8 @@ export function createConversations({
         projectId,
         ticketNumber: input.ticketNumber ?? null,
         intent: input.intent,
+        agentKind,
+        costUnit: runner.capabilities.costUnit,
         defaultCycleId: input.defaults?.cycleId ?? null,
         defaultEpicNumber: input.defaults?.epicNumber ?? null,
         defaultType: input.defaults?.type ?? null,
@@ -1194,7 +1376,7 @@ export function createConversations({
       })
       .returning({ id: conversations.id })
       .get();
-    append(created.id, input.startedBy, prompt);
+    append(created.id, input.startedBy, firstText);
     // A Merge always gets a worktree: it checks out the PR branch, which must
     // not disturb the User's checkout, even with Parallel runs off (T1221).
     if (
@@ -1212,7 +1394,7 @@ export function createConversations({
       }
     }
     try {
-      startRun(created.id, prompt, undefined, true, input.startedBy);
+      startRun(created.id, message, undefined, true, input.startedBy);
     } catch (error) {
       update(created.id, { state: 'interrupted' });
       append(created.id, 'error', 'The Agent could not be started.');
@@ -1315,7 +1497,7 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: modelFor(input.intent, settings),
+      model: modelFor(input.intent, settings.models['claude-code']),
     };
   };
 
@@ -1382,7 +1564,7 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: modelFor('plan', settings),
+      model: modelFor('plan', settings.models['claude-code']),
     };
   };
 
@@ -1461,7 +1643,14 @@ export function createConversations({
     }
     const name = `mcp__tandembike__${toolName}`;
     append(id, 'tool', `${name} ${JSON.stringify(input)}`.slice(0, 300), {
-      tool: { name, input },
+      tool: {
+        name,
+        input,
+        activity:
+          typeof input.number === 'number'
+            ? { tandembike: toolName, ticketNumber: input.number }
+            : { tandembike: toolName },
+      },
     });
     update(id, {});
     announce(id);
@@ -1599,10 +1788,14 @@ export function createConversations({
    * the cost of the runs it started that ended then or later, from Run
    * outcomes, plus the cost so far of an Autopilot Triage run still working.
    */
-  const autopilotTriageSpend = (projectId: number, dayStart: Date): number => {
+  const autopilotTriageSpend = (
+    projectId: number,
+    dayStart: Date,
+    unit: CostUnit = 'usd',
+  ): number => {
     const ended = db
       .select({
-        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
       })
       .from(runOutcomes)
       .where(
@@ -1610,6 +1803,7 @@ export function createConversations({
           eq(runOutcomes.projectId, projectId),
           eq(runOutcomes.stage, 'triage'),
           eq(runOutcomes.startedByAutopilot, true),
+          eq(runOutcomes.costUnit, unit),
           gte(runOutcomes.endedAt, dayStart),
         ),
       )
@@ -1622,10 +1816,11 @@ export function createConversations({
         pending &&
         conversation.projectId === projectId &&
         conversation.intent === 'triage' &&
-        conversation.startedBy === 'autopilot'
+        conversation.startedBy === 'autopilot' &&
+        conversation.costUnit === unit
       ) {
         // The run's own cost so far: the Conversation's total less its earlier runs.
-        working += Math.max(0, conversation.costUsd - pending.costAtStart);
+        working += Math.max(0, conversation.cost - pending.costAtStart);
       }
     }
     return (ended?.total ?? 0) + working;
@@ -1637,16 +1832,20 @@ export function createConversations({
    * plus the cost so far of its runs still working. An approved merge and the
    * User's own runs are left out.
    */
-  const autopilotSpendToday = (dayStart: Date): number => {
+  const autopilotSpendToday = (
+    dayStart: Date,
+    unit: CostUnit = 'usd',
+  ): number => {
     const ended = db
       .select({
-        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
       })
       .from(runOutcomes)
       .where(
         and(
           eq(runOutcomes.startedByAutopilot, true),
           ne(runOutcomes.stage, 'merge'),
+          eq(runOutcomes.costUnit, unit),
           gte(runOutcomes.endedAt, dayStart),
         ),
       )
@@ -1654,8 +1853,13 @@ export function createConversations({
     let working = 0;
     for (const id of live.keys()) {
       const pending = live.get(id)?.run.pending;
-      if (pending?.startedByAutopilot && pending.stage !== 'merge') {
-        working += Math.max(0, get(id).costUsd - pending.costAtStart);
+      const conversation = get(id);
+      if (
+        pending?.startedByAutopilot &&
+        pending.stage !== 'merge' &&
+        conversation.costUnit === unit
+      ) {
+        working += Math.max(0, conversation.cost - pending.costAtStart);
       }
     }
     return (ended?.total ?? 0) + working;
@@ -1685,6 +1889,21 @@ export function createConversations({
 
   return {
     get,
+
+    /**
+     * Every Agent kind with whether it can run now, and why not, for the
+     * default selector (ADR 0051).
+     */
+    agentKinds(): ({
+      kind: AgentKind;
+      label: string;
+    } & RunnerAvailability)[] {
+      return agentKinds.map((kind) => ({
+        kind,
+        label: agentKindLabels[kind],
+        ...availabilityOf(kind),
+      }));
+    },
 
     /**
      * The tokens Conversation `id`'s runs used per model, across all its
@@ -1730,19 +1949,20 @@ export function createConversations({
     /**
      * Today's Machine ceiling budget (ADR 0041), the one place that decides
      * "paused": Autopilot's spend since the start of `now`'s local day against
-     * the machine's daily ceiling. Null while no ceiling is set.
+     * the machine's daily ceiling, both in `unit` (ADR 0051). Null while no
+     * ceiling is kept in that unit.
      */
-    machineBudget(
-      now: Date = clock(),
-    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
-      const ceilingUsd = tickets.getMachineSettings().dailySpendCeilingUsd;
-      if (ceilingUsd === null) {
+    machineBudget(now: Date = clock(), unit: CostUnit = 'usd'): Budget | null {
+      const ceiling = dollarCeiling(
+        tickets.getMachineSettings().dailySpendCeilingUsd,
+      )[unit];
+      if (ceiling === null) {
         return null;
       }
       const dayStart = new Date(now);
       dayStart.setHours(0, 0, 0, 0);
-      const spendUsd = autopilotSpendToday(dayStart);
-      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+      const spend = autopilotSpendToday(dayStart, unit);
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
@@ -1754,17 +1974,23 @@ export function createConversations({
     capacity,
 
     /**
-     * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
+     * What Autopilot has spent on a Cycle in `unit`, by default the unit of
+     * the Project's default Agent kind (ADR 0030, ADR 0051, GLOSSARY: Spend
      * ceiling): the total cost of the Conversations it started for that Cycle,
      * resumes included, since a resume adds to its Conversation. A hand-started
      * Conversation counts as started by Autopilot for Autopilot's replies only
      * (ADR 0034): the cost of those runs, on Tickets planned in the Cycle,
      * adds to it. The next Cycle starts again at zero.
      */
-    autopilotSpend(input: { projectId: number; cycleId: number }): number {
+    autopilotSpend(input: {
+      projectId: number;
+      cycleId: number;
+      unit?: CostUnit;
+    }): number {
+      const unit = input.unit ?? defaultUnitOf(input.projectId);
       const started = db
         .select({
-          total: sql<number>`coalesce(sum(${conversations.costUsd}), 0)`,
+          total: sql<number>`coalesce(sum(${conversations.cost}), 0)`,
         })
         .from(conversations)
         .where(
@@ -1772,6 +1998,7 @@ export function createConversations({
             eq(conversations.projectId, input.projectId),
             eq(conversations.startedBy, 'autopilot'),
             eq(conversations.autopilotCycleId, input.cycleId),
+            eq(conversations.costUnit, unit),
           ),
         )
         .get();
@@ -1781,7 +2008,7 @@ export function createConversations({
           ? null
           : db
               .select({
-                total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+                total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
               })
               .from(runOutcomes)
               .innerJoin(
@@ -1793,6 +2020,7 @@ export function createConversations({
                   eq(runOutcomes.projectId, input.projectId),
                   eq(runOutcomes.startedByAutopilot, true),
                   eq(conversations.startedBy, 'user'),
+                  eq(runOutcomes.costUnit, unit),
                   inArray(runOutcomes.ticketNumber, numbers),
                 ),
               )
@@ -1801,7 +2029,7 @@ export function createConversations({
       // `merge` run there, and is not Autopilot's spend (ADR 0038).
       const approvedMerges = db
         .select({
-          total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+          total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
         })
         .from(runOutcomes)
         .innerJoin(
@@ -1815,6 +2043,7 @@ export function createConversations({
             eq(conversations.intent, 'start'),
             eq(conversations.startedBy, 'autopilot'),
             eq(conversations.autopilotCycleId, input.cycleId),
+            eq(runOutcomes.costUnit, unit),
           ),
         )
         .get();
@@ -1829,43 +2058,38 @@ export function createConversations({
     /**
      * A Cycle's Spend ceiling budget (the Project's setting), the one place
      * that decides "paused": Autopilot's spend on the Cycle against the
-     * ceiling. Null while the Project has no Spend ceiling.
+     * ceiling, in the unit of the agent Autopilot would start, the Project's
+     * default (ADR 0051). Null while no Spend ceiling is kept in that unit.
      */
-    spendBudget(input: {
-      projectId: number;
-      cycleId: number;
-    }): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
-      const ceilingUsd = tickets.getProjectAgentSettings(
-        input.projectId,
-      ).spendCeilingUsd;
-      if (ceilingUsd === null) {
+    spendBudget(input: { projectId: number; cycleId: number }): Budget | null {
+      const unit = defaultUnitOf(input.projectId);
+      const ceiling = dollarCeiling(
+        tickets.getProjectAgentSettings(input.projectId).spendCeilingUsd,
+      )[unit];
+      if (ceiling === null) {
         return null;
       }
-      const spendUsd = this.autopilotSpend(input);
-      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+      const spend = this.autopilotSpend({ ...input, unit });
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
      * Today's Auto-triage budget of a Project (ADR 0040), the one place that
      * decides "paused": the spend since the start of `now`'s day against the
-     * Triage ceiling. Null while Auto-triage is off or has no ceiling.
+     * Triage ceiling, in the unit of the Project's default agent (ADR 0051).
+     * Null while Auto-triage is off or has no ceiling in that unit.
      */
-    triageBudget(
-      projectId: number,
-      now: Date = clock(),
-    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+    triageBudget(projectId: number, now: Date = clock()): Budget | null {
       const settings = tickets.getProjectAgentSettings(projectId);
-      if (!settings.autoTriage || settings.triageCeilingUsd === null) {
+      const unit = defaultUnitOf(projectId);
+      const ceiling = dollarCeiling(settings.triageCeilingUsd)[unit];
+      if (!settings.autoTriage || ceiling === null) {
         return null;
       }
       const dayStart = new Date(now);
       dayStart.setHours(0, 0, 0, 0);
-      const spendUsd = autopilotTriageSpend(projectId, dayStart);
-      return {
-        spendUsd,
-        ceilingUsd: settings.triageCeilingUsd,
-        paused: spendUsd >= settings.triageCeilingUsd,
-      };
+      const spend = autopilotTriageSpend(projectId, dayStart, unit);
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
@@ -1931,7 +2155,7 @@ export function createConversations({
         };
         stats.runs += 1;
         stats.results[row.result] += 1;
-        stats.totalCostUsd += row.costUsd;
+        stats.totalCostUsd += row.cost;
         stats.meanDurationMs += row.endedAt.getTime() - row.startedAt.getTime();
         byStage.set(row.stage, stats);
       }
@@ -1943,6 +2167,9 @@ export function createConversations({
     },
 
     startCostEstimate,
+
+    /** The unit of the agent the Project starts runs on by default (ADR 0051). */
+    defaultCostUnit: defaultUnitOf,
 
     /** Conversations of a Project and/or Ticket, newest first. */
     list(filter: ListConversationsFilter = {}): Conversation[] {
@@ -1981,6 +2208,7 @@ export function createConversations({
             permissionRules: conversationEntries.permissionRules,
             toolName: conversationEntries.toolName,
             toolInput: conversationEntries.toolInput,
+            toolActivity: conversationEntries.toolActivity,
             createdAt: conversationEntries.createdAt,
           })
           .from(conversationEntries)
@@ -2005,6 +2233,7 @@ export function createConversations({
               permissionRules: entry.permissionRules,
               toolName: entry.toolName,
               toolInput: entry.toolInput,
+              toolActivity: entry.toolActivity,
             }
           : null;
       // Every run starts with the User's message, so the latest one is the
@@ -2022,7 +2251,8 @@ export function createConversations({
             ticketNumber: conversations.ticketNumber,
             projectId: conversations.projectId,
             state: conversations.state,
-            costUsd: conversations.costUsd,
+            cost: conversations.cost,
+            costUnit: conversations.costUnit,
             createdAt: conversations.createdAt,
             startedBy: conversations.startedBy,
             intent: conversations.intent,
@@ -2042,7 +2272,8 @@ export function createConversations({
               ticketNumber,
               projectId,
               state,
-              costUsd,
+              cost,
+              costUnit,
               createdAt,
               startedBy,
               batchTriageTickets,
@@ -2052,7 +2283,8 @@ export function createConversations({
                 ticketNumber,
                 projectId,
                 state,
-                costUsd: costUsd ?? 0,
+                cost: cost ?? 0,
+                costUnit,
                 startedBy,
                 batchTriageTickets,
                 latest: statusEntryOf(latest.get(id)),
@@ -2186,7 +2418,10 @@ export function createConversations({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         brief: briefOf(id),
         runMode: settings.runMode,
-        model: modelFor(conversation.intent, settings),
+        model: modelFor(
+          conversation.intent,
+          settings.models[conversation.agentKind],
+        ),
       };
     },
 
@@ -2201,13 +2436,7 @@ export function createConversations({
         startedBy: 'user',
         projectId: cycle.projectId,
         intent: 'retro',
-        prompt: retroPrompt(
-          cycle,
-          commandForStage(
-            'retro',
-            tickets.getProjectAgentCommands(cycle.projectId),
-          ),
-        ),
+        stage: { stage: 'retro' },
         retroCycleId: cycle.id,
       });
     },
@@ -2230,10 +2459,7 @@ export function createConversations({
         startedBy: 'user',
         projectId: input.projectId,
         intent: 'plan',
-        prompt: planCommandMessage(
-          goal,
-          tickets.getProjectAgentCommands(input.projectId),
-        ),
+        stage: { stage: 'plan', goal },
       });
     },
 
@@ -2348,7 +2574,7 @@ export function createConversations({
       } else {
         startRun(
           id,
-          message,
+          { text: message },
           conversation.sdkSessionId ?? undefined,
           limited,
           sentBy,
@@ -2422,11 +2648,7 @@ export function createConversations({
         startedBy: 'user',
         ticketNumber: ticket.number,
         intent: 'merge',
-        prompt: agentCommandMessage(
-          'merge',
-          ticket,
-          tickets.getProjectAgentCommands(ticket.projectId),
-        ),
+        stage: { stage: 'merge' },
       });
     },
 
