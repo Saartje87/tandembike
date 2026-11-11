@@ -10,7 +10,7 @@ import { appTickets } from '../../../tickets/app-tickets';
 import { type CostUnit, ceilingsByUnit } from '../../../tickets/cost-unit';
 import { cycleUnitCount } from '../../../tickets/cycle-units';
 import { NotFoundError } from '../../../tickets/errors';
-import { openTicketNumber } from '../../lib/paths';
+import { noBoardFilter, openTicketNumber } from '../../lib/paths';
 
 /**
  * A Board's search parameters: `?ticket=` opens a Ticket (ADR 0013), and
@@ -196,6 +196,8 @@ export function needsYouCountOf(projectId: number): number {
   return boardOf(
     cycleTicketsWithEpics(projectId, active.id),
     conversationActivity(appConversations().activityRows()),
+    noBoardFilter,
+    active.id,
   ).needsYou.count;
 }
 
@@ -207,7 +209,9 @@ export function backlogIntakeCountOf(projectId: number): number {
   return boardOf(
     appTickets('user').listTickets({ projectId, cycleId: null }),
     conversationActivity(appConversations().activityRows()),
-  ).needsYou.intake.length;
+    noBoardFilter,
+    null,
+  ).counts.intake;
 }
 
 /**
@@ -242,23 +246,30 @@ export function ticketPathOf(projectId: number) {
   const backlog = boardOf(
     appTickets('user').listTickets({ projectId, cycleId: null }),
     activity,
+    noBoardFilter,
+    null,
   );
   const cycle = active
-    ? boardOf(cycleTicketsWithEpics(projectId, active.id), activity)
+    ? boardOf(
+        cycleTicketsWithEpics(projectId, active.id),
+        activity,
+        noBoardFilter,
+        active.id,
+      )
     : null;
   return {
-    backlogIntake: backlog.needsYou.intake.length,
+    backlogIntake: backlog.counts.intake,
     activeCycle:
       active && cycle
         ? {
             id: active.id,
             counts: {
-              queued: cycle.queued.length,
-              yourWork: cycle.needsYou.yourWork.length,
-              inFlight: cycle.epics.length + cycle.inFlight.length,
-              actionNeeded: cycle.needsYou.actionNeeded.length,
-              review: cycle.needsYou.review.length,
-              done: cycle.done.length,
+              queued: cycle.counts.queued,
+              yourWork: cycle.counts.yourWork,
+              inFlight: cycle.counts.inFlight,
+              actionNeeded: cycle.counts.actionNeeded,
+              review: cycle.counts.review,
+              done: cycle.counts.done,
             },
           }
         : null,

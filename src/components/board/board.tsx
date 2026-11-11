@@ -38,7 +38,6 @@ import {
 } from 'react';
 
 import { callAction } from '../../app/lib/call-action';
-import { formatCost } from '../../app/lib/format-cost';
 import { modeColors } from '../../app/lib/mode-colors';
 import {
   type BoardFilter,
@@ -73,7 +72,6 @@ import { MoveToCycleMenu } from '../move-to-cycle-menu/move-to-cycle-menu';
 import { NewTicketInline } from '../new-ticket-inline/new-ticket-inline';
 import { tinted } from '../palette/palette.css';
 import { SelectionBar } from '../selection-bar/selection-bar';
-import { formatElapsed } from '../status-line/format-elapsed';
 import { useNow } from '../status-line/use-now';
 import * as styles from './board.css';
 import {
@@ -83,16 +81,21 @@ import {
   ticketMatches,
 } from './board-filter';
 import {
+  archivedLine,
   type BoardTicket,
   boardOf,
+  doneLine,
   type EpicChildState,
   type EpicRow,
-  type InFlightRow,
+  inFlightLine,
   type NeedKind,
   type NeedRow,
-  type QueuedRow,
+  needLine,
+  pullRequestLabel,
+  queuedLine,
+  type ReorderSection,
   rowOf,
-  type TodoRow,
+  yourWorkLine,
 } from './board-of';
 import { isSelectClick, type SelectMode, selectModeOf } from './select-click';
 import { useBoardFilter } from './use-board-filter';
@@ -137,10 +140,6 @@ const sectionIntent = {
   Review: 'info',
 } as const satisfies Record<InProgressSection, string>;
 
-/** A pull request's number from its GitHub URL, such as `#87`. */
-const pullRequestLabel = (url: string) =>
-  `PR #${new URL(url).pathname.split('/')[4]}`;
-
 type PullRequestLinkProps = { url: string };
 
 /** A pull request as a link to it, in small text. */
@@ -182,47 +181,16 @@ const ConversationBell: FC<ConversationBellProps> = ({
   );
 };
 
-/**
- * How a Needs you row shows its kind: its icon, its label, and what it waits
- * on when it has no live Conversation whose line says so.
- */
-const needDisplay: Record<
-  NeedKind,
-  { icon: IconName; label: string; parked?: string }
-> = {
-  waiting: { icon: 'chat-bubble-left-ellipsis', label: 'Waiting' },
-  idle: { icon: 'hand-raised', label: 'Idle' },
-  failed: { icon: 'exclamation-circle', label: 'Failed' },
-  interrupted: { icon: 'pause-circle', label: 'Interrupted' },
-  stalled: {
-    icon: 'exclamation-triangle',
-    label: 'Stalled',
-    parked: 'no Claim and no PR',
-  },
-  review: { icon: 'check-circle', label: 'Review', parked: 'PR open' },
-  intake: { icon: 'inbox', label: 'Intake', parked: 'to triage' },
+/** The icon a Needs you row shows for its kind. */
+const needIcon: Record<NeedKind, IconName> = {
+  waiting: 'chat-bubble-left-ellipsis',
+  idle: 'hand-raised',
+  failed: 'exclamation-circle',
+  interrupted: 'pause-circle',
+  stalled: 'exclamation-triangle',
+  review: 'check-circle',
+  intake: 'inbox',
 };
-
-/** A row's second line: its parts that are there, joined by a dot. */
-const lineOf = (...parts: (string | false | null | undefined)[]) =>
-  parts.filter(Boolean).join(' · ');
-
-/** A Needs you row's second line: what it waits on, and for how long. */
-function needLine(row: NeedRow, waited: string): string {
-  const { label, parked } = needDisplay[row.kind];
-  return lineOf(label, row.live?.line ?? parked, waited);
-}
-
-/** What a blocked Todo row waits on, by its Blockers when it knows them. */
-const blockedByOf = (row: TodoRow): string =>
-  row.blockers.length > 0
-    ? `blocked by ${row.blockers.map((number) => `T${number}`).join(', ')}`
-    : 'blocked';
-
-/** A queued row's second line: its place, and what blocks it. */
-function queuedLine(row: QueuedRow, index: number): string {
-  return lineOf(`Queued #${index + 1}`, row.blocked && blockedByOf(row));
-}
 
 const countPrefix = /^\(\d+\) /;
 
@@ -396,9 +364,6 @@ const TicketRow: FC<TicketRowProps> = ({
     </Box>
   );
 };
-
-/** The sections whose rows a drag orders, each among its own rows. */
-type ReorderSection = 'Queued' | 'Your work' | 'Intake';
 
 type Sortable = { section: ReorderSection; index: number };
 
@@ -728,24 +693,6 @@ const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
 };
 
 /**
- * An In flight row's second line: its live line and run time, or, for a
- * claimed Ticket with no live run (such as one worked in a terminal), that.
- */
-function inFlightLine(row: InFlightRow, now: number): string {
-  // A Terminal run shows elapsed time only, even when a UI run spent before
-  // the hand-off (ADR 0039).
-  const cost =
-    !row.live?.terminal && row.cost > 0 && formatCost(row.cost, 'usd');
-  return row.live
-    ? lineOf(
-        row.live.line,
-        formatElapsed(now - new Date(row.live.since).getTime()),
-        cost,
-      )
-    : lineOf('Claimed, no live run', cost);
-}
-
-/**
  * A Project's Board: a Cycle's or the Backlog's Tickets in one column, by
  * what needs the User first. The header shows the Cycle's progress and the Start runs
  * working; Needs you shows what waits on the User on this Board (Action
@@ -796,7 +743,7 @@ export const Board: FC<BoardProps> = ({
   // The Board filter narrows every section and its counts; only the tab and
   // the browser title keep the full Needs you count.
   const view = {
-    ...boardOf(shownTickets, { live, cost }, filter),
+    ...boardOf(shownTickets, { live, cost }, filter, cycleId),
     archived: isFiltering(filter)
       ? archived.filter((ticket) => ticketMatches(ticket, filter))
       : archived,
@@ -806,50 +753,18 @@ export const Board: FC<BoardProps> = ({
   ].sort();
   const hrefOf = (number: number) =>
     ticketOnBoardPath(boardPath, number, filter);
-  const age = (date: Date) => formatElapsed(now - date.getTime());
   const { done, total } = view.progress;
   const hideEmpty = (count: number) => planning && count === 0;
-  const { needsYou } = view;
+  const { needsYou, counts, todoOrder, reorderScopes } = view;
   // Needs you shows while it has rows, though a blocked one is not counted.
-  const needsYouRows =
-    needsYou.actionNeeded.length +
-    needsYou.review.length +
-    needsYou.yourWork.length +
-    needsYou.intake.length;
-  const inFlightCount = view.epics.length + view.inFlight.length;
+  const { needsYouRows, inFlight: inFlightCount } = counts;
   useCountInTitle(needsYou.total);
-
-  /** The Todo Tickets this Cycle orders, over all three sections, in order. */
-  const todoLane = shownTickets
-    .filter(
-      (ticket) =>
-        ticket.status === 'Todo' &&
-        !ticket.archived &&
-        (ticket.type !== 'Epic' || (ticket.cycle?.id ?? null) === cycleId),
-    )
-    .sort(
-      (left, right) =>
-        left.position - right.position || left.number - right.number,
-    )
-    .map(({ number }) => number);
-  /** The rows of a section that a drag orders, in the order shown. */
-  const sectionNumbers: Record<ReorderSection, number[]> = {
-    Queued: view.queued.map(({ number }) => number),
-    'Your work': needsYou.yourWork.map(({ number }) => number),
-    Intake: needsYou.intake.map(({ number }) => number),
-  };
-  // An Epic of another Cycle shown here is not ordered by this Cycle.
-  for (const section of Object.keys(sectionNumbers) as ReorderSection[]) {
-    sectionNumbers[section] = sectionNumbers[section].filter((number) =>
-      todoLane.includes(number),
-    );
-  }
 
   const sortableIn = (
     section: ReorderSection,
     number: number,
   ): Sortable | undefined => {
-    const index = sectionNumbers[section].indexOf(number);
+    const index = reorderScopes[section].indexOf(number);
     return index < 0 ? undefined : { section, index };
   };
 
@@ -862,7 +777,7 @@ export const Board: FC<BoardProps> = ({
     if (selection.length < 2 || !selection.includes(source)) {
       return [source];
     }
-    const numbers = sectionNumbers[section];
+    const numbers = reorderScopes[section];
     return selection.every((number) => numbers.includes(number))
       ? numbers.filter((number) => selection.includes(number))
       : undefined;
@@ -912,7 +827,7 @@ export const Board: FC<BoardProps> = ({
     if (dragSectionOf(target) !== section) {
       return;
     }
-    const numbers = sectionNumbers[section];
+    const numbers = reorderScopes[section];
     const sourceNumber = Number(source.id);
     const carried = carriedBy(sourceNumber, section);
     const from = numbers.indexOf(sourceNumber);
@@ -927,13 +842,13 @@ export const Board: FC<BoardProps> = ({
     }
     if (carried.length > 1) {
       const { laneOrder } = filteredSelectionDrop(
-        todoLane,
+        todoOrder,
         numbers,
         carried,
         sourceNumber,
         numbers[to],
       );
-      if (laneOrder.some((number, index) => number !== todoLane[index])) {
+      if (laneOrder.some((number, index) => number !== todoOrder[index])) {
         saveOrder(laneOrder);
       }
       return;
@@ -942,7 +857,7 @@ export const Board: FC<BoardProps> = ({
     moved.splice(from, 1);
     moved.splice(to, 0, sourceNumber);
     // The Todo Tickets of the other sections keep their places around it.
-    saveOrder(mergeLaneOrder(todoLane, moved, [sourceNumber]));
+    saveOrder(mergeLaneOrder(todoOrder, moved, [sourceNumber]));
   };
 
   // The rows that can be selected, by list, in the order shown. An Epic's row
@@ -977,8 +892,8 @@ export const Board: FC<BoardProps> = ({
         sortable={sortableIn('Intake', row.number)}
         ticket={row}
         href={hrefOf(row.number)}
-        icon={needDisplay[row.kind].icon}
-        line={needLine(row, age(row.since))}
+        icon={needIcon[row.kind]}
+        line={needLine(row, now)}
         {...epicParts(
           row,
           board,
@@ -1066,34 +981,34 @@ export const Board: FC<BoardProps> = ({
                 </Text>
               ) : (
                 <Stack gap={3}>
-                  {needsYou.actionNeeded.length > 0 && (
+                  {counts.actionNeeded > 0 && (
                     <RowList
                       title="Action needed"
                       empty={emptyText.actionNeeded}
                       id="action-needed"
-                      count={needsYou.actionNeeded.length}
+                      count={counts.actionNeeded}
                       open
                     >
                       {needRows(needsYou.actionNeeded, 'actionNeeded')}
                     </RowList>
                   )}
-                  {needsYou.review.length > 0 && (
+                  {counts.review > 0 && (
                     <RowList
                       title="Review"
                       empty={emptyText.review}
                       id="review"
-                      count={needsYou.review.length}
+                      count={counts.review}
                       open
                     >
                       {needRows(needsYou.review, 'review')}
                     </RowList>
                   )}
-                  {needsYou.yourWork.length > 0 && (
+                  {counts.yourWork > 0 && (
                     <RowList
                       title="Your work"
                       empty={emptyText.yourWork}
                       id="your-work"
-                      count={needsYou.yourWork.length}
+                      count={counts.yourWork}
                       open
                     >
                       {needsYou.yourWork.map((row) => (
@@ -1109,10 +1024,7 @@ export const Board: FC<BoardProps> = ({
                               ? undefined
                               : selectable(row.number, 'yourWork')
                           }
-                          line={lineOf(
-                            `ready-for-human · for ${age(row.updatedAt)}`,
-                            row.blocked && blockedByOf(row),
-                          )}
+                          line={yourWorkLine(row, now)}
                           end={
                             row.blocked ? (
                               <Tag intent="warning">Blocked</Tag>
@@ -1124,12 +1036,12 @@ export const Board: FC<BoardProps> = ({
                       ))}
                     </RowList>
                   )}
-                  {needsYou.intake.length > 0 && (
+                  {counts.intake > 0 && (
                     <RowList
                       title="Intake"
                       empty={emptyText.intake}
                       id="intake"
-                      count={needsYou.intake.length}
+                      count={counts.intake}
                       open
                     >
                       {needRows(needsYou.intake, 'intake')}
@@ -1218,12 +1130,12 @@ export const Board: FC<BoardProps> = ({
           </Stack>
         )}
         <Stack gap={2}>
-          {!hideEmpty(view.queued.length) && (
+          {!hideEmpty(counts.queued) && (
             <RowList
               title="Queued"
               empty={emptyText.queued}
               id="queued"
-              count={view.queued.length}
+              count={counts.queued}
               open={planning}
             >
               {view.queued.map((row, index) => (
@@ -1252,12 +1164,12 @@ export const Board: FC<BoardProps> = ({
               ))}
             </RowList>
           )}
-          {!hideEmpty(view.done.length) && (
+          {!hideEmpty(counts.done) && (
             <RowList
               title="Done"
               empty={emptyText.done}
               id="done"
-              count={view.done.length}
+              count={counts.done}
             >
               {view.done.map((row) => (
                 <TicketRow
@@ -1270,11 +1182,7 @@ export const Board: FC<BoardProps> = ({
                   selection={
                     row.children ? undefined : selectable(row.number, 'done')
                   }
-                  line={lineOf(
-                    `Done ${age(row.updatedAt)} ago`,
-                    row.pullRequest && pullRequestLabel(row.pullRequest),
-                    row.cost > 0 && formatCost(row.cost, 'usd'),
-                  )}
+                  line={doneLine(row, now)}
                   end={<Tag intent="success">Done</Tag>}
                 />
               ))}
@@ -1294,7 +1202,7 @@ export const Board: FC<BoardProps> = ({
                   ticket={rowOf(ticket)}
                   href={hrefOf(ticket.number)}
                   icon="archive-box"
-                  line={`Archived · ${ticket.type === 'Epic' ? 'Epic' : 'Ticket'} · ${age(ticket.updatedAt)} ago`}
+                  line={archivedLine(ticket, now)}
                 />
               ))}
             </RowList>
