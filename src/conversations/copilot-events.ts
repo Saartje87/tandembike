@@ -4,6 +4,7 @@ import {
   isTransientCopilotError,
 } from './copilot-run-error';
 import { copilotToolActivity } from './copilot-tool-activity';
+import { copilotWidgetToolNames } from './copilot-widget-tools';
 import { createdNumbers } from './created-numbers';
 
 const maxToolTextLength = 300;
@@ -53,13 +54,7 @@ const recordOf = (value: unknown): Record<string, unknown> =>
  * Tools whose call the chat shows as something else: the Widget tools as
  * their Widget, and Copilot's `ask_user` as its question.
  */
-const shownElsewhere = new Set([
-  'ask_user',
-  'ask_choice',
-  'ask_rank',
-  'ask_matrix',
-  'ask_scale',
-]);
+const shownElsewhere = new Set(['ask_user', ...copilotWidgetToolNames]);
 
 const isFileTickets = (data: Data) =>
   data.mcpServerName === 'tandembike' && data.mcpToolName === 'file_tickets';

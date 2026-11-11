@@ -5,6 +5,7 @@ import type {
 
 import type { RunOptions } from './agent-runner';
 import { copilotPermissionHandler } from './copilot-permissions';
+import { copilotWidgetTools } from './copilot-widget-tools';
 
 /** Copilot's own GitHub MCP server, which a Tandembike run does without (ADR 0051). */
 const githubMcpServer = 'github-mcp-server';
@@ -35,6 +36,10 @@ export function copilotSessionConfig(
       },
     },
     disabledMcpServers: [githubMcpServer],
+    // The Playbook as a plugin: its skills run as /tandembike:<skill>, as on
+    // Claude Code (ADR 0032, ADR 0051).
+    pluginDirectories: options.plugins.map(({ path }) => path),
+    tools: copilotWidgetTools(options.askWidget),
     systemMessage: { mode: 'append', content: options.systemPrompt },
     ...(options.model === undefined ? {} : { model: options.model }),
     // Never Copilot's autopilot loop or approve-all: every request the User

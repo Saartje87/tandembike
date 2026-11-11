@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { agentCommands } from '../test/fixtures';
 import { noAgentCommands } from '../tickets/agent-commands';
-import type { RunEvent, RunOptions } from './agent-runner';
+import type { RunEvent, RunOptions, StageInvocation } from './agent-runner';
+import type { Widget } from './widget';
 
 type Handler = (event: { type: string; data: Record<string, unknown> }) => void;
 
@@ -233,6 +235,132 @@ describe('The Copilot runner', () => {
     expect(events).toEqual([
       { type: 'exit', error: 'fetch failed', transient: true },
     ]);
+  });
+
+  describe('the Playbook (ADR 0051)', () => {
+    it('loads the Playbook as a plugin, so its namespaced commands run', async () => {
+      startRun();
+      await settle();
+
+      expect(sdk.sessions[0].config.pluginDirectories).toEqual([
+        '/app/playbook',
+      ]);
+    });
+
+    it.each<[StageInvocation, string]>([
+      [
+        { stage: 'start', ticket: { number: 42, type: 'Ticket' } },
+        '/tandembike:implement T42',
+      ],
+      [
+        { stage: 'start', ticket: { number: 42, type: 'Epic' } },
+        '/tandembike:implement-epic T42',
+      ],
+      [
+        { stage: 'triage', ticket: { number: 7, type: 'Ticket' } },
+        '/tandembike:triage T7',
+      ],
+      [
+        { stage: 'spec', ticket: { number: 5, type: 'Ticket' } },
+        '/tandembike:spec T5',
+      ],
+      [
+        { stage: 'merge', ticket: { number: 9, type: 'Ticket' } },
+        '/tandembike:merge T9',
+      ],
+      [
+        { stage: 'retro', cycle: { id: 3, title: 'Beta' } },
+        '/tandembike:retro "Beta" (Cycle 3)',
+      ],
+      [{ stage: 'plan', goal: 'Ship it' }, '/tandembike:plan Ship it'],
+      [
+        { stage: 'spar', topic: 'Faster triage', focusTicketNumber: 42 },
+        '/tandembike:spar "Faster triage" T42',
+      ],
+    ])(
+      "sends a Stage as the Playbook's command, whatever the Project's overrides: %o",
+      async (invocation, text) => {
+        const { runner } = startRun({
+          message: { invocation },
+          agentCommands: agentCommands({
+            startCommand: '/ship',
+            startEpicCommand: '/ship-epic',
+            triageCommand: '/sort',
+            specCommand: '/spec-it',
+            mergeCommand: '/land',
+            retroCommand: '/look-back',
+            planCommand: '/plan-it',
+            sparCommand: '/think',
+          }),
+        });
+        await settle();
+
+        expect(sdk.sessions[0].sent).toEqual([text]);
+        expect(runner.invocationText(invocation, agentCommands())).toBe(text);
+      },
+    );
+  });
+
+  describe('the Widget tools (ADR 0045)', () => {
+    type FakeTool = {
+      name: string;
+      description: string;
+      skipPermission: boolean;
+      handler(args: unknown): Promise<unknown>;
+    };
+    const toolsOf = async (askWidget: RunOptions['askWidget']) => {
+      startRun({ askWidget });
+      await settle();
+      return sdk.sessions[0].config.tools as FakeTool[];
+    };
+
+    it('serves ask_choice, ask_rank, ask_matrix and ask_scale as tools that need no permission', async () => {
+      const tools = await toolsOf(async () => ({ expired: true }));
+
+      expect(tools.map(({ name }) => name).sort()).toEqual([
+        'ask_choice',
+        'ask_matrix',
+        'ask_rank',
+        'ask_scale',
+      ]);
+      expect(tools.every(({ skipPermission }) => skipPermission)).toBe(true);
+      expect(tools.every(({ description }) => description !== '')).toBe(true);
+    });
+
+    it("asks the User the Widget and answers the tool with the User's answer as JSON", async () => {
+      const asked: Widget[] = [];
+      const tools = await toolsOf(async (widget) => {
+        asked.push(widget);
+        return { selected: ['B'] };
+      });
+      const choice = tools.find(({ name }) => name === 'ask_choice');
+
+      const result = await choice?.handler({
+        prompt: 'Which?',
+        options: [{ label: 'A' }, { label: 'B' }],
+      });
+
+      expect(asked).toEqual([
+        {
+          kind: 'choice',
+          prompt: 'Which?',
+          options: [{ label: 'A' }, { label: 'B' }],
+          multiSelect: false,
+        },
+      ]);
+      expect(result).toBe('{"selected":["B"]}');
+    });
+
+    it('refuses input that does not fit the tool, without asking the User', async () => {
+      const askWidget = vi.fn(async () => ({ expired: true }) as const);
+      const tools = await toolsOf(askWidget);
+      const choice = tools.find(({ name }) => name === 'ask_choice');
+
+      const result = await choice?.handler({ prompt: 'Which?', options: [] });
+
+      expect(askWidget).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ resultType: 'failure' });
+    });
   });
 
   describe('maps session events to run events', () => {
