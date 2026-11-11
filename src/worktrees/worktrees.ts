@@ -143,6 +143,9 @@ export function createWorktrees({
 }): Worktrees {
   // The same data folder however it was written, relative or with a trailing slash.
   const ownerFolder = resolve(owner);
+  // `root` is only known at runtime and lies outside the project, so the
+  // turbopackIgnore comments below keep `next build` from tracing the whole
+  // project into the server output.
   return {
     async create({ repositoryPath, projectId, conversationId }) {
       const detection = detectRepository(repositoryPath);
@@ -152,7 +155,11 @@ export function createWorktrees({
       if (detection.defaultBranch === null) {
         throw new Error('The repository has no default branch to start from.');
       }
-      const path = join(root, String(projectId), `c${conversationId}`);
+      const path = join(
+        /*turbopackIgnore: true*/ root,
+        String(projectId),
+        `c${conversationId}`,
+      );
       let base = detection.defaultBranch;
       if (detection.remote !== null) {
         await git(repositoryPath, ['fetch', 'origin']);
@@ -212,10 +219,10 @@ export function createWorktrees({
 
     async list() {
       const found: ListedWorktree[] = [];
-      if (!existsSync(root)) {
+      if (!existsSync(/*turbopackIgnore: true*/ root)) {
         return found;
       }
-      for (const project of readdirSync(root)) {
+      for (const project of readdirSync(/*turbopackIgnore: true*/ root)) {
         if (!/^\d+$/.test(project)) {
           continue;
         }
