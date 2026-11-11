@@ -6,7 +6,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // The SDK spawns its own Claude Code binary relative to its package files.
-  serverExternalPackages: ['@anthropic-ai/claude-agent-sdk'],
+  // The Copilot SDK spawns its bundled runtime from its platform package.
+  serverExternalPackages: [
+    '@anthropic-ai/claude-agent-sdk',
+    '@github/copilot-sdk',
+  ],
   experimental: {
     serverActions: {
       // A 10 MB Attachment plus form overhead; the Tickets module enforces 10 MB.

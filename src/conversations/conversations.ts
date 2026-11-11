@@ -417,6 +417,11 @@ export function createConversations({
       reason: `${agentKindLabels[kind]} cannot run here yet.`,
     };
 
+  /** Refreshes whether `kind` can run, for a caller about to start it. */
+  const checkAvailability = async (kind: AgentKind): Promise<void> => {
+    await runners[kind]?.checkAvailability?.();
+  };
+
   /** The unit `kind` reports cost in; dollars for a kind with no runner. */
   const costUnitOf = (kind: AgentKind): CostUnit =>
     runners[kind]?.capabilities.costUnit ?? 'usd';
@@ -1332,6 +1337,7 @@ export function createConversations({
     // Every start takes the Project's default (ADR 0051); a kind that
     // cannot run is refused here, before anything is stored.
     const agentKind = settings.defaultAgentKind;
+    await checkAvailability(agentKind);
     const runner = runnerOf(agentKind);
     const message: RunMessage =
       input.stage === undefined
@@ -1894,10 +1900,13 @@ export function createConversations({
      * Every Agent kind with whether it can run now, and why not, for the
      * default selector (ADR 0051).
      */
-    agentKinds(): ({
-      kind: AgentKind;
-      label: string;
-    } & RunnerAvailability)[] {
+    async agentKinds(): Promise<
+      ({
+        kind: AgentKind;
+        label: string;
+      } & RunnerAvailability)[]
+    > {
+      await Promise.all(agentKinds.map(checkAvailability));
       return agentKinds.map((kind) => ({
         kind,
         label: agentKindLabels[kind],
@@ -2393,6 +2402,13 @@ export function createConversations({
       if (conversation.hidden) {
         throw new NotAllowedError('This Conversation is closed.');
       }
+      // `tandembike resume` runs `claude`, so it continues Claude Code's
+      // sessions only (ADR 0039, ADR 0051).
+      if (conversation.agentKind !== 'claude-code') {
+        throw new NotAllowedError(
+          'Only a Claude Code Conversation can continue in a terminal.',
+        );
+      }
       if (conversation.sdkSessionId === null) {
         throw new NotAllowedError(
           'This Conversation has no session to continue yet.',
@@ -2572,6 +2588,7 @@ export function createConversations({
         );
         return get(id);
       } else {
+        await checkAvailability(conversation.agentKind);
         startRun(
           id,
           { text: message },

@@ -184,8 +184,17 @@ export type RunnerAvailability =
  * Tandembike's terms into its agent's own, and says what it can do.
  */
 export type AgentRunner = {
-  /** Whether it can run now; Claude Code always can. */
+  /**
+   * Whether it can run now, at once: the last answer it has, which it may
+   * refresh in the background. Claude Code always can.
+   */
   availability(): RunnerAvailability;
+  /**
+   * Refreshes the answer `availability()` gives and resolves with it, for a
+   * caller that can wait, such as a start; left out when the answer never
+   * changes.
+   */
+  checkAvailability?(): Promise<RunnerAvailability>;
   capabilities: RunnerCapabilities;
   /**
    * The text its first message sends for a Stage, which the transcript

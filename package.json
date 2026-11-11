@@ -23,6 +23,7 @@
     "@blockle/blocks-theme-momotaro": "^7.3.2",
     "@dnd-kit/dom": "^0.5.1",
     "@dnd-kit/react": "^0.5.1",
+    "@github/copilot-sdk": "1.0.31",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@vanilla-extract/css": "^1.21.3",
     "better-sqlite3": "^13.0.3",
