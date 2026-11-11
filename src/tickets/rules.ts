@@ -89,3 +89,15 @@ export function eachOrNone<Result>(
   }
   return results;
 }
+
+export const maxDescriptionLength = 50_000;
+
+export const maxCommentLength = 50_000;
+
+export const maxOverrideLength = 10_000;
+
+export const maxLabelLength = 50;
+
+export const maxAcceptanceCriterionLength = 500;
+
+export const maxAcceptanceCriteria = 100;

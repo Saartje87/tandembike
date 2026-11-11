@@ -12,6 +12,7 @@ import {
 } from '../db/schema';
 import type { ActivityChange } from './activity-change';
 import { resolvedBlockerSql } from './blocker-sql';
+import type { TicketRowContext } from './ticket-row-context';
 import type { Project } from './tickets';
 
 /** One Project's figures on the Stats page (see `GLOSSARY.md`). */
@@ -200,7 +201,7 @@ function totalOf(rows: readonly ProjectStats[]): StatsTotal {
   return total;
 }
 
-export function createStats(db: DatabaseConnection) {
+export function createStats({ db }: TicketRowContext) {
   return {
     /**
      * Every non-archived Project's figures side by side, with their total.

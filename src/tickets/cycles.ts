@@ -2,10 +2,9 @@ import { and, asc, eq, inArray, ne, or } from 'drizzle-orm';
 
 import type { DatabaseConnection } from '../db/connection';
 import { cycles, cycleTickets, projects, tickets } from '../db/schema';
-import { type Actor, recordActivity } from './activity';
+import { recordActivity } from './activity';
 import type { ActivityCycle } from './activity-change';
 import { checkProjectWritable } from './archived-projects';
-import type { ChangeChannel } from './changes';
 import type { CycleState } from './cycle-state';
 import {
   type BatchFailure,
@@ -15,6 +14,7 @@ import {
 } from './errors';
 import { checkBatchNumbers, checkTitle, throwFieldErrors } from './rules';
 import type { Status } from './status';
+import type { TicketRowContext } from './ticket-row-context';
 
 /** A goal-led plan within one Project (ADR 0010). */
 export type Cycle = {
@@ -417,11 +417,7 @@ export function leaveAllCycles(
  * The Tickets module's Cycle functions, spread into `createTickets`: they
  * share its database, change channel and actor.
  */
-export function createCycles(
-  db: DatabaseConnection,
-  changes: ChangeChannel,
-  actor: Actor,
-) {
+export function createCycles({ db, changes, actor }: TicketRowContext) {
   function cycleRow(id: number): CycleRow {
     const cycle = db
       .select(cycleColumns)
