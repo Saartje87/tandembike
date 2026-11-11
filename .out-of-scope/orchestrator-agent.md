@@ -18,7 +18,7 @@ An Epic runs its children one after another in one run. That usually takes 20 to
 
 ### (c) Collisions between parallel runs
 
-At least 8 migration-number collisions on 8 and 9 November, all from `implement-spec`'s parallel implementers (T1091, T1193, T1197), and none since T1162 and T1282. About 4% of PRs needed a merge from `main` to catch up, which the merge steps already handle.
+At least 8 migration-number collisions on 8 and 9 November, all from `implement-spec`'s parallel implementers (T1091, T1193, T1197), and none since T1162 and T1282. About 4% of PRs needed a merge from `main` to catch up.
 
 ## When to revisit
 
