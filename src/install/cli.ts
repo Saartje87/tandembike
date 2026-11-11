@@ -19,6 +19,7 @@ import {
 } from './install';
 import {
   findServerUrl,
+  isLocalUrl,
   lastLines,
   liveRecord,
   logTailLines,
@@ -125,10 +126,12 @@ async function runCommand(parsed: RunnableCommand): Promise<number> {
       return showLogs(parsed.follow);
     case 'mcp':
       await firstRunSteps({ offers: false });
+      console.log(`Tandembike data: ${home}`);
       if (await offerMcp()) markMcpOffered();
       return 0;
     case 'plugin':
       await firstRunSteps({ offers: false });
+      console.log(`Tandembike data: ${home}`);
       if (await offerPlugin()) markOffersMade(home, 'plugin');
       return 0;
     case 'triage':
@@ -243,13 +246,21 @@ function readRecord(): ServerRecord | null {
   }
 }
 
+/**
+ * Whether `pid` is still the server `start` spawned: alive and running
+ * `server.ts`, so a pid the system reused after a crash or reboot is not
+ * taken for it (and never signalled).
+ */
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
+    if ((error as NodeJS.ErrnoException).code !== 'EPERM') return false;
   }
+  const ps = spawnSync('ps', ['-o', 'command=', '-p', String(pid)], {
+    encoding: 'utf8',
+  });
+  return ps.status === 0 && ps.stdout.includes('server.ts');
 }
 
 const serverEnv = (): NodeJS.ProcessEnv => ({
@@ -368,7 +379,8 @@ async function showLogs(follow: boolean): Promise<number> {
  */
 async function ensureServer(): Promise<boolean> {
   const state = await serverState(serverEffects);
-  if (state.state !== 'stopped') return true;
+  // A server on another host is not ours to start: the call reports it down.
+  if (state.state !== 'stopped' || !isLocalUrl(state.url)) return true;
   const exitCode = await startServer(serverEffects, {
     port: Number(new URL(state.url).port) || null,
     automatic: true,

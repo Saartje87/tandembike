@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   findServerUrl,
+  isLocalUrl,
   lastLines,
   logRollBytes,
   restartServer,
@@ -133,6 +134,16 @@ describe('findServerUrl', () => {
     );
     expect(findServerUrl(undefined, record)).toBe('http://localhost:4848');
     expect(findServerUrl(undefined, null)).toBe('http://localhost:4747');
+  });
+});
+
+describe('isLocalUrl', () => {
+  it('is true only for this machine, which the automatic start can serve', () => {
+    expect(isLocalUrl('http://localhost:4747')).toBe(true);
+    expect(isLocalUrl('http://127.0.0.1:1')).toBe(true);
+    expect(isLocalUrl('http://[::1]:4747')).toBe(true);
+    expect(isLocalUrl('http://tandembike.example:4747')).toBe(false);
+    expect(isLocalUrl('http://10.0.0.5:4747')).toBe(false);
   });
 });
 

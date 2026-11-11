@@ -1,11 +1,14 @@
 import { type LiveMap, placementOf } from '../tickets/ticket-lanes';
 import type { FindTicketsInput, Ticket, Tickets } from '../tickets/tickets';
-import { isTriageStateLabel, readyForAgent } from '../tickets/triage-labels';
-
-const needsTriage = 'needs-triage';
-
+import {
+  isTriageStateLabel,
+  readyForAgent,
+  type TriageStateLabel,
+} from '../tickets/triage-labels';
 import { isTerminal } from './conversation-state';
 import type { Conversation } from './conversations';
+
+const needsTriage: TriageStateLabel = 'needs-triage';
 
 /**
  * What the `tandembike` wizard lists for each action (T1357, ADR 0052): the
@@ -157,11 +160,17 @@ function resumeChoices(
     .map((c) => ({
       conversationId: c.id,
       ticketNumber: c.ticketNumber,
-      title:
-        c.ticketNumber === null
-          ? c.intent
-          : tickets.getTicket(c.ticketNumber).title,
+      title: titleOf(c),
     }));
+  /** Its Ticket's title; its intent without a Ticket, or when it is gone. */
+  function titleOf(c: Conversation): string {
+    if (c.ticketNumber === null) return c.intent;
+    try {
+      return tickets.getTicket(c.ticketNumber).title;
+    } catch {
+      return c.intent;
+    }
+  }
 }
 
 /** What the wizard lists for an intent: Conversations to resume, else Tickets. */

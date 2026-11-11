@@ -1,3 +1,4 @@
+import { isLoopbackAddress } from '../http/loopback-address';
 import { appPort } from '../http/server-port';
 
 /**
@@ -65,6 +66,15 @@ export function findServerUrl(
 ): string {
   if (envUrl) return envUrl.replace(/\/+$/, '');
   return localUrl(record?.port ?? appPort);
+}
+
+/**
+ * Whether `url` names this machine: only then can the automatic start serve
+ * it (a `TANDEMBIKE_URL` naming another host is never started here).
+ */
+export function isLocalUrl(url: string): boolean {
+  const host = new URL(url).hostname.replace(/^\[|\]$/g, '');
+  return host === 'localhost' || isLoopbackAddress(host);
 }
 
 /** The recorded server, after removing a `server.json` whose pid is gone. */
