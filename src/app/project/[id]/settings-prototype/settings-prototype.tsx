@@ -8,6 +8,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type FC, useEffect } from 'react';
 
 import { usePrototypeState } from './prototype-state';
+import { VariantD } from './prototype-variant-d';
 import { VariantA, VariantB, VariantC } from './prototype-variants';
 import * as styles from './settings-prototype.css';
 
@@ -15,6 +16,7 @@ const variants = [
   { key: 'A', name: 'Side nav, open sections', Component: VariantA },
   { key: 'B', name: 'Chip nav, cards', Component: VariantB },
   { key: 'C', name: 'Side nav, label | control rows', Component: VariantC },
+  { key: 'D', name: 'Tabs, a card per tab', Component: VariantD },
 ];
 
 export const SettingsPrototype: FC = () => {
@@ -86,6 +88,17 @@ export const SettingsPrototype: FC = () => {
             >
               {state.hasRepository ? 'Clear repository' : 'Set repository'}
             </Button>
+            {current.key === 'D' && (
+              <Button
+                type="button"
+                size="small"
+                variant="outline"
+                intent="inherit"
+                onClick={state.toggleMarker}
+              >
+                {state.marker === 'dot' ? 'Marker: dot' : 'Marker: pencil'}
+              </Button>
+            )}
           </Inline>
         </div>
       )}

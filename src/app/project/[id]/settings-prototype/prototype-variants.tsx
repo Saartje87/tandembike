@@ -51,11 +51,11 @@ type FieldProps = {
   disabled: boolean;
 };
 
-const lockedOf = (section: Section, state: PrototypeState) =>
+export const lockedOf = (section: Section, state: PrototypeState) =>
   section.needsRepository === true && !state.hasRepository;
 
 /** References as prefix → URL rows, the same in every variant. */
-const ReferenceRows: FC<VariantProps> = ({ state }) => {
+export const ReferenceRows: FC<VariantProps> = ({ state }) => {
   const section = sections.find(({ id }) => id === 'references');
   const fields = section?.groups[0].fields ?? [];
   const pairs = [fields.slice(0, 2), fields.slice(2, 4)];
@@ -83,7 +83,7 @@ const ReferenceRows: FC<VariantProps> = ({ state }) => {
 
 // ---------------------------------------------------------------- Variant A
 
-const StackedField: FC<FieldProps> = ({ field, state, disabled }) => {
+export const StackedField: FC<FieldProps> = ({ field, state, disabled }) => {
   const id = useId();
   if (field.kind === 'switch') {
     const on = state.draft[field.key] === true;

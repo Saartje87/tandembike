@@ -319,6 +319,7 @@ export function usePrototypeState() {
   const [saving, setSaving] = useState<SectionId | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [setupOffer, setSetupOffer] = useState<string | null>(null);
+  const [marker, setMarker] = useState<'dot' | 'pencil'>('dot');
 
   const hasRepository = String(saved.repositoryPath).trim() !== '';
 
@@ -382,6 +383,8 @@ export function usePrototypeState() {
     save,
     discard,
     dismissSetup: () => setSetupOffer(null),
+    marker,
+    toggleMarker: () => setMarker((m) => (m === 'dot' ? 'pencil' : 'dot')),
     toggleRepository,
   };
 }
