@@ -22,7 +22,10 @@ PROJECTS = os.path.expanduser("~/.claude/projects")
 
 
 def first_request(folder):
-    path = glob.glob(os.path.join(PROJECTS, folder, "*.jsonl"))[0]
+    paths = glob.glob(os.path.join(PROJECTS, folder, "*.jsonl"))
+    if len(paths) != 1:
+        sys.exit(f"{folder}: expected one session log, found {len(paths)}")
+    path = paths[0]
     shape, blobs, request, usage = None, {}, None, None
     for line in open(path):
         entry = json.loads(line)
@@ -40,7 +43,10 @@ def first_request(folder):
     blocks += [(f"system[{i}]", b["text"]) for i, b in enumerate(shape["system"])]
     for k, digest in enumerate(request["tail"]):
         message = blobs[digest]
-        for j, part in enumerate(message["content"]):
+        content = message["content"]
+        if isinstance(content, str):
+            content = [{"text": content}]
+        for j, part in enumerate(content):
             text = part.get("text", json.dumps(part))
             blocks.append((f"messages[{k}] {message['role']} [{j}]", text))
     return blocks, request["cacheControl"], usage
@@ -56,6 +62,8 @@ def first_difference(a, b):
 def main(folder_a, folder_b):
     a, breakpoints, usage_a = first_request(folder_a)
     b, _, usage_b = first_request(folder_b)
+    if len(a) != len(b):
+        print(f"warning: {len(a)} blocks against {len(b)}; extra blocks are not compared")
     print("cache breakpoints:", [c["path"] for c in breakpoints])
     for label, usage in (("A", usage_a), ("B", usage_b)):
         print(
