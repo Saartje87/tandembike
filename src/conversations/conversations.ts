@@ -612,11 +612,11 @@ export function createConversations({
     }
   };
 
-  /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
   /** The note of a run that runs in default mode instead of `wanted`. */
   const runModeFallbackNote = (kind: AgentKind, wanted: AgentRunMode) =>
     `${agentKindLabels[kind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`;
 
+  /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
   const noteOnce = (id: number, text: string) => {
     const noted = db
       .select({ id: conversationEntries.id })

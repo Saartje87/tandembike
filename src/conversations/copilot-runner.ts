@@ -3,6 +3,7 @@ import type { CopilotClient, CopilotSession } from '@github/copilot-sdk';
 import { noAgentCommands } from '../tickets/agent-commands';
 import type {
   AgentRunner,
+  RunEvent,
   RunnerAvailability,
   RunnerCapabilities,
   StageInvocation,
@@ -123,25 +124,31 @@ export function createCopilotRunner({
       const state = copilotEventState();
       const onSessionEvent = (event: CopilotEvent) => {
         for (const runEvent of copilotEventsOf(event, state)) {
-          onEvent(runEvent);
+          // An end goes through `end`, so a run reports it once.
+          if (runEvent.type === 'exit') {
+            end(runEvent);
+          } else {
+            onEvent(runEvent);
+          }
         }
       };
       let session: CopilotSession | null = null;
       let ended = false;
-      const end = (error?: string) => {
+      /** Reports the run's end once, however it came. */
+      const end = (exit: Extract<RunEvent, { type: 'exit' }>) => {
         if (ended) {
           return;
         }
         ended = true;
-        onEvent(
-          error === undefined
-            ? { type: 'exit' }
-            : {
-                type: 'exit',
-                error,
-                transient: isTransientCopilotError({ message: error }),
-              },
-        );
+        onEvent(exit);
+      };
+      const failed = (error: unknown): Extract<RunEvent, { type: 'exit' }> => {
+        const message = messageOf(error);
+        return {
+          type: 'exit',
+          error: message,
+          transient: isTransientCopilotError({ message }),
+        };
       };
       const queued: string[] = [];
       /** The session once its first message is sent: replies go straight in. */
@@ -189,7 +196,7 @@ export function createCopilotRunner({
           }
           accepting = session;
         } catch (error) {
-          end(messageOf(error));
+          end(failed(error));
         }
       })();
 
@@ -199,7 +206,10 @@ export function createCopilotRunner({
             queued.push(text);
             return;
           }
-          void accepting.send({ prompt: text, mode: 'enqueue' });
+          // A session that died cannot take the reply: the run has ended.
+          accepting
+            .send({ prompt: text, mode: 'enqueue' })
+            .catch((error: unknown) => end(failed(error)));
         },
         async interrupt() {
           await ready;
@@ -210,7 +220,7 @@ export function createCopilotRunner({
             return;
           }
           const open = session;
-          end();
+          end({ type: 'exit' });
           void open?.disconnect().catch(() => undefined);
         },
       };

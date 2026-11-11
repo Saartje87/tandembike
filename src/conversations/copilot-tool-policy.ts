@@ -21,6 +21,8 @@ export type CopilotToolFilters = {
  * `custom:*` keeps the Widget tools.
  */
 export function copilotToolFilters(policy: ToolPolicy): CopilotToolFilters {
+  // Copilot names an MCP tool `<server>-<tool>`, as T597 saw for the
+  // `tandembike` server; `mcp:` matches only MCP tools.
   const excludedTools = blockedTandembikeTools[policy].map(
     (name) => `mcp:tandembike-${name}`,
   );

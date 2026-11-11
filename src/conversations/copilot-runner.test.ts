@@ -258,6 +258,46 @@ describe('The Copilot runner', () => {
     ]);
   });
 
+  it('ends the run with the reason when a reply cannot reach the session', async () => {
+    const { run, events } = startRun();
+    await settle();
+    sdk.sessions[0].send = async () => {
+      throw new Error('Connection is closed.');
+    };
+
+    run.send('Go on');
+    await settle();
+
+    expect(events.filter(({ type }) => type === 'exit')).toEqual([
+      { type: 'exit', error: 'Connection is closed.', transient: false },
+    ]);
+  });
+
+  it('ends the run when Copilot shuts the session down, with the reason after a crash, and once only', async () => {
+    const crashed = startRun();
+    await settle();
+    sdk.sessions[0].emit('session.shutdown', {
+      shutdownType: 'error',
+      errorReason: 'socket hang up',
+    });
+    crashed.run.close();
+    await settle();
+
+    expect(crashed.events.filter(({ type }) => type === 'exit')).toEqual([
+      { type: 'exit', error: 'socket hang up', transient: true },
+    ]);
+
+    const closed = startRun();
+    await settle();
+    closed.run.close();
+    sdk.sessions[1].emit('session.shutdown', { shutdownType: 'routine' });
+    await settle();
+
+    expect(closed.events.filter(({ type }) => type === 'exit')).toEqual([
+      { type: 'exit' },
+    ]);
+  });
+
   it('reports an exit with the reason when no session could start, transient for a network error', async () => {
     sdk.createError = new Error('fetch failed');
     const { events } = startRun();

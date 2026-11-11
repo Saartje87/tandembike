@@ -189,6 +189,22 @@ export function copilotEventsOf(
         },
       ];
     }
+    case 'session.shutdown': {
+      // The session ended: on purpose when the runner closed it, else after
+      // a crash or fatal error, which reports its reason.
+      const reason = stringOf(data, 'errorReason');
+      return data.shutdownType === 'error'
+        ? [
+            {
+              type: 'exit',
+              error: reason ?? 'Copilot stopped with an error.',
+              transient: isTransientCopilotError({
+                message: reason ?? '',
+              }),
+            },
+          ]
+        : [{ type: 'exit' }];
+    }
     default:
       return [];
   }
