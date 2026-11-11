@@ -8,8 +8,8 @@ import {
   detectProjectRepository,
   setProjectAgentSettings,
 } from '../../app/projects/actions';
+import { projectAgentSettings } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
-import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { AgentSettingsForm } from './agent-settings-form';
 
 vi.mock('../../app/conversations/actions', () => ({ startSetup: vi.fn() }));
@@ -18,23 +18,8 @@ vi.mock('../../app/projects/actions', () => ({
   setProjectAgentSettings: vi.fn(),
 }));
 
-const unset: ProjectAgentSettings = {
-  repositoryPath: null,
-  checkCommand: null,
-  prepareCommand: null,
-  parallelRuns: false,
-  agentMode: false,
-  runMode: 'default',
-  runModel: null,
-  triageModel: null,
-  autopilot: false,
-  spendCeilingUsd: null,
-  autoTriage: false,
-  triageCeilingUsd: null,
-  autoMerge: false,
-  defaultAgentKind: 'claude-code',
-};
-const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
+const unset = projectAgentSettings();
+const set = projectAgentSettings({ repositoryPath: '/repo' });
 
 describe('AgentSettingsForm', () => {
   beforeEach(() => {
@@ -168,8 +153,7 @@ describe('AgentSettingsForm', () => {
         parallelRuns: false,
         agentMode: false,
         runMode: 'default',
-        runModel: null,
-        triageModel: null,
+        models: { 'claude-code': { runModel: null, triageModel: null } },
         autopilot: false,
         spendCeilingUsd: null,
         autoTriage: false,
@@ -322,8 +306,7 @@ describe('AgentSettingsForm', () => {
         parallelRuns: true,
         agentMode: true,
         runMode: 'default',
-        runModel: null,
-        triageModel: null,
+        models: { 'claude-code': { runModel: null, triageModel: null } },
         autopilot: false,
         spendCeilingUsd: null,
         autoTriage: false,
@@ -342,7 +325,7 @@ describe('AgentSettingsForm', () => {
     expect(screen.getByText(/outbound POST/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: /Auto/ }));
     await userEvent.type(
-      screen.getByLabelText('Run model'),
+      screen.getByLabelText('Claude Code run model'),
       ' claude-opus-5-5 ',
     );
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -351,7 +334,9 @@ describe('AgentSettingsForm', () => {
       expect(setProjectAgentSettings).toHaveBeenCalledWith(
         expect.objectContaining({
           runMode: 'auto',
-          runModel: 'claude-opus-5-5',
+          models: {
+            'claude-code': { runModel: 'claude-opus-5-5', triageModel: null },
+          },
         }),
       ),
     );
@@ -361,16 +346,26 @@ describe('AgentSettingsForm', () => {
     renderWithTheme(
       <AgentSettingsForm
         projectId={3}
-        settings={{ ...set, triageModel: 'claude-haiku-5' }}
+        settings={{
+          ...set,
+          models: {
+            ...set.models,
+            'claude-code': { runModel: null, triageModel: 'claude-haiku-5' },
+          },
+        }}
       />,
     );
 
-    const field = screen.getByLabelText('Triage model');
+    const field = screen.getByLabelText('Claude Code triage model');
     expect(field).toHaveValue('claude-haiku-5');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(setProjectAgentSettings).toHaveBeenCalledWith(
-        expect.objectContaining({ triageModel: 'claude-haiku-5' }),
+        expect.objectContaining({
+          models: {
+            'claude-code': { runModel: null, triageModel: 'claude-haiku-5' },
+          },
+        }),
       ),
     );
 
@@ -378,7 +373,9 @@ describe('AgentSettingsForm', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(setProjectAgentSettings).toHaveBeenLastCalledWith(
-        expect.objectContaining({ triageModel: null }),
+        expect.objectContaining({
+          models: { 'claude-code': { runModel: null, triageModel: null } },
+        }),
       ),
     );
   });

@@ -58,6 +58,7 @@ describe('MCP server and Project agent settings', () => {
       prepareCommand: 'npm ci',
       autoMerge: true,
       defaultAgentKind: 'copilot',
+      models: { 'claude-code': { runModel: 'opus-test-model' } },
     });
     const client = await connectMcpClient(tickets);
 
@@ -70,10 +71,10 @@ describe('MCP server and Project agent settings', () => {
     );
 
     expect(tools.map((tool) => tool.name).join(' ')).not.toMatch(
-      /repository|agent_setting|parallel|agent_mode|auto_merge|agent_kind/,
+      /repository|agent_setting|parallel|agent_mode|auto_merge|agent_kind|model/,
     );
     expect(listed).not.toMatch(
-      /repositoryPath|parallelRuns|agentMode|autopilot|autoMerge|spendCeiling|checkCommand|prepareCommand|defaultAgentKind|copilot|npm ci|npm run check|\/tmp/,
+      /repositoryPath|parallelRuns|agentMode|autopilot|autoMerge|spendCeiling|checkCommand|prepareCommand|defaultAgentKind|copilot|opus-test-model|npm ci|npm run check|\/tmp/,
     );
     await client.close();
   });

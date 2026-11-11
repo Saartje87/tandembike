@@ -168,4 +168,65 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
       },
     ]);
   });
+
+  it("runs on the model set for the Conversation's own kind, never another kind's", async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      models: {
+        'claude-code': { runModel: 'claude-opus-5-5' },
+        copilot: { runModel: 'gpt-5', triageModel: 'gpt-5-mini' },
+      },
+    });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'What is left?',
+    });
+    world.runners['claude-code'].runs[0].emit({
+      type: 'session',
+      sessionId: 's1',
+    });
+    world.runners['claude-code'].runs[0].emit({ type: 'exit' });
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+    });
+
+    await world.conversations.reply(conversation.id, 'Go on', 'user');
+    await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'triage',
+      prompt: 'Triage it.',
+    });
+    await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'And now?',
+    });
+
+    expect(world.runners['claude-code'].runs[1].options.model).toBe(
+      'claude-opus-5-5',
+    );
+    expect(world.runners.copilot.runs[0].options.model).toBe('gpt-5-mini');
+    expect(world.runners.copilot.runs[1].options.model).toBe('gpt-5');
+  });
+
+  it("leaves the model out, the agent's own default, when its kind has none", async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+      models: { 'claude-code': { runModel: 'claude-opus-5-5' } },
+    });
+
+    await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'What is left?',
+    });
+
+    expect(world.runners.copilot.runs[0].options).not.toHaveProperty('model');
+  });
 });

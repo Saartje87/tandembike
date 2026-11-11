@@ -211,8 +211,12 @@ describe('A Batch triage run (T1317)', () => {
   it("starts on the Project's triage model when set", async () => {
     const { conversations, runner, tickets, project } = setup();
     tickets.setProjectAgentSettings(project.id, {
-      runModel: 'claude-opus-5-5',
-      triageModel: 'claude-haiku-5',
+      models: {
+        'claude-code': {
+          runModel: 'claude-opus-5-5',
+          triageModel: 'claude-haiku-5',
+        },
+      },
     });
 
     await conversations.startBatchTriage({

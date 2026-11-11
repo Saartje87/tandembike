@@ -144,8 +144,8 @@ export const SetupPanel: FC<SetupPanelProps> = ({
             ? 'Auto: a classifier decides, so runs wait less.'
             : 'Default: asks before each tool call the repository has not allowed.'}
         </Item>
-        <Item label="Run model" href={field('run-model')}>
-          {settings.runModel ?? 'Your default model'}
+        <Item label="Claude Code run model" href={field('run-model')}>
+          {settings.models['claude-code'].runModel ?? 'Your default model'}
         </Item>
       </Group>
       <Group title="Ceilings">

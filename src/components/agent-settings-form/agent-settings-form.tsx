@@ -77,8 +77,8 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   agentMode: 'agentMode',
   defaultAgentKind: 'defaultAgentKind',
   runMode: 'runMode',
-  runModel: 'runModel',
-  triageModel: 'triageModel',
+  'models.claude-code.runModel': 'runModel',
+  'models.claude-code.triageModel': 'triageModel',
   spendCeilingUsd: 'spendCeiling',
   triageCeilingUsd: 'triageCeiling',
 };
@@ -133,8 +133,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       defaultAgentKind: settings.defaultAgentKind,
       agentMode: settings.agentMode,
       runMode: settings.runMode,
-      runModel: settings.runModel ?? '',
-      triageModel: settings.triageModel ?? '',
+      runModel: settings.models['claude-code'].runModel ?? '',
+      triageModel: settings.models['claude-code'].triageModel ?? '',
       autopilot: settings.autopilot,
       spendCeiling:
         settings.spendCeilingUsd === null
@@ -209,10 +209,18 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
           parallelRuns: values.parallelRuns,
           agentMode: values.agentMode,
           runMode: values.runMode,
-          runModel:
-            values.runModel.trim() === '' ? null : values.runModel.trim(),
-          triageModel:
-            values.triageModel.trim() === '' ? null : values.triageModel.trim(),
+          // Only Claude Code's models show while it is the only kind that
+          // runs (ADR 0051).
+          models: {
+            'claude-code': {
+              runModel:
+                values.runModel.trim() === '' ? null : values.runModel.trim(),
+              triageModel:
+                values.triageModel.trim() === ''
+                  ? null
+                  : values.triageModel.trim(),
+            },
+          },
           autopilot: values.autopilot,
           spendCeilingUsd:
             values.spendCeiling.trim() === ''
@@ -408,7 +416,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             <FieldError id={runModeErrorId} reason={runModeError} />
           </Stack>
           <Stack gap={1} id="run-model">
-            <Label htmlFor={runModelId}>Run model</Label>
+            <Label htmlFor={runModelId}>Claude Code run model</Label>
             <TextInput
               {...register('runModel')}
               id={runModelId}
@@ -418,13 +426,13 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               aria-describedby={runModelError ? runModelErrorId : undefined}
             />
             <Text tag="p" fontSize="small" color="muted">
-              The model runs start on; leave empty for your default. A run can
-              still change models itself.
+              The model Claude Code runs start on; leave empty for its default.
+              A run can still change models itself.
             </Text>
             <FieldError id={runModelErrorId} reason={runModelError} />
           </Stack>
           <Stack gap={1}>
-            <Label htmlFor={triageModelId}>Triage model</Label>
+            <Label htmlFor={triageModelId}>Claude Code triage model</Label>
             <TextInput
               {...register('triageModel')}
               id={triageModelId}
@@ -436,7 +444,8 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               }
             />
             <Text tag="p" fontSize="small" color="muted">
-              The model Triage runs start on; leave empty to use the run model.
+              The model Claude Code Triage runs start on; leave empty to use the
+              run model.
             </Text>
             <FieldError id={triageModelErrorId} reason={triageModelError} />
           </Stack>

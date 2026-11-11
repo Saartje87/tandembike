@@ -5,6 +5,7 @@ import {
   type RepositoryDetection,
 } from '../../repository/detect-repository';
 import type { ProjectAgentCommands } from '../../tickets/agent-commands';
+import { agentKinds } from '../../tickets/agent-kind';
 import type {
   SetProjectAgentSettingsInput,
   StyleProjectInput,
@@ -127,6 +128,35 @@ export async function styleProject(
   });
 }
 
+/** A model from the browser: left out, cleared, or its text. */
+const modelText = (value: unknown): string | null | undefined =>
+  value === undefined ? undefined : value === null ? null : String(value);
+
+/** Models from the browser, by known Agent kind (ADR 0051). */
+function agentModelsInput(
+  models: NonNullable<SetProjectAgentSettingsInput['models']>,
+): NonNullable<SetProjectAgentSettingsInput['models']> {
+  return Object.fromEntries(
+    agentKinds.flatMap((kind) => {
+      const given = models?.[kind];
+      if (given === undefined) {
+        return [];
+      }
+      const runModel = modelText(given.runModel);
+      const triageModel = modelText(given.triageModel);
+      return [
+        [
+          kind,
+          {
+            ...(runModel === undefined ? {} : { runModel }),
+            ...(triageModel === undefined ? {} : { triageModel }),
+          },
+        ],
+      ];
+    }),
+  );
+}
+
 /**
  * Sets a Project's repository path, Parallel runs, default Agent kind, agent
  * mode, run mode and run model for the UI. Only a Server Action does this, never an MCP tool
@@ -150,20 +180,9 @@ export async function setProjectAgentSettings(
         ? {}
         : { agentMode: Boolean(settings.agentMode) }),
       ...(settings.runMode === undefined ? {} : { runMode: settings.runMode }),
-      ...(settings.runModel === undefined
+      ...(settings.models === undefined
         ? {}
-        : {
-            runModel:
-              settings.runModel === null ? null : String(settings.runModel),
-          }),
-      ...(settings.triageModel === undefined
-        ? {}
-        : {
-            triageModel:
-              settings.triageModel === null
-                ? null
-                : String(settings.triageModel),
-          }),
+        : { models: agentModelsInput(settings.models) }),
       ...(settings.autopilot === undefined
         ? {}
         : { autopilot: Boolean(settings.autopilot) }),

@@ -35,7 +35,7 @@ import { isPullRequestReference } from '../tickets/external-reference-display';
 import type { Status } from '../tickets/status';
 import { canSpec, isInReview } from '../tickets/ticket-lanes';
 import type { TicketType } from '../tickets/ticket-type';
-import type { Tickets } from '../tickets/tickets';
+import type { AgentModel, Tickets } from '../tickets/tickets';
 import type { NoWorkReason } from '../tickets/work';
 import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
@@ -274,7 +274,7 @@ export type TerminalSession = {
   /** The run brief, saying the run is in a terminal. */
   brief: string;
   runMode: 'default' | 'auto';
-  /** The Project's run model; null for Claude Code's own default. */
+  /** The Project's Claude Code run model; null for Claude Code's own default. */
   model: string | null;
 };
 
@@ -347,11 +347,12 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
-/** The model a run of `intent` starts on: Triage's own when set, Batch triage's too, else the run model. */
-const modelFor = (
-  intent: ConversationIntent,
-  settings: { runModel: string | null; triageModel: string | null },
-) =>
+/**
+ * The model a run of `intent` starts on, from its Agent kind's models (ADR
+ * 0051): Triage's own when set, Batch triage's too, else the run model; null
+ * for the agent's own default.
+ */
+const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
   (intent === 'triage' || intent === 'batch_triage') &&
   settings.triageModel !== null
     ? settings.triageModel
@@ -952,7 +953,10 @@ export function createConversations({
     const agentCommands = tickets.getProjectAgentCommands(
       conversation.projectId,
     );
-    const runModel = modelFor(conversation.intent, settings);
+    const runModel = modelFor(
+      conversation.intent,
+      settings.models[conversation.agentKind],
+    );
     const handle: RunHandle = {
       process: null,
       run: {
@@ -1438,7 +1442,7 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: modelFor(input.intent, settings),
+      model: modelFor(input.intent, settings.models['claude-code']),
     };
   };
 
@@ -1505,7 +1509,7 @@ export function createConversations({
       firstMessage,
       brief: briefOf(created.id),
       runMode: settings.runMode,
-      model: modelFor('plan', settings),
+      model: modelFor('plan', settings.models['claude-code']),
     };
   };
 
@@ -2324,7 +2328,10 @@ export function createConversations({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
         brief: briefOf(id),
         runMode: settings.runMode,
-        model: modelFor(conversation.intent, settings),
+        model: modelFor(
+          conversation.intent,
+          settings.models[conversation.agentKind],
+        ),
       };
     },
 

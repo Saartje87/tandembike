@@ -4,7 +4,7 @@ import {
   agentStages,
   type ProjectAgentCommands,
 } from '../tickets/agent-commands';
-import type { EpicChild } from '../tickets/tickets';
+import type { EpicChild, ProjectAgentSettings } from '../tickets/tickets';
 
 const createdAt = new Date('2026-03-01T09:00:00Z');
 
@@ -37,6 +37,33 @@ export const aConversation = (
   worktreeRemoved: false,
   createdAt,
   updatedAt: createdAt,
+  ...overrides,
+});
+
+/**
+ * A Project's agent settings for a test: a fresh Project's (no repository
+ * path, default run mode, no models or ceilings, Claude Code) but for
+ * `overrides`. A new setting gets its default here, once.
+ */
+export const projectAgentSettings = (
+  overrides: Partial<ProjectAgentSettings> = {},
+): ProjectAgentSettings => ({
+  repositoryPath: null,
+  checkCommand: null,
+  prepareCommand: null,
+  parallelRuns: false,
+  agentMode: false,
+  runMode: 'default',
+  models: {
+    'claude-code': { runModel: null, triageModel: null },
+    copilot: { runModel: null, triageModel: null },
+  },
+  autopilot: false,
+  spendCeilingUsd: null,
+  autoTriage: false,
+  triageCeilingUsd: null,
+  autoMerge: false,
+  defaultAgentKind: 'claude-code',
   ...overrides,
 });
 

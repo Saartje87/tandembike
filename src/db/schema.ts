@@ -87,10 +87,6 @@ export const projects = sqliteTable('projects', {
   defaultAgentKind: text('default_agent_kind', { enum: agentKinds })
     .notNull()
     .default('claude-code'),
-  /** The model its runs start on; null is the User's default model. */
-  runModel: text('run_model'),
-  /** The model Triage runs start on; null uses the run model. */
-  triageModel: text('triage_model'),
   /** Whether Autopilot starts the Active Cycle's Eligible work (ADR 0030). */
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
@@ -610,6 +606,25 @@ export const triageProposals = sqliteTable(
  * The settings of the whole machine (ADR 0041): one row, id 1, written only
  * through a Server Action. No row means the defaults.
  */
+/**
+ * A Project's run and triage models for one Agent kind (ADR 0051); a kind
+ * without a row has neither. Only the User sets them.
+ */
+export const projectAgentModels = sqliteTable(
+  'project_agent_models',
+  {
+    projectId: integer('project_id')
+      .notNull()
+      .references(() => projects.id),
+    agentKind: text('agent_kind', { enum: agentKinds }).notNull(),
+    /** The model its runs start on; null is that agent's own default. */
+    runModel: text('run_model'),
+    /** The model Triage runs start on; null uses the run model. */
+    triageModel: text('triage_model'),
+  },
+  (table) => [primaryKey({ columns: [table.projectId, table.agentKind] })],
+);
+
 export const machineSettings = sqliteTable('machine_settings', {
   id: integer('id').primaryKey(),
   /** The most working runs across all Projects at once. */

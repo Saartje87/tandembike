@@ -43,7 +43,7 @@ function setup(
 describe('Starting a Terminal Conversation (T1237)', () => {
   it('records a running Conversation Started by Terminal and returns what the CLI needs', async () => {
     const { conversations, ticket, project, repositoryDir } = setup({
-      runModel: 'sonnet',
+      models: { 'claude-code': { runModel: 'sonnet' } },
     });
 
     const session = await conversations.startTerminal({
@@ -404,7 +404,7 @@ describe('Terminal Spec (T1240)', () => {
 describe('Terminal Plan (T1249)', () => {
   it('records a Terminal Plan in the main checkout with the Plan command, the goal and the brief', async () => {
     const { conversations, project, repositoryDir } = setup({
-      runModel: 'sonnet',
+      models: { 'claude-code': { runModel: 'sonnet' } },
     });
 
     const session = await conversations.startTerminalPlan({

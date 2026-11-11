@@ -2,27 +2,15 @@
 import { screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { projectAgentSettings } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { noAgentCommands } from '../../tickets/agent-commands';
-import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { SetupPanel, type SetupPanelProps } from './setup-panel';
 
-const defaults: ProjectAgentSettings = {
+const defaults = projectAgentSettings({
   repositoryPath: '/repo',
-  checkCommand: null,
-  prepareCommand: null,
-  parallelRuns: false,
   agentMode: true,
-  runMode: 'default',
-  runModel: null,
-  triageModel: null,
-  autopilot: false,
-  spendCeilingUsd: null,
-  autoTriage: false,
-  triageCeilingUsd: null,
-  autoMerge: false,
-  defaultAgentKind: 'claude-code',
-};
+});
 
 const renderPanel = (props: Partial<SetupPanelProps> = {}) =>
   renderWithTheme(
@@ -62,7 +50,7 @@ describe('SetupPanel', () => {
     ]);
     expect(items('Runs')).toEqual([
       'Agent run modeDefault: asks before each tool call the repository has not allowed.',
-      'Run modelYour default model',
+      'Claude Code run modelYour default model',
     ]);
     expect(items('Ceilings')).toEqual([
       'Spend ceilingNone set · no Active Cycle',
@@ -78,7 +66,10 @@ describe('SetupPanel', () => {
         checkCommand: 'npm run check',
         prepareCommand: 'npm ci',
         runMode: 'auto',
-        runModel: 'claude-opus-5-5',
+        models: {
+          ...defaults.models,
+          'claude-code': { runModel: 'claude-opus-5-5', triageModel: null },
+        },
         spendCeilingUsd: 20,
         triageCeilingUsd: 2,
       },
@@ -94,7 +85,7 @@ describe('SetupPanel', () => {
     ]);
     expect(items('Runs')).toEqual([
       'Agent run modeAuto: a classifier decides, so runs wait less.',
-      'Run modelclaude-opus-5-5',
+      'Claude Code run modelclaude-opus-5-5',
     ]);
     expect(items('Ceilings').slice(0, 2)).toEqual([
       'Spend ceiling$20.00 · $4.50 spent this Cycle',
@@ -112,7 +103,7 @@ describe('SetupPanel', () => {
     );
     expect(href('Prepare command')).toBe('/project/3/settings#prepare-command');
     expect(href('Agent run mode')).toBe('/project/3/settings#run-mode');
-    expect(href('Run model')).toBe('/project/3/settings#run-model');
+    expect(href('Claude Code run model')).toBe('/project/3/settings#run-model');
     expect(href('Spend ceiling')).toBe('/project/3/settings#spend-ceiling');
     expect(href('Triage ceiling')).toBe('/project/3/settings#triage-ceiling');
     expect(href('Machine cap and ceiling')).toBe('/settings');
