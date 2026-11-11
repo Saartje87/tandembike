@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/git-guardrail/git-guardrail.ts --copilot",
+        "cwd": ".",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

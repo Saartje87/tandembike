@@ -76,5 +76,7 @@ A Copilot run uses the User's own Copilot sign-in and `~/.copilot`, where Copilo
 - The Conversations module picks a runner by the Conversation's Agent kind on start, reply, resume, stop and close. App wiring registers the runners.
 - A new writing tool on the HTTP server must be excluded for both runners' read-only policies; the tests fail until it is.
 - A Copilot run in this repository has no git guardrail until the repository adds a Copilot hook.
+
+  _Note (2026-11-11, T1396):_ it has one now. `.github/hooks/git-guardrail.json` runs the same guardrail (`src/git-guardrail/`) as a Copilot `preToolUse` command hook, with the same rules and reasons as the Claude Code hook. It is the repository's own hook, which Copilot loads from `.github/hooks/`; the Copilot runner still adds none.
 - AI-credit figures follow Copilot's own report, which may not match GitHub's billing page exactly.
 - A Copilot run on a model that is not Claude's leaves those tokens out of the Footprint until T1370 adds factors.
