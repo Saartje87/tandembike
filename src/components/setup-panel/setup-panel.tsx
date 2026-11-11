@@ -15,7 +15,7 @@ import {
 } from '../../tickets/agent-commands';
 import { type CostUnit, ceilingsByUnit } from '../../tickets/cost-unit';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
-import type { AgentKindOption } from '../agent-settings-form/agent-settings-form';
+import type { AgentKindOption } from '../agent-settings/agent-kind-options';
 import { AppLink } from '../app-link/app-link';
 
 /** The Stages by the names the glossary gives them. */

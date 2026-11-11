@@ -69,6 +69,23 @@ export function boardSectionPath(
   return `${boardPath}#${section}`;
 }
 
+/** The sections of a Project's Settings, one tab each (ADR 0053). */
+export type SettingsSection =
+  | 'general'
+  | 'repository'
+  | 'agent'
+  | 'automation'
+  | 'commands'
+  | 'references';
+
+/** One section of a Project's Settings, opened on its tab. */
+export function projectSettingsSectionPath(
+  projectId: number,
+  section: SettingsSection,
+): string {
+  return `${projectSettingsPath(projectId)}?section=${section}`;
+}
+
 /** The fields of a Project's Settings that other pages link to, by their anchor. */
 export type SettingsField =
   | 'repository-path'

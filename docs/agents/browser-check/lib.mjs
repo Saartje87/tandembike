@@ -134,14 +134,15 @@ export function savesRepositoryPath(request, projectId, path) {
 }
 
 /**
- * Sets Project `projectId`'s repository path to `path` through its settings
- * form, as the User does. Throws at once with the form's reason when the Save
- * is refused (such as a path another Project already uses), or when the path
- * did not stick, rather than letting a later step time out far from the cause.
+ * Sets Project `projectId`'s repository path to `path` through the Repository
+ * section of its Settings, as the User does. Throws at once with the form's
+ * reason when the Save is refused (such as a path another Project already
+ * uses), or when the path did not stick, rather than letting a later step
+ * time out far from the cause.
  */
 export async function setRepositoryPath(page, projectId, path) {
-  await page.goto(`${base}/project/${projectId}/settings`);
-  const form = page.getByRole('form', { name: 'Agent settings' });
+  await page.goto(`${base}/project/${projectId}/settings?section=repository`);
+  const form = page.getByRole('form', { name: 'Repository settings' });
   const field = form.getByLabel('Repository path', { exact: true });
   await field.fill(path);
   const saved = page.waitForResponse((response) =>
@@ -149,10 +150,15 @@ export async function setRepositoryPath(page, projectId, path) {
   );
   await form.getByRole('button', { name: 'Save' }).click();
   await saved;
-  // Save shows loading, so is disabled, until the form has handled the reply.
-  await form.getByRole('button', { name: 'Save', disabled: false }).waitFor();
+  // Save shows loading, so is disabled, until the form has handled the reply;
+  // then it is gone once saved, or enabled again beside the reason (ADR 0053).
+  await form
+    .getByRole('button', { name: 'Save', disabled: true })
+    .waitFor({ state: 'hidden' });
   // React's ids can hold characters a `#id` selector rejects.
-  const reasonId = await field.getAttribute('aria-describedby');
+  const reasonId = (await field.getAttribute('aria-describedby'))
+    ?.split(' ')
+    .at(-1);
   const refusal = [
     (await field.getAttribute('aria-invalid')) === 'true'
       ? await form.locator(`[id="${reasonId}"]`).textContent()

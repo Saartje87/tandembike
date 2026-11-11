@@ -620,4 +620,92 @@ describe("A Project's agent settings", () => {
     tickets.setProjectAgentSettings(project.id, { autoMerge: false });
     expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(false);
   });
+
+  describe('updated in part, one Settings section at a time (T1432)', () => {
+    /** A Project with every setting set, as a full save leaves it. */
+    const fullySet = () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      const path = directory();
+      tickets.setProjectAgentSettings(project.id, {
+        repositoryPath: path,
+        checkCommand: 'npm run check',
+        prepareCommand: 'npm ci',
+        parallelRuns: true,
+        agentMode: true,
+        runMode: 'default',
+        models: {
+          'claude-code': { runModel: 'opus', triageModel: 'haiku' },
+          copilot: { runModel: 'gpt', triageModel: 'mini' },
+        },
+        autopilot: true,
+        spendCeilingUsd: 20,
+        spendCeilingAiCredits: 300,
+        autoTriage: true,
+        triageCeilingUsd: 2,
+        triageCeilingAiCredits: 30,
+        autoMerge: true,
+        defaultAgentKind: 'claude-code',
+      });
+      return {
+        tickets,
+        project,
+        before: tickets.getProjectAgentSettings(project.id),
+      };
+    };
+
+    it.each([
+      ['Repository', { checkCommand: 'make check', prepareCommand: null }],
+      ['Parallel runs', { parallelRuns: false }],
+      ['Agent mode', { agentMode: false }],
+      [
+        'Agent',
+        {
+          defaultAgentKind: 'copilot',
+          runMode: 'auto',
+          models: { copilot: { triageModel: null } },
+        },
+      ],
+      [
+        'Automation ceilings',
+        { spendCeilingUsd: 50, triageCeilingAiCredits: 10 },
+      ],
+      ['Auto-merge', { autoMerge: false }],
+    ] as const)('%s changes only the fields it names', (_, change) => {
+      const { tickets, project, before } = fullySet();
+
+      const after = tickets.setProjectAgentSettings(project.id, change);
+
+      const { models, ...rest } = change as Record<string, unknown> & {
+        models?: { copilot: { triageModel: null } };
+      };
+      expect(after).toEqual({
+        ...before,
+        ...rest,
+        models: models
+          ? {
+              ...before.models,
+              copilot: { ...before.models.copilot, ...models.copilot },
+            }
+          : before.models,
+      });
+    });
+
+    it('refuses a part naming its own field, and keeps every saved value', () => {
+      const { tickets, project, before } = fullySet();
+
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, {
+          models: { copilot: { runModel: 'gpt 5' } },
+          triageCeilingUsd: -1,
+        }),
+      );
+
+      expect((error as ValidationError).fieldErrors).toEqual({
+        'models.copilot.runModel': 'Enter a model name without spaces.',
+        triageCeilingUsd: 'Enter an amount in dollars above 0.',
+      });
+      expect(tickets.getProjectAgentSettings(project.id)).toEqual(before);
+    });
+  });
 });

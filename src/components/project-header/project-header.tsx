@@ -1,20 +1,14 @@
 'use client';
 
-import { Box, Inline, Stack } from '@blockle/blocks';
-import {
-  type FC,
-  type ReactNode,
-  useOptimistic,
-  useState,
-  useTransition,
-} from 'react';
+import { Box, Heading, Inline, Stack } from '@blockle/blocks';
+import type { FC, ReactNode } from 'react';
 
-import { callAction } from '../../app/lib/call-action';
-import { styleProject } from '../../app/projects/actions';
-import type { Project, StyleProjectInput } from '../../tickets/tickets';
+import { projectSettingsSectionPath } from '../../app/lib/paths';
+import type { Project } from '../../tickets/tickets';
+import { AppLink } from '../app-link/app-link';
+import { Icon } from '../icon/icon';
 import { tintBackground } from '../palette/palette.css';
-import { ProjectStylePicker } from '../project-style-picker/project-style-picker';
-import { RenameProjectInlineEdit } from '../rename-project-inline-edit/rename-project-inline-edit';
+import { ProjectIcon } from '../project-icon/project-icon';
 
 export type ProjectHeaderProps = {
   project: Project;
@@ -22,62 +16,38 @@ export type ProjectHeaderProps = {
   children?: ReactNode;
 };
 
-type Style = Pick<Project, 'color' | 'icon'>;
-
-const applyPick = (style: Style, pick: StyleProjectInput): Style => ({
-  ...style,
-  ...pick,
-});
-
 /**
- * A Project's header above each of its tabs: its icon, which opens
- * the colour and icon picker, its name, and `children`, on a soft band of
- * its colour when it has one. Its padding does not depend on the colour, so
- * a pick changes only the background. A pick shows at once and goes back,
- * with the reason in the picker, when it is refused.
+ * A Project's header above each of its tabs: its icon and name, a link to
+ * its Settings, where they are edited (ADR 0053), and `children`, on a soft
+ * band of its colour when it has one. Its padding does not depend on the
+ * colour.
  */
 export const ProjectHeader: FC<ProjectHeaderProps> = ({
   project,
   children,
-}) => {
-  const [style, showPick] = useOptimistic<Style, StyleProjectInput>(
-    { color: project.color, icon: project.icon },
-    applyPick,
-  );
-  const [error, setError] = useState<string>();
-  const [, startTransition] = useTransition();
-
-  const pick = (change: StyleProjectInput) => {
-    setError(undefined);
-    startTransition(async () => {
-      showPick(change);
-      const result = await callAction(
-        () => styleProject({ projectId: project.id, ...change }),
-        'The colour and icon could not be saved. Try again.',
-      );
-      if (!result.ok) {
-        setError(result.error);
-      }
-    });
-  };
-
-  return (
-    <Box
-      asChild
-      borderRadius={3}
-      paddingBlock={2}
-      paddingInline={3}
-      className={style.color ? tintBackground[style.color] : undefined}
-    >
-      <section aria-label={project.name} data-color={style.color ?? undefined}>
-        <Stack gap={4}>
-          <Inline gap={1} alignY="center" flexWrap="nowrap">
-            <ProjectStylePicker style={style} onPick={pick} error={error} />
-            <RenameProjectInlineEdit key={project.id} project={project} />
-          </Inline>
-          {children}
-        </Stack>
-      </section>
-    </Box>
-  );
-};
+}) => (
+  <Box
+    asChild
+    borderRadius={3}
+    paddingBlock={2}
+    paddingInline={3}
+    className={project.color ? tintBackground[project.color] : undefined}
+  >
+    <section aria-label={project.name} data-color={project.color ?? undefined}>
+      <Stack gap={4}>
+        <Inline gap={2} alignY="center" flexWrap="nowrap">
+          <ProjectIcon project={project} />
+          <Heading level={1}>{project.name}</Heading>
+          <AppLink
+            href={projectSettingsSectionPath(project.id, 'general')}
+            aria-label="Project settings"
+            title="Project settings"
+          >
+            <Icon name="cog-6-tooth" size="small" />
+          </AppLink>
+        </Inline>
+        {children}
+      </Stack>
+    </section>
+  </Box>
+);

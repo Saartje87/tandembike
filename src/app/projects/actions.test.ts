@@ -190,6 +190,32 @@ describe('setProjectAgentSettings', () => {
       fieldErrors: { repositoryPath: 'There is no directory at this path.' },
     });
   });
+
+  it("saves only the fields a section sends, keeping the others' saved values (T1432)", async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: '/',
+      checkCommand: 'npm test',
+      runMode: 'default',
+      autoMerge: true,
+    });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const result = await setProjectAgentSettings({
+      projectId: project.id,
+      prepareCommand: 'npm ci',
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      repositoryPath: '/',
+      checkCommand: 'npm test',
+      prepareCommand: 'npm ci',
+      runMode: 'default',
+      autoMerge: true,
+    });
+  });
 });
 
 describe('setProjectAgentSettings run mode', () => {
