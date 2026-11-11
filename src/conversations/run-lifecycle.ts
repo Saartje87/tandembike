@@ -299,7 +299,7 @@ const stoppedEvent = (
   effects.push({ type: 'announce' });
   return {
     run: { ...run, phase: { name: 'stopped', lateCost: null } },
-    patch: { cost: cost },
+    patch: { cost },
     effects,
   };
 };

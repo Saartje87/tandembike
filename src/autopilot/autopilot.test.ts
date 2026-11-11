@@ -1536,6 +1536,26 @@ describe('explain (ADR 0044)', () => {
       expect(started()).toEqual([a.number]);
     });
 
+    it('names no Spend ceiling when none is kept in the unit of the default agent, and starts nothing (ADR 0051)', async () => {
+      const { project, tickets, cycle, autopilot, ready, started, runners } =
+        setup();
+      runners.copilot.capabilities = {
+        ...runners.copilot.capabilities,
+        costUnit: 'ai_credits',
+      };
+      tickets.setProjectAgentSettings(project.id, {
+        defaultAgentKind: 'copilot',
+      });
+      ready('A');
+      tickets.startCycle(cycle.id);
+
+      expect(reasonTypes(autopilot.explain(project.id).autopilot)).toEqual([
+        'noSpendCeiling',
+      ]);
+      await autopilot.evaluate();
+      expect(started()).toEqual([]);
+    });
+
     it('names the switch, the Spend ceiling and the Active Cycle', () => {
       const { project, autopilot, ready } = setup({ autopilot: false });
       ready('A');
@@ -1654,6 +1674,23 @@ describe('explain (ADR 0044)', () => {
 
       expect(reasonTypes(autopilot.explain(project.id).autoTriage)).toEqual([
         'switchedOff',
+        'noTriageCeiling',
+      ]);
+    });
+
+    it('names no Triage ceiling when none is kept in the unit of the default agent (ADR 0051)', () => {
+      const { project, tickets, autopilot, runners } = setup();
+      runners.copilot.capabilities = {
+        ...runners.copilot.capabilities,
+        costUnit: 'ai_credits',
+      };
+      tickets.setProjectAgentSettings(project.id, {
+        autoTriage: true,
+        triageCeilingUsd: 5,
+        defaultAgentKind: 'copilot',
+      });
+
+      expect(reasonTypes(autopilot.explain(project.id).autoTriage)).toEqual([
         'noTriageCeiling',
       ]);
     });

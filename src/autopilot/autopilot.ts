@@ -5,6 +5,7 @@ import type {
   Conversations,
 } from '../conversations/conversations';
 import type { ChangeChannel } from '../tickets/changes';
+import { dollarCeiling } from '../tickets/cost-unit';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
@@ -212,7 +213,10 @@ export function createAutopilot({
     if (!cycle) {
       reasons.push({ type: 'noActiveCycle' });
     }
-    if (settings.spendCeilingUsd === null) {
+    // Ceilings are kept per unit: one in the unit of the agent Autopilot
+    // would start, or none (ADR 0051).
+    const unit = conversations.defaultCostUnit(projectId);
+    if (dollarCeiling(settings.spendCeilingUsd)[unit] === null) {
       reasons.push({ type: 'noSpendCeiling' });
     } else if (cycle) {
       const budget = conversations.spendBudget({
@@ -522,7 +526,11 @@ export function createAutopilot({
     if (!settings.autoTriage) {
       reasons.push({ type: 'switchedOff' });
     }
-    if (settings.triageCeilingUsd === null) {
+    if (
+      dollarCeiling(settings.triageCeilingUsd)[
+        conversations.defaultCostUnit(projectId)
+      ] === null
+    ) {
       reasons.push({ type: 'noTriageCeiling' });
     }
     const verdict = verdictOf(conversations.capacity(projectId), 'autoTriage');
