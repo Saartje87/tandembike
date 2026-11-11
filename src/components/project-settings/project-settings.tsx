@@ -119,8 +119,9 @@ export const ProjectSettings: FC<ProjectSettingsProps> = ({
     next.set('section', section);
     const hash = anchor ? `#${anchor}` : '';
     // The native history API keeps Next's router in step without a fetch.
+    // Its state must be null: Next does not sync a call carrying its own.
     window.history.replaceState(
-      window.history.state,
+      null,
       '',
       `${window.location.pathname}?${next}${hash}`,
     );
