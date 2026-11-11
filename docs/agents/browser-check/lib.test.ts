@@ -124,3 +124,61 @@ describe('the helpers browser-checks.md names', () => {
     expect(missing).toEqual([]);
   });
 });
+
+describe('savesRepositoryPath', () => {
+  // A stand-in for Playwright's Request: only what the predicate reads.
+  const request = ({
+    method = 'POST',
+    url = 'http://localhost:3100/project/3/settings',
+    body = null as string | null,
+  }) => ({ method: () => method, url: () => url, postData: () => body });
+
+  it('matches the Server Action POST that carries the path', async () => {
+    const { savesRepositoryPath } = await importHelper();
+
+    const save = request({
+      body: '[{"repositoryPath":"/tmp/fake-repo-a1","autoMerge":true}]',
+    });
+
+    expect(savesRepositoryPath(save, 3, '/tmp/fake-repo-a1')).toBe(true);
+  });
+
+  it('skips the polling Server Actions posted to the same page', async () => {
+    const { savesRepositoryPath } = await importHelper();
+
+    const poll = request({ body: '[3]' });
+
+    expect(savesRepositoryPath(poll, 3, '/tmp/fake-repo-a1')).toBe(false);
+  });
+
+  it("skips another Project's Settings and other methods", async () => {
+    const { savesRepositoryPath } = await importHelper();
+    const body = '[{"repositoryPath":"/tmp/fake-repo-a1"}]';
+
+    expect(
+      savesRepositoryPath(
+        request({ body, url: 'http://localhost:3100/project/13/settings' }),
+        3,
+        '/tmp/fake-repo-a1',
+      ),
+    ).toBe(false);
+    expect(
+      savesRepositoryPath(
+        request({ body, method: 'GET' }),
+        3,
+        '/tmp/fake-repo-a1',
+      ),
+    ).toBe(false);
+  });
+
+  it('matches a path JSON escapes', async () => {
+    const { savesRepositoryPath } = await importHelper();
+    const path = '/tmp/a "quoted" \\ folder';
+
+    const save = request({
+      body: JSON.stringify([{ repositoryPath: path }]),
+    });
+
+    expect(savesRepositoryPath(save, 3, path)).toBe(true);
+  });
+});
