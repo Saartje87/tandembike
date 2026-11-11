@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { notMeasuredModel } from '../footprint/footprint';
 import { agentCommands } from '../test/fixtures';
 import { noAgentCommands } from '../tickets/agent-commands';
-import type { RunEvent, RunOptions, StageInvocation } from './agent-runner';
+import type {
+  PermissionRequest,
+  RunEvent,
+  RunOptions,
+  StageInvocation,
+} from './agent-runner';
 import type { Widget } from './widget';
 
 type Handler = (event: { type: string; data: Record<string, unknown> }) => void;
@@ -15,6 +20,16 @@ type FakeSession = {
   sent: unknown[];
   aborted: number;
   disconnected: boolean;
+  modes: string[];
+  rpc: {
+    permissions: {
+      getCapabilities(): Promise<{
+        assistedApproval: boolean;
+        bypassPermissions: boolean;
+      }>;
+      setMode(request: { mode: string }): Promise<{ success: boolean }>;
+    };
+  };
   send(message: unknown): Promise<string>;
   abort(): Promise<void>;
   disconnect(): Promise<void>;
@@ -34,6 +49,7 @@ const sdk = vi.hoisted(() => ({
   createError: null as Error | null,
   sessions: [] as FakeSession[],
   resumed: [] as string[],
+  assisted: true,
 }));
 
 vi.mock('@github/copilot-sdk', () => {
@@ -48,6 +64,18 @@ vi.mock('@github/copilot-sdk', () => {
       sent: [],
       aborted: 0,
       disconnected: false,
+      modes: [],
+      rpc: {
+        permissions: {
+          async getCapabilities() {
+            return { assistedApproval: sdk.assisted, bypassPermissions: true };
+          },
+          async setMode({ mode }) {
+            session.modes.push(mode);
+            return { success: true };
+          },
+        },
+      },
       async send(message) {
         session.sent.push(message);
         return 'message-id';
@@ -91,6 +119,7 @@ vi.mock('@github/copilot-sdk', () => {
 });
 
 import { createCopilotRunner } from './copilot-runner';
+import { copilotToolFilters } from './copilot-tool-policy';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -101,6 +130,7 @@ beforeEach(() => {
   sdk.createError = null;
   sdk.sessions = [];
   sdk.resumed = [];
+  sdk.assisted = true;
 });
 
 function startRun(overrides: Partial<RunOptions> = {}) {
@@ -607,7 +637,7 @@ describe('The Copilot runner', () => {
       expect(askPermission).toHaveBeenCalledWith({
         toolName: 'shell',
         input: { command: 'touch a.txt', intention: 'Create a file' },
-        rules: [],
+        rules: ['shell(touch)'],
       });
       expect(result).toEqual({ kind: 'approve-once' });
     });
@@ -655,8 +685,283 @@ describe('The Copilot runner', () => {
       expect(askPermission).toHaveBeenCalledWith({
         toolName: 'tandembike-start_work',
         input: { number: 7 },
-        rules: [],
+        rules: ['tandembike-start_work'],
       });
+    });
+  });
+
+  describe('run modes (ADR 0051)', () => {
+    type Handler = (request: unknown, invocation: unknown) => Promise<unknown>;
+    const handlerOf = (session: FakeSession) =>
+      session.config.onPermissionRequest as Handler;
+    const shell = {
+      kind: 'shell',
+      fullCommandText: 'npm test',
+      intention: 'Run the tests',
+      commands: [{ identifier: 'npm', readOnly: false }],
+      canOfferSessionApproval: true,
+    };
+    const judged = (recommendation: 'approve' | 'requireApproval') => ({
+      sessionId: 'copilot-1',
+      assistedApprovalAssessment: { status: 'completed', recommendation },
+    });
+
+    it('starts in manual mode with autopilot off, never allow-all', async () => {
+      startRun();
+      await settle();
+
+      expect(sdk.sessions[0].config).toMatchObject({
+        permissionMode: 'manual',
+        autopilot: { continuationEnabled: false },
+      });
+      expect(sdk.sessions[0].modes).toEqual([]);
+    });
+
+    it('turns on Assisted permissions for an auto run, and approves what the judge approves without asking', async () => {
+      const askPermission = vi.fn(async () => 'deny' as const);
+      startRun({ runMode: 'auto', askPermission });
+      await settle();
+      const [session] = sdk.sessions;
+
+      const approved = await handlerOf(session)(shell, judged('approve'));
+
+      expect(session.modes).toEqual(['assisted']);
+      expect(approved).toEqual({ kind: 'approve-once' });
+      expect(askPermission).not.toHaveBeenCalled();
+    });
+
+    it('asks the User about what the judge does not approve, or what managed policy reserves for a person', async () => {
+      const askPermission = vi.fn(async () => 'allow' as const);
+      startRun({ runMode: 'auto', askPermission });
+      await settle();
+      const handler = handlerOf(sdk.sessions[0]);
+
+      await handler(shell, judged('requireApproval'));
+      await handler(
+        { ...shell, managedApprovalRequired: true },
+        judged('approve'),
+      );
+      await handler(shell, { sessionId: 'copilot-1' });
+
+      expect(askPermission).toHaveBeenCalledTimes(3);
+    });
+
+    it('never approves by the judge in a default run', async () => {
+      const askPermission = vi.fn(async () => 'deny' as const);
+      startRun({ askPermission });
+      await settle();
+
+      await handlerOf(sdk.sessions[0])(shell, judged('approve'));
+
+      expect(askPermission).toHaveBeenCalledTimes(1);
+    });
+
+    it('runs an auto run in default mode, says so, and declares default only once Copilot has no Assisted permissions', async () => {
+      sdk.assisted = false;
+      const { runner, events } = startRun({ runMode: 'auto' });
+      expect(runner.capabilities.runModes).toEqual(['default', 'auto']);
+      await settle();
+
+      expect(sdk.sessions[0].modes).toEqual([]);
+      expect(events).toContainEqual({
+        type: 'runMode',
+        wanted: 'auto',
+        runMode: 'default',
+      });
+      expect(runner.capabilities.runModes).toEqual(['default']);
+    });
+  });
+
+  describe('Allow-always (ADR 0051)', () => {
+    type Handler = (request: unknown, invocation: unknown) => Promise<unknown>;
+    const ask = async (request: unknown) => {
+      const askPermission = vi.fn(
+        async (_request: PermissionRequest) => 'allow-always' as const,
+      );
+      startRun({ askPermission });
+      await settle();
+      const handler = (sdk.sessions.at(-1) as FakeSession).config
+        .onPermissionRequest as Handler;
+      const result = await handler(request, { sessionId: 'copilot-1' });
+      return { result, asked: askPermission.mock.calls[0][0] };
+    };
+
+    it('is declared, since Copilot can approve for the rest of the session', () => {
+      expect(createCopilotRunner().capabilities.allowAlways).toBe(true);
+    });
+
+    it("offers a shell command's commands for the session, and approves them for it", async () => {
+      const { result, asked } = await ask({
+        kind: 'shell',
+        fullCommandText: 'touch a && touch b',
+        intention: 'Create files',
+        commands: [
+          { identifier: 'touch', readOnly: false },
+          { identifier: 'touch', readOnly: false },
+        ],
+        canOfferSessionApproval: true,
+      });
+
+      expect(asked.rules).toEqual(['shell(touch)']);
+      expect(result).toEqual({
+        kind: 'approve-for-session',
+        approval: { kind: 'commands', commandIdentifiers: ['touch'] },
+      });
+    });
+
+    it('offers file writes and an MCP tool for the session', async () => {
+      const write = await ask({
+        kind: 'write',
+        fileName: 'a.ts',
+        intention: 'Edit',
+        diff: '+x',
+        canOfferSessionApproval: true,
+      });
+      const mcp = await ask({
+        kind: 'mcp',
+        serverName: 'tandembike',
+        toolName: 'add_note',
+        toolTitle: 'Add note',
+        readOnly: false,
+      });
+
+      expect(write.asked.rules).toEqual(['write']);
+      expect(write.result).toEqual({
+        kind: 'approve-for-session',
+        approval: { kind: 'write' },
+      });
+      expect(mcp.asked.rules).toEqual(['tandembike-add_note']);
+      expect(mcp.result).toEqual({
+        kind: 'approve-for-session',
+        approval: {
+          kind: 'mcp',
+          serverName: 'tandembike',
+          toolName: 'add_note',
+        },
+      });
+    });
+
+    it('offers nothing for the session where Copilot cannot approve for it', async () => {
+      const shell = await ask({
+        kind: 'shell',
+        fullCommandText: 'rm -rf x',
+        intention: 'Remove',
+        commands: [{ identifier: 'rm', readOnly: false }],
+        canOfferSessionApproval: false,
+      });
+      const url = await ask({
+        kind: 'url',
+        url: 'https://x',
+        intention: 'Fetch',
+      });
+
+      expect(shell.asked.rules).toEqual([]);
+      expect(url.asked.rules).toEqual([]);
+    });
+  });
+
+  describe("Copilot's questions", () => {
+    type InputHandler = (
+      request: unknown,
+      invocation: unknown,
+    ) => Promise<{ answer: string; wasFreeform: boolean }>;
+    const asking = async (
+      answer: Awaited<ReturnType<RunOptions['askWidget']>>,
+    ) => {
+      const asked: Widget[] = [];
+      startRun({
+        askWidget: async (widget) => {
+          asked.push(widget);
+          return answer;
+        },
+      });
+      await settle();
+      const handler = (sdk.sessions.at(-1) as FakeSession).config
+        .onUserInputRequest as InputHandler;
+      return { handler, asked };
+    };
+
+    it('asks a question with a button per choice, and answers with the one picked', async () => {
+      const { handler, asked } = await asking({ selected: ['Yes'] });
+
+      const answer = await handler(
+        { question: 'Go on?', choices: ['Yes', 'No'] },
+        { sessionId: 'copilot-1' },
+      );
+
+      expect(asked).toEqual([
+        {
+          kind: 'choice',
+          prompt: 'Go on?',
+          options: [{ label: 'Yes' }, { label: 'No' }],
+          multiSelect: false,
+        },
+      ]);
+      expect(answer).toEqual({ answer: 'Yes', wasFreeform: false });
+    });
+
+    it('answers with the text the User typed instead', async () => {
+      const { handler } = await asking({ other: 'Only the tests' });
+
+      expect(
+        await handler({ question: 'What next?' }, { sessionId: 'copilot-1' }),
+      ).toEqual({ answer: 'Only the tests', wasFreeform: true });
+    });
+
+    it('says the User skipped it, and fails the request once the run ended unanswered', async () => {
+      const skipped = await asking({ skipped: true });
+      expect(
+        await skipped.handler({ question: 'Why?' }, { sessionId: 'copilot-1' }),
+      ).toEqual({
+        answer: 'The User skipped this question.',
+        wasFreeform: true,
+      });
+
+      const expired = await asking({ expired: true });
+      await expect(
+        expired.handler({ question: 'Why?' }, { sessionId: 'copilot-1' }),
+      ).rejects.toThrow('The User did not answer.');
+    });
+  });
+
+  describe('tool policy (ADR 0046, ADR 0051)', () => {
+    it('gives a read-only run only reading tools, the Widgets and MCP, without the writing Tandembike tools', async () => {
+      startRun({ toolPolicy: 'read-only' });
+      await settle();
+
+      const { availableTools, excludedTools } = sdk.sessions[0].config as {
+        availableTools: string[];
+        excludedTools: string[];
+      };
+      expect(availableTools).toEqual(
+        expect.arrayContaining(['builtin:view', 'mcp:*', 'custom:*']),
+      );
+      expect(availableTools).not.toContain('builtin:edit');
+      expect(availableTools).not.toContain('builtin:create');
+      expect(excludedTools).toEqual(
+        expect.arrayContaining([
+          'mcp:tandembike-file_tickets',
+          'mcp:tandembike-update_ticket',
+          'mcp:tandembike-add_note',
+        ]),
+      );
+    });
+
+    it('keeps an Autopilot Triage run from creating or changing Tickets, and nothing else', () => {
+      expect(copilotToolFilters('no-ticket-writes')).toEqual({
+        excludedTools: [
+          'mcp:tandembike-update_ticket',
+          'mcp:tandembike-file_tickets',
+        ],
+      });
+    });
+
+    it('leaves a run without a policy unfiltered', async () => {
+      startRun();
+      await settle();
+
+      expect(sdk.sessions[0].config).not.toHaveProperty('availableTools');
+      expect(sdk.sessions[0].config).not.toHaveProperty('excludedTools');
     });
   });
 

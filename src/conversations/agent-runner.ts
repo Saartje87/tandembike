@@ -58,6 +58,12 @@ export type RunEvent =
     }
   /** Tickets the Agent created over MCP, by number. */
   | { type: 'created'; numbers: number[] }
+  /**
+   * The run could not honour the run mode it was given, `wanted`, and runs
+   * in `runMode` instead, which the Conversation notes (ADR 0051), such as a
+   * Copilot account without Assisted permissions.
+   */
+  | { type: 'runMode'; wanted: AgentRunMode; runMode: AgentRunMode }
   /** The run waits for the User (`true`) or goes on again (`false`). */
   | { type: 'waiting'; waiting: boolean }
   /**

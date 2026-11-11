@@ -4,6 +4,7 @@ import { noAgentCommands } from '../tickets/agent-commands';
 import type {
   AgentRunner,
   RunnerAvailability,
+  RunnerCapabilities,
   StageInvocation,
 } from './agent-runner';
 import { claudeInvocationText } from './claude-invocation';
@@ -90,6 +91,9 @@ export function createCopilotRunner({
     });
     return probing;
   };
+  /** False once a session reported no Assisted permissions for the account. */
+  let assistedAvailable = true;
+
   const fresh = () => known !== null && clock() - known.at < availabilityTtlMs;
 
   return {
@@ -102,14 +106,20 @@ export function createCopilotRunner({
     },
     checkAvailability: async () =>
       fresh() && known ? known.availability : probe(),
-    capabilities: {
-      runModes: ['default'],
-      allowAlways: false,
-      costUnit: 'ai_credits',
+    // `auto` is Tandembike acting on Copilot's Assisted verdicts, until a
+    // session says the account has none; Allow-always approves for the
+    // session (ADR 0051).
+    get capabilities(): RunnerCapabilities {
+      return {
+        runModes: assistedAvailable ? ['default', 'auto'] : ['default'],
+        allowAlways: true,
+        costUnit: 'ai_credits',
+      };
     },
     invocationText: copilotInvocationText,
     start(options) {
-      const { message, resume, onEvent } = options;
+      const { message, resume, onEvent, runMode = 'default' } = options;
+      let assisted = false;
       const state = copilotEventState();
       const onSessionEvent = (event: CopilotEvent) => {
         for (const runEvent of copilotEventsOf(event, state)) {
@@ -140,7 +150,10 @@ export function createCopilotRunner({
       const ready = (async () => {
         try {
           const copilot = await clientOf();
-          const config = copilotSessionConfig(options, onSessionEvent);
+          const config = copilotSessionConfig(options, {
+            onEvent: onSessionEvent,
+            assisted: () => assisted,
+          });
           session =
             resume === undefined
               ? await copilot.createSession(config)
@@ -151,6 +164,17 @@ export function createCopilotRunner({
           }
           state.sessionId = session.sessionId;
           onEvent({ type: 'session', sessionId: session.sessionId });
+          if (runMode === 'auto') {
+            const { assistedApproval } =
+              await session.rpc.permissions.getCapabilities();
+            assistedAvailable = assistedApproval;
+            if (assistedApproval) {
+              await session.rpc.permissions.setMode({ mode: 'assisted' });
+              assisted = true;
+            } else {
+              onEvent({ type: 'runMode', wanted: 'auto', runMode: 'default' });
+            }
+          }
           await session.send(
             'text' in message
               ? message.text

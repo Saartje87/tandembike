@@ -25,6 +25,7 @@ import {
   agentKindLabels,
   agentKinds,
 } from '../tickets/agent-kind';
+import type { AgentRunMode } from '../tickets/agent-run-mode';
 import type { ChangeChannel } from '../tickets/changes';
 import { type CostUnit, ceilingsByUnit } from '../tickets/cost-unit';
 import {
@@ -606,6 +607,10 @@ export function createConversations({
   };
 
   /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
+  /** The note of a run that runs in default mode instead of `wanted`. */
+  const runModeFallbackNote = (kind: AgentKind, wanted: AgentRunMode) =>
+    `${agentKindLabels[kind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`;
+
   const noteOnce = (id: number, text: string) => {
     const noted = db
       .select({ id: conversationEntries.id })
@@ -792,6 +797,13 @@ export function createConversations({
 
   const handleEvent = (id: number, handle: RunHandle, event: RunEvent) => {
     const conversation = get(id);
+    // A run that found it cannot honour its run mode says so, as a start
+    // that knew beforehand does (ADR 0051).
+    if (event.type === 'runMode') {
+      noteOnce(id, runModeFallbackNote(conversation.agentKind, event.wanted));
+      announce(id);
+      return;
+    }
     void stepRun(
       id,
       handle,
@@ -1050,10 +1062,7 @@ export function createConversations({
       ? wanted
       : 'default';
     if (runMode !== wanted) {
-      noteOnce(
-        id,
-        `${agentKindLabels[conversation.agentKind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`,
-      );
+      noteOnce(id, runModeFallbackNote(conversation.agentKind, wanted));
     }
     try {
       handle.process = runner.start({

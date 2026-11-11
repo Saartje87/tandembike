@@ -6,6 +6,7 @@ import { connectMcpClient } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { NotAllowedError } from '../tickets/errors';
 import { claudeDisallowedTools } from './claude-tool-policy';
+import { copilotToolFilters } from './copilot-tool-policy';
 
 function setup(runMode: 'default' | 'auto' = 'auto') {
   const world = createTestConversations();
@@ -74,6 +75,21 @@ describe('A Spar run (ADR 0046)', () => {
     for (const tool of tools) {
       const name = `mcp__tandembike__${tool.name}`;
       expect(claudeDisallowedTools('read-only').includes(name), name).toBe(
+        tool.annotations?.readOnlyHint !== true &&
+          !sparToolNames.includes(tool.name),
+      );
+    }
+  });
+
+  it("excludes on Copilot every Tandembike tool that is not read-only, but the Spar's own", async () => {
+    const client = await connectMcpClient(createTestTickets());
+    const { tools } = await client.listTools();
+    await client.close();
+    const { excludedTools = [] } = copilotToolFilters('read-only');
+
+    for (const tool of tools) {
+      const name = `mcp:tandembike-${tool.name}`;
+      expect(excludedTools.includes(name), name).toBe(
         tool.annotations?.readOnlyHint !== true &&
           !sparToolNames.includes(tool.name),
       );

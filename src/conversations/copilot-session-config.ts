@@ -5,6 +5,8 @@ import type {
 
 import type { RunOptions } from './agent-runner';
 import { copilotPermissionHandler } from './copilot-permissions';
+import { copilotQuestionHandler } from './copilot-questions';
+import { copilotToolFilters } from './copilot-tool-policy';
 import { copilotWidgetTools } from './copilot-widget-tools';
 
 /** Copilot's own GitHub MCP server, which a Tandembike run does without (ADR 0051). */
@@ -18,7 +20,11 @@ const githubMcpServer = 'github-mcp-server';
  */
 export function copilotSessionConfig(
   options: RunOptions,
-  onEvent: SessionEventHandler,
+  run: {
+    onEvent: SessionEventHandler;
+    /** Whether the run acts on Copilot's Assisted verdicts, its `auto`. */
+    assisted(): boolean;
+  },
 ): SessionConfigBase {
   return {
     workingDirectory: options.cwd,
@@ -42,13 +48,21 @@ export function copilotSessionConfig(
     tools: copilotWidgetTools(options.askWidget),
     systemMessage: { mode: 'append', content: options.systemPrompt },
     ...(options.model === undefined ? {} : { model: options.model }),
+    ...(options.toolPolicy === undefined
+      ? {}
+      : copilotToolFilters(options.toolPolicy)),
     // Never Copilot's autopilot loop or approve-all: every request the User
-    // must judge reaches the relay below (ADR 0051).
+    // must judge reaches the relay below (ADR 0051). An `auto` run turns on
+    // Assisted once the session says it can.
     permissionMode: 'manual',
     autopilot: { continuationEnabled: false },
     // Commits carry only the attribution the repository asks for.
     coauthorEnabled: false,
-    onPermissionRequest: copilotPermissionHandler(options.askPermission),
-    onEvent,
+    onPermissionRequest: copilotPermissionHandler(
+      options.askPermission,
+      run.assisted,
+    ),
+    onUserInputRequest: copilotQuestionHandler(options.askWidget),
+    onEvent: run.onEvent,
   };
 }
