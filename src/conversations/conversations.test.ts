@@ -908,6 +908,7 @@ describe('Activity rows', () => {
           permissionRules: null,
           toolName: null,
           toolInput: null,
+          toolActivity: null,
         },
         message: {
           role: 'agent',
@@ -915,6 +916,7 @@ describe('Activity rows', () => {
           permissionRules: null,
           toolName: null,
           toolInput: null,
+          toolActivity: null,
         },
         startedAt: '2026-11-07T10:05:00.000Z',
         cost: 0,
@@ -933,6 +935,7 @@ describe('Activity rows', () => {
           permissionRules: null,
           toolName: null,
           toolInput: null,
+          toolActivity: null,
         },
         message: {
           role: 'error',
@@ -940,6 +943,7 @@ describe('Activity rows', () => {
           permissionRules: null,
           toolName: null,
           toolInput: null,
+          toolActivity: null,
         },
         startedAt: '2026-11-07T10:00:00.000Z',
         cost: 0,
@@ -976,6 +980,7 @@ describe('Activity rows', () => {
       permissionRules: null,
       toolName: null,
       toolInput: null,
+      toolActivity: null,
     });
   });
 
@@ -1004,6 +1009,7 @@ describe('Activity rows', () => {
       permissionRules: null,
       toolName: null,
       toolInput: null,
+      toolActivity: null,
     });
     expect(first.latest).toMatchObject({ role: 'tool' });
     expect(second.message).toBeNull();
@@ -1030,11 +1036,13 @@ describe('Activity rows', () => {
       role: 'tool',
       toolName: 'Read',
       toolInput: { file_path: '/a.ts' },
+      toolActivity: null,
     });
     const entry = conversations.transcript(id).at(-1);
     expect(entry).toMatchObject({
       toolName: 'Read',
       toolInput: { file_path: '/a.ts' },
+      toolActivity: null,
     });
   });
 
@@ -1058,6 +1066,7 @@ describe('Activity rows', () => {
     expect(row.latest).toMatchObject({
       toolName: 'Write',
       toolInput: null,
+      toolActivity: null,
     });
   });
 
@@ -1081,6 +1090,7 @@ describe('Activity rows', () => {
       role: 'permission',
       toolName: 'Bash',
       toolInput: { command: 'ls' },
+      toolActivity: null,
     });
   });
 });

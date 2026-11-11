@@ -6,6 +6,7 @@ import type { CostUnit } from '../tickets/cost-unit';
 import type { TicketType } from '../tickets/ticket-type';
 import type { PermissionAnswer } from './conversation-state';
 import type { RetroCycle } from './retro-prompt';
+import type { ToolActivity } from './tool-activity';
 import type { Widget, WidgetAnswer } from './widget';
 
 /**
@@ -25,13 +26,15 @@ export type RunEvent =
   | { type: 'agent'; text: string }
   /**
    * A tool the Agent used: `text` is one line for the transcript, `name` and
-   * `input` are the tool's name and raw input for the status line (T1066).
+   * `input` the tool's own name and raw input, and `activity` what it does
+   * in the status line's terms, which the runner maps (T1066, ADR 0051).
    */
   | {
       type: 'tool';
       text: string;
       name?: string;
       input?: Record<string, unknown>;
+      activity?: ToolActivity;
     }
   /**
    * A turn ended. `cost` is what this run has cost in total so far, not
@@ -47,15 +50,21 @@ export type RunEvent =
        */
       usage?: UsageByModel;
       error?: string;
-      /** The SDK result subtype an error came with, for classifying it. */
-      errorSubtype?: string;
+      /**
+       * The runner's verdict that `error` is worth resuming once, such as an
+       * overload or a network error (ADR 0034, ADR 0051).
+       */
+      transient?: boolean;
     }
   /** Tickets the Agent created over MCP, by number. */
   | { type: 'created'; numbers: number[] }
   /** The run waits for the User (`true`) or goes on again (`false`). */
   | { type: 'waiting'; waiting: boolean }
-  /** The run's process ended; `error` says why when it was not on purpose. */
-  | { type: 'exit'; error?: string };
+  /**
+   * The run's process ended; `error` says why when it was not on purpose,
+   * and `transient` whether it is worth resuming once (ADR 0034).
+   */
+  | { type: 'exit'; error?: string; transient?: boolean };
 
 /** A tool the Agent wants to use that needs the User's say-so. */
 export type PermissionRequest = {

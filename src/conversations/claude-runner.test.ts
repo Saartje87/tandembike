@@ -399,17 +399,60 @@ describe('The Claude runner', () => {
         text: 'Read {"file_path":"a.md"}',
         name: 'Read',
         input: { file_path: 'a.md' },
+        activity: { verb: 'Reading', target: 'a.md' },
       },
       { type: 'turn', cost: 0.42 },
       {
         type: 'turn',
         cost: 0.5,
         error: 'error_max_turns',
-        errorSubtype: 'error_max_turns',
+        transient: false,
       },
       { type: 'exit' },
     ]);
   });
+
+  it.each([
+    [
+      'Read',
+      { file_path: '/repo/src/board.tsx' },
+      { verb: 'Reading', target: 'board.tsx' },
+    ],
+    ['Edit', { file_path: 'a.ts' }, { verb: 'Editing', target: 'a.ts' }],
+    [
+      'Bash',
+      { command: 'ls', description: 'List files' },
+      { verb: 'Running', target: 'List files' },
+    ],
+    ['Grep', { pattern: 'foo' }, { verb: 'Searching', target: 'foo' }],
+    ['Skill', { skill: 'tdd' }, { verb: 'Using', target: 'tdd' }],
+    [
+      'Agent',
+      { description: 'Explore' },
+      { verb: 'Delegating', target: 'Explore' },
+    ],
+    [
+      'mcp__tandembike__get_ticket',
+      { number: 7 },
+      { tandembike: 'get_ticket', ticketNumber: 7 },
+    ],
+    [
+      'mcp__tandembike__find_tickets',
+      { query: 'x' },
+      { tandembike: 'find_tickets' },
+    ],
+    ['TodoWrite', { todos: 'x' }, { verb: 'TodoWrite', target: 'x' }],
+  ])(
+    'maps its tool %s to the status line activity (ADR 0051)',
+    (name, input, activity) => {
+      expect(
+        eventsOf({
+          type: 'assistant',
+          message: { content: [{ type: 'tool_use', id: 't', name, input }] },
+        } as never),
+      ).toEqual([expect.objectContaining({ type: 'tool', name, activity })]);
+    },
+  );
 
   it('reports the tokens per model of a result’s modelUsage with its turn (T1176)', () => {
     const modelUsage = (input: number, output: number) => ({
@@ -538,7 +581,71 @@ describe('The Claude runner', () => {
     });
     await settle();
 
-    expect(events).toEqual([{ type: 'exit', error: 'boom' }]);
+    expect(events).toEqual([{ type: 'exit', error: 'boom', transient: false }]);
+  });
+
+  it('reports a network failure of the query as a transient exit (ADR 0034)', async () => {
+    query.mockReturnValue(
+      Object.assign(
+        // biome-ignore lint/correctness/useYield: it fails before yielding.
+        (async function* () {
+          throw new Error('socket hang up');
+        })(),
+        controls,
+      ),
+    );
+    const events: RunEvent[] = [];
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: (event) => events.push(event),
+    });
+    await settle();
+
+    expect(events).toEqual([
+      { type: 'exit', error: 'socket hang up', transient: true },
+    ]);
+  });
+
+  it('reports an API overload of a result as a transient turn end, by its text or subtype', () => {
+    expect(
+      eventsOf({
+        type: 'result',
+        subtype: 'error_during_execution',
+        is_error: true,
+        total_cost_usd: 0.1,
+      } as never),
+    ).toEqual([
+      {
+        type: 'turn',
+        cost: 0.1,
+        error: 'error_during_execution',
+        transient: false,
+      },
+    ]);
+    expect(
+      eventsOf({
+        type: 'result',
+        subtype: 'success',
+        is_error: true,
+        result: 'API Error: 529 overloaded',
+        total_cost_usd: 0.1,
+      } as never),
+    ).toEqual([
+      {
+        type: 'turn',
+        cost: 0.1,
+        error: 'API Error: 529 overloaded',
+        transient: true,
+      },
+    ]);
   });
 
   it('interrupts and closes the query', async () => {

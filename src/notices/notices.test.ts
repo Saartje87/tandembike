@@ -515,7 +515,12 @@ describe('Notices', () => {
     const { run } = await world.startRun();
     world.notices.start();
 
-    run.emit({ type: 'turn', cost: 0, error: 'API Error: 529 overloaded' });
+    run.emit({
+      type: 'turn',
+      cost: 0,
+      error: 'API Error: 529 overloaded',
+      transient: true,
+    });
 
     expect(world.raised).not.toHaveBeenCalled();
   });

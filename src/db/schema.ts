@@ -20,6 +20,7 @@ import {
   transcriptRoles,
 } from '../conversations/conversation-state';
 import { runResults } from '../conversations/run-outcome';
+import type { ToolActivity } from '../conversations/tool-activity';
 import type { WidgetEntry } from '../conversations/widget';
 import { type Canvas, stickyAuthors } from '../spars/canvas';
 import type { HandOffDraft } from '../spars/spar-moves';
@@ -495,6 +496,8 @@ export const conversationEntries = sqliteTable(
     toolInput: text('tool_input', { mode: 'json' }).$type<
       Record<string, unknown>
     >(),
+    /** For a tool entry: what it did, as its runner mapped it (ADR 0051); null for older entries. */
+    toolActivity: text('tool_activity', { mode: 'json' }).$type<ToolActivity>(),
     /** For a question of the Agent: what it asked and the answers; null for other entries. */
     question: text('question', { mode: 'json' }).$type<QuestionEntry>(),
     /** For a Widget of the Agent: the Widget, the answer and expired; null for other entries. */

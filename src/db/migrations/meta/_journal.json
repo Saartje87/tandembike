@@ -470,6 +470,13 @@
       "when": 1794389493034,
       "tag": "0066_cost_unit",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1794390122341,
+      "tag": "0067_tool_activity",
+      "breakpoints": true
     }
   ]
 }

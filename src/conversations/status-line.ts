@@ -1,4 +1,6 @@
+import { claudeToolActivity } from './claude-tool-activity';
 import type { TranscriptRole } from './conversation-state';
+import { activityLine, type ToolActivity } from './tool-activity';
 
 /** The part of a transcript entry the status line is made from. */
 export type StatusEntry = {
@@ -8,11 +10,11 @@ export type StatusEntry = {
   /** The tool's name and input; null for older entries, and no input when over the cap. */
   toolName?: string | null;
   toolInput?: Record<string, unknown> | null;
+  /** What the tool did, as its runner mapped it (ADR 0051); null for older entries. */
+  toolActivity?: ToolActivity | null;
 };
 
 type ToolInput = Record<string, unknown>;
-
-const tandembikePrefix = 'mcp__tandembike__';
 
 /**
  * Parses the input of a tool entry. The stored text is cut to 300 characters,
@@ -46,90 +48,7 @@ const parseInput = (json: string): ToolInput => {
   }
 };
 
-const stringOf = (input: ToolInput, key: string): string | undefined => {
-  const value = input[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-};
-
 const firstLine = (text: string) => text.trim().split('\n')[0].trim();
-
-const baseName = (path: string) =>
-  path.split('/').filter(Boolean).pop() ?? path;
-
-const withTarget = (verb: string, target: string | undefined) =>
-  target ? `${verb} ${target}` : verb;
-
-/** Built-in tools: a verb and the input that is its target. */
-const builtIn: Record<string, (input: ToolInput) => string> = {
-  Read: (i) => withTarget('Reading', fileOf(i)),
-  Edit: (i) => withTarget('Editing', fileOf(i)),
-  MultiEdit: (i) => withTarget('Editing', fileOf(i)),
-  Write: (i) => withTarget('Writing', fileOf(i)),
-  Grep: (i) => withTarget('Searching', stringOf(i, 'pattern')),
-  Glob: (i) => withTarget('Finding', stringOf(i, 'pattern')),
-  Bash: (i) =>
-    withTarget('Running', stringOf(i, 'description') ?? stringOf(i, 'command')),
-  Skill: (i) => withTarget('Using', stringOf(i, 'skill')),
-  Agent: (i) => withTarget('Delegating', stringOf(i, 'description')),
-  WebFetch: (i) => withTarget('Fetching', stringOf(i, 'url')),
-  WebSearch: (i) => withTarget('Searching', stringOf(i, 'query')),
-};
-
-const fileOf = (input: ToolInput) => {
-  const path = stringOf(input, 'file_path') ?? stringOf(input, 'path');
-  return path ? baseName(path) : undefined;
-};
-
-/**
- * The Tandembike tools: the line with `{T}` for the Ticket number, and the
- * line to use when the input names none.
- */
-const tandembike: Record<string, [line: string, without: string]> = {
-  next_work: ['Finding the next work', 'Finding the next work'],
-  start_work: ['Starting {T}', 'Starting a Ticket'],
-  add_note: ['Commenting on {T}', 'Commenting'],
-  propose_triage: ['Proposing triage for {T}', 'Proposing triage'],
-  check_criterion: ['Checking criteria of {T}', 'Checking criteria'],
-  open_pr: ['Linking a pull request to {T}', 'Linking a pull request'],
-  finish_work: ['Finishing {T}', 'Finishing a Ticket'],
-  abandon_work: ['Giving up {T}', 'Giving up a Ticket'],
-  file_tickets: ['Creating Tickets', 'Creating Tickets'],
-  find_tickets: ['Listing Tickets', 'Listing Tickets'],
-  attach: ['Attaching a file to {T}', 'Attaching a file'],
-  read_attachment: ['Reading an attachment of {T}', 'Reading an attachment'],
-  get_project: ['Reading a Project', 'Reading a Project'],
-  get_ticket: ['Reading {T}', 'Reading a Ticket'],
-  update_ticket: ['Updating {T}', 'Updating a Ticket'],
-  create_cycle: ['Creating a Cycle', 'Creating a Cycle'],
-  update_cycle: ['Renaming a Cycle', 'Renaming a Cycle'],
-};
-
-const humanise = (name: string) => {
-  const words = name.replaceAll('_', ' ');
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
-
-const toolLine = (name: string, input: ToolInput): string => {
-  const builtInLine = builtIn[name];
-  if (builtInLine) {
-    return builtInLine(input);
-  }
-  if (name.startsWith(tandembikePrefix)) {
-    const tool = name.slice(tandembikePrefix.length);
-    const entry = tandembike[tool];
-    if (!entry) {
-      return humanise(tool);
-    }
-    const number = input.number;
-    return typeof number === 'number'
-      ? entry[0].replace('{T}', `T${number}`)
-      : entry[1];
-  }
-  const first = Object.values(input).find(
-    (value): value is string => typeof value === 'string' && value !== '',
-  );
-  return withTarget(name, first);
-};
 
 const splitTool = (text: string): [name: string, input: string] => {
   const space = text.indexOf(' ');
@@ -139,16 +58,25 @@ const splitTool = (text: string): [name: string, input: string] => {
 };
 
 /**
- * A tool entry worded as on the Board cards, such as "Editing a.ts" (T1066),
- * from its tool name and input, or for an older entry from its stored
- * `Name {json}` text. The chat uses it for its steps too (T1386).
+ * The activity of an entry recorded before tool events carried one (T1372):
+ * every such entry is Claude Code's, so its runner's map reads it, from the
+ * tool name and input, or from the stored `Name {json}` text.
  */
-export function toolPhrase(entry: StatusEntry): string {
+const olderActivity = (entry: StatusEntry): ToolActivity => {
   if (entry.toolName && entry.toolInput) {
-    return toolLine(entry.toolName, entry.toolInput);
+    return claudeToolActivity(entry.toolName, entry.toolInput);
   }
   const [name, input] = splitTool(entry.text);
-  return toolLine(entry.toolName ?? name, parseInput(input));
+  return claudeToolActivity(entry.toolName ?? name, parseInput(input));
+};
+
+/**
+ * A tool entry worded as on the Board cards, such as "Editing a.ts" (T1066),
+ * from the activity its runner reported. The chat uses it for its steps too
+ * (T1386).
+ */
+export function toolPhrase(entry: StatusEntry): string {
+  return activityLine(entry.toolActivity ?? olderActivity(entry));
 }
 
 /** A tool entry's input as stored: its text after the tool name, already capped. */

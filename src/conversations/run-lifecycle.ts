@@ -10,6 +10,7 @@ import type {
   TranscriptRole,
 } from './conversation-state';
 import { type RunResult, runResultOf } from './run-outcome';
+import type { ToolActivity } from './tool-activity';
 
 /**
  * The run lifecycle (T1387): one pure step for every input that changes a
@@ -157,7 +158,11 @@ export type RunEffect =
       type: 'append';
       role: TranscriptRole;
       text: string;
-      tool?: { name: string; input?: Record<string, unknown> };
+      tool?: {
+        name: string;
+        input?: Record<string, unknown>;
+        activity?: ToolActivity;
+      };
     }
   | { type: 'writeUsage'; before: UsageByModel; run: UsageByModel }
   | { type: 'recordOutcome'; outcome: NewRunOutcome }
@@ -237,7 +242,7 @@ const outcomeOf = (
   end: {
     stopped?: boolean;
     error?: string;
-    errorSubtype?: string;
+    transient?: boolean;
     waitingOnUser?: boolean;
     ticket: TicketFacts | null;
     cost: number;
@@ -250,7 +255,7 @@ const outcomeOf = (
   result: runResultOf({
     stopped: end.stopped ?? false,
     error: end.error,
-    errorSubtype: end.errorSubtype,
+    transient: end.transient ?? false,
     ticketStatus: end.ticket?.status ?? null,
     hasPullRequest: end.ticket?.hasPullRequest ?? false,
     waitingOnUser: end.waitingOnUser ?? false,
@@ -339,7 +344,15 @@ const liveEvent = (
         text: event.text,
         ...(event.name === undefined
           ? {}
-          : { tool: { name: event.name, input: event.input } }),
+          : {
+              tool: {
+                name: event.name,
+                input: event.input,
+                ...(event.activity === undefined
+                  ? {}
+                  : { activity: event.activity }),
+              },
+            }),
       });
       break;
     case 'created':
@@ -375,7 +388,7 @@ const liveEvent = (
             conversation,
             {
               error: event.error,
-              errorSubtype: event.errorSubtype,
+              transient: event.transient,
               waitingOnUser,
               ticket: input.ticket,
               cost,
@@ -421,6 +434,7 @@ const liveEvent = (
             conversation,
             {
               error: event.error,
+              transient: event.transient,
               waitingOnUser,
               ticket: input.ticket,
               cost: conversation.cost,

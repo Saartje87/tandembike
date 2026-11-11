@@ -567,6 +567,7 @@ describe('Autopilot startup', () => {
       type: 'turn',
       cost: 1,
       error: 'API Error: 529 overloaded',
+      transient: true,
     });
     await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -662,6 +663,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     type: 'turn',
     cost: 1,
     error: 'API Error: 529 overloaded',
+    transient: true,
   } as const;
 
   const begin = async (options: Parameters<typeof setup>[0] = {}) => {
@@ -727,7 +729,11 @@ describe('Autopilot transient resume (ADR 0034)', () => {
       await begin({ parallel: 1 });
     // Its process ended, so it holds no slot and a resume would take one; an
     // idle run keeps its slot, and its resume adds nothing (ADR 0049).
-    runner.runs[0].emit({ type: 'exit', error: overloaded.error });
+    runner.runs[0].emit({
+      type: 'exit',
+      error: overloaded.error,
+      transient: true,
+    });
     const other = tickets.createTicket({ projectId: project.id, title: 'B' });
     await conversations.start({
       startedBy: 'user',
@@ -1361,6 +1367,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     runner.runs[0].emit({
       type: 'exit',
       error: 'API Error: 529 overloaded',
+      transient: true,
     });
     // The failed run's process ended and freed its slot; another Project's
     // work takes it.

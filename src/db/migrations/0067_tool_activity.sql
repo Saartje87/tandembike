@@ -1,0 +1,1 @@
+ALTER TABLE `conversation_entries` ADD `tool_activity` text;

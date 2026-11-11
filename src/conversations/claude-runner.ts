@@ -14,6 +14,8 @@ import type {
   WidgetAnswer,
 } from './agent-runner';
 import { claudeInvocationText } from './claude-invocation';
+import { isTransientClaudeError } from './claude-run-error';
+import { claudeToolActivity } from './claude-tool-activity';
 import { claudeDisallowedTools } from './claude-tool-policy';
 import {
   createWidgetServer,
@@ -125,6 +127,10 @@ export function eventsOf(
           ),
           name: block.name,
           input: block.input as Record<string, unknown>,
+          activity: claudeToolActivity(
+            block.name,
+            block.input as Record<string, unknown>,
+          ),
         });
       }
     }
@@ -160,7 +166,10 @@ export function eventsOf(
         ...(message.modelUsage ? { usage: usageOf(message.modelUsage) } : {}),
         ...(error === undefined
           ? {}
-          : { error, errorSubtype: message.subtype }),
+          : {
+              error,
+              transient: isTransientClaudeError(error, message.subtype),
+            }),
       },
     ];
   }
@@ -367,9 +376,11 @@ export function createClaudeRunner(): AgentRunner {
           }
           onEvent({ type: 'exit' });
         } catch (error) {
+          const text = error instanceof Error ? error.message : String(error);
           onEvent({
             type: 'exit',
-            error: error instanceof Error ? error.message : String(error),
+            error: text,
+            transient: isTransientClaudeError(text),
           });
         }
       })();

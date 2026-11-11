@@ -246,7 +246,12 @@ describe('A turn end', () => {
     const result = step(
       aRun(),
       aConversation(),
-      event({ type: 'turn', cost: 0, error: 'API Error: 529 overloaded' }),
+      event({
+        type: 'turn',
+        cost: 0,
+        error: 'API Error: 529 overloaded',
+        transient: true,
+      }),
       now,
     );
 

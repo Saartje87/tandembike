@@ -190,6 +190,7 @@ describe('Run outcomes', () => {
         type: 'turn',
         cost: 1,
         error: 'API Error: 529 overloaded',
+        transient: true,
       });
       runner.runs[1].emit({
         type: 'turn',
@@ -209,7 +210,7 @@ describe('Run outcomes', () => {
         type: 'turn',
         cost: 1,
         error: 'The run failed',
-        errorSubtype: 'api_error',
+        transient: true,
       });
       expect(conversations.latestRunOutcome(conversation.id)?.result).toBe(
         'failed_transient',
@@ -235,7 +236,11 @@ describe('Run outcomes', () => {
     it('is failed at an exit that carries an error, once for the run', async () => {
       const { conversations, runner, startOnTicket } = setup();
       const conversation = await startOnTicket();
-      runner.runs[0].emit({ type: 'exit', error: 'socket hang up' });
+      runner.runs[0].emit({
+        type: 'exit',
+        error: 'socket hang up',
+        transient: true,
+      });
       expect(conversations.runOutcomes(conversation.id)).toMatchObject([
         { result: 'failed_transient' },
       ]);

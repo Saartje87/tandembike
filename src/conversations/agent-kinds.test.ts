@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
 import { NotAllowedError } from '../tickets/errors';
+import { conversationActivity } from './conversation-activity';
 
 function setup() {
   const world = createTestConversations();
@@ -228,5 +229,39 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
     });
 
     expect(world.runners.copilot.runs[0].options).not.toHaveProperty('model');
+  });
+
+  it("shows the activity a runner reports on the status line, not its agent's tool name (T1372)", async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+    });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'What is left?',
+    });
+
+    world.runners.copilot.runs[0].emit({
+      type: 'tool',
+      text: 'shell {"command":"npm test"}',
+      name: 'shell',
+      input: { command: 'npm test' },
+      activity: { verb: 'Running', target: 'npm test' },
+    });
+
+    const row = world.conversations
+      .activityRows()
+      .find(({ id }) => id === conversation.id);
+    expect(row?.latest?.toolActivity).toEqual({
+      verb: 'Running',
+      target: 'npm test',
+    });
+    expect(
+      conversationActivity(world.conversations.activityRows()).live[
+        world.ticket.number
+      ]?.line,
+    ).toBe('Running npm test');
   });
 });

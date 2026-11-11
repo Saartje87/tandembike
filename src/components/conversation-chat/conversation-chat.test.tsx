@@ -42,6 +42,7 @@ const entry = (values: Partial<TranscriptEntry>): TranscriptEntry => ({
   permissionRules: null,
   toolName: null,
   toolInput: null,
+  toolActivity: null,
   question: null,
   widget: null,
   createdAt: at,

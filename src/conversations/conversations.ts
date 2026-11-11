@@ -90,6 +90,7 @@ import {
   terminalIdleMinutes,
   terminalIdleMs,
 } from './terminal-shared';
+import type { ToolActivity } from './tool-activity';
 import {
   readUsage,
   totalUsage,
@@ -206,6 +207,8 @@ export type TranscriptEntry = {
   toolName: string | null;
   /** For a tool or permission entry, its input; null for others, older entries and an input over the cap. */
   toolInput: Record<string, unknown> | null;
+  /** For a tool entry, what it did, as its runner mapped it (ADR 0051); null for others and older entries. */
+  toolActivity: ToolActivity | null;
   /** For a question of the Agent, what it asked and the answers; null for other entries. */
   question: QuestionEntry | null;
   /** For a Widget of the Agent, the Widget, its answer and expired; null for other entries. */
@@ -493,7 +496,11 @@ export function createConversations({
       permission?: PermissionStatus;
       widget?: WidgetEntry;
       permissionRules?: string[] | null;
-      tool?: { name: string; input?: Record<string, unknown> };
+      tool?: {
+        name: string;
+        input?: Record<string, unknown>;
+        activity?: ToolActivity;
+      };
     } = {},
   ): number =>
     db
@@ -506,6 +513,7 @@ export function createConversations({
         permissionRules: extra.permissionRules ?? null,
         toolName: extra.tool?.name ?? null,
         toolInput: cappedInput(extra.tool?.input),
+        toolActivity: extra.tool?.activity ?? null,
         widget: extra.widget ?? null,
         createdAt: clock(),
       })
@@ -1635,7 +1643,14 @@ export function createConversations({
     }
     const name = `mcp__tandembike__${toolName}`;
     append(id, 'tool', `${name} ${JSON.stringify(input)}`.slice(0, 300), {
-      tool: { name, input },
+      tool: {
+        name,
+        input,
+        activity:
+          typeof input.number === 'number'
+            ? { tandembike: toolName, ticketNumber: input.number }
+            : { tandembike: toolName },
+      },
     });
     update(id, {});
     announce(id);
@@ -2193,6 +2208,7 @@ export function createConversations({
             permissionRules: conversationEntries.permissionRules,
             toolName: conversationEntries.toolName,
             toolInput: conversationEntries.toolInput,
+            toolActivity: conversationEntries.toolActivity,
             createdAt: conversationEntries.createdAt,
           })
           .from(conversationEntries)
@@ -2217,6 +2233,7 @@ export function createConversations({
               permissionRules: entry.permissionRules,
               toolName: entry.toolName,
               toolInput: entry.toolInput,
+              toolActivity: entry.toolActivity,
             }
           : null;
       // Every run starts with the User's message, so the latest one is the

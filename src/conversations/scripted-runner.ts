@@ -90,6 +90,7 @@ export function createScriptedRunner(): AgentRunner {
                 text: `Bash ${JSON.stringify(input)}`,
                 name: 'Bash',
                 input,
+                activity: { verb: 'Running', target: input.description },
               });
               if (left > 1) {
                 setTimeout(() => {
