@@ -1,5 +1,6 @@
 import type { WorktreeState, Worktrees } from '../worktrees/worktrees';
 import type { AgentRun, AgentRunner, RunOptions } from './agent-runner';
+import { claudeInvocationText } from './claude-invocation';
 
 /**
  * Fake runs for browser checks (T678): an `AgentRunner` that starts no Agent
@@ -37,6 +38,7 @@ let sessions = 0;
 export function createScriptedRunner(): AgentRunner {
   return {
     availability: () => ({ available: true }),
+    invocationText: claudeInvocationText,
     start(options: RunOptions): AgentRun {
       let closed = false;
       let steps = 0;
@@ -111,7 +113,7 @@ export function createScriptedRunner(): AgentRunner {
           sessionId: options.resume ?? `fake-session-${++sessions}`,
           model: 'fake',
         });
-        act(options.prompt);
+        act('text' in options.message ? options.message.text : '');
       });
       return {
         send(text) {

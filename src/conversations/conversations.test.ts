@@ -56,7 +56,7 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[0].options).toMatchObject({
       cwd: repositoryDir,
       mcpUrl: 'http://localhost:4747/api/mcp',
-      prompt: 'What is left to do?',
+      message: { text: 'What is left to do?' },
     });
     expect(runner.runs[0].options.resume).toBeUndefined();
     expect(conversations.transcript(conversation.id)).toMatchObject([
@@ -653,7 +653,7 @@ describe('Replying to a Conversation', () => {
     expect(runner.runs[1].options).toMatchObject({
       cwd: repositoryDir,
       resume: 'sess-1',
-      prompt: 'Carry on',
+      message: { text: 'Carry on' },
     });
   });
 
@@ -1840,7 +1840,7 @@ describe('New Ticket Conversations', () => {
     });
 
     expect(conversation.ticketNumber).toBeNull();
-    expect(runner.runs[0].options.prompt).toBe('Add a coupon field');
+    expect(runner.runs[0].firstMessage).toBe('Add a coupon field');
     const brief = runner.runs[0].options.systemPrompt;
     expect(brief).toContain('Website');
     expect(brief).toContain('new Ticket');
@@ -2337,7 +2337,7 @@ describe('A Spec Conversation (T1222)', () => {
 
     expect(spec).toMatchObject({ intent: 'spec', worktreePath: null });
     expect(runner.runs).toHaveLength(2);
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:spec T${idea.number}`,
     );
     expect(runner.runs[0].options.systemPrompt).toContain('Spec');
@@ -2394,7 +2394,7 @@ describe('A Retro Conversation', () => {
       startedBy: 'user',
       retroCycleId: cycle.id,
     });
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:retro "Launch the beta" (Cycle ${cycle.id})`,
     );
     expect(runner.runs[0].options.systemPrompt).toContain(
@@ -2426,7 +2426,7 @@ describe('A Retro Conversation', () => {
     const retro = await conversations.startRetro({ cycleId: cycle.id });
 
     const message = `/retro "Launch the beta" (Cycle ${cycle.id})`;
-    expect(runner.runs[0].options.prompt).toBe(message);
+    expect(runner.runs[0].firstMessage).toBe(message);
     expect(conversations.transcript(retro.id)).toMatchObject([
       { role: 'user', text: message },
     ]);

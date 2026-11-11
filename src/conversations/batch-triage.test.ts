@@ -165,7 +165,7 @@ describe('A Batch triage run (T1317)', () => {
       ticketNumbers: [12, 4],
     });
 
-    const { prompt } = runner.runs[0].options;
+    const prompt = runner.runs[0].firstMessage;
     expect(prompt).toContain(
       `Batch triage the Cycle "Beta" (Cycle ${cycle.id})`,
     );
@@ -185,7 +185,7 @@ describe('A Batch triage run (T1317)', () => {
       ticketNumbers: [7],
     });
 
-    expect(runner.runs[0].options.prompt).toContain(
+    expect(runner.runs[0].firstMessage).toContain(
       'Batch triage the Backlog: T7.',
     );
   });

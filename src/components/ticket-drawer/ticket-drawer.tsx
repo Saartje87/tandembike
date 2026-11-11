@@ -38,10 +38,6 @@ import {
 import type { Conversation } from '../../conversations/conversations';
 import type { Footprint } from '../../footprint/footprint';
 import type { ActivityEntry } from '../../tickets/activity';
-import {
-  noAgentCommands,
-  type ProjectAgentCommands,
-} from '../../tickets/agent-commands';
 import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { UncheckedCriterion } from '../../tickets/errors';
@@ -133,11 +129,6 @@ export type TicketDrawerProps = {
   conversations?: Conversation[];
   /** Their estimated Footprints by Conversation id (ADR 0050). Defaults to none: not measured. */
   conversationFootprints?: Record<number, Footprint>;
-  /**
-   * The commands of the Ticket's Project that Triage and Start send.
-   * Defaults to none, which sends the Playbook's commands.
-   */
-  agentCommands?: ProjectAgentCommands;
   /** The Ticket's pending triage proposal, if it has one. */
   triageProposal?: Proposal | null;
   /**
@@ -263,7 +254,6 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   referenceTemplates,
   conversations = [],
   conversationFootprints,
-  agentCommands = noAgentCommands,
   triageProposal = null,
   board,
   why,
@@ -686,8 +676,6 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       />
       <TicketAgentActions
         ticketNumber={ticket.number}
-        ticketType={ticket.type}
-        commands={agentCommands}
         specAvailable={canSpec(ticket)}
         askOnly={archived}
         onStarted={dialog.open}

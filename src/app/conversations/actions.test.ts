@@ -216,7 +216,7 @@ describe('Conversation actions', () => {
       ok: true,
       conversation: { intent: 'plan', startedBy: 'user' },
     });
-    expect(runner.runs[0].options.prompt).toBe('/tandembike:plan Ship');
+    expect(runner.runs[0].firstMessage).toBe('/tandembike:plan Ship');
   });
 
   it('send a reply and stop the run', async () => {

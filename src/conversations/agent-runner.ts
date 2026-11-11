@@ -1,6 +1,9 @@
 import type { UsageByModel } from '../footprint/token-usage';
+import type { ProjectAgentCommands } from '../tickets/agent-commands';
 import type { AgentKind } from '../tickets/agent-kind';
+import type { TicketType } from '../tickets/ticket-type';
 import type { PermissionAnswer } from './conversation-state';
+import type { RetroCycle } from './retro-prompt';
 import type { Widget, WidgetAnswer } from './widget';
 
 /**
@@ -68,6 +71,25 @@ export type PermissionRequest = {
  */
 export type { PermissionAnswer, Widget, WidgetAnswer };
 
+/**
+ * The Stage a run's first message invokes, in Tandembike's terms (ADR 0051):
+ * the Stage with its Ticket, Cycle, goal or topic. Each runner turns it into
+ * its agent's own invocation of the Playbook skill, such as Claude Code's
+ * `/tandembike:implement T42`.
+ */
+export type StageInvocation =
+  | {
+      stage: 'triage' | 'start' | 'spec' | 'merge';
+      /** Start on an Epic invokes the Epic's skill. */
+      ticket: { number: number; type: TicketType };
+    }
+  | { stage: 'retro'; cycle: RetroCycle }
+  | { stage: 'plan'; goal: string }
+  | { stage: 'spar'; topic: string | null; focusTicketNumber: number | null };
+
+/** What a run starts with: a Stage to invoke, or the User's text. */
+export type RunMessage = { invocation: StageInvocation } | { text: string };
+
 export type RunOptions = {
   /**
    * Asks the User whether the Agent may use a tool; the run waits for the
@@ -88,8 +110,13 @@ export type RunOptions = {
   mcpUrl: string;
   /** Appended to the Agent's own system prompt: only its situation. */
   systemPrompt: string;
-  /** The User's first message of this run. */
-  prompt: string;
+  /** The first message of this run: a Stage to invoke, or a reply's text. */
+  message: RunMessage;
+  /**
+   * The Project's agent command overrides (ADR 0051). They are Claude Code
+   * commands, so only the Claude runner reads them.
+   */
+  agentCommands: ProjectAgentCommands;
   /** The plugins every run loads: the Playbook, by local path (ADR 0032). */
   plugins: { type: 'local'; path: string }[];
   /** The permission mode of the run; `default` when left out (ADR 0029). */
@@ -127,6 +154,14 @@ export type RunnerAvailability =
 export type AgentRunner = {
   /** Whether it can run now; Claude Code always can. */
   availability(): RunnerAvailability;
+  /**
+   * The text its first message sends for a Stage, which the transcript
+   * records as the starter's message.
+   */
+  invocationText(
+    invocation: StageInvocation,
+    agentCommands: ProjectAgentCommands,
+  ): string;
   start(options: RunOptions): AgentRun;
 };
 

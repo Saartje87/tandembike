@@ -82,7 +82,7 @@ describe('Approve merge', () => {
       },
     ]);
     expect(runner.runs[0].options.cwd).toBe(path);
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:merge T${ticket.number}`,
     );
     expect(runner.runs[0].options.systemPrompt).toContain('worktree');
@@ -99,7 +99,7 @@ describe('Approve merge', () => {
 
     await conversations.approveMerge({ ticketNumber: ticket.number });
 
-    expect(runner.runs[0].options.prompt).toBe(`/ship T${ticket.number}`);
+    expect(runner.runs[0].firstMessage).toBe(`/ship T${ticket.number}`);
   });
 
   it('resumes an open idle Start Conversation with the fixed reply from the User', async () => {
@@ -114,7 +114,7 @@ describe('Approve merge', () => {
     expect(resumed.id).toBe(start.id);
     // The handoff ended the Start's process (ADR 0049): the merge resumes it.
     expect(runner.runs[0].closed).toBe(true);
-    expect(runner.runs[1].options.prompt).toBe(
+    expect(runner.runs[1].firstMessage).toBe(
       `Approved: merge T${ticket.number} now by the Playbook's merge steps, then finish_work.`,
     );
     expect(conversations.get(start.id).state).toBe('running');
@@ -157,7 +157,7 @@ describe('Approve merge', () => {
 
     await conversations.approveMerge({ ticketNumber: epic.number });
 
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:merge T${epic.number}`,
     );
   });

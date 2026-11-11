@@ -7,7 +7,6 @@ import { appAutopilot } from '../../../../autopilot/app-autopilot';
 import { createAutopilot } from '../../../../autopilot/autopilot';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { createTestConversations } from '../../../../test/conversations';
-import { agentCommandEntries, agentCommands } from '../../../../test/fixtures';
 import { renderWithTheme } from '../../../../test/render';
 import { createTestSettings } from '../../../../test/settings';
 import { appTickets } from '../../../../tickets/app-tickets';
@@ -36,7 +35,6 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     referenceTemplates,
     conversations,
     conversationFootprints,
-    agentCommands,
     board,
     why,
   }: {
@@ -49,7 +47,6 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
     referenceTemplates: { prefix: string }[];
     conversations: unknown[];
     conversationFootprints: unknown;
-    agentCommands: unknown;
     board: unknown;
     why: ReactNode;
   }) => (
@@ -66,7 +63,6 @@ vi.mock('../../../../components/ticket-drawer/ticket-drawer', () => ({
       data-conversation-intents={(conversations as { intent: string }[])
         .map(({ intent }) => intent)
         .join(' ')}
-      data-agent-commands={JSON.stringify(agentCommands)}
       data-board={JSON.stringify(board)}
     >
       {why}
@@ -251,37 +247,6 @@ describe('BoardTicketDrawer', () => {
     expect(screen.getByRole('dialog')).toHaveAttribute(
       'data-footprints',
       JSON.stringify({ [started.id]: { measured: false } }),
-    );
-  });
-
-  it("gives the drawer its Project's Triage and Start commands", async () => {
-    const { tickets, website, ticket } = setUp();
-    tickets.setProjectAgentCommands(
-      website.id,
-      agentCommandEntries({
-        triageCommand: '/triage',
-        startCommand: '/implement',
-      }),
-    );
-
-    renderWithTheme(
-      <div>
-        {
-          await BoardTicketDrawer({
-            projectId: website.id,
-            number: ticket.number,
-            cycleId: null,
-          })
-        }
-      </div>,
-    );
-
-    expect(
-      JSON.parse(
-        screen.getByRole('dialog').getAttribute('data-agent-commands') ?? '',
-      ),
-    ).toEqual(
-      agentCommands({ triageCommand: '/triage', startCommand: '/implement' }),
     );
   });
 

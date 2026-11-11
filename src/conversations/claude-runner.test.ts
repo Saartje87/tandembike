@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RunEvent } from './agent-runner';
+import { agentCommands } from '../test/fixtures';
+import { noAgentCommands } from '../tickets/agent-commands';
+import type { RunEvent, StageInvocation } from './agent-runner';
 
 const { query, controls } = vi.hoisted(() => ({
   query: vi.fn(),
@@ -49,7 +51,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: 'Your situation.',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       resume: 'sess-1',
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
@@ -93,7 +96,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: 'Your situation.',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       runMode: 'auto',
       askPermission,
       askWidget: async () => ({ expired: true }),
@@ -120,7 +124,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://localhost:4747/api/mcp',
         plugins: [{ type: 'local', path: '/app/playbook' }],
         systemPrompt: 'Your situation.',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         runMode: 'default',
         ...(model === undefined ? {} : { model }),
         askPermission: async () => 'deny',
@@ -144,7 +149,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://localhost:4747/api/mcp',
       plugins: [{ type: 'local', path: '/app/playbook' }],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -162,7 +168,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'First',
+      message: { text: 'First' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -174,6 +181,87 @@ describe('The Claude runner', () => {
 
     expect((await input.next()).value?.message.content).toBe('First');
     expect((await input.next()).value?.message.content).toBe('Second');
+  });
+
+  it.each<[StageInvocation, string]>([
+    [
+      { stage: 'start', ticket: { number: 42, type: 'Ticket' } },
+      '/tandembike:implement T42',
+    ],
+    [
+      { stage: 'start', ticket: { number: 7, type: 'Epic' } },
+      '/tandembike:implement-epic T7',
+    ],
+    [
+      { stage: 'triage', ticket: { number: 42, type: 'Ticket' } },
+      '/tandembike:triage T42',
+    ],
+    [
+      { stage: 'spec', ticket: { number: 5, type: 'Ticket' } },
+      '/tandembike:spec T5',
+    ],
+    [
+      { stage: 'merge', ticket: { number: 9, type: 'Epic' } },
+      '/tandembike:merge T9',
+    ],
+    [
+      { stage: 'retro', cycle: { id: 3, title: 'Beta' } },
+      '/tandembike:retro "Beta" (Cycle 3)',
+    ],
+    [{ stage: 'plan', goal: 'Ship it' }, '/tandembike:plan Ship it'],
+    [
+      { stage: 'spar', topic: 'Faster triage', focusTicketNumber: 42 },
+      '/tandembike:spar "Faster triage" T42',
+    ],
+    [
+      { stage: 'spar', topic: null, focusTicketNumber: null },
+      '/tandembike:spar',
+    ],
+  ])(
+    'sends a Stage as its Playbook slash command: %o',
+    async (invocation, text) => {
+      query.mockReturnValue(fakeQuery([]));
+      const runner = createClaudeRunner();
+      runner.start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        message: { invocation },
+        agentCommands: noAgentCommands,
+        askPermission: async () => 'deny',
+        askWidget: async () => ({ expired: true }),
+        onEvent: () => {},
+      });
+      const input: AsyncIterator<{ message: { content: string } }> =
+        query.mock.calls[0][0].prompt[Symbol.asyncIterator]();
+
+      expect((await input.next()).value?.message.content).toBe(text);
+      expect(runner.invocationText(invocation, noAgentCommands)).toBe(text);
+    },
+  );
+
+  it("sends the Project's agent command override for a Stage", async () => {
+    query.mockReturnValue(fakeQuery([]));
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: {
+        invocation: { stage: 'start', ticket: { number: 42, type: 'Ticket' } },
+      },
+      agentCommands: agentCommands({ startCommand: '/ship' }),
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: () => {},
+    });
+    const input: AsyncIterator<{ message: { content: string } }> =
+      query.mock.calls[0][0].prompt[Symbol.asyncIterator]();
+
+    expect((await input.next()).value?.message.content).toBe('/ship T42');
   });
 
   it('turns SDK messages into run events and ends with an exit', async () => {
@@ -214,7 +302,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
@@ -327,7 +416,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
@@ -359,7 +449,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: (event) => events.push(event),
@@ -377,7 +468,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission: async () => 'deny',
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -402,7 +494,8 @@ describe('The Claude runner', () => {
       mcpUrl: 'http://x',
       plugins: [],
       systemPrompt: '',
-      prompt: 'Hi',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
       askPermission,
       askWidget: async () => ({ expired: true }),
       onEvent: () => {},
@@ -441,7 +534,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission,
         askWidget: async () => ({ expired: true }),
         onEvent: () => {},
@@ -558,7 +652,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission,
         askWidget: askWidget as never,
         onEvent: () => {},
@@ -649,7 +744,8 @@ describe('The Claude runner', () => {
         mcpUrl: 'http://x',
         plugins: [],
         systemPrompt: '',
-        prompt: 'Hi',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
         askPermission: vi.fn(),
         askWidget: askWidget as never,
         onEvent: () => {},

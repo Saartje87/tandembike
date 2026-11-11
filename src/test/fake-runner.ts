@@ -4,10 +4,13 @@ import type {
   RunEvent,
   RunOptions,
 } from '../conversations/agent-runner';
+import { claudeInvocationText } from '../conversations/claude-invocation';
 import type { AgentKind } from '../tickets/agent-kind';
 
 export type FakeRun = AgentRun & {
   options: RunOptions;
+  /** The first message's text: a reply's, or the Stage as Claude Code words it. */
+  firstMessage: string;
   sent: string[];
   interrupted: boolean;
   closed: boolean;
@@ -32,9 +35,18 @@ export function createFakeRunner(kind: AgentKind = 'claude-code'): FakeRunner {
     kind,
     runs,
     availability: () => ({ available: true }),
+    // Worded as Claude Code does, so transcripts read as in the app.
+    invocationText: claudeInvocationText,
     start(options) {
       const run: FakeRun = {
         options,
+        firstMessage:
+          'text' in options.message
+            ? options.message.text
+            : claudeInvocationText(
+                options.message.invocation,
+                options.agentCommands,
+              ),
         sent: [],
         interrupted: false,
         closed: false,

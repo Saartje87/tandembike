@@ -33,7 +33,7 @@ describe('Starting a Spar', () => {
       ticketNumber: ticket.number,
       startedBy: 'user',
     });
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:spar "Speed it up" T${ticket.number}`,
     );
     expect(spars.getSpar(spar.id)).toEqual(spar);
@@ -52,7 +52,7 @@ describe('Starting a Spar', () => {
     expect(spar.topic).toBeNull();
     expect(spar.focusTicketNumber).toBeNull();
     expect(conversations.get(spar.id).ticketNumber).toBeNull();
-    expect(runner.runs[0].options.prompt).toBe('/think');
+    expect(runner.runs[0].firstMessage).toBe('/think');
   });
 
   it('refuses a focus Ticket of another Project and a topic over one line', async () => {
@@ -590,7 +590,7 @@ describe('The Hand-off of a Spar', () => {
       ticketNumber: result.ticketNumber,
       startedBy: 'user',
     });
-    expect(runner.runs.at(-1)?.options.prompt).toBe(
+    expect(runner.runs.at(-1)?.firstMessage).toBe(
       `/tandembike:spec T${result.ticketNumber}`,
     );
   });

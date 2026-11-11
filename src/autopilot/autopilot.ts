@@ -4,7 +4,6 @@ import type {
   Conversation,
   Conversations,
 } from '../conversations/conversations';
-import { agentCommandMessage } from '../tickets/agent-commands';
 import type { ChangeChannel } from '../tickets/changes';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
@@ -478,11 +477,7 @@ export function createAutopilot({
         ticketNumber: ticket.number,
         intent: 'start',
         cycleId: builds.cycleId as number,
-        prompt: agentCommandMessage(
-          'start',
-          ticket,
-          tickets.getProjectAgentCommands(projectId),
-        ),
+        stage: { stage: 'start' },
       });
       return true;
     } catch (error) {
@@ -680,11 +675,7 @@ export function createAutopilot({
         startedBy: 'autopilot',
         ticketNumber: ticket.number,
         intent: 'triage',
-        prompt: agentCommandMessage(
-          'triage',
-          ticket,
-          tickets.getProjectAgentCommands(projectId),
-        ),
+        stage: { stage: 'triage' },
       });
       return true;
     } catch (error) {

@@ -13,6 +13,7 @@ import type {
   Widget,
   WidgetAnswer,
 } from './agent-runner';
+import { claudeInvocationText } from './claude-invocation';
 import {
   createWidgetServer,
   isWidgetTool,
@@ -249,12 +250,14 @@ export function createClaudeRunner(): AgentRunner {
   return {
     // The SDK ships with the app, so Claude Code can always run (ADR 0051).
     availability: () => ({ available: true }),
+    invocationText: claudeInvocationText,
     start({
       cwd,
       agentRunId,
       mcpUrl,
       systemPrompt,
-      prompt,
+      message,
+      agentCommands,
       resume,
       plugins,
       runMode = 'default',
@@ -265,7 +268,11 @@ export function createClaudeRunner(): AgentRunner {
       onEvent,
     }) {
       const input = createInput();
-      input.push(prompt);
+      input.push(
+        'text' in message
+          ? message.text
+          : claudeInvocationText(message.invocation, agentCommands),
+      );
 
       const run = query({
         prompt: input.messages(),

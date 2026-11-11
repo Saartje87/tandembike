@@ -59,7 +59,9 @@ export async function startConversation(
         ? {}
         : { ticketNumber: Number(input.ticketNumber) }),
       intent: input?.intent,
-      prompt: String(input?.prompt ?? ''),
+      ...(input?.stage === undefined
+        ? { prompt: String(input?.prompt ?? '') }
+        : { stage: input.stage }),
       startedBy: 'user',
       ...(input?.defaults === undefined ? {} : { defaults: input.defaults }),
     }),

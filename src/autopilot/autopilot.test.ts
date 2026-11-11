@@ -90,7 +90,7 @@ describe('Autopilot dispatch', () => {
     expect(list.map((x) => x.ticketNumber)).toEqual([c.number, a.number]);
     expect(list.every((x) => x.startedBy === 'autopilot')).toBe(true);
     expect(list.every((x) => x.intent === 'start')).toBe(true);
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:implement T${c.number}`,
     );
   });
@@ -138,7 +138,7 @@ describe('Autopilot dispatch', () => {
 
     await autopilot.evaluate();
 
-    expect(runner.runs[0].options.prompt).toBe(
+    expect(runner.runs[0].firstMessage).toBe(
       `/tandembike:implement-epic T${epic.number}`,
     );
   });
@@ -866,9 +866,7 @@ describe('Auto-triage', () => {
       ticketNumber: a.number,
       intent: 'triage',
     });
-    expect(runner.runs[0].options.prompt).toBe(
-      `/tandembike:triage T${a.number}`,
-    );
+    expect(runner.runs[0].firstMessage).toBe(`/tandembike:triage T${a.number}`);
   });
 
   it('triages a Ticket with no state label, planned in a Cycle too', async () => {
@@ -1032,7 +1030,7 @@ describe('Auto-triage', () => {
 
       await autopilot.evaluate();
 
-      expect(runner.runs[1].options.prompt).toContain(`T${a.number}`);
+      expect(runner.runs[1].firstMessage).toContain(`T${a.number}`);
       expect(runner.runs[1].options.disallowedTools).toEqual([
         'mcp__tandembike__update_ticket',
         'mcp__tandembike__file_tickets',

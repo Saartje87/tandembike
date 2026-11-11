@@ -18,7 +18,6 @@ import type { UsageByModel } from '../footprint/token-usage';
 import { playbookPath } from '../playbook/playbook';
 import {
   agentCommandMessage,
-  commandForStage,
   planCommandMessage,
 } from '../tickets/agent-commands';
 import {
@@ -45,7 +44,9 @@ import type {
   AgentRunners,
   PermissionRequest,
   RunEvent,
+  RunMessage,
   RunnerAvailability,
+  StageInvocation,
 } from './agent-runner';
 import { batchTriagePrompt } from './batch-triage-prompt';
 import {
@@ -70,7 +71,6 @@ import {
   type QuestionEntry,
   type TranscriptRole,
 } from './conversation-state';
-import { retroPrompt } from './retro-prompt';
 import { type NewTicketDefaults, runBrief } from './run-brief';
 import {
   type ConversationSender,
@@ -233,8 +233,14 @@ export type StartConversationInput = {
   projectId?: number;
   ticketNumber?: number;
   intent: ConversationIntent;
-  /** The User's first message. */
-  prompt: string;
+  /** The starter's first message; left out when `stage` invokes the Stage. */
+  prompt?: string;
+  /**
+   * The Stage the first message invokes, which must be the intent: the run
+   * gets it with its Ticket, Cycle, goal or topic, and its runner words it
+   * (ADR 0051). The Ticket Stages need `ticketNumber`, a Retro its Cycle.
+   */
+  stage?: StageRequest;
   /**
    * Autopilot only: the Active Cycle it starts the Conversation for, whose
    * Spend ceiling the cost counts against.
@@ -247,6 +253,15 @@ export type StartConversationInput = {
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
 };
+
+/**
+ * A Stage to invoke, with what only the starter knows: a Plan's goal, a
+ * Spar's topic. The Ticket, focus and Cycle come from the Conversation.
+ */
+export type StageRequest =
+  | { stage: 'triage' | 'start' | 'spec' | 'merge' | 'retro' }
+  | { stage: 'plan'; goal: string }
+  | { stage: 'spar'; topic: string | null };
 
 /** What the CLI needs to open `claude` for a Terminal Conversation. */
 export type TerminalSession = {
@@ -926,7 +941,7 @@ export function createConversations({
    */
   const startRun = (
     id: number,
-    prompt: string,
+    message: RunMessage,
     resume?: string,
     limited = true,
     sentBy: ConversationSender = 'user',
@@ -944,6 +959,9 @@ export function createConversations({
       id,
     );
     const runner = runnerOf(conversation.agentKind);
+    const agentCommands = tickets.getProjectAgentCommands(
+      conversation.projectId,
+    );
     const runModel = modelFor(conversation.intent, settings);
     const handle: RunHandle = {
       process: null,
@@ -954,7 +972,9 @@ export function createConversations({
         model: null,
         ticketStatus: ticketFactsOf(conversation)?.status ?? null,
         pending: pendingRunOf(
-          prompt,
+          'text' in message
+            ? message.text
+            : runner.invocationText(message.invocation, agentCommands),
           {
             costAtStart: conversation.costUsd,
             sentBy,
@@ -976,7 +996,8 @@ export function createConversations({
         mcpUrl,
         plugins: [{ type: 'local', path: playbookPath }],
         systemPrompt: briefOf(id),
-        prompt,
+        message,
+        agentCommands,
         // A Spar is read-only whatever the Project's run mode (ADR 0046).
         runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
         ...(runModel === null ? {} : { model: runModel }),
@@ -1069,6 +1090,50 @@ export function createConversations({
       .get() ?? null;
 
   /**
+   * The Stage invocation of a start: the request with the Conversation's
+   * Ticket, focus or Retro Cycle. Refused when the Stage lacks what it needs.
+   */
+  const invocationOf = (
+    request: StageRequest,
+    input: { ticketNumber?: number; retroCycleId?: number },
+  ): StageInvocation => {
+    switch (request.stage) {
+      case 'triage':
+      case 'start':
+      case 'spec':
+      case 'merge': {
+        if (input.ticketNumber === undefined) {
+          throw new ValidationError({
+            ticketNumber: `The ${request.stage} Stage is about a Ticket.`,
+          });
+        }
+        const ticket = tickets.getTicket(input.ticketNumber);
+        return {
+          stage: request.stage,
+          ticket: { number: ticket.number, type: ticket.type },
+        };
+      }
+      case 'retro': {
+        const cycle = tickets.getCycle(input.retroCycleId as number);
+        return { stage: 'retro', cycle: { id: cycle.id, title: cycle.title } };
+      }
+      case 'plan': {
+        const goal = request.goal.trim();
+        if (goal === '') {
+          throw new ValidationError({ goal: 'Describe the goal to plan for.' });
+        }
+        return { stage: 'plan', goal };
+      }
+      case 'spar':
+        return {
+          stage: 'spar',
+          topic: request.topic,
+          focusTicketNumber: input.ticketNumber ?? null,
+        };
+    }
+  };
+
+  /**
    * Starts a Conversation on a Ticket or a Project and its first run.
    * Refused when the Project has no repository path.
    */
@@ -1076,8 +1141,13 @@ export function createConversations({
     input: StartConversationInput,
   ): Promise<Conversation> => {
     const prompt = (input.prompt ?? '').trim();
-    if (prompt === '') {
+    if (input.stage === undefined && prompt === '') {
       throw new ValidationError({ prompt: 'Write a message for the Agent.' });
+    }
+    if (input.stage !== undefined && input.stage.stage !== input.intent) {
+      throw new ValidationError({
+        stage: `A ${input.intent} Conversation cannot invoke the ${input.stage.stage} Stage.`,
+      });
     }
     let projectId = input.projectId;
     if (input.ticketNumber !== undefined) {
@@ -1200,7 +1270,18 @@ export function createConversations({
     // Every start takes the Project's default (ADR 0051); a kind that
     // cannot run is refused here, before anything is stored.
     const agentKind = settings.defaultAgentKind;
-    runnerOf(agentKind);
+    const runner = runnerOf(agentKind);
+    const message: RunMessage =
+      input.stage === undefined
+        ? { text: prompt }
+        : { invocation: invocationOf(input.stage, input) };
+    const firstText =
+      'text' in message
+        ? message.text
+        : runner.invocationText(
+            message.invocation,
+            tickets.getProjectAgentCommands(projectId),
+          );
 
     const now = clock();
     const created = db
@@ -1232,7 +1313,7 @@ export function createConversations({
       })
       .returning({ id: conversations.id })
       .get();
-    append(created.id, input.startedBy, prompt);
+    append(created.id, input.startedBy, firstText);
     // A Merge always gets a worktree: it checks out the PR branch, which must
     // not disturb the User's checkout, even with Parallel runs off (T1221).
     if (
@@ -1250,7 +1331,7 @@ export function createConversations({
       }
     }
     try {
-      startRun(created.id, prompt, undefined, true, input.startedBy);
+      startRun(created.id, message, undefined, true, input.startedBy);
     } catch (error) {
       update(created.id, { state: 'interrupted' });
       append(created.id, 'error', 'The Agent could not be started.');
@@ -2254,13 +2335,7 @@ export function createConversations({
         startedBy: 'user',
         projectId: cycle.projectId,
         intent: 'retro',
-        prompt: retroPrompt(
-          cycle,
-          commandForStage(
-            'retro',
-            tickets.getProjectAgentCommands(cycle.projectId),
-          ),
-        ),
+        stage: { stage: 'retro' },
         retroCycleId: cycle.id,
       });
     },
@@ -2283,10 +2358,7 @@ export function createConversations({
         startedBy: 'user',
         projectId: input.projectId,
         intent: 'plan',
-        prompt: planCommandMessage(
-          goal,
-          tickets.getProjectAgentCommands(input.projectId),
-        ),
+        stage: { stage: 'plan', goal },
       });
     },
 
@@ -2401,7 +2473,7 @@ export function createConversations({
       } else {
         startRun(
           id,
-          message,
+          { text: message },
           conversation.sdkSessionId ?? undefined,
           limited,
           sentBy,
@@ -2475,11 +2547,7 @@ export function createConversations({
         startedBy: 'user',
         ticketNumber: ticket.number,
         intent: 'merge',
-        prompt: agentCommandMessage(
-          'merge',
-          ticket,
-          tickets.getProjectAgentCommands(ticket.projectId),
-        ),
+        stage: { stage: 'merge' },
       });
     },
 

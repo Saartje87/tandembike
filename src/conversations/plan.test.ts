@@ -42,9 +42,7 @@ describe('A Plan Conversation (T1248)', () => {
       startedBy: 'user',
       worktreePath: null,
     });
-    expect(runner.runs[0].options.prompt).toBe(
-      '/tandembike:plan Ship the beta',
-    );
+    expect(runner.runs[0].firstMessage).toBe('/tandembike:plan Ship the beta');
   });
 
   it("sends the Project's own Plan command when it set one", async () => {
@@ -56,7 +54,7 @@ describe('A Plan Conversation (T1248)', () => {
 
     await conversations.startPlan({ projectId: project.id, goal: 'Ship it' });
 
-    expect(runner.runs[0].options.prompt).toBe('/my:plan Ship it');
+    expect(runner.runs[0].firstMessage).toBe('/my:plan Ship it');
   });
 
   it('is refused without a goal', async () => {

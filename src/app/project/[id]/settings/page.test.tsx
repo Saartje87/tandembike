@@ -146,6 +146,19 @@ describe('SettingsPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('says the agent commands apply to Claude Code runs only (ADR 0051)', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(
+      screen.getByText(/They apply to Claude Code runs only/),
+    ).toBeInTheDocument();
+  });
+
   it("gives the agent settings the Project's latest Setup", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
@@ -156,6 +169,7 @@ describe('SettingsPage', () => {
         { id: 7, intent: 'setup' },
         { id: 2, intent: 'setup' },
       ],
+      agentKinds: () => [],
     } as unknown as ReturnType<typeof appConversations>);
 
     const params = Promise.resolve({ id: String(project.id) });

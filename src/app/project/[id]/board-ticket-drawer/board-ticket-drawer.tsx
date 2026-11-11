@@ -146,7 +146,6 @@ export const BoardTicketDrawer: FC<BoardTicketDrawerProps> = async ({
       conversationFootprints={Object.fromEntries(
         ticketConversations.map(({ id }) => [id, conversationFootprint(id)]),
       )}
-      agentCommands={tickets.getProjectAgentCommands(ticket.projectId)}
       triageProposal={tickets.pendingTriage(ticket.number)}
       why={
         why && (

@@ -418,7 +418,7 @@ describe('A reply after the worktree is released (T1281)', () => {
     await conversations.reply(conversation.id, 'Commit it.', 'user');
     expect(runner.runs[1].options).toMatchObject({
       cwd: path,
-      prompt: 'Commit it.',
+      message: { text: 'Commit it.' },
     });
   });
 
@@ -447,6 +447,6 @@ describe('A reply after the worktree is released (T1281)', () => {
 
     // The run ended at Done (ADR 0049); the reply resumes it.
     expect(world.runner.runs[0].closed).toBe(true);
-    expect(world.runner.runs[1].options.prompt).toBe('Thanks.');
+    expect(world.runner.runs[1].firstMessage).toBe('Thanks.');
   });
 });
