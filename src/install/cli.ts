@@ -27,6 +27,7 @@ import {
   type ServerEffects,
   type ServerRecord,
   type StopOptions,
+  serverState,
   serverStatus,
   startServer,
   stopServer,
@@ -112,6 +113,7 @@ async function main(): Promise<void> {
       return process.exit(0);
     case 'triage':
     case 'spec':
+      if (!(await ensureServer())) return process.exit(1);
       return process.exit(
         await startSession({
           action: 'start',
@@ -120,6 +122,7 @@ async function main(): Promise<void> {
         }),
       );
     case 'plan':
+      if (!(await ensureServer())) return process.exit(1);
       return process.exit(
         await startSession({
           action: 'plan',
@@ -128,6 +131,7 @@ async function main(): Promise<void> {
         }),
       );
     case 'implement':
+      if (!(await ensureServer())) return process.exit(1);
       return process.exit(
         parsed.ticketNumber === null
           ? await startNext()
@@ -138,6 +142,7 @@ async function main(): Promise<void> {
             }),
       );
     case 'resume':
+      if (!(await ensureServer())) return process.exit(1);
       return process.exit(await resumeSession(parsed.conversationId));
   }
 }
@@ -293,6 +298,22 @@ async function showLogs(follow: boolean): Promise<number> {
     });
     tail.on('exit', (code, signal) => resolve(signal ? 130 : (code ?? 0)));
   });
+}
+
+/**
+ * The automatic start of a session command (T1354): with no server running,
+ * start it in the background without the MCP and plugin offers, on the port
+ * clients look for. Returns whether a server runs now.
+ */
+async function ensureServer(): Promise<boolean> {
+  const state = await serverState(serverEffects);
+  if (state.state !== 'stopped') return true;
+  const exitCode = await startServer(serverEffects, {
+    port: Number(new URL(state.url).port) || null,
+    automatic: true,
+    prepare: () => firstRunSteps({ offers: false }),
+  });
+  return exitCode === 0;
 }
 
 /** `stop`'s question, asked only in a terminal. */

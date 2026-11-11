@@ -10,6 +10,17 @@ import { join } from 'node:path';
 // finds the main checkout's install (T1224).
 const tsxCli = createRequire(import.meta.url).resolve('tsx/cli');
 
+// A home, data folder and checkout of its own for every run, so no test
+// reads the User's ~/.tandembike or starts a server from a real build: the
+// temp checkout has none.
+let sandbox: string;
+beforeEach(() => {
+  sandbox = mkdtempSync(join(tmpdir(), 'tandembike-cli-sandbox-'));
+});
+afterEach(() => {
+  rmSync(sandbox, { recursive: true, force: true });
+});
+
 // Runs the CLI from source in this checkout. Node runs tsx directly, so PATH
 // can leave out `claude` (and node).
 const runCli = (args: string[], env: Record<string, string> = {}) =>
@@ -20,7 +31,14 @@ const runCli = (args: string[], env: Record<string, string> = {}) =>
       cwd: process.cwd(),
       encoding: 'utf8',
       input: '',
-      env: { NODE_ENV: 'test', PATH: '/usr/bin:/bin', ...env },
+      env: {
+        NODE_ENV: 'test',
+        PATH: '/usr/bin:/bin',
+        HOME: sandbox,
+        TANDEMBIKE_DATA_DIR: join(sandbox, '.tandembike'),
+        TANDEMBIKE_PACKAGE_DIR: join(sandbox, 'checkout'),
+        ...env,
+      },
     },
   );
 
@@ -94,18 +112,24 @@ describe('tandembike help and status (T1350)', () => {
   }, 30_000);
 });
 
+describe('session commands with the server down (T1354)', () => {
+  it.each([[['implement', '42']], [['resume', '3']]])(
+    '%j exits 1 with the log path and the tandembike start hint when the automatic start fails',
+    (argv) => {
+      const result = runCli(argv, { TANDEMBIKE_URL: 'http://127.0.0.1:1' });
+
+      expect(result.status).toBe(1);
+      expect(result.stdout).toContain('run `npm run build` first');
+      expect(result.stdout).toContain(
+        `Logs: ${join(sandbox, '.tandembike', 'server.log')}`,
+      );
+      expect(result.stdout).toContain('`tandembike start`');
+    },
+    30_000,
+  );
+});
+
 describe('tandembike resume (T1241)', () => {
-  it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = runCli(['resume', '3'], {
-      TANDEMBIKE_URL: 'http://127.0.0.1:1',
-    });
-
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Tandembike is not running. Start it with `tandembike start`.',
-    );
-  }, 30_000);
-
   it('prints the usage and exits 1 for a resume without a Conversation', () => {
     const result = runCli(['resume']);
 

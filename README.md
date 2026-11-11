@@ -110,8 +110,11 @@ why, and from a folder in no Project's repository it names the known Projects.
 The Conversation shows on the Board as In flight, **Started by Terminal**. It
 holds no Start run slot and counts against no Spend ceiling, and Autopilot does
 not start a second run on its Ticket. It ends when `claude` exits, and
-the command exits with `claude`'s exit code. If Tandembike is not
-running, it says so and exits 1. See
+the command exits with `claude`'s exit code. When Tandembike is not running, the
+command starts it in the background first (without the MCP and plugin offers)
+and says so in one line, `Started Tandembike on :4747 (logs: …)`; when that
+start fails it prints why, the log path and the `tandembike start` hint, and
+exits 1. The same holds for `triage`, `spec`, `plan` and `resume`. See
 `docs/adr/0039-terminal-conversations.md`.
 
 ### Continue a Conversation in your terminal
