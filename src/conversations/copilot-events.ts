@@ -1,3 +1,9 @@
+import { isClaudeModel, notMeasuredModel } from '../footprint/footprint';
+import {
+  addTokens,
+  noTokens,
+  type UsageByModel,
+} from '../footprint/token-usage';
 import type { RunEvent } from './agent-runner';
 import {
   type CopilotError,
@@ -26,6 +32,8 @@ export type CopilotEventState = {
   error: CopilotError | null;
   /** The run's cost so far in nano-AIU, from each model call's usage. */
   nanoAiu: number;
+  /** The run's tokens so far per model (ADR 0050). */
+  usage: UsageByModel;
 };
 
 export const copilotEventState = (): CopilotEventState => ({
@@ -33,7 +41,11 @@ export const copilotEventState = (): CopilotEventState => ({
   createCalls: new Set(),
   error: null,
   nanoAiu: 0,
+  usage: {},
 });
+
+const count = (value: unknown) =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
 /** AI credits are Copilot's nano-AIU over 10⁹ (ADR 0051). */
 const nanoAiuPerCredit = 1_000_000_000;
@@ -131,9 +143,18 @@ export function copilotEventsOf(
     }
     case 'assistant.usage': {
       // Recorded live: these events are not kept in the session's log.
-      const nano = recordOf(data.copilotUsage).totalNanoAiu;
-      if (typeof nano === 'number' && Number.isFinite(nano)) {
-        state.nanoAiu += nano;
+      state.nanoAiu += count(recordOf(data.copilotUsage).totalNanoAiu);
+      const model = stringOf(data, 'model');
+      if (model) {
+        // A model with no Claude tier is stored apart: not measured, never
+        // counted as Opus (ADR 0051).
+        const key = isClaudeModel(model) ? model : notMeasuredModel(model);
+        state.usage[key] = addTokens(state.usage[key] ?? noTokens, {
+          input: count(data.inputTokens),
+          output: count(data.outputTokens),
+          cacheWrite: count(data.cacheWriteTokens),
+          cacheRead: count(data.cacheReadTokens),
+        });
       }
       return [];
     }
@@ -156,6 +177,9 @@ export function copilotEventsOf(
         {
           type: 'turn',
           cost: state.nanoAiu / nanoAiuPerCredit,
+          ...(Object.keys(state.usage).length === 0
+            ? {}
+            : { usage: structuredClone(state.usage) }),
           ...(error === null
             ? {}
             : {

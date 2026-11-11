@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { notMeasuredModel } from '../footprint/footprint';
 import { agentCommands } from '../test/fixtures';
 import { noAgentCommands } from '../tickets/agent-commands';
 import type { RunEvent, RunOptions, StageInvocation } from './agent-runner';
@@ -509,8 +510,52 @@ describe('The Copilot runner', () => {
       session.emit('session.idle', {});
 
       expect(events).toEqual([
-        { type: 'turn', cost: 7.8 },
-        { type: 'turn', cost: 12.8 },
+        expect.objectContaining({ type: 'turn', cost: 7.8 }),
+        expect.objectContaining({ type: 'turn', cost: 12.8 }),
+      ]);
+    });
+
+    it("ends each turn with the run's tokens per model, a model with no Claude tier kept apart as not measured", async () => {
+      const { session, events } = await emitting();
+
+      session.emit('assistant.usage', {
+        model: 'claude-sonnet-5.5',
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 300,
+        cacheWriteTokens: 40,
+      });
+      session.emit('assistant.usage', {
+        model: 'claude-sonnet-5.5',
+        inputTokens: 10,
+        outputTokens: 2,
+      });
+      session.emit('assistant.usage', {
+        model: 'gpt-5.5',
+        inputTokens: 50,
+        outputTokens: 5,
+      });
+      session.emit('session.idle', {});
+
+      expect(events).toEqual([
+        {
+          type: 'turn',
+          cost: 0,
+          usage: {
+            'claude-sonnet-5.5': {
+              input: 110,
+              output: 22,
+              cacheRead: 300,
+              cacheWrite: 40,
+            },
+            [notMeasuredModel('gpt-5.5')]: {
+              input: 50,
+              output: 5,
+              cacheRead: 0,
+              cacheWrite: 0,
+            },
+          },
+        },
       ]);
     });
 
