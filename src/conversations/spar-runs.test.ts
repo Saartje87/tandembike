@@ -5,7 +5,7 @@ import { createTestConversations } from '../test/conversations';
 import { connectMcpClient } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { NotAllowedError } from '../tickets/errors';
-import { sparDisallowedTools } from './conversations';
+import { claudeDisallowedTools } from './claude-tool-policy';
 
 function setup(runMode: 'default' | 'auto' = 'auto') {
   const world = createTestConversations();
@@ -34,16 +34,7 @@ describe('A Spar run (ADR 0046)', () => {
 
     const { options } = world.runner.runs[0];
     expect(options.runMode).toBe('default');
-    expect(options.disallowedTools).toEqual(
-      expect.arrayContaining([
-        'Edit',
-        'Write',
-        'NotebookEdit',
-        'mcp__tandembike__file_tickets',
-        'mcp__tandembike__update_ticket',
-      ]),
-    );
-    expect(options.disallowedTools).not.toContain('Read');
+    expect(options.toolPolicy).toBe('read-only');
     expect(options.systemPrompt).toContain('read-only');
     expect(options.systemPrompt).toContain('edit_canvas');
   });
@@ -58,18 +49,31 @@ describe('A Spar run (ADR 0046)', () => {
 
     expect(world.runner.runs[1].options).toMatchObject({
       runMode: 'default',
-      disallowedTools: sparDisallowedTools,
+      toolPolicy: 'read-only',
     });
   });
 
-  it("disallows every Tandembike tool that is not read-only, but the Spar's own", async () => {
+  it('is read-only on Claude Code: file edits and Ticket changes disallowed, reading allowed', () => {
+    expect(claudeDisallowedTools('read-only')).toEqual(
+      expect.arrayContaining([
+        'Edit',
+        'Write',
+        'NotebookEdit',
+        'mcp__tandembike__file_tickets',
+        'mcp__tandembike__update_ticket',
+      ]),
+    );
+    expect(claudeDisallowedTools('read-only')).not.toContain('Read');
+  });
+
+  it("disallows on Claude Code every Tandembike tool that is not read-only, but the Spar's own", async () => {
     const client = await connectMcpClient(createTestTickets());
     const { tools } = await client.listTools();
     await client.close();
 
     for (const tool of tools) {
       const name = `mcp__tandembike__${tool.name}`;
-      expect(sparDisallowedTools.includes(name), name).toBe(
+      expect(claudeDisallowedTools('read-only').includes(name), name).toBe(
         tool.annotations?.readOnlyHint !== true &&
           !sparToolNames.includes(tool.name),
       );

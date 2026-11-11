@@ -357,38 +357,6 @@ const modelFor = (
     ? settings.triageModel
     : settings.runModel;
 
-/**
- * What an Autopilot Triage run and every Batch triage run may not use: their
- * only writes are a proposal and a note (ADR 0040, ADR 0047).
- */
-const autopilotTriageDisallowedTools = [
-  'mcp__tandembike__update_ticket',
-  'mcp__tandembike__file_tickets',
-];
-
-/**
- * What a Spar run may not use, whatever the Agent run mode (ADR 0046): file
- * edits and every Tandembike tool that creates or changes Tickets or Cycles.
- * Reading, the Widget tools and the Spar tools stay.
- */
-export const sparDisallowedTools = [
-  'Edit',
-  'Write',
-  'NotebookEdit',
-  'mcp__tandembike__file_tickets',
-  'mcp__tandembike__update_ticket',
-  'mcp__tandembike__start_work',
-  'mcp__tandembike__finish_work',
-  'mcp__tandembike__abandon_work',
-  'mcp__tandembike__open_pr',
-  'mcp__tandembike__add_note',
-  'mcp__tandembike__check_criterion',
-  'mcp__tandembike__attach',
-  'mcp__tandembike__propose_triage',
-  'mcp__tandembike__create_cycle',
-  'mcp__tandembike__update_cycle',
-];
-
 /** The states of a run whose process may be alive. */
 const liveStates: ConversationState[] = ['running', 'waiting', 'idle'];
 
@@ -1001,14 +969,15 @@ export function createConversations({
         // A Spar is read-only whatever the Project's run mode (ADR 0046).
         runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
         ...(runModel === null ? {} : { model: runModel }),
-        ...((conversation.intent === 'triage' &&
-          conversation.startedBy === 'autopilot') ||
-        conversation.intent === 'batch_triage'
-          ? { disallowedTools: autopilotTriageDisallowedTools }
-          : {}),
+        // A Spar is read-only (ADR 0046); Autopilot Triage and Batch triage
+        // only propose and note (ADR 0040, ADR 0047).
         ...(conversation.intent === 'spar'
-          ? { disallowedTools: sparDisallowedTools }
-          : {}),
+          ? { toolPolicy: 'read-only' as const }
+          : (conversation.intent === 'triage' &&
+                conversation.startedBy === 'autopilot') ||
+              conversation.intent === 'batch_triage'
+            ? { toolPolicy: 'no-ticket-writes' as const }
+            : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) => askPermission(id, handle, request),
         askWidget: (widget) => askWidget(id, handle, widget),

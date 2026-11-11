@@ -264,6 +264,75 @@ describe('The Claude runner', () => {
     expect((await input.next()).value?.message.content).toBe('/ship T42');
   });
 
+  it.each([
+    [
+      'read-only',
+      [
+        'Edit',
+        'Write',
+        'NotebookEdit',
+        'mcp__tandembike__file_tickets',
+        'mcp__tandembike__update_ticket',
+        'mcp__tandembike__start_work',
+        'mcp__tandembike__finish_work',
+        'mcp__tandembike__abandon_work',
+        'mcp__tandembike__open_pr',
+        'mcp__tandembike__add_note',
+        'mcp__tandembike__check_criterion',
+        'mcp__tandembike__attach',
+        'mcp__tandembike__propose_triage',
+        'mcp__tandembike__create_cycle',
+        'mcp__tandembike__update_cycle',
+      ],
+    ],
+    [
+      'no-ticket-writes',
+      ['mcp__tandembike__update_ticket', 'mcp__tandembike__file_tickets'],
+    ],
+  ] as const)(
+    'turns the tool policy %s into the same disallowed tools as before',
+    (toolPolicy, disallowed) => {
+      query.mockReturnValue(fakeQuery([]));
+      createClaudeRunner().start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
+        toolPolicy,
+        askPermission: async () => 'deny',
+        askWidget: async () => ({ expired: true }),
+        onEvent: () => {},
+      });
+
+      expect(query.mock.calls[0][0].options.disallowedTools).toEqual(
+        disallowed,
+      );
+    },
+  );
+
+  it('disallows nothing without a tool policy', () => {
+    query.mockReturnValue(fakeQuery([]));
+    createClaudeRunner().start({
+      cwd: '/repo',
+      agentRunId: 'conv-1',
+      mcpUrl: 'http://x',
+      plugins: [],
+      systemPrompt: '',
+      message: { text: 'Hi' },
+      agentCommands: noAgentCommands,
+      askPermission: async () => 'deny',
+      askWidget: async () => ({ expired: true }),
+      onEvent: () => {},
+    });
+
+    expect(query.mock.calls[0][0].options).not.toHaveProperty(
+      'disallowedTools',
+    );
+  });
+
   it('turns SDK messages into run events and ends with an exit', async () => {
     query.mockReturnValue(
       fakeQuery([

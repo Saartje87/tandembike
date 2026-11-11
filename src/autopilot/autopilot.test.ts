@@ -1026,15 +1026,12 @@ describe('Auto-triage', () => {
         prompt: '/tandembike:triage',
       });
       runner.runs[0].emit({ type: 'turn', costUsd: 0 });
-      expect(runner.runs[0].options.disallowedTools).toBeUndefined();
+      expect(runner.runs[0].options.toolPolicy).toBeUndefined();
 
       await autopilot.evaluate();
 
       expect(runner.runs[1].firstMessage).toContain(`T${a.number}`);
-      expect(runner.runs[1].options.disallowedTools).toEqual([
-        'mcp__tandembike__update_ticket',
-        'mcp__tandembike__file_tickets',
-      ]);
+      expect(runner.runs[1].options.toolPolicy).toBe('no-ticket-writes');
     });
   });
 

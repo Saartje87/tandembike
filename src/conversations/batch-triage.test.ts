@@ -203,10 +203,7 @@ describe('A Batch triage run (T1317)', () => {
     await conversations.reply(batch.id, 'Label them yourself', 'user');
 
     for (const run of runner.runs) {
-      expect(run.options.disallowedTools).toEqual([
-        'mcp__tandembike__update_ticket',
-        'mcp__tandembike__file_tickets',
-      ]);
+      expect(run.options.toolPolicy).toBe('no-ticket-writes');
     }
     expect(runner.runs).toHaveLength(2);
   });

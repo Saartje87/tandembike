@@ -87,6 +87,13 @@ export type StageInvocation =
   | { stage: 'plan'; goal: string }
   | { stage: 'spar'; topic: string | null; focusTicketNumber: number | null };
 
+/**
+ * A restriction on a run, in Tandembike's terms: `read-only` for a Spar (ADR
+ * 0046), `no-ticket-writes` for Autopilot Triage and Batch triage (ADR 0040,
+ * ADR 0047).
+ */
+export type ToolPolicy = 'read-only' | 'no-ticket-writes';
+
 /** What a run starts with: a Stage to invoke, or the User's text. */
 export type RunMessage = { invocation: StageInvocation } | { text: string };
 
@@ -124,10 +131,10 @@ export type RunOptions = {
   /** The model to start on; left out for the User's default model. */
   model?: string;
   /**
-   * Tools the run may not use, passed to the SDK as `disallowedTools`; left
-   * out for none. An Autopilot Triage run cannot change Tickets (ADR 0040).
+   * What the run may not do, which its runner turns into its own tool names
+   * (ADR 0051); left out for no restriction.
    */
-  disallowedTools?: string[];
+  toolPolicy?: ToolPolicy;
   /** The SDK session to continue, for a Conversation that was interrupted. */
   resume?: string;
   onEvent(event: RunEvent): void;
