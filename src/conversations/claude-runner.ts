@@ -19,7 +19,7 @@ import {
   createWidgetServer,
   isWidgetTool,
   widgetServerName,
-} from './widget-server';
+} from './claude-widget-server';
 
 const maxToolTextLength = 300;
 

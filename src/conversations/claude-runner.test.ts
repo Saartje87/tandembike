@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { agentCommands } from '../test/fixtures';
 import { noAgentCommands } from '../tickets/agent-commands';
 import type { RunEvent, StageInvocation } from './agent-runner';
+import { widgetTools } from './widget-tools';
 
 const { query, controls } = vi.hoisted(() => ({
   query: vi.fn(),
@@ -825,6 +826,18 @@ describe('The Claude runner', () => {
           (tool: { name: string }) => tool.name === name,
         );
     };
+
+    it('serves every shared Widget definition, by its name, description and input schema (ADR 0051)', () => {
+      const toolNamed = startWith(vi.fn());
+
+      for (const definition of widgetTools) {
+        expect(toolNamed(definition.name)).toMatchObject({
+          name: definition.name,
+          description: definition.description,
+          inputSchema: definition.inputSchema.shape,
+        });
+      }
+    });
 
     it('serves ask_choice in-process; its handler blocks on askWidget and returns the answer as JSON', async () => {
       let answer: (value: unknown) => void = () => {};
