@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Resolve tsx the way Node does, so a worktree without its own node_modules
 // finds the main checkout's install (T1224).
@@ -135,5 +137,56 @@ describe('tandembike resume (T1241)', () => {
 
     expect(result.status).toBe(1);
     expect(result.stdout).toContain('tandembike resume <conversation>');
+  }, 30_000);
+});
+
+describe('bin/tandembike.mjs', () => {
+  it('sends the folder the command was typed in, not the checkout', async () => {
+    const bodies: { action?: string; folder?: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        if (body) bodies.push(JSON.parse(body));
+        res.writeHead(409, { 'content-type': 'text/plain' });
+        res.end('Refused.');
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+    const folder = realpathSync(
+      mkdtempSync(join(tmpdir(), 'tandembike-folder-')),
+    );
+    try {
+      const status = await new Promise<number | null>((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [join(process.cwd(), 'bin', 'tandembike.mjs'), 'plan', 'Ship'],
+          {
+            cwd: folder,
+            stdio: 'ignore',
+            env: {
+              // The checkout's tsx runs under `#!/usr/bin/env node`.
+              NODE_ENV: 'test',
+              PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+              HOME: sandbox,
+              TANDEMBIKE_DATA_DIR: join(sandbox, '.tandembike'),
+              TANDEMBIKE_URL: `http://127.0.0.1:${port}`,
+            },
+          },
+        );
+        child.on('exit', resolve);
+      });
+
+      expect(status).toBe(1);
+      expect(bodies).toEqual([{ action: 'plan', folder, goal: 'Ship' }]);
+    } finally {
+      server.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
   }, 30_000);
 });

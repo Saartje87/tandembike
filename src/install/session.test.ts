@@ -9,8 +9,12 @@ import {
 } from './session';
 
 describe('parseCommand', () => {
-  it('prints the help for no subcommand, help and --help (T1350)', () => {
-    for (const argv of [[], ['help'], ['--help']]) {
+  it('opens the wizard with no subcommand (T1355)', () => {
+    expect(parseCommand([])).toEqual({ command: 'wizard' });
+  });
+
+  it('prints the help for help and --help (T1350)', () => {
+    for (const argv of [['help'], ['--help']]) {
       expect(parseCommand(argv)).toEqual({ command: 'help', text: usageText });
     }
   });

@@ -27,6 +27,7 @@ import {
   type ServerEffects,
   type ServerRecord,
   type StopOptions,
+  serverLabel,
   serverState,
   serverStatus,
   startServer,
@@ -36,9 +37,12 @@ import {
   noWorkMessage,
   parseCommand,
   planClaudeSession,
+  type RunnableCommand,
   type TerminalResumeResult,
   type TerminalStartResult,
+  usageText,
 } from './session';
+import { cancelled, type Prompter, runWizard } from './wizard';
 import { spawn, spawnSync } from 'node:child_process';
 import {
   appendFileSync,
@@ -66,6 +70,8 @@ import { createInterface } from 'node:readline/promises';
  */
 
 const checkout = process.env.TANDEMBIKE_PACKAGE_DIR ?? process.cwd();
+/** The folder the User ran `tandembike` in (bin/tandembike.mjs runs this from the checkout). */
+const callerFolder = process.env.TANDEMBIKE_CWD ?? process.cwd();
 const home = process.env.TANDEMBIKE_DATA_DIR || join(homedir(), '.tandembike');
 const recordPath = join(home, 'server.json');
 const logPath = join(home, 'server.log');
@@ -74,77 +80,132 @@ const logPath = join(home, 'server.log');
 // it cannot use top-level await: the async steps run in main().
 async function main(): Promise<void> {
   const parsed = parseCommand(process.argv.slice(2));
+  if (parsed.command === 'wizard') {
+    // Without a terminal there is no one to answer the prompts.
+    if (!process.stdin.isTTY || !process.stdout.isTTY) {
+      console.log(usageText);
+      return process.exit(0);
+    }
+    return process.exit(await wizard());
+  }
+  process.exit(await runCommand(parsed));
+}
+
+/** Where a session command's Project comes from: the wizard's pick, else this folder. */
+const projectRef = (projectId: number | undefined) =>
+  projectId === undefined ? { folder: callerFolder } : { projectId };
+
+/**
+ * Runs a typed command, or the one the wizard returned, and returns its exit
+ * code: one path for both, so they cannot drift (ADR 0052).
+ */
+async function runCommand(parsed: RunnableCommand): Promise<number> {
   switch (parsed.command) {
     case 'usage':
       console.log(parsed.text);
-      return process.exit(1);
+      return 1;
     case 'help':
       console.log(parsed.text);
-      return process.exit(0);
+      return 0;
     case 'start':
-      return process.exit(
-        await startServer(serverEffects, {
-          port: parsed.port,
-          foreground: parsed.foreground,
-          prepare: () => firstRunSteps({ offers: true }),
-        }),
-      );
+      return startServer(serverEffects, {
+        port: parsed.port,
+        foreground: parsed.foreground,
+        prepare: () => firstRunSteps({ offers: true }),
+      });
     case 'stop':
-      return process.exit(
-        await stopServer(serverEffects, stopOptions(parsed.force)),
-      );
+      return stopServer(serverEffects, stopOptions(parsed.force));
     case 'restart':
-      return process.exit(
-        await restartServer(serverEffects, stopOptions(false), {
-          prepare: () => firstRunSteps({ offers: true }),
-        }),
-      );
+      return restartServer(serverEffects, stopOptions(false), {
+        prepare: () => firstRunSteps({ offers: true }),
+      });
     case 'status':
-      return process.exit(await serverStatus(serverEffects));
+      return serverStatus(serverEffects);
     case 'logs':
-      return process.exit(await showLogs(parsed.follow));
+      return showLogs(parsed.follow);
     case 'mcp':
       await firstRunSteps({ offers: false });
       if (await offerMcp()) markMcpOffered();
-      return process.exit(0);
+      return 0;
     case 'plugin':
       await firstRunSteps({ offers: false });
       if (await offerPlugin()) markOffersMade(home, 'plugin');
-      return process.exit(0);
+      return 0;
     case 'triage':
     case 'spec':
-      if (!(await ensureServer())) return process.exit(1);
-      return process.exit(
-        await startSession({
-          action: 'start',
-          ticketNumber: parsed.ticketNumber,
-          intent: parsed.command,
-        }),
-      );
+      if (!(await ensureServer())) return 1;
+      return startSession({
+        action: 'start',
+        ticketNumber: parsed.ticketNumber,
+        intent: parsed.command,
+      });
     case 'plan':
-      if (!(await ensureServer())) return process.exit(1);
-      return process.exit(
-        await startSession({
-          action: 'plan',
-          folder: process.cwd(),
-          goal: parsed.goal,
-        }),
-      );
+      if (!(await ensureServer())) return 1;
+      return startSession({
+        action: 'plan',
+        ...projectRef(parsed.projectId),
+        goal: parsed.goal,
+      });
     case 'implement':
-      if (!(await ensureServer())) return process.exit(1);
-      return process.exit(
-        parsed.ticketNumber === null
-          ? await startNext()
-          : await startSession({
-              action: 'start',
-              ticketNumber: parsed.ticketNumber,
-              intent: 'start',
-            }),
-      );
+      if (!(await ensureServer())) return 1;
+      return parsed.ticketNumber === null
+        ? startNext(parsed.projectId)
+        : startSession({
+            action: 'start',
+            ticketNumber: parsed.ticketNumber,
+            intent: 'start',
+          });
     case 'resume':
-      if (!(await ensureServer())) return process.exit(1);
-      return process.exit(await resumeSession(parsed.conversationId));
+      if (!(await ensureServer())) return 1;
+      return resumeSession(parsed.conversationId);
   }
+}
+
+/**
+ * Bare `tandembike` in a terminal: starts the server when it is down, so the
+ * lists can load, then runs the wizard's pick through `runCommand`.
+ */
+async function wizard(): Promise<number> {
+  if (!(await ensureServer())) return 1;
+  try {
+    const outcome = await runWizard({
+      prompter: await clackPrompter(),
+      serverLabel: serverLabel(await serverState(serverEffects)),
+      projects: () => callServer({ action: 'projects', folder: callerFolder }),
+      choices: (intent, projectId) =>
+        callServer({ action: 'list', intent, projectId }),
+    });
+    if ('exit' in outcome) {
+      if (outcome.message) console.log(outcome.message);
+      return outcome.exit;
+    }
+    return runCommand(outcome.run);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
+  }
+}
+
+/** The wizard's prompts, by `@clack/prompts` (an ES module, so imported here). */
+async function clackPrompter(): Promise<Prompter> {
+  const clack = await import('@clack/prompts');
+  return {
+    select: async (message, options) => {
+      const value = await clack.select({
+        message,
+        // Clack types each option by its value; the wizard's are plain.
+        options: options as never,
+      });
+      return clack.isCancel(value) ? cancelled : (value as never);
+    },
+    text: async (message, validate) => {
+      const value = await clack.text({
+        message,
+        validate: (v) => validate(v ?? ''),
+      });
+      return clack.isCancel(value) ? cancelled : value;
+    },
+  };
 }
 
 /**
@@ -397,11 +458,11 @@ async function startSession(request: object): Promise<number> {
  * `tandembike implement` without a Ticket: the Project is the one whose repository holds this
  * folder; the server starts its next Eligible item, or says why there is none.
  */
-async function startNext(): Promise<number> {
+async function startNext(projectId?: number): Promise<number> {
   const next = await callServerOrReport<
     | { started: true; session: TerminalStartResult }
     | { started: false; reason: Parameters<typeof noWorkMessage>[0] }
-  >({ action: 'next', folder: process.cwd() });
+  >({ action: 'next', ...projectRef(projectId) });
   if (!next) return 1;
   if (!next.started) {
     console.log(noWorkMessage(next.reason));

@@ -86,6 +86,33 @@ port (`http://localhost:<port>/api/mcp`).
 
 ## Work a Ticket in your terminal
 
+### The wizard
+
+Run `tandembike` alone in a terminal and it asks instead of making you
+remember the commands. When the current folder is in no Project's repository
+it first asks **Which Project?**; otherwise it uses the folder's Project. Then
+it offers **Implement**, **Triage**, **Spec**, **Plan**, **Resume** and a
+**Server** entry labelled with the server's state (`Server: running on
+:4747`), which offers start, stop, restart and status. Each action lists what
+fits it in that Project:
+
+- **Implement**: the Active Cycle's ready, open items, with the `next_work`
+  pick first.
+- **Triage**: the untriaged Todo Tickets (labelled `needs-triage`, or with no
+  triage state label).
+- **Spec**: the ideas in Intake and the Epics without children.
+- **Resume**: the Conversations **Continue in terminal** would accept.
+
+Every list ends with **Type a number…** for a Ticket it leaves out (for
+Implement, `next` also works); an empty list says so and still offers it.
+**Plan** asks for the goal as text. The wizard then opens exactly the session
+the typed command would and exits with `claude`'s exit code; Ctrl+C at any
+prompt leaves with exit 130. It starts the server first when it is down.
+Without a terminal (piped, in a script) `tandembike` prints the help, as
+`tandembike help` always does.
+
+### The commands
+
 With Tandembike running, `tandembike implement T42` (or `tandembike implement
 42`) in any folder opens interactive `claude` on that Ticket or Epic, whatever
 the folder is: the Ticket's Project says where. Tandembike makes the run's worktree and runs

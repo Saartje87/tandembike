@@ -12,6 +12,7 @@ import { playbookPath } from '../playbook/playbook';
 
 export const usageText = [
   'Usage:',
+  '  tandembike                    in a terminal, a wizard: pick an action and a Ticket',
   '  tandembike start [-p <port>] [--foreground]',
   '                                start the server in the background (or in this terminal)',
   '  tandembike stop [--force]     stop the server `tandembike start` started',
@@ -30,6 +31,7 @@ export const usageText = [
 ].join('\n');
 
 export type ParsedCommand =
+  | { command: 'wizard' }
   | { command: 'help'; text: string }
   | { command: 'start'; port: number | null; foreground: boolean }
   | { command: 'stop'; force: boolean }
@@ -39,15 +41,28 @@ export type ParsedCommand =
   | { command: 'mcp' }
   | { command: 'plugin' }
   | { command: Exclude<TerminalIntent, 'start'>; ticketNumber: number }
-  | { command: 'implement'; ticketNumber: number | null }
-  | { command: 'plan'; goal: string }
+  | {
+      command: 'implement';
+      ticketNumber: number | null;
+      /** The wizard's Project for the next Eligible item; else the folder's. */
+      projectId?: number;
+    }
+  | {
+      command: 'plan';
+      goal: string;
+      /** The wizard's Project; else the folder's. */
+      projectId?: number;
+    }
   | { command: 'resume'; conversationId: number }
   | { command: 'usage'; text: string };
+
+/** A command that runs: everything but the wizard, which returns one. */
+export type RunnableCommand = Exclude<ParsedCommand, { command: 'wizard' }>;
 
 const usage: ParsedCommand = { command: 'usage', text: usageText };
 
 /** A Ticket as typed, `T42` or `42`; null for anything else. */
-const ticketNumberOf = (text: string | undefined): number | null => {
+export const ticketNumberOf = (text: string | undefined): number | null => {
   const match = /^T?(\d+)$/i.exec(text ?? '');
   const number = match ? Number(match[1]) : 0;
   return number > 0 ? number : null;
@@ -67,12 +82,13 @@ const parseStart = (args: string[]): ParsedCommand | null => {
 };
 
 /**
- * What `tandembike <argv>` does: the help with no subcommand, a server
+ * What `tandembike <argv>` does: the wizard with no subcommand, a server
  * command (ADR 0052), or a session command (ADR 0039).
  */
 export function parseCommand(argv: string[]): ParsedCommand {
   const [first, ...rest] = argv;
-  if (first === undefined || (rest.length === 0 && /^(--)?help$/.test(first))) {
+  if (first === undefined) return { command: 'wizard' };
+  if (rest.length === 0 && /^(--)?help$/.test(first)) {
     return { command: 'help', text: usageText };
   }
   if (first === 'start') return parseStart(rest) ?? usage;
