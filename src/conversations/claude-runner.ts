@@ -156,7 +156,7 @@ export function eventsOf(
     return [
       {
         type: 'turn',
-        costUsd: message.total_cost_usd,
+        cost: message.total_cost_usd,
         ...(message.modelUsage ? { usage: usageOf(message.modelUsage) } : {}),
         ...(error === undefined
           ? {}
@@ -252,7 +252,11 @@ export function createClaudeRunner(): AgentRunner {
     // The SDK ships with the app, so Claude Code can always run (ADR 0051).
     availability: () => ({ available: true }),
     // Claude's classifier serves `auto`; Allow-always saves Claude Code rules.
-    capabilities: { runModes: ['default', 'auto'], allowAlways: true },
+    capabilities: {
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    },
     invocationText: claudeInvocationText,
     start({
       cwd,

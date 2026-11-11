@@ -91,7 +91,7 @@ describe('The machine cap (ADR 0041)', () => {
     const { conversations, runner, projects, startIn } = setup(9);
 
     await startIn(projects[0].id, 'start');
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await startIn(projects[1].id, 'start', 'terminal');
 
     expect(conversations.capacity().machine.slotsHeld).toBe(1);
@@ -162,7 +162,7 @@ describe('The machine cap (ADR 0041)', () => {
     const { conversations, runner, projects, startIn } = setup(1);
     await startIn(projects[0].id, 'start');
     const [first] = conversations.list({ projectId: projects[0].id });
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     // The idle run keeps its slot, so a second Start is refused.
     await expect(startIn(projects[1].id, 'start')).rejects.toEqual(
       new NotAllowedError(capMessage(1, 'T1 (waiting on you)')),
@@ -215,7 +215,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     const world = setup(1);
     const { run } = await startOn(world, world.projects[0].id);
 
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
     expect(run.closed).toBe(false);
@@ -230,7 +230,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
       parallelRuns: false,
     });
     const { run } = await startOn(world, world.projects[0].id);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(
       world.conversations.capacity(world.projects[0].id).project.slotsHeld,
@@ -243,7 +243,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
   it('accepts the User’s reply into an idle run at the cap without raising the count', async () => {
     const world = setup(1);
     const { conversation, run } = await startOn(world, world.projects[0].id);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     await world.conversations.reply(conversation.id, 'Yes', 'user');
 
@@ -259,7 +259,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     );
     handOff(world, ticket.number);
 
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(run.closed).toBe(true);
     expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
@@ -280,7 +280,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     const { ticket, run } = await startOn(world, world.projects[0].id);
     world.tickets.completeTicket(ticket.number);
 
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(run.closed).toBe(true);
     expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
@@ -292,7 +292,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     handOff(world, ticket.number);
     world.tickets.claimTicket(ticket.number, { agentRunId: 'r1' });
 
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(run.closed).toBe(false);
     expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
@@ -306,7 +306,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     );
     run.emit({ type: 'session', sessionId: 'sdk-1' });
     handOff(world, ticket.number);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     const merged = await world.conversations.approveMerge({
       ticketNumber: ticket.number,
@@ -317,7 +317,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     expect(world.runner.runs[1].options.resume).toBe('sdk-1');
     expect(world.conversations.capacity().machine.slotsHeld).toBe(1);
 
-    world.runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+    world.runner.runs[1].emit({ type: 'turn', cost: 1 });
     await world.conversations.reply(conversation.id, 'And?', 'user');
     expect(world.runner.runs).toHaveLength(3);
     expect(world.runner.runs[2].options.resume).toBe('sdk-1');
@@ -327,7 +327,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     const world = setup(1);
     const { ticket, run } = await startOn(world, world.projects[0].id);
     handOff(world, ticket.number);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
     await startOn(world, world.projects[1].id);
 
     await expect(
@@ -361,7 +361,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
   it('frees an idle Start’s slot when the User closes it', async () => {
     const world = setup(1);
     const { conversation, run } = await startOn(world, world.projects[0].id);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     await world.conversations.close(conversation.id);
 
@@ -371,7 +371,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
   it('frees an idle Start’s slot when the User stops it', async () => {
     const world = setup(1);
     const { conversation, run } = await startOn(world, world.projects[0].id);
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     await world.conversations.stop(conversation.id);
 
@@ -385,7 +385,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
       world.projects[0].id,
     );
     world.tickets.updateTicket(ticket.number, { status: 'In progress' });
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     world.tickets.backToTodo(ticket.number);
 
@@ -401,7 +401,7 @@ describe('A run waiting on the User keeps its slot (ADR 0049)', () => {
     world.tickets.backToTodo(ticket.number);
     expect(run.closed).toBe(false);
 
-    run.emit({ type: 'turn', costUsd: 1 });
+    run.emit({ type: 'turn', cost: 1 });
 
     expect(run.closed).toBe(true);
     expect(world.conversations.capacity().machine.slotsHeld).toBe(0);
@@ -428,7 +428,7 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
       prompt: 'Spec it',
     });
     // An idle run of the User's own is a live process too.
-    runner.runs[1].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[1].emit({ type: 'turn', cost: 0 });
     expect(conversations.capacity().liveProcessCount).toBe(4);
 
     await startIn(projects[1].id, 'start', 'terminal');
@@ -464,7 +464,7 @@ describe('Autopilot’s headroom counts every live Agent process (T1329)', () =>
     await startIn(projects[0].id, 'triage', 'autopilot');
     expect(conversations.capacity().liveProcessCount).toBe(1);
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     expect(conversations.capacity().liveProcessCount).toBe(0);
   });
@@ -503,7 +503,7 @@ describe('Parallel runs and the Machine cap, the one number (T1330)', () => {
     const { conversations, runner, projects, startIn, tickets } = setup(9);
     tickets.setProjectAgentSettings(projects[0].id, { parallelRuns: false });
     await startIn(projects[0].id, 'start');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     const ticket = tickets.createTicket({
       projectId: projects[0].id,
       title: 'Ship',
@@ -529,7 +529,7 @@ describe('A refusal names the Conversations holding the slots (T1331)', () => {
     await startIn(projects[1].id, 'start');
     await startIn(projects[0].id, 'start');
     // T1 ends its turn waiting on a reply, T3 waits on a permission.
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     void runner.runs[2].options.askPermission({
       toolName: 'Bash',
       input: {},
@@ -558,7 +558,7 @@ describe('A refusal names the Conversations holding the slots (T1331)', () => {
     const { runner, projects, startIn, tickets } = setup(9);
     tickets.setProjectAgentSettings(projects[0].id, { parallelRuns: false });
     await startIn(projects[0].id, 'start');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     await expect(startIn(projects[0].id, 'start')).rejects.toEqual(
       new NotAllowedError(
@@ -596,7 +596,7 @@ describe('The live processes split into working and waiting on the User (T1332)'
     await startIn(projects[0].id, 'start');
     await startIn(projects[1].id, 'ask');
     await startIn(projects[1].id, 'start', 'terminal');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     void runner.runs[2].options.askPermission({
       toolName: 'Bash',
       input: {},
@@ -636,7 +636,7 @@ describe('An Epic’s Start and its children’s moves (ADR 0049)', () => {
       intent: 'start',
       prompt: 'Go',
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     return { ...world, epic, children, run: runner.runs[0] };
   };
 
@@ -701,7 +701,7 @@ describe('Auto-triage’s working Triage run (T1384)', () => {
     agree();
     const first = await triage(projectId, 'autopilot');
     agree();
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     agree();
     const second = await triage(projectId, 'user');
     agree();

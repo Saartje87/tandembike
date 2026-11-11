@@ -132,7 +132,7 @@ describe('runBrief per Agent kind (ADR 0051)', () => {
         terminal,
         runMode: 'auto' as const,
         checkCommand: 'npm run check',
-        planEstimateUsd: 1.5,
+        planEstimate: { amount: 1.5, unit: 'usd' as const },
         retroCycle: { id: 44, title: 'Factory p2' },
       })),
     ),

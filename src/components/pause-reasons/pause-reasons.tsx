@@ -26,7 +26,7 @@ export function pauseReasonText(
     case 'noSpendCeiling':
       return 'No Spend ceiling is set, and Autopilot needs one.';
     case 'overSpendCeiling':
-      return `This Cycle's Autopilot spend, ${formatCost(reason.spendUsd)}, has reached the Spend ceiling of ${formatCost(reason.ceilingUsd)}.`;
+      return `This Cycle's Autopilot spend, ${formatCost(reason.spend, reason.unit)}, has reached the Spend ceiling of ${formatCost(reason.ceiling, reason.unit)}.`;
     case 'noFreeStartRunSlot':
       return `${slots(reason.limit, 'Start run')} in use.`;
     case 'machineCapFull': {
@@ -41,13 +41,13 @@ export function pauseReasonText(
       return `${full}: ${waiting} to let Autopilot go on.`;
     }
     case 'overMachineCeiling':
-      return `Today's Autopilot spend across all Projects, ${formatCost(reason.spendUsd)}, has reached the machine ceiling of ${formatCost(reason.ceilingUsd)}.`;
+      return `Today's Autopilot spend across all Projects, ${formatCost(reason.spend, reason.unit)}, has reached the machine ceiling of ${formatCost(reason.ceiling, reason.unit)}.`;
     case 'noEligibleWork':
       return 'Nothing is Eligible: no Ticket in the Active Cycle is ready-for-agent, unblocked and free.';
     case 'noTriageCeiling':
       return 'No Triage ceiling is set, and Auto-triage needs one.';
     case 'overTriageCeiling':
-      return `Today's triage spend, ${formatCost(reason.spendUsd)}, has reached the Triage ceiling of ${formatCost(reason.ceilingUsd)}.`;
+      return `Today's triage spend, ${formatCost(reason.spend, reason.unit)}, has reached the Triage ceiling of ${formatCost(reason.ceiling, reason.unit)}.`;
     case 'triageRunWorking':
       return 'A Triage run is already working; Auto-triage runs one at a time.';
     case 'noTriageEligibleWork':

@@ -13,7 +13,7 @@ export type AutopilotBarProps = {
   /** The Project's Spend ceiling in USD, or null without one. */
   spendCeilingUsd: number | null;
   /** What Autopilot has spent on the Active Cycle in USD. */
-  spendUsd: number;
+  spend: number;
   /**
    * The whole Cycle's Footprint, hand-started Conversations included, or
    * null while it has none (ADR 0050). Information only.
@@ -33,11 +33,11 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
   projectId,
   autopilot,
   spendCeilingUsd,
-  spendUsd,
+  spend,
   cycleFootprint,
 }) => {
   const paused =
-    autopilot && spendCeilingUsd !== null && spendUsd >= spendCeilingUsd;
+    autopilot && spendCeilingUsd !== null && spend >= spendCeilingUsd;
   return (
     <Inline gap={3} alignY="start">
       <ProjectSwitch
@@ -47,8 +47,8 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
       />
       <Text color="muted" fontSize="small">
         {spendCeilingUsd === null
-          ? `${formatCost(spendUsd)}, no ceiling`
-          : `${formatCost(spendUsd)} of ${formatCost(spendCeilingUsd)}`}
+          ? `${formatCost(spend, 'usd')}, no ceiling`
+          : `${formatCost(spend, 'usd')} of ${formatCost(spendCeilingUsd, 'usd')}`}
       </Text>
       {cycleFootprint && (
         <FootprintText
@@ -59,7 +59,7 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
       )}
       {paused && (
         <Tag intent="warning">
-          {`paused: over ceiling (${formatCost(spendUsd)})`}
+          {`paused: over ceiling (${formatCost(spend, 'usd')})`}
         </Tag>
       )}
     </Inline>

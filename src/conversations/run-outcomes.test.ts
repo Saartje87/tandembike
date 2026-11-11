@@ -44,7 +44,7 @@ describe('Run outcomes', () => {
     });
 
     vi.setSystemTime(new Date('2026-03-01T10:05:00Z'));
-    runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+    runner.runs[0].emit({ type: 'turn', cost: 1.5 });
 
     expect(conversations.latestRunOutcome(conversation.id)).toMatchObject({
       conversationId: conversation.id,
@@ -54,7 +54,7 @@ describe('Run outcomes', () => {
       result: 'abandoned',
       startedAt: new Date('2026-03-01T10:00:00Z'),
       endedAt: new Date('2026-03-01T10:05:00Z'),
-      costUsd: 1.5,
+      cost: 1.5,
       model: 'claude-opus-5',
       command: '/implement',
       startedByAutopilot: false,
@@ -66,7 +66,7 @@ describe('Run outcomes', () => {
     const conversation = await startOnTicket('start', 'Please do it');
     expect(conversations.latestRunOutcome(conversation.id)).toBeNull();
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     expect(conversations.latestRunOutcome(conversation.id)).toMatchObject({
       command: null,
@@ -77,23 +77,23 @@ describe('Run outcomes', () => {
   it('records the cost of each run, not the Conversation’s total', async () => {
     const { conversations, runner, startOnTicket } = setup();
     const conversation = await startOnTicket();
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await conversations.reply(conversation.id, 'More', 'user');
-    runner.runs[0].emit({ type: 'turn', costUsd: 1.75 });
+    runner.runs[0].emit({ type: 'turn', cost: 1.75 });
 
     expect(
-      conversations.runOutcomes(conversation.id).map((o) => o.costUsd),
+      conversations.runOutcomes(conversation.id).map((o) => o.cost),
     ).toEqual([1, 0.75]);
   });
 
   it('marks a run Autopilot started, and a reply by Autopilot', async () => {
     const { conversations, runner, startOnTicket } = setup();
     const conversation = await startOnTicket('start', 'Go', 'autopilot');
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await conversations.reply(conversation.id, 'Hi', 'user');
-    runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+    runner.runs[0].emit({ type: 'turn', cost: 2 });
     await conversations.reply(conversation.id, 'Resume', 'autopilot');
-    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+    runner.runs[0].emit({ type: 'turn', cost: 3 });
 
     expect(
       conversations
@@ -107,7 +107,7 @@ describe('Run outcomes', () => {
       const { conversations, runner, tickets, ticket, startOnTicket } = setup();
       const conversation = await startOnTicket();
       tickets.updateTicket(ticket.number, { status: 'Done' });
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       expect(conversations.latestRunOutcome(conversation.id)?.result).toBe(
         'completed',
       );
@@ -120,7 +120,7 @@ describe('Run outcomes', () => {
       tickets.addExternalReferences(ticket.number, [
         'https://github.com/acme/site/pull/12',
       ]);
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       expect(conversations.latestRunOutcome(conversation.id)?.result).toBe(
         'pr_open',
       );
@@ -130,8 +130,8 @@ describe('Run outcomes', () => {
       const { conversations, runner, startOnTicket } = setup();
       const start = await startOnTicket('start');
       const triage = await startOnTicket('triage');
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
-      runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
+      runner.runs[1].emit({ type: 'turn', cost: 1 });
       expect(conversations.latestRunOutcome(start.id)?.result).toBe(
         'abandoned',
       );
@@ -151,7 +151,7 @@ describe('Run outcomes', () => {
           rules: [],
         });
       }
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       runner.runs[1].emit({ type: 'exit' });
       expect(conversations.latestRunOutcome(turnEnd.id)?.result).toBe(
         'needs_reply',
@@ -175,7 +175,7 @@ describe('Run outcomes', () => {
       const { conversations, runner, tickets, ticket, startOnTicket } = setup();
       const conversation = await startOnTicket();
       tickets.updateTicket(ticket.number, { status: 'In progress' });
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       expect(conversations.latestRunOutcome(conversation.id)?.result).toBe(
         'needs_reply',
       );
@@ -188,12 +188,12 @@ describe('Run outcomes', () => {
       tickets.updateTicket(ticket.number, { status: 'Done' });
       runner.runs[0].emit({
         type: 'turn',
-        costUsd: 1,
+        cost: 1,
         error: 'API Error: 529 overloaded',
       });
       runner.runs[1].emit({
         type: 'turn',
-        costUsd: 1,
+        cost: 1,
         error: 'error_max_turns',
       });
       expect(conversations.latestRunOutcome(overloaded.id)?.result).toBe(
@@ -207,7 +207,7 @@ describe('Run outcomes', () => {
       const conversation = await startOnTicket();
       runner.runs[0].emit({
         type: 'turn',
-        costUsd: 1,
+        cost: 1,
         error: 'The run failed',
         errorSubtype: 'api_error',
       });
@@ -224,7 +224,7 @@ describe('Run outcomes', () => {
         intent: 'ask',
         prompt: 'Hi',
       });
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       expect(conversations.latestRunOutcome(ask.id)).toMatchObject({
         ticketNumber: null,
         stage: 'ask',
@@ -244,7 +244,7 @@ describe('Run outcomes', () => {
     it('records an exit without error after a turn only when no outcome was recorded for that run', async () => {
       const { conversations, runner, startOnTicket } = setup();
       const conversation = await startOnTicket();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       runner.runs[0].emit({ type: 'exit' });
       expect(conversations.runOutcomes(conversation.id)).toHaveLength(1);
 
@@ -259,7 +259,7 @@ describe('Run outcomes', () => {
       const { conversations, runner, startOnTicket } = setup();
       const working = await startOnTicket();
       const idle = await startOnTicket();
-      runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[1].emit({ type: 'turn', cost: 1 });
 
       await conversations.stop(working.id);
       await conversations.stop(idle.id);
@@ -276,7 +276,7 @@ describe('Run outcomes', () => {
       const { conversations, runner, startOnTicket } = setup();
       const working = await startOnTicket();
       await conversations.stop(working.id);
-      runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+      runner.runs[0].emit({ type: 'turn', cost: 2 });
       expect(conversations.runOutcomes(working.id)).toHaveLength(1);
     });
 
@@ -284,13 +284,13 @@ describe('Run outcomes', () => {
       const { conversations, runner, startOnTicket } = setup();
       const working = await startOnTicket();
       await conversations.stop(working.id);
-      expect(conversations.runOutcomes(working.id)[0].costUsd).toBe(0);
+      expect(conversations.runOutcomes(working.id)[0].cost).toBe(0);
 
-      runner.runs[0].emit({ type: 'turn', costUsd: 2 });
-      runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+      runner.runs[0].emit({ type: 'turn', cost: 2 });
+      runner.runs[0].emit({ type: 'turn', cost: 3 });
 
       expect(conversations.runOutcomes(working.id)).toMatchObject([
-        { result: 'stopped', costUsd: 2 },
+        { result: 'stopped', cost: 2 },
       ]);
     });
   });
@@ -298,7 +298,7 @@ describe('Run outcomes', () => {
   it('keeps Run outcomes when the Conversation is closed', async () => {
     const { conversations, runner, startOnTicket } = setup();
     const conversation = await startOnTicket();
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await conversations.close(conversation.id);
     expect(conversations.runOutcomes(conversation.id)).toHaveLength(1);
   });
@@ -310,17 +310,17 @@ describe('Run stats', () => {
     vi.setSystemTime(new Date('2026-03-01T10:00:00Z'));
     const { conversations, runner, project, startOnTicket } = setup();
     const old = await startOnTicket();
-    runner.runs[0].emit({ type: 'turn', costUsd: 9 });
+    runner.runs[0].emit({ type: 'turn', cost: 9 });
 
     vi.setSystemTime(new Date('2026-04-15T10:00:00Z'));
     const a = await startOnTicket();
     vi.setSystemTime(new Date('2026-04-15T10:10:00Z'));
-    runner.runs[1].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[1].emit({ type: 'turn', cost: 1 });
     const b = await startOnTicket();
     vi.setSystemTime(new Date('2026-04-15T10:30:00Z'));
     runner.runs[2].emit({
       type: 'turn',
-      costUsd: 3,
+      cost: 3,
       error: 'error_max_turns',
     });
     expect([old.id, a.id, b.id]).toHaveLength(3);

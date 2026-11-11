@@ -52,7 +52,7 @@ describe('MachineRuns', () => {
       working: 1,
       waiting: 0,
       cap: 3,
-      budget: { spendUsd: 4.5, ceilingUsd: 10, paused: false },
+      budget: { spend: 4.5, ceiling: 10, paused: false },
     });
 
     renderWithTheme(<MachineRuns />);
@@ -66,7 +66,7 @@ describe('MachineRuns', () => {
       working: 0,
       waiting: 0,
       cap: 3,
-      budget: { spendUsd: 10, ceilingUsd: 10, paused: true },
+      budget: { spend: 10, ceiling: 10, paused: true },
     });
 
     renderWithTheme(<MachineRuns />);

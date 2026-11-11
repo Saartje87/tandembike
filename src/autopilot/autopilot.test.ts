@@ -306,7 +306,7 @@ describe('Autopilot dispatch', () => {
     await autopilot.evaluate();
     // A goes idle waiting for the User, in Action needed: it keeps its slot.
     tickets.updateTicket(a.number, { status: 'In progress' });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await autopilot.evaluate();
     expect(started()).toEqual([a.number]);
 
@@ -321,7 +321,7 @@ describe('Autopilot dispatch', () => {
     tickets.addExternalReferences(a.number, [
       'https://github.com/acme/site/pull/1',
     ]);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await autopilot.evaluate();
     expect(started()).toEqual([a.number, b.number]);
   });
@@ -400,7 +400,7 @@ describe('Autopilot dispatch', () => {
       tickets.startCycle(cycle.id);
       const stop = world.autopilot.start();
       await world.autopilot.idle();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+      runner.runs[0].emit({ type: 'turn', cost: 1.5 });
       tickets.completeTicket(a.number);
       await conversations.stop(
         conversations.list({ projectId: project.id })[0].id,
@@ -416,7 +416,7 @@ describe('Autopilot dispatch', () => {
       const a = ready('A');
       tickets.startCycle(cycle.id);
       await world.autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       ready('B');
 
       await world.autopilot.evaluate();
@@ -468,7 +468,7 @@ describe('Autopilot dispatch', () => {
         intent: 'start',
         prompt: 'Go',
       });
-      runner.runs[0].emit({ type: 'turn', costUsd: 5 });
+      runner.runs[0].emit({ type: 'turn', cost: 5 });
       await conversations.stop(
         conversations.list({ projectId: project.id })[0].id,
       );
@@ -516,7 +516,7 @@ describe('Autopilot startup', () => {
     tickets.updateTicket(mine.number, { status: 'In progress' });
     tickets.updateTicket(yours.number, { status: 'In progress' });
     if (options.spent !== undefined) {
-      world.runner.runs[0].emit({ type: 'turn', costUsd: options.spent });
+      world.runner.runs[0].emit({ type: 'turn', cost: options.spent });
     }
     const fresh = world.restart();
     fresh.interruptStale();
@@ -565,7 +565,7 @@ describe('Autopilot startup', () => {
 
     runner.runs[runner.runs.length - 1].emit({
       type: 'turn',
-      costUsd: 1,
+      cost: 1,
       error: 'API Error: 529 overloaded',
     });
     await autopilot.evaluate();
@@ -660,7 +660,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
     'The last run ended on a transient error. Continue where you left off.';
   const overloaded = {
     type: 'turn',
-    costUsd: 1,
+    cost: 1,
     error: 'API Error: 529 overloaded',
   } as const;
 
@@ -695,7 +695,7 @@ describe('Autopilot transient resume (ADR 0034)', () => {
 
   it('does not resume a failed outcome', async () => {
     const { runner, autopilot, project, resumes } = await begin();
-    runner.runs[0].emit({ type: 'turn', costUsd: 1, error: 'error_max_turns' });
+    runner.runs[0].emit({ type: 'turn', cost: 1, error: 'error_max_turns' });
     await autopilot.evaluate();
     await vi.advanceTimersByTimeAsync(120_000);
     await autopilot.idle();
@@ -819,8 +819,8 @@ describe('Auto-triage', () => {
         .list({ projectId: project.id })
         .filter((conversation) => conversation.intent === 'triage')
         .reverse();
-    const finish = (index: number, costUsd = 0) =>
-      world.runner.runs[index].emit({ type: 'turn', costUsd });
+    const finish = (index: number, cost = 0) =>
+      world.runner.runs[index].emit({ type: 'turn', cost });
     return {
       ...world,
       changes,
@@ -1001,14 +1001,15 @@ describe('Auto-triage', () => {
       });
       idea('A');
       await autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+      runner.runs[0].emit({ type: 'turn', cost: 1 });
       const start = new Date();
       start.setHours(0, 0, 0, 0);
 
       expect(conversations.autopilotTriageSpend(project.id, start)).toBe(1);
       expect(conversations.triageBudget(project.id)).toEqual({
-        spendUsd: 1,
-        ceilingUsd: 2,
+        spend: 1,
+        ceiling: 2,
+        unit: 'usd',
         paused: false,
       });
     });
@@ -1025,7 +1026,7 @@ describe('Auto-triage', () => {
         intent: 'triage',
         prompt: '/tandembike:triage',
       });
-      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+      runner.runs[0].emit({ type: 'turn', cost: 0 });
       expect(runner.runs[0].options.toolPolicy).toBeUndefined();
 
       await autopilot.evaluate();
@@ -1127,7 +1128,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
 
     // A waiting on the User keeps its slot (ADR 0049).
     tickets.updateTicket(a.number, { status: 'In progress' });
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await autopilot.evaluate();
     expect(startedIn(projects[1])).toEqual([c.number]);
 
@@ -1140,7 +1141,7 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       'Open the PR',
       'user',
     );
-    runner.runs[0].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[0].emit({ type: 'turn', cost: 1 });
     await autopilot.evaluate();
 
     expect(startedIn(projects[1])).toEqual([c.number, d.number]);
@@ -1450,7 +1451,7 @@ describe('Machine ceiling (ADR 0041)', () => {
     } = ceilingSetup(2);
     ready(projects[0], 'A');
     await autopilot.evaluate();
-    runner.runs[0].emit({ type: 'turn', costUsd: 2.5 });
+    runner.runs[0].emit({ type: 'turn', cost: 2.5 });
     ready(projects[0], 'B');
     ready(projects[1], 'C');
 
@@ -1458,10 +1459,10 @@ describe('Machine ceiling (ADR 0041)', () => {
 
     expect(total()).toBe(1);
     expect(autopilot.machineBudget()).toMatchObject({
-      ceilingUsd: 2,
+      ceiling: 2,
       paused: true,
     });
-    expect(conversations.machineBudget()?.spendUsd).toBeGreaterThanOrEqual(2.5);
+    expect(conversations.machineBudget()?.spend).toBeGreaterThanOrEqual(2.5);
 
     setClock(new Date(Date.now() + 25 * 60 * 60 * 1000));
     expect(autopilot.machineBudget()?.paused).toBe(false);
@@ -1474,7 +1475,7 @@ describe('Machine ceiling (ADR 0041)', () => {
       ceilingSetup(2);
     ready(projects[0], 'A');
     await autopilot.evaluate();
-    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+    runner.runs[0].emit({ type: 'turn', cost: 3 });
     ready(projects[1], 'C');
     await autopilot.evaluate();
     expect(total()).toBe(1);
@@ -1497,7 +1498,7 @@ describe('Machine ceiling (ADR 0041)', () => {
     const baseline = vi.getTimerCount();
     ready(projects[0], 'A');
     await autopilot.evaluate();
-    runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+    runner.runs[0].emit({ type: 'turn', cost: 2 });
     const stop = autopilot.start();
     await autopilot.idle();
 
@@ -1574,11 +1575,13 @@ describe('explain (ADR 0044)', () => {
       ready('B');
       tickets.startCycle(cycle.id);
       await autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+      runner.runs[0].emit({ type: 'turn', cost: 1.5 });
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'overSpendCeiling', spendUsd: 1.5, ceilingUsd: 1 }],
+        reasons: [
+          { type: 'overSpendCeiling', spend: 1.5, ceiling: 1, unit: 'usd' },
+        ],
       });
     });
 
@@ -1608,7 +1611,7 @@ describe('explain (ADR 0044)', () => {
       tickets.startCycle(cycle.id);
       await autopilot.evaluate();
       tickets.updateTicket(a.number, { status: 'In progress' });
-      runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+      runner.runs[0].emit({ type: 'turn', cost: 0 });
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
@@ -1624,12 +1627,14 @@ describe('explain (ADR 0044)', () => {
       const b = ready('B');
       tickets.startCycle(cycle.id);
       await autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 2 });
+      runner.runs[0].emit({ type: 'turn', cost: 2 });
       ready('C');
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'overMachineCeiling', spendUsd: 2, ceilingUsd: 1 }],
+        reasons: [
+          { type: 'overMachineCeiling', spend: 2, ceiling: 1, unit: 'usd' },
+        ],
       });
       await autopilot.evaluate();
       expect(started()).toEqual([a.number, b.number]);
@@ -1676,7 +1681,7 @@ describe('explain (ADR 0044)', () => {
       tickets.createTicket({ projectId: project.id, title: 'Idea' });
       tickets.createTicket({ projectId: project.id, title: 'Other' });
       await autopilot.evaluate();
-      runner.runs[0].emit({ type: 'turn', costUsd: 1.5 });
+      runner.runs[0].emit({ type: 'turn', cost: 1.5 });
       tickets.setMachineSettings({ maxConcurrentRuns: 1 });
       await conversations.start({
         startedBy: 'user',

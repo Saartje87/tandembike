@@ -98,7 +98,7 @@ const conversation = (
   fields: Pick<Conversation, 'intent' | 'state'>,
 ): Conversation => fields as Conversation;
 
-const stubConversations = (list: Conversation[], spendUsd = 0) =>
+const stubConversations = (list: Conversation[], spend = 0) =>
   vi.mocked(appConversations).mockReturnValue({
     list: () => list,
     capacity: (projectId: number) => ({
@@ -110,9 +110,10 @@ const stubConversations = (list: Conversation[], spendUsd = 0) =>
         ),
       },
     }),
-    autopilotSpend: () => spendUsd,
+    autopilotSpend: () => spend,
     retroOf: () => null,
     startCostEstimate: () => null,
+    defaultCostUnit: () => 'usd',
     openBatchTriage: () => null,
   } as unknown as ReturnType<typeof appConversations>);
 

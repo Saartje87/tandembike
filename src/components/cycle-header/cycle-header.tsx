@@ -19,6 +19,7 @@ import { callAction } from '../../app/lib/call-action';
 import { formatCost } from '../../app/lib/format-cost';
 import { projectPath } from '../../app/lib/paths';
 import type { Conversation } from '../../conversations/conversations';
+import type { CostUnit } from '../../tickets/cost-unit';
 import type { Cycle } from '../../tickets/cycles';
 import { archiveCycleConfirmation } from '../archive-cycle-confirmation/archive-cycle-confirmation';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
@@ -33,7 +34,7 @@ export type CycleHeaderProps = {
    * A Prepared Cycle's Estimate (GLOSSARY: Estimate): the per-Ticket cost, or
    * null without enough Run outcomes, and the units of work planned.
    */
-  estimate?: { totalUsd: number | null; units: number };
+  estimate?: { total: number | null; unit: CostUnit; units: number };
   /**
    * An Archived Cycle's Retro, closed or not, which Open Retro opens; null or
    * left out when it has none.
@@ -232,9 +233,9 @@ export const CycleHeader: FC<CycleHeaderProps> = ({
       </Inline>
       {cycle.state === 'Prepared' && estimate && (
         <Text fontSize="small" color="muted">
-          {estimate.totalUsd === null
+          {estimate.total === null
             ? 'Not enough runs to estimate'
-            : `Estimated ≈ ${formatCost(estimate.totalUsd)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
+            : `Estimated ≈ ${formatCost(estimate.total, estimate.unit)} for ${estimate.units} ${estimate.units === 1 ? 'Ticket' : 'Tickets'}`}
         </Text>
       )}
       {error && <Alert intent="danger">{error}</Alert>}

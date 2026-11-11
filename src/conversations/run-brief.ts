@@ -1,4 +1,6 @@
+import { formatCost } from '../app/lib/format-cost';
 import type { AgentKind } from '../tickets/agent-kind';
+import type { CostUnit } from '../tickets/cost-unit';
 import type { TicketType } from '../tickets/ticket-type';
 import type { ConversationIntent } from './conversation-state';
 import { cycleReference, type RetroCycle } from './retro-prompt';
@@ -32,10 +34,11 @@ export type RunBrief = {
   /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
   terminal?: boolean;
   /**
-   * Plan only: the Project's cost of one Start in dollars, from its Run
-   * outcomes, or null when there are too few to estimate (T1248).
+   * Plan only: the Project's cost of one Start on this Conversation's Agent
+   * kind, in its unit, from its Run outcomes, or null when there are too few
+   * to estimate (T1248, ADR 0051).
    */
-  planEstimateUsd?: number | null;
+  planEstimate?: { amount: number; unit: CostUnit } | null;
   defaults?: NewTicketDefaults;
 };
 
@@ -58,8 +61,6 @@ const intentLines: Record<ConversationIntent, string> = {
     "The User started this Conversation to triage a Board's Intake in one go (Batch triage). Their first message names the Board and the Tickets.",
   spar: "The User started this Conversation to think an idea through with you on a Spar page (Spar). Their first message gives the topic and the focus Ticket, if any. This run is read-only (ADR 0046): you may read and search the code and read Tickets, but not edit files or create or change Tickets; any command you run asks the User first. The Spar page shows a Canvas of Columns and Stickies beside the chat: read it with get_canvas and change it with edit_canvas. Below it, keep the Write-up (Decisions, Open questions, Next steps) current with update_write_up. When you agree, propose the Hand-off with propose_hand_off; only the User files it. The User's edits of it send you nothing; each of their messages ends with what they changed since your last turn. Prefer Widgets to questions in text.",
 };
-
-const dollars = (usd: number) => `$${usd.toFixed(2)}`;
 
 /**
  * The lines of the brief that name one agent's own tools and files (ADR
@@ -116,6 +117,16 @@ const setupChecklist = (brief: RunBrief): string[] => {
     'End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.',
   ];
 };
+
+/** An estimate in its unit: dollars to the cent, as the brief always read. */
+const estimateText = ({
+  amount,
+  unit,
+}: {
+  amount: number;
+  unit: CostUnit;
+}): string =>
+  unit === 'usd' ? `$${amount.toFixed(2)}` : formatCost(amount, unit);
 
 /**
  * What Tandembike tells a run (ADR 0019): only its situation. How to do the
@@ -174,9 +185,9 @@ export function runBrief(brief: RunBrief): string {
   }
   if (brief.intent === 'plan') {
     lines.push(
-      brief.planEstimateUsd == null
+      brief.planEstimate == null
         ? 'There are not enough runs to estimate what a Ticket costs, so size the Cycle by the work, not by a budget.'
-        : `A Start in this Project has cost about ${dollars(brief.planEstimateUsd)} per Ticket, the median of its recent runs. Multiply it by the number of Tickets to size the Cycle against a budget the User names. It is an estimate, not a limit.`,
+        : `A Start in this Project has cost about ${estimateText(brief.planEstimate)} per Ticket, the median of its recent runs. Multiply it by the number of Tickets to size the Cycle against a budget the User names. It is an estimate, not a limit.`,
     );
   }
   if (brief.intent === 'setup') {

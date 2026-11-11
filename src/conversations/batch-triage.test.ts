@@ -249,7 +249,7 @@ describe('A Batch triage run (T1317)', () => {
       cycleId: cycle.id,
       ticketNumbers: [ticket.number],
     });
-    runner.runs.at(-1)?.emit({ type: 'turn', costUsd: 3 });
+    runner.runs.at(-1)?.emit({ type: 'turn', cost: 3 });
 
     expect(batch.worktreePath).toBeNull();
     expect(conversations.capacity().machine.slotsHeld).toBe(1);

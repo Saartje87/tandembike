@@ -102,6 +102,7 @@ async function flowTab(params: ProjectPageProps['params']) {
               ? appConversations().autopilotSpend({
                   projectId: project.id,
                   cycleId: active.id,
+                  unit: 'usd',
                 })
               : null
           }

@@ -141,7 +141,7 @@ describe('A Plan Conversation (T1248)', () => {
       const run = runner.runs[runner.runs.length - 1];
       tickets.updateTicket(ticket.number, { status: 'Done' });
       tick();
-      run.emit({ type: 'turn', costUsd: cost });
+      run.emit({ type: 'turn', cost: cost });
     }
 
     await conversations.startPlan({ projectId: project.id, goal: 'Ship' });

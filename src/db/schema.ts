@@ -26,6 +26,7 @@ import type { HandOffDraft } from '../spars/spar-moves';
 import type { ActivityChange } from '../tickets/activity-change';
 import { agentKinds } from '../tickets/agent-kind';
 import { agentRunModes } from '../tickets/agent-run-mode';
+import { costUnits } from '../tickets/cost-unit';
 import { cycleStates } from '../tickets/cycle-state';
 import { mergeModes } from '../tickets/merge-mode';
 import { paletteColors } from '../tickets/palette';
@@ -397,7 +398,7 @@ export const ticketAttachments = sqliteTable(
 /**
  * A Conversation (ADR 0019): an exchange between the User and an Agent run
  * that Tandembike starts, about a Project and optionally one of its Tickets.
- * `costUsd` adds up every run of it.
+ * `cost` adds up every run of it.
  */
 export const conversations = sqliteTable(
   'conversations',
@@ -419,7 +420,10 @@ export const conversations = sqliteTable(
       .default('claude-code'),
     /** The runner's opaque session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
-    costUsd: real('cost_usd').notNull().default(0),
+    /** In `costUnit`; the column keeps its old name (ADR 0051). */
+    cost: real('cost_usd').notNull().default(0),
+    /** The unit of `cost`, its runner's; older rows are dollars. */
+    costUnit: text('cost_unit', { enum: costUnits }).notNull().default('usd'),
     /** Closed by the User: stopped and left out of the Project's list. */
     hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
     /**
@@ -528,8 +532,10 @@ export const runOutcomes = sqliteTable(
     result: text('result', { enum: runResults }).notNull(),
     startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
     endedAt: integer('ended_at', { mode: 'timestamp_ms' }).notNull(),
-    /** What this run cost in USD, not the Conversation's total. */
-    costUsd: real('cost_usd').notNull(),
+    /** What this run cost in `costUnit`, not the Conversation's total. */
+    cost: real('cost_usd').notNull(),
+    /** The unit of `cost`, its Conversation's; older rows are dollars. */
+    costUnit: text('cost_unit', { enum: costUnits }).notNull().default('usd'),
     /** The model from the SDK's init message; null when the run never reported one. */
     model: text('model'),
     /** The `/command` the run's first message started with; null for none. */

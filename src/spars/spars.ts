@@ -75,7 +75,7 @@ export type SparListing = Spar & {
   outcomeTitle: string | null;
   /** Its Conversation's state. */
   state: ConversationState;
-  costUsd: number;
+  cost: number;
   /** The later of its Conversation's and its own last change. */
   lastActivity: Date;
 };
@@ -785,7 +785,7 @@ export function createSpars({
                 ? null
                 : tickets.getTicket(spar.outcomeTicketNumber).title,
             state: conversation.state,
-            costUsd: conversation.costUsd,
+            cost: conversation.cost,
             lastActivity: new Date(
               Math.max(
                 conversation.updatedAt.getTime(),

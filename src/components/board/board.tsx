@@ -734,7 +734,8 @@ const NotMoved: FC<NotMovedProps> = ({ refusals }) => {
 function inFlightLine(row: InFlightRow, now: number): string {
   // A Terminal run shows elapsed time only, even when a UI run spent before
   // the hand-off (ADR 0039).
-  const cost = !row.live?.terminal && row.cost > 0 && formatCost(row.cost);
+  const cost =
+    !row.live?.terminal && row.cost > 0 && formatCost(row.cost, 'usd');
   return row.live
     ? lineOf(
         row.live.line,
@@ -1272,7 +1273,7 @@ export const Board: FC<BoardProps> = ({
                   line={lineOf(
                     `Done ${age(row.updatedAt)} ago`,
                     row.pullRequest && pullRequestLabel(row.pullRequest),
-                    row.cost > 0 && formatCost(row.cost),
+                    row.cost > 0 && formatCost(row.cost, 'usd'),
                   )}
                   end={<Tag intent="success">Done</Tag>}
                 />

@@ -70,7 +70,7 @@ describe('projectFootprints (T1177)', () => {
       });
       runner.runs[runner.runs.length - 1].emit({
         type: 'turn',
-        costUsd: 0.1,
+        cost: 0.1,
         usage: opusOutput(output),
       });
     }
@@ -96,7 +96,7 @@ describe('conversationFootprint (T1178)', () => {
     });
     runner.runs[0].emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: opusOutput(1_000_000),
     });
     expect(conversationFootprint(id)).toMatchObject({ energyWh: 1000 });
@@ -160,7 +160,7 @@ describe('cycleFootprint (T1348)', () => {
       });
       runner.runs[runner.runs.length - 1].emit({
         type: 'turn',
-        costUsd: 0.1,
+        cost: 0.1,
         usage: opusOutput(output),
       });
     }

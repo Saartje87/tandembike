@@ -2,6 +2,7 @@ import type { UsageByModel } from '../footprint/token-usage';
 import type { ProjectAgentCommands } from '../tickets/agent-commands';
 import type { AgentKind } from '../tickets/agent-kind';
 import type { AgentRunMode } from '../tickets/agent-run-mode';
+import type { CostUnit } from '../tickets/cost-unit';
 import type { TicketType } from '../tickets/ticket-type';
 import type { PermissionAnswer } from './conversation-state';
 import type { RetroCycle } from './retro-prompt';
@@ -33,15 +34,16 @@ export type RunEvent =
       input?: Record<string, unknown>;
     }
   /**
-   * A turn ended. `costUsd` is what this run has cost in total so far, not
-   * counting earlier runs of the Conversation.
+   * A turn ended. `cost` is what this run has cost in total so far, not
+   * counting earlier runs of the Conversation, in the runner's declared
+   * `costUnit` (ADR 0051).
    */
   | {
       type: 'turn';
-      costUsd: number;
+      cost: number;
       /**
        * The tokens this run has used per model in total so far, like
-       * `costUsd`; left out when the run reports none (ADR 0050).
+       * `cost`; left out when the run reports none (ADR 0050).
        */
       usage?: UsageByModel;
       error?: string;
@@ -159,6 +161,8 @@ export type RunnerCapabilities = {
   runModes: readonly AgentRunMode[];
   /** Whether it can honour Allow-always, so the User is offered it. */
   allowAlways: boolean;
+  /** The unit its runs report cost in; every `turn` cost is in it. */
+  costUnit: CostUnit;
 };
 
 /** Whether a runner can start a run now, and why not when it cannot. */

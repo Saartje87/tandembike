@@ -16,9 +16,9 @@ function setup() {
     vi.setSystemTime(at);
   };
 
-  /** Runs one Start to its end, costing `costUsd`, finished or not. */
+  /** Runs one Start to its end, costing `cost`, finished or not. */
   const runStart = async (
-    costUsd: number,
+    cost: number,
     { done = true, pr = false, intent = 'start' as 'start' | 'triage' } = {},
   ) => {
     const ticket = world.tickets.createTicket({
@@ -43,7 +43,7 @@ function setup() {
       ]);
     }
     tick();
-    run.emit({ type: 'turn', costUsd });
+    run.emit({ type: 'turn', cost });
     return { conversation, run, ticket };
   };
   return { ...world, project, runStart };
@@ -90,7 +90,7 @@ describe('startCostEstimate', () => {
     }
     const { conversation, run } = await runStart(2);
     await conversations.reply(conversation.id, 'More', 'user');
-    run.emit({ type: 'turn', costUsd: 12 });
+    run.emit({ type: 'turn', cost: 12 });
     // Costs 1, 1, 1, 1 and 12 (2 + 10); the median is 1, not an average of runs.
     expect(conversations.startCostEstimate(project.id)).toBe(1);
   });

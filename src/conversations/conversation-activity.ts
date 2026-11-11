@@ -1,3 +1,4 @@
+import type { CostUnit } from '../tickets/cost-unit';
 import {
   type ConversationStarter,
   type ConversationState,
@@ -72,8 +73,10 @@ export type ActivityRow = {
   message: StatusEntry | null;
   /** When the current run started, as an ISO string. */
   startedAt: string;
-  /** What the Conversation has cost in USD, 0 if nothing yet. */
-  costUsd: number;
+  /** What the Conversation has cost in `costUnit`, 0 if nothing yet. */
+  cost: number;
+  /** Its runner's cost unit (ADR 0051); dollars when left out. */
+  costUnit?: CostUnit;
   /** Who started it. */
   startedBy: ConversationStarter;
   /**
@@ -110,7 +113,7 @@ const liveOf = (rows: ActivityRow[]): Record<number, LiveConversation> => {
       line:
         state === 'running' ? statusLine(row.latest) : messageLine(row.message),
       since: row.startedAt,
-      cost: row.costUsd,
+      cost: row.cost,
       terminal: isTerminal(row),
     };
   };
@@ -158,14 +161,18 @@ const ticketsOf = (rows: ActivityRow[]): number[] => [
   ),
 ];
 
+/**
+ * Each Ticket's cost in dollars, summed over its Conversations. Costs in
+ * another unit are left out, never added to dollars (ADR 0051).
+ */
 const costOf = (rows: ActivityRow[]): Record<number, number> => {
-  const cost: Record<number, number> = {};
-  for (const { ticketNumber, costUsd } of rows) {
-    if (ticketNumber !== null && costUsd > 0) {
-      cost[ticketNumber] = (cost[ticketNumber] ?? 0) + costUsd;
+  const total: Record<number, number> = {};
+  for (const { ticketNumber, cost, costUnit = 'usd' } of rows) {
+    if (ticketNumber !== null && cost > 0 && costUnit === 'usd') {
+      total[ticketNumber] = (total[ticketNumber] ?? 0) + cost;
     }
   }
-  return cost;
+  return total;
 };
 
 const countBy = (ids: number[]): Record<number, number> => {

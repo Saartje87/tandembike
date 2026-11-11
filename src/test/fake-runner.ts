@@ -35,7 +35,11 @@ export function createFakeRunner(kind: AgentKind = 'claude-code'): FakeRunner {
     kind,
     runs,
     availability: () => ({ available: true }),
-    capabilities: { runModes: ['default', 'auto'], allowAlways: true },
+    capabilities: {
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    },
     // Worded as Claude Code does, so transcripts read as in the app.
     invocationText: claudeInvocationText,
     start(options) {

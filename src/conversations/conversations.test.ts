@@ -50,7 +50,7 @@ describe('Starting a Conversation', () => {
       intent: 'ask',
       state: 'running',
       sdkSessionId: null,
-      costUsd: 0,
+      cost: 0,
     });
     expect(runner.runs).toHaveLength(1);
     expect(runner.runs[0].options).toMatchObject({
@@ -530,20 +530,20 @@ describe('A running Conversation', () => {
       prompt: 'Hi',
     });
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.25 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.25 });
     expect(conversations.get(id)).toMatchObject({
       state: 'idle',
-      costUsd: 0.25,
+      cost: 0.25,
     });
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.5 });
-    expect(conversations.get(id).costUsd).toBe(0.5);
+    runner.runs[0].emit({ type: 'turn', cost: 0.5 });
+    expect(conversations.get(id).cost).toBe(0.5);
 
     // A resumed run starts counting from zero again.
     runner.runs[0].emit({ type: 'exit', error: 'crashed' });
     await conversations.reply(id, 'Again', 'user');
-    runner.runs[1].emit({ type: 'turn', costUsd: 0.1 });
-    expect(conversations.get(id).costUsd).toBeCloseTo(0.6);
+    runner.runs[1].emit({ type: 'turn', cost: 0.1 });
+    expect(conversations.get(id).cost).toBeCloseTo(0.6);
   });
 
   it('works again when the Agent acts after its turn ended, as when a background task wakes it (T1261)', async () => {
@@ -554,17 +554,17 @@ describe('A running Conversation', () => {
       intent: 'ask',
       prompt: 'Hi',
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.25 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.25 });
     expect(conversations.get(id).state).toBe('idle');
 
     runner.runs[0].emit({ type: 'tool', text: 'Bash git status' });
     expect(conversations.get(id).state).toBe('running');
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.5 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.5 });
     runner.runs[0].emit({ type: 'agent', text: 'The subagent is done.' });
     expect(conversations.get(id).state).toBe('running');
 
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.75 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.75 });
     expect(conversations.get(id).state).toBe('idle');
   });
 
@@ -628,7 +628,7 @@ describe('Replying to a Conversation', () => {
     });
 
     await conversations.reply(id, 'Also this', 'user');
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.1 });
     const after = await conversations.reply(id, 'And that', 'user');
 
     expect(runner.runs).toHaveLength(1);
@@ -671,7 +671,7 @@ describe('Replying to a Conversation', () => {
       intent: 'ask',
       prompt: 'Hi',
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.1 });
     runner.runs[0].emit({ type: 'exit' });
 
     expect(conversations.get(id).state).toBe('interrupted');
@@ -703,7 +703,7 @@ describe('Replying to a Conversation', () => {
       prompt: 'Hi',
     });
     runner.runs[0].emit({ type: 'session', sessionId: 'sess-1' });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.1 });
     runner.runs[0].emit({ type: 'exit' });
 
     await conversations.reply(id, 'More', 'user');
@@ -793,10 +793,10 @@ describe('Stopping a Conversation', () => {
     });
 
     await conversations.stop(id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.25, error: 'interrupted' });
+    runner.runs[0].emit({ type: 'turn', cost: 0.25, error: 'interrupted' });
 
     const stopped = conversations.get(id);
-    expect(stopped.costUsd).toBe(0.25);
+    expect(stopped.cost).toBe(0.25);
     expect(stopped.state).toBe('stopped');
   });
 
@@ -830,7 +830,7 @@ describe('Restarting the server', () => {
       prompt: 'Hi',
     });
     await conversations.stop(stopped.id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.1 });
 
     // A new server process has no runs, but the database still says so.
     const fresh = restart();
@@ -917,7 +917,8 @@ describe('Activity rows', () => {
           toolInput: null,
         },
         startedAt: '2026-11-07T10:05:00.000Z',
-        costUsd: 0,
+        cost: 0,
+        costUnit: 'usd',
         startedBy: 'user',
         batchTriageTickets: null,
       },
@@ -941,7 +942,8 @@ describe('Activity rows', () => {
           toolInput: null,
         },
         startedAt: '2026-11-07T10:00:00.000Z',
-        costUsd: 0,
+        cost: 0,
+        costUnit: 'usd',
         startedBy: 'user',
         batchTriageTickets: null,
       },
@@ -959,7 +961,7 @@ describe('Activity rows', () => {
       intent: 'start',
       prompt: 'One',
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.1 });
     vi.setSystemTime(new Date('2026-11-07T11:00:00Z'));
     await conversations.reply(id, 'More', 'user');
     runner.runs
@@ -1109,7 +1111,7 @@ describe('Live updates', () => {
     expect(seen).toHaveBeenCalledWith({ type: 'conversation', id });
 
     seen.mockClear();
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.2 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.2 });
     expect(seen).toHaveBeenCalledWith({ type: 'conversation', id });
 
     seen.mockClear();
@@ -1666,7 +1668,7 @@ describe('The Start run limit', () => {
   it('counts a Start that waits idle for a reply (ADR 0049)', async () => {
     const { conversations, runner, project } = setup();
     await startOn(conversations, project.id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     const error = await failure(startOn(conversations, project.id));
 
@@ -1676,7 +1678,7 @@ describe('The Start run limit', () => {
   it('lets the User reply to an idle Start while the slots are full, in the slot it holds (T1185)', async () => {
     const { conversations, runner, project } = setup();
     const first = await startOn(conversations, project.id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     expect(await failure(startOn(conversations, project.id))).toBeInstanceOf(
       NotAllowedError,
     );
@@ -1950,7 +1952,7 @@ describe('Open Conversations', () => {
       ticketNumber: ticket.number,
       intent: 'triage',
       state: 'running',
-      costUsd: 0,
+      cost: 0,
     });
     expect(open[1]).toMatchObject({
       ticketTitle: null,
@@ -2206,7 +2208,7 @@ describe('Started by', () => {
       prompt: 'Hello',
       startedBy: 'autopilot',
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await conversations.reply(id, 'Continue T42', 'autopilot');
     await conversations.reply(id, 'Thanks', 'user');
 
@@ -2243,7 +2245,7 @@ describe('Autopilot spend', () => {
     const startFor = async (
       ticketNumber: number,
       startedBy: 'user' | 'autopilot',
-      costUsd: number,
+      cost: number,
       cycleId?: number,
     ) => {
       const started = await conversations.start({
@@ -2253,7 +2255,7 @@ describe('Autopilot spend', () => {
         prompt: 'Go',
         ...(cycleId === undefined ? {} : { cycleId }),
       });
-      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', cost });
       return started;
     };
 
@@ -2264,7 +2266,7 @@ describe('Autopilot spend', () => {
     // A resume adds to the same Conversation, so it stays with its Cycle.
     await conversations.stop(run.id);
     await conversations.reply(run.id, 'Go on', 'autopilot');
-    runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 1 });
+    runner.runs[runner.runs.length - 1].emit({ type: 'turn', cost: 1 });
 
     expect(
       conversations.autopilotSpend({
@@ -2301,17 +2303,17 @@ describe('Autopilot spend', () => {
         intent: 'start',
         prompt: 'Go',
       });
-      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 4 });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', cost: 4 });
       await conversations.reply(started.id, 'Resume', 'autopilot');
       // The live run reports its running total.
-      runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 5.5 });
+      runner.runs[runner.runs.length - 1].emit({ type: 'turn', cost: 5.5 });
       return started;
     };
     const manual = await hand(ticket.number);
     await hand(elsewhere.number);
     // The User's own reply adds nothing.
     await conversations.reply(manual.id, 'Thanks', 'user');
-    runner.runs[runner.runs.length - 1].emit({ type: 'turn', costUsd: 8 });
+    runner.runs[runner.runs.length - 1].emit({ type: 'turn', cost: 8 });
 
     expect(
       conversations.autopilotSpend({
@@ -2508,7 +2510,7 @@ describe('A Retro Conversation', () => {
     const cycle = tickets.createCycle({ projectId: project.id, title: 'A' });
 
     await conversations.startRetro({ cycleId: cycle.id });
-    runner.runs[0].emit({ type: 'turn', costUsd: 3 });
+    runner.runs[0].emit({ type: 'turn', cost: 3 });
 
     expect(
       conversations.autopilotSpend({

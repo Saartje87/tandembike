@@ -80,10 +80,10 @@ const Group: FC<GroupProps> = ({ title, children }) => (
   </Stack>
 );
 
-const ceilingText = (ceilingUsd: number | null, spent: string) =>
-  ceilingUsd === null
+const ceilingText = (ceiling: number | null, spent: string) =>
+  ceiling === null
     ? `None set · ${spent}`
-    : `${formatCost(ceilingUsd)} · ${spent}`;
+    : `${formatCost(ceiling, 'usd')} · ${spent}`;
 
 /**
  * Flow's Setup (ADR 0044): what this Project runs at each Stage, its Check
@@ -154,13 +154,13 @@ export const SetupPanel: FC<SetupPanelProps> = ({
             settings.spendCeilingUsd,
             cycleSpendUsd === null
               ? 'no Active Cycle'
-              : `${formatCost(cycleSpendUsd)} spent this Cycle`,
+              : `${formatCost(cycleSpendUsd, 'usd')} spent this Cycle`,
           )}
         </Item>
         <Item label="Triage ceiling" href={field('triage-ceiling')}>
           {ceilingText(
             settings.triageCeilingUsd,
-            `${formatCost(triageSpendUsd)} spent today`,
+            `${formatCost(triageSpendUsd, 'usd')} spent today`,
           )}
         </Item>
         <Item label="Machine cap and ceiling" href={settingsPath()}>

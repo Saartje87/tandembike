@@ -60,7 +60,7 @@ export const TicketConversationList: FC<TicketConversationListProps> = ({
                       });
                     }}
                   >
-                    {`${intentNames[conversation.intent]} · ${conversation.hidden ? 'closed' : stateNames[conversation.state]} · ${formatCost(conversation.costUsd)}`}
+                    {`${intentNames[conversation.intent]} · ${conversation.hidden ? 'closed' : stateNames[conversation.state]} · ${formatCost(conversation.cost, conversation.costUnit)}`}
                   </Button>
                   <Text fontSize="small" color="muted" aria-hidden>
                     ·

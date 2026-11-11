@@ -67,7 +67,7 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
     });
     const first = world.runners['claude-code'].runs[0];
     first.emit({ type: 'session', sessionId: 's1' });
-    first.emit({ type: 'turn', costUsd: 0.1 });
+    first.emit({ type: 'turn', cost: 0.1 });
 
     world.tickets.setProjectAgentSettings(world.project.id, {
       defaultAgentKind: 'copilot',

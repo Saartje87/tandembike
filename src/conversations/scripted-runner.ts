@@ -38,7 +38,11 @@ let sessions = 0;
 export function createScriptedRunner(): AgentRunner {
   return {
     availability: () => ({ available: true }),
-    capabilities: { runModes: ['default', 'auto'], allowAlways: true },
+    capabilities: {
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+      costUnit: 'usd',
+    },
     invocationText: claudeInvocationText,
     start(options: RunOptions): AgentRun {
       let closed = false;
@@ -97,10 +101,10 @@ export function createScriptedRunner(): AgentRunner {
             return;
           }
           case 'idle':
-            options.onEvent({ type: 'turn', costUsd: 0 });
+            options.onEvent({ type: 'turn', cost: 0 });
             return;
           case 'exit':
-            options.onEvent({ type: 'turn', costUsd: 0 });
+            options.onEvent({ type: 'turn', cost: 0 });
             options.onEvent({ type: 'exit' });
             return;
           case null:
@@ -121,7 +125,7 @@ export function createScriptedRunner(): AgentRunner {
           later(() => act(text));
         },
         async interrupt() {
-          later(() => options.onEvent({ type: 'turn', costUsd: 0 }));
+          later(() => options.onEvent({ type: 'turn', cost: 0 }));
         },
         close() {
           closed = true;

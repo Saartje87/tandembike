@@ -26,6 +26,7 @@ import {
   agentKinds,
 } from '../tickets/agent-kind';
 import type { ChangeChannel } from '../tickets/changes';
+import { type CostUnit, dollarCeiling } from '../tickets/cost-unit';
 import {
   NotAllowedError,
   NotFoundError,
@@ -118,7 +119,10 @@ export type Conversation = {
   agentKind: AgentKind;
   /** The runner's opaque session a reply resumes. */
   sdkSessionId: string | null;
-  costUsd: number;
+  /** What all its runs cost, in `costUnit`. */
+  cost: number;
+  /** Its runner's cost unit (ADR 0051). */
+  costUnit: CostUnit;
   /** Closed by the User: stopped, and left out of the open Conversations. */
   hidden: boolean;
   /** Retro: the Cycle it looks back on; null for other intents. */
@@ -151,8 +155,9 @@ export type RunOutcome = {
   result: RunResult;
   startedAt: Date;
   endedAt: Date;
-  /** What this run cost in USD, not the Conversation's total. */
-  costUsd: number;
+  /** What this run cost in `costUnit`, not the Conversation's total. */
+  cost: number;
+  costUnit: CostUnit;
   model: string | null;
   /** The `/command` the run's first message started with; null for none. */
   command: string | null;
@@ -162,6 +167,14 @@ export type RunOutcome = {
 };
 
 /** How one Stage of a Project ended over the last 30 days. */
+/** Spend against a ceiling, both in `unit`, and whether it is reached. */
+export type Budget = {
+  spend: number;
+  ceiling: number;
+  unit: CostUnit;
+  paused: boolean;
+};
+
 export type StageRunStats = {
   stage: ConversationIntent;
   runs: number;
@@ -401,6 +414,18 @@ export function createConversations({
       reason: `${agentKindLabels[kind]} cannot run here yet.`,
     };
 
+  /** The unit `kind` reports cost in; dollars for a kind with no runner. */
+  const costUnitOf = (kind: AgentKind): CostUnit =>
+    runners[kind]?.capabilities.costUnit ?? 'usd';
+
+  /** The cost unit of the agent Autopilot would start in Project `projectId`. */
+  const defaultUnitOf = (projectId: number): CostUnit =>
+    costUnitOf(tickets.getProjectAgentSettings(projectId).defaultAgentKind);
+
+  /** An estimate with its unit, or null when there is none. */
+  const estimateIn = (amount: number | null, unit: CostUnit) =>
+    amount === null ? null : { amount, unit };
+
   /** The runner of `kind`, refused with its reason when it cannot run now. */
   const runnerOf = (kind: AgentKind): AgentRunner => {
     const availability = availabilityOf(kind);
@@ -438,7 +463,7 @@ export function createConversations({
         | 'state'
         | 'startedBy'
         | 'sdkSessionId'
-        | 'costUsd'
+        | 'cost'
         | 'worktreePath'
         | 'worktreeKept'
         | 'worktreeRemoved'
@@ -617,7 +642,7 @@ export function createConversations({
       case 'setStoppedOutcomeCost':
         if (handle?.stoppedOutcomeId != null) {
           db.update(runOutcomes)
-            .set({ costUsd: effect.costUsd })
+            .set({ cost: effect.cost })
             .where(eq(runOutcomes.id, handle.stoppedOutcomeId))
             .run();
         }
@@ -845,26 +870,42 @@ export function createConversations({
    * such Conversations. Only this module reads Run outcomes, so the
    * Estimate never reaches an MCP tool (GLOSSARY: Estimate).
    */
-  const startCostEstimate = (projectId: number): number | null => {
+  const startCostEstimate = (
+    projectId: number,
+    agentKind: AgentKind = tickets.getProjectAgentSettings(
+      projectId,
+    ).defaultAgentKind,
+  ): number | null => {
+    // Only one Agent kind's history, so the estimate is in its unit and
+    // never mixes two agents' prices (ADR 0051).
     const rows = db
-      .select()
+      .select({
+        conversationId: runOutcomes.conversationId,
+        cost: runOutcomes.cost,
+        endedAt: runOutcomes.endedAt,
+        result: runOutcomes.result,
+      })
       .from(runOutcomes)
+      .innerJoin(
+        conversations,
+        eq(conversations.id, runOutcomes.conversationId),
+      )
       .where(
         and(
           eq(runOutcomes.projectId, projectId),
           eq(runOutcomes.stage, 'start'),
+          eq(conversations.agentKind, agentKind),
         ),
       )
       .orderBy(runOutcomes.id)
       .all();
     const byConversation = new Map<
       number,
-      { costUsd: number; endedAt: number; result: RunResult }
+      { cost: number; endedAt: number; result: RunResult }
     >();
     for (const row of rows) {
       byConversation.set(row.conversationId, {
-        costUsd:
-          (byConversation.get(row.conversationId)?.costUsd ?? 0) + row.costUsd,
+        cost: (byConversation.get(row.conversationId)?.cost ?? 0) + row.cost,
         endedAt: row.endedAt.getTime(),
         result: row.result,
       });
@@ -873,7 +914,7 @@ export function createConversations({
       .filter(({ result }) => result === 'completed' || result === 'pr_open')
       .sort((a, b) => b.endedAt - a.endedAt)
       .slice(0, startEstimateSample)
-      .map(({ costUsd }) => costUsd)
+      .map(({ cost }) => cost)
       .sort((a, b) => a - b);
     if (costs.length < startEstimateMinimum) {
       return null;
@@ -916,7 +957,12 @@ export function createConversations({
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
       ...(conversation.intent === 'plan'
-        ? { planEstimateUsd: startCostEstimate(conversation.projectId) }
+        ? {
+            planEstimate: estimateIn(
+              startCostEstimate(conversation.projectId, conversation.agentKind),
+              conversation.costUnit,
+            ),
+          }
         : {}),
       defaults: {
         cycleId: conversation.defaultCycleId,
@@ -961,7 +1007,7 @@ export function createConversations({
       process: null,
       run: {
         phase: { name: 'alive', releaseWorktree: false },
-        costBefore: conversation.costUsd,
+        costBefore: conversation.cost,
         usageBefore: readUsage(db, id),
         model: null,
         ticketStatus: ticketFactsOf(conversation)?.status ?? null,
@@ -970,7 +1016,7 @@ export function createConversations({
             ? message.text
             : runner.invocationText(message.invocation, agentCommands),
           {
-            costAtStart: conversation.costUsd,
+            costAtStart: conversation.cost,
             sentBy,
             transientResume,
             stage,
@@ -1299,6 +1345,7 @@ export function createConversations({
         ticketNumber: input.ticketNumber ?? null,
         intent: input.intent,
         agentKind,
+        costUnit: runner.capabilities.costUnit,
         defaultCycleId: input.defaults?.cycleId ?? null,
         defaultEpicNumber: input.defaults?.epicNumber ?? null,
         defaultType: input.defaults?.type ?? null,
@@ -1726,10 +1773,14 @@ export function createConversations({
    * the cost of the runs it started that ended then or later, from Run
    * outcomes, plus the cost so far of an Autopilot Triage run still working.
    */
-  const autopilotTriageSpend = (projectId: number, dayStart: Date): number => {
+  const autopilotTriageSpend = (
+    projectId: number,
+    dayStart: Date,
+    unit: CostUnit = 'usd',
+  ): number => {
     const ended = db
       .select({
-        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
       })
       .from(runOutcomes)
       .where(
@@ -1737,6 +1788,7 @@ export function createConversations({
           eq(runOutcomes.projectId, projectId),
           eq(runOutcomes.stage, 'triage'),
           eq(runOutcomes.startedByAutopilot, true),
+          eq(runOutcomes.costUnit, unit),
           gte(runOutcomes.endedAt, dayStart),
         ),
       )
@@ -1749,10 +1801,11 @@ export function createConversations({
         pending &&
         conversation.projectId === projectId &&
         conversation.intent === 'triage' &&
-        conversation.startedBy === 'autopilot'
+        conversation.startedBy === 'autopilot' &&
+        conversation.costUnit === unit
       ) {
         // The run's own cost so far: the Conversation's total less its earlier runs.
-        working += Math.max(0, conversation.costUsd - pending.costAtStart);
+        working += Math.max(0, conversation.cost - pending.costAtStart);
       }
     }
     return (ended?.total ?? 0) + working;
@@ -1764,16 +1817,20 @@ export function createConversations({
    * plus the cost so far of its runs still working. An approved merge and the
    * User's own runs are left out.
    */
-  const autopilotSpendToday = (dayStart: Date): number => {
+  const autopilotSpendToday = (
+    dayStart: Date,
+    unit: CostUnit = 'usd',
+  ): number => {
     const ended = db
       .select({
-        total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+        total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
       })
       .from(runOutcomes)
       .where(
         and(
           eq(runOutcomes.startedByAutopilot, true),
           ne(runOutcomes.stage, 'merge'),
+          eq(runOutcomes.costUnit, unit),
           gte(runOutcomes.endedAt, dayStart),
         ),
       )
@@ -1781,8 +1838,13 @@ export function createConversations({
     let working = 0;
     for (const id of live.keys()) {
       const pending = live.get(id)?.run.pending;
-      if (pending?.startedByAutopilot && pending.stage !== 'merge') {
-        working += Math.max(0, get(id).costUsd - pending.costAtStart);
+      const conversation = get(id);
+      if (
+        pending?.startedByAutopilot &&
+        pending.stage !== 'merge' &&
+        conversation.costUnit === unit
+      ) {
+        working += Math.max(0, conversation.cost - pending.costAtStart);
       }
     }
     return (ended?.total ?? 0) + working;
@@ -1872,19 +1934,20 @@ export function createConversations({
     /**
      * Today's Machine ceiling budget (ADR 0041), the one place that decides
      * "paused": Autopilot's spend since the start of `now`'s local day against
-     * the machine's daily ceiling. Null while no ceiling is set.
+     * the machine's daily ceiling, both in `unit` (ADR 0051). Null while no
+     * ceiling is kept in that unit.
      */
-    machineBudget(
-      now: Date = clock(),
-    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
-      const ceilingUsd = tickets.getMachineSettings().dailySpendCeilingUsd;
-      if (ceilingUsd === null) {
+    machineBudget(now: Date = clock(), unit: CostUnit = 'usd'): Budget | null {
+      const ceiling = dollarCeiling(
+        tickets.getMachineSettings().dailySpendCeilingUsd,
+      )[unit];
+      if (ceiling === null) {
         return null;
       }
       const dayStart = new Date(now);
       dayStart.setHours(0, 0, 0, 0);
-      const spendUsd = autopilotSpendToday(dayStart);
-      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+      const spend = autopilotSpendToday(dayStart, unit);
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
@@ -1896,17 +1959,23 @@ export function createConversations({
     capacity,
 
     /**
-     * What Autopilot has spent on a Cycle in USD (ADR 0030, GLOSSARY: Spend
+     * What Autopilot has spent on a Cycle in `unit`, by default the unit of
+     * the Project's default Agent kind (ADR 0030, ADR 0051, GLOSSARY: Spend
      * ceiling): the total cost of the Conversations it started for that Cycle,
      * resumes included, since a resume adds to its Conversation. A hand-started
      * Conversation counts as started by Autopilot for Autopilot's replies only
      * (ADR 0034): the cost of those runs, on Tickets planned in the Cycle,
      * adds to it. The next Cycle starts again at zero.
      */
-    autopilotSpend(input: { projectId: number; cycleId: number }): number {
+    autopilotSpend(input: {
+      projectId: number;
+      cycleId: number;
+      unit?: CostUnit;
+    }): number {
+      const unit = input.unit ?? defaultUnitOf(input.projectId);
       const started = db
         .select({
-          total: sql<number>`coalesce(sum(${conversations.costUsd}), 0)`,
+          total: sql<number>`coalesce(sum(${conversations.cost}), 0)`,
         })
         .from(conversations)
         .where(
@@ -1914,6 +1983,7 @@ export function createConversations({
             eq(conversations.projectId, input.projectId),
             eq(conversations.startedBy, 'autopilot'),
             eq(conversations.autopilotCycleId, input.cycleId),
+            eq(conversations.costUnit, unit),
           ),
         )
         .get();
@@ -1923,7 +1993,7 @@ export function createConversations({
           ? null
           : db
               .select({
-                total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+                total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
               })
               .from(runOutcomes)
               .innerJoin(
@@ -1935,6 +2005,7 @@ export function createConversations({
                   eq(runOutcomes.projectId, input.projectId),
                   eq(runOutcomes.startedByAutopilot, true),
                   eq(conversations.startedBy, 'user'),
+                  eq(runOutcomes.costUnit, unit),
                   inArray(runOutcomes.ticketNumber, numbers),
                 ),
               )
@@ -1943,7 +2014,7 @@ export function createConversations({
       // `merge` run there, and is not Autopilot's spend (ADR 0038).
       const approvedMerges = db
         .select({
-          total: sql<number>`coalesce(sum(${runOutcomes.costUsd}), 0)`,
+          total: sql<number>`coalesce(sum(${runOutcomes.cost}), 0)`,
         })
         .from(runOutcomes)
         .innerJoin(
@@ -1957,6 +2028,7 @@ export function createConversations({
             eq(conversations.intent, 'start'),
             eq(conversations.startedBy, 'autopilot'),
             eq(conversations.autopilotCycleId, input.cycleId),
+            eq(runOutcomes.costUnit, unit),
           ),
         )
         .get();
@@ -1971,43 +2043,38 @@ export function createConversations({
     /**
      * A Cycle's Spend ceiling budget (the Project's setting), the one place
      * that decides "paused": Autopilot's spend on the Cycle against the
-     * ceiling. Null while the Project has no Spend ceiling.
+     * ceiling, in the unit of the agent Autopilot would start, the Project's
+     * default (ADR 0051). Null while no Spend ceiling is kept in that unit.
      */
-    spendBudget(input: {
-      projectId: number;
-      cycleId: number;
-    }): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
-      const ceilingUsd = tickets.getProjectAgentSettings(
-        input.projectId,
-      ).spendCeilingUsd;
-      if (ceilingUsd === null) {
+    spendBudget(input: { projectId: number; cycleId: number }): Budget | null {
+      const unit = defaultUnitOf(input.projectId);
+      const ceiling = dollarCeiling(
+        tickets.getProjectAgentSettings(input.projectId).spendCeilingUsd,
+      )[unit];
+      if (ceiling === null) {
         return null;
       }
-      const spendUsd = this.autopilotSpend(input);
-      return { spendUsd, ceilingUsd, paused: spendUsd >= ceilingUsd };
+      const spend = this.autopilotSpend({ ...input, unit });
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
      * Today's Auto-triage budget of a Project (ADR 0040), the one place that
      * decides "paused": the spend since the start of `now`'s day against the
-     * Triage ceiling. Null while Auto-triage is off or has no ceiling.
+     * Triage ceiling, in the unit of the Project's default agent (ADR 0051).
+     * Null while Auto-triage is off or has no ceiling in that unit.
      */
-    triageBudget(
-      projectId: number,
-      now: Date = clock(),
-    ): { spendUsd: number; ceilingUsd: number; paused: boolean } | null {
+    triageBudget(projectId: number, now: Date = clock()): Budget | null {
       const settings = tickets.getProjectAgentSettings(projectId);
-      if (!settings.autoTriage || settings.triageCeilingUsd === null) {
+      const unit = defaultUnitOf(projectId);
+      const ceiling = dollarCeiling(settings.triageCeilingUsd)[unit];
+      if (!settings.autoTriage || ceiling === null) {
         return null;
       }
       const dayStart = new Date(now);
       dayStart.setHours(0, 0, 0, 0);
-      const spendUsd = autopilotTriageSpend(projectId, dayStart);
-      return {
-        spendUsd,
-        ceilingUsd: settings.triageCeilingUsd,
-        paused: spendUsd >= settings.triageCeilingUsd,
-      };
+      const spend = autopilotTriageSpend(projectId, dayStart, unit);
+      return { spend, ceiling, unit, paused: spend >= ceiling };
     },
 
     /**
@@ -2073,7 +2140,7 @@ export function createConversations({
         };
         stats.runs += 1;
         stats.results[row.result] += 1;
-        stats.totalCostUsd += row.costUsd;
+        stats.totalCostUsd += row.cost;
         stats.meanDurationMs += row.endedAt.getTime() - row.startedAt.getTime();
         byStage.set(row.stage, stats);
       }
@@ -2085,6 +2152,9 @@ export function createConversations({
     },
 
     startCostEstimate,
+
+    /** The unit of the agent the Project starts runs on by default (ADR 0051). */
+    defaultCostUnit: defaultUnitOf,
 
     /** Conversations of a Project and/or Ticket, newest first. */
     list(filter: ListConversationsFilter = {}): Conversation[] {
@@ -2164,7 +2234,8 @@ export function createConversations({
             ticketNumber: conversations.ticketNumber,
             projectId: conversations.projectId,
             state: conversations.state,
-            costUsd: conversations.costUsd,
+            cost: conversations.cost,
+            costUnit: conversations.costUnit,
             createdAt: conversations.createdAt,
             startedBy: conversations.startedBy,
             intent: conversations.intent,
@@ -2184,7 +2255,8 @@ export function createConversations({
               ticketNumber,
               projectId,
               state,
-              costUsd,
+              cost,
+              costUnit,
               createdAt,
               startedBy,
               batchTriageTickets,
@@ -2194,7 +2266,8 @@ export function createConversations({
                 ticketNumber,
                 projectId,
                 state,
-                costUsd: costUsd ?? 0,
+                cost: cost ?? 0,
+                costUnit,
                 startedBy,
                 batchTriageTickets,
                 latest: statusEntryOf(latest.get(id)),

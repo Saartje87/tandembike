@@ -70,7 +70,7 @@ export type MachineRunsState = {
   waiting: number;
   cap: number;
   /** Today's Autopilot spend against the daily ceiling; null without one. */
-  budget: { spendUsd: number; ceilingUsd: number; paused: boolean } | null;
+  budget: { spend: number; ceiling: number; paused: boolean } | null;
 };
 
 /** The live runs holding a slot against the cap and today's spend, for the app header. It only reads. */

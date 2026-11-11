@@ -341,6 +341,7 @@ describe('The Claude runner', () => {
     expect(runner.capabilities).toEqual({
       runModes: ['default', 'auto'],
       allowAlways: true,
+      costUnit: 'usd',
     });
   });
 
@@ -399,10 +400,10 @@ describe('The Claude runner', () => {
         name: 'Read',
         input: { file_path: 'a.md' },
       },
-      { type: 'turn', costUsd: 0.42 },
+      { type: 'turn', cost: 0.42 },
       {
         type: 'turn',
-        costUsd: 0.5,
+        cost: 0.5,
         error: 'error_max_turns',
         errorSubtype: 'error_max_turns',
       },
@@ -437,7 +438,7 @@ describe('The Claude runner', () => {
     expect(events).toEqual([
       {
         type: 'turn',
-        costUsd: 0.42,
+        cost: 0.42,
         usage: {
           'claude-opus-5-5': {
             input: 100,

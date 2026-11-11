@@ -47,12 +47,12 @@ describe('A Conversation’s token usage (T1176)', () => {
 
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(1) },
     });
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.2,
+      cost: 0.2,
       usage: { [opus]: tokens(5) },
     });
 
@@ -64,7 +64,7 @@ describe('A Conversation’s token usage (T1176)', () => {
     const { id } = await ask();
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(5) },
     });
     lastRun().emit({ type: 'exit', error: 'crashed' });
@@ -72,12 +72,12 @@ describe('A Conversation’s token usage (T1176)', () => {
     await conversations.reply(id, 'Again', 'user');
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(1) },
     });
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(2) },
     });
 
@@ -90,14 +90,14 @@ describe('A Conversation’s token usage (T1176)', () => {
 
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(5), [haiku]: tokens(1) },
     });
     lastRun().emit({ type: 'exit' });
     await conversations.reply(id, 'Again', 'user');
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [haiku]: tokens(2) },
     });
 
@@ -112,14 +112,14 @@ describe('A Conversation’s token usage (T1176)', () => {
     const { id } = await ask();
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(1) },
     });
 
     await conversations.stop(id);
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.2,
+      cost: 0.2,
       error: 'interrupted',
       usage: { [opus]: tokens(4) },
     });
@@ -139,7 +139,7 @@ describe('A Conversation’s token usage (T1176)', () => {
 
     lastRun().emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: { [opus]: tokens(3) },
     });
 
@@ -169,7 +169,7 @@ describe('Usage totals (T1177)', () => {
     if (input.n !== null) {
       world.lastRun().emit({
         type: 'turn',
-        costUsd: 0.1,
+        cost: 0.1,
         usage: { [opus]: tokens(input.n) },
       });
     }

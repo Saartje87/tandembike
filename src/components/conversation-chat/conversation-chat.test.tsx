@@ -115,7 +115,7 @@ describe('ConversationChat', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
-        item={one({ intent: 'triage', state: 'running', costUsd: 0.5 })}
+        item={one({ intent: 'triage', state: 'running', cost: 0.5 })}
       />,
     );
 
@@ -130,7 +130,7 @@ describe('ConversationChat', () => {
       <ConversationChat
         title="T4 A Ticket"
         item={{
-          ...one({ costUsd: 0.5 }),
+          ...one({ cost: 0.5 }),
           footprint: aFootprint({ energyWh: 2400, co2eG: 1140 }),
         }}
       />,
@@ -151,7 +151,7 @@ describe('ConversationChat', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
-        item={one({ startedBy: 'autopilot', costUsd: 1.15 })}
+        item={one({ startedBy: 'autopilot', cost: 1.15 })}
       />,
     );
     expect(screen.getByText(/, \$1\.15, by Autopilot$/)).toBeInTheDocument();
@@ -506,7 +506,7 @@ describe('ConversationChat', () => {
 
   it('shows a cost under a cent to 4 places', () => {
     renderWithTheme(
-      <ConversationChat title="T4" item={one({ costUsd: 0.0034 })} />,
+      <ConversationChat title="T4" item={one({ cost: 0.0034 })} />,
     );
 
     expect(screen.getByText(/\$0\.0034/)).toBeInTheDocument();
@@ -861,7 +861,7 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
-        item={one({ startedBy: 'terminal', state: 'running', costUsd: 0.75 })}
+        item={one({ startedBy: 'terminal', state: 'running', cost: 0.75 })}
       />,
     );
 

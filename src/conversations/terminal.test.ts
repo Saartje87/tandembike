@@ -58,7 +58,7 @@ describe('Starting a Terminal Conversation (T1237)', () => {
       intent: 'start',
       startedBy: 'terminal',
       state: 'running',
-      costUsd: 0,
+      cost: 0,
     });
     expect(session).toMatchObject({
       cwd: repositoryDir,
@@ -515,7 +515,7 @@ describe('Handing a Conversation over to the terminal (T1241)', () => {
     });
     const run = world.runner.runs[0];
     run.emit({ type: 'session', sessionId: 'sess-1' });
-    run.emit({ type: 'turn', costUsd: 0.25 });
+    run.emit({ type: 'turn', cost: 0.25 });
     await world.conversations.reply(id, 'Go on', 'user');
     return { ...world, id, run };
   };
@@ -530,7 +530,7 @@ describe('Handing a Conversation over to the terminal (T1241)', () => {
     expect(conversations.get(id)).toMatchObject({
       startedBy: 'terminal',
       state: 'running',
-      costUsd: 0.25,
+      cost: 0.25,
       sdkSessionId: 'sess-1',
     });
     expect(conversations.transcript(id).at(-1)).toMatchObject({

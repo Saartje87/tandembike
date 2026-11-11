@@ -399,7 +399,7 @@ describe('Conversation actions', () => {
 
     runner.runs[0].emit({
       type: 'turn',
-      costUsd: 0.1,
+      cost: 0.1,
       usage: {
         'claude-opus-5-5': {
           input: 0,
@@ -436,7 +436,7 @@ describe('Conversation actions', () => {
       intent: 'ask',
       prompt: 'Go',
     });
-    runner.runs[1]?.emit({ type: 'turn', costUsd: 0.1 });
+    runner.runs[1]?.emit({ type: 'turn', cost: 0.1 });
 
     expect(await currentConversationActivity()).toEqual(
       activity({

@@ -50,12 +50,12 @@ describe('TicketConversationList', () => {
     renderWithTheme(
       <TicketConversationList
         conversations={[
-          aConversation({ id: 1, intent: 'start', state: 'idle', costUsd: 1 }),
+          aConversation({ id: 1, intent: 'start', state: 'idle', cost: 1 }),
           aConversation({
             id: 2,
             intent: 'triage',
             state: 'idle',
-            costUsd: 0.2,
+            cost: 0.2,
           }),
         ]}
         footprints={{ 1: aFootprint() }}

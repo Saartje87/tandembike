@@ -177,8 +177,9 @@ export function createAutopilot({
     if (budget?.paused) {
       reasons.push({
         type: 'overMachineCeiling',
-        spendUsd: budget.spendUsd,
-        ceilingUsd: budget.ceilingUsd,
+        spend: budget.spend,
+        ceiling: budget.ceiling,
+        unit: budget.unit,
       });
     }
     return reasons;
@@ -221,8 +222,9 @@ export function createAutopilot({
       if (budget?.paused) {
         reasons.push({
           type: 'overSpendCeiling',
-          spendUsd: budget.spendUsd,
-          ceilingUsd: budget.ceilingUsd,
+          spend: budget.spend,
+          ceiling: budget.ceiling,
+          unit: budget.unit,
         });
       }
     }
@@ -534,8 +536,9 @@ export function createAutopilot({
     if (budget?.paused) {
       reasons.push({
         type: 'overTriageCeiling',
-        spendUsd: budget.spendUsd,
-        ceilingUsd: budget.ceilingUsd,
+        spend: budget.spend,
+        ceiling: budget.ceiling,
+        unit: budget.unit,
       });
     }
     reasons.push(...machineReasons());

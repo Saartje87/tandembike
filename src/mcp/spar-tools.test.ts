@@ -114,7 +114,7 @@ describe('The Spar tools', () => {
   it('are refused on a closed Spar', async () => {
     const { client, spars, spar, runner } = await sparRun();
     await spars.closeSpar(spar.id);
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     const result = await client.callTool({
       name: 'update_write_up',

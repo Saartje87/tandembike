@@ -57,7 +57,7 @@ describe('A run that invokes a Stage (ADR 0051)', () => {
       role: 'user',
       text: `/tandembike:triage T${world.ticket.number}`,
     });
-    world.runner.runs[0].emit({ type: 'turn', costUsd: 0.1 });
+    world.runner.runs[0].emit({ type: 'turn', cost: 0.1 });
     world.runner.runs[0].emit({ type: 'exit' });
     expect(world.conversations.latestRunOutcome(conversation.id)?.command).toBe(
       '/tandembike:triage',

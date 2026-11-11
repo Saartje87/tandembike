@@ -111,7 +111,7 @@ describe('Listing Spars', () => {
       projectId: project.id,
       focusTicketNumber: ticket.number,
     });
-    runner.runs[0].emit({ type: 'turn', costUsd: 0.5 });
+    runner.runs[0].emit({ type: 'turn', cost: 0.5 });
 
     const listed = spars.listSpars(project.id);
 
@@ -126,7 +126,7 @@ describe('Listing Spars', () => {
     expect(listed[1]).toMatchObject({
       topic: 'A',
       state: 'idle',
-      costUsd: 0.5,
+      cost: 0.5,
     });
     expect(listed[1].lastActivity).toBeInstanceOf(Date);
   });
@@ -402,7 +402,7 @@ describe('Closing and reopening a Spar', () => {
     const spar = await world.spars.startSpar({ projectId: world.project.id });
     const run = world.runner.runs[0];
     run.emit({ type: 'session', sessionId: 'sess-1' });
-    run.emit({ type: 'turn', costUsd: 0.1 });
+    run.emit({ type: 'turn', cost: 0.1 });
     return { ...world, spar, run };
   }
 
@@ -414,7 +414,7 @@ describe('Closing and reopening a Spar', () => {
     expect(run.sent.at(-1)).toMatch(/^Summarise: update the Write-up/);
     expect(closing).toMatchObject({ closing: true, closed: false });
 
-    run.emit({ type: 'turn', costUsd: 0.2 });
+    run.emit({ type: 'turn', cost: 0.2 });
     await Promise.resolve();
 
     expect(spars.getSpar(spar.id)).toMatchObject({
@@ -432,7 +432,7 @@ describe('Closing and reopening a Spar', () => {
     const { spars, spar, run } = await started();
     const [ideas] = spars.getCanvas(spar.id).columns;
     await spars.closeSpar(spar.id);
-    run.emit({ type: 'turn', costUsd: 0.2 });
+    run.emit({ type: 'turn', cost: 0.2 });
 
     expect(() =>
       spars.addSticky(spar.id, { columnId: ideas.id, title: 'A' }, 'user'),
@@ -457,7 +457,7 @@ describe('Closing and reopening a Spar', () => {
     await spars.closeSpar(spar.id);
 
     expect(await pending).toEqual({ expired: true });
-    run.emit({ type: 'turn', costUsd: 0 });
+    run.emit({ type: 'turn', cost: 0 });
     expect(spars.getSpar(spar.id).closed).toBe(true);
   });
 
@@ -491,7 +491,7 @@ describe('Closing and reopening a Spar', () => {
   it('reopens: editable again, and the next reply resumes the run from its session', async () => {
     const { spars, spar, run, runner } = await started();
     await spars.closeSpar(spar.id);
-    run.emit({ type: 'turn', costUsd: 0.2 });
+    run.emit({ type: 'turn', cost: 0.2 });
 
     expect(spars.reopenSpar(spar.id).closed).toBe(false);
     const [ideas] = spars.getCanvas(spar.id).columns;
@@ -625,9 +625,9 @@ describe('The Hand-off of a Spar', () => {
     );
 
     const other = await started();
-    runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    runner.runs[0].emit({ type: 'turn', cost: 0 });
     await other.spars.closeSpar(other.spar.id);
-    other.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    other.runner.runs[0].emit({ type: 'turn', cost: 0 });
     await expect(other.spars.handOff(other.spar.id, draft)).rejects.toThrow(
       NotAllowedError,
     );

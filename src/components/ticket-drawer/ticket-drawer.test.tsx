@@ -161,7 +161,7 @@ describe('TicketDrawer', () => {
       <InShell
         ticket={ticket}
         conversations={[
-          conversationWithId(2, { intent: 'ask', costUsd: 1.234 }),
+          conversationWithId(2, { intent: 'ask', cost: 1.234 }),
           conversationWithId(1, { state: 'stopped', hidden: true }),
         ]}
         conversationFootprints={{

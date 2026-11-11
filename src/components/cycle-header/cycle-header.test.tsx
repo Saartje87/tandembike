@@ -461,7 +461,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={prepared}
-          estimate={{ totalUsd: 12.6, units: 3 }}
+          estimate={{ total: 12.6, unit: 'usd', units: 3 }}
         />,
       );
 
@@ -472,7 +472,10 @@ describe('CycleHeader', () => {
 
     it('counts one Ticket in the singular', () => {
       renderWithTheme(
-        <CycleHeader cycle={prepared} estimate={{ totalUsd: 4, units: 1 }} />,
+        <CycleHeader
+          cycle={prepared}
+          estimate={{ total: 4, unit: 'usd', units: 1 }}
+        />,
       );
 
       expect(
@@ -484,7 +487,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={prepared}
-          estimate={{ totalUsd: null, units: 3 }}
+          estimate={{ total: null, unit: 'usd', units: 3 }}
         />,
       );
 
@@ -497,7 +500,7 @@ describe('CycleHeader', () => {
       renderWithTheme(
         <CycleHeader
           cycle={{ ...prepared, state: 'Active' }}
-          estimate={{ totalUsd: 4, units: 1 }}
+          estimate={{ total: 4, unit: 'usd', units: 1 }}
         />,
       );
 

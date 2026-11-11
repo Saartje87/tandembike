@@ -82,7 +82,7 @@ describe('SparPage', () => {
     const spar = await test.spars.startSpar({ projectId: test.project.id });
     test.spars.updateWriteUp(spar.id, { decisions: 'Keep it small' }, 'user');
     await test.spars.closeSpar(spar.id);
-    test.runner.runs[0].emit({ type: 'turn', costUsd: 0 });
+    test.runner.runs[0].emit({ type: 'turn', cost: 0 });
 
     const params = Promise.resolve({
       id: String(test.project.id),

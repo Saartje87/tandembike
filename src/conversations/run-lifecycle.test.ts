@@ -38,7 +38,8 @@ const aConversation = (
   ticketNumber: 7,
   intent: 'start',
   state: 'running',
-  costUsd: 1,
+  cost: 1,
+  costUnit: 'usd',
   worktreePath: null,
   worktreeRemoved: false,
   ...overrides,
@@ -179,12 +180,12 @@ describe('A turn end', () => {
   it('makes the Conversation idle, adds the run cost, writes usage and records the Run outcome', () => {
     const result = step(
       aRun({ costBefore: 2, usageBefore: {} }),
-      aConversation({ costUsd: 2 }),
-      event({ type: 'turn', costUsd: 0.5, usage }),
+      aConversation({ cost: 2 }),
+      event({ type: 'turn', cost: 0.5, usage }),
       now,
     );
 
-    expect(result.patch).toEqual({ state: 'idle', costUsd: 2.5 });
+    expect(result.patch).toEqual({ state: 'idle', cost: 2.5 });
     expect(result.run?.pending).toBeNull();
     expect(result.run?.phase).toEqual({
       name: 'alive',
@@ -201,7 +202,8 @@ describe('A turn end', () => {
           result: 'needs_reply',
           startedAt,
           endedAt: now,
-          costUsd: 1.5,
+          cost: 1.5,
+          costUnit: 'usd',
           model: 'opus',
           command: '/implement',
           startedByAutopilot: false,
@@ -225,7 +227,7 @@ describe('A turn end', () => {
         },
       }),
       aConversation(),
-      event({ type: 'turn', costUsd: 0 }),
+      event({ type: 'turn', cost: 0 }),
       now,
     );
 
@@ -244,7 +246,7 @@ describe('A turn end', () => {
     const result = step(
       aRun(),
       aConversation(),
-      event({ type: 'turn', costUsd: 0, error: 'API Error: 529 overloaded' }),
+      event({ type: 'turn', cost: 0, error: 'API Error: 529 overloaded' }),
       now,
     );
 
@@ -268,19 +270,16 @@ describe('A turn end', () => {
       );
 
     expect(
-      resultOf(event({ type: 'turn', costUsd: 0 }, { ticket: null })),
+      resultOf(event({ type: 'turn', cost: 0 }, { ticket: null })),
     ).toMatchObject({ outcome: { result: 'completed' } });
     expect(
       resultOf(
-        event(
-          { type: 'turn', costUsd: 0 },
-          { ticket: null, waitsOnUser: true },
-        ),
+        event({ type: 'turn', cost: 0 }, { ticket: null, waitsOnUser: true }),
       ),
     ).toMatchObject({ outcome: { result: 'needs_reply' } });
     expect(
       resultOf(
-        event({ type: 'turn', costUsd: 0 }, { ticket: null }),
+        event({ type: 'turn', cost: 0 }, { ticket: null }),
         aConversation({ intent: 'ask', ticketNumber: null, state: 'waiting' }),
       ),
     ).toMatchObject({ outcome: { result: 'needs_reply' } });
@@ -290,7 +289,7 @@ describe('A turn end', () => {
     const result = step(
       between(),
       aConversation({ state: 'idle' }),
-      event({ type: 'turn', costUsd: 0 }),
+      event({ type: 'turn', cost: 0 }),
       now,
     );
 
@@ -301,7 +300,7 @@ describe('A turn end', () => {
     const result = step(
       aRun({ ticketStatus: 'Todo' }),
       aConversation(),
-      event({ type: 'turn', costUsd: 0 }, { ticket: aTicket() }),
+      event({ type: 'turn', cost: 0 }, { ticket: aTicket() }),
       now,
     );
 
@@ -312,7 +311,7 @@ describe('A turn end', () => {
     const result = step(
       aRun({ phase: { name: 'alive', releaseWorktree: true } }),
       aConversation({ intent: 'ask' }),
-      event({ type: 'turn', costUsd: 0 }),
+      event({ type: 'turn', cost: 0 }),
       now,
     );
 
@@ -335,7 +334,7 @@ describe('A turn end', () => {
       const result = step(
         aRun(),
         aConversation(),
-        event({ type: 'turn', costUsd: 0 }, { ticket }),
+        event({ type: 'turn', cost: 0 }, { ticket }),
         now,
       );
 
@@ -358,7 +357,7 @@ describe('A turn end', () => {
       const result = step(
         aRun(),
         conversation,
-        event({ type: 'turn', costUsd: 0 }, { ticket }),
+        event({ type: 'turn', cost: 0 }, { ticket }),
         now,
       );
 
@@ -371,10 +370,7 @@ describe('A turn end', () => {
     const result = step(
       aRun({ phase: { name: 'endingAfterTurn', releaseWorktree: false } }),
       aConversation(),
-      event(
-        { type: 'turn', costUsd: 0 },
-        { ticket: aTicket({ status: 'Todo' }) },
-      ),
+      event({ type: 'turn', cost: 0 }, { ticket: aTicket({ status: 'Todo' }) }),
       now,
     );
 
@@ -390,7 +386,7 @@ describe('A run exit', () => {
   it('interrupts the Conversation, expires its waits and records the outcome at its cost', () => {
     const result = step(
       aRun(),
-      aConversation({ costUsd: 3 }),
+      aConversation({ cost: 3 }),
       event({ type: 'exit', error: 'Process died' }),
       now,
     );
@@ -404,7 +400,7 @@ describe('A run exit', () => {
       { type: 'append', role: 'error', text: 'Process died' },
       {
         type: 'recordOutcome',
-        outcome: expect.objectContaining({ result: 'failed', costUsd: 2 }),
+        outcome: expect.objectContaining({ result: 'failed', cost: 2 }),
       },
       { type: 'announce' },
     ]);
@@ -437,14 +433,14 @@ describe('A run that no longer speaks for its Conversation', () => {
     const result = step(
       stopped(2.5),
       aConversation({ state: 'stopped' }),
-      event({ type: 'turn', costUsd: 1, usage }),
+      event({ type: 'turn', cost: 1, usage }),
       now,
     );
 
     expect(result.run?.phase).toEqual({ name: 'stopped', lateCost: null });
-    expect(result.patch).toEqual({ costUsd: 3 });
+    expect(result.patch).toEqual({ cost: 3 });
     expect(result.effects).toEqual([
-      { type: 'setStoppedOutcomeCost', costUsd: 0.5 },
+      { type: 'setStoppedOutcomeCost', cost: 0.5 },
       { type: 'writeUsage', before: {}, run: usage },
       { type: 'announce' },
     ]);
@@ -454,11 +450,11 @@ describe('A run that no longer speaks for its Conversation', () => {
     const result = step(
       stopped(null),
       aConversation({ state: 'stopped' }),
-      event({ type: 'turn', costUsd: 1 }),
+      event({ type: 'turn', cost: 1 }),
       now,
     );
 
-    expect(result.patch).toEqual({ costUsd: 3 });
+    expect(result.patch).toEqual({ cost: 3 });
     expect(result.effects).toEqual([{ type: 'announce' }]);
   });
 
@@ -476,7 +472,7 @@ describe('A run that no longer speaks for its Conversation', () => {
   it('ignores every event of a run whose process ended', () => {
     const ended = aRun({ phase: { name: 'ended' } });
     for (const runEvent of [
-      { type: 'turn', costUsd: 9 },
+      { type: 'turn', cost: 9 },
       { type: 'agent', text: 'late' },
       { type: 'exit' },
     ] satisfies RunEvent[]) {
@@ -493,7 +489,7 @@ describe("The User's reply to a live run", () => {
   it('appends it, puts it into the process and starts a pending run from it', () => {
     const result = step(
       between(),
-      aConversation({ state: 'idle', costUsd: 4 }),
+      aConversation({ state: 'idle', cost: 4 }),
       {
         type: 'reply',
         text: '/merge now',
@@ -537,7 +533,7 @@ describe("The User's stop", () => {
   it('stops a run mid-turn: records its stopped outcome and interrupts its process, waiting for its last cost (T587)', () => {
     const result = step(
       aRun(),
-      aConversation({ costUsd: 1.5 }),
+      aConversation({ cost: 1.5 }),
       { type: 'stop', keepWorktree: false },
       now,
     );
@@ -552,7 +548,7 @@ describe("The User's stop", () => {
       { type: 'detach' },
       {
         type: 'recordOutcome',
-        outcome: expect.objectContaining({ result: 'stopped', costUsd: 0.5 }),
+        outcome: expect.objectContaining({ result: 'stopped', cost: 0.5 }),
       },
       { type: 'expireWaits' },
       { type: 'announce' },
