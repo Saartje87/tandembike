@@ -19,7 +19,9 @@ import {
 } from './install';
 import {
   findServerUrl,
+  lastLines,
   liveRecord,
+  logTailLines,
   restartServer,
   type ServerEffects,
   type ServerRecord,
@@ -97,6 +99,8 @@ async function main(): Promise<void> {
       );
     case 'status':
       return process.exit(await serverStatus(serverEffects));
+    case 'logs':
+      return process.exit(await showLogs(parsed.follow));
     case 'mcp':
       await firstRunSteps({ offers: false });
       if (await offerMcp()) markMcpOffered();
@@ -249,6 +253,38 @@ const serverEffects: ServerEffects = {
   logPath,
   envUrl: process.env.TANDEMBIKE_URL,
 };
+
+/**
+ * `tandembike logs`: the log's last lines; with `follow`, `tail -F` prints
+ * them and follows the log until Ctrl+C.
+ */
+async function showLogs(follow: boolean): Promise<number> {
+  if (!existsSync(logPath)) {
+    console.log(`There is no server log yet at ${logPath}.`);
+    return 0;
+  }
+  if (!follow) {
+    for (const line of lastLines(readFileSync(logPath, 'utf8'), logTailLines)) {
+      console.log(line);
+    }
+    return 0;
+  }
+  return new Promise((resolve) => {
+    const tail = spawn('tail', ['-n', String(logTailLines), '-F', logPath], {
+      stdio: 'inherit',
+    });
+    // In a terminal Ctrl+C reaches tail with the foreground group; leave
+    // quietly with it. Without one nothing else delivers it, so forward.
+    process.on('SIGINT', () => {
+      if (!process.stdin.isTTY) tail.kill('SIGINT');
+    });
+    tail.on('error', (error) => {
+      console.error(`Could not run tail: ${error.message}`);
+      resolve(1);
+    });
+    tail.on('exit', (code, signal) => resolve(signal ? 130 : (code ?? 0)));
+  });
+}
 
 /** `stop`'s question, asked only in a terminal. */
 function stopOptions(force: boolean): StopOptions {

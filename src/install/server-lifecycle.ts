@@ -192,6 +192,16 @@ function rollLog(effects: ServerEffects, startedAt: Date): void {
   effects.appendLog(`started at ${startedAt.toISOString()}`);
 }
 
+/** How many lines `tandembike logs` prints. */
+export const logTailLines = 100;
+
+/** The last `count` lines of a log's text, without the final newline. */
+export function lastLines(text: string, count: number): string[] {
+  const lines = text.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines.slice(-count);
+}
+
 export type StopOptions = {
   force: boolean;
   /** The open Terminal sessions, asked of the server; empty when it cannot say. */

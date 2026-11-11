@@ -40,17 +40,20 @@ run, when `~/.tandembike/ticket.db` is missing and the checkout has
 `data/ticket.db`, the command copies that database (with any `-wal` and `-shm`
 files) and says so. It never moves, deletes or overwrites a database.
 
-| Command                         | Does                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------ |
-| `tandembike start [-p <port>]`  | Start the server in the background; says "already running" when it is    |
-| `tandembike start --foreground` | Serve in this terminal instead, to watch or debug it                     |
-| `tandembike stop [--force]`     | Stop the server `tandembike start` started, and wait until it is gone    |
-| `tandembike restart`            | Stop, then start on the same port (after `git pull` and `npm run build`) |
-| `tandembike status`             | pid, URL, uptime and log path; exits 1 when nothing runs                 |
-| `tandembike help`               | Every command                                                            |
+| Command                         | Does                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------ |
+| `tandembike start [-p <port>]`  | Start the server in the background; says "already running" when it is          |
+| `tandembike start --foreground` | Serve in this terminal instead, to watch or debug it                           |
+| `tandembike stop [--force]`     | Stop the server `tandembike start` started, and wait until it is gone          |
+| `tandembike restart`            | Stop, then start on the same port (after `git pull` and `npm run build`)       |
+| `tandembike status`             | pid, URL, uptime and log path; exits 1 when nothing runs                       |
+| `tandembike logs [-f]`          | The last 100 lines of `~/.tandembike/server.log`; `-f` follows it until Ctrl+C |
+| `tandembike help`               | Every command                                                                  |
 
 `start` records the server in `~/.tandembike/server.json` (pid, port and start
-time) and appends its output to `~/.tandembike/server.log`. Pass `-p <port>` to
+time) and appends its output to `~/.tandembike/server.log`. On each start the log
+gets a "started at …" line, after rolling over to `server.log.1` once it passes
+5 MB. Pass `-p <port>` to
 use another port; the other commands find it from `server.json` (or
 `TANDEMBIKE_URL` when set). `start` refuses with "run `npm run build` first"
 when the checkout has no production build. `stop` and `status` never touch a

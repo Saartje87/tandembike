@@ -48,6 +48,20 @@ describe('parseCommand', () => {
     expect(parseCommand(['status'])).toEqual({ command: 'status' });
   });
 
+  it('knows logs and logs -f (T1351)', () => {
+    expect(parseCommand(['logs'])).toEqual({ command: 'logs', follow: false });
+    expect(parseCommand(['logs', '-f'])).toEqual({
+      command: 'logs',
+      follow: true,
+    });
+    expect(parseCommand(['logs', '--follow'])).toEqual({
+      command: 'logs',
+      follow: true,
+    });
+    expect(parseCommand(['logs', 'x'])).toMatchObject({ command: 'usage' });
+    expect(usageText).toContain('tandembike logs [-f]');
+  });
+
   it('lists the server commands in the help (T1350)', () => {
     for (const line of [
       'tandembike start',

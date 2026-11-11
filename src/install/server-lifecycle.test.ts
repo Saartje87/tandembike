@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   findServerUrl,
+  lastLines,
   logRollBytes,
   restartServer,
   type ServerEffects,
@@ -539,5 +540,20 @@ describe('uptimeText', () => {
     [60 * 24 * 2 + 90, '2d 1h'],
   ])('%i minutes is %s', (minutes, text) => {
     expect(uptimeText(at, new Date(at.getTime() + minutes * 60000))).toBe(text);
+  });
+});
+
+describe('lastLines (T1351)', () => {
+  it('keeps the last lines, ignoring the final newline', () => {
+    const text = `${Array.from({ length: 150 }, (_, i) => `line ${i + 1}`).join('\n')}\n`;
+    const lines = lastLines(text, 100);
+    expect(lines).toHaveLength(100);
+    expect(lines[0]).toBe('line 51');
+    expect(lines[99]).toBe('line 150');
+  });
+
+  it('keeps a short log whole and an empty one empty', () => {
+    expect(lastLines('a\nb\n', 100)).toEqual(['a', 'b']);
+    expect(lastLines('', 100)).toEqual([]);
   });
 });

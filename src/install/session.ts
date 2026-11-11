@@ -17,6 +17,7 @@ export const usageText = [
   '  tandembike stop [--force]     stop the server `tandembike start` started',
   '  tandembike restart            stop, then start the server on the same port',
   '  tandembike status             whether the server runs: pid, URL, uptime, log',
+  '  tandembike logs [-f]          the last 100 lines of the server log; -f follows it',
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
@@ -33,6 +34,7 @@ export type ParsedCommand =
   | { command: 'stop'; force: boolean }
   | { command: 'restart' }
   | { command: 'status' }
+  | { command: 'logs'; follow: boolean }
   | { command: 'mcp' }
   | { command: 'plugin' }
   | { command: Exclude<TerminalIntent, 'start'>; ticketNumber: number }
@@ -77,6 +79,12 @@ export function parseCommand(argv: string[]): ParsedCommand {
     if (rest.length === 0) return { command: 'stop', force: false };
     return rest.length === 1 && rest[0] === '--force'
       ? { command: 'stop', force: true }
+      : usage;
+  }
+  if (first === 'logs') {
+    if (rest.length === 0) return { command: 'logs', follow: false };
+    return rest.length === 1 && (rest[0] === '-f' || rest[0] === '--follow')
+      ? { command: 'logs', follow: true }
       : usage;
   }
   if (first === 'restart' || first === 'status') {
