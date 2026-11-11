@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkCommand, gitBranch, hookDecision } from './git-guardrail';
+import {
+  checkCommand,
+  copilotHookDecision,
+  gitBranch,
+  hookDecision,
+} from './git-guardrail';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const onBranch = (branch: string | null | undefined) => ({
   cwd: '/repo',
@@ -302,6 +307,90 @@ describe('hookDecision', () => {
   });
 });
 
+describe('copilotHookDecision', () => {
+  const noBranch = () => null;
+  /** A preToolUse input as Copilot's command hooks get it on stdin. */
+  const bashCall = (command: string, cwd = '/repo') =>
+    JSON.stringify({
+      timestamp: 1_704_614_600_000,
+      cwd,
+      toolName: 'bash',
+      toolArgs: JSON.stringify({ command, description: 'Run it' }),
+    });
+
+  it('denies a bash call whose command a rule denies, naming the rule', () => {
+    const decision = copilotHookDecision(
+      bashCall('git push --force origin topic'),
+      noBranch,
+    );
+    expect(decision?.permissionDecision).toBe('deny');
+    expect(decision?.permissionDecisionReason).toMatch(
+      /^Git guardrail \(no-force-push\): force pushes .* are not allowed\./,
+    );
+    expect(decision?.permissionDecisionReason).toMatch(/policy/);
+  });
+
+  it('gives the same reason as the Claude Code hook', () => {
+    const claude = hookDecision(
+      JSON.stringify({
+        tool_name: 'Bash',
+        cwd: '/repo',
+        tool_input: { command: 'git clean -fd' },
+      }),
+      noBranch,
+    );
+    expect(
+      copilotHookDecision(bashCall('git clean -fd'), noBranch)
+        ?.permissionDecisionReason,
+    ).toBe(claude?.hookSpecificOutput.permissionDecisionReason);
+  });
+
+  it('checks a commit against the branch of the directory it runs in', () => {
+    const branches = (dir: string) => (dir === '/main' ? 'main' : 'topic');
+    expect(
+      copilotHookDecision(bashCall('git commit -m x', '/main'), branches)
+        ?.permissionDecisionReason,
+    ).toMatch(/no-commit-off-branch/);
+    expect(
+      copilotHookDecision(bashCall('git commit -m x', '/topic'), branches),
+    ).toBeNull();
+  });
+
+  it('makes no decision on an allowed command', () => {
+    expect(copilotHookDecision(bashCall('git status'), noBranch)).toBeNull();
+    expect(
+      copilotHookDecision(bashCall('git push origin topic'), noBranch),
+    ).toBeNull();
+  });
+
+  it('reads toolArgs given as an object', () => {
+    const input = JSON.stringify({
+      cwd: '/repo',
+      toolName: 'bash',
+      toolArgs: { command: 'git reset --hard' },
+    });
+    expect(
+      copilotHookDecision(input, noBranch)?.permissionDecisionReason,
+    ).toMatch(/no-reset-hard/);
+  });
+
+  it('makes no decision on other tools or input it cannot read', () => {
+    expect(copilotHookDecision('not json', noBranch)).toBeNull();
+    expect(
+      copilotHookDecision(
+        JSON.stringify({ toolName: 'view', toolArgs: '{"path":"/repo"}' }),
+        noBranch,
+      ),
+    ).toBeNull();
+    expect(
+      copilotHookDecision(
+        JSON.stringify({ toolName: 'bash', toolArgs: 'not json' }),
+        noBranch,
+      ),
+    ).toBeNull();
+  });
+});
+
 describe('gitBranch', () => {
   const dirs: string[] = [];
   const tempDir = () => {
@@ -338,5 +427,44 @@ describe('gitBranch', () => {
 
   it('is undefined outside a repository', () => {
     expect(gitBranch(tempDir())).toBeUndefined();
+  });
+});
+
+describe("the repository's Copilot hook", () => {
+  const root = resolve(import.meta.dirname, '../..');
+  type CommandHook = { type: string; bash: string; cwd?: string };
+  const config = JSON.parse(
+    readFileSync(join(root, '.github/hooks/git-guardrail.json'), 'utf8'),
+  ) as { version: number; hooks: { preToolUse: CommandHook[] } };
+
+  /** Runs the configured hook as Copilot does: its `bash` line, input on stdin. */
+  const runHook = (toolArgs: object) => {
+    const [hook] = config.hooks.preToolUse;
+    return execFileSync('bash', ['-c', hook.bash], {
+      cwd: resolve(root, hook.cwd ?? '.'),
+      input: JSON.stringify({
+        timestamp: 0,
+        cwd: tmpdir(),
+        toolName: 'bash',
+        toolArgs: JSON.stringify(toolArgs),
+      }),
+      encoding: 'utf8',
+    });
+  };
+
+  it('is a version 1 preToolUse command hook', () => {
+    expect(config.version).toBe(1);
+    expect(config.hooks.preToolUse).toHaveLength(1);
+    expect(config.hooks.preToolUse[0].type).toBe('command');
+  });
+
+  it('denies a destructive git command with the rule name', () => {
+    const output = JSON.parse(runHook({ command: 'git reset --hard' }));
+    expect(output.permissionDecision).toBe('deny');
+    expect(output.permissionDecisionReason).toMatch(/no-reset-hard/);
+  });
+
+  it('prints nothing for an allowed command', () => {
+    expect(runHook({ command: 'git status' })).toBe('');
   });
 });

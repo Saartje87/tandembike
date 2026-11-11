@@ -1,5 +1,7 @@
 // The git guardrail (T1081): a PreToolUse hook on Bash that denies destructive
-// git commands. Node runs this file directly (type stripping), so it imports
+// git commands. One rule check, with an adapter per Agent kind: Claude Code's
+// hook (`.claude/settings.json`) and Copilot's (`.github/hooks/git-guardrail.json`,
+// T1396). Node runs this file directly (type stripping), so it imports
 // nothing outside Node and uses only erasable TypeScript.
 
 import { execFileSync } from 'node:child_process';
@@ -436,6 +438,35 @@ export const checkCommand = (
   return null;
 };
 
+/** The message a denied call gets, the same on every Agent kind. */
+const denialMessage = ({ rule, reason }: Denial): string =>
+  `Git guardrail (${rule}): ${reason}. This is repository policy, enforced by the PreToolUse hook in src/git-guardrail/, not a bug; do not work around it. If the work needs it, ask the User to run the command.`;
+
+/** Parses a hook's JSON input, or null when it cannot be read. */
+const parseInput = (input: string): Record<string, unknown> | null => {
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The denial for a shell command run in `cwd`, when it reads as text. */
+const denialOf = (
+  command: unknown,
+  cwd: unknown,
+  currentBranch: GuardrailContext['currentBranch'],
+): Denial | null =>
+  typeof command === 'string'
+    ? checkCommand(command, {
+        cwd: typeof cwd === 'string' ? cwd : process.cwd(),
+        currentBranch,
+      })
+    : null;
+
 export type HookDecision = {
   hookSpecificOutput: {
     hookEventName: 'PreToolUse';
@@ -445,32 +476,57 @@ export type HookDecision = {
 };
 
 /**
- * The hook's answer to one PreToolUse input (JSON, as Claude Code sends it on
- * stdin): a denial, or null to leave the decision to the permission mode.
- * Input it cannot read is left alone rather than blocking every command.
+ * Claude Code's adapter: the hook's answer to one PreToolUse input (JSON, as
+ * Claude Code sends it on stdin): a denial, or null to leave the decision to
+ * the permission mode. Input it cannot read is left alone rather than
+ * blocking every command.
  */
 export const hookDecision = (
   input: string,
   currentBranch: GuardrailContext['currentBranch'],
 ): HookDecision | null => {
-  let parsed: { tool_name?: unknown; cwd?: unknown; tool_input?: unknown };
-  try {
-    parsed = JSON.parse(input);
-  } catch {
-    return null;
-  }
+  const parsed = parseInput(input);
+  if (parsed?.tool_name !== 'Bash') return null;
   const command = (parsed.tool_input as { command?: unknown } | undefined)
     ?.command;
-  if (parsed.tool_name !== 'Bash' || typeof command !== 'string') return null;
-  const cwd = typeof parsed.cwd === 'string' ? parsed.cwd : process.cwd();
-  const denial = checkCommand(command, { cwd, currentBranch });
+  const denial = denialOf(command, parsed.cwd, currentBranch);
   if (!denial) return null;
   return {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
-      permissionDecisionReason: `Git guardrail (${denial.rule}): ${denial.reason}. This is repository policy, enforced by the PreToolUse hook in src/git-guardrail/, not a bug; do not work around it. If the work needs it, ask the User to run the command.`,
+      permissionDecisionReason: denialMessage(denial),
     },
+  };
+};
+
+export type CopilotHookDecision = {
+  permissionDecision: 'deny';
+  permissionDecisionReason: string;
+};
+
+/**
+ * Copilot's adapter (T1396): the answer to one `preToolUse` input of a
+ * Copilot command hook (`.github/hooks/git-guardrail.json`), whose shell tool
+ * is `bash` and whose `toolArgs` is the arguments' JSON text. A denial, or
+ * null to leave the decision to Copilot's permissions.
+ */
+export const copilotHookDecision = (
+  input: string,
+  currentBranch: GuardrailContext['currentBranch'],
+): CopilotHookDecision | null => {
+  const parsed = parseInput(input);
+  if (parsed?.toolName !== 'bash') return null;
+  const args =
+    typeof parsed.toolArgs === 'string'
+      ? parseInput(parsed.toolArgs)
+      : parsed.toolArgs;
+  const command = (args as { command?: unknown } | null | undefined)?.command;
+  const denial = denialOf(command, parsed.cwd, currentBranch);
+  if (!denial) return null;
+  return {
+    permissionDecision: 'deny',
+    permissionDecisionReason: denialMessage(denial),
   };
 };
 
@@ -488,7 +544,11 @@ export const gitBranch = (dir: string): Branch => {
   }
 };
 
+// Claude Code runs the hook as is; Copilot's hook passes `--copilot`.
 if (import.meta.main) {
-  const decision = hookDecision(readFileSync(0, 'utf8'), gitBranch);
+  const adapter = process.argv.includes('--copilot')
+    ? copilotHookDecision
+    : hookDecision;
+  const decision = adapter(readFileSync(0, 'utf8'), gitBranch);
   if (decision) process.stdout.write(JSON.stringify(decision));
 }
