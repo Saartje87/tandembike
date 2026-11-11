@@ -334,6 +334,16 @@ describe('The Claude runner', () => {
     );
   });
 
+  it('can always run, in default and auto mode, and honours Allow-always (ADR 0051)', () => {
+    const runner = createClaudeRunner();
+
+    expect(runner.availability()).toEqual({ available: true });
+    expect(runner.capabilities).toEqual({
+      runModes: ['default', 'auto'],
+      allowAlways: true,
+    });
+  });
+
   it('turns SDK messages into run events and ends with an exit', async () => {
     query.mockReturnValue(
       fakeQuery([

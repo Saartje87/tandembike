@@ -1,6 +1,7 @@
 import type { UsageByModel } from '../footprint/token-usage';
 import type { ProjectAgentCommands } from '../tickets/agent-commands';
 import type { AgentKind } from '../tickets/agent-kind';
+import type { AgentRunMode } from '../tickets/agent-run-mode';
 import type { TicketType } from '../tickets/ticket-type';
 import type { PermissionAnswer } from './conversation-state';
 import type { RetroCycle } from './retro-prompt';
@@ -126,8 +127,11 @@ export type RunOptions = {
   agentCommands: ProjectAgentCommands;
   /** The plugins every run loads: the Playbook, by local path (ADR 0032). */
   plugins: { type: 'local'; path: string }[];
-  /** The permission mode of the run; `default` when left out (ADR 0029). */
-  runMode?: 'default' | 'auto';
+  /**
+   * The permission mode of the run, one its runner declares; `default` when
+   * left out (ADR 0029, ADR 0051).
+   */
+  runMode?: AgentRunMode;
   /** The model to start on; left out for the User's default model. */
   model?: string;
   /**
@@ -149,6 +153,14 @@ export type AgentRun = {
   close(): void;
 };
 
+/** What a runner can do, which the Conversations module reads (ADR 0051). */
+export type RunnerCapabilities = {
+  /** The run modes it can honour; a run in another runs in `default`. */
+  runModes: readonly AgentRunMode[];
+  /** Whether it can honour Allow-always, so the User is offered it. */
+  allowAlways: boolean;
+};
+
 /** Whether a runner can start a run now, and why not when it cannot. */
 export type RunnerAvailability =
   | { available: true }
@@ -161,6 +173,7 @@ export type RunnerAvailability =
 export type AgentRunner = {
   /** Whether it can run now; Claude Code always can. */
   availability(): RunnerAvailability;
+  capabilities: RunnerCapabilities;
   /**
    * The text its first message sends for a Stage, which the transcript
    * records as the starter's message.

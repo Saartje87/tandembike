@@ -251,6 +251,8 @@ export function createClaudeRunner(): AgentRunner {
   return {
     // The SDK ships with the app, so Claude Code can always run (ADR 0051).
     availability: () => ({ available: true }),
+    // Claude's classifier serves `auto`; Allow-always saves Claude Code rules.
+    capabilities: { runModes: ['default', 'auto'], allowAlways: true },
     invocationText: claudeInvocationText,
     start({
       cwd,

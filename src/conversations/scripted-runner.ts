@@ -38,6 +38,7 @@ let sessions = 0;
 export function createScriptedRunner(): AgentRunner {
   return {
     availability: () => ({ available: true }),
+    capabilities: { runModes: ['default', 'auto'], allowAlways: true },
     invocationText: claudeInvocationText,
     start(options: RunOptions): AgentRun {
       let closed = false;

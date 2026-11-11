@@ -566,6 +566,24 @@ export function createConversations({
     }
   };
 
+  /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
+  const noteOnce = (id: number, text: string) => {
+    const noted = db
+      .select({ id: conversationEntries.id })
+      .from(conversationEntries)
+      .where(
+        and(
+          eq(conversationEntries.conversationId, id),
+          eq(conversationEntries.role, 'session'),
+          eq(conversationEntries.text, text),
+        ),
+      )
+      .get();
+    if (!noted) {
+      append(id, 'session', text);
+    }
+  };
+
   /** Applies one effect of the run lifecycle; an async one returns its promise. */
   const applyEffect = (
     id: number,
@@ -709,17 +727,20 @@ export function createConversations({
     id: number,
     handle: RunHandle,
     request: PermissionRequest,
+    allowAlways: boolean,
   ): Promise<PermissionAnswer> => {
     if (live.get(id) !== handle) {
       return Promise.resolve('deny');
     }
+    // Without rules there is no Always allow to offer (ADR 0051).
     const entryId = append(
       id,
       'permission',
       `${request.toolName} ${JSON.stringify(request.input)}`,
       {
         permission: 'pending',
-        permissionRules: request.rules.length === 0 ? null : request.rules,
+        permissionRules:
+          !allowAlways || request.rules.length === 0 ? null : request.rules,
         tool: { name: request.toolName, input: request.input },
       },
     );
@@ -957,6 +978,19 @@ export function createConversations({
       widgets: new Map(),
     };
     live.set(id, handle);
+    // A Spar is read-only whatever the Project's run mode (ADR 0046); a mode
+    // the runner cannot honour falls back to default, and says so (ADR 0051).
+    const wanted =
+      conversation.intent === 'spar' ? 'default' : settings.runMode;
+    const runMode = runner.capabilities.runModes.includes(wanted)
+      ? wanted
+      : 'default';
+    if (runMode !== wanted) {
+      noteOnce(
+        id,
+        `${agentKindLabels[conversation.agentKind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`,
+      );
+    }
     try {
       handle.process = runner.start({
         cwd: conversation.worktreePath ?? settings.repositoryPath,
@@ -966,8 +1000,7 @@ export function createConversations({
         systemPrompt: briefOf(id),
         message,
         agentCommands,
-        // A Spar is read-only whatever the Project's run mode (ADR 0046).
-        runMode: conversation.intent === 'spar' ? 'default' : settings.runMode,
+        runMode,
         ...(runModel === null ? {} : { model: runModel }),
         // A Spar is read-only (ADR 0046); Autopilot Triage and Batch triage
         // only propose and note (ADR 0040, ADR 0047).
@@ -979,7 +1012,8 @@ export function createConversations({
             ? { toolPolicy: 'no-ticket-writes' as const }
             : {}),
         ...(resume === undefined ? {} : { resume }),
-        askPermission: (request) => askPermission(id, handle, request),
+        askPermission: (request) =>
+          askPermission(id, handle, request, runner.capabilities.allowAlways),
         askWidget: (widget) => askWidget(id, handle, widget),
         onEvent: (event) => handleEvent(id, handle, event),
       });
