@@ -1,5 +1,7 @@
 # The Footprint is an estimate from tokens
 
+Amended by [ADR 0051](0051-agent-kinds-claude-code-and-copilot.md): Copilot runs record tokens per model too. A Claude model served by Copilot maps to the tiers; any other model on a Copilot run is not measured, never counted as Opus. Cost is in each Agent kind's own unit: dollars for Claude Code, AI credits for Copilot.
+
 The User sees what each Conversation costs in USD, not what its runs cost the environment. Cost is a poor stand-in: price per token differs from energy per token between models and token types, and prices change. Tandembike now shows a **Footprint** for every Conversation it runs: the estimated energy (Wh) and CO₂e of its runs, worked out from the tokens they used. Anthropic publishes no per-token energy figures, so every factor below is an outside estimate with wide uncertainty, taken from [`docs/research/footprint-factors.md`](../research/footprint-factors.md) (T1174). Expect a factor of 3 either way, and more for Haiku and Opus.
 
 ## The method

@@ -1,5 +1,7 @@
 # Tandembike ships a default Playbook; a repository's Agent commands override it
 
+Amended by [ADR 0051](0051-agent-kinds-claude-code-and-copilot.md): a run gets a Stage and a Ticket, and each Agent kind's runner invokes the Playbook skill its own way. Copilot loads the same Playbook as a plugin. Agent command overrides apply to Claude Code runs only.
+
 Amends [ADR 0019](0019-tandembike-starts-agent-runs.md) and [ADR 0020](0020-setup-advises-the-user-decides.md). Decided on 2026-11-08 (T1191) and built in phase 9 of [`software-factory-2.md`](../roadmap/software-factory-2.md) (T1195).
 
 ADR 0019 tells a run only its situation and leaves the whole process to the repository: its skills, branch rules and when a Ticket is done. That made every new repository a setup job before the factory could work there. Setup (ADR 0020) checked for it, and the User entered Agent commands pointing at a skills plugin of their own. Tandembike is meant to work with any repository on the machine, and most have no such process.

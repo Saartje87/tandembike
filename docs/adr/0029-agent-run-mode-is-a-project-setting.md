@@ -2,6 +2,8 @@
 
 Amended by [ADR 0032](0032-tandembike-ships-a-default-playbook.md) (T1218): new Projects start in `auto`, so the Playbook's runs do not idle on every unlisted call. Existing Projects keep their mode.
 
+Amended by [ADR 0051](0051-agent-kinds-claude-code-and-copilot.md): each runner declares the run modes it supports, and a run whose agent lacks the Project's mode runs in `default` with a note. On Copilot, `auto` means the runner approves what Copilot's Assisted judge recommends and asks about the rest. The run model is set per Agent kind.
+
 Amended again (T1228): a Project created with a repository folder also starts with agent mode on, and with Parallel runs on when the folder is a git repository with a default branch. Each Start run then gets a worktree of its own (ADR 0033) and never touches the User's checkout, so the first Start works hands-off without a trip to the settings. A Project created without a folder keeps both off, since agent mode needs a path. The User can turn either off in the Project settings, and existing Projects keep what they have.
 
 ADR 0021 pinned every run to the SDK's `default` permission mode, so no repository's `defaultMode` could skip the relay of Allow and Deny to the User. That holds a factory back: each unlisted call idles a run until the User returns. The spike in `docs/research/auto-permission-mode.md` found that the SDK's `auto` mode asks `canUseTool` only for calls its classifier cannot decide, so the relay keeps working there.
