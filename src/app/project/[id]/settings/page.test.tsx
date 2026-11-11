@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../../../conversations/app-conversations';
@@ -20,7 +20,10 @@ const { notFound } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('next/navigation', () => ({ notFound }));
+vi.mock('next/navigation', () => ({
+  notFound,
+  useSearchParams: () => new URLSearchParams(),
+}));
 vi.mock('next/server', () => ({ connection: vi.fn() }));
 vi.mock('../../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
@@ -41,19 +44,32 @@ vi.mock(
   }),
 );
 
+type SectionProps = {
+  settings: { agentMode: boolean; repositoryPath: string | null };
+  latestSetup?: { id: number } | null;
+};
+
+vi.mock('../../../../components/general-settings/general-settings', () => ({
+  GeneralSettings: ({ project }: { project: { name: string } }) => (
+    <p>{`General of ${project.name}`}</p>
+  ),
+}));
 vi.mock(
-  '../../../../components/agent-settings-form/agent-settings-form',
+  '../../../../components/repository-settings/repository-settings',
   () => ({
-    AgentSettingsForm: ({
-      settings,
-      latestSetup,
-    }: {
-      settings: { agentMode: boolean };
-      latestSetup: { id: number } | null;
-    }) => (
-      <p>{`Agent mode ${settings.agentMode ? 'on' : 'off'}, Setup ${latestSetup?.id ?? 'none'}`}</p>
+    RepositorySettings: ({ settings, latestSetup }: SectionProps) => (
+      <p>{`Repository ${settings.repositoryPath ?? 'unset'}, Setup ${latestSetup?.id ?? 'none'}`}</p>
     ),
   }),
+);
+vi.mock('../../../../components/agent-settings/agent-settings', () => ({
+  AgentSettings: ({ settings, latestSetup }: SectionProps) => (
+    <p>{`Agent mode ${settings.agentMode ? 'on' : 'off'}, Setup ${latestSetup?.id ?? 'none'}`}</p>
+  ),
+}));
+vi.mock(
+  '../../../../components/automation-settings/automation-settings',
+  () => ({ AutomationSettings: () => <p>Automation section</p> }),
 );
 
 vi.mock(
@@ -80,7 +96,50 @@ describe('SettingsPage', () => {
     } as unknown as ReturnType<typeof appConversations>);
   });
 
-  it("shows the Project's Reference templates", async () => {
+  it('shows the six sections as tabs, opening on Repository while no path is saved', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'General',
+      'Repository',
+      'Agent',
+      'Automation',
+      'Commands',
+      'References',
+    ]);
+    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent(
+      'Repository',
+    );
+    expect(screen.getByText('General of Website')).toBeInTheDocument();
+    expect(screen.getByText('Automation section')).toBeInTheDocument();
+    // The Project's layout shows its header and tabs.
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    await expect(generateMetadata({ params })).resolves.toEqual({
+      title: 'Settings · Website',
+    });
+  });
+
+  it('opens on General once a repository path is saved', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    tickets.setProjectAgentSettings(project.id, { repositoryPath: '/' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const params = Promise.resolve({ id: String(project.id) });
+    await renderPage(<main>{await SettingsPage({ params })}</main>);
+
+    expect(screen.getByRole('tab', { selected: true })).toHaveTextContent(
+      'General',
+    );
+    expect(screen.getByText('Repository /, Setup none')).toBeInTheDocument();
+  });
+
+  it("shows the Project's Reference templates in their card", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     tickets.addReferenceTemplate(project.id, {
@@ -92,18 +151,21 @@ describe('SettingsPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
-    expect(screen.getByText('Agent mode off, Setup none')).toBeInTheDocument();
-    // The Project's layout shows its header and tabs.
-    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'Reference templates' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(`Templates of ${project.id}: #`),
-    ).toBeInTheDocument();
-    await expect(generateMetadata({ params })).resolves.toEqual({
-      title: 'Settings · Website',
+    const card = screen.getByRole('region', {
+      name: 'References',
+      hidden: true,
     });
+    expect(
+      within(card).getByText(`Templates of ${project.id}: #`),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        'Turn External reference keys such as #55 into links.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(card).getByText(/The first matching template/),
+    ).not.toBeVisible();
   });
 
   it('has no Skills section (T1340)', async () => {
@@ -114,12 +176,7 @@ describe('SettingsPage', () => {
     const params = Promise.resolve({ id: String(project.id) });
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
-    expect(
-      screen.getByRole('heading', { level: 2, name: 'Agent commands' }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('heading', { level: 2, name: 'Skills' }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Skills' })).toBeNull();
     expect(screen.queryByText(/Skills? chips?/i)).not.toBeInTheDocument();
   });
 
@@ -139,27 +196,11 @@ describe('SettingsPage', () => {
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Agent commands' }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByText(`Commands of ${project.id}: /triage /implement null`),
     ).toBeInTheDocument();
   });
 
-  it('says the agent commands apply to Claude Code runs only (ADR 0051)', async () => {
-    const tickets = createTestTickets();
-    const project = tickets.createProject({ name: 'Website' });
-    vi.mocked(appTickets).mockReturnValue(tickets);
-
-    const params = Promise.resolve({ id: String(project.id) });
-    await renderPage(<main>{await SettingsPage({ params })}</main>);
-
-    expect(
-      screen.getByText(/They apply to Claude Code runs only/),
-    ).toBeInTheDocument();
-  });
-
-  it("gives the agent settings the Project's latest Setup", async () => {
+  it("gives Repository and Agent the Project's latest Setup", async () => {
     const tickets = createTestTickets();
     const project = tickets.createProject({ name: 'Website' });
     vi.mocked(appTickets).mockReturnValue(tickets);
@@ -176,6 +217,7 @@ describe('SettingsPage', () => {
     await renderPage(<main>{await SettingsPage({ params })}</main>);
 
     expect(screen.getByText('Agent mode off, Setup 7')).toBeInTheDocument();
+    expect(screen.getByText('Repository unset, Setup 7')).toBeInTheDocument();
   });
 
   it('shows the loading state until the Project loads', async () => {
