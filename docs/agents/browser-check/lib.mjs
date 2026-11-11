@@ -228,11 +228,15 @@ export async function freshProjectWithRepository(page) {
  * Gives Project `projectId` a fresh empty folder as its repository path, for
  * a Start on a server with fake runs on (browser-checks.md, "Conversations in
  * a given state"), which runs nothing there. Throws if Settings refuses it.
- * A check that needs a git repository uses `freshProjectWithRepository`.
+ * Returns the folder's path, for the check to remove once the server is
+ * stopped. A check that needs a git repository uses
+ * `freshProjectWithRepository`.
  */
 export async function fakeRepository(page, projectId) {
   const { mkdtempSync } = await import('node:fs');
-  await setRepositoryPath(page, projectId, mkdtempSync('/tmp/fake-repo-'));
+  const folder = mkdtempSync('/tmp/fake-repo-');
+  await setRepositoryPath(page, projectId, folder);
+  return folder;
 }
 
 /** Sends `text` as the User's reply in the open Conversation and lets it settle. */

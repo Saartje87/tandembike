@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync, realpathSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // The helper imports `playwright-core`, which lives in the driver folder a
@@ -180,5 +180,55 @@ describe('savesRepositoryPath', () => {
     });
 
     expect(savesRepositoryPath(save, 3, path)).toBe(true);
+  });
+});
+
+describe('fakeRepository', () => {
+  const made: string[] = [];
+
+  afterEach(() => {
+    for (const folder of made.splice(0)) {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  });
+
+  // A stand-in for Playwright's Page whose Settings form keeps what is typed
+  // into it and accepts every Save: only what `setRepositoryPath` reads.
+  const settingsPage = () => {
+    const saved: string[] = [];
+    const field = {
+      fill: async (value: string) => {
+        saved.push(value);
+      },
+      inputValue: async () => saved.at(-1),
+      getAttribute: async () => null,
+    };
+    const button = { click: async () => {}, waitFor: async () => {} };
+    const form = {
+      getByLabel: () => field,
+      getByRole: (role: string) =>
+        role === 'alert' ? { allTextContents: async () => [] } : button,
+      locator: () => ({ textContent: async () => null }),
+    };
+    const page = {
+      goto: async () => {},
+      reload: async () => {},
+      waitForTimeout: async () => {},
+      waitForResponse: async () => {},
+      getByRole: () => form,
+    };
+    return { page, saved };
+  };
+
+  it('returns the path of the empty folder it set as the repository path', async () => {
+    const { fakeRepository } = await importHelper();
+    const { page, saved } = settingsPage();
+
+    const folder = await fakeRepository(page, 3);
+    if (folder) made.push(folder);
+
+    expect(folder).toMatch(/^\/tmp\/fake-repo-/);
+    expect(saved).toEqual([folder]);
+    expect(readdirSync(folder)).toEqual([]);
   });
 });
