@@ -32,6 +32,14 @@ describe('Spar actions', () => {
     expect(
       world.conversations.get(result.ok ? result.spar.id : 0),
     ).toMatchObject({ startedBy: 'user', intent: 'spar' });
+
+    const onCopilot = await startSpar({
+      projectId: world.project.id,
+      agentKind: 'copilot',
+    });
+    expect(
+      world.conversations.get(onCopilot.ok ? onCopilot.spar.id : 0),
+    ).toMatchObject({ intent: 'spar', agentKind: 'copilot' });
   });
 
   it("edit a Spar's Canvas as the User, and say why one is refused", async () => {

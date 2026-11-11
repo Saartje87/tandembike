@@ -164,7 +164,7 @@ describe('AgentSettingsForm', () => {
     );
   });
 
-  it('offers as the default Agent only the kinds that can run, and saves the choice (ADR 0051)', async () => {
+  it('shows a kind that cannot run disabled in the default selector, with its reason, and saves the choice (ADR 0051, T1368)', async () => {
     renderWithTheme(
       <AgentSettingsForm
         projectId={3}
@@ -175,7 +175,7 @@ describe('AgentSettingsForm', () => {
             kind: 'copilot',
             label: 'Copilot',
             available: false,
-            reason: 'Copilot cannot run here yet.',
+            reason: 'Copilot is not signed in. Sign in with copilot login.',
           },
         ]}
       />,
@@ -185,7 +185,13 @@ describe('AgentSettingsForm', () => {
     expect(agent).toHaveValue('claude-code');
     expect(
       screen.getAllByRole('option').map((option) => option.textContent),
-    ).toEqual(['Claude Code']);
+    ).toEqual(['Claude Code', 'Copilot: cannot run']);
+    expect(
+      screen.getByRole('option', { name: 'Copilot: cannot run' }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText('Copilot is not signed in. Sign in with copilot login.'),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
@@ -193,6 +199,51 @@ describe('AgentSettingsForm', () => {
         expect.objectContaining({ defaultAgentKind: 'claude-code' }),
       ),
     );
+  });
+
+  it("shows Copilot's run and triage model fields once Copilot can run, and saves them, blank as Copilot's default (T1368)", async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={{
+          ...set,
+          models: {
+            ...set.models,
+            copilot: { runModel: 'gpt-5.5', triageModel: null },
+          },
+        }}
+        agentKinds={[
+          { kind: 'claude-code', label: 'Claude Code', available: true },
+          { kind: 'copilot', label: 'Copilot', available: true },
+        ]}
+      />,
+    );
+
+    expect(screen.getByLabelText('Copilot run model')).toHaveValue('gpt-5.5');
+    await userEvent.clear(screen.getByLabelText('Copilot run model'));
+    await userEvent.type(
+      screen.getByLabelText('Copilot triage model'),
+      'gpt-5-mini',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          models: expect.objectContaining({
+            copilot: { runModel: null, triageModel: 'gpt-5-mini' },
+          }),
+        }),
+      ),
+    );
+  });
+
+  it('shows no Copilot model fields while Copilot cannot run and is not the default', () => {
+    renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+    expect(
+      screen.queryByLabelText('Copilot run model'),
+    ).not.toBeInTheDocument();
   });
 
   it('saves a default Agent of another kind that can run', async () => {

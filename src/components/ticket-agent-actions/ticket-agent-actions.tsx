@@ -6,6 +6,8 @@ import { type FC, useState, useTransition } from 'react';
 import { startConversation } from '../../app/conversations/actions';
 import { callAction } from '../../app/lib/call-action';
 import type { AgentCommandIntent } from '../../tickets/agent-commands';
+import type { AgentKind } from '../../tickets/agent-kind';
+import { AgentPicker } from '../agent-picker/agent-picker';
 
 export type TicketAgentActionsProps = {
   ticketNumber: number;
@@ -30,8 +32,10 @@ export type TicketAgentActionsProps = {
  * `specAvailable`. Start, Triage and Spec begin a Conversation at once that
  * invokes their Stage on the Ticket; its runner words it, on Claude Code
  * with the Project's command or the Playbook's ("/tandembike:implement
- * T42", T621, T1218, ADR 0051). Ask opens a draft tab for the User's own question, through
- * `onAsk`. A refusal, such as the Start run limit, shows its reason.
+ * T42", T621, T1218, ADR 0051), on the Agent kind picked below them, the
+ * Project's default unless the User picks another (T1368). Ask opens a
+ * draft tab for the User's own question, through `onAsk`. A refusal, such as
+ * the Start run limit, shows its reason.
  */
 export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
   ticketNumber,
@@ -42,13 +46,20 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
 }) => {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string>();
+  // Left unpicked, a start runs on the Project's default (ADR 0051).
+  const [agentKind, setAgentKind] = useState<AgentKind>();
 
   const begin = (intent: AgentCommandIntent) => () => {
     setError(undefined);
     startTransition(async () => {
       const result = await callAction(
         () =>
-          startConversation({ ticketNumber, intent, stage: { stage: intent } }),
+          startConversation({
+            ticketNumber,
+            intent,
+            stage: { stage: intent },
+            ...(agentKind === undefined ? {} : { agentKind }),
+          }),
         'The run could not be started. Try again.',
       );
       if (result.ok) {
@@ -98,6 +109,13 @@ export const TicketAgentActions: FC<TicketAgentActionsProps> = ({
           Ask
         </Button>
       </Inline>
+      {!askOnly && (
+        <AgentPicker
+          scope={{ ticketNumber }}
+          value={agentKind}
+          onChange={setAgentKind}
+        />
+      )}
       {error && <Alert intent="danger">{error}</Alert>}
     </Stack>
   );

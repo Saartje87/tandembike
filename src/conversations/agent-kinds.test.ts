@@ -196,6 +196,68 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
     );
   });
 
+  describe('a picked Agent kind on a manual start (T1368)', () => {
+    it("starts the User's Conversation on the kind they picked, not the Project default", async () => {
+      const world = setup();
+
+      const conversation = await world.conversations.start({
+        startedBy: 'user',
+        ticketNumber: world.ticket.number,
+        intent: 'start',
+        stage: { stage: 'start' },
+        agentKind: 'copilot',
+      });
+
+      expect(conversation.agentKind).toBe('copilot');
+      expect(world.runners.copilot.runs).toHaveLength(1);
+      expect(world.runners['claude-code'].runs).toHaveLength(0);
+    });
+
+    it('keeps Autopilot on the Project default, whatever kind it is given', async () => {
+      const world = setup();
+
+      const conversation = await world.conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: world.ticket.number,
+        intent: 'triage',
+        prompt: '/tandembike:triage T1',
+        agentKind: 'copilot',
+      });
+
+      expect(conversation.agentKind).toBe('claude-code');
+    });
+
+    it('refuses a picked kind that cannot run, with its reason', async () => {
+      const world = setup();
+      world.runners.copilot.availability = () => ({
+        available: false,
+        reason: 'Copilot is not signed in.',
+      });
+
+      await expect(
+        world.conversations.start({
+          startedBy: 'user',
+          ticketNumber: world.ticket.number,
+          intent: 'ask',
+          prompt: 'Hi',
+          agentKind: 'copilot',
+        }),
+      ).rejects.toEqual(new NotAllowedError('Copilot is not signed in.'));
+    });
+
+    it('starts a Plan and a Spar on the picked kind', async () => {
+      const world = setup();
+
+      const plan = await world.conversations.startPlan({
+        projectId: world.project.id,
+        goal: 'Ship it',
+        agentKind: 'copilot',
+      });
+
+      expect(plan.agentKind).toBe('copilot');
+    });
+  });
+
   it('refuses a start on a kind with no runner, naming it', async () => {
     const world = createTestConversations(undefined, {
       kinds: ['claude-code'],

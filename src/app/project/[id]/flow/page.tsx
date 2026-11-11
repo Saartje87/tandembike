@@ -115,6 +115,7 @@ async function flowTab(params: ProjectPageProps['params']) {
             unit,
           )}
           unit={unit}
+          agentKinds={await appConversations().agentKinds()}
         />
       </FlowSection>
       <FlowSection

@@ -4,12 +4,17 @@ import { userEvent } from '@testing-library/user-event';
 import { useRouter } from 'next/navigation';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
+import { loadAgentChoices } from '../../app/conversations/actions';
 import { startSpar } from '../../app/spars/actions';
+import { agentChoices } from '../../test/fixtures';
 import { mockRouter } from '../../test/navigation';
 import { renderWithTheme } from '../../test/render';
 import { SparButton } from './spar-button';
 
 vi.mock('../../app/spars/actions', () => ({ startSpar: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  loadAgentChoices: vi.fn(),
+}));
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
 
 let router: ReturnType<typeof mockRouter>;
@@ -17,6 +22,7 @@ let router: ReturnType<typeof mockRouter>;
 describe('SparButton', () => {
   beforeEach(() => {
     vi.mocked(startSpar).mockReset();
+    vi.mocked(loadAgentChoices).mockResolvedValue({ ok: true, choices: null });
     router = mockRouter();
     vi.mocked(useRouter).mockReturnValue(router);
   });
@@ -110,5 +116,26 @@ describe('SparButton', () => {
       screen.getByRole('button', { name: 'Start sparring' }),
     ).toBeEnabled();
     expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('starts the Spar on the Agent kind the User picks (T1368)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(loadAgentChoices).mockResolvedValue({
+      ok: true,
+      choices: agentChoices(),
+    });
+    vi.mocked(startSpar).mockResolvedValue({
+      ok: true,
+      spar: { id: 12 } as never,
+    });
+    renderWithTheme(<SparButton projectId={3} />);
+
+    await user.click(screen.getByRole('button', { name: 'Spar' }));
+    await user.selectOptions(await screen.findByLabelText('Agent'), 'copilot');
+    await user.click(screen.getByRole('button', { name: 'Start sparring' }));
+
+    expect(startSpar).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 3, agentKind: 'copilot' }),
+    );
   });
 });

@@ -49,6 +49,8 @@ vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
 }));
 vi.mock('../../app/conversations/actions', () => ({
+  // One Agent kind: no agent picker shows (T1368).
+  loadAgentChoices: vi.fn(async () => ({ ok: true, choices: null })),
   approveMerge: vi.fn(),
   answerConversationPermission: vi.fn(),
   replyToConversation: vi.fn(),

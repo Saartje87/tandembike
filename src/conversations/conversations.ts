@@ -24,6 +24,7 @@ import {
   type AgentKind,
   agentKindLabels,
   agentKinds,
+  isAgentKind,
 } from '../tickets/agent-kind';
 import type { AgentRunMode } from '../tickets/agent-run-mode';
 import type { ChangeChannel } from '../tickets/changes';
@@ -269,6 +270,11 @@ export type StartConversationInput = {
   batchTriage?: { cycleId: number | null; ticketNumbers: number[] };
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
+  /**
+   * The Agent kind the User picked for this start (T1368); left out for the
+   * Project's default. Autopilot always starts on the default (ADR 0051).
+   */
+  agentKind?: AgentKind;
 };
 
 /**
@@ -1343,9 +1349,18 @@ export function createConversations({
       throw new ValidationError(noRepositoryPath);
     }
     checkStartLimit(projectId, input.intent);
-    // Every start takes the Project's default (ADR 0051); a kind that
-    // cannot run is refused here, before anything is stored.
-    const agentKind = settings.defaultAgentKind;
+    if (input.agentKind !== undefined && !isAgentKind(input.agentKind)) {
+      throw new ValidationError({
+        agentKind: `Choose one of: ${agentKinds.map((kind) => agentKindLabels[kind]).join(', ')}.`,
+      });
+    }
+    // The User may pick the kind of a start; Autopilot's takes the Project's
+    // default (ADR 0051). A kind that cannot run is refused here, before
+    // anything is stored.
+    const agentKind =
+      input.startedBy === 'user' && input.agentKind !== undefined
+        ? input.agentKind
+        : settings.defaultAgentKind;
     await checkAvailability(agentKind);
     const runner = runnerOf(agentKind);
     const message: RunMessage =
@@ -1924,6 +1939,38 @@ export function createConversations({
     },
 
     /**
+     * What the agent picker of a manual start offers in a Project, or on a
+     * Ticket of it (T1368, ADR 0051): every registered Agent kind with whether it can run
+     * now, and the Project's default it starts on; null while only one kind
+     * is registered, when there is nothing to pick.
+     */
+    async agentChoices(
+      scope: { projectId: number } | { ticketNumber: number },
+    ): Promise<{
+      defaultKind: AgentKind;
+      kinds: ({ kind: AgentKind; label: string } & RunnerAvailability)[];
+    } | null> {
+      const registered = agentKinds.filter((kind) => runners[kind]);
+      if (registered.length < 2) {
+        return null;
+      }
+      const projectId =
+        'ticketNumber' in scope
+          ? tickets.getTicket(scope.ticketNumber).projectId
+          : scope.projectId;
+      await Promise.all(registered.map(checkAvailability));
+      return {
+        defaultKind:
+          tickets.getProjectAgentSettings(projectId).defaultAgentKind,
+        kinds: registered.map((kind) => ({
+          kind,
+          label: agentKindLabels[kind],
+          ...availabilityOf(kind),
+        })),
+      };
+    },
+
+    /**
      * The tokens Conversation `id`'s runs used per model, across all its
      * runs (ADR 0050); empty when it recorded none: not measured.
      */
@@ -2482,6 +2529,7 @@ export function createConversations({
     async startPlan(input: {
       projectId: number;
       goal: string;
+      agentKind?: AgentKind;
     }): Promise<Conversation> {
       const goal = input.goal.trim();
       if (goal === '') {
@@ -2492,6 +2540,9 @@ export function createConversations({
         projectId: input.projectId,
         intent: 'plan',
         stage: { stage: 'plan', goal },
+        ...(input.agentKind === undefined
+          ? {}
+          : { agentKind: input.agentKind }),
       });
     },
 

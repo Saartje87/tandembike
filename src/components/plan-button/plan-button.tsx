@@ -13,6 +13,8 @@ import { useForm } from 'react-hook-form';
 
 import { startPlan } from '../../app/conversations/actions';
 import { callAction } from '../../app/lib/call-action';
+import type { AgentKind } from '../../tickets/agent-kind';
+import { AgentPicker } from '../agent-picker/agent-picker';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { FieldError } from '../field-error/field-error';
 
@@ -36,13 +38,22 @@ export const PlanButton: FC<PlanButtonProps> = ({ projectId }) => {
     register,
     reset,
     setError,
-  } = useForm<{ goal: string }>({ defaultValues: { goal: '' } });
+    setValue,
+    watch,
+  } = useForm<{ goal: string; agentKind?: AgentKind }>({
+    defaultValues: { goal: '' },
+  });
   const goalReason = errors.goal?.message;
   const serverError = errors.root?.server?.message;
 
-  const submit = handleSubmit(async ({ goal }) => {
+  const submit = handleSubmit(async ({ goal, agentKind }) => {
     const result = await callAction(
-      () => startPlan({ projectId, goal }),
+      () =>
+        startPlan({
+          projectId,
+          goal,
+          ...(agentKind === undefined ? {} : { agentKind }),
+        }),
       'The Plan could not be started. Try again.',
     );
     if (!result.ok) {
@@ -84,6 +95,11 @@ export const PlanButton: FC<PlanButtonProps> = ({ projectId }) => {
           aria-describedby={goalReason ? errorId : undefined}
         />
         <FieldError id={errorId} reason={goalReason} />
+        <AgentPicker
+          scope={{ projectId }}
+          value={watch('agentKind')}
+          onChange={(kind) => setValue('agentKind', kind)}
+        />
         {serverError && <Alert intent="danger">{serverError}</Alert>}
         <Inline gap={2}>
           <Button type="submit" size="small" loading={isSubmitting}>

@@ -15,6 +15,7 @@ import {
 } from '../../tickets/agent-commands';
 import { type CostUnit, ceilingsByUnit } from '../../tickets/cost-unit';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
+import type { AgentKindOption } from '../agent-settings-form/agent-settings-form';
 import { AppLink } from '../app-link/app-link';
 
 /** The Stages by the names the glossary gives them. */
@@ -53,6 +54,11 @@ export type SetupPanelProps = {
    * 0051): the spend and the ceilings shown are in it.
    */
   unit: CostUnit;
+  /**
+   * Every Agent kind with whether it can run (ADR 0051); Copilot's gets a
+   * status row (T1368). Left out, none shows.
+   */
+  agentKinds?: AgentKindOption[];
 };
 
 type ItemProps = {
@@ -104,7 +110,9 @@ export const SetupPanel: FC<SetupPanelProps> = ({
   cycleSpend,
   triageSpend,
   unit,
+  agentKinds = [],
 }) => {
+  const copilot = agentKinds.find(({ kind }) => kind === 'copilot');
   const field = (name: SettingsField) =>
     projectSettingsFieldPath(projectId, name);
   return (
@@ -155,6 +163,13 @@ export const SetupPanel: FC<SetupPanelProps> = ({
         <Item label="Claude Code run model" href={field('run-model')}>
           {settings.models['claude-code'].runModel ?? 'Your default model'}
         </Item>
+        {copilot && (
+          <Item label="Copilot" href={field('default-agent')}>
+            {copilot.available
+              ? 'Ready: Copilot can run here.'
+              : copilot.reason}
+          </Item>
+        )}
       </Group>
       <Group title="Ceilings">
         <Item

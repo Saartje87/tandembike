@@ -118,6 +118,34 @@ describe('SetupPanel', () => {
     );
   });
 
+  it("shows Copilot's status among the runs, ready or why it cannot run (T1368)", () => {
+    const { unmount } = renderPanel({
+      agentKinds: [
+        { kind: 'claude-code', label: 'Claude Code', available: true },
+        { kind: 'copilot', label: 'Copilot', available: true },
+      ],
+    });
+    expect(items('Runs')).toContain('CopilotReady: Copilot can run here.');
+    expect(screen.getByRole('link', { name: 'Copilot' })).toHaveAttribute(
+      'href',
+      '/project/3/settings#default-agent',
+    );
+    unmount();
+
+    renderPanel({
+      agentKinds: [
+        { kind: 'claude-code', label: 'Claude Code', available: true },
+        {
+          kind: 'copilot',
+          label: 'Copilot',
+          available: false,
+          reason: 'Copilot is not signed in.',
+        },
+      ],
+    });
+    expect(items('Runs')).toContain('CopilotCopilot is not signed in.');
+  });
+
   it('links each item to its field on Settings, and the machine limits to the machine Settings', () => {
     renderPanel();
 

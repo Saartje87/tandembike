@@ -3,12 +3,16 @@ import { act, screen } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { startPlan } from '../../app/conversations/actions';
+import { loadAgentChoices, startPlan } from '../../app/conversations/actions';
+import { agentChoices } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { PlanButton } from './plan-button';
 
-vi.mock('../../app/conversations/actions', () => ({ startPlan: vi.fn() }));
+vi.mock('../../app/conversations/actions', () => ({
+  startPlan: vi.fn(),
+  loadAgentChoices: vi.fn(),
+}));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),
 }));
@@ -18,6 +22,7 @@ const open = vi.fn();
 describe('PlanButton (T1248)', () => {
   beforeEach(() => {
     vi.mocked(startPlan).mockReset();
+    vi.mocked(loadAgentChoices).mockResolvedValue({ ok: true, choices: null });
     open.mockReset();
     vi.mocked(useConversationDialog).mockReturnValue({
       conversations: [],
@@ -94,5 +99,30 @@ describe('PlanButton (T1248)', () => {
       screen.getByRole('button', { name: 'Start planning' }),
     ).toBeEnabled();
     expect(open).not.toHaveBeenCalled();
+  });
+
+  it('starts the Plan on the Agent kind the User picks (T1368)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(loadAgentChoices).mockResolvedValue({
+      ok: true,
+      choices: agentChoices(),
+    });
+    vi.mocked(startPlan).mockResolvedValue({
+      ok: true,
+      conversation: { id: 31 } as never,
+    });
+    renderWithTheme(<PlanButton projectId={3} />);
+
+    await user.click(screen.getByRole('button', { name: 'Plan' }));
+    await user.type(screen.getByLabelText('Goal'), 'Ship it');
+    await user.selectOptions(await screen.findByLabelText('Agent'), 'copilot');
+    await user.click(screen.getByRole('button', { name: 'Start planning' }));
+
+    expect(startPlan).toHaveBeenCalledWith({
+      projectId: 3,
+      goal: 'Ship it',
+      agentKind: 'copilot',
+    });
+    expect(loadAgentChoices).toHaveBeenCalledWith({ projectId: 3 });
   });
 });
