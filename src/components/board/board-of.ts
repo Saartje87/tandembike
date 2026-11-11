@@ -9,8 +9,7 @@ import type { PaletteColor } from '../../tickets/palette';
 import {
   type BoardLane,
   type InProgressSection,
-  inheritsSection,
-  laneOf,
+  placementOf,
 } from '../../tickets/ticket-lanes';
 import type { Ticket } from '../../tickets/tickets';
 import {
@@ -277,8 +276,8 @@ const longestWaitingFirst = (left: NeedRow, right: NeedRow) =>
 
 /**
  * The view of a Board's `tickets`: those of a Cycle or of the Backlog, and
- * nothing else (ADR 0025). It places each Ticket by the Board's own Lane
- * derivation, so the two views never disagree, and reads run state and cost
+ * nothing else (ADR 0025). It places each Ticket by `placementOf`, so the
+ * Board and every other view agree, and reads run state and cost
  * from `activity`. An Epic's row lists only its children on this Board, and
  * counts the others as `childrenElsewhere`; its cost still covers them all.
  *
@@ -298,8 +297,11 @@ export function boardOf(
   // Every Epic is placed by its lane, like a Ticket.
   const allEpics = tickets
     .filter((ticket) => ticket.type === 'Epic' && !ticket.archived)
-    .map((epic) => ({ epic, live: activity.live[epic.number] }))
-    .map((entry) => ({ ...entry, ...laneOf(entry.epic, entry.live) }))
+    .map((epic) => ({
+      epic,
+      live: activity.live[epic.number],
+      ...placementOf(epic, activity.live),
+    }))
     .sort((left, right) => byPosition(left.epic, right.epic));
   const epics = allEpics.filter(
     (entry) => entry.lane === 'In progress' && entry.section === 'Running',
@@ -317,26 +319,19 @@ export function boardOf(
   // Epic's row, in Needs you or In flight, carries it (T1143).
   const isFolded = ({
     ticket,
-    inherited,
+    placedByEpic,
   }: {
     ticket: Ticket;
-    inherited: boolean;
+    placedByEpic: boolean;
   }) =>
-    inherited && ticket.epic !== null && runningEpics.has(ticket.epic.number);
-  // A child with no run state of its own is placed by its Epic's (T1143).
+    placedByEpic &&
+    ticket.epic !== null &&
+    runningEpics.has(ticket.epic.number);
   const placed = shown
     .map((ticket) => ({
       ticket,
       live: activity.live[ticket.number],
-    }))
-    .map((entry) => ({
-      ...entry,
-      ...laneOf(
-        entry.ticket,
-        entry.live,
-        entry.ticket.epic ? activity.live[entry.ticket.epic.number] : undefined,
-      ),
-      inherited: inheritsSection(entry.ticket, entry.live),
+      ...placementOf(ticket, activity.live),
     }))
     .sort((left, right) => byPosition(left.ticket, right.ticket));
   const inLane = (lane: BoardLane) =>

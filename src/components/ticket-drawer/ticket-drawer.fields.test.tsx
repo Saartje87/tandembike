@@ -27,7 +27,7 @@ vi.mock('../conversation-activity/conversation-activity', async (original) => ({
   ...(await original<
     typeof import('../conversation-activity/conversation-activity')
   >()),
-  useTicketLiveConversation: vi.fn(),
+  useLiveConversations: vi.fn(),
 }));
 vi.mock('../conversation-dialog-provider/conversation-dialog-provider', () => ({
   useConversationDialog: vi.fn(),

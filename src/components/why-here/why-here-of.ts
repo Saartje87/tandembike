@@ -6,7 +6,7 @@ import type {
   NotTriageEligibleReason,
   TicketExplanation,
 } from '../../autopilot/explanation';
-import type { LanePlacement } from '../../tickets/ticket-lanes';
+import type { Placement } from '../../tickets/ticket-lanes';
 
 /** A piece of the sentence: plain text, or text linking somewhere. */
 export type WhySegment =
@@ -16,7 +16,7 @@ export type WhySegment =
 
 export type WhyHereInput = {
   /** Where the Ticket sits on its Board, by the Board's own derivation. */
-  placement: LanePlacement;
+  placement: Pick<Placement, 'lane' | 'section'>;
   /** Whether a Conversation of its own is live: without one, In progress is Stalled. */
   hasLive: boolean;
   /** The Epic it is a child of, or null. */

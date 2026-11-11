@@ -913,7 +913,7 @@ describe('boardOf', () => {
         activity(),
       ).needsYou.intake;
 
-      // As laneOf reads it: ready-for-agent decides first.
+      // As placementOf reads it: ready-for-agent decides first.
       expect(row).toMatchObject({ number: 52, triageLabel: 'ready-for-agent' });
     });
 

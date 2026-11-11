@@ -42,12 +42,7 @@ import type { Cycle } from '../../tickets/cycles';
 import { type EpicLink, epicLinkOf } from '../../tickets/epic-link';
 import type { UncheckedCriterion } from '../../tickets/errors';
 import type { ReferenceTemplateLink } from '../../tickets/external-reference-display';
-import {
-  canSpec,
-  isInReview,
-  isParked,
-  offersDone,
-} from '../../tickets/ticket-lanes';
+import { placementOf } from '../../tickets/ticket-lanes';
 import type {
   Blockers,
   Comment,
@@ -60,7 +55,7 @@ import { ApproveMergeButton } from '../approve-merge-button/approve-merge-button
 import { ArchiveEpicDialog } from '../archive-epic-dialog/archive-epic-dialog';
 import { BackToTodoButton } from '../back-to-todo-button/back-to-todo-button';
 import { BlockerEditor } from '../blocker-editor/blocker-editor';
-import { useTicketLiveConversation } from '../conversation-activity/conversation-activity';
+import { useLiveConversations } from '../conversation-activity/conversation-activity';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { CyclePlanner } from '../cycle-planner/cycle-planner';
 import { DateTime } from '../date-time/date-time';
@@ -274,7 +269,8 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
   const dialog = useConversationDialog();
   const [claimError, setClaimError] = useState<string>();
   const [claimPending, startClaimClear] = useTransition();
-  const live = useTicketLiveConversation(ticket.number);
+  // What the drawer offers, by the answer that places the Ticket.
+  const { offers } = placementOf(ticket, useLiveConversations());
   // Shared by the buttons beside Status (Merged, Done and Back to Todo).
   const [actionError, setActionError] = useState<string>();
   const [actionPending, startAction] = useTransition();
@@ -410,21 +406,17 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
     });
   };
 
-  const showMerged = isInReview(ticket, live);
-  const showDone = offersDone(ticket, live);
-  const showBackToTodo = isParked(ticket, live);
-
   const statusActions = archived ? null : (
     <Stack gap={1}>
       <Inline gap={2} alignY="center">
-        {showMerged && (
+        {offers.merged && (
           <ApproveMergeButton
             ticket={ticket}
             pending={actionPending}
             onApprove={approveThisMerge}
           />
         )}
-        {showMerged && (
+        {offers.merged && (
           <MergedButton
             ticket={ticket}
             pending={actionPending}
@@ -433,7 +425,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             onCancel={() => setMergedUnchecked(undefined)}
           />
         )}
-        {showDone && (
+        {offers.done && (
           <MergedButton
             ticket={ticket}
             action="Done"
@@ -443,7 +435,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
             onCancel={() => setMergedUnchecked(undefined)}
           />
         )}
-        {showBackToTodo && (
+        {offers.backToTodo && (
           <BackToTodoButton
             pending={actionPending}
             onClick={() =>
@@ -676,7 +668,7 @@ export const TicketDrawer: FC<TicketDrawerProps> = ({
       />
       <TicketAgentActions
         ticketNumber={ticket.number}
-        specAvailable={canSpec(ticket)}
+        specAvailable={offers.spec}
         askOnly={archived}
         onStarted={dialog.open}
         onAsk={() =>
