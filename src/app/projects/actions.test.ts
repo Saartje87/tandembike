@@ -146,6 +146,8 @@ describe('setProjectAgentSettings', () => {
       prepareCommand: ' npm ci ',
       autoTriage: true,
       triageCeilingUsd: 3,
+      triageCeilingAiCredits: 40,
+      spendCeilingAiCredits: 300,
       defaultAgentKind: 'copilot',
     });
 
@@ -163,8 +165,10 @@ describe('setProjectAgentSettings', () => {
       },
       autopilot: false,
       spendCeilingUsd: null,
+      spendCeilingAiCredits: 300,
       autoTriage: true,
       triageCeilingUsd: 3,
+      triageCeilingAiCredits: 40,
       autoMerge: false,
       defaultAgentKind: 'copilot',
     });

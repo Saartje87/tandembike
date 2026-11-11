@@ -4,6 +4,7 @@ import { appChangeChannel } from '../tickets/changes';
 import { createWorktrees } from '../worktrees/worktrees';
 import { createClaudeRunner } from './claude-runner';
 import { type Conversations, createConversations } from './conversations';
+import { createCopilotRunner } from './copilot-runner';
 import { agentBackends } from './fake-runs';
 import { terminalSweepMs } from './terminal-shared';
 
@@ -23,7 +24,7 @@ const mcpUrl =
 
 /**
  * The Conversations module the app uses, with a runner per Agent kind that
- * can run (Claude Code only today), or
+ * can run (Claude Code and Copilot), or
  * the scripted one with `TANDEMBIKE_FAKE_RUNS=1`. It
  * lives on `globalThis`, with the runs it holds, so Server Actions share it
  * and dev-mode reloads keep it. The first call marks the Conversations of
@@ -39,8 +40,12 @@ export function appConversations(): Conversations {
       changes: appChangeChannel(),
       // Fake runs on a throwaway server for browser checks (T678).
       ...agentBackends(process.env, () => ({
-        // Claude Code is the only Agent kind that runs until T596 (ADR 0051).
-        runners: { 'claude-code': createClaudeRunner() },
+        // A runner per Agent kind (ADR 0051); Copilot's loads its SDK only
+        // once something asks for it.
+        runners: {
+          'claude-code': createClaudeRunner(),
+          copilot: createCopilotRunner(),
+        },
         worktrees: createWorktrees({ owner: appDataFolder }),
       })),
       mcpUrl,

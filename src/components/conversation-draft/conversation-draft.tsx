@@ -1,11 +1,13 @@
 'use client';
 
 import { Heading } from '@blockle/blocks';
-import type { FC } from 'react';
+import { type FC, useState } from 'react';
 
 import { startConversation } from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
 import type { NewTicketDefaults } from '../../conversations/run-brief';
+import type { AgentKind } from '../../tickets/agent-kind';
+import { AgentPicker } from '../agent-picker/agent-picker';
 import { ConversationMessageInput } from '../conversation-message-input/conversation-message-input';
 import * as styles from './conversation-draft.css';
 
@@ -45,7 +47,7 @@ export type ConversationDraftProps = {
 };
 
 /**
- * The shown tab of a draft: an input and Send.
+ * The shown tab of a draft: the agent picker, an input and Send.
  * Nothing starts until Send; a refusal, such as the Start run limit, keeps the
  * text and shows the reason.
  */
@@ -54,11 +56,22 @@ export const ConversationDraft: FC<ConversationDraftProps> = ({
   onTextChange,
   onStarted,
 }) => {
+  // Left unpicked, the Conversation runs on the Project's default (T1368).
+  const [agentKind, setAgentKind] = useState<AgentKind>();
   return (
     <div className={styles.draft}>
       <Heading level={3} fontSize="medium">
         {draftLabel(draft)}
       </Heading>
+      <AgentPicker
+        scope={
+          draft.ticketNumber === undefined
+            ? { projectId: draft.projectId as number }
+            : { ticketNumber: draft.ticketNumber }
+        }
+        value={agentKind}
+        onChange={setAgentKind}
+      />
       <ConversationMessageInput
         className={styles.form}
         initialText={draft.text}
@@ -83,6 +96,7 @@ export const ConversationDraft: FC<ConversationDraftProps> = ({
             ...(draft.defaults === undefined
               ? {}
               : { defaults: draft.defaults }),
+            ...(agentKind === undefined ? {} : { agentKind }),
           });
           if (!result.ok) {
             return {

@@ -36,10 +36,11 @@ export type ProjectSwitchProps = {
   /** Whether it is on. */
   checked: boolean;
   /**
-   * Where its ceiling is set. When given and the ceiling is not set, the
-   * switch is off and disabled, and links there with "Set a … ceiling".
+   * Its ceiling in the unit of the Project's default agent (ADR 0051), and
+   * where it is set. When given and the ceiling is not set, the switch is
+   * off and disabled, and links there with "Set a … ceiling".
    */
-  ceiling?: { usd: number | null; settingsHref: string };
+  ceiling?: { amount: number | null; settingsHref: string };
 };
 
 /**
@@ -69,7 +70,7 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
     (_current, next: boolean) => next,
   );
   const needsCeiling =
-    ceiling !== undefined && ceiling.usd === null && !checked;
+    ceiling !== undefined && ceiling.amount === null && !checked;
 
   const change = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.checked;

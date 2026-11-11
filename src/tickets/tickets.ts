@@ -73,6 +73,13 @@ import { resolvedBlockerSql } from './blocker-sql';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { claimOwner } from './claim-owner';
 import {
+  agentCostUnits,
+  type CeilingsByUnit,
+  type CostUnit,
+  ceilingsByUnit,
+  costUnits,
+} from './cost-unit';
+import {
   type CycleLink,
   createCycles,
   cycleMembers,
@@ -232,10 +239,14 @@ export type ProjectAgentSettings = {
   autopilot: boolean;
   /** What Autopilot may spend on one Cycle, in dollars; `null` while unset. */
   spendCeilingUsd: number | null;
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051); `null` while unset. */
+  spendCeilingAiCredits: number | null;
   /** Whether Autopilot starts Triage runs on Triage-eligible Tickets (ADR 0040). */
   autoTriage: boolean;
   /** What Auto-triage may spend per local calendar day, in dollars; `null` while unset. */
   triageCeilingUsd: number | null;
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051); `null` while unset. */
+  triageCeilingAiCredits: number | null;
   /** Whether the run that opened a PR merges it itself (ADR 0043). */
   autoMerge: boolean;
   /** The Agent kind new Conversations start on (ADR 0051). */
@@ -304,8 +315,10 @@ const agentSettingsColumns = {
   runMode: projects.runMode,
   autopilot: projects.autopilot,
   spendCeilingUsd: projects.spendCeilingUsd,
+  spendCeilingAiCredits: projects.spendCeilingAiCredits,
   autoTriage: projects.autoTriage,
   triageCeilingUsd: projects.triageCeilingUsd,
+  triageCeilingAiCredits: projects.triageCeilingAiCredits,
   autoMerge: projects.autoMerge,
   defaultAgentKind: projects.defaultAgentKind,
 };
@@ -339,34 +352,48 @@ function runModelProblem(model: string | null): string | undefined {
     : undefined;
 }
 
-/** Why the Triage ceiling and the Auto-triage switch disagree, or `undefined`. */
-function triageCeilingProblem(
+/** Why a ceiling is not a positive amount in its unit, or `undefined`. */
+function ceilingAmountProblem(
   ceiling: number | null,
-  autoTriage: boolean,
+  unit: CostUnit,
 ): string | undefined {
-  if (ceiling !== null) {
-    return Number.isFinite(ceiling) && ceiling > 0
-      ? undefined
-      : 'Enter an amount in dollars above 0.';
-  }
-  return autoTriage
-    ? 'Set a Triage ceiling before turning on Auto-triage.'
-    : undefined;
+  return ceiling === null || (Number.isFinite(ceiling) && ceiling > 0)
+    ? undefined
+    : unit === 'usd'
+      ? 'Enter an amount in dollars above 0.'
+      : 'Enter an amount of AI credits above 0.';
 }
 
-/** Why the Spend ceiling and the Autopilot switch disagree, or `undefined`. */
-function spendCeilingProblem(
-  ceiling: number | null,
-  autopilot: boolean,
-): string | undefined {
-  if (ceiling !== null) {
-    return Number.isFinite(ceiling) && ceiling > 0
-      ? undefined
-      : 'Enter an amount in dollars above 0.';
+/**
+ * Why a ceiling setting and its switch disagree, by field: each amount must
+ * be positive, and a switch that is on needs a ceiling in the unit of the
+ * Project's default agent (ADR 0051). That need is checked only when the
+ * call touches the switch or the ceiling, so changing the default agent is
+ * never refused; Autopilot pauses for want of a ceiling instead.
+ */
+function ceilingProblems(input: {
+  name: 'Spend' | 'Triage';
+  switchName: 'Autopilot' | 'Auto-triage';
+  fields: Record<CostUnit, string>;
+  ceilings: CeilingsByUnit;
+  on: boolean;
+  touched: boolean;
+  unit: CostUnit;
+}): Record<string, string | undefined> {
+  const problems: Record<string, string | undefined> = {};
+  for (const unit of costUnits) {
+    problems[input.fields[unit]] = ceilingAmountProblem(
+      input.ceilings[unit],
+      unit,
+    );
   }
-  return autopilot
-    ? 'Set a Spend ceiling before turning on Autopilot.'
-    : undefined;
+  if (input.on && input.touched && input.ceilings[input.unit] === null) {
+    problems[input.fields[input.unit]] =
+      input.unit === 'usd'
+        ? `Set a ${input.name} ceiling before turning on ${input.switchName}.`
+        : `Set a ${input.name} ceiling in AI credits before turning on ${input.switchName}.`;
+  }
+  return problems;
 }
 
 /**
@@ -1862,21 +1889,33 @@ export function createTickets(
         models,
         autopilot,
         spendCeilingUsd,
+        spendCeilingAiCredits,
         autoTriage,
         triageCeilingUsd,
+        triageCeilingAiCredits,
         autoMerge,
         defaultAgentKind,
       } = input;
-      const nextTriageCeiling =
-        triageCeilingUsd === undefined
-          ? before.triageCeilingUsd
-          : triageCeilingUsd;
+      const kept = <T>(given: T | undefined, was: T): T =>
+        given === undefined ? was : given;
+      const nextTriageCeiling = kept(triageCeilingUsd, before.triageCeilingUsd);
+      const nextTriageCredits = kept(
+        triageCeilingAiCredits,
+        before.triageCeilingAiCredits,
+      );
       const nextAutoTriage = autoTriage ?? before.autoTriage;
-      const nextCeiling =
-        spendCeilingUsd === undefined
-          ? before.spendCeilingUsd
-          : spendCeilingUsd;
+      const nextCeiling = kept(spendCeilingUsd, before.spendCeilingUsd);
+      const nextCredits = kept(
+        spendCeilingAiCredits,
+        before.spendCeilingAiCredits,
+      );
       const nextAutopilot = autopilot ?? before.autopilot;
+      const nextUnit =
+        agentCostUnits[
+          isAgentKind(defaultAgentKind)
+            ? defaultAgentKind
+            : before.defaultAgentKind
+        ];
       const nextModels = Object.fromEntries(
         agentKinds.map((kind) => {
           const given = models?.[kind] ?? {};
@@ -1927,11 +1966,36 @@ export function createTickets(
         runMode: runModeProblem(runMode),
         defaultAgentKind: agentKindProblem(defaultAgentKind),
         ...modelProblems,
-        spendCeilingUsd: spendCeilingProblem(nextCeiling, nextAutopilot),
-        triageCeilingUsd: triageCeilingProblem(
-          nextTriageCeiling,
-          nextAutoTriage,
-        ),
+        ...ceilingProblems({
+          name: 'Spend',
+          switchName: 'Autopilot',
+          fields: {
+            usd: 'spendCeilingUsd',
+            ai_credits: 'spendCeilingAiCredits',
+          },
+          ceilings: ceilingsByUnit(nextCeiling, nextCredits),
+          on: nextAutopilot,
+          touched:
+            autopilot !== undefined ||
+            spendCeilingUsd !== undefined ||
+            spendCeilingAiCredits !== undefined,
+          unit: nextUnit,
+        }),
+        ...ceilingProblems({
+          name: 'Triage',
+          switchName: 'Auto-triage',
+          fields: {
+            usd: 'triageCeilingUsd',
+            ai_credits: 'triageCeilingAiCredits',
+          },
+          ceilings: ceilingsByUnit(nextTriageCeiling, nextTriageCredits),
+          on: nextAutoTriage,
+          touched:
+            autoTriage !== undefined ||
+            triageCeilingUsd !== undefined ||
+            triageCeilingAiCredits !== undefined,
+          unit: nextUnit,
+        }),
       });
       db.update(projects)
         .set({
@@ -1950,8 +2014,10 @@ export function createTickets(
           ...(runMode === undefined ? {} : { runMode }),
           autopilot: nextAutopilot,
           spendCeilingUsd: nextCeiling,
+          spendCeilingAiCredits: nextCredits,
           autoTriage: nextAutoTriage,
           triageCeilingUsd: nextTriageCeiling,
+          triageCeilingAiCredits: nextTriageCredits,
           ...(autoMerge === undefined ? {} : { autoMerge }),
           ...(defaultAgentKind === undefined ? {} : { defaultAgentKind }),
         })

@@ -24,9 +24,11 @@ import {
   type AgentKind,
   agentKindLabels,
   agentKinds,
+  isAgentKind,
 } from '../tickets/agent-kind';
+import type { AgentRunMode } from '../tickets/agent-run-mode';
 import type { ChangeChannel } from '../tickets/changes';
-import { type CostUnit, dollarCeiling } from '../tickets/cost-unit';
+import { type CostUnit, ceilingsByUnit } from '../tickets/cost-unit';
 import {
   NotAllowedError,
   NotFoundError,
@@ -268,6 +270,11 @@ export type StartConversationInput = {
   batchTriage?: { cycleId: number | null; ticketNumbers: number[] };
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
+  /**
+   * The Agent kind the User picked for this start (T1368); left out for the
+   * Project's default. Autopilot always starts on the default (ADR 0051).
+   */
+  agentKind?: AgentKind;
 };
 
 /**
@@ -416,6 +423,11 @@ export function createConversations({
       available: false,
       reason: `${agentKindLabels[kind]} cannot run here yet.`,
     };
+
+  /** Refreshes whether `kind` can run, for a caller about to start it. */
+  const checkAvailability = async (kind: AgentKind): Promise<void> => {
+    await runners[kind]?.checkAvailability?.();
+  };
 
   /** The unit `kind` reports cost in; dollars for a kind with no runner. */
   const costUnitOf = (kind: AgentKind): CostUnit =>
@@ -599,6 +611,10 @@ export function createConversations({
       return null;
     }
   };
+
+  /** The note of a run that runs in default mode instead of `wanted`. */
+  const runModeFallbackNote = (kind: AgentKind, wanted: AgentRunMode) =>
+    `${agentKindLabels[kind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`;
 
   /** Adds Tandembike's note `text` to the transcript, unless it is there already. */
   const noteOnce = (id: number, text: string) => {
@@ -787,6 +803,13 @@ export function createConversations({
 
   const handleEvent = (id: number, handle: RunHandle, event: RunEvent) => {
     const conversation = get(id);
+    // A run that found it cannot honour its run mode says so, as a start
+    // that knew beforehand does (ADR 0051).
+    if (event.type === 'runMode') {
+      noteOnce(id, runModeFallbackNote(conversation.agentKind, event.wanted));
+      announce(id);
+      return;
+    }
     void stepRun(
       id,
       handle,
@@ -1045,10 +1068,7 @@ export function createConversations({
       ? wanted
       : 'default';
     if (runMode !== wanted) {
-      noteOnce(
-        id,
-        `${agentKindLabels[conversation.agentKind]} cannot run in ${wanted} mode, so this run runs in default mode: it asks before each tool call the repository has not allowed.`,
-      );
+      noteOnce(id, runModeFallbackNote(conversation.agentKind, wanted));
     }
     try {
       handle.process = runner.start({
@@ -1329,9 +1349,19 @@ export function createConversations({
       throw new ValidationError(noRepositoryPath);
     }
     checkStartLimit(projectId, input.intent);
-    // Every start takes the Project's default (ADR 0051); a kind that
-    // cannot run is refused here, before anything is stored.
-    const agentKind = settings.defaultAgentKind;
+    if (input.agentKind !== undefined && !isAgentKind(input.agentKind)) {
+      throw new ValidationError({
+        agentKind: `Choose one of: ${agentKinds.map((kind) => agentKindLabels[kind]).join(', ')}.`,
+      });
+    }
+    // The User may pick the kind of a start; Autopilot's takes the Project's
+    // default (ADR 0051). A kind that cannot run is refused here, before
+    // anything is stored.
+    const agentKind =
+      input.startedBy === 'user' && input.agentKind !== undefined
+        ? input.agentKind
+        : settings.defaultAgentKind;
+    await checkAvailability(agentKind);
     const runner = runnerOf(agentKind);
     const message: RunMessage =
       input.stage === undefined
@@ -1894,15 +1924,50 @@ export function createConversations({
      * Every Agent kind with whether it can run now, and why not, for the
      * default selector (ADR 0051).
      */
-    agentKinds(): ({
-      kind: AgentKind;
-      label: string;
-    } & RunnerAvailability)[] {
+    async agentKinds(): Promise<
+      ({
+        kind: AgentKind;
+        label: string;
+      } & RunnerAvailability)[]
+    > {
+      await Promise.all(agentKinds.map(checkAvailability));
       return agentKinds.map((kind) => ({
         kind,
         label: agentKindLabels[kind],
         ...availabilityOf(kind),
       }));
+    },
+
+    /**
+     * What the agent picker of a manual start offers in a Project, or on a
+     * Ticket of it (T1368, ADR 0051): every registered Agent kind with whether it can run
+     * now, and the Project's default it starts on; null while only one kind
+     * is registered, when there is nothing to pick.
+     */
+    async agentChoices(
+      scope: { projectId: number } | { ticketNumber: number },
+    ): Promise<{
+      defaultKind: AgentKind;
+      kinds: ({ kind: AgentKind; label: string } & RunnerAvailability)[];
+    } | null> {
+      const registered = agentKinds.filter((kind) => runners[kind]);
+      if (registered.length < 2) {
+        return null;
+      }
+      const projectId =
+        'ticketNumber' in scope
+          ? tickets.getTicket(scope.ticketNumber).projectId
+          : scope.projectId;
+      await Promise.all(registered.map(checkAvailability));
+      return {
+        defaultKind:
+          tickets.getProjectAgentSettings(projectId).defaultAgentKind,
+        kinds: registered.map((kind) => ({
+          kind,
+          label: agentKindLabels[kind],
+          ...availabilityOf(kind),
+        })),
+      };
     },
 
     /**
@@ -1953,8 +2018,10 @@ export function createConversations({
      * ceiling is kept in that unit.
      */
     machineBudget(now: Date = clock(), unit: CostUnit = 'usd'): Budget | null {
-      const ceiling = dollarCeiling(
-        tickets.getMachineSettings().dailySpendCeilingUsd,
+      const machine = tickets.getMachineSettings();
+      const ceiling = ceilingsByUnit(
+        machine.dailySpendCeilingUsd,
+        machine.dailySpendCeilingAiCredits,
       )[unit];
       if (ceiling === null) {
         return null;
@@ -2063,8 +2130,10 @@ export function createConversations({
      */
     spendBudget(input: { projectId: number; cycleId: number }): Budget | null {
       const unit = defaultUnitOf(input.projectId);
-      const ceiling = dollarCeiling(
-        tickets.getProjectAgentSettings(input.projectId).spendCeilingUsd,
+      const settings = tickets.getProjectAgentSettings(input.projectId);
+      const ceiling = ceilingsByUnit(
+        settings.spendCeilingUsd,
+        settings.spendCeilingAiCredits,
       )[unit];
       if (ceiling === null) {
         return null;
@@ -2082,7 +2151,10 @@ export function createConversations({
     triageBudget(projectId: number, now: Date = clock()): Budget | null {
       const settings = tickets.getProjectAgentSettings(projectId);
       const unit = defaultUnitOf(projectId);
-      const ceiling = dollarCeiling(settings.triageCeilingUsd)[unit];
+      const ceiling = ceilingsByUnit(
+        settings.triageCeilingUsd,
+        settings.triageCeilingAiCredits,
+      )[unit];
       if (!settings.autoTriage || ceiling === null) {
         return null;
       }
@@ -2393,6 +2465,13 @@ export function createConversations({
       if (conversation.hidden) {
         throw new NotAllowedError('This Conversation is closed.');
       }
+      // `tandembike resume` runs `claude`, so it continues Claude Code's
+      // sessions only (ADR 0039, ADR 0051).
+      if (conversation.agentKind !== 'claude-code') {
+        throw new NotAllowedError(
+          'Only a Claude Code Conversation can continue in a terminal.',
+        );
+      }
       if (conversation.sdkSessionId === null) {
         throw new NotAllowedError(
           'This Conversation has no session to continue yet.',
@@ -2450,6 +2529,7 @@ export function createConversations({
     async startPlan(input: {
       projectId: number;
       goal: string;
+      agentKind?: AgentKind;
     }): Promise<Conversation> {
       const goal = input.goal.trim();
       if (goal === '') {
@@ -2460,6 +2540,9 @@ export function createConversations({
         projectId: input.projectId,
         intent: 'plan',
         stage: { stage: 'plan', goal },
+        ...(input.agentKind === undefined
+          ? {}
+          : { agentKind: input.agentKind }),
       });
     },
 
@@ -2572,6 +2655,7 @@ export function createConversations({
         );
         return get(id);
       } else {
+        await checkAvailability(conversation.agentKind);
         startRun(
           id,
           { text: message },

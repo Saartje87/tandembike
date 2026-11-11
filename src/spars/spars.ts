@@ -8,6 +8,7 @@ import type {
 } from '../conversations/conversations';
 import type { DatabaseConnection } from '../db/connection';
 import { sparColumns, sparStickies, spars } from '../db/schema';
+import type { AgentKind } from '../tickets/agent-kind';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -84,6 +85,8 @@ export type StartSparInput = {
   projectId: number;
   focusTicketNumber?: number | null;
   topic?: string | null;
+  /** The Agent kind the User picked; left out for the Project's default. */
+  agentKind?: AgentKind;
 };
 
 export type SparsDeps = {
@@ -509,6 +512,9 @@ export function createSpars({
         ...(focus === null ? {} : { ticketNumber: focus }),
         intent: 'spar',
         stage: { stage: 'spar', topic },
+        ...(input.agentKind === undefined
+          ? {}
+          : { agentKind: input.agentKind }),
       });
       const now = new Date();
       db.insert(spars)

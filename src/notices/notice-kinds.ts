@@ -13,6 +13,7 @@ import type {
   Conversations,
   OpenConversation,
 } from '../conversations/conversations';
+import { costUnits } from '../tickets/cost-unit';
 import { isPullRequestReference } from '../tickets/external-reference-display';
 import { inheritsSection, isStalled, laneOf } from '../tickets/ticket-lanes';
 import type { Ticket, Tickets } from '../tickets/tickets';
@@ -334,12 +335,20 @@ const ceiling: NoticeDetector = ({ tickets, conversations, now }) => {
   const at = now();
   const day = dayOf(at);
   const found: Notice[] = [];
-  const machine = conversations.machineBudget(at);
-  if (machine?.paused) {
+  // The Machine ceiling is kept per unit (ADR 0051); the dollar one keeps
+  // its key, so a pause still notifies once a day.
+  for (const unit of costUnits) {
+    const machine = conversations.machineBudget(at, unit);
+    if (!machine?.paused) {
+      continue;
+    }
     found.push(
       projectNotice(null, {
         kind: 'ceiling',
-        key: `ceiling:machine:${day}`,
+        key:
+          unit === 'usd'
+            ? `ceiling:machine:${day}`
+            : `ceiling:machine:${unit}:${day}`,
         title: 'Autopilot paused on the machine ceiling',
         body: `${formatCost(machine.spend, machine.unit)} spent today of ${formatCost(machine.ceiling, machine.unit)}`,
         path: settingsPath(),

@@ -172,4 +172,56 @@ describe('runBrief per Agent kind (ADR 0051)', () => {
     expect(brief).toContain('Your Agent-run ID: 5.');
     expect(brief).toContain('`npm run check`');
   });
+
+  it('tells a Copilot Start with Parallel runs on and no worktree to make its own, by convention or git worktree add, and work only in it', () => {
+    const brief = runBrief({
+      ...situations[0],
+      intent: 'start',
+      parallelRuns: true,
+      worktree: null,
+      agentKind: 'copilot',
+    });
+
+    expect(brief).toContain(
+      "follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`",
+    );
+    expect(brief).toContain('work only inside it');
+    expect(brief).not.toMatch(/EnterWorktree|ExitWorktree/);
+  });
+
+  it("keeps a Copilot Start in Tandembike's worktree on the shared worktree line", () => {
+    const brief = runBrief({
+      ...situations[0],
+      intent: 'start',
+      parallelRuns: true,
+      worktree: { path: '/wt/5', base: 'origin/main' },
+      agentKind: 'copilot',
+    });
+
+    expect(brief).toContain(
+      'You are in a git worktree Tandembike made for this Conversation at /wt/5',
+    );
+    expect(brief).not.toContain('git worktree add');
+  });
+
+  it('names the Widget tools only on Copilot, never another way to ask', () => {
+    const brief = runBrief({ ...situations[0], agentKind: 'copilot' });
+
+    expect(brief).toContain(
+      'whenever the answer is a pick, an order, a placement or an amount. Every Widget',
+    );
+  });
+
+  it('accepts AGENTS.md or .github/copilot-instructions.md in a Copilot Setup check, and asks about no Claude Code allowlist', () => {
+    const brief = runBrief({
+      ...situations[0],
+      intent: 'setup',
+      agentKind: 'copilot',
+    });
+
+    expect(brief).toContain(
+      '1. An AGENTS.md or a .github/copilot-instructions.md exists',
+    );
+    expect(brief).not.toContain('permission allowlist');
+  });
 });

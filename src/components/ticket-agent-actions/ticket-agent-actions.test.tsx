@@ -3,13 +3,18 @@ import { screen, waitFor } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import { startConversation } from '../../app/conversations/actions';
+import {
+  loadAgentChoices,
+  startConversation,
+} from '../../app/conversations/actions';
 import type { Conversation } from '../../conversations/conversations';
+import { agentChoices } from '../../test/fixtures';
 import { renderWithTheme } from '../../test/render';
 import { TicketAgentActions } from './ticket-agent-actions';
 
 vi.mock('../../app/conversations/actions', () => ({
   startConversation: vi.fn(),
+  loadAgentChoices: vi.fn(),
 }));
 
 const started = {
@@ -20,6 +25,7 @@ const started = {
 describe('TicketAgentActions', () => {
   beforeEach(() => {
     vi.mocked(startConversation).mockReset();
+    vi.mocked(loadAgentChoices).mockResolvedValue({ ok: true, choices: null });
   });
 
   it('shows Spec only when specAvailable, and starts the Spec Stage', async () => {
@@ -121,5 +127,41 @@ describe('TicketAgentActions', () => {
       expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled(),
     );
     expect(onStarted).not.toHaveBeenCalled();
+  });
+
+  it('starts Start, Triage and Spec on the Agent kind the User picks (T1368)', async () => {
+    vi.mocked(loadAgentChoices).mockResolvedValue({
+      ok: true,
+      choices: agentChoices(),
+    });
+    vi.mocked(startConversation).mockResolvedValue(started);
+    renderWithTheme(<TicketAgentActions ticketNumber={42} specAvailable />);
+
+    await userEvent.selectOptions(
+      await screen.findByLabelText('Agent'),
+      'copilot',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Triage' }));
+
+    await waitFor(() =>
+      expect(startConversation).toHaveBeenCalledWith({
+        ticketNumber: 42,
+        intent: 'triage',
+        stage: { stage: 'triage' },
+        agentKind: 'copilot',
+      }),
+    );
+    expect(loadAgentChoices).toHaveBeenCalledWith({ ticketNumber: 42 });
+  });
+
+  it('offers no picker on an archived Ticket, which only Ask reaches', async () => {
+    vi.mocked(loadAgentChoices).mockResolvedValue({
+      ok: true,
+      choices: agentChoices(),
+    });
+    renderWithTheme(<TicketAgentActions ticketNumber={42} askOnly />);
+
+    await screen.findByRole('button', { name: 'Ask' });
+    expect(screen.queryByLabelText('Agent')).not.toBeInTheDocument();
   });
 });

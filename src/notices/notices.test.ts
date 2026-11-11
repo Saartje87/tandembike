@@ -588,12 +588,12 @@ describe('ceiling Notices', () => {
     let clock = new Date(2026, 4, 10, 12);
     const world = setup(() => clock);
     world.notices.start();
-    vi.spyOn(world.conversations, 'machineBudget').mockReturnValue({
-      spend: 5,
-      ceiling: 4,
-      unit: 'usd',
-      paused: true,
-    });
+    vi.spyOn(world.conversations, 'machineBudget').mockImplementation(
+      (_at, unit = 'usd') =>
+        unit === 'usd'
+          ? { spend: 5, ceiling: 4, unit: 'usd', paused: true }
+          : null,
+    );
 
     poke(world);
     poke(world);
@@ -612,6 +612,26 @@ describe('ceiling Notices', () => {
     expect(ofKind(world).map((notice) => notice.key)).toEqual([
       'ceiling:machine:2026-05-10',
       'ceiling:machine:2026-05-11',
+    ]);
+  });
+
+  it('raises for the machine ceiling in AI credits on its own key, labelled in credits (ADR 0051)', () => {
+    const world = setup(() => new Date(2026, 4, 10, 12));
+    world.notices.start();
+    vi.spyOn(world.conversations, 'machineBudget').mockImplementation(
+      (_at, unit = 'usd') =>
+        unit === 'ai_credits'
+          ? { spend: 120, ceiling: 100, unit: 'ai_credits', paused: true }
+          : null,
+    );
+
+    poke(world);
+
+    expect(ofKind(world)).toEqual([
+      expect.objectContaining({
+        key: 'ceiling:machine:ai_credits:2026-05-10',
+        body: '120.00 AI credits spent today of 100.00 AI credits',
+      }),
     ]);
   });
 

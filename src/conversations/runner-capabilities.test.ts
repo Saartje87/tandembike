@@ -66,6 +66,22 @@ describe("A runner's capabilities (ADR 0051)", () => {
     ).toEqual([fallbackNote]);
   });
 
+  it('notes the fallback once when the run itself finds it cannot honour the run mode', async () => {
+    const world = setup('auto');
+    const conversation = await world.ask();
+    const run = world.copilot.runs[0];
+
+    run.emit({ type: 'runMode', wanted: 'auto', runMode: 'default' });
+    run.emit({ type: 'runMode', wanted: 'auto', runMode: 'default' });
+
+    expect(
+      world.conversations
+        .transcript(conversation.id)
+        .filter(({ role }) => role === 'session')
+        .map(({ text }) => text),
+    ).toEqual([fallbackNote]);
+  });
+
   it('offers Always allow for its permission requests only when its runner can honour it', async () => {
     const world = setup('default');
     world.copilot.capabilities = {

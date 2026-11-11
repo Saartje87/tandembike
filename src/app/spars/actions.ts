@@ -5,6 +5,7 @@ import { appSpars } from '../../spars/app-spars';
 import type { Canvas, CanvasOp } from '../../spars/canvas';
 import type { HandOffPath } from '../../spars/spar-moves';
 import type { Spar, WriteUp } from '../../spars/spars';
+import type { AgentKind } from '../../tickets/agent-kind';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
 
@@ -42,6 +43,8 @@ export async function startSpar(input: {
   projectId: number;
   focusTicketNumber?: number | null;
   topic?: string;
+  /** The Agent kind the User picked; left out for the Project's default. */
+  agentKind?: AgentKind;
 }): Promise<ActionResult<{ spar: Spar }>> {
   return sparResult(async () => ({
     spar: await appSpars().startSpar({
@@ -51,6 +54,7 @@ export async function startSpar(input: {
           ? null
           : Number(input.focusTicketNumber),
       topic: String(input?.topic ?? ''),
+      ...(input?.agentKind === undefined ? {} : { agentKind: input.agentKind }),
     }),
   }));
 }

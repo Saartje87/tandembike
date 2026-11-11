@@ -9,12 +9,14 @@ import {
 } from '../../conversations/conversation-activity';
 import type {
   Conversation,
+  Conversations,
   OpenConversation,
   StartConversationInput,
   TranscriptEntry,
 } from '../../conversations/conversations';
 import { conversationFootprint } from '../../footprint/app-footprint';
 import type { Footprint } from '../../footprint/footprint';
+import type { AgentKind } from '../../tickets/agent-kind';
 import { TicketsError, ValidationError } from '../../tickets/errors';
 import type { ActionResult } from '../lib/action-result';
 
@@ -64,6 +66,7 @@ export async function startConversation(
         : { stage: input.stage }),
       startedBy: 'user',
       ...(input?.defaults === undefined ? {} : { defaults: input.defaults }),
+      ...(input?.agentKind === undefined ? {} : { agentKind: input.agentKind }),
     }),
   );
 }
@@ -121,13 +124,45 @@ export async function startRetro(input: {
 export async function startPlan(input: {
   projectId: number;
   goal: string;
+  /** The Agent kind the User picked; left out for the Project's default. */
+  agentKind?: AgentKind;
 }): Promise<ActionResult<{ conversation: Conversation }>> {
   return conversationResult(() =>
     appConversations().startPlan({
       projectId: Number(input?.projectId),
       goal: String(input?.goal ?? ''),
+      ...(input?.agentKind === undefined ? {} : { agentKind: input.agentKind }),
     }),
   );
+}
+
+/** What the agent picker of a manual start offers (T1368). */
+export type AgentChoices = Awaited<ReturnType<Conversations['agentChoices']>>;
+
+/**
+ * The Agent kinds a manual start in a Project, or on a Ticket of it, can
+ * pick, each with whether it can run and why not, and the Project's
+ * default; null while only one kind is registered (T1368). It only reads.
+ */
+export async function loadAgentChoices(input: {
+  projectId?: number;
+  ticketNumber?: number;
+}): Promise<ActionResult<{ choices: AgentChoices }>> {
+  try {
+    return {
+      ok: true,
+      choices: await appConversations().agentChoices(
+        input?.ticketNumber === undefined
+          ? { projectId: Number(input?.projectId) }
+          : { ticketNumber: Number(input.ticketNumber) },
+      ),
+    };
+  } catch (error) {
+    if (error instanceof TicketsError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 /**

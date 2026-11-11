@@ -58,6 +58,12 @@ export type RunEvent =
     }
   /** Tickets the Agent created over MCP, by number. */
   | { type: 'created'; numbers: number[] }
+  /**
+   * The run could not honour the run mode it was given, `wanted`, and runs
+   * in `runMode` instead, which the Conversation notes (ADR 0051), such as a
+   * Copilot account without Assisted permissions.
+   */
+  | { type: 'runMode'; wanted: AgentRunMode; runMode: AgentRunMode }
   /** The run waits for the User (`true`) or goes on again (`false`). */
   | { type: 'waiting'; waiting: boolean }
   /**
@@ -184,8 +190,17 @@ export type RunnerAvailability =
  * Tandembike's terms into its agent's own, and says what it can do.
  */
 export type AgentRunner = {
-  /** Whether it can run now; Claude Code always can. */
+  /**
+   * Whether it can run now, at once: the last answer it has, which it may
+   * refresh in the background. Claude Code always can.
+   */
   availability(): RunnerAvailability;
+  /**
+   * Refreshes the answer `availability()` gives and resolves with it, for a
+   * caller that can wait, such as a start; left out when the answer never
+   * changes.
+   */
+  checkAvailability?(): Promise<RunnerAvailability>;
   capabilities: RunnerCapabilities;
   /**
    * The text its first message sends for a Stage, which the transcript

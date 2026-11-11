@@ -72,6 +72,8 @@ describe('FlowPage', () => {
       autopilotTriageSpend: () => 0.5,
       triageBudget: () => null,
       spendBudget: () => null,
+      defaultCostUnit: () => 'usd',
+      agentKinds: async () => [],
     } as unknown as ReturnType<typeof appConversations>);
     explaining({});
   });

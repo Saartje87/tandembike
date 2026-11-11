@@ -62,12 +62,26 @@ type AgentSettingsValues = {
   runMode: AgentRunMode;
   runModel: string;
   triageModel: string;
+  copilotRunModel: string;
+  copilotTriageModel: string;
   autopilot: boolean;
   spendCeiling: string;
+  spendCeilingAiCredits: string;
   autoTriage: boolean;
   triageCeiling: string;
+  triageCeilingAiCredits: string;
   autoMerge: boolean;
 };
+
+/** A model field's text as the setting, null when blank: the agent's default. */
+const modelOf = (text: string) => (text.trim() === '' ? null : text.trim());
+
+/** A ceiling as the form's text, blank for none. */
+const ceilingText = (ceiling: number | null) =>
+  ceiling === null ? '' : String(ceiling);
+
+/** A ceiling field's text as the setting, null when blank. */
+const ceilingOf = (text: string) => (text.trim() === '' ? null : Number(text));
 
 /** The form field each field of a refusal names. */
 const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
@@ -79,8 +93,12 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   runMode: 'runMode',
   'models.claude-code.runModel': 'runModel',
   'models.claude-code.triageModel': 'triageModel',
+  'models.copilot.runModel': 'copilotRunModel',
+  'models.copilot.triageModel': 'copilotTriageModel',
   spendCeilingUsd: 'spendCeiling',
+  spendCeilingAiCredits: 'spendCeilingAiCredits',
   triageCeilingUsd: 'triageCeiling',
+  triageCeilingAiCredits: 'triageCeilingAiCredits',
 };
 
 /**
@@ -135,16 +153,14 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       runMode: settings.runMode,
       runModel: settings.models['claude-code'].runModel ?? '',
       triageModel: settings.models['claude-code'].triageModel ?? '',
+      copilotRunModel: settings.models.copilot.runModel ?? '',
+      copilotTriageModel: settings.models.copilot.triageModel ?? '',
       autopilot: settings.autopilot,
-      spendCeiling:
-        settings.spendCeilingUsd === null
-          ? ''
-          : String(settings.spendCeilingUsd),
+      spendCeiling: ceilingText(settings.spendCeilingUsd),
+      spendCeilingAiCredits: ceilingText(settings.spendCeilingAiCredits),
       autoTriage: settings.autoTriage,
-      triageCeiling:
-        settings.triageCeilingUsd === null
-          ? ''
-          : String(settings.triageCeilingUsd),
+      triageCeiling: ceilingText(settings.triageCeilingUsd),
+      triageCeilingAiCredits: ceilingText(settings.triageCeilingAiCredits),
       autoMerge: settings.autoMerge,
     },
   });
@@ -156,9 +172,10 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const prepareErrorId = useId();
   const modeError = errors.agentMode?.message;
   const agentKindError = errors.defaultAgentKind?.message;
-  // A kind that cannot run is not offered, but the saved one always shows.
-  const offeredKinds = agentKinds.filter(
-    ({ kind, available }) => available || kind === settings.defaultAgentKind,
+  // A kind that cannot run shows disabled with its reason (T1368); the saved
+  // one stays selectable, so saving other settings keeps it.
+  const kindReasons = agentKinds.flatMap((option) =>
+    option.available ? [] : [{ kind: option.kind, reason: option.reason }],
   );
   const runModeError = errors.runMode?.message;
   const runModelError = errors.runModel?.message;
@@ -174,6 +191,27 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const triageCeilingId = useId();
   const triageCeilingErrorId = useId();
   const triageCeilingError = errors.triageCeiling?.message;
+  // Copilot's models and AI-credit ceilings (ADR 0051): shown once Copilot
+  // can run here, is the default, or has one of them kept.
+  const showCopilot =
+    agentKinds.some(({ kind, available }) => kind === 'copilot' && available) ||
+    settings.defaultAgentKind === 'copilot' ||
+    settings.spendCeilingAiCredits !== null ||
+    settings.triageCeilingAiCredits !== null ||
+    settings.models.copilot.runModel !== null ||
+    settings.models.copilot.triageModel !== null;
+  const copilotRunModelId = useId();
+  const copilotRunModelErrorId = useId();
+  const copilotRunModelError = errors.copilotRunModel?.message;
+  const copilotTriageModelId = useId();
+  const copilotTriageModelErrorId = useId();
+  const copilotTriageModelError = errors.copilotTriageModel?.message;
+  const creditsId = useId();
+  const creditsErrorId = useId();
+  const creditsError = errors.spendCeilingAiCredits?.message;
+  const triageCreditsId = useId();
+  const triageCreditsErrorId = useId();
+  const triageCreditsError = errors.triageCeilingAiCredits?.message;
   const serverError = errors.root?.server?.message;
 
   /** Re-runs detection for the path in the field and offers its candidates. */
@@ -209,28 +247,33 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
           parallelRuns: values.parallelRuns,
           agentMode: values.agentMode,
           runMode: values.runMode,
-          // Only Claude Code's models show while it is the only kind that
-          // runs (ADR 0051).
+          // Each kind's models apply to its own runs only (ADR 0051).
           models: {
             'claude-code': {
-              runModel:
-                values.runModel.trim() === '' ? null : values.runModel.trim(),
-              triageModel:
-                values.triageModel.trim() === ''
-                  ? null
-                  : values.triageModel.trim(),
+              runModel: modelOf(values.runModel),
+              triageModel: modelOf(values.triageModel),
             },
+            ...(showCopilot
+              ? {
+                  copilot: {
+                    runModel: modelOf(values.copilotRunModel),
+                    triageModel: modelOf(values.copilotTriageModel),
+                  },
+                }
+              : {}),
           },
           autopilot: values.autopilot,
-          spendCeilingUsd:
-            values.spendCeiling.trim() === ''
-              ? null
-              : Number(values.spendCeiling),
+          spendCeilingUsd: ceilingOf(values.spendCeiling),
+          ...(showCopilot
+            ? {
+                spendCeilingAiCredits: ceilingOf(values.spendCeilingAiCredits),
+                triageCeilingAiCredits: ceilingOf(
+                  values.triageCeilingAiCredits,
+                ),
+              }
+            : {}),
           autoTriage: values.autoTriage,
-          triageCeilingUsd:
-            values.triageCeiling.trim() === ''
-              ? null
-              : Number(values.triageCeiling),
+          triageCeilingUsd: ceilingOf(values.triageCeiling),
           autoMerge: values.autoMerge,
           defaultAgentKind: values.defaultAgentKind,
         }),
@@ -357,9 +400,13 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
                     : agentKindHintId
                 }
               >
-                {offeredKinds.map(({ kind, label }) => (
-                  <option key={kind} value={kind}>
-                    {label}
+                {agentKinds.map(({ kind, label, available }) => (
+                  <option
+                    key={kind}
+                    value={kind}
+                    disabled={!available && kind !== settings.defaultAgentKind}
+                  >
+                    {available ? label : `${label}: cannot run`}
                   </option>
                 ))}
               </Select>
@@ -368,6 +415,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
                 Changing it leaves Conversations already started on their own
                 agent.
               </Text>
+              {kindReasons.map(({ kind, reason }) => (
+                <Text key={kind} tag="p" fontSize="small" color="muted">
+                  {reason}
+                </Text>
+              ))}
               <FieldError id={agentKindErrorId} reason={agentKindError} />
             </Stack>
           )}
@@ -410,8 +462,9 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             <Text tag="p" fontSize="small" color="muted">
               In the spike the auto classifier allowed a hard reset, writes
               outside the repository, an outbound POST and a push without
-              asking. Calls it cannot decide still ask you. Applies to every run
-              this Project starts.
+              asking. Calls it cannot decide still ask you. On Copilot, auto
+              approves what Copilot's Assisted permissions judge safe and asks
+              you about the rest. Applies to every run this Project starts.
             </Text>
             <FieldError id={runModeErrorId} reason={runModeError} />
           </Stack>
@@ -449,6 +502,54 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             </Text>
             <FieldError id={triageModelErrorId} reason={triageModelError} />
           </Stack>
+          {showCopilot && (
+            <Stack gap={1} id="copilot-run-model">
+              <Label htmlFor={copilotRunModelId}>Copilot run model</Label>
+              <TextInput
+                {...register('copilotRunModel')}
+                id={copilotRunModelId}
+                placeholder="Copilot's default model"
+                autoComplete="off"
+                aria-invalid={copilotRunModelError ? true : undefined}
+                aria-describedby={
+                  copilotRunModelError ? copilotRunModelErrorId : undefined
+                }
+              />
+              <Text tag="p" fontSize="small" color="muted">
+                The model Copilot runs start on; leave empty for Copilot's
+                default.
+              </Text>
+              <FieldError
+                id={copilotRunModelErrorId}
+                reason={copilotRunModelError}
+              />
+            </Stack>
+          )}
+          {showCopilot && (
+            <Stack gap={1}>
+              <Label htmlFor={copilotTriageModelId}>Copilot triage model</Label>
+              <TextInput
+                {...register('copilotTriageModel')}
+                id={copilotTriageModelId}
+                placeholder="The run model"
+                autoComplete="off"
+                aria-invalid={copilotTriageModelError ? true : undefined}
+                aria-describedby={
+                  copilotTriageModelError
+                    ? copilotTriageModelErrorId
+                    : undefined
+                }
+              />
+              <Text tag="p" fontSize="small" color="muted">
+                The model Copilot Triage runs start on; leave empty to use the
+                run model.
+              </Text>
+              <FieldError
+                id={copilotTriageModelErrorId}
+                reason={copilotTriageModelError}
+              />
+            </Stack>
+          )}
           <Stack gap={1} id="autopilot">
             <Inline gap={2} alignY="center">
               <Switch {...register('autopilot')} id={autopilotId} />
@@ -475,6 +576,27 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             />
             <FieldError id={ceilingErrorId} reason={ceilingError} />
           </Stack>
+          {showCopilot && (
+            <Stack gap={1} id="spend-ceiling-ai-credits">
+              <Label htmlFor={creditsId}>Spend ceiling (AI credits)</Label>
+              <TextInput
+                {...register('spendCeilingAiCredits')}
+                id={creditsId}
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                placeholder="No ceiling"
+                aria-invalid={creditsError ? true : undefined}
+                aria-describedby={creditsError ? creditsErrorId : undefined}
+              />
+              <Text tag="p" fontSize="small" color="muted">
+                The same for Copilot runs, in GitHub AI credits. Autopilot
+                checks the ceiling in the unit of the default agent.
+              </Text>
+              <FieldError id={creditsErrorId} reason={creditsError} />
+            </Stack>
+          )}
           <Stack gap={1}>
             <Inline gap={2} alignY="center">
               <Switch {...register('autoMerge')} id={autoMergeId} />
@@ -521,6 +643,30 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             </Text>
             <FieldError id={triageCeilingErrorId} reason={triageCeilingError} />
           </Stack>
+          {showCopilot && (
+            <Stack gap={1} id="triage-ceiling-ai-credits">
+              <Label htmlFor={triageCreditsId}>
+                Triage ceiling (AI credits)
+              </Label>
+              <TextInput
+                {...register('triageCeilingAiCredits')}
+                id={triageCreditsId}
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                placeholder="No ceiling"
+                aria-invalid={triageCreditsError ? true : undefined}
+                aria-describedby={
+                  triageCreditsError ? triageCreditsErrorId : undefined
+                }
+              />
+              <FieldError
+                id={triageCreditsErrorId}
+                reason={triageCreditsError}
+              />
+            </Stack>
+          )}
           {serverError && <Alert intent="danger">{serverError}</Alert>}
           <div>
             <Button type="submit" size="small" loading={isSubmitting}>

@@ -88,7 +88,24 @@ export function comparisonsOf(energyWh: number, co2eG: number): Comparisons {
   };
 }
 
-/** The tier of `model` by name; a model matching none counts as Opus. */
+const notMeasuredPrefix = 'not-measured:';
+
+/**
+ * How a model with no tier is kept in usage (ADR 0051): a non-Claude model
+ * a Copilot run used. Its tokens are stored, but left out of every Footprint
+ * and its totals until it has factors of its own (T1370).
+ */
+export const notMeasuredModel = (model: string): string =>
+  `${notMeasuredPrefix}${model}`;
+
+/** Whether `model` names a Claude model, which has a tier by its name. */
+export const isClaudeModel = (model: string): boolean =>
+  /claude|haiku|sonnet|opus/i.test(model);
+
+/**
+ * The tier of `model` by name; a model matching none counts as Opus, as
+ * Claude Code's models are all Claude's (ADR 0050).
+ */
 export function tierOf(model: string): ModelTier {
   const name = model.toLowerCase();
   if (name.includes('haiku')) {
@@ -114,12 +131,17 @@ const weighted = (tokens: TokenUsage) =>
   tokens.cacheWrite * tokenWeights.cacheWrite +
   tokens.cacheRead * tokenWeights.cacheRead;
 
-/** The Footprint of `usage` with `factors`; not measured when `usage` is empty. */
+/**
+ * The Footprint of `usage` with `factors`; not measured when `usage` holds
+ * no model with a tier.
+ */
 export function footprintOf(
   usage: UsageByModel,
   factors: FootprintFactors,
 ): Footprint {
-  const models = Object.entries(usage);
+  const models = Object.entries(usage).filter(
+    ([model]) => !model.startsWith(notMeasuredPrefix),
+  );
   if (models.length === 0) {
     return { measured: false };
   }

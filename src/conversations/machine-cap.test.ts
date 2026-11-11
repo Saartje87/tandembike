@@ -131,6 +131,44 @@ describe('The machine cap (ADR 0041)', () => {
     expect(conversations.list({ ticketNumber: ticket.number })).toEqual([]);
   });
 
+  it('counts Copilot and Claude Code Start runs toward the same cap (ADR 0049, ADR 0051)', async () => {
+    const { conversations, runners, projects, startIn, tickets } = setup();
+    tickets.setProjectAgentSettings(projects[1].id, {
+      defaultAgentKind: 'copilot',
+    });
+    await startIn(projects[0].id, 'start');
+    await startIn(projects[1].id, 'start');
+    const ticket = tickets.createTicket({
+      projectId: projects[1].id,
+      title: 'Third',
+    });
+
+    await expect(
+      conversations.start({
+        startedBy: 'user',
+        ticketNumber: ticket.number,
+        intent: 'start',
+        prompt: 'Go',
+      }),
+    ).rejects.toEqual(new NotAllowedError(capMessage(2, 'T1 and T2')));
+    expect(runners['claude-code'].runs).toHaveLength(1);
+    expect(runners.copilot.runs).toHaveLength(1);
+  });
+
+  it("counts a Copilot Start toward its Project's Start run limit beside a Claude Code one", async () => {
+    const { conversations, projects, startIn, tickets } = setup(5);
+    tickets.setProjectAgentSettings(projects[0].id, { parallelRuns: false });
+    await startIn(projects[0].id, 'start');
+    tickets.setProjectAgentSettings(projects[0].id, {
+      defaultAgentKind: 'copilot',
+    });
+
+    await expect(startIn(projects[0].id, 'start')).rejects.toBeInstanceOf(
+      NotAllowedError,
+    );
+    expect(conversations.capacity().machine.slotsHeld).toBe(1);
+  });
+
   it('refuses Approve merge at the cap', async () => {
     const { conversations, projects, startIn, tickets } = setup(1);
     await startIn(projects[0].id, 'start');

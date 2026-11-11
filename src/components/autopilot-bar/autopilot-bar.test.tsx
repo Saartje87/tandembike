@@ -26,7 +26,8 @@ describe('AutopilotBar', () => {
       <AutopilotBar
         projectId={3}
         autopilot
-        spendCeilingUsd={5}
+        spendCeiling={5}
+        unit="usd"
         spend={0.75}
         cycleFootprint={null}
       />,
@@ -37,12 +38,33 @@ describe('AutopilotBar', () => {
     expect(screen.queryByText(/paused/)).not.toBeInTheDocument();
   });
 
+  it("shows a Copilot Project's spend and ceiling in AI credits, never in dollars (ADR 0051)", () => {
+    renderWithTheme(
+      <AutopilotBar
+        projectId={3}
+        autopilot
+        spendCeiling={300}
+        unit="ai_credits"
+        spend={320}
+        cycleFootprint={null}
+      />,
+    );
+
+    expect(
+      screen.getByText('320.00 AI credits of 300.00 AI credits'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('paused: over ceiling (320.00 AI credits)'),
+    ).toBeInTheDocument();
+  });
+
   it('says paused: over ceiling with the amount once the spend reaches the ceiling, switch still on', () => {
     renderWithTheme(
       <AutopilotBar
         projectId={3}
         autopilot
-        spendCeilingUsd={5}
+        spendCeiling={5}
+        unit="usd"
         spend={5.2}
         cycleFootprint={null}
       />,
@@ -59,7 +81,8 @@ describe('AutopilotBar', () => {
       <AutopilotBar
         projectId={3}
         autopilot={false}
-        spendCeilingUsd={5}
+        spendCeiling={5}
+        unit="usd"
         spend={9}
         cycleFootprint={null}
       />,
@@ -73,7 +96,8 @@ describe('AutopilotBar', () => {
       <AutopilotBar
         projectId={3}
         autopilot={false}
-        spendCeilingUsd={5}
+        spendCeiling={5}
+        unit="usd"
         spend={0}
         cycleFootprint={null}
       />,
@@ -97,7 +121,8 @@ describe('AutopilotBar', () => {
       <AutopilotBar
         projectId={3}
         autopilot={false}
-        spendCeilingUsd={null}
+        spendCeiling={null}
+        unit="usd"
         spend={0}
         cycleFootprint={null}
       />,
@@ -121,7 +146,8 @@ describe('AutopilotBar', () => {
         <AutopilotBar
           projectId={3}
           autopilot
-          spendCeilingUsd={5}
+          spendCeiling={5}
+          unit="usd"
           spend={0.75}
           cycleFootprint={aFootprint({ energyWh: 1200, co2eG: 570 })}
         />,
@@ -148,7 +174,8 @@ describe('AutopilotBar', () => {
         <AutopilotBar
           projectId={3}
           autopilot
-          spendCeilingUsd={5}
+          spendCeiling={5}
+          unit="usd"
           spend={0}
           cycleFootprint={null}
         />,
@@ -163,7 +190,8 @@ describe('AutopilotBar', () => {
         <AutopilotBar
           projectId={3}
           autopilot
-          spendCeilingUsd={5}
+          spendCeiling={5}
+          unit="usd"
           spend={0}
           cycleFootprint={{ measured: false }}
         />,
@@ -179,7 +207,8 @@ describe('AutopilotBar', () => {
         <AutopilotBar
           projectId={3}
           autopilot
-          spendCeilingUsd={5}
+          spendCeiling={5}
+          unit="usd"
           spend={1}
           cycleFootprint={aFootprint({ energyWh: 9e9, co2eG: 9e9 })}
         />,

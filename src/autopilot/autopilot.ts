@@ -5,7 +5,7 @@ import type {
   Conversations,
 } from '../conversations/conversations';
 import type { ChangeChannel } from '../tickets/changes';
-import { dollarCeiling } from '../tickets/cost-unit';
+import { ceilingsByUnit, costUnits } from '../tickets/cost-unit';
 import { isFeedback } from '../tickets/feedback';
 import type { Ticket, Tickets } from '../tickets/tickets';
 import { triageStateLabels } from '../tickets/triage-labels';
@@ -156,8 +156,14 @@ export function createAutopilot({
     return Math.max(0, machine.cap - liveProcessCount);
   };
 
-  /** The machine's own Pause reasons (ADR 0041), shared by builds and triage. */
-  const machineReasons = (): Extract<
+  /**
+   * The machine's own Pause reasons for Project `projectId` (ADR 0041),
+   * shared by builds and triage: the Machine ceiling counts in the unit of
+   * the agent Autopilot would start there (ADR 0051).
+   */
+  const machineReasons = (
+    projectId: number,
+  ): Extract<
     AutopilotPauseReason,
     { type: 'machineCapFull' | 'overMachineCeiling' }
   >[] => {
@@ -174,7 +180,10 @@ export function createAutopilot({
         waitingOnUser: liveProcesses.waiting,
       });
     }
-    const budget = machineBudget();
+    const budget = conversations.machineBudget(
+      now(),
+      conversations.defaultCostUnit(projectId),
+    );
     if (budget?.paused) {
       reasons.push({
         type: 'overMachineCeiling',
@@ -216,7 +225,11 @@ export function createAutopilot({
     // Ceilings are kept per unit: one in the unit of the agent Autopilot
     // would start, or none (ADR 0051).
     const unit = conversations.defaultCostUnit(projectId);
-    if (dollarCeiling(settings.spendCeilingUsd)[unit] === null) {
+    if (
+      ceilingsByUnit(settings.spendCeilingUsd, settings.spendCeilingAiCredits)[
+        unit
+      ] === null
+    ) {
       reasons.push({ type: 'noSpendCeiling' });
     } else if (cycle) {
       const budget = conversations.spendBudget({
@@ -253,7 +266,11 @@ export function createAutopilot({
     projectId: number,
   ): { cycleId: number; slots: number } | null => {
     const open = projectRoom(projectId);
-    return open.reasons.length === 0 && open.cycleId !== null
+    // The Machine ceiling in this Project's unit stops its resumes too.
+    const machinePaused = machineReasons(projectId).some(
+      ({ type }) => type === 'overMachineCeiling',
+    );
+    return open.reasons.length === 0 && open.cycleId !== null && !machinePaused
       ? { cycleId: open.cycleId, slots: open.slots }
       : null;
   };
@@ -335,7 +352,7 @@ export function createAutopilot({
    */
   const explainBuilds = (projectId: number, todo = todoTickets(projectId)) => {
     const open = projectRoom(projectId);
-    const reasons = [...open.reasons, ...machineReasons()];
+    const reasons = [...open.reasons, ...machineReasons(projectId)];
     const free = reasons.length === 0 ? Math.min(open.slots, machineFree()) : 0;
     const eligibility = buildEligibility(projectId, todo, open.cycleId, free);
     const next = todo.find(
@@ -527,9 +544,10 @@ export function createAutopilot({
       reasons.push({ type: 'switchedOff' });
     }
     if (
-      dollarCeiling(settings.triageCeilingUsd)[
-        conversations.defaultCostUnit(projectId)
-      ] === null
+      ceilingsByUnit(
+        settings.triageCeilingUsd,
+        settings.triageCeilingAiCredits,
+      )[conversations.defaultCostUnit(projectId)] === null
     ) {
       reasons.push({ type: 'noTriageCeiling' });
     }
@@ -549,7 +567,7 @@ export function createAutopilot({
         unit: budget.unit,
       });
     }
-    reasons.push(...machineReasons());
+    reasons.push(...machineReasons(projectId));
     return reasons;
   };
 
@@ -805,8 +823,15 @@ export function createAutopilot({
    * step, so a run another step started is counted.
    */
   const runPass = async (startupResume: boolean) => {
-    if (machineBudget()?.paused) {
+    // Each unit's Machine ceiling pauses the Projects whose agent counts in
+    // it; only with every unit paused is there nothing to pass over.
+    const paused = costUnits.filter(
+      (unit) => conversations.machineBudget(now(), unit)?.paused,
+    );
+    if (paused.length > 0) {
       wakeNextDay();
+    }
+    if (paused.length === costUnits.length) {
       return;
     }
     const ids = projectIds();

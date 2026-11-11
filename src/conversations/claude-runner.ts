@@ -22,6 +22,7 @@ import {
   isWidgetTool,
   widgetServerName,
 } from './claude-widget-server';
+import { createdNumbers } from './created-numbers';
 
 const maxToolTextLength = 300;
 
@@ -68,25 +69,6 @@ async function askQuestions(
 }
 
 const createToolName = /(^|__)file_tickets$/;
-
-/** The Ticket numbers in the JSON result of file_tickets. */
-function createdNumbers(content: unknown): number[] {
-  const text = Array.isArray(content)
-    ? content.map((part) => (part?.type === 'text' ? part.text : '')).join('')
-    : content;
-  if (typeof text !== 'string') {
-    return [];
-  }
-  try {
-    const result = JSON.parse(text) as { number?: unknown; numbers?: unknown };
-    const numbers = Array.isArray(result.numbers)
-      ? result.numbers
-      : [result.number];
-    return numbers.filter((n): n is number => Number.isInteger(n));
-  } catch {
-    return [];
-  }
-}
 
 /**
  * What a run reports for one SDK message; unknown kinds report nothing.

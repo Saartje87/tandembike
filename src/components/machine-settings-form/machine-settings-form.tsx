@@ -18,7 +18,15 @@ export type MachineSettingsFormProps = {
 type MachineSettingsValues = {
   maxConcurrentRuns: number;
   dailySpendCeiling: string;
+  dailySpendCeilingAiCredits: string;
 };
+
+/** A ceiling as the form's text, blank for none. */
+const ceilingText = (ceiling: number | null) =>
+  ceiling === null ? '' : String(ceiling);
+
+/** A ceiling field's text as the setting, null when blank. */
+const ceilingOf = (text: string) => (text.trim() === '' ? null : Number(text));
 
 /**
  * The machine-wide limits (ADR 0041): the cap on working runs across all
@@ -31,6 +39,8 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
   const capErrorId = useId();
   const ceilingId = useId();
   const ceilingErrorId = useId();
+  const creditsId = useId();
+  const creditsErrorId = useId();
   const {
     formState: { errors, isSubmitting, isSubmitSuccessful },
     handleSubmit,
@@ -39,14 +49,15 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
   } = useForm<MachineSettingsValues>({
     defaultValues: {
       maxConcurrentRuns: settings.maxConcurrentRuns,
-      dailySpendCeiling:
-        settings.dailySpendCeilingUsd === null
-          ? ''
-          : String(settings.dailySpendCeilingUsd),
+      dailySpendCeiling: ceilingText(settings.dailySpendCeilingUsd),
+      dailySpendCeilingAiCredits: ceilingText(
+        settings.dailySpendCeilingAiCredits,
+      ),
     },
   });
   const capError = errors.maxConcurrentRuns?.message;
   const ceilingError = errors.dailySpendCeiling?.message;
+  const creditsError = errors.dailySpendCeilingAiCredits?.message;
   const serverError = errors.root?.server?.message;
 
   const submit = handleSubmit(async (values) => {
@@ -54,10 +65,10 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
       () =>
         saveMachineSettings({
           maxConcurrentRuns: Number(values.maxConcurrentRuns),
-          dailySpendCeilingUsd:
-            values.dailySpendCeiling.trim() === ''
-              ? null
-              : Number(values.dailySpendCeiling),
+          dailySpendCeilingUsd: ceilingOf(values.dailySpendCeiling),
+          dailySpendCeilingAiCredits: ceilingOf(
+            values.dailySpendCeilingAiCredits,
+          ),
         }),
       'The machine settings could not be saved. Try again.',
     );
@@ -68,6 +79,10 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
       [
         ['maxConcurrentRuns', fieldRefusal(result, 'maxConcurrentRuns')],
         ['dailySpendCeiling', fieldRefusal(result, 'dailySpendCeilingUsd')],
+        [
+          'dailySpendCeilingAiCredits',
+          fieldRefusal(result, 'dailySpendCeilingAiCredits'),
+        ],
       ] as const
     ).filter(([, message]) => message);
     for (const [field, message] of refused) {
@@ -115,19 +130,44 @@ export const MachineSettingsForm: FC<MachineSettingsFormProps> = ({
             aria-describedby={ceilingError ? ceilingErrorId : undefined}
           />
           <Text tag="p" fontSize="small" color="muted">
-            The most Autopilot may spend per day across all Projects. At it,
-            Autopilot starts and resumes nothing anywhere, running runs finish,
-            and it goes on the next day or when you raise the ceiling. Merges
-            you approve and your own runs are not counted.
+            The most Autopilot may spend per day across all Projects whose
+            default agent is Claude Code. At it, Autopilot starts and resumes
+            nothing in those Projects, running runs finish, and it goes on the
+            next day or when you raise the ceiling. Merges you approve and your
+            own runs are not counted.
           </Text>
           <FieldError id={ceilingErrorId} reason={ceilingError} />
         </Stack>
-        {serverError && <Alert intent="danger">{serverError}</Alert>}
-        {isSubmitSuccessful && !serverError && !capError && !ceilingError && (
-          <Text tag="p" fontSize="small" color="muted" role="status">
-            Saved.
+        <Stack gap={1}>
+          <Label htmlFor={creditsId}>Daily spend ceiling (AI credits)</Label>
+          <TextInput
+            {...register('dailySpendCeilingAiCredits')}
+            id={creditsId}
+            type="number"
+            min={0}
+            step="any"
+            inputMode="decimal"
+            placeholder="No ceiling"
+            aria-invalid={creditsError ? true : undefined}
+            aria-describedby={creditsError ? creditsErrorId : undefined}
+          />
+          <Text tag="p" fontSize="small" color="muted">
+            The same for Copilot runs, in GitHub AI credits. Each ceiling pauses
+            only the Projects whose default agent counts in its unit; nothing
+            converts one into the other.
           </Text>
-        )}
+          <FieldError id={creditsErrorId} reason={creditsError} />
+        </Stack>
+        {serverError && <Alert intent="danger">{serverError}</Alert>}
+        {isSubmitSuccessful &&
+          !serverError &&
+          !capError &&
+          !ceilingError &&
+          !creditsError && (
+            <Text tag="p" fontSize="small" color="muted" role="status">
+              Saved.
+            </Text>
+          )}
         <Button type="submit" alignSelf="flex-start" loading={isSubmitting}>
           Save
         </Button>

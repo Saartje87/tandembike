@@ -75,11 +75,15 @@ export type SettingsField =
   | 'check-command'
   | 'prepare-command'
   | 'run-mode'
+  | 'default-agent'
   | 'run-model'
+  | 'copilot-run-model'
   | 'autopilot'
   | 'spend-ceiling'
+  | 'spend-ceiling-ai-credits'
   | 'auto-triage'
   | 'triage-ceiling'
+  | 'triage-ceiling-ai-credits'
   | 'agent-commands'
   | `${string}-command`;
 

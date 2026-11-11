@@ -13,6 +13,7 @@ import {
   closeConversation,
   currentConversationActivity,
   listOpenConversations,
+  loadAgentChoices,
   loadConversation,
   removeConversationWorktree,
   reopenConversation,
@@ -463,5 +464,106 @@ describe('Conversation actions', () => {
         waitingByProject: { [project.id]: 1 },
       }),
     );
+  });
+});
+
+describe('the agent picker (T1368)', () => {
+  beforeEach(() => {
+    vi.mocked(appConversations).mockReset();
+  });
+
+  it('starts a Conversation, a Plan on the kind the User picked', async () => {
+    const world = setup();
+    const ticket = world.tickets.createTicket({
+      projectId: world.project.id,
+      title: 'Work',
+    });
+
+    const started = await startConversation({
+      ticketNumber: ticket.number,
+      intent: 'start',
+      stage: { stage: 'start' },
+      agentKind: 'copilot',
+    });
+    const plan = await startPlan({
+      projectId: world.project.id,
+      goal: 'Ship it',
+      agentKind: 'copilot',
+    });
+
+    expect(started).toMatchObject({
+      ok: true,
+      conversation: { agentKind: 'copilot' },
+    });
+    expect(plan).toMatchObject({
+      ok: true,
+      conversation: { agentKind: 'copilot' },
+    });
+  });
+
+  it('refuses a kind that is not one', async () => {
+    const world = setup();
+
+    expect(
+      await startConversation({
+        projectId: world.project.id,
+        intent: 'ask',
+        prompt: 'Hi',
+        agentKind: 'gemini' as never,
+      }),
+    ).toMatchObject({
+      ok: false,
+      fieldErrors: { agentKind: expect.any(String) },
+    });
+  });
+
+  it("loads the kinds that can be picked, with the Project's default, by Project or Ticket", async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+    });
+    world.runners.copilot.availability = () => ({
+      available: false,
+      reason: 'Copilot is not signed in.',
+    });
+    const ticket = world.tickets.createTicket({
+      projectId: world.project.id,
+      title: 'Work',
+    });
+
+    const expected = {
+      ok: true,
+      choices: {
+        defaultKind: 'copilot',
+        kinds: [
+          { kind: 'claude-code', label: 'Claude Code', available: true },
+          {
+            kind: 'copilot',
+            label: 'Copilot',
+            available: false,
+            reason: 'Copilot is not signed in.',
+          },
+        ],
+      },
+    };
+    expect(await loadAgentChoices({ projectId: world.project.id })).toEqual(
+      expected,
+    );
+    expect(await loadAgentChoices({ ticketNumber: ticket.number })).toEqual(
+      expected,
+    );
+  });
+
+  it('offers no picker while one Agent kind is registered', async () => {
+    const world = createTestConversations(undefined, {
+      kinds: ['claude-code'],
+    });
+    const project = world.tickets.createProject({ name: 'Website' });
+    vi.mocked(appConversations).mockReturnValue(world.conversations);
+
+    expect(await loadAgentChoices({ projectId: project.id })).toEqual({
+      ok: true,
+      choices: null,
+    });
   });
 });

@@ -4,6 +4,7 @@ import {
   defaultFootprintFactors,
   type FootprintFactors,
   footprintOf,
+  notMeasuredModel,
   tierOf,
 } from './footprint';
 import { noTokens } from './token-usage';
@@ -105,6 +106,26 @@ describe('footprintOf (T1176)', () => {
     expect(footprintOf({ 'claude-opus-5-5': noTokens }, factors)).toMatchObject(
       { measured: true, energyWh: 0 },
     );
+  });
+});
+
+describe('footprintOf a model with no tier (ADR 0051, T1367)', () => {
+  it('leaves its tokens out, never counting them as Opus', () => {
+    const footprint = footprintOf(
+      {
+        'claude-sonnet-5.5': output(1_000_000),
+        [notMeasuredModel('gpt-5.5')]: output(9_000_000),
+      },
+      factors,
+    );
+
+    expect(footprint).toMatchObject({ measured: true, energyWh: 400 });
+  });
+
+  it('is not measured when it is all a run used', () => {
+    expect(
+      footprintOf({ [notMeasuredModel('gpt-5.5')]: output(1) }, factors),
+    ).toEqual({ measured: false });
   });
 });
 

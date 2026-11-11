@@ -12,6 +12,7 @@ import { SetupPanel } from '../../../../components/setup-panel/setup-panel';
 import { TicketPath } from '../../../../components/ticket-path/ticket-path';
 import { appConversations } from '../../../../conversations/app-conversations';
 import { appTickets } from '../../../../tickets/app-tickets';
+import { ceilingsByUnit } from '../../../../tickets/cost-unit';
 import { openCyclesInOrder } from '../../../../tickets/cycle-state';
 import type { Cycle } from '../../../../tickets/cycles';
 import {
@@ -43,6 +44,8 @@ async function flowTab(params: ProjectPageProps['params']) {
   const project = await loadProject(params);
   const explanation = appAutopilot().explain(project.id);
   const settings = appTickets('user').getProjectAgentSettings(project.id);
+  // Spend and ceilings in the unit of the agent Autopilot starts (ADR 0051).
+  const unit = appConversations().defaultCostUnit(project.id);
   const path = ticketPathOf(project.id);
   const cycleLink = (cycle: Cycle) => ({
     id: cycle.id,
@@ -97,19 +100,22 @@ async function flowTab(params: ProjectPageProps['params']) {
           projectId={project.id}
           settings={settings}
           commands={appTickets('user').getProjectAgentCommands(project.id)}
-          cycleSpendUsd={
+          cycleSpend={
             active
               ? appConversations().autopilotSpend({
                   projectId: project.id,
                   cycleId: active.id,
-                  unit: 'usd',
+                  unit,
                 })
               : null
           }
-          triageSpendUsd={appConversations().autopilotTriageSpend(
+          triageSpend={appConversations().autopilotTriageSpend(
             project.id,
             startOfToday(),
+            unit,
           )}
+          unit={unit}
+          agentKinds={await appConversations().agentKinds()}
         />
       </FlowSection>
       <FlowSection
@@ -123,10 +129,13 @@ async function flowTab(params: ProjectPageProps['params']) {
             setting="autopilot"
             checked={settings.autopilot}
             ceiling={{
-              usd: settings.spendCeilingUsd,
+              amount: ceilingsByUnit(
+                settings.spendCeilingUsd,
+                settings.spendCeilingAiCredits,
+              )[unit],
               settingsHref: projectSettingsFieldPath(
                 project.id,
-                'spend-ceiling',
+                unit === 'usd' ? 'spend-ceiling' : 'spend-ceiling-ai-credits',
               ),
             }}
           />
@@ -135,10 +144,13 @@ async function flowTab(params: ProjectPageProps['params']) {
             setting="autoTriage"
             checked={settings.autoTriage}
             ceiling={{
-              usd: settings.triageCeilingUsd,
+              amount: ceilingsByUnit(
+                settings.triageCeilingUsd,
+                settings.triageCeilingAiCredits,
+              )[unit],
               settingsHref: projectSettingsFieldPath(
                 project.id,
-                'triage-ceiling',
+                unit === 'usd' ? 'triage-ceiling' : 'triage-ceiling-ai-credits',
               ),
             }}
           />

@@ -3,6 +3,7 @@ import type { FC } from 'react';
 
 import { formatCost } from '../../app/lib/format-cost';
 import type { Footprint } from '../../footprint/footprint';
+import type { CostUnit } from '../../tickets/cost-unit';
 import { FootprintText } from '../footprint-text/footprint-text';
 import { ProjectSwitch } from '../project-switch/project-switch';
 
@@ -10,10 +11,15 @@ export type AutopilotBarProps = {
   projectId: number;
   /** Whether the Project's Autopilot switch is on. */
   autopilot: boolean;
-  /** The Project's Spend ceiling in USD, or null without one. */
-  spendCeilingUsd: number | null;
-  /** What Autopilot has spent on the Active Cycle in USD. */
+  /**
+   * The Project's Spend ceiling in `unit`, the unit of the agent Autopilot
+   * starts (ADR 0051), or null without one in it.
+   */
+  spendCeiling: number | null;
+  /** What Autopilot has spent on the Active Cycle in `unit`. */
   spend: number;
+  /** The unit of the spend and the ceiling. */
+  unit: CostUnit;
   /**
    * The whole Cycle's Footprint, hand-started Conversations included, or
    * null while it has none (ADR 0050). Information only.
@@ -32,12 +38,12 @@ export type AutopilotBarProps = {
 export const AutopilotBar: FC<AutopilotBarProps> = ({
   projectId,
   autopilot,
-  spendCeilingUsd,
+  spendCeiling,
   spend,
+  unit,
   cycleFootprint,
 }) => {
-  const paused =
-    autopilot && spendCeilingUsd !== null && spend >= spendCeilingUsd;
+  const paused = autopilot && spendCeiling !== null && spend >= spendCeiling;
   return (
     <Inline gap={3} alignY="start">
       <ProjectSwitch
@@ -46,9 +52,9 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
         checked={autopilot}
       />
       <Text color="muted" fontSize="small">
-        {spendCeilingUsd === null
-          ? `${formatCost(spend, 'usd')}, no ceiling`
-          : `${formatCost(spend, 'usd')} of ${formatCost(spendCeilingUsd, 'usd')}`}
+        {spendCeiling === null
+          ? `${formatCost(spend, unit)}, no ceiling`
+          : `${formatCost(spend, unit)} of ${formatCost(spendCeiling, unit)}`}
       </Text>
       {cycleFootprint && (
         <FootprintText
@@ -59,7 +65,7 @@ export const AutopilotBar: FC<AutopilotBarProps> = ({
       )}
       {paused && (
         <Tag intent="warning">
-          {`paused: over ceiling (${formatCost(spend, 'usd')})`}
+          {`paused: over ceiling (${formatCost(spend, unit)})`}
         </Tag>
       )}
     </Inline>

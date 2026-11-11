@@ -26,8 +26,10 @@ describe("A Project's agent settings", () => {
       },
       autopilot: false,
       spendCeilingUsd: null,
+      spendCeilingAiCredits: null,
       autoTriage: false,
       triageCeilingUsd: null,
+      triageCeilingAiCredits: null,
       autoMerge: false,
       defaultAgentKind: 'claude-code',
     });
@@ -267,6 +269,90 @@ describe("A Project's agent settings", () => {
         triageCeilingUsd: null,
       }),
     ).toMatchObject({ autoTriage: false, triageCeilingUsd: null });
+  });
+
+  describe('AI-credit ceilings (ADR 0051)', () => {
+    it('keep a Spend and a Triage ceiling in AI credits beside the dollar ones', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      tickets.setProjectAgentSettings(project.id, {
+        spendCeilingUsd: 20,
+        spendCeilingAiCredits: 300,
+        triageCeilingAiCredits: 40,
+      });
+
+      expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+        spendCeilingUsd: 20,
+        spendCeilingAiCredits: 300,
+        triageCeilingUsd: null,
+        triageCeilingAiCredits: 40,
+      });
+    });
+
+    it('refuse a credit ceiling that is not a positive number', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      for (const field of [
+        'spendCeilingAiCredits',
+        'triageCeilingAiCredits',
+      ] as const) {
+        const error = errorFrom(() =>
+          tickets.setProjectAgentSettings(project.id, { [field]: 0 }),
+        );
+        expect((error as ValidationError).fieldErrors).toEqual({
+          [field]: 'Enter an amount of AI credits above 0.',
+        });
+      }
+    });
+
+    it("turn Autopilot and Auto-triage on only with a ceiling in the default agent's unit", () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      tickets.setProjectAgentSettings(project.id, {
+        defaultAgentKind: 'copilot',
+        spendCeilingUsd: 20,
+        triageCeilingUsd: 2,
+      });
+
+      const refused = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, {
+          autopilot: true,
+          autoTriage: true,
+        }),
+      );
+      expect((refused as ValidationError).fieldErrors).toEqual({
+        spendCeilingAiCredits:
+          'Set a Spend ceiling in AI credits before turning on Autopilot.',
+        triageCeilingAiCredits:
+          'Set a Triage ceiling in AI credits before turning on Auto-triage.',
+      });
+
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          autopilot: true,
+          autoTriage: true,
+          spendCeilingAiCredits: 300,
+          triageCeilingAiCredits: 40,
+        }),
+      ).toMatchObject({ autopilot: true, autoTriage: true });
+    });
+
+    it('never refuse a change of the default agent, though Autopilot has no ceiling in its unit', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+      tickets.setProjectAgentSettings(project.id, {
+        autopilot: true,
+        spendCeilingUsd: 20,
+      });
+
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'copilot',
+        }),
+      ).toMatchObject({ autopilot: true, defaultAgentKind: 'copilot' });
+    });
   });
 
   it('refuse a Spend ceiling that is not a positive number', () => {

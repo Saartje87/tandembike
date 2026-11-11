@@ -13,7 +13,9 @@ import {
   type ProjectAgentCommands,
   playbookCommand,
 } from '../../tickets/agent-commands';
+import { type CostUnit, ceilingsByUnit } from '../../tickets/cost-unit';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
+import type { AgentKindOption } from '../agent-settings-form/agent-settings-form';
 import { AppLink } from '../app-link/app-link';
 
 /** The Stages by the names the glossary gives them. */
@@ -44,9 +46,19 @@ export type SetupPanelProps = {
   settings: ProjectAgentSettings;
   commands: ProjectAgentCommands;
   /** What Autopilot has spent on the Active Cycle, or null without one. */
-  cycleSpendUsd: number | null;
+  cycleSpend: number | null;
   /** What Auto-triage has spent today. */
-  triageSpendUsd: number;
+  triageSpend: number;
+  /**
+   * The unit of the agent Autopilot starts, the Project's default (ADR
+   * 0051): the spend and the ceilings shown are in it.
+   */
+  unit: CostUnit;
+  /**
+   * Every Agent kind with whether it can run (ADR 0051); Copilot's gets a
+   * status row (T1368). Left out, none shows.
+   */
+  agentKinds?: AgentKindOption[];
 };
 
 type ItemProps = {
@@ -80,23 +92,27 @@ const Group: FC<GroupProps> = ({ title, children }) => (
   </Stack>
 );
 
-const ceilingText = (ceiling: number | null, spent: string) =>
+const ceilingText = (ceiling: number | null, unit: CostUnit, spent: string) =>
   ceiling === null
     ? `None set · ${spent}`
-    : `${formatCost(ceiling, 'usd')} · ${spent}`;
+    : `${formatCost(ceiling, unit)} · ${spent}`;
 
 /**
  * Flow's Setup (ADR 0044): what this Project runs at each Stage, its Check
  * and Prepare commands, run mode and model, and its ceilings with their
- * spend, read-only, each linking to its field on Settings.
+ * spend in the default agent's unit, read-only, each linking to its field on
+ * Settings.
  */
 export const SetupPanel: FC<SetupPanelProps> = ({
   projectId,
   settings,
   commands,
-  cycleSpendUsd,
-  triageSpendUsd,
+  cycleSpend,
+  triageSpend,
+  unit,
+  agentKinds = [],
 }) => {
+  const copilot = agentKinds.find(({ kind }) => kind === 'copilot');
   const field = (name: SettingsField) =>
     projectSettingsFieldPath(projectId, name);
   return (
@@ -147,20 +163,45 @@ export const SetupPanel: FC<SetupPanelProps> = ({
         <Item label="Claude Code run model" href={field('run-model')}>
           {settings.models['claude-code'].runModel ?? 'Your default model'}
         </Item>
+        {copilot && (
+          <Item label="Copilot" href={field('default-agent')}>
+            {copilot.available
+              ? 'Ready: Copilot can run here.'
+              : copilot.reason}
+          </Item>
+        )}
       </Group>
       <Group title="Ceilings">
-        <Item label="Spend ceiling" href={field('spend-ceiling')}>
+        <Item
+          label="Spend ceiling"
+          href={field(
+            unit === 'usd' ? 'spend-ceiling' : 'spend-ceiling-ai-credits',
+          )}
+        >
           {ceilingText(
-            settings.spendCeilingUsd,
-            cycleSpendUsd === null
+            ceilingsByUnit(
+              settings.spendCeilingUsd,
+              settings.spendCeilingAiCredits,
+            )[unit],
+            unit,
+            cycleSpend === null
               ? 'no Active Cycle'
-              : `${formatCost(cycleSpendUsd, 'usd')} spent this Cycle`,
+              : `${formatCost(cycleSpend, unit)} spent this Cycle`,
           )}
         </Item>
-        <Item label="Triage ceiling" href={field('triage-ceiling')}>
+        <Item
+          label="Triage ceiling"
+          href={field(
+            unit === 'usd' ? 'triage-ceiling' : 'triage-ceiling-ai-credits',
+          )}
+        >
           {ceilingText(
-            settings.triageCeilingUsd,
-            `${formatCost(triageSpendUsd, 'usd')} spent today`,
+            ceilingsByUnit(
+              settings.triageCeilingUsd,
+              settings.triageCeilingAiCredits,
+            )[unit],
+            unit,
+            `${formatCost(triageSpend, unit)} spent today`,
           )}
         </Item>
         <Item label="Machine cap and ceiling" href={settingsPath()}>

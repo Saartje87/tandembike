@@ -1,3 +1,4 @@
+import type { AgentChoices } from '../app/conversations/actions';
 import type { Conversation } from '../conversations/conversations';
 import { comparisonsOf, type MeasuredFootprint } from '../footprint/footprint';
 import {
@@ -61,8 +62,10 @@ export const projectAgentSettings = (
   },
   autopilot: false,
   spendCeilingUsd: null,
+  spendCeilingAiCredits: null,
   autoTriage: false,
   triageCeilingUsd: null,
+  triageCeilingAiCredits: null,
   autoMerge: false,
   defaultAgentKind: 'claude-code',
   ...overrides,
@@ -124,4 +127,19 @@ export const aFootprint = ({
   energyWh,
   co2eG,
   comparisons: comparisonsOf(energyWh, co2eG),
+});
+
+/**
+ * What the agent picker loads (T1368): Claude Code and Copilot, both able
+ * to run, the Project's default Claude Code, but for `overrides`.
+ */
+export const agentChoices = (
+  overrides: Partial<NonNullable<AgentChoices>> = {},
+): NonNullable<AgentChoices> => ({
+  defaultKind: 'claude-code',
+  kinds: [
+    { kind: 'claude-code', label: 'Claude Code', available: true },
+    { kind: 'copilot', label: 'Copilot', available: true },
+  ],
+  ...overrides,
 });

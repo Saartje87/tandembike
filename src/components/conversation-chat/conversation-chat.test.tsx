@@ -112,7 +112,7 @@ describe('ConversationChat', () => {
     expect(within(lines[3]).getByText('Went wrong')).toBeInTheDocument();
   });
 
-  it('shows the title, then intent, state, cost and starter as one meta line', () => {
+  it('shows the title, then intent, Agent kind, state, cost and starter as one meta line', () => {
     renderWithTheme(
       <ConversationChat
         title="T4 A Ticket"
@@ -122,7 +122,7 @@ describe('ConversationChat', () => {
 
     expect(screen.getByText('T4 A Ticket')).toBeInTheDocument();
     expect(
-      screen.getByText('Triage, working, $0.50, by you'),
+      screen.getByText('Triage, Claude Code, working, $0.50, by you'),
     ).toBeInTheDocument();
   });
 
@@ -146,6 +146,43 @@ describe('ConversationChat', () => {
     renderWithTheme(<ConversationChat title="T4" item={one({})} />);
 
     expect(screen.getByText('Footprint not measured')).toBeInTheDocument();
+  });
+
+  it('names the Agent kind of a Copilot Conversation, with its cost in AI credits', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({
+          intent: 'start',
+          state: 'idle',
+          agentKind: 'copilot',
+          costUnit: 'ai_credits',
+          cost: 12.8,
+        })}
+      />,
+    );
+
+    expect(
+      screen.getByText(/^Start, Copilot, .*, 12\.80 AI credits, by you$/),
+    ).toBeInTheDocument();
+  });
+
+  it('offers no Continue in terminal on a Copilot Conversation, which only Claude Code can continue', () => {
+    renderWithTheme(
+      <ConversationChat
+        title="T4 A Ticket"
+        item={one({
+          state: 'running',
+          sdkSessionId: 'copilot-1',
+          agentKind: 'copilot',
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Continue in terminal' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
   });
 
   it('names who started the Conversation in the meta line', () => {
@@ -851,7 +888,9 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
       />,
     );
 
-    expect(screen.getByText('Start, working, by Terminal')).toBeInTheDocument();
+    expect(
+      screen.getByText('Start, Claude Code, working, by Terminal'),
+    ).toBeInTheDocument();
     expect(screen.getByText('Running in a terminal')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
     expect(screen.queryByRole('textbox')).toBeNull();
@@ -867,7 +906,7 @@ describe('ConversationChat of a Terminal Conversation (T1237)', () => {
     );
 
     expect(
-      screen.getByText('Start, working, $0.75, by Terminal'),
+      screen.getByText('Start, Claude Code, working, $0.75, by Terminal'),
     ).toBeInTheDocument();
   });
 

@@ -14,6 +14,8 @@ export type MachineSettings = {
    * null for none (the Machine ceiling, ADR 0041).
    */
   dailySpendCeilingUsd: number | null;
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051). */
+  dailySpendCeilingAiCredits: number | null;
 };
 
 export type SetMachineSettingsInput = Partial<MachineSettings>;
@@ -23,7 +25,17 @@ export const defaultMaxConcurrentRuns = 3;
 const defaults: MachineSettings = {
   maxConcurrentRuns: defaultMaxConcurrentRuns,
   dailySpendCeilingUsd: null,
+  dailySpendCeilingAiCredits: null,
 };
+
+/** Why a ceiling is not a positive amount in its unit, or `undefined`. */
+const ceilingProblem = (
+  ceiling: number | null,
+  unitText: string,
+): string | undefined =>
+  ceiling === null || (Number.isFinite(ceiling) && ceiling > 0)
+    ? undefined
+    : `Enter an amount ${unitText} above 0.`;
 
 /** The single row of machine settings is stored under this id. */
 const rowId = 1;
@@ -37,6 +49,7 @@ export function createMachineSettings(
       .select({
         maxConcurrentRuns: machineSettings.maxConcurrentRuns,
         dailySpendCeilingUsd: machineSettings.dailySpendCeilingUsd,
+        dailySpendCeilingAiCredits: machineSettings.dailySpendCeilingAiCredits,
       })
       .from(machineSettings)
       .where(eq(machineSettings.id, rowId))
@@ -63,22 +76,38 @@ export function createMachineSettings(
         input.dailySpendCeilingUsd === undefined
           ? before.dailySpendCeilingUsd
           : input.dailySpendCeilingUsd;
+      const dailySpendCeilingAiCredits =
+        input.dailySpendCeilingAiCredits === undefined
+          ? before.dailySpendCeilingAiCredits
+          : input.dailySpendCeilingAiCredits;
       throwFieldErrors({
-        dailySpendCeilingUsd:
-          dailySpendCeilingUsd === null ||
-          (Number.isFinite(dailySpendCeilingUsd) && dailySpendCeilingUsd > 0)
-            ? undefined
-            : 'Enter an amount in dollars above 0.',
+        dailySpendCeilingUsd: ceilingProblem(
+          dailySpendCeilingUsd,
+          'in dollars',
+        ),
+        dailySpendCeilingAiCredits: ceilingProblem(
+          dailySpendCeilingAiCredits,
+          'of AI credits',
+        ),
         maxConcurrentRuns:
           Number.isInteger(maxConcurrentRuns) && maxConcurrentRuns >= 1
             ? undefined
             : 'Enter a whole number of at least 1.',
       });
       db.insert(machineSettings)
-        .values({ id: rowId, maxConcurrentRuns, dailySpendCeilingUsd })
+        .values({
+          id: rowId,
+          maxConcurrentRuns,
+          dailySpendCeilingUsd,
+          dailySpendCeilingAiCredits,
+        })
         .onConflictDoUpdate({
           target: machineSettings.id,
-          set: { maxConcurrentRuns, dailySpendCeilingUsd },
+          set: {
+            maxConcurrentRuns,
+            dailySpendCeilingUsd,
+            dailySpendCeilingAiCredits,
+          },
         })
         .run();
       changes.publish({ type: 'machine' });

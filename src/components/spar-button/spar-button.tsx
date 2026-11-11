@@ -15,6 +15,8 @@ import { useForm } from 'react-hook-form';
 import { callAction } from '../../app/lib/call-action';
 import { sparPath } from '../../app/lib/paths';
 import { startSpar } from '../../app/spars/actions';
+import type { AgentKind } from '../../tickets/agent-kind';
+import { AgentPicker } from '../agent-picker/agent-picker';
 import { FieldError } from '../field-error/field-error';
 
 export type SparButtonProps = {
@@ -45,17 +47,22 @@ export const SparButton: FC<SparButtonProps> = ({
     register,
     reset,
     setError,
-  } = useForm<{ topic: string }>({ defaultValues: { topic: '' } });
+    setValue,
+    watch,
+  } = useForm<{ topic: string; agentKind?: AgentKind }>({
+    defaultValues: { topic: '' },
+  });
   const topicReason = errors.topic?.message;
   const serverError = errors.root?.server?.message;
 
-  const submit = handleSubmit(async ({ topic }) => {
+  const submit = handleSubmit(async ({ topic, agentKind }) => {
     const result = await callAction(
       () =>
         startSpar({
           projectId,
           focusTicketNumber: focusTicketNumber ?? null,
           topic,
+          ...(agentKind === undefined ? {} : { agentKind }),
         }),
       'The Spar could not be started. Try again.',
     );
@@ -103,6 +110,11 @@ export const SparButton: FC<SparButtonProps> = ({
           aria-describedby={topicReason ? errorId : undefined}
         />
         <FieldError id={errorId} reason={topicReason} />
+        <AgentPicker
+          scope={{ projectId }}
+          value={watch('agentKind')}
+          onChange={(kind) => setValue('agentKind', kind)}
+        />
         {serverError && <Alert intent="danger">{serverError}</Alert>}
         <Inline gap={2}>
           <Button type="submit" size="small" loading={isSubmitting}>

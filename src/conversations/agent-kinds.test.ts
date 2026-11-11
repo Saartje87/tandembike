@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createTestConversations } from '../test/conversations';
 import { NotAllowedError } from '../tickets/errors';
+import type { RunnerAvailability } from './agent-runner';
 import { conversationActivity } from './conversation-activity';
 
 function setup() {
@@ -134,6 +135,129 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
     expect(world.conversations.list()).toEqual([]);
   });
 
+  it("waits for a runner's fresh answer before a start, a reply or the default selector", async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+    });
+    let known: RunnerAvailability = {
+      available: false,
+      reason: 'Checking whether Copilot can run…',
+    };
+    const copilot = world.runners.copilot;
+    copilot.availability = () => known;
+    copilot.checkAvailability = vi.fn(async () => {
+      known = { available: true };
+      return known;
+    });
+
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'What is left?',
+    });
+    copilot.runs[0].emit({ type: 'session', sessionId: 's1' });
+    copilot.runs[0].emit({ type: 'exit' });
+    known = { available: false, reason: 'Checking whether Copilot can run…' };
+    await world.conversations.reply(conversation.id, 'Go on', 'user');
+    known = { available: false, reason: 'Checking whether Copilot can run…' };
+    const kinds = await world.conversations.agentKinds();
+
+    expect(copilot.runs).toHaveLength(2);
+    expect(copilot.runs[1].options.resume).toBe('s1');
+    expect(kinds[1]).toEqual({
+      kind: 'copilot',
+      label: 'Copilot',
+      available: true,
+    });
+    expect(copilot.checkAvailability).toHaveBeenCalledTimes(3);
+  });
+
+  it('refuses to continue a Copilot Conversation in a terminal, which runs Claude Code only (T1369)', async () => {
+    const world = setup();
+    world.tickets.setProjectAgentSettings(world.project.id, {
+      defaultAgentKind: 'copilot',
+    });
+    const conversation = await world.conversations.start({
+      startedBy: 'user',
+      ticketNumber: world.ticket.number,
+      intent: 'ask',
+      prompt: 'What is left?',
+    });
+    world.runners.copilot.runs[0].emit({ type: 'session', sessionId: 's1' });
+
+    await expect(
+      world.conversations.handOffToTerminal(conversation.id),
+    ).rejects.toEqual(
+      new NotAllowedError(
+        'Only a Claude Code Conversation can continue in a terminal.',
+      ),
+    );
+  });
+
+  describe('a picked Agent kind on a manual start (T1368)', () => {
+    it("starts the User's Conversation on the kind they picked, not the Project default", async () => {
+      const world = setup();
+
+      const conversation = await world.conversations.start({
+        startedBy: 'user',
+        ticketNumber: world.ticket.number,
+        intent: 'start',
+        stage: { stage: 'start' },
+        agentKind: 'copilot',
+      });
+
+      expect(conversation.agentKind).toBe('copilot');
+      expect(world.runners.copilot.runs).toHaveLength(1);
+      expect(world.runners['claude-code'].runs).toHaveLength(0);
+    });
+
+    it('keeps Autopilot on the Project default, whatever kind it is given', async () => {
+      const world = setup();
+
+      const conversation = await world.conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: world.ticket.number,
+        intent: 'triage',
+        prompt: '/tandembike:triage T1',
+        agentKind: 'copilot',
+      });
+
+      expect(conversation.agentKind).toBe('claude-code');
+    });
+
+    it('refuses a picked kind that cannot run, with its reason', async () => {
+      const world = setup();
+      world.runners.copilot.availability = () => ({
+        available: false,
+        reason: 'Copilot is not signed in.',
+      });
+
+      await expect(
+        world.conversations.start({
+          startedBy: 'user',
+          ticketNumber: world.ticket.number,
+          intent: 'ask',
+          prompt: 'Hi',
+          agentKind: 'copilot',
+        }),
+      ).rejects.toEqual(new NotAllowedError('Copilot is not signed in.'));
+    });
+
+    it('starts a Plan and a Spar on the picked kind', async () => {
+      const world = setup();
+
+      const plan = await world.conversations.startPlan({
+        projectId: world.project.id,
+        goal: 'Ship it',
+        agentKind: 'copilot',
+      });
+
+      expect(plan.agentKind).toBe('copilot');
+    });
+  });
+
   it('refuses a start on a kind with no runner, naming it', async () => {
     const world = createTestConversations(undefined, {
       kinds: ['claude-code'],
@@ -154,12 +278,12 @@ describe('The Agent kind of a Conversation (ADR 0051)', () => {
     ).rejects.toEqual(new NotAllowedError('Copilot cannot run here yet.'));
   });
 
-  it('lists each Agent kind with whether it can run, for the default selector', () => {
+  it('lists each Agent kind with whether it can run, for the default selector', async () => {
     const world = createTestConversations(undefined, {
       kinds: ['claude-code'],
     });
 
-    expect(world.conversations.agentKinds()).toEqual([
+    expect(await world.conversations.agentKinds()).toEqual([
       { kind: 'claude-code', label: 'Claude Code', available: true },
       {
         kind: 'copilot',

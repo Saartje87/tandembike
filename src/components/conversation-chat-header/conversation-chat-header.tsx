@@ -9,6 +9,7 @@ import { formatCost } from '../../app/lib/format-cost';
 import { isTerminal } from '../../conversations/conversation-state';
 import type { Conversation } from '../../conversations/conversations';
 import type { Footprint } from '../../footprint/footprint';
+import { agentKindLabels } from '../../tickets/agent-kind';
 import {
   hasRun,
   intentNames,
@@ -27,10 +28,10 @@ export type ConversationChatHeaderProps = {
 };
 
 /**
- * The chat's header, one row: its Ticket or Project, then intent, state, cost
- * and starter in muted text, both cut short with an ellipsis, then the
- * Footprint (ADR 0050), and Continue in terminal and Stop at the end (a
- * Terminal Conversation has no Stop). The
+ * The chat's header, one row: its Ticket or Project, then intent, Agent kind,
+ * state, cost and starter in muted text, both cut short with an ellipsis,
+ * then the Footprint (ADR 0050), and Continue in terminal and Stop at the end
+ * (a Terminal Conversation has no Stop). The
  * worktree, the Copied status and a refusal show below it, when present.
  */
 export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
@@ -42,9 +43,12 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
   const [error, setError] = useState<string>();
   const [copied, setCopied] = useState(false);
   const resumeCommand = `tandembike resume ${conversation.id}`;
-  // Continue in terminal hands a UI Conversation's SDK session to `claude`.
+  // Continue in terminal hands a UI Conversation's SDK session to `claude`,
+  // so only a Claude Code one (ADR 0051).
   const canContinue =
-    !isTerminal(conversation) && conversation.sdkSessionId !== null;
+    !isTerminal(conversation) &&
+    conversation.agentKind === 'claude-code' &&
+    conversation.sdkSessionId !== null;
 
   return (
     <Stack gap={1}>
@@ -67,6 +71,7 @@ export const ConversationChatHeader: FC<ConversationChatHeaderProps> = ({
           <Text fontSize="small" color="muted" truncate>
             {[
               intentNames[conversation.intent],
+              agentKindLabels[conversation.agentKind],
               stateNames[conversation.state],
               // Tandembike sees no cost of an interactive session, but keeps
               // what a UI run spent before the hand-off (ADR 0039).
