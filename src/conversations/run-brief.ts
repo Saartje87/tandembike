@@ -73,15 +73,8 @@ type AgentBriefLines = {
   ownWorktree: string;
   /** Setup's first check: the agent loads the repository's instructions. */
   instructionsCheck: string;
-};
-
-/** The shared wording, for a kind that has no lines of its own yet (T601). */
-const anyAgent: AgentBriefLines = {
-  askAlso: '',
-  ownWorktree:
-    "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
-  instructionsCheck:
-    'The repository has instructions this agent loads, such as AGENTS.md.',
+  /** Setup's check that the agent's own allowlist covers the Tandembike tools, if it has one. */
+  allowlistCheck: string | null;
 };
 
 const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
@@ -91,15 +84,26 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
       "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     instructionsCheck:
       "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
+    allowlistCheck: 'The permission allowlist covers the Tandembike MCP tools.',
   },
-  copilot: anyAgent,
+  // Copilot has no worktree tool and no AskUserQuestion; it loads AGENTS.md
+  // or .github/copilot-instructions.md, and has no repository allowlist.
+  copilot: {
+    askAlso: '',
+    ownWorktree:
+      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`. Then work only inside it. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
+    instructionsCheck:
+      "An AGENTS.md or a .github/copilot-instructions.md exists and holds the repository's instructions.",
+    allowlistCheck: null,
+  },
 };
 
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
+  const own = agentBriefLines[brief.agentKind];
   const items = [
-    agentBriefLines[brief.agentKind].instructionsCheck,
-    'The permission allowlist covers the Tandembike MCP tools.',
+    own.instructionsCheck,
+    ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
   ];
   items.push(
     `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
