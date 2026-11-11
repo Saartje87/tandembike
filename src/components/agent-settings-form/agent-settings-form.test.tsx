@@ -217,6 +217,80 @@ describe('AgentSettingsForm', () => {
     );
   });
 
+  describe('AI-credit ceilings (ADR 0051)', () => {
+    const withCopilot = [
+      { kind: 'claude-code', label: 'Claude Code', available: true },
+      { kind: 'copilot', label: 'Copilot', available: true },
+    ] as const;
+
+    it('shows no AI-credit ceilings while Copilot cannot run and is not the default', () => {
+      renderWithTheme(<AgentSettingsForm projectId={3} settings={set} />);
+
+      expect(
+        screen.queryByLabelText('Spend ceiling (AI credits)'),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText('Triage ceiling (AI credits)'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('shows the saved credit ceilings next to the dollar ones once Copilot can run, and saves them', async () => {
+      renderWithTheme(
+        <AgentSettingsForm
+          projectId={3}
+          settings={{ ...set, spendCeilingAiCredits: 300 }}
+          agentKinds={[...withCopilot]}
+        />,
+      );
+
+      expect(screen.getByLabelText('Spend ceiling (AI credits)')).toHaveValue(
+        300,
+      );
+      await userEvent.type(
+        screen.getByLabelText('Triage ceiling (AI credits)'),
+        '40',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() =>
+        expect(setProjectAgentSettings).toHaveBeenCalledWith(
+          expect.objectContaining({
+            spendCeilingAiCredits: 300,
+            triageCeilingAiCredits: 40,
+          }),
+        ),
+      );
+    });
+
+    it('shows a refusal under the credit ceiling it names', async () => {
+      vi.mocked(setProjectAgentSettings).mockResolvedValue({
+        ok: false,
+        error: 'Set a Spend ceiling in AI credits before turning on Autopilot.',
+        fieldErrors: {
+          spendCeilingAiCredits:
+            'Set a Spend ceiling in AI credits before turning on Autopilot.',
+        },
+      });
+      renderWithTheme(
+        <AgentSettingsForm
+          projectId={3}
+          settings={{ ...set, defaultAgentKind: 'copilot' }}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      expect(
+        await screen.findByText(
+          'Set a Spend ceiling in AI credits before turning on Autopilot.',
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByLabelText('Spend ceiling (AI credits)'),
+      ).toHaveAttribute('aria-invalid', 'true');
+    });
+  });
+
   it('shows the saved Check command and saves an edit of it', async () => {
     renderWithTheme(
       <AgentSettingsForm

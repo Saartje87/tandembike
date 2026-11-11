@@ -13,6 +13,7 @@ import {
   type ProjectAgentCommands,
   playbookCommand,
 } from '../../tickets/agent-commands';
+import { type CostUnit, ceilingsByUnit } from '../../tickets/cost-unit';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { AppLink } from '../app-link/app-link';
 
@@ -44,9 +45,14 @@ export type SetupPanelProps = {
   settings: ProjectAgentSettings;
   commands: ProjectAgentCommands;
   /** What Autopilot has spent on the Active Cycle, or null without one. */
-  cycleSpendUsd: number | null;
+  cycleSpend: number | null;
   /** What Auto-triage has spent today. */
-  triageSpendUsd: number;
+  triageSpend: number;
+  /**
+   * The unit of the agent Autopilot starts, the Project's default (ADR
+   * 0051): the spend and the ceilings shown are in it.
+   */
+  unit: CostUnit;
 };
 
 type ItemProps = {
@@ -80,22 +86,24 @@ const Group: FC<GroupProps> = ({ title, children }) => (
   </Stack>
 );
 
-const ceilingText = (ceiling: number | null, spent: string) =>
+const ceilingText = (ceiling: number | null, unit: CostUnit, spent: string) =>
   ceiling === null
     ? `None set · ${spent}`
-    : `${formatCost(ceiling, 'usd')} · ${spent}`;
+    : `${formatCost(ceiling, unit)} · ${spent}`;
 
 /**
  * Flow's Setup (ADR 0044): what this Project runs at each Stage, its Check
  * and Prepare commands, run mode and model, and its ceilings with their
- * spend, read-only, each linking to its field on Settings.
+ * spend in the default agent's unit, read-only, each linking to its field on
+ * Settings.
  */
 export const SetupPanel: FC<SetupPanelProps> = ({
   projectId,
   settings,
   commands,
-  cycleSpendUsd,
-  triageSpendUsd,
+  cycleSpend,
+  triageSpend,
+  unit,
 }) => {
   const field = (name: SettingsField) =>
     projectSettingsFieldPath(projectId, name);
@@ -149,18 +157,36 @@ export const SetupPanel: FC<SetupPanelProps> = ({
         </Item>
       </Group>
       <Group title="Ceilings">
-        <Item label="Spend ceiling" href={field('spend-ceiling')}>
+        <Item
+          label="Spend ceiling"
+          href={field(
+            unit === 'usd' ? 'spend-ceiling' : 'spend-ceiling-ai-credits',
+          )}
+        >
           {ceilingText(
-            settings.spendCeilingUsd,
-            cycleSpendUsd === null
+            ceilingsByUnit(
+              settings.spendCeilingUsd,
+              settings.spendCeilingAiCredits,
+            )[unit],
+            unit,
+            cycleSpend === null
               ? 'no Active Cycle'
-              : `${formatCost(cycleSpendUsd, 'usd')} spent this Cycle`,
+              : `${formatCost(cycleSpend, unit)} spent this Cycle`,
           )}
         </Item>
-        <Item label="Triage ceiling" href={field('triage-ceiling')}>
+        <Item
+          label="Triage ceiling"
+          href={field(
+            unit === 'usd' ? 'triage-ceiling' : 'triage-ceiling-ai-credits',
+          )}
+        >
           {ceilingText(
-            settings.triageCeilingUsd,
-            `${formatCost(triageSpendUsd, 'usd')} spent today`,
+            ceilingsByUnit(
+              settings.triageCeilingUsd,
+              settings.triageCeilingAiCredits,
+            )[unit],
+            unit,
+            `${formatCost(triageSpend, unit)} spent today`,
           )}
         </Item>
         <Item label="Machine cap and ceiling" href={settingsPath()}>

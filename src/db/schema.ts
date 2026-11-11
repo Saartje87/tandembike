@@ -93,12 +93,16 @@ export const projects = sqliteTable('projects', {
   autopilot: integer('autopilot', { mode: 'boolean' }).notNull().default(false),
   /** What Autopilot may spend on one Cycle, in dollars; null while unset. */
   spendCeilingUsd: real('spend_ceiling_usd'),
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051); null while unset. */
+  spendCeilingAiCredits: real('spend_ceiling_ai_credits'),
   /** Whether Autopilot starts Triage runs on Triage-eligible Tickets (ADR 0040). */
   autoTriage: integer('auto_triage', { mode: 'boolean' })
     .notNull()
     .default(false),
   /** What Auto-triage may spend per local calendar day, in dollars; null while unset. */
   triageCeilingUsd: real('triage_ceiling_usd'),
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051); null while unset. */
+  triageCeilingAiCredits: real('triage_ceiling_ai_credits'),
   /** Whether the run that opened a PR merges it itself (ADR 0043). */
   autoMerge: integer('auto_merge', { mode: 'boolean' })
     .notNull()
@@ -640,6 +644,8 @@ export const machineSettings = sqliteTable('machine_settings', {
   maxConcurrentRuns: integer('max_concurrent_runs').notNull().default(3),
   /** Autopilot's most spend per local day across all Projects; null is none. */
   dailySpendCeilingUsd: real('daily_spend_ceiling_usd'),
+  /** The same in GitHub AI credits, for Copilot runs (ADR 0051); null is none. */
+  dailySpendCeilingAiCredits: real('daily_spend_ceiling_ai_credits'),
 });
 
 /**

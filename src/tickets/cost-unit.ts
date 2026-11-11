@@ -1,3 +1,5 @@
+import type { AgentKind } from './agent-kind';
+
 /**
  * The units Agent kinds report cost in (ADR 0051): dollars for Claude Code,
  * GitHub AI credits for Copilot. Nothing converts or totals across them.
@@ -9,11 +11,17 @@ export type CostUnit = (typeof costUnits)[number];
 /** A ceiling per unit; a unit without one has no ceiling. */
 export type CeilingsByUnit = Record<CostUnit, number | null>;
 
+/** A ceiling setting kept per unit, from its dollar and its AI-credit field. */
+export const ceilingsByUnit = (
+  usd: number | null,
+  aiCredits: number | null,
+): CeilingsByUnit => ({ usd, ai_credits: aiCredits });
+
 /**
- * The ceilings kept per unit: the existing settings are the dollar ones, and
- * no other unit has a ceiling until one is added (T602).
+ * The unit each Agent kind reports cost in (ADR 0051), for the settings that
+ * check a ceiling in the default agent's unit; each runner declares the same.
  */
-export const dollarCeiling = (usd: number | null): CeilingsByUnit => ({
-  usd,
-  ai_credits: null,
-});
+export const agentCostUnits: Record<AgentKind, CostUnit> = {
+  'claude-code': 'usd',
+  copilot: 'ai_credits',
+};

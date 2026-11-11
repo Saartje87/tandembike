@@ -157,6 +157,18 @@ function agentModelsInput(
   );
 }
 
+/** A ceiling field as a number or null, or nothing when it was left out. */
+function nullableNumber<Field extends string>(
+  field: Field,
+  value: number | null | undefined,
+): { [Key in Field]?: number | null } {
+  return value === undefined
+    ? {}
+    : ({ [field]: value === null ? null : Number(value) } as {
+        [Key in Field]?: number | null;
+      });
+}
+
 /**
  * Sets a Project's repository path, Parallel runs, default Agent kind, agent
  * mode, run mode and run model for the UI. Only a Server Action does this, never an MCP tool
@@ -186,14 +198,11 @@ export async function setProjectAgentSettings(
       ...(settings.autopilot === undefined
         ? {}
         : { autopilot: Boolean(settings.autopilot) }),
-      ...(settings.spendCeilingUsd === undefined
-        ? {}
-        : {
-            spendCeilingUsd:
-              settings.spendCeilingUsd === null
-                ? null
-                : Number(settings.spendCeilingUsd),
-          }),
+      ...nullableNumber('spendCeilingUsd', settings.spendCeilingUsd),
+      ...nullableNumber(
+        'spendCeilingAiCredits',
+        settings.spendCeilingAiCredits,
+      ),
       ...(settings.autoTriage === undefined
         ? {}
         : { autoTriage: Boolean(settings.autoTriage) }),
@@ -203,14 +212,11 @@ export async function setProjectAgentSettings(
       ...(settings.defaultAgentKind === undefined
         ? {}
         : { defaultAgentKind: settings.defaultAgentKind }),
-      ...(settings.triageCeilingUsd === undefined
-        ? {}
-        : {
-            triageCeilingUsd:
-              settings.triageCeilingUsd === null
-                ? null
-                : Number(settings.triageCeilingUsd),
-          }),
+      ...nullableNumber('triageCeilingUsd', settings.triageCeilingUsd),
+      ...nullableNumber(
+        'triageCeilingAiCredits',
+        settings.triageCeilingAiCredits,
+      ),
     });
     return {};
   });

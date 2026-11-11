@@ -16,6 +16,7 @@ import { userAction } from '../lib/user-action';
 export async function saveMachineSettings(input: {
   maxConcurrentRuns: number;
   dailySpendCeilingUsd: number | null;
+  dailySpendCeilingAiCredits?: number | null;
 }): Promise<ActionResult<{ settings: MachineSettings }>> {
   return userAction((tickets) => {
     const settings = tickets.setMachineSettings({
@@ -25,6 +26,14 @@ export async function saveMachineSettings(input: {
         input?.dailySpendCeilingUsd === undefined
           ? null
           : Number(input.dailySpendCeilingUsd),
+      ...(input?.dailySpendCeilingAiCredits === undefined
+        ? {}
+        : {
+            dailySpendCeilingAiCredits:
+              input.dailySpendCeilingAiCredits === null
+                ? null
+                : Number(input.dailySpendCeilingAiCredits),
+          }),
     });
     return { settings };
   });

@@ -26,7 +26,7 @@ import {
   agentKinds,
 } from '../tickets/agent-kind';
 import type { ChangeChannel } from '../tickets/changes';
-import { type CostUnit, dollarCeiling } from '../tickets/cost-unit';
+import { type CostUnit, ceilingsByUnit } from '../tickets/cost-unit';
 import {
   NotAllowedError,
   NotFoundError,
@@ -1962,8 +1962,10 @@ export function createConversations({
      * ceiling is kept in that unit.
      */
     machineBudget(now: Date = clock(), unit: CostUnit = 'usd'): Budget | null {
-      const ceiling = dollarCeiling(
-        tickets.getMachineSettings().dailySpendCeilingUsd,
+      const machine = tickets.getMachineSettings();
+      const ceiling = ceilingsByUnit(
+        machine.dailySpendCeilingUsd,
+        machine.dailySpendCeilingAiCredits,
       )[unit];
       if (ceiling === null) {
         return null;
@@ -2072,8 +2074,10 @@ export function createConversations({
      */
     spendBudget(input: { projectId: number; cycleId: number }): Budget | null {
       const unit = defaultUnitOf(input.projectId);
-      const ceiling = dollarCeiling(
-        tickets.getProjectAgentSettings(input.projectId).spendCeilingUsd,
+      const settings = tickets.getProjectAgentSettings(input.projectId);
+      const ceiling = ceilingsByUnit(
+        settings.spendCeilingUsd,
+        settings.spendCeilingAiCredits,
       )[unit];
       if (ceiling === null) {
         return null;
@@ -2091,7 +2095,10 @@ export function createConversations({
     triageBudget(projectId: number, now: Date = clock()): Budget | null {
       const settings = tickets.getProjectAgentSettings(projectId);
       const unit = defaultUnitOf(projectId);
-      const ceiling = dollarCeiling(settings.triageCeilingUsd)[unit];
+      const ceiling = ceilingsByUnit(
+        settings.triageCeilingUsd,
+        settings.triageCeilingAiCredits,
+      )[unit];
       if (!settings.autoTriage || ceiling === null) {
         return null;
       }

@@ -64,10 +64,19 @@ type AgentSettingsValues = {
   triageModel: string;
   autopilot: boolean;
   spendCeiling: string;
+  spendCeilingAiCredits: string;
   autoTriage: boolean;
   triageCeiling: string;
+  triageCeilingAiCredits: string;
   autoMerge: boolean;
 };
+
+/** A ceiling as the form's text, blank for none. */
+const ceilingText = (ceiling: number | null) =>
+  ceiling === null ? '' : String(ceiling);
+
+/** A ceiling field's text as the setting, null when blank. */
+const ceilingOf = (text: string) => (text.trim() === '' ? null : Number(text));
 
 /** The form field each field of a refusal names. */
 const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
@@ -80,7 +89,9 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   'models.claude-code.runModel': 'runModel',
   'models.claude-code.triageModel': 'triageModel',
   spendCeilingUsd: 'spendCeiling',
+  spendCeilingAiCredits: 'spendCeilingAiCredits',
   triageCeilingUsd: 'triageCeiling',
+  triageCeilingAiCredits: 'triageCeilingAiCredits',
 };
 
 /**
@@ -136,15 +147,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       runModel: settings.models['claude-code'].runModel ?? '',
       triageModel: settings.models['claude-code'].triageModel ?? '',
       autopilot: settings.autopilot,
-      spendCeiling:
-        settings.spendCeilingUsd === null
-          ? ''
-          : String(settings.spendCeilingUsd),
+      spendCeiling: ceilingText(settings.spendCeilingUsd),
+      spendCeilingAiCredits: ceilingText(settings.spendCeilingAiCredits),
       autoTriage: settings.autoTriage,
-      triageCeiling:
-        settings.triageCeilingUsd === null
-          ? ''
-          : String(settings.triageCeilingUsd),
+      triageCeiling: ceilingText(settings.triageCeilingUsd),
+      triageCeilingAiCredits: ceilingText(settings.triageCeilingAiCredits),
       autoMerge: settings.autoMerge,
     },
   });
@@ -174,6 +181,19 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const triageCeilingId = useId();
   const triageCeilingErrorId = useId();
   const triageCeilingError = errors.triageCeiling?.message;
+  // AI-credit ceilings count Copilot's runs (ADR 0051): shown once Copilot
+  // can run here, is the default, or has a ceiling kept.
+  const showCredits =
+    agentKinds.some(({ kind, available }) => kind === 'copilot' && available) ||
+    settings.defaultAgentKind === 'copilot' ||
+    settings.spendCeilingAiCredits !== null ||
+    settings.triageCeilingAiCredits !== null;
+  const creditsId = useId();
+  const creditsErrorId = useId();
+  const creditsError = errors.spendCeilingAiCredits?.message;
+  const triageCreditsId = useId();
+  const triageCreditsErrorId = useId();
+  const triageCreditsError = errors.triageCeilingAiCredits?.message;
   const serverError = errors.root?.server?.message;
 
   /** Re-runs detection for the path in the field and offers its candidates. */
@@ -222,15 +242,17 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             },
           },
           autopilot: values.autopilot,
-          spendCeilingUsd:
-            values.spendCeiling.trim() === ''
-              ? null
-              : Number(values.spendCeiling),
+          spendCeilingUsd: ceilingOf(values.spendCeiling),
+          ...(showCredits
+            ? {
+                spendCeilingAiCredits: ceilingOf(values.spendCeilingAiCredits),
+                triageCeilingAiCredits: ceilingOf(
+                  values.triageCeilingAiCredits,
+                ),
+              }
+            : {}),
           autoTriage: values.autoTriage,
-          triageCeilingUsd:
-            values.triageCeiling.trim() === ''
-              ? null
-              : Number(values.triageCeiling),
+          triageCeilingUsd: ceilingOf(values.triageCeiling),
           autoMerge: values.autoMerge,
           defaultAgentKind: values.defaultAgentKind,
         }),
@@ -475,6 +497,27 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             />
             <FieldError id={ceilingErrorId} reason={ceilingError} />
           </Stack>
+          {showCredits && (
+            <Stack gap={1} id="spend-ceiling-ai-credits">
+              <Label htmlFor={creditsId}>Spend ceiling (AI credits)</Label>
+              <TextInput
+                {...register('spendCeilingAiCredits')}
+                id={creditsId}
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                placeholder="No ceiling"
+                aria-invalid={creditsError ? true : undefined}
+                aria-describedby={creditsError ? creditsErrorId : undefined}
+              />
+              <Text tag="p" fontSize="small" color="muted">
+                The same for Copilot runs, in GitHub AI credits. Autopilot
+                checks the ceiling in the unit of the default agent.
+              </Text>
+              <FieldError id={creditsErrorId} reason={creditsError} />
+            </Stack>
+          )}
           <Stack gap={1}>
             <Inline gap={2} alignY="center">
               <Switch {...register('autoMerge')} id={autoMergeId} />
@@ -521,6 +564,30 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
             </Text>
             <FieldError id={triageCeilingErrorId} reason={triageCeilingError} />
           </Stack>
+          {showCredits && (
+            <Stack gap={1} id="triage-ceiling-ai-credits">
+              <Label htmlFor={triageCreditsId}>
+                Triage ceiling (AI credits)
+              </Label>
+              <TextInput
+                {...register('triageCeilingAiCredits')}
+                id={triageCreditsId}
+                type="number"
+                min={0}
+                step="any"
+                inputMode="decimal"
+                placeholder="No ceiling"
+                aria-invalid={triageCreditsError ? true : undefined}
+                aria-describedby={
+                  triageCreditsError ? triageCreditsErrorId : undefined
+                }
+              />
+              <FieldError
+                id={triageCreditsErrorId}
+                reason={triageCreditsError}
+              />
+            </Stack>
+          )}
           {serverError && <Alert intent="danger">{serverError}</Alert>}
           <div>
             <Button type="submit" size="small" loading={isSubmitting}>

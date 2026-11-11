@@ -648,6 +648,17 @@ describe('Autopilot startup', () => {
     await over.autopilot.idle();
     expect(over.stateOf(over.mine.number)).toBe('interrupted');
 
+    // A credit Machine ceiling with room does not let a Claude Code Project
+    // over its dollar one resume (ADR 0051).
+    const overMachine = await restarted({ spent: 2 });
+    overMachine.tickets.setMachineSettings({
+      dailySpendCeilingUsd: 1,
+      dailySpendCeilingAiCredits: 100,
+    });
+    overMachine.autopilot.start();
+    await overMachine.autopilot.idle();
+    expect(overMachine.stateOf(overMachine.mine.number)).toBe('interrupted');
+
     const noCycle = await restarted();
     noCycle.tickets.archiveCycle(noCycle.cycle.id);
     noCycle.autopilot.start();
@@ -1668,6 +1679,79 @@ describe('explain (ADR 0044)', () => {
     });
   });
 
+  describe('AI-credit ceilings on Copilot (ADR 0051)', () => {
+    const onCopilot = (world: ReturnType<typeof setup>) => {
+      world.runners.copilot.capabilities = {
+        ...world.runners.copilot.capabilities,
+        costUnit: 'ai_credits',
+      };
+      world.tickets.setProjectAgentSettings(world.project.id, {
+        defaultAgentKind: 'copilot',
+        spendCeilingAiCredits: 300,
+      });
+    };
+
+    it("starts a Copilot run against the Spend ceiling in AI credits, and pauses once the Cycle's credits reach it", async () => {
+      const world = setup({ parallel: 3 });
+      onCopilot(world);
+      world.tickets.setProjectAgentSettings(world.project.id, {
+        spendCeilingAiCredits: 10,
+      });
+      const a = world.ready('A');
+      world.ready('B');
+      world.tickets.startCycle(world.cycle.id);
+      await world.autopilot.evaluate();
+      world.runners.copilot.runs[0].emit({ type: 'turn', cost: 12 });
+      world.runners.copilot.runs[1].emit({ type: 'turn', cost: 0 });
+      world.ready('C');
+
+      expect(world.autopilot.explain(world.project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [
+          {
+            type: 'overSpendCeiling',
+            spend: 12,
+            ceiling: 10,
+            unit: 'ai_credits',
+          },
+        ],
+      });
+      await world.autopilot.evaluate();
+      expect(world.started()).toHaveLength(2);
+      expect(world.started()[0]).toBe(a.number);
+    });
+
+    it('pauses a Copilot Project on the Machine ceiling in AI credits, while a dollar ceiling alone does not', async () => {
+      const world = setup({ parallel: 3 });
+      onCopilot(world);
+      world.tickets.setMachineSettings({ dailySpendCeilingUsd: 1 });
+      world.ready('A');
+      world.tickets.startCycle(world.cycle.id);
+      await world.autopilot.evaluate();
+      world.runners.copilot.runs[0].emit({ type: 'turn', cost: 5 });
+      world.ready('B');
+      await world.autopilot.evaluate();
+      expect(world.started()).toHaveLength(2);
+
+      world.tickets.setMachineSettings({ dailySpendCeilingAiCredits: 4 });
+      world.ready('C');
+
+      expect(world.autopilot.explain(world.project.id).autopilot).toEqual({
+        state: 'paused',
+        reasons: [
+          {
+            type: 'overMachineCeiling',
+            spend: 5,
+            ceiling: 4,
+            unit: 'ai_credits',
+          },
+        ],
+      });
+      await world.autopilot.evaluate();
+      expect(world.started()).toHaveLength(2);
+    });
+  });
+
   describe('Auto-triage Pause reasons', () => {
     it('names the switch and the Triage ceiling while off', () => {
       const { project, autopilot } = setup();
@@ -1687,6 +1771,9 @@ describe('explain (ADR 0044)', () => {
       tickets.setProjectAgentSettings(project.id, {
         autoTriage: true,
         triageCeilingUsd: 5,
+      });
+      // Changing the default agent is never refused (ADR 0051).
+      tickets.setProjectAgentSettings(project.id, {
         defaultAgentKind: 'copilot',
       });
 

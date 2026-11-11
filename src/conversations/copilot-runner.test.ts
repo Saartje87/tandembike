@@ -361,6 +361,31 @@ describe('The Copilot runner', () => {
       expect(events).toEqual([{ type: 'turn', cost: 0 }]);
     });
 
+    it("ends each turn with the run's AI credits so far, from Copilot's nano-AIU", async () => {
+      const { session, events } = await emitting();
+
+      session.emit('assistant.usage', {
+        model: 'claude-sonnet-5.5',
+        copilotUsage: { totalNanoAiu: 4_500_000_000 },
+      });
+      session.emit('assistant.usage', {
+        model: 'claude-sonnet-5.5',
+        copilotUsage: { totalNanoAiu: 3_300_000_000 },
+      });
+      session.emit('session.idle', {});
+      session.emit('assistant.usage', { model: 'gpt-5.5' });
+      session.emit('assistant.usage', {
+        model: 'gpt-5.5',
+        copilotUsage: { totalNanoAiu: 5_000_000_000 },
+      });
+      session.emit('session.idle', {});
+
+      expect(events).toEqual([
+        { type: 'turn', cost: 7.8 },
+        { type: 'turn', cost: 12.8 },
+      ]);
+    });
+
     it('ends the turn with the error Copilot reported, transient for a rate limit or server error', async () => {
       const { session, events } = await emitting();
 

@@ -23,7 +23,10 @@ describe('ProjectSwitch', () => {
         projectId={3}
         setting="autoTriage"
         checked={false}
-        ceiling={{ usd: 2, settingsHref: '/project/3/settings#triage-ceiling' }}
+        ceiling={{
+          amount: 2,
+          settingsHref: '/project/3/settings#triage-ceiling',
+        }}
       />,
     );
 
@@ -55,7 +58,7 @@ describe('ProjectSwitch', () => {
         setting="autopilot"
         checked={false}
         ceiling={{
-          usd: null,
+          amount: null,
           settingsHref: '/project/3/settings#spend-ceiling',
         }}
       />,

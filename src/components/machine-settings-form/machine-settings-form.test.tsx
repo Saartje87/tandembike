@@ -17,7 +17,11 @@ describe('MachineSettingsForm', () => {
   it('shows the saved cap', () => {
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
 
@@ -27,11 +31,19 @@ describe('MachineSettingsForm', () => {
   it('saves the cap the User types', async () => {
     vi.mocked(saveMachineSettings).mockResolvedValue({
       ok: true,
-      settings: { maxConcurrentRuns: 5, dailySpendCeilingUsd: null },
+      settings: {
+        maxConcurrentRuns: 5,
+        dailySpendCeilingUsd: null,
+        dailySpendCeilingAiCredits: null,
+      },
     });
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
     const field = screen.getByLabelText('Max concurrent runs');
@@ -44,6 +56,7 @@ describe('MachineSettingsForm', () => {
       expect(saveMachineSettings).toHaveBeenCalledWith({
         maxConcurrentRuns: 5,
         dailySpendCeilingUsd: null,
+        dailySpendCeilingAiCredits: null,
       }),
     );
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
@@ -57,7 +70,11 @@ describe('MachineSettingsForm', () => {
     });
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
     const field = screen.getByLabelText('Max concurrent runs');
@@ -75,11 +92,19 @@ describe('MachineSettingsForm', () => {
   it('shows and saves the daily spend ceiling, and clears it when emptied', async () => {
     vi.mocked(saveMachineSettings).mockResolvedValue({
       ok: true,
-      settings: { maxConcurrentRuns: 3, dailySpendCeilingUsd: 20 },
+      settings: {
+        maxConcurrentRuns: 3,
+        dailySpendCeilingUsd: 20,
+        dailySpendCeilingAiCredits: null,
+      },
     });
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: 12.5 }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: 12.5,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
     const field = screen.getByLabelText('Daily spend ceiling (USD)');
@@ -92,6 +117,7 @@ describe('MachineSettingsForm', () => {
       expect(saveMachineSettings).toHaveBeenLastCalledWith({
         maxConcurrentRuns: 3,
         dailySpendCeilingUsd: 20,
+        dailySpendCeilingAiCredits: null,
       }),
     );
 
@@ -101,6 +127,7 @@ describe('MachineSettingsForm', () => {
       expect(saveMachineSettings).toHaveBeenLastCalledWith({
         maxConcurrentRuns: 3,
         dailySpendCeilingUsd: null,
+        dailySpendCeilingAiCredits: null,
       }),
     );
   });
@@ -115,7 +142,11 @@ describe('MachineSettingsForm', () => {
     });
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
 
@@ -129,13 +160,79 @@ describe('MachineSettingsForm', () => {
       await screen.findByText('Enter an amount in dollars above 0.'),
     ).toBeInTheDocument();
   });
+  it('shows and saves the daily spend ceiling in AI credits beside the dollar one (ADR 0051)', async () => {
+    vi.mocked(saveMachineSettings).mockResolvedValue({
+      ok: true,
+      settings: {
+        maxConcurrentRuns: 3,
+        dailySpendCeilingUsd: null,
+        dailySpendCeilingAiCredits: 500,
+      },
+    });
+    renderWithTheme(
+      <MachineSettingsForm
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: 250,
+        }}
+      />,
+    );
+    const field = screen.getByLabelText('Daily spend ceiling (AI credits)');
+    expect(field).toHaveValue(250);
+
+    await userEvent.clear(field);
+    await userEvent.type(field, '500');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(saveMachineSettings).toHaveBeenLastCalledWith({
+        maxConcurrentRuns: 3,
+        dailySpendCeilingUsd: null,
+        dailySpendCeilingAiCredits: 500,
+      }),
+    );
+  });
+
+  it('shows a credit ceiling refusal under its field', async () => {
+    vi.mocked(saveMachineSettings).mockResolvedValue({
+      ok: false,
+      error: 'Invalid',
+      fieldErrors: {
+        dailySpendCeilingAiCredits: 'Enter an amount of AI credits above 0.',
+      },
+    });
+    renderWithTheme(
+      <MachineSettingsForm
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(
+      await screen.findByText('Enter an amount of AI credits above 0.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Daily spend ceiling (AI credits)'),
+    ).toHaveAttribute('aria-invalid', 'true');
+  });
+
   it('shows a save whose action throws as an alert and keeps the draft (T1322)', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     onTestFinished(() => log.mockRestore());
     vi.mocked(saveMachineSettings).mockRejectedValue(new Error('network down'));
     renderWithTheme(
       <MachineSettingsForm
-        settings={{ maxConcurrentRuns: 3, dailySpendCeilingUsd: null }}
+        settings={{
+          maxConcurrentRuns: 3,
+          dailySpendCeilingUsd: null,
+          dailySpendCeilingAiCredits: null,
+        }}
       />,
     );
     const field = screen.getByLabelText('Max concurrent runs');

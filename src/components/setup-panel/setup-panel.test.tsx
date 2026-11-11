@@ -18,8 +18,9 @@ const renderPanel = (props: Partial<SetupPanelProps> = {}) =>
       projectId={3}
       settings={defaults}
       commands={noAgentCommands}
-      cycleSpendUsd={null}
-      triageSpendUsd={0}
+      cycleSpend={null}
+      triageSpend={0}
+      unit="usd"
       {...props}
     />,
   );
@@ -74,8 +75,8 @@ describe('SetupPanel', () => {
         triageCeilingUsd: 2,
       },
       commands: { ...noAgentCommands, startCommand: '/implement' },
-      cycleSpendUsd: 4.5,
-      triageSpendUsd: 0.25,
+      cycleSpend: 4.5,
+      triageSpend: 0.25,
     });
 
     expect(items('Stages')[1]).toBe("Start/implement Project's own");
@@ -91,6 +92,30 @@ describe('SetupPanel', () => {
       'Spend ceiling$20.00 · $4.50 spent this Cycle',
       'Triage ceiling$2.00 · $0.25 spent today',
     ]);
+  });
+
+  it('shows the ceilings and spend in AI credits when the default agent counts in them (ADR 0051)', () => {
+    renderPanel({
+      settings: {
+        ...defaults,
+        defaultAgentKind: 'copilot',
+        spendCeilingUsd: 20,
+        spendCeilingAiCredits: 300,
+        triageCeilingAiCredits: 40,
+      },
+      cycleSpend: 12.8,
+      triageSpend: 1.5,
+      unit: 'ai_credits',
+    });
+
+    expect(items('Ceilings').slice(0, 2)).toEqual([
+      'Spend ceiling300.00 AI credits · 12.80 AI credits spent this Cycle',
+      'Triage ceiling40.00 AI credits · 1.50 AI credits spent today',
+    ]);
+    expect(screen.getByRole('link', { name: 'Spend ceiling' })).toHaveAttribute(
+      'href',
+      '/project/3/settings#spend-ceiling-ai-credits',
+    );
   });
 
   it('links each item to its field on Settings, and the machine limits to the machine Settings', () => {

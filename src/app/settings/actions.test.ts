@@ -46,10 +46,15 @@ describe('saveMachineSettings', () => {
       await saveMachineSettings({
         maxConcurrentRuns: 5,
         dailySpendCeilingUsd: 20,
+        dailySpendCeilingAiCredits: 400,
       }),
     ).toEqual({
       ok: true,
-      settings: { maxConcurrentRuns: 5, dailySpendCeilingUsd: 20 },
+      settings: {
+        maxConcurrentRuns: 5,
+        dailySpendCeilingUsd: 20,
+        dailySpendCeilingAiCredits: 400,
+      },
     });
     expect(refresh).toHaveBeenCalled();
   });

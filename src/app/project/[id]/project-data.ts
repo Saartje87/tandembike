@@ -7,7 +7,7 @@ import { appConversations } from '../../../conversations/app-conversations';
 import { conversationActivity } from '../../../conversations/conversation-activity';
 import { cycleFootprint } from '../../../footprint/app-footprint';
 import { appTickets } from '../../../tickets/app-tickets';
-import type { CostUnit } from '../../../tickets/cost-unit';
+import { type CostUnit, ceilingsByUnit } from '../../../tickets/cost-unit';
 import { cycleUnitCount } from '../../../tickets/cycle-units';
 import { NotFoundError } from '../../../tickets/errors';
 import { openTicketNumber } from '../../lib/paths';
@@ -133,17 +133,18 @@ export function runSlotsOf(projectId: number) {
  * Board header, which the live Board refresh keeps current.
  */
 export function autopilotOf(projectId: number, cycleId: number) {
-  const { autopilot, spendCeilingUsd } =
-    appTickets('user').getProjectAgentSettings(projectId);
+  const settings = appTickets('user').getProjectAgentSettings(projectId);
+  // The spend and the ceiling in the unit of the agent Autopilot starts
+  // (ADR 0051), never added across units.
+  const unit = appConversations().defaultCostUnit(projectId);
   return {
-    autopilot,
-    spendCeilingUsd,
-    // Shown against the dollar Spend ceiling, so in dollars (ADR 0051).
-    spend: appConversations().autopilotSpend({
-      projectId,
-      cycleId,
-      unit: 'usd',
-    }),
+    autopilot: settings.autopilot,
+    spendCeiling: ceilingsByUnit(
+      settings.spendCeilingUsd,
+      settings.spendCeilingAiCredits,
+    )[unit],
+    unit,
+    spend: appConversations().autopilotSpend({ projectId, cycleId, unit }),
     cycleFootprint: cycleFootprint(projectId, cycleId),
   };
 }

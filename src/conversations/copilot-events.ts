@@ -23,13 +23,19 @@ export type CopilotEventState = {
   createCalls: Set<string>;
   /** The error Copilot reported in the turn that is still going. */
   error: CopilotError | null;
+  /** The run's cost so far in nano-AIU, from each model call's usage. */
+  nanoAiu: number;
 };
 
 export const copilotEventState = (): CopilotEventState => ({
   sessionId: null,
   createCalls: new Set(),
   error: null,
+  nanoAiu: 0,
 });
+
+/** AI credits are Copilot's nano-AIU over 10⁹ (ADR 0051). */
+const nanoAiuPerCredit = 1_000_000_000;
 
 type Data = Record<string, unknown>;
 
@@ -128,6 +134,14 @@ export function copilotEventsOf(
       const numbers = createdNumbers(recordOf(data.result).content);
       return numbers.length === 0 ? [] : [{ type: 'created', numbers }];
     }
+    case 'assistant.usage': {
+      // Recorded live: these events are not kept in the session's log.
+      const nano = recordOf(data.copilotUsage).totalNanoAiu;
+      if (typeof nano === 'number' && Number.isFinite(nano)) {
+        state.nanoAiu += nano;
+      }
+      return [];
+    }
     case 'session.error': {
       state.error = {
         message: stringOf(data, 'message') ?? 'Copilot reported an error.',
@@ -146,7 +160,7 @@ export function copilotEventsOf(
       return [
         {
           type: 'turn',
-          cost: 0,
+          cost: state.nanoAiu / nanoAiuPerCredit,
           ...(error === null
             ? {}
             : {
