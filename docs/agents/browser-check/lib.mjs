@@ -118,6 +118,22 @@ export async function press(page, locator, mode) {
 }
 
 /**
+ * Whether Playwright's `request` is the Save of Project `projectId`'s Agent
+ * settings with `path` as its repository path. Settings also polls other
+ * Server Actions on the same URL (T1384), so the save is the POST whose body
+ * carries the path, not the first POST to the page (T1394). It reads the body
+ * as the JSON text a Server Action sends for plain arguments; a multipart
+ * body would never match, and the wait would time out.
+ */
+export function savesRepositoryPath(request, projectId, path) {
+  return (
+    request.method() === 'POST' &&
+    new URL(request.url()).pathname === `/project/${projectId}/settings` &&
+    (request.postData() ?? '').includes(JSON.stringify(path).slice(1, -1))
+  );
+}
+
+/**
  * Sets Project `projectId`'s repository path to `path` through its settings
  * form, as the User does. Throws at once with the form's reason when the Save
  * is refused (such as a path another Project already uses), or when the path
@@ -128,15 +144,13 @@ export async function setRepositoryPath(page, projectId, path) {
   const form = page.getByRole('form', { name: 'Agent settings' });
   const field = form.getByLabel('Repository path', { exact: true });
   await field.fill(path);
-  // The Server Action posts to the page itself; its reply carries the result.
-  const saved = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' &&
-      new URL(response.url()).pathname.endsWith('/settings'),
+  const saved = page.waitForResponse((response) =>
+    savesRepositoryPath(response.request(), projectId, path),
   );
   await form.getByRole('button', { name: 'Save' }).click();
   await saved;
-  await page.waitForTimeout(500);
+  // Save shows loading, so is disabled, until the form has handled the reply.
+  await form.getByRole('button', { name: 'Save', disabled: false }).waitFor();
   // React's ids can hold characters a `#id` selector rejects.
   const reasonId = await field.getAttribute('aria-describedby');
   const refusal = [
@@ -150,10 +164,17 @@ export async function setRepositoryPath(page, projectId, path) {
       `Settings refused repository path ${path} for Project ${projectId}: ${refusal.join(' ')}`,
     );
   }
-  await page.reload();
-  const kept = await form
-    .getByLabel('Repository path', { exact: true })
-    .inputValue();
+  // A recompiling `next dev` can serve a reload before the save shows in it.
+  const deadline = Date.now() + 10_000;
+  let kept;
+  for (;;) {
+    kept = await page
+      .reload()
+      .then(() => field.inputValue())
+      .catch((error) => `(reload failed: ${error.message.split('\n')[0]})`);
+    if (kept === path || Date.now() > deadline) break;
+    await page.waitForTimeout(500);
+  }
   if (kept !== path) {
     throw new Error(
       `Repository path ${path} did not save for Project ${projectId}: Settings shows "${kept}".`,
