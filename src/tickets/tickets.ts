@@ -3,7 +3,6 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { DatabaseConnection } from '../db/connection';
 import {
   ticketAcceptanceCriteria,
-  ticketAttachments,
   ticketBlockers,
   ticketComments,
   ticketLabels,
@@ -11,27 +10,18 @@ import {
   triageProposals,
 } from '../db/schema';
 import {
-  type ActivityEntry,
   type Actor,
   type AutoMerge,
-  activityOf,
   autoMergesSince,
   deleteActivity,
 } from './activity';
 import type { AgentKind } from './agent-kind';
 import type { AgentRunMode } from './agent-run-mode';
-import {
-  type AddAttachmentInput,
-  type Attachment,
-  attachmentColumns,
-  checkAttachmentCount,
-  checkedAttachment,
-  deleteAttachments,
-  type StoredAttachment,
-} from './attachments';
+import { type Attachment, deleteAttachments } from './attachments';
 import { type ChangeChannel, createChangeChannel } from './changes';
 import { createClaims } from './claims';
 import { type CycleLink, createCycles, leaveAllCycles } from './cycles';
+import { createDiscussion } from './discussion';
 import type { EpicLink } from './epic-link';
 import {
   checkChildrenArchived,
@@ -40,7 +30,6 @@ import {
 } from './epics';
 import {
   type BatchFailure,
-  NotAllowedError,
   NotFoundError,
   UncheckedCriteriaError,
   type UncheckedCriterion,
@@ -59,7 +48,6 @@ import {
 } from './reference-templates';
 import {
   checkBatchNumbers,
-  maxCommentLength,
   maxOverrideLength,
   throwFieldErrors,
 } from './rules';
@@ -669,20 +657,6 @@ export type RemoveAttachmentInput = {
   by: Actor;
 };
 
-/** A comment body trimmed, or a `ValidationError` if it is empty or too long. */
-function checkedCommentBody(rawBody: string): string {
-  const body = rawBody.trim();
-  throwFieldErrors({
-    body:
-      body === ''
-        ? 'Enter a comment.'
-        : body.length > maxCommentLength
-          ? `Keep the comment to ${maxCommentLength.toLocaleString('en-US')} characters or fewer.`
-          : undefined,
-  });
-  return body;
-}
-
 /** An override reason trimmed, or a `ValidationError` if blank or too long. */
 function checkedOverride(rawOverride: string): string {
   const override = rawOverride.trim();
@@ -710,15 +684,6 @@ function overrideComment(
     `Reason: ${override}`,
   ].join('\n');
 }
-
-const commentColumns = {
-  id: ticketComments.id,
-  ticketNumber: ticketComments.ticketNumber,
-  author: ticketComments.author,
-  body: ticketComments.body,
-  createdAt: ticketComments.createdAt,
-  editedAt: ticketComments.editedAt,
-};
 
 /**
  * The Tickets module: the only code that reads or writes Projects and
@@ -756,6 +721,7 @@ export function createTickets(
   });
   const epics = createEpics(ctx);
   const order = createTicketOrder(ctx);
+  const discussion = createDiscussion(ctx);
   const rest = {
     /**
      * Back to Todo, the User's action on a parked Ticket (ADR 0024): Status
@@ -855,152 +821,6 @@ export function createTickets(
     uncheckedCriteria(number: number): UncheckedCriterion[] {
       getTicket(number);
       return uncheckedCriteriaOf(number);
-    },
-
-    /** The comments on Ticket `number`, oldest first. */
-    listComments(number: number): Comment[] {
-      getTicket(number);
-      return db
-        .select(commentColumns)
-        .from(ticketComments)
-        .where(eq(ticketComments.ticketNumber, number))
-        .orderBy(asc(ticketComments.id))
-        .all();
-    },
-
-    /**
-     * Ticket `number`'s Activity, oldest first, whether or not it is
-     * archived.
-     */
-    listActivity(number: number): ActivityEntry[] {
-      getTicket(number);
-      return activityOf(db, number);
-    },
-
-    /** Adds a Markdown comment by `author` to Ticket `number`. */
-    addComment(number: number, input: AddCommentInput): Comment {
-      const body = checkedCommentBody(input.body);
-      getTicket(number);
-      checkTicketProjectWritable(number);
-      const comment = db
-        .insert(ticketComments)
-        .values({
-          ticketNumber: number,
-          author: input.author,
-          body,
-          createdAt: new Date(),
-        })
-        .returning(commentColumns)
-        .get();
-      changes.publish({ type: 'ticket', number });
-      return comment;
-    },
-
-    /**
-     * Replaces comment `id`'s body by the rules for adding one and sets its
-     * edited time; the author and created time stay.
-     */
-    editComment(id: number, input: EditCommentInput): Comment {
-      const body = checkedCommentBody(input.body);
-      const { ticketNumber } = editableComment(id, input.by);
-      checkTicketProjectWritable(ticketNumber);
-      const comment = db
-        .update(ticketComments)
-        .set({ body, editedAt: new Date() })
-        .where(eq(ticketComments.id, id))
-        .returning(commentColumns)
-        .get();
-      changes.publish({ type: 'ticket', number: ticketNumber });
-      return comment;
-    },
-
-    /**
-     * Deletes comment `id` for good (ADR 0006), by the same rule for who
-     * may as editing it.
-     */
-    removeComment(id: number, { by }: RemoveCommentInput): void {
-      const { ticketNumber } = editableComment(id, by);
-      checkTicketProjectWritable(ticketNumber);
-      db.delete(ticketComments).where(eq(ticketComments.id, id)).run();
-      changes.publish({ type: 'ticket', number: ticketNumber });
-    },
-
-    /**
-     * Adds a file to Ticket `number` (ADR 0018) and returns its metadata. The
-     * name is trimmed; the media type comes from the input, else the name's
-     * extension. Recorded as Activity in the same transaction.
-     */
-    addAttachment(number: number, input: AddAttachmentInput): Attachment {
-      const { name, mediaType } = checkedAttachment(input);
-      const attachment = db.transaction(() => {
-        checkTicketProjectWritable(number);
-        touchTicket(number);
-        checkAttachmentCount(db, number);
-        const added = db
-          .insert(ticketAttachments)
-          .values({
-            ticketNumber: number,
-            name,
-            mediaType,
-            size: input.content.byteLength,
-            author: input.author,
-            content: Buffer.from(input.content),
-            createdAt: new Date(),
-          })
-          .returning(attachmentColumns)
-          .get();
-        recordActivity(number, [{ type: 'attachmentAdded', name }]);
-        return added;
-      });
-      changes.publish({ type: 'ticket', number });
-      return attachment;
-    },
-
-    /** Attachment `id` with its metadata and content. */
-    getAttachment(id: number): StoredAttachment {
-      const attachment = db
-        .select({ ...attachmentColumns, content: ticketAttachments.content })
-        .from(ticketAttachments)
-        .where(eq(ticketAttachments.id, id))
-        .get();
-      if (!attachment) {
-        throw new NotFoundError(`There is no Attachment ${id}.`);
-      }
-      return attachment;
-    },
-
-    /**
-     * Deletes Attachment `id` for good (ADR 0018), by the Comment rule: the
-     * User may remove any, an Agent only one an Agent added. Recorded as
-     * Activity naming the file, in the same transaction.
-     */
-    removeAttachment(id: number, { by }: RemoveAttachmentInput): void {
-      const attachment = db
-        .select({
-          ticketNumber: ticketAttachments.ticketNumber,
-          name: ticketAttachments.name,
-          author: ticketAttachments.author,
-        })
-        .from(ticketAttachments)
-        .where(eq(ticketAttachments.id, id))
-        .get();
-      if (!attachment) {
-        throw new NotFoundError(`There is no Attachment ${id}.`);
-      }
-      if (by === 'agent' && attachment.author !== 'agent') {
-        throw new NotAllowedError(
-          `Attachment ${id} was added by the User. Agents can only remove Attachments added by an Agent.`,
-        );
-      }
-      db.transaction(() => {
-        checkTicketProjectWritable(attachment.ticketNumber);
-        touchTicket(attachment.ticketNumber);
-        db.delete(ticketAttachments).where(eq(ticketAttachments.id, id)).run();
-        recordActivity(attachment.ticketNumber, [
-          { type: 'attachmentRemoved', name: attachment.name },
-        ]);
-      });
-      changes.publish({ type: 'ticket', number: attachment.ticketNumber });
     },
 
     /**
@@ -1166,13 +986,14 @@ export function createTickets(
     ...epics,
     ...ticketChanges,
     ...order,
+    ...discussion,
     ...rest,
   };
   return {
     ...core,
     ...createTriageProposals(ctx, {
       updateTicket: core.updateTicket,
-      addComment: core.addComment,
+      addComment: discussion.addComment,
       createTicketBatch: core.createTicketBatch,
       archiveTicket: core.archiveTicket,
     }),
@@ -1186,8 +1007,8 @@ export function createTickets(
       updateTicket: core.updateTicket,
       backToTodo: core.backToTodo,
       listBlockers: core.listBlockers,
-      listComments: core.listComments,
-      addComment: core.addComment,
+      listComments: discussion.listComments,
+      addComment: discussion.addComment,
       getProjectAgentSettings: core.getProjectAgentSettings,
       claimMergeMode: core.claimMergeMode,
       addExternalReferences: core.addExternalReferences,
@@ -1285,30 +1106,6 @@ export function createTickets(
         createdAt: new Date(),
       })
       .run();
-  }
-
-  /**
-   * Comment `id`, if `by` may edit or remove it: the User may change any
-   * comment, an Agent only an Agent's.
-   */
-  function editableComment(id: number, by: CommentAuthor) {
-    const comment = db
-      .select({
-        ticketNumber: ticketComments.ticketNumber,
-        author: ticketComments.author,
-      })
-      .from(ticketComments)
-      .where(eq(ticketComments.id, id))
-      .get();
-    if (!comment) {
-      throw new NotFoundError(`There is no comment ${id}.`);
-    }
-    if (by === 'agent' && comment.author !== 'agent') {
-      throw new NotAllowedError(
-        `Comment ${id} was written by the User. Agents can only edit or remove comments written by an Agent.`,
-      );
-    }
-    return comment;
   }
 
   /**
