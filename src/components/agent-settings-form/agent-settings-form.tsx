@@ -6,6 +6,7 @@ import {
   Inline,
   Label,
   Radio,
+  Select,
   Stack,
   Switch,
   Text,
@@ -21,6 +22,7 @@ import {
   setProjectAgentSettings,
 } from '../../app/projects/actions';
 import type { Conversation } from '../../conversations/conversations';
+import type { AgentKind } from '../../tickets/agent-kind';
 import type { AgentRunMode } from '../../tickets/agent-run-mode';
 import type { ProjectAgentSettings } from '../../tickets/tickets';
 import { CheckCommandField } from '../check-command-field/check-command-field';
@@ -33,13 +35,29 @@ export type AgentSettingsFormProps = {
   settings: ProjectAgentSettings;
   /** The Project's latest Setup Conversation, if it ever held one. */
   latestSetup?: Conversation | null;
+  /**
+   * Every Agent kind with whether it can run now (ADR 0051); the default
+   * selector offers only those that can. Claude Code alone when left out.
+   */
+  agentKinds?: AgentKindOption[];
 };
+
+/** An Agent kind as the default selector sees it. */
+export type AgentKindOption = { kind: AgentKind; label: string } & (
+  | { available: true }
+  | { available: false; reason: string }
+);
+
+const claudeCodeOnly: AgentKindOption[] = [
+  { kind: 'claude-code', label: 'Claude Code', available: true },
+];
 
 type AgentSettingsValues = {
   repositoryPath: string;
   checkCommand: string;
   prepareCommand: string;
   parallelRuns: boolean;
+  defaultAgentKind: AgentKind;
   agentMode: boolean;
   runMode: AgentRunMode;
   runModel: string;
@@ -57,6 +75,7 @@ const formFields: Record<string, keyof AgentSettingsValues | undefined> = {
   checkCommand: 'checkCommand',
   prepareCommand: 'prepareCommand',
   agentMode: 'agentMode',
+  defaultAgentKind: 'defaultAgentKind',
   runMode: 'runMode',
   runModel: 'runModel',
   triageModel: 'triageModel',
@@ -73,6 +92,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   projectId,
   settings,
   latestSetup = null,
+  agentKinds = claudeCodeOnly,
 }) => {
   const [saved, setSaved] = useState({
     agentMode: settings.agentMode,
@@ -83,6 +103,9 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const [detecting, setDetecting] = useState(false);
   const pathId = useId();
   const parallelId = useId();
+  const agentKindId = useId();
+  const agentKindHintId = useId();
+  const agentKindErrorId = useId();
   const modeId = useId();
   const pathErrorId = useId();
   const parallelHintId = useId();
@@ -107,6 +130,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
       checkCommand: settings.checkCommand ?? '',
       prepareCommand: settings.prepareCommand ?? '',
       parallelRuns: settings.parallelRuns,
+      defaultAgentKind: settings.defaultAgentKind,
       agentMode: settings.agentMode,
       runMode: settings.runMode,
       runModel: settings.runModel ?? '',
@@ -131,6 +155,11 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
   const prepareId = useId();
   const prepareErrorId = useId();
   const modeError = errors.agentMode?.message;
+  const agentKindError = errors.defaultAgentKind?.message;
+  // A kind that cannot run is not offered, but the saved one always shows.
+  const offeredKinds = agentKinds.filter(
+    ({ kind, available }) => available || kind === settings.defaultAgentKind,
+  );
   const runModeError = errors.runMode?.message;
   const runModelError = errors.runModel?.message;
   const triageModelId = useId();
@@ -195,6 +224,7 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
               ? null
               : Number(values.triageCeiling),
           autoMerge: values.autoMerge,
+          defaultAgentKind: values.defaultAgentKind,
         }),
       'The agent settings could not be saved. Try again.',
     );
@@ -304,6 +334,33 @@ export const AgentSettingsForm: FC<AgentSettingsFormProps> = ({
                 overlap, each in a worktree of its own, up to the machine cap
                 set in Settings.
               </Text>
+            </Stack>
+          )}
+          {hasPath && (
+            <Stack gap={1} id="default-agent">
+              <Label htmlFor={agentKindId}>Agent</Label>
+              <Select
+                {...register('defaultAgentKind')}
+                id={agentKindId}
+                aria-invalid={agentKindError ? true : undefined}
+                aria-describedby={
+                  agentKindError
+                    ? `${agentKindHintId} ${agentKindErrorId}`
+                    : agentKindHintId
+                }
+              >
+                {offeredKinds.map(({ kind, label }) => (
+                  <option key={kind} value={kind}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+              <Text id={agentKindHintId} tag="p" fontSize="small" color="muted">
+                The agent new Conversations and Autopilot's runs start on.
+                Changing it leaves Conversations already started on their own
+                agent.
+              </Text>
+              <FieldError id={agentKindErrorId} reason={agentKindError} />
             </Stack>
           )}
           <Stack gap={1}>

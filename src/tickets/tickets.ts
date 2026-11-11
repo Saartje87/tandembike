@@ -51,6 +51,7 @@ import {
   normalizeAgentCommands,
   type ProjectAgentCommands,
 } from './agent-commands';
+import { type AgentKind, isAgentKind } from './agent-kind';
 import { type AgentRunMode, agentRunModes } from './agent-run-mode';
 import {
   checkProjectWritable,
@@ -238,6 +239,8 @@ export type ProjectAgentSettings = {
   triageCeilingUsd: number | null;
   /** Whether the run that opened a PR merges it itself (ADR 0043). */
   autoMerge: boolean;
+  /** The Agent kind new Conversations start on (ADR 0051). */
+  defaultAgentKind: AgentKind;
 };
 
 export type SetProjectAgentSettingsInput = Partial<ProjectAgentSettings>;
@@ -292,6 +295,7 @@ const agentSettingsColumns = {
   autoTriage: projects.autoTriage,
   triageCeilingUsd: projects.triageCeilingUsd,
   autoMerge: projects.autoMerge,
+  defaultAgentKind: projects.defaultAgentKind,
 };
 
 /** A trimmed text setting; blank reads as not set. */
@@ -307,6 +311,13 @@ function runModeProblem(
   return runMode === undefined || agentRunModes.includes(runMode)
     ? undefined
     : 'Choose default or auto.';
+}
+
+/** Why `kind` is not an Agent kind, or `undefined` when it is or is left out. */
+function agentKindProblem(kind: unknown): string | undefined {
+  return kind === undefined || isAgentKind(kind)
+    ? undefined
+    : 'Choose an Agent kind Tandembike knows.';
 }
 
 /** Why a model name is refused, or `undefined` when it can be stored. */
@@ -1826,6 +1837,7 @@ export function createTickets(
         autoTriage,
         triageCeilingUsd,
         autoMerge,
+        defaultAgentKind,
       } = input;
       const nextTriageCeiling =
         triageCeilingUsd === undefined
@@ -1858,6 +1870,7 @@ export function createTickets(
             ? 'Set a repository path before turning on agent mode.'
             : undefined,
         runMode: runModeProblem(runMode),
+        defaultAgentKind: agentKindProblem(defaultAgentKind),
         runModel:
           runModel === undefined ? undefined : runModelProblem(nextModel),
         triageModel:
@@ -1893,6 +1906,7 @@ export function createTickets(
           autoTriage: nextAutoTriage,
           triageCeilingUsd: nextTriageCeiling,
           ...(autoMerge === undefined ? {} : { autoMerge }),
+          ...(defaultAgentKind === undefined ? {} : { defaultAgentKind }),
         })
         .where(eq(projects.id, id))
         .returning(agentSettingsColumns)

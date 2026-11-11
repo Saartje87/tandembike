@@ -32,6 +32,7 @@ const unset: ProjectAgentSettings = {
   autoTriage: false,
   triageCeilingUsd: null,
   autoMerge: false,
+  defaultAgentKind: 'claude-code',
 };
 const set: ProjectAgentSettings = { ...unset, repositoryPath: '/repo' };
 
@@ -174,7 +175,61 @@ describe('AgentSettingsForm', () => {
         autoTriage: false,
         triageCeilingUsd: null,
         autoMerge: false,
+        defaultAgentKind: 'claude-code',
       }),
+    );
+  });
+
+  it('offers as the default Agent only the kinds that can run, and saves the choice (ADR 0051)', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={set}
+        agentKinds={[
+          { kind: 'claude-code', label: 'Claude Code', available: true },
+          {
+            kind: 'copilot',
+            label: 'Copilot',
+            available: false,
+            reason: 'Copilot cannot run here yet.',
+          },
+        ]}
+      />,
+    );
+
+    const agent = screen.getByLabelText('Agent');
+    expect(agent).toHaveValue('claude-code');
+    expect(
+      screen.getAllByRole('option').map((option) => option.textContent),
+    ).toEqual(['Claude Code']);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultAgentKind: 'claude-code' }),
+      ),
+    );
+  });
+
+  it('saves a default Agent of another kind that can run', async () => {
+    renderWithTheme(
+      <AgentSettingsForm
+        projectId={3}
+        settings={set}
+        agentKinds={[
+          { kind: 'claude-code', label: 'Claude Code', available: true },
+          { kind: 'copilot', label: 'Copilot', available: true },
+        ]}
+      />,
+    );
+
+    await userEvent.selectOptions(screen.getByLabelText('Agent'), 'copilot');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(setProjectAgentSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultAgentKind: 'copilot' }),
+      ),
     );
   });
 
@@ -274,6 +329,7 @@ describe('AgentSettingsForm', () => {
         autoTriage: false,
         triageCeilingUsd: null,
         autoMerge: false,
+        defaultAgentKind: 'claude-code',
       }),
     );
   });

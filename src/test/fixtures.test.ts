@@ -12,6 +12,7 @@ describe('aConversation', () => {
       intent: 'start',
       state: 'idle',
       startedBy: 'user',
+      agentKind: 'claude-code',
       sdkSessionId: null,
       costUsd: 0,
       hidden: false,

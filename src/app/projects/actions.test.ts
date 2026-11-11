@@ -146,6 +146,7 @@ describe('setProjectAgentSettings', () => {
       prepareCommand: ' npm ci ',
       autoTriage: true,
       triageCeilingUsd: 3,
+      defaultAgentKind: 'copilot',
     });
 
     expect(result).toEqual({ ok: true });
@@ -163,6 +164,7 @@ describe('setProjectAgentSettings', () => {
       autoTriage: true,
       triageCeilingUsd: 3,
       autoMerge: false,
+      defaultAgentKind: 'copilot',
     });
     expect(refresh).toHaveBeenCalled();
   });

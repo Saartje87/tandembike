@@ -449,6 +449,13 @@
       "when": 1794329056447,
       "tag": "0063_drop_project_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "6",
+      "when": 1794388015049,
+      "tag": "0064_agent_kind",
+      "breakpoints": true
     }
   ]
 }

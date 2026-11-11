@@ -128,8 +128,8 @@ export async function styleProject(
 }
 
 /**
- * Sets a Project's repository path, Parallel runs, agent mode, run mode and
- * run model for the UI. Only a Server Action does this, never an MCP tool
+ * Sets a Project's repository path, Parallel runs, default Agent kind, agent
+ * mode, run mode and run model for the UI. Only a Server Action does this, never an MCP tool
  * (ADR 0019). Domain errors come back as `error`, with `fieldErrors`.
  */
 export async function setProjectAgentSettings(
@@ -181,6 +181,9 @@ export async function setProjectAgentSettings(
       ...(settings.autoMerge === undefined
         ? {}
         : { autoMerge: Boolean(settings.autoMerge) }),
+      ...(settings.defaultAgentKind === undefined
+        ? {}
+        : { defaultAgentKind: settings.defaultAgentKind }),
       ...(settings.triageCeilingUsd === undefined
         ? {}
         : {

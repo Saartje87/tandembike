@@ -4,6 +4,7 @@ import type {
   RunEvent,
   RunOptions,
 } from '../conversations/agent-runner';
+import type { AgentKind } from '../tickets/agent-kind';
 
 export type FakeRun = AgentRun & {
   options: RunOptions;
@@ -15,15 +16,22 @@ export type FakeRun = AgentRun & {
 };
 
 export type FakeRunner = AgentRunner & {
+  /** The Agent kind it stands in for. */
+  kind: AgentKind;
   /** Every run started, oldest first. */
   runs: FakeRun[];
 };
 
-/** An `AgentRunner` for tests: it records what it is told and says what the test emits. */
-export function createFakeRunner(): FakeRunner {
+/**
+ * An `AgentRunner` for tests: it records what it is told and says what the
+ * test emits. It can run unless a test replaces `availability`.
+ */
+export function createFakeRunner(kind: AgentKind = 'claude-code'): FakeRunner {
   const runs: FakeRun[] = [];
   return {
+    kind,
     runs,
+    availability: () => ({ available: true }),
     start(options) {
       const run: FakeRun = {
         options,
@@ -48,3 +56,6 @@ export function createFakeRunner(): FakeRunner {
     },
   };
 }
+
+/** A fake runner per Agent kind, keyed as the app registers runners. */
+export type FakeRunners = Record<AgentKind, FakeRunner>;

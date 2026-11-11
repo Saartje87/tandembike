@@ -35,6 +35,7 @@ async function settingsTab(params: ProjectPageProps['params']) {
           <AgentSettingsForm
             projectId={project.id}
             settings={appTickets('user').getProjectAgentSettings(project.id)}
+            agentKinds={appConversations().agentKinds()}
             latestSetup={
               appConversations()
                 .list({ projectId: project.id })

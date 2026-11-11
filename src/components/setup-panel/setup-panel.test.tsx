@@ -21,6 +21,7 @@ const defaults: ProjectAgentSettings = {
   autoTriage: false,
   triageCeilingUsd: null,
   autoMerge: false,
+  defaultAgentKind: 'claude-code',
 };
 
 const renderPanel = (props: Partial<SetupPanelProps> = {}) =>

@@ -5,7 +5,7 @@ import type { AgentRunner } from './agent-runner';
 import { agentBackends, refuseFakeRunsOnAppPort } from './fake-runs';
 
 const real = () => ({
-  runner: { start: () => ({}) } as unknown as AgentRunner,
+  runners: { 'claude-code': { start: () => ({}) } as unknown as AgentRunner },
   worktrees: {} as Worktrees,
 });
 
@@ -24,7 +24,7 @@ describe('Fake runs (TANDEMBIKE_FAKE_RUNS)', () => {
       throw new Error('The real runner was built.');
     });
 
-    expect(backends.runner).toBeDefined();
+    expect(backends.runners['claude-code']).toBeDefined();
     expect(backends.worktrees).toBeDefined();
   });
 

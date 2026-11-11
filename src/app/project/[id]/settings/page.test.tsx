@@ -76,6 +76,7 @@ describe('SettingsPage', () => {
     notFound.mockClear();
     vi.mocked(appConversations).mockReturnValue({
       list: () => [],
+      agentKinds: () => [],
     } as unknown as ReturnType<typeof appConversations>);
   });
 

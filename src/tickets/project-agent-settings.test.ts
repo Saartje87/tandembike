@@ -27,6 +27,50 @@ describe("A Project's agent settings", () => {
       autoTriage: false,
       triageCeilingUsd: null,
       autoMerge: false,
+      defaultAgentKind: 'claude-code',
+    });
+  });
+
+  describe('default Agent kind (ADR 0051)', () => {
+    it('is Claude Code for a new Project', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      expect(tickets.getProjectAgentSettings(project.id).defaultAgentKind).toBe(
+        'claude-code',
+      );
+    });
+
+    it('changes to another Agent kind, and back, without refusal', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'copilot',
+        }).defaultAgentKind,
+      ).toBe('copilot');
+      expect(
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'claude-code',
+        }).defaultAgentKind,
+      ).toBe('claude-code');
+    });
+
+    it('refuses a kind that is not an Agent kind, naming the field', () => {
+      const tickets = createTestTickets();
+      const project = tickets.createProject({ name: 'Website' });
+
+      const error = errorFrom(() =>
+        tickets.setProjectAgentSettings(project.id, {
+          defaultAgentKind: 'cursor' as never,
+        }),
+      );
+
+      expect(error).toBeInstanceOf(ValidationError);
+      expect((error as ValidationError).fieldErrors).toHaveProperty(
+        'defaultAgentKind',
+      );
     });
   });
 

@@ -247,6 +247,8 @@ function createInput() {
  */
 export function createClaudeRunner(): AgentRunner {
   return {
+    // The SDK ships with the app, so Claude Code can always run (ADR 0051).
+    availability: () => ({ available: true }),
     start({
       cwd,
       agentRunId,

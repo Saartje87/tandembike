@@ -24,6 +24,7 @@ import type { WidgetEntry } from '../conversations/widget';
 import { type Canvas, stickyAuthors } from '../spars/canvas';
 import type { HandOffDraft } from '../spars/spar-moves';
 import type { ActivityChange } from '../tickets/activity-change';
+import { agentKinds } from '../tickets/agent-kind';
 import { agentRunModes } from '../tickets/agent-run-mode';
 import { cycleStates } from '../tickets/cycle-state';
 import { mergeModes } from '../tickets/merge-mode';
@@ -82,6 +83,10 @@ export const projects = sqliteTable('projects', {
   runMode: text('run_mode', { enum: agentRunModes })
     .notNull()
     .default('default'),
+  /** The Agent kind new Conversations start on (ADR 0051); only the User sets it. */
+  defaultAgentKind: text('default_agent_kind', { enum: agentKinds })
+    .notNull()
+    .default('claude-code'),
   /** The model its runs start on; null is the User's default model. */
   runModel: text('run_model'),
   /** The model Triage runs start on; null uses the run model. */
@@ -412,7 +417,11 @@ export const conversations = sqliteTable(
     startedBy: text('started_by', { enum: conversationStarters })
       .notNull()
       .default('user'),
-    /** The Claude Agent SDK session a reply resumes; set by the first run. */
+    /** The Agent kind it runs on for life (ADR 0051); older rows are Claude Code. */
+    agentKind: text('agent_kind', { enum: agentKinds })
+      .notNull()
+      .default('claude-code'),
+    /** The runner's opaque session a reply resumes; set by the first run. */
     sdkSessionId: text('sdk_session_id'),
     costUsd: real('cost_usd').notNull().default(0),
     /** Closed by the User: stopped and left out of the Project's list. */

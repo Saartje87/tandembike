@@ -21,6 +21,11 @@ import {
   commandForStage,
   planCommandMessage,
 } from '../tickets/agent-commands';
+import {
+  type AgentKind,
+  agentKindLabels,
+  agentKinds,
+} from '../tickets/agent-kind';
 import type { ChangeChannel } from '../tickets/changes';
 import {
   NotAllowedError,
@@ -37,8 +42,10 @@ import type { KeptWorktreeState, Worktrees } from '../worktrees/worktrees';
 import type {
   AgentRun,
   AgentRunner,
+  AgentRunners,
   PermissionRequest,
   RunEvent,
+  RunnerAvailability,
 } from './agent-runner';
 import { batchTriagePrompt } from './batch-triage-prompt';
 import {
@@ -107,6 +114,9 @@ export type Conversation = {
   state: ConversationState;
   /** Who started it: the User, Autopilot or a Terminal session. */
   startedBy: ConversationStarter;
+  /** The Agent kind it runs on for life (ADR 0051). */
+  agentKind: AgentKind;
+  /** The runner's opaque session a reply resumes. */
   sdkSessionId: string | null;
   costUsd: number;
   /** Closed by the User: stopped, and left out of the open Conversations. */
@@ -292,7 +302,8 @@ export type ConversationsDeps = {
   /** Where Projects and Tickets are read; this module never writes them. */
   tickets: Tickets;
   changes?: ChangeChannel;
-  runner: AgentRunner;
+  /** The runner of each Agent kind that can run here (ADR 0051). */
+  runners: AgentRunners;
   /** The only code that runs git: makes and inspects the worktrees of Start runs. */
   worktrees: Worktrees;
   /** The Tandembike MCP server the runs connect to. */
@@ -391,13 +402,34 @@ export function createConversations({
   db,
   tickets,
   changes,
-  runner,
+  runners,
   worktrees,
   mcpUrl,
   clock = () => new Date(),
 }: ConversationsDeps) {
   /** The runs alive in this process, by Conversation id. */
   const live = new Map<number, RunHandle>();
+
+  /** Whether Agent kind `kind` can run now: a registered runner says so. */
+  const availabilityOf = (kind: AgentKind): RunnerAvailability =>
+    runners[kind]?.availability() ?? {
+      available: false,
+      reason: `${agentKindLabels[kind]} cannot run here yet.`,
+    };
+
+  /** The runner of `kind`, refused with its reason when it cannot run now. */
+  const runnerOf = (kind: AgentKind): AgentRunner => {
+    const availability = availabilityOf(kind);
+    const runner = runners[kind];
+    if (!availability.available || !runner) {
+      throw new NotAllowedError(
+        availability.available
+          ? `${agentKindLabels[kind]} cannot run here yet.`
+          : availability.reason,
+      );
+    }
+    return runner;
+  };
 
   const announce = (id: number) =>
     changes?.publish({ type: 'conversation', id });
@@ -911,6 +943,7 @@ export function createConversations({
       limited ? conversation.intent : 'reply',
       id,
     );
+    const runner = runnerOf(conversation.agentKind);
     const runModel = modelFor(conversation.intent, settings);
     const handle: RunHandle = {
       process: null,
@@ -1164,6 +1197,10 @@ export function createConversations({
       throw new ValidationError(noRepositoryPath);
     }
     checkStartLimit(projectId, input.intent);
+    // Every start takes the Project's default (ADR 0051); a kind that
+    // cannot run is refused here, before anything is stored.
+    const agentKind = settings.defaultAgentKind;
+    runnerOf(agentKind);
 
     const now = clock();
     const created = db
@@ -1172,6 +1209,7 @@ export function createConversations({
         projectId,
         ticketNumber: input.ticketNumber ?? null,
         intent: input.intent,
+        agentKind,
         defaultCycleId: input.defaults?.cycleId ?? null,
         defaultEpicNumber: input.defaults?.epicNumber ?? null,
         defaultType: input.defaults?.type ?? null,
@@ -1685,6 +1723,21 @@ export function createConversations({
 
   return {
     get,
+
+    /**
+     * Every Agent kind with whether it can run now, and why not, for the
+     * default selector (ADR 0051).
+     */
+    agentKinds(): ({
+      kind: AgentKind;
+      label: string;
+    } & RunnerAvailability)[] {
+      return agentKinds.map((kind) => ({
+        kind,
+        label: agentKindLabels[kind],
+        ...availabilityOf(kind),
+      }));
+    },
 
     /**
      * The tokens Conversation `id`'s runs used per model, across all its

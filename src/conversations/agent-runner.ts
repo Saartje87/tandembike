@@ -1,10 +1,12 @@
 import type { UsageByModel } from '../footprint/token-usage';
+import type { AgentKind } from '../tickets/agent-kind';
 import type { PermissionAnswer } from './conversation-state';
 import type { Widget, WidgetAnswer } from './widget';
 
 /**
- * The seam between Conversations and the Agent that does the work (ADR 0019).
- * Only `claude-runner.ts` knows the Claude Agent SDK; tests use a fake.
+ * The seam between Conversations and the Agent that does the work (ADR 0019,
+ * ADR 0051): one runner per Agent kind. Only `claude-runner.ts` knows the
+ * Claude Agent SDK; tests use a fake per kind.
  */
 
 /** What a run reports while it works. */
@@ -113,6 +115,20 @@ export type AgentRun = {
   close(): void;
 };
 
+/** Whether a runner can start a run now, and why not when it cannot. */
+export type RunnerAvailability =
+  | { available: true }
+  | { available: false; reason: string };
+
+/**
+ * One Agent kind's runner (ADR 0051): it turns a run described in
+ * Tandembike's terms into its agent's own, and says what it can do.
+ */
 export type AgentRunner = {
+  /** Whether it can run now; Claude Code always can. */
+  availability(): RunnerAvailability;
   start(options: RunOptions): AgentRun;
 };
+
+/** The runners the app registers, by Agent kind; a kind left out cannot run. */
+export type AgentRunners = Partial<Record<AgentKind, AgentRunner>>;

@@ -36,6 +36,7 @@ let sessions = 0;
 
 export function createScriptedRunner(): AgentRunner {
   return {
+    availability: () => ({ available: true }),
     start(options: RunOptions): AgentRun {
       let closed = false;
       let steps = 0;

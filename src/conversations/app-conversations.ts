@@ -22,7 +22,8 @@ const mcpUrl =
   process.env.TANDEMBIKE_MCP_URL ?? 'http://localhost:4747/api/mcp';
 
 /**
- * The Conversations module the app uses, with the Claude Code runner, or
+ * The Conversations module the app uses, with a runner per Agent kind that
+ * can run (Claude Code only today), or
  * the scripted one with `TANDEMBIKE_FAKE_RUNS=1`. It
  * lives on `globalThis`, with the runs it holds, so Server Actions share it
  * and dev-mode reloads keep it. The first call marks the Conversations of
@@ -38,7 +39,8 @@ export function appConversations(): Conversations {
       changes: appChangeChannel(),
       // Fake runs on a throwaway server for browser checks (T678).
       ...agentBackends(process.env, () => ({
-        runner: createClaudeRunner(),
+        // Claude Code is the only Agent kind that runs until T596 (ADR 0051).
+        runners: { 'claude-code': createClaudeRunner() },
         worktrees: createWorktrees({ owner: appDataFolder }),
       })),
       mcpUrl,
