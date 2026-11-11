@@ -52,23 +52,45 @@ describe('tandembike mcp', () => {
   }, 30_000);
 });
 
-describe('tandembike start', () => {
-  it('says Tandembike is not running and exits 1 when the server is unreachable', () => {
-    const result = runCli(['start', 'T1'], {
+describe('tandembike help and status (T1350)', () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'tandembike-cli-'));
+  });
+
+  afterEach(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('prints the help and exits 0 for a bare tandembike without a terminal', () => {
+    const result = runCli([]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('tandembike start');
+    expect(result.stdout).toContain('tandembike stop');
+  }, 30_000);
+
+  it('exits 1 from status with nothing running', () => {
+    const result = runCli(['status'], {
+      HOME: home,
+      TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
       TANDEMBIKE_URL: 'http://127.0.0.1:1',
     });
 
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain(
-      'Tandembike is not running. Start it with `tandembike`.',
-    );
+    expect(result.stdout).toContain('Tandembike is not running.');
   }, 30_000);
 
-  it('prints the usage and exits 1 for a start without a Ticket', () => {
-    const result = runCli(['start']);
+  it('refuses start with no production build, exit 1', () => {
+    const result = runCli(['start'], {
+      HOME: home,
+      TANDEMBIKE_DATA_DIR: join(home, '.tandembike'),
+      TANDEMBIKE_PACKAGE_DIR: join(home, 'checkout'),
+    });
 
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain('tandembike start <ticket>');
+    expect(result.stdout).toContain('run `npm run build` first');
   }, 30_000);
 });
 
@@ -80,7 +102,7 @@ describe('tandembike resume (T1241)', () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(
-      'Tandembike is not running. Start it with `tandembike`.',
+      'Tandembike is not running. Start it with `tandembike start`.',
     );
   }, 30_000);
 

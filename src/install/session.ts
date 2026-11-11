@@ -2,6 +2,7 @@ import {
   isTerminalIntent,
   type TerminalIntent,
 } from '../conversations/terminal-shared';
+import { serverPort } from '../http/server-port';
 import { playbookPath } from '../playbook/playbook';
 
 /**
@@ -11,8 +12,11 @@ import { playbookPath } from '../playbook/playbook';
 
 export const usageText = [
   'Usage:',
-  '  tandembike                    start the server',
-  '  tandembike start <ticket>     work a Ticket in this terminal (T42 or 42)',
+  '  tandembike start [-p <port>] [--foreground]',
+  '                                start the server in the background (or in this terminal)',
+  '  tandembike stop [--force]     stop the server `tandembike start` started',
+  '  tandembike restart            stop, then start the server on the same port',
+  '  tandembike status             whether the server runs: pid, URL, uptime, log',
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
@@ -20,13 +24,18 @@ export const usageText = [
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
   '  tandembike plugin             install the Playbook plugin in Claude Code',
+  '  tandembike help               this help',
 ].join('\n');
 
 export type ParsedCommand =
-  | { command: 'server'; args: string[] }
+  | { command: 'help'; text: string }
+  | { command: 'start'; port: number | null; foreground: boolean }
+  | { command: 'stop'; force: boolean }
+  | { command: 'restart' }
+  | { command: 'status' }
   | { command: 'mcp' }
   | { command: 'plugin' }
-  | { command: TerminalIntent; ticketNumber: number }
+  | { command: Exclude<TerminalIntent, 'start'>; ticketNumber: number }
   | { command: 'next' }
   | { command: 'plan'; goal: string }
   | { command: 'resume'; conversationId: number }
@@ -41,15 +50,37 @@ const ticketNumberOf = (text: string | undefined): number | null => {
   return number > 0 ? number : null;
 };
 
+/** `start`'s flags: `-p`/`--port <port>` and `--foreground`; null when wrong. */
+const parseStart = (args: string[]): ParsedCommand | null => {
+  const foreground = args.includes('--foreground');
+  const portArgs = args.filter((arg) => arg !== '--foreground');
+  if (portArgs.length === 0)
+    return { command: 'start', port: null, foreground };
+  try {
+    return { command: 'start', port: serverPort(portArgs), foreground };
+  } catch {
+    return null;
+  }
+};
+
 /**
- * What `tandembike <argv>` does. No subcommand (or only flags) starts the
- * server with those arguments; other subcommands are added here, one per
- * Stage the terminal can open.
+ * What `tandembike <argv>` does: the help with no subcommand, a server
+ * command (ADR 0052), or a session command (ADR 0039).
  */
 export function parseCommand(argv: string[]): ParsedCommand {
   const [first, ...rest] = argv;
-  if (first === undefined || first.startsWith('-')) {
-    return { command: 'server', args: argv };
+  if (first === undefined || (rest.length === 0 && /^(--)?help$/.test(first))) {
+    return { command: 'help', text: usageText };
+  }
+  if (first === 'start') return parseStart(rest) ?? usage;
+  if (first === 'stop') {
+    if (rest.length === 0) return { command: 'stop', force: false };
+    return rest.length === 1 && rest[0] === '--force'
+      ? { command: 'stop', force: true }
+      : usage;
+  }
+  if (first === 'restart' || first === 'status') {
+    return rest.length === 0 ? { command: first } : usage;
   }
   if (first === 'mcp') {
     return rest.length === 0 ? { command: 'mcp' } : usage;
@@ -64,7 +95,7 @@ export function parseCommand(argv: string[]): ParsedCommand {
     const goal = rest.join(' ').trim();
     return goal === '' ? usage : { command: 'plan', goal };
   }
-  if (isTerminalIntent(first)) {
+  if (isTerminalIntent(first) && first !== 'start') {
     const ticketNumber = ticketNumberOf(rest[0]);
     return rest.length === 1 && ticketNumber !== null
       ? { command: first, ticketNumber }

@@ -33,14 +33,32 @@ npm run setup
 ```
 
 This runs `npm ci`, `npm run build` and `npm link`, which adds a global
-`tandembike` command. From then on, `tandembike` in any folder serves the app
-on [http://localhost:4747](http://localhost:4747), with its database in
-`~/.tandembike/`. On the first run, when `~/.tandembike/ticket.db` is missing
-and the checkout has `data/ticket.db`, the command copies that database (with
-any `-wal` and `-shm` files) and says so. It never moves, deletes or
-overwrites a database. Pass `-p <port>` to use another port.
+`tandembike` command. From then on, `tandembike start` in any folder starts the
+app in the background on [http://localhost:4747](http://localhost:4747), with
+its database in `~/.tandembike/`, and returns once it answers. On the first
+run, when `~/.tandembike/ticket.db` is missing and the checkout has
+`data/ticket.db`, the command copies that database (with any `-wal` and `-shm`
+files) and says so. It never moves, deletes or overwrites a database.
 
-See `docs/adr/0035-tandembike-installs-from-its-checkout.md`.
+| Command                         | Does                                                                     |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| `tandembike start [-p <port>]`  | Start the server in the background; says "already running" when it is    |
+| `tandembike start --foreground` | Serve in this terminal instead, to watch or debug it                     |
+| `tandembike stop [--force]`     | Stop the server `tandembike start` started, and wait until it is gone    |
+| `tandembike restart`            | Stop, then start on the same port (after `git pull` and `npm run build`) |
+| `tandembike status`             | pid, URL, uptime and log path; exits 1 when nothing runs                 |
+| `tandembike help`               | Every command                                                            |
+
+`start` records the server in `~/.tandembike/server.json` (pid, port and start
+time) and appends its output to `~/.tandembike/server.log`. Pass `-p <port>` to
+use another port; the other commands find it from `server.json` (or
+`TANDEMBIKE_URL` when set). `start` refuses with "run `npm run build` first"
+when the checkout has no production build. `stop` and `status` never touch a
+server they did not start, such as `npm run dev`: `status` reports it as
+running, not started by `tandembike start`, and `stop` refuses it.
+
+See `docs/adr/0035-tandembike-installs-from-its-checkout.md` and
+`docs/adr/0052-the-cli-runs-the-server-in-the-background.md`.
 
 ## Getting started (development)
 
@@ -111,7 +129,7 @@ removed.
 The checkout is also a Claude Code marketplace named `tandembike`
 (`.claude-plugin/marketplace.json`) whose one plugin is the bundled Playbook
 (`./playbook`), so installing needs no network. The offer is made only when
-`tandembike` starts the server: on the first run, and on any later start where
+`tandembike start` starts the server: on the first run, and on any later start where
 the installed plugin is older than the bundled Playbook. It offers to run:
 
 ```bash
@@ -131,7 +149,7 @@ this install.
 ## Connect an Agent
 
 The MCP server is served by the running app at
-`http://localhost:4747/api/mcp`. The `tandembike` command offers to register it
+`http://localhost:4747/api/mcp`. `tandembike start` offers to register it
 for Claude Code at user level on its first start, so every repository reaches
 it; to register it yourself, or for other clients, see the next section. This
 repository's own `.mcp.json` registers it only for development in this

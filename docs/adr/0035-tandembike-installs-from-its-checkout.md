@@ -1,5 +1,7 @@
 # Tandembike installs from its checkout and keeps its data in ~/.tandembike
 
+Amended on 2026-11-10 by [ADR 0052](0052-the-cli-runs-the-server-in-the-background.md): bare `tandembike` no longer serves; `tandembike start` runs the server in the background and `tandembike stop` stops it.
+
 Decided on 2026-11-08 (T1192, phase 6 of [`software-factory-2.md`](../roadmap/software-factory-2.md)). Builds on [ADR 0022](0022-local-only-enforced-in-four-layers.md) and [ADR 0020](0020-setup-advises-the-user-decides.md).
 
 Tandembike ran only from its own checkout, with its database in the checkout's `data/` folder found from the working directory. To serve every repository on the machine it must run from anywhere, and its data must survive a fresh clone.
