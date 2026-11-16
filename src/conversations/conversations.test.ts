@@ -11,7 +11,7 @@ import {
   ValidationError,
 } from '../tickets/errors';
 import { maxToolInputLength } from './conversations';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -2124,6 +2124,21 @@ describe('Setup', () => {
       intent: 'setup',
       prompt: 'Check this repository.',
     });
+
+  it("names the Check commands detected in the Project's repository", async () => {
+    const { conversations, runner, project, repositoryDir } = setup();
+    mkdirSync(join(repositoryDir, '.git'), { recursive: true });
+    writeFileSync(
+      join(repositoryDir, 'package.json'),
+      JSON.stringify({ scripts: { check: 'biome check', test: 'vitest' } }),
+    );
+
+    await startSetup(conversations, project.id);
+
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      'Tandembike detected these candidates, best first: `npm run check`.',
+    );
+  });
 
   it('is about the Project, and the brief lists the checklist and the no-commit rule', async () => {
     const { conversations, runner, project } = setup();

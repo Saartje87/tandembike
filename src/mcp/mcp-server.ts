@@ -27,11 +27,12 @@ export const instructions = `This server is a ticket tracker shared with the Use
 - End with finish_work when done, or abandon_work with a reason if you give up, so nothing stays Stalled. Claims coordinate, not authenticate.
 - Your Agent-run ID comes from the run Tandembike started. A \`tandembike implement\` session needs no agentRunId; in another terminal session, pass your own unique agentRunId to the tools that name it.
 - Share progress and findings with add_note, not by editing the description. End a Triage run with propose_triage. get_ticket returns the comments; include: ["activity"] adds what changed, when and by whom.
-- Create new work with file_tickets: one or many Tickets, with an Epic and its children (type: "Epic" plus epicPosition), Blockers by position (blockedByPositions) or on existing Tickets (blockedByNumbers), originPosition or originNumber for a split, labels, acceptanceCriteria and a Cycle.
+- Create new work with file_tickets: one or many Tickets, an Epic with its children, Blockers, originNumber for a split, labels, acceptanceCriteria and a Cycle.
 - Blockers are native: add them with update_ticket (addBlockers), never in the description. An ordered checklist belongs in acceptanceCriteria, never as a checklist in the description or a comment; check each off with check_criterion as you verify it.
 - An Epic is a Ticket, created with type: "Epic", that groups child Tickets of its own Project, one level deep, to hand them off as one unit; its description holds their shared context. start_work on the Epic covers its children and returns the next one; then start_work each child in Blocker order.
 - A Cycle is a goal-led plan of Tickets in one Project: Prepared, Active (one per Project at most) or Archived; get_project lists them. create_cycle proposes a Prepared Cycle with Tickets and update_cycle renames one; only the User renames an Active or Archived Cycle. update_ticket (cycleId) plans, moves or unplans a Ticket; withChildren: true takes an Epic's children too.
 - find_tickets searches by text, Status, labels, Epic, Cycle and more. update_ticket changes one or several Tickets: fields, labels, Epic, Blockers, Cycle and archiving. Agents may reorder Tickets within a Status on the Board: update_ticket before or after. Reuse the labels get_project lists.
+- Only a Setup run may save a Project setting: the Check command the User agreed to, with set_check_command.
 - Attach files with attach, not comments; read_attachment reads them.
 - Work with Tickets through these tools, not direct database access; get_conversations reads run transcripts. Tools that change a Ticket return its summary; get_ticket reads the whole Ticket.
 - Refer to Tickets by number with a T, like T42.
@@ -89,7 +90,7 @@ export function createMcpServer(
 
   registerTicketTools(context);
   registerWorkTools(context);
-  registerProjectTools(context);
+  registerProjectTools(context, conversations);
   registerAttachmentTools(context);
   registerConversationTools(context, conversations);
   registerSparTools(context, spars);

@@ -96,8 +96,9 @@ Your Agent-run ID: 5. Tandembike's tools already know it.
 Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:
 1. A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).
 2. The permission allowlist covers the Tandembike MCP tools.
-3. The Project's Agent run mode is auto. Report it; do not suggest changing it.
-4. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
+3. The Check command: what a Start run must see pass before it opens a pull request. Tandembike detected no candidate. Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.
+4. The Project's Agent run mode is auto. Report it; do not suggest changing it.
+5. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
 Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.
 End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.",
   "You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "Website".
@@ -108,8 +109,9 @@ Your Agent-run ID: 5. Tandembike's tools already know it.
 Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:
 1. A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).
 2. The permission allowlist covers the Tandembike MCP tools.
-3. The Project's Agent run mode is auto. Report it; do not suggest changing it.
-4. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
+3. The Check command: what a Start run must see pass before it opens a pull request. Tandembike detected no candidate. Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.
+4. The Project's Agent run mode is auto. Report it; do not suggest changing it.
+5. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
 Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.
 End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.",
   "You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "Website".
@@ -120,9 +122,10 @@ Your Agent-run ID: 5. Tandembike's tools already know it.
 Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:
 1. A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).
 2. The permission allowlist covers the Tandembike MCP tools.
-3. The Project's Agent run mode is auto. Report it; do not suggest changing it.
-4. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
-5. Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.
+3. The Check command: what a Start run must see pass before it opens a pull request. Tandembike detected no candidate. Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.
+4. The Project's Agent run mode is auto. Report it; do not suggest changing it.
+5. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
+6. Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.
 Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.
 End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.",
   "You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "Website".
@@ -133,9 +136,10 @@ Your Agent-run ID: 5. Tandembike's tools already know it.
 Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:
 1. A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).
 2. The permission allowlist covers the Tandembike MCP tools.
-3. The Project's Agent run mode is auto. Report it; do not suggest changing it.
-4. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
-5. Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.
+3. The Check command: what a Start run must see pass before it opens a pull request. Tandembike detected no candidate. Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.
+4. The Project's Agent run mode is auto. Report it; do not suggest changing it.
+5. Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.
+6. Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.
 Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.
 End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.",
   "You were started by Tandembike, a ticket tracker, in a Conversation with the User about the Project "Website".

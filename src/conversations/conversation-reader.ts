@@ -122,6 +122,22 @@ export function createConversationReader(
   };
 
   return {
+    /**
+     * The Project of Setup Conversation `conversationId`, UI or terminal;
+     * null when there is no such Conversation or it is not a Setup.
+     */
+    setupProjectOf(conversationId: number): number | null {
+      const row = db
+        .select({
+          projectId: conversations.projectId,
+          intent: conversations.intent,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .get();
+      return row?.intent === 'setup' ? row.projectId : null;
+    },
+
     /** A Ticket's Conversations, newest first. */
     ticketConversations: listOf,
 

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createConversationReader } from '../conversations/conversation-reader';
+import { createTestConversations } from '../test/conversations';
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { createChangeChannel } from '../tickets/changes';
@@ -381,6 +383,127 @@ describe('project tool descriptions', () => {
       const tool = tools.find((candidate) => candidate.name === name);
       expect(tool?.description?.length, name).toBeLessThan(descriptionLimit);
     }
+    await client.close();
+  });
+});
+
+describe('set_check_command', () => {
+  const setupRun = async (changes?: ReturnType<typeof createChangeChannel>) => {
+    const world = createTestConversations(changes);
+    const project = world.tickets.createProject({ name: 'Website' });
+    world.tickets.setProjectAgentSettings(project.id, {
+      repositoryPath: world.repositoryDir,
+      checkCommand: 'npm test',
+    });
+    const reader = createConversationReader(world.db, world.tickets);
+    const connect = (runId?: string) =>
+      connectMcpClient(world.tickets, { runId, conversations: reader });
+    return { ...world, project, connect };
+  };
+
+  it("sets the Setup Conversation's Project's Check command", async () => {
+    const { conversations, tickets, project, connect } = await setupRun();
+    const setup = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'setup',
+      prompt: 'Check it.',
+    });
+    const client = await connect(String(setup.id));
+
+    const result = resultJson(
+      await client.callTool({
+        name: 'set_check_command',
+        arguments: { command: '  npm run check  ' },
+      }),
+    );
+
+    expect(result).toEqual({
+      projectId: project.id,
+      checkCommand: 'npm run check',
+    });
+    expect(tickets.getProjectAgentSettings(project.id).checkCommand).toBe(
+      'npm run check',
+    );
+    await client.close();
+  });
+
+  it('clears it with an empty value', async () => {
+    const { conversations, tickets, project, connect } = await setupRun();
+    const setup = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'setup',
+      prompt: 'Check it.',
+    });
+    const client = await connect(String(setup.id));
+
+    await client.callTool({
+      name: 'set_check_command',
+      arguments: { command: '' },
+    });
+
+    expect(tickets.getProjectAgentSettings(project.id).checkCommand).toBeNull();
+    await client.close();
+  });
+
+  it('is refused from a run that is not Setup, and without a run', async () => {
+    const { conversations, tickets, project, connect } = await setupRun();
+    const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });
+    const start = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      ticketNumber: ticket.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+    const terminal = await conversations.startTerminal({
+      ticketNumber: ticket.number,
+      intent: 'triage',
+    });
+
+    for (const runId of [
+      String(start.id),
+      String(terminal.conversationId),
+      '999',
+      'not-a-number',
+      undefined,
+    ]) {
+      const client = await connect(runId);
+      const result = await client.callTool({
+        name: 'set_check_command',
+        arguments: { command: 'rm -rf /' },
+      });
+      expect(result.isError).toBe(true);
+      expect(resultText(result)).toMatch(
+        /Only a Setup Conversation may set the Check command.*Settings/,
+      );
+      await client.close();
+    }
+    expect(tickets.getProjectAgentSettings(project.id).checkCommand).toBe(
+      'npm test',
+    );
+  });
+
+  it('emits the change event so open tabs refresh', async () => {
+    const changes = createChangeChannel();
+    const { conversations, project, connect } = await setupRun(changes);
+    const setup = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'setup',
+      prompt: 'Check it.',
+    });
+    const listener = vi.fn();
+    changes.subscribe(listener);
+    const client = await connect(String(setup.id));
+
+    await client.callTool({
+      name: 'set_check_command',
+      arguments: { command: 'npm run check' },
+    });
+
+    expect(listener).toHaveBeenCalledWith({ type: 'project', id: project.id });
     await client.close();
   });
 });

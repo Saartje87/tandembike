@@ -284,6 +284,7 @@ describe('The Claude runner', () => {
         'mcp__tandembike__propose_triage',
         'mcp__tandembike__create_cycle',
         'mcp__tandembike__update_cycle',
+        'mcp__tandembike__set_check_command',
       ],
     ],
     [

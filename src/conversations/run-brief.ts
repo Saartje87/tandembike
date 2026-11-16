@@ -33,6 +33,8 @@ export type RunBrief = {
   worktree?: { path: string; base: string; onTicketBranch?: boolean } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
+  /** Setup only: the Check commands Tandembike detected in the repository, best first. */
+  checkCommandSuggestions?: string[];
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
   runMode: 'default' | 'auto';
   /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
@@ -103,6 +105,14 @@ const setupChecklist = (brief: RunBrief): string[] => {
     own.instructionsCheck,
     ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
   ];
+  const suggestions = brief.checkCommandSuggestions ?? [];
+  items.push(
+    `The Check command: what a Start run must see pass before it opens a pull request. ${
+      suggestions.length === 0
+        ? 'Tandembike detected no candidate.'
+        : `Tandembike detected these candidates, best first: ${suggestions.map((command) => `\`${command}\``).join(', ')}.`
+    } Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.`,
+  );
   items.push(
     `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
     'Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.',

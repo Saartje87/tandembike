@@ -23,6 +23,7 @@ export const blockedTandembikeTools: Record<ToolPolicy, readonly string[]> = {
     'propose_triage',
     'create_cycle',
     'update_cycle',
+    'set_check_command',
   ],
   /**
    * An Autopilot Triage run and every Batch triage run: their only writes

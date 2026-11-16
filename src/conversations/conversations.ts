@@ -16,6 +16,7 @@ import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import type { UsageByModel } from '../footprint/token-usage';
 import { playbookPath } from '../playbook/playbook';
+import { detectRepository } from '../repository/detect-repository';
 import {
   agentCommandMessage,
   planCommandMessage,
@@ -988,6 +989,15 @@ export function createConversations({
   };
 
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
+  /** The Check commands detected in the repository at `path`, best first; none without one. */
+  const checkCommandsOf = (path: string | null): string[] => {
+    if (path === null) {
+      return [];
+    }
+    const detection = detectRepository(path);
+    return detection.ok ? detection.checkCommands : [];
+  };
+
   const briefOf = (id: number): string => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
@@ -1020,6 +1030,9 @@ export function createConversations({
                 conversation.ticketNumber !== null,
             },
       checkCommand: settings.checkCommand,
+      ...(conversation.intent === 'setup'
+        ? { checkCommandSuggestions: checkCommandsOf(settings.repositoryPath) }
+        : {}),
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
       ...(conversation.intent === 'plan'

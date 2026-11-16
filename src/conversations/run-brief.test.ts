@@ -64,7 +64,7 @@ describe('runBrief and the Check command', () => {
   });
 
   it('leaves other intents without a Check command line', () => {
-    for (const intent of ['triage', 'ask', 'setup'] as const) {
+    for (const intent of ['triage', 'ask'] as const) {
       expect(
         runBrief({ ...base, intent, checkCommand: 'npm run check' }),
       ).not.toContain('Check command');
@@ -225,5 +225,41 @@ describe('runBrief per Agent kind (ADR 0051)', () => {
       '1. An AGENTS.md or a .github/copilot-instructions.md exists',
     );
     expect(brief).not.toContain('permission allowlist');
+  });
+});
+
+describe('runBrief for Setup and the Check command', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: null,
+    ticketTitle: null,
+    ticketType: null,
+    projectName: 'Website',
+    agentKind: 'claude-code' as const,
+    intent: 'setup' as const,
+    parallelRuns: true,
+    runMode: 'default' as const,
+  };
+
+  it('proposes the best detected command and saves it with set_check_command only on a yes', () => {
+    const brief = runBrief({
+      ...base,
+      checkCommandSuggestions: ['npm run check', 'npm test'],
+    });
+
+    expect(brief).toContain(
+      'Tandembike detected these candidates, best first: `npm run check`, `npm test`.',
+    );
+    expect(brief).toMatch(/propose the best one/i);
+    expect(brief).toMatch(
+      /save it with set_check_command only after the User says yes/,
+    );
+  });
+
+  it('says to tell the User when no Check command is found', () => {
+    const brief = runBrief({ ...base, checkCommandSuggestions: [] });
+
+    expect(brief).toContain('Tandembike detected no candidate');
+    expect(brief).toMatch(/When you find none, say so/);
   });
 });
