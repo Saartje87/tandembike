@@ -131,7 +131,7 @@ command and the goal as the first message; from a folder in no Project's
 repository it names the known Projects. `tandembike implement` without a
 Ticket takes the Project whose repository holds the current folder and starts
 a Terminal Start on the top
-Eligible item of its Active Cycle, the rule of `next_work`; with none it says
+ready item of its Active Cycle, by the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
 `tandembike add [path]` makes the repository of the current folder (or of
 the path, resolved to its repository root) a Project: named from its `origin`
