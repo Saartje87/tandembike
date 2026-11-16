@@ -22,7 +22,14 @@ export function appAutopilot(): Autopilot {
     tickets: appTickets('user'),
     conversations: appConversations(),
     changes: appChangeChannel(),
-    sparTopic: (id) => appSpars().getSpar(id).topic,
+    // A Spar's row is missing only by a bug; Flow names it by its Ticket then.
+    sparTopic: (id) => {
+      try {
+        return appSpars().getSpar(id).topic;
+      } catch {
+        return null;
+      }
+    },
   });
   return global[globalKey];
 }
