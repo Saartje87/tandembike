@@ -2183,17 +2183,6 @@ describe('Setup', () => {
     expect(runner.runs[0].options.systemPrompt).toMatch(/run mode is auto/i);
   });
 
-  it('lists the worktree item only with Parallel runs on', async () => {
-    const { conversations, tickets, runner, project } = setup();
-    const first = await startSetup(conversations, project.id);
-    expect(runner.runs[0].options.systemPrompt).not.toContain('worktree');
-
-    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
-    await conversations.stop(first.id);
-    await startSetup(conversations, project.id);
-    expect(runner.runs[1].options.systemPrompt).toContain('worktree');
-  });
-
   it('refuses a Ticket: Setup is about a Project', async () => {
     const { conversations, tickets, project } = setup();
     const ticket = tickets.createTicket({ projectId: project.id, title: 'A' });

@@ -242,7 +242,7 @@ A Conversation the User has begun but not yet sent: an intent, its Ticket or Pro
 _Avoid_: Pending Conversation, unsent Conversation
 
 **Setup**:
-A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, and offers to add what is missing. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time.
+A Conversation about a Project in which the Agent checks that the Project's repository has what Tandembike's Agent runs rely on, against a checklist fixed in Tandembike's code. It inspects first, then asks about one item at a time with its recommended answer, and offers to add what is missing; the only setting it may save is the Check command, and the only commit it may make is the first of a repository with none, each on the User's yes. It is advisory: it never stops the User from using agent mode, and the User can hold it again at any time, from the Project's settings or with `tandembike setup`.
 _Avoid_: First-time setup, onboarding, readiness check
 
 **Agent run mode**:

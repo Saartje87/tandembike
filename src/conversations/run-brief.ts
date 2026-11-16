@@ -33,6 +33,8 @@ export type RunBrief = {
   worktree?: { path: string; base: string; onTicketBranch?: boolean } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
+  /** Setup only: the default branch Tandembike found in the repository. */
+  defaultBranch?: string | null;
   /** Setup only: the Check commands Tandembike detected in the repository, best first. */
   checkCommandSuggestions?: string[];
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
@@ -77,6 +79,8 @@ type AgentBriefLines = {
   askAlso: string;
   /** Setup's first check: the agent loads the repository's instructions. */
   instructionsCheck: string;
+  /** The instructions file Setup offers as a skeleton: the one the agent loads. */
+  instructionsFile: string;
   /** Setup's check that the agent's own allowlist covers the Tandembike tools, if it has one. */
   allowlistCheck: string | null;
 };
@@ -86,6 +90,7 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
     askAlso: '; AskUserQuestion also works and shows as choice cards',
     instructionsCheck:
       "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
+    instructionsFile: 'CLAUDE.md',
     allowlistCheck: 'The permission allowlist covers the Tandembike MCP tools.',
   },
   // Copilot has no worktree tool and no AskUserQuestion; it loads AGENTS.md
@@ -94,6 +99,7 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
     askAlso: '',
     instructionsCheck:
       "An AGENTS.md or a .github/copilot-instructions.md exists and holds the repository's instructions.",
+    instructionsFile: 'AGENTS.md',
     allowlistCheck: null,
   },
 };
@@ -101,32 +107,30 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
   const own = agentBriefLines[brief.agentKind];
-  const items = [
-    own.instructionsCheck,
-    ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
-  ];
   const suggestions = brief.checkCommandSuggestions ?? [];
-  items.push(
+  const items = [
+    `${own.instructionsCheck} It says how to test, lint and run the app. When it is missing or silent on those, offer a skeleton \`${own.instructionsFile}\` that says how to test, lint and run the app, from what you found in the repository.`,
+    ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
     `The Check command: what a Start run must see pass before it opens a pull request. ${
       suggestions.length === 0
         ? 'Tandembike detected no candidate.'
         : `Tandembike detected these candidates, best first: ${suggestions.map((command) => `\`${command}\``).join(', ')}.`
     } Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.`,
-  );
-  items.push(
+    '`gh` is installed and logged in (`gh auth status`). Report only: runs need it to open pull requests.',
+    'The repository has a CI workflow, such as one in `.github/workflows/`. Report only. Without CI, Auto-merge hands every pull request to the User for Approve merge, since no checks prove it.',
+    `The default branch: Tandembike found ${brief.defaultBranch ? `\`${brief.defaultBranch}\`` : 'none'}. Report it, so the User can spot one they did not expect.`,
+    'A git guardrail: a hook in the repository that blocks destructive git commands (force pushes, pushes to the default branch, git reset --hard, git clean, commits on the default branch or a detached HEAD). When there is none, offer to install one as advice, not a requirement: it also keeps terminal sessions and people off the default branch.',
     `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
-    'Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.',
-  );
-  if (brief.parallelRuns) {
-    items.push(
-      "Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.",
-    );
-  }
+    "Commits: when the repository has no commits yet, offer to make the first commit of what it holds, since worktrees and Start runs need one; make it only after the User's Allow.",
+  ];
   return [
     'Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:',
     ...items.map((item, index) => `${index + 1}. ${item}`),
-    'Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.',
-    'End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.',
+    brief.terminal
+      ? 'First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found and ask about that item alone, with your recommended answer; ask in the chat, so the User can accept it with a yes.'
+      : 'First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found and ask about that item alone, with your recommended answer, as a Widget: ask_choice, with your recommendation in `recommended`, so the User can accept it with a click.',
+    'Setup is advisory, and the User may decline any suggestion. Every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request, except that first commit of a repository with none: the User reviews the diff and commits it their own way.',
+    'End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), saved, committed, skipped by the User, or missing.',
   ];
 };
 

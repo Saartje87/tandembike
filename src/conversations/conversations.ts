@@ -989,13 +989,17 @@ export function createConversations({
   };
 
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
-  /** The Check commands detected in the repository at `path`, best first; none without one. */
-  const checkCommandsOf = (path: string | null): string[] => {
-    if (path === null) {
-      return [];
-    }
-    const detection = detectRepository(path);
-    return detection.ok ? detection.checkCommands : [];
+  /** What Setup's brief tells of the repository at `path`: its default branch and Check commands, best first. */
+  const repositoryFacts = (
+    path: string | null,
+  ): { defaultBranch: string | null; checkCommandSuggestions: string[] } => {
+    const detection = path === null ? null : detectRepository(path);
+    return detection?.ok
+      ? {
+          defaultBranch: detection.defaultBranch,
+          checkCommandSuggestions: detection.checkCommands,
+        }
+      : { defaultBranch: null, checkCommandSuggestions: [] };
   };
 
   const briefOf = (id: number): string => {
@@ -1031,7 +1035,7 @@ export function createConversations({
             },
       checkCommand: settings.checkCommand,
       ...(conversation.intent === 'setup'
-        ? { checkCommandSuggestions: checkCommandsOf(settings.repositoryPath) }
+        ? repositoryFacts(settings.repositoryPath)
         : {}),
       runMode: settings.runMode,
       terminal: isTerminal(conversation),

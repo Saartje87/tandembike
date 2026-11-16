@@ -263,3 +263,83 @@ describe('runBrief for Setup and the Check command', () => {
     expect(brief).toMatch(/When you find none, say so/);
   });
 });
+
+describe("runBrief for Setup's checklist", () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: null,
+    ticketTitle: null,
+    ticketType: null,
+    projectName: 'Website',
+    agentKind: 'claude-code' as const,
+    intent: 'setup' as const,
+    parallelRuns: true,
+    runMode: 'default' as const,
+    defaultBranch: 'main',
+    checkCommandSuggestions: ['npm run check'],
+  };
+  const setup = runBrief(base);
+
+  it('inspects first, then asks one item at a time with a recommendation', () => {
+    expect(setup).toMatch(/First inspect the repository for every item/);
+    expect(setup).toMatch(/one item at a time/);
+    expect(setup).toMatch(/your recommended answer/);
+  });
+
+  it('asks with a Widget in the app and in chat in a terminal', () => {
+    expect(setup).toMatch(
+      /ask_choice, with your recommendation in `recommended`/,
+    );
+    const terminal = runBrief({ ...base, terminal: true });
+    expect(terminal).toMatch(/ask in the chat/);
+    expect(terminal).not.toMatch(/ask_choice, with your recommendation/);
+  });
+
+  it('reports gh, installed and logged in, without offering a fix', () => {
+    expect(setup).toMatch(
+      /`gh` is installed and logged in \(`gh auth status`\)\. Report only/,
+    );
+  });
+
+  it('reports whether CI exists and that Auto-merge hands off without it', () => {
+    expect(setup).toMatch(/has a CI workflow, .*\. Report only\./);
+    expect(setup).toMatch(
+      /Without CI, Auto-merge hands every pull request to the User/,
+    );
+  });
+
+  it('reports the default branch it found', () => {
+    expect(setup).toContain(
+      'The default branch: Tandembike found `main`. Report it, so the User can spot one they did not expect.',
+    );
+    expect(runBrief({ ...base, defaultBranch: null })).toContain(
+      'Tandembike found none',
+    );
+  });
+
+  it('offers a skeleton instructions file per Agent kind saying how to test, lint and run the app', () => {
+    expect(setup).toMatch(
+      /offer a skeleton `CLAUDE\.md` that says how to test, lint and run the app/,
+    );
+    expect(runBrief({ ...base, agentKind: 'copilot' })).toMatch(
+      /offer a skeleton `AGENTS\.md` that says how to test, lint and run the app/,
+    );
+  });
+
+  it('offers a git guardrail hook as advice, not a requirement', () => {
+    expect(setup).toMatch(/offer to install one as advice, not a requirement/);
+  });
+
+  it('offers the first commit in a repository with none, the only commit Setup may make', () => {
+    expect(setup).toMatch(
+      /no commits yet, offer to make the first commit[^.]*only after the User's Allow/,
+    );
+    expect(setup).toMatch(
+      /Never commit, push or open a pull request, except that first commit/,
+    );
+  });
+
+  it('asks about no worktree convention: the runner makes each worktree', () => {
+    expect(setup).not.toMatch(/convention for working in a git worktree/);
+  });
+});
