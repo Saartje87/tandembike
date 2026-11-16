@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTickets } from '../tickets/tickets';
 import { openDatabase } from './connection';
@@ -9,9 +9,12 @@ import * as schema from './schema';
 import {
   cpSync,
   existsSync,
+  mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -48,6 +51,168 @@ describe('openDatabase', () => {
     expect(reopened.listProjects().map((project) => project.name)).toEqual([
       'Website',
     ]);
+  });
+});
+
+describe('openDatabase backs up before migrating (T1554)', () => {
+  const source = join(process.cwd(), 'src', 'db', 'migrations');
+  const journal = JSON.parse(
+    readFileSync(join(source, 'meta', '_journal.json'), 'utf8'),
+  ) as { entries: { tag: string }[] };
+  const lastTag = journal.entries[journal.entries.length - 1].tag;
+  let folder: string;
+  let path: string;
+  let backups: string;
+  let behind: string;
+
+  beforeEach(() => {
+    folder = mkdtempSync(join(tmpdir(), 'ticket-backup-'));
+    path = join(folder, 'data', 'ticket.db');
+    backups = join(folder, 'data', 'backups');
+    behind = join(folder, 'migrations');
+    cpSync(source, behind, { recursive: true });
+    writeFileSync(
+      join(behind, 'meta', '_journal.json'),
+      JSON.stringify({ ...journal, entries: journal.entries.slice(0, -1) }),
+    );
+  });
+
+  afterEach(() => {
+    rmSync(folder, { recursive: true, force: true });
+  });
+
+  const appliedCount = (file: string) => {
+    const sqlite = new Database(file, { readonly: true });
+    const { count } = sqlite
+      .prepare('select count(*) as count from __drizzle_migrations')
+      .get() as { count: number };
+    sqlite.close();
+    return count;
+  };
+
+  it('writes a backup named after the time and the first pending migration', () => {
+    openDatabase(path, { migrationsFolder: behind });
+
+    openDatabase(path);
+
+    const files = readdirSync(backups);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(
+      new RegExp(
+        `^ticket-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z-before-${lastTag}\\.db$`,
+      ),
+    );
+    expect(appliedCount(join(backups, files[0]))).toBe(
+      journal.entries.length - 1,
+    );
+    expect(appliedCount(path)).toBe(journal.entries.length);
+  });
+
+  it('writes no backup when no migration is pending', () => {
+    openDatabase(path);
+
+    openDatabase(path);
+
+    expect(existsSync(backups)).toBe(false);
+  });
+
+  it('writes no backup for a database file it creates', () => {
+    openDatabase(path);
+
+    expect(existsSync(backups)).toBe(false);
+  });
+
+  it('backs up everything before the first migration when the file has no migrations table', () => {
+    mkdirSync(join(folder, 'data'));
+    const sqlite = new Database(path);
+    sqlite.prepare('create table notes (body text)').run();
+    sqlite.close();
+
+    openDatabase(path);
+
+    const [file] = readdirSync(backups);
+    expect(file).toMatch(new RegExp(`-before-${journal.entries[0].tag}\\.db$`));
+  });
+
+  it('includes rows still in the WAL', () => {
+    openDatabase(path, { migrationsFolder: behind });
+    // Left open: closing the last connection would checkpoint the WAL.
+    const writer = new Database(path);
+    writer
+      .prepare(
+        "insert into projects (name, name_key, created_at) values ('Website', 'website', 0)",
+      )
+      .run();
+    expect(statSync(`${path}-wal`).size).toBeGreaterThan(0);
+
+    openDatabase(path);
+
+    const [file] = readdirSync(backups);
+    const backup = new Database(join(backups, file), { readonly: true });
+    expect(backup.prepare('select name from projects').all()).toEqual([
+      { name: 'Website' },
+    ]);
+    backup.close();
+    writer.close();
+  });
+
+  it('keeps only the 5 most recent backups', () => {
+    openDatabase(path, { migrationsFolder: behind });
+    mkdirSync(backups);
+    const older = [1, 2, 3, 4, 5].map(
+      (day) => `ticket-2020-01-0${day}T00-00-00-000Z-before-0001_old.db`,
+    );
+    for (const name of older) {
+      writeFileSync(join(backups, name), '');
+    }
+
+    openDatabase(path);
+
+    const files = readdirSync(backups).sort();
+    expect(files).toHaveLength(5);
+    expect(files.slice(0, 4)).toEqual(older.slice(1));
+    expect(files[4]).toMatch(new RegExp(`-before-${lastTag}\\.db$`));
+  });
+
+  it('still migrates when an old backup cannot be deleted', () => {
+    openDatabase(path, { migrationsFolder: behind });
+    for (const day of [1, 2, 3, 4, 5]) {
+      mkdirSync(
+        join(
+          backups,
+          `ticket-2020-01-0${day}T00-00-00-000Z-before-0001_old.db`,
+        ),
+        { recursive: true },
+      );
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    openDatabase(path);
+
+    expect(appliedCount(path)).toBe(journal.entries.length);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not delete old database backups'),
+      expect.anything(),
+    );
+    warn.mockRestore();
+  });
+
+  it('throws naming the reason and does not migrate when the backup fails', () => {
+    openDatabase(path, { migrationsFolder: behind });
+    writeFileSync(backups, 'a file where the backups folder goes');
+
+    expect(() => openDatabase(path)).toThrow(
+      /Could not back up the database .* before applying migration .*, so it was not migrated: .*EEXIST/,
+    );
+    expect(appliedCount(path)).toBe(journal.entries.length - 1);
+  });
+
+  it('never backs up a database in memory', () => {
+    const cwdBackups = join(process.cwd(), 'backups');
+
+    openDatabase(':memory:', { migrationsFolder: behind });
+
+    expect(existsSync(cwdBackups)).toBe(false);
   });
 });
 

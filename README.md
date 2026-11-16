@@ -259,6 +259,16 @@ keeps it in `~/.tandembike/`. `npm run dev` and `npm run start` keep it in the
 folder. Both are outside git, so your Tickets are never committed. To back up,
 copy the folder; to start fresh, stop the app and delete it.
 
+Migrations cannot be undone, so before the app applies a pending migration to
+the database it writes a backup to `backups/` in the same data folder, named
+after the time and the first migration it is about to apply, such as
+`ticket-2026-11-16T10-08-42-456Z-before-0068_ai_credit_ceilings.db`. It keeps
+the 5 most recent and deletes older ones. If the backup fails, the app does not
+migrate and refuses to start with the reason. To restore one, stop the app,
+delete `ticket.db-wal` and `ticket.db-shm` if they exist, copy the backup over
+`ticket.db`, and start a version of the app that does not have that migration
+(the app applies pending migrations again on start).
+
 ## Available commands
 
 | Command               | Description                                                                               |
