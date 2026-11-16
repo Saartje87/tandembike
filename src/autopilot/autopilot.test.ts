@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestConversations } from '../test/conversations';
 import { createChangeChannel } from '../tickets/changes';
 import { createAutopilot } from './autopilot';
+import type {
+  AutopilotPauseReason,
+  AutoTriagePauseReason,
+} from './explanation';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1080,6 +1084,8 @@ describe('Autopilot machine cap (ADR 0041)', () => {
     const world = createTestConversations(changes);
     const { tickets, conversations } = world;
     tickets.setMachineSettings({ maxConcurrentRuns: cap });
+    /** The Spars' topics by Conversation, as the Spars module would give them. */
+    const sparTopics = new Map<number, string>();
     const projects = Array.from({ length: options.projects ?? 2 }, (_, i) => {
       const project = tickets.createProject({ name: `Project ${i + 1}` });
       tickets.setProjectAgentSettings(project.id, {
@@ -1105,7 +1111,12 @@ describe('Autopilot machine cap (ADR 0041)', () => {
         labels: ['ready-for-agent'],
         cycleId: project.cycleId,
       });
-    const autopilot = createAutopilot({ tickets, conversations, changes });
+    const autopilot = createAutopilot({
+      tickets,
+      conversations,
+      changes,
+      sparTopic: (id) => sparTopics.get(id) ?? null,
+    });
     /** The Tickets with a Start Conversation, per Project, in start order. */
     const startedIn = (project: (typeof projects)[number]) =>
       conversations
@@ -1119,8 +1130,92 @@ describe('Autopilot machine cap (ADR 0041)', () => {
       ready,
       autopilot,
       startedIn,
+      sparTopics,
     };
   }
+
+  it('names every live process holding a full cap, from every Project (T1521)', async () => {
+    const { projects, autopilot, conversations, runner, tickets, sparTopics } =
+      machineSetup(3);
+    const built = tickets.createTicket({
+      projectId: projects[0].id,
+      title: 'Build it',
+    });
+    const start = await conversations.start({
+      startedBy: 'user',
+      projectId: projects[0].id,
+      ticketNumber: built.number,
+      intent: 'start',
+      prompt: 'Build it',
+    });
+    const spar = await conversations.start({
+      startedBy: 'user',
+      projectId: projects[1].id,
+      intent: 'spar',
+      stage: { stage: 'spar', topic: 'Pricing' },
+    });
+    sparTopics.set(spar.id, 'Pricing');
+    runner.runs[1].emit({ type: 'turn', cost: 0 });
+    const typed = tickets.createTicket({
+      projectId: projects[1].id,
+      title: 'In a terminal',
+    });
+    const session = await conversations.startTerminal({
+      ticketNumber: typed.number,
+      intent: 'start',
+    });
+
+    const [reason] = (
+      autopilot.explain(projects[0].id).autopilot as {
+        reasons: AutopilotPauseReason[];
+      }
+    ).reasons;
+    expect(reason).toEqual({
+      type: 'machineCapFull',
+      cap: 3,
+      holders: [
+        {
+          conversationId: start.id,
+          projectId: projects[0].id,
+          projectName: 'Project 1',
+          intent: 'start',
+          terminal: false,
+          ticketNumber: built.number,
+          title: 'Build it',
+          waitingOnUser: false,
+          lastActivity: expect.any(Date),
+        },
+        {
+          conversationId: spar.id,
+          projectId: projects[1].id,
+          projectName: 'Project 2',
+          intent: 'spar',
+          terminal: false,
+          ticketNumber: null,
+          title: 'Pricing',
+          waitingOnUser: true,
+          lastActivity: expect.any(Date),
+        },
+        {
+          conversationId: session.conversationId,
+          projectId: projects[1].id,
+          projectName: 'Project 2',
+          intent: 'start',
+          terminal: true,
+          ticketNumber: typed.number,
+          title: 'In a terminal',
+          waitingOnUser: false,
+          lastActivity: expect.any(Date),
+        },
+      ],
+    });
+    const autoTriage = autopilot.explain(projects[0].id).autoTriage as {
+      reasons: AutoTriagePauseReason[];
+    };
+    expect(
+      autoTriage.reasons.find(({ type }) => type === 'machineCapFull'),
+    ).toEqual(reason);
+  });
 
   it('never runs more than the cap across Projects, and goes on when a run hands off', async () => {
     const {
@@ -1635,7 +1730,15 @@ describe('explain (ADR 0044)', () => {
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'machineCapFull', cap: 1, waitingOnUser: 0 }],
+        reasons: [
+          {
+            type: 'machineCapFull',
+            cap: 1,
+            holders: [
+              expect.objectContaining({ title: 'A', waitingOnUser: false }),
+            ],
+          },
+        ],
       });
     });
 
@@ -1653,7 +1756,16 @@ describe('explain (ADR 0044)', () => {
 
       expect(autopilot.explain(project.id).autopilot).toEqual({
         state: 'paused',
-        reasons: [{ type: 'machineCapFull', cap: 2, waitingOnUser: 1 }],
+        reasons: [
+          {
+            type: 'machineCapFull',
+            cap: 2,
+            holders: [
+              expect.objectContaining({ title: 'A', waitingOnUser: true }),
+              expect.objectContaining({ title: 'B', waitingOnUser: false }),
+            ],
+          },
+        ],
       });
     });
 

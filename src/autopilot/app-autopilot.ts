@@ -1,4 +1,5 @@
 import { appConversations } from '../conversations/app-conversations';
+import { appSpars } from '../spars/app-spars';
 import { appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
 import { type Autopilot, createAutopilot } from './autopilot';
@@ -21,6 +22,14 @@ export function appAutopilot(): Autopilot {
     tickets: appTickets('user'),
     conversations: appConversations(),
     changes: appChangeChannel(),
+    // A Spar's row is missing only by a bug; Flow names it by its Ticket then.
+    sparTopic: (id) => {
+      try {
+        return appSpars().getSpar(id).topic;
+      } catch {
+        return null;
+      }
+    },
   });
   return global[globalKey];
 }
