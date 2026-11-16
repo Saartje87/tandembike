@@ -22,7 +22,7 @@ Wait until the pull request's checks finish, with the host CLI (`gh pr checks <n
 
 - All green: go to step 5.
 - A check failed: go to "When you cannot merge", unless the failure is clearly the branch being behind, in which case go to step 4.
-- No checks exist: continue, and say in your note that none ran.
+- No checks exist: continue, since the User's approval is what lets it merge without them (with Auto-merge, a run hands such a pull request off instead of merging it), and say in your note that none ran.
 
 ## 4. Update the branch when it is behind or conflicts
 

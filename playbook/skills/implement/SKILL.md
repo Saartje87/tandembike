@@ -38,7 +38,9 @@ Keep the red-run list as you go: for each behaviour test, its name and the faili
 
 ## 4. Check
 
-Run the Check command from the `start_work` bundle once your work is complete, and fix everything it reports until it passes. When the bundle has no Check command, run the repository's own test and lint commands as its instructions name them. Do not open a pull request with a failing check; if you cannot make it pass, go to "When you cannot finish".
+Run the Check command from the `start_work` bundle once your work is complete, and fix everything it reports until it passes. When the bundle has no Check command, run the repository's own test and lint commands as its instructions name them. When it has neither a Check command nor instructions that name them, find its test and lint scripts yourself (such as `package.json` scripts, a `Makefile`, `cargo test`, `go test ./...`, `pytest`), run them, and list in the pull request body exactly what you ran.
+
+When the repository has a UI and its instructions say how to run it, also see the change working in a real browser: run the app as they say and check the behaviour the Ticket changes, then say in the pull request what you saw. Do not open a pull request with a failing check; if you cannot make it pass, go to "When you cannot finish".
 
 ## 5. Acceptance criteria
 
@@ -50,7 +52,7 @@ Commit your work first, then call the `review` skill on the diff against the def
 
 ## 7. Push and open the pull request
 
-Commit messages name the Ticket (`T42`) and say what changed in plain words, unless the repository's instructions say otherwise.
+Commit messages name the Ticket (`T42`) and say what changed in plain words, unless the repository's instructions say otherwise. Before each commit, check that `git branch --show-current` names the Ticket's branch, not the default branch or a detached HEAD: a stray checkout is caught here.
 
 - When the repository has a host CLI you can use, such as `gh` for GitHub, push the branch and open a pull request with it. The body says what changed, how you checked it (the Check command and what it covered), the red-run list from step 3, and which Ticket it is for (`T42`).
 - When there is none, push the branch if a remote exists and say so in a note on the Ticket with `add_note`: the branch name, and that no pull request could be opened.
@@ -62,13 +64,13 @@ Then call `open_pr` with the pull request's URL, without `handOff`, to record th
 `start_work` returned `merge`, the Project's Auto-merge setting when you took the Claim. Only the User sets it; follow it, whatever the default branch's history suggests.
 
 - **`merge: "approve"`**: hand off. Call `open_pr` with the URL and `handOff: true`: it releases your Claim and leaves the Ticket in Review for the User to approve the merge. Do not merge and do not call `finish_work` unless the User approves (see "Merge").
-- **`merge: "auto"`**: merge it yourself, by "Merge", only when all of these hold: the Check command passes, your review has no unresolved findings (a finding you chose not to fix is explained in a note), every acceptance criterion is checked or a note says why it is not, you have read the red-run list (see "Merge"), and the pull request's checks are green. When one does not hold, call `add_note` saying which and why, then hand off as for `approve`. Do not call `finish_work`.
+- **`merge: "auto"`**: merge it yourself, by "Merge", only when all of these hold: the Check command passes, your review has no unresolved findings (a finding you chose not to fix is explained in a note), every acceptance criterion is checked or a note says why it is not, you have read the red-run list (see "Merge"), and the pull request has at least one CI check, and its checks are green. A pull request with no CI checks is a failed condition: nothing proved it, so hand off. When one does not hold, call `add_note` saying which and why, then hand off as for `approve`. Do not call `finish_work`.
 
 ## Merge
 
 Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. First read the red-run list in the pull request body. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Ticket (`add_note`). The list is self-reported and nothing checks it automatically; it does not block the merge by itself. Then merge the pull request you opened, from the worktree you are in:
 
-1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: continue, and say so in a note.
+1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: with `merge: "auto"`, go to step 5 and hand off, since nothing proved the change; after the User's approval, continue and say so in a note.
 2. When the branch is behind the default branch or conflicts, merge the default branch into it (`git fetch origin`, `git merge origin/<default>`), resolve conflicts keeping the intent of both sides without losing the Ticket's change, run the Check command when it is cheap, push normally with `git push`, and go back to step 1. Many repositories forbid force pushes, by a guardrail hook or in their instructions; only where force pushes are allowed may you rebase instead (`git rebase origin/<default>`, then `git push --force-with-lease`). Update and push at most twice.
 3. When the checks are green, merge with the host CLI (`gh pr merge <number> --merge`, unless the repository's instructions name another method). When it refuses, read why and go back to step 1 or 2 once.
 4. Call `finish_work` with the Ticket number. It refuses while an acceptance criterion is unchecked: pass `override` with the reason only for a criterion you deliberately left unmet and explained.
@@ -80,7 +82,8 @@ Never push to the default branch, and never merge with failing checks.
 
 If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you merge or hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
 
-- has a clear problem and how to reproduce it;
+- has a description with these sections: **Problem** (what went wrong), **Repro** (the steps that show it), **Expected** (what should have happened), and, when you used one, **Workaround**;
+- takes its acceptance criteria from Expected;
 - is labelled `needs-triage` and `from:agent-run`;
 - sits outside any Cycle and Epic (leave both out);
 - names the Ticket you worked as its Origin (`originNumber`), so the Retro can find it.

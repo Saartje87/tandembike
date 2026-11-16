@@ -37,4 +37,4 @@ When Autopilot or Auto-triage starts nothing, Flow lists every **Pause reason**,
 
 ## The Merge gate
 
-A run builds its Ticket in its own worktree and opens a pull request; the Ticket then waits in Review. By default a run never merges its own pull request: you approve each merge with **Approve merge**, and a Merge run merges it. With the Project's **Auto-merge** on, a run merges its own pull request once its checks, its review and every acceptance criterion pass, and hands it to you when they do not.
+A run builds its Ticket in its own worktree and opens a pull request; the Ticket then waits in Review. By default a run never merges its own pull request: you approve each merge with **Approve merge**, and a Merge run merges it. With the Project's **Auto-merge** on, a run merges its own pull request once its CI checks, its review and every acceptance criterion pass, and hands it to you when they do not, or when the pull request has no CI checks at all.

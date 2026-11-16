@@ -21,7 +21,7 @@ State what you understand the idea to be in two or three sentences, using the re
 
 ## 2. Explore
 
-Read the code, glossary and ADRs around the idea so you ask about what the code cannot tell you. Use `find_tickets` to see whether the Project already has Tickets or Epics about the same thing, and `get_project` for its labels and Cycles. Respect the decisions already recorded in the area.
+Look for the repository's domain docs: a glossary (`GLOSSARY.md` or `CONTEXT.md`) and decision records (`docs/adr/`) at its root. Use their language and respect their decisions when they exist; when they do not, carry on without remarking on it. Read the code, glossary and ADRs around the idea so you ask about what the code cannot tell you. Use `find_tickets` to see whether the Project already has Tickets or Epics about the same thing, and `get_project` for its labels and Cycles. Respect the decisions already recorded in the area.
 
 ## 3. Grill the User, a round at a time
 
