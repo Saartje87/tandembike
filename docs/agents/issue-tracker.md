@@ -14,7 +14,7 @@ To see a Project's structure, start from the `find_tickets` summaries: each row 
 
 ## Worktrees for parallel runs
 
-When Tandembike starts a Start run with Parallel runs on, it makes the run's worktree itself, under `~/.tandembike/worktrees/`, detached at the up-to-date default branch, and starts the run inside it. Such a run is already in its worktree: it creates its branch there, makes no other worktree, enters none, and does not remove its own, since Tandembike does. The rest of this section is the recipe for the Agent runs Tandembike does not start in a worktree, such as terminal sessions and subagents that share the checkout with another run.
+When Tandembike starts a Start run with Parallel runs on, it makes the run's worktree itself, under `~/.tandembike/worktrees/`, on the Ticket's own branch (`ticket-<number>-<slug>`, or the branch the Ticket already has), and starts the run inside it (ADR 0033). Such a run is already in its worktree and on its branch: it creates no branch, makes no other worktree, enters none, and does not remove its own, since Tandembike does. The rest of this section is the recipe for the Agent runs Tandembike does not start in a worktree, such as terminal sessions and subagents that share the checkout with another run.
 
 Setup takes three turns: create, enter, and at the end tear down.
 

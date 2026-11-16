@@ -253,7 +253,7 @@ describe('Starting a Conversation', () => {
     expect(runner.runs[2].options.model).toBe('claude-opus-5-5');
   });
 
-  it('starts a Start run with Parallel runs on in a worktree Tandembike made, and says so in the brief', async () => {
+  it("starts a Start run with Parallel runs on in a worktree on its Ticket's branch, and says so in the brief", async () => {
     const {
       conversations,
       runner,
@@ -263,10 +263,15 @@ describe('Starting a Conversation', () => {
       repositoryDir,
     } = setup();
     tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    const ticket = tickets.createTicket({
+      projectId: project.id,
+      title: 'Fix the Board',
+    });
 
     const conversation = await conversations.start({
       startedBy: 'user',
       projectId: project.id,
+      ticketNumber: ticket.number,
       intent: 'start',
       prompt: 'Go.',
     });
@@ -277,15 +282,61 @@ describe('Starting a Conversation', () => {
         repositoryPath: repositoryDir,
         projectId: project.id,
         conversationId: conversation.id,
+        branch: { ticketNumber: ticket.number, title: 'Fix the Board' },
       },
     ]);
     expect(conversation.worktreePath).toBe(path);
     expect(runner.runs[0].options.cwd).toBe(path);
     const brief = runner.runs[0].options.systemPrompt;
     expect(brief).toContain(
-      `You are in a git worktree Tandembike made for this Conversation at ${path}, detached at origin/main.`,
+      `You are in a git worktree Tandembike made for this Conversation at ${path}. It is already on T${ticket.number}'s own branch`,
     );
     expect(brief).not.toContain('EnterWorktree');
+  });
+
+  it("makes an Epic's Start worktree on the Epic's own branch", async () => {
+    const { conversations, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Big work',
+      type: 'Epic',
+    });
+    tickets.createTicket({
+      projectId: project.id,
+      title: 'Child',
+      epicNumber: epic.number,
+    });
+
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      ticketNumber: epic.number,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(worktrees.created[0].branch).toEqual({
+      ticketNumber: epic.number,
+      title: 'Big work',
+    });
+  });
+
+  it('detaches the worktree of a Start without a Ticket', async () => {
+    const { conversations, runner, tickets, project, worktrees } = setup();
+    tickets.setProjectAgentSettings(project.id, { parallelRuns: true });
+
+    await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'start',
+      prompt: 'Go.',
+    });
+
+    expect(worktrees.created[0].branch).toBeUndefined();
+    expect(runner.runs[0].options.systemPrompt).toContain(
+      'detached at origin/main',
+    );
   });
 
   it('keeps the main checkout with Parallel runs off and for every other intent', async () => {

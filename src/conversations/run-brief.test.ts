@@ -85,16 +85,29 @@ describe('runBrief and the worktree', () => {
     runMode: 'default' as const,
   };
 
-  it('replaces the Parallel runs line with the worktree line when there is a worktree', () => {
+  it("tells a Start its worktree is already on the Ticket's branch, and to make no other", () => {
     const brief = runBrief({
       ...base,
-      worktree: { path: '/w/1/c5', base: 'origin/main' },
+      worktree: { path: '/w/1/c5', base: 'origin/main', onTicketBranch: true },
     });
 
     expect(brief).toContain(
-      'You are in a git worktree Tandembike made for this Conversation at /w/1/c5, detached at origin/main. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.',
+      "You are in a git worktree Tandembike made for this Conversation at /w/1/c5. It is already on T7's own branch (`git branch --show-current` names it): new from origin/main, or the branch T7 already had. Commit on that branch and check it before each commit; do not create another branch or worktree. Tandembike removes the worktree when the Conversation closes or the Ticket is Done; the branch stays.",
     );
+    expect(brief).not.toContain('Create your branch here');
     expect(brief).not.toContain('Other runs may work in this repository');
+  });
+
+  it('tells a Start without a Ticket its worktree is detached', () => {
+    const brief = runBrief({
+      ...base,
+      ticketNumber: null,
+      ticketTitle: null,
+      ticketType: null,
+      worktree: { path: '/w/1/c5', base: 'origin/main' },
+    });
+
+    expect(brief).toContain('at /w/1/c5, detached at origin/main');
   });
 
   it('tells a Merge its worktree is detached, not that it creates a branch', () => {
@@ -109,11 +122,16 @@ describe('runBrief and the worktree', () => {
     expect(brief).not.toContain('Create your branch here');
   });
 
-  it('keeps the Parallel runs line without a worktree', () => {
-    const brief = runBrief({ ...base, worktree: null });
+  it('tells a Parallel runs Start without a worktree to make neither a worktree nor a branch, but to tell the User', () => {
+    for (const agentKind of ['claude-code', 'copilot'] as const) {
+      const brief = runBrief({ ...base, agentKind, worktree: null });
 
-    expect(brief).toContain('Other runs may work in this repository');
-    expect(brief).not.toContain('Tandembike made for this Conversation');
+      expect(brief).toContain('has no worktree of its own');
+      expect(brief).toContain('tell the User');
+      expect(brief).not.toMatch(
+        /EnterWorktree|git worktree add|Work in a git worktree of your own|Name your branch/,
+      );
+    }
   });
 });
 
@@ -173,28 +191,12 @@ describe('runBrief per Agent kind (ADR 0051)', () => {
     expect(brief).toContain('`npm run check`');
   });
 
-  it('tells a Copilot Start with Parallel runs on and no worktree to make its own, by convention or git worktree add, and work only in it', () => {
-    const brief = runBrief({
-      ...situations[0],
-      intent: 'start',
-      parallelRuns: true,
-      worktree: null,
-      agentKind: 'copilot',
-    });
-
-    expect(brief).toContain(
-      "follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`",
-    );
-    expect(brief).toContain('work only inside it');
-    expect(brief).not.toMatch(/EnterWorktree|ExitWorktree/);
-  });
-
   it("keeps a Copilot Start in Tandembike's worktree on the shared worktree line", () => {
     const brief = runBrief({
       ...situations[0],
       intent: 'start',
       parallelRuns: true,
-      worktree: { path: '/wt/5', base: 'origin/main' },
+      worktree: { path: '/wt/5', base: 'origin/main', onTicketBranch: true },
       agentKind: 'copilot',
     });
 

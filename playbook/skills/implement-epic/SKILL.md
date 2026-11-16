@@ -17,7 +17,9 @@ Call `start_work` on the Epic. It claims the Epic, which covers its children, an
 
 ## 2. Branch
 
-Create one branch off the repository's default branch, named after the Epic: `t<number>-<slug>` (for example `t42-checkout-flow`), unless the repository's instructions name another pattern. If the working directory is already a git worktree on a branch of its own, use that branch.
+A run Tandembike starts in a worktree is already on the Epic's own branch, `ticket-<number>-<slug>` (for example `ticket-42-checkout-flow`): the runner checked it out, reusing the branch the Epic already had. Check with `git branch --show-current`, work all the children on that branch, and create no other branch or worktree.
+
+Only when you are not on a branch of the Epic's (a session in the main checkout, on the default branch or detached), switch to its existing `ticket-<number>-…` branch, or else create `ticket-<number>-<slug>` off the default branch, named after the Epic.
 
 ## 3. Work the children in Blocker order
 

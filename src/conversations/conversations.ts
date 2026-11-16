@@ -1014,6 +1014,10 @@ export function createConversations({
           : {
               path: conversation.worktreePath,
               base: worktreeBaseOf(id),
+              // A Start on a Ticket is made on the Ticket's branch (ADR 0032).
+              onTicketBranch:
+                conversation.intent === 'start' &&
+                conversation.ticketNumber !== null,
             },
       checkCommand: settings.checkCommand,
       runMode: settings.runMode,
@@ -1135,7 +1139,8 @@ export function createConversations({
 
   /**
    * Makes the worktree of Conversation `id` and runs the Project's Prepare
-   * command in it. Returns why it failed, or null when the worktree is ready.
+   * command in it. A Start's worktree is on its Ticket's branch (ADR 0032),
+   * a Merge's detached. Returns why it failed, or null when it is ready.
    */
   const prepareWorktree = async (
     id: number,
@@ -1143,10 +1148,18 @@ export function createConversations({
     settings: { repositoryPath: string | null; prepareCommand: string | null },
   ): Promise<string | null> => {
     try {
+      const conversation = get(id);
+      const ticket =
+        conversation.intent === 'start' && conversation.ticketNumber !== null
+          ? tickets.getTicket(conversation.ticketNumber)
+          : null;
       const made = await worktrees.create({
         repositoryPath: settings.repositoryPath as string,
         projectId,
         conversationId: id,
+        ...(ticket === null
+          ? {}
+          : { branch: { ticketNumber: ticket.number, title: ticket.title } }),
       });
       update(id, { worktreePath: made.path, worktreeBase: made.base });
       if (settings.prepareCommand !== null) {

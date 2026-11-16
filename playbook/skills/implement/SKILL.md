@@ -18,7 +18,9 @@ Call `start_work` with the Ticket number. It claims the Ticket, moves a Todo Tic
 
 ## 2. Branch
 
-Create a branch off the repository's default branch, named `t<number>-<slug>` (for example `t42-fix-login-redirect`) unless the repository's instructions name another pattern. For an Epic, name it after the Epic. If the working directory is already a git worktree on a branch of its own, use that branch.
+A run Tandembike starts in a worktree is already on the Ticket's own branch, `ticket-<number>-<slug>` (for example `ticket-42-fix-login-redirect`): the runner checked it out, reusing the branch the Ticket already had. Check with `git branch --show-current`, work on that branch, and create no other branch or worktree.
+
+Only when you are not on a branch of the Ticket's (a session in the main checkout, on the default branch or detached), switch to its existing `ticket-<number>-…` branch, or else create `ticket-<number>-<slug>` off the default branch. For an Epic, use the Epic's number and title.
 
 ## 3. Build test-first
 

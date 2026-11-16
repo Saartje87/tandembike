@@ -13,8 +13,8 @@ This repository's process for one Agent run on one Ticket, from claim to merge. 
 
 Start runs here run the Playbook's `/tandembike:implement`, or `/tandembike:implement-epic` for an Epic: the Project's Start commands are blank, and this repository has no `implement` skill of its own. The Playbook defers to the repository's instructions, so these steps add to it or override it:
 
-- **Worktree.** A run Tandembike started is already in its own worktree; create the branch there. Any other run works in a worktree of its own, by "Worktrees for parallel runs" in [`issue-tracker.md`](issue-tracker.md), so a parallel session in the same checkout cannot switch its branch.
-- **Branch.** Name it by "Git workflow" in `AGENTS.md` (`ticket-<number>-<slug>`), not the Playbook's `t<number>-<slug>`. Before each commit, check that `git branch --show-current` names it: the Git guardrail refuses a commit on `main` or a detached HEAD.
+- **Worktree.** A run Tandembike started is already in its own worktree, on the Ticket's branch. Any other run works in a worktree of its own, by "Worktrees for parallel runs" in [`issue-tracker.md`](issue-tracker.md), so a parallel session in the same checkout cannot switch its branch.
+- **Branch.** The runner names it `ticket-<number>-<slug>`, as "Git workflow" in `AGENTS.md` does; a run outside a Tandembike worktree creates it by that name. Before each commit, check that `git branch --show-current` names it: the Git guardrail refuses a commit on `main` or a detached HEAD.
 - **Review.** Commit first, then call the Playbook's `review` skill (`tandembike:review`) on the diff against `main`, for every change, docs-only included. Do not use `code-review` for a run's review.
 - **Browser check.** When the change touches routing, navigation, a drawer or dialog, or a Server Action that navigates, also run a real-browser check by [`browser-checks.md`](browser-checks.md) after the review: jsdom cannot run Next's routing, so those bugs pass every test.
 - **Feedback.** File friction by "Feedback as Tickets" below; it says more than the Playbook's step (which Project, the category label, the first comment).

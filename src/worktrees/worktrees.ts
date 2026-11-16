@@ -27,8 +27,13 @@ export type KeptWorktreeState = Exclude<WorktreeState, 'clean' | 'missing'>;
 
 export type CreatedWorktree = {
   path: string;
-  /** What it is detached at: `origin/<default branch>`, or the local branch without a remote. */
+  /**
+   * What it starts from: `origin/<default branch>`, or the local branch
+   * without a remote. A worktree without a `branch` is detached at it.
+   */
   base: string;
+  /** The local branch it is on: the Ticket's own, new or reused; null when detached. */
+  branch: string | null;
 };
 
 export type PrepareResult = {
@@ -42,6 +47,11 @@ export type CreateWorktreeInput = {
   repositoryPath: string;
   projectId: number;
   conversationId: number;
+  /**
+   * The Ticket whose branch the worktree is on (ADR 0032); left out, the
+   * worktree is detached at its base, as a Merge's is.
+   */
+  branch?: { ticketNumber: number; title: string };
 };
 
 /**
@@ -50,9 +60,13 @@ export type CreateWorktreeInput = {
  */
 export type Worktrees = {
   /**
-   * Fetches `origin` when there is one and adds a detached worktree at its
-   * default branch, or at the local default branch without a remote. Rejects
-   * with git's message when that fails.
+   * Fetches `origin` when there is one and adds a worktree at its default
+   * branch, or at the local default branch without a remote. With a
+   * `branch`, the worktree is on the Ticket's branch, found by its number
+   * (`ticket-<n>-*`, else the old `t<n>-*`, the most recently committed
+   * first) or else made as `ticket-<n>-<slug>` from that base; without one it
+   * is detached there. Rejects when the branch is checked out in another
+   * worktree, when the repository has no commits, or with git's message.
    */
   create(input: CreateWorktreeInput): Promise<CreatedWorktree>;
   state(path: string): Promise<WorktreeState>;
@@ -98,6 +112,69 @@ const tail = (text: string): string =>
   text.length <= maxPrepareOutput
     ? text
     : `[output truncated]\n${text.slice(-maxPrepareOutput)}`;
+
+/** The longest slug a new Ticket branch gets from the title. */
+const maxSlug = 40;
+
+/** A Ticket title as a branch-name slug: lower-case, hyphenated, capped. */
+export function branchSlug(title: string): string {
+  const slug = title
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .slice(0, maxSlug)
+    .replace(/^-+|-+$/g, '');
+  return slug === '' ? 'work' : slug;
+}
+
+/**
+ * The Ticket's existing local branch: `ticket-<n>-*`, else the Playbook's
+ * old `t<n>-*`, the most recently committed at each step; null when none.
+ * The number ends at the hyphen, so T42 never takes `ticket-420-…`.
+ */
+async function existingTicketBranch(
+  repositoryPath: string,
+  ticketNumber: number,
+): Promise<string | null> {
+  for (const prefix of [`ticket-${ticketNumber}-`, `t${ticketNumber}-`]) {
+    const names = (
+      await git(repositoryPath, [
+        'for-each-ref',
+        '--sort=-committerdate',
+        '--format=%(refname:short)',
+        `refs/heads/${prefix}*`,
+      ])
+    )
+      .split('\n')
+      .map((name) => name.trim())
+      .filter((name) => name.startsWith(prefix) && name.length > prefix.length);
+    if (names.length > 0) {
+      return names[0];
+    }
+  }
+  return null;
+}
+
+/** The worktree `branch` is checked out in, the main checkout included; null when none. */
+async function checkedOutAt(
+  repositoryPath: string,
+  branch: string,
+): Promise<string | null> {
+  const listing = await git(repositoryPath, [
+    'worktree',
+    'list',
+    '--porcelain',
+  ]);
+  for (const entry of listing.split('\n\n')) {
+    const lines = entry.split('\n');
+    const path = lines.find((line) => line.startsWith('worktree '));
+    if (path && lines.includes(`branch refs/heads/${branch}`)) {
+      return path.slice('worktree '.length);
+    }
+  }
+  return null;
+}
 
 /** The folder worktrees go in: `<data folder>/worktrees`, `~/.tandembike` by default. */
 export const worktreesRoot = (
@@ -148,13 +225,15 @@ export function createWorktrees({
   // turbopackIgnore comments below keep `next build` from tracing the whole
   // project into the server output.
   return {
-    async create({ repositoryPath, projectId, conversationId }) {
+    async create({ repositoryPath, projectId, conversationId, branch }) {
       const detection = detectRepository(repositoryPath);
       if (!detection.ok) {
         throw new Error(detection.message);
       }
+      const noCommits =
+        'The repository has no commits yet, so a run has nothing to start from. Make a first commit, then start again.';
       if (detection.defaultBranch === null) {
-        throw new Error('The repository has no default branch to start from.');
+        throw new Error(noCommits);
       }
       const path = join(
         /*turbopackIgnore: true*/ root,
@@ -166,9 +245,49 @@ export function createWorktrees({
         await git(repositoryPath, ['fetch', 'origin']);
         base = `origin/${base}`;
       }
-      await git(repositoryPath, ['worktree', 'add', '--detach', path, base]);
+      try {
+        await git(repositoryPath, [
+          'rev-parse',
+          '--verify',
+          `${base}^{commit}`,
+        ]);
+      } catch {
+        throw new Error(noCommits);
+      }
+      if (branch === undefined) {
+        await git(repositoryPath, ['worktree', 'add', '--detach', path, base]);
+        writeFileSync(ownerMark(path), ownerFolder);
+        return { path, base, branch: null };
+      }
+      const existing = await existingTicketBranch(
+        repositoryPath,
+        branch.ticketNumber,
+      );
+      let name: string;
+      if (existing === null) {
+        name = `ticket-${branch.ticketNumber}-${branchSlug(branch.title)}`;
+        // No upstream: the branch is the Ticket's, never the default branch's.
+        await git(repositoryPath, [
+          'worktree',
+          'add',
+          '--no-track',
+          '-b',
+          name,
+          path,
+          base,
+        ]);
+      } else {
+        name = existing;
+        const busy = await checkedOutAt(repositoryPath, name);
+        if (busy !== null) {
+          throw new Error(
+            `T${branch.ticketNumber}'s branch ${name} is checked out in ${busy}. Finish or close the run working there, or switch that checkout to another branch, then start again.`,
+          );
+        }
+        await git(repositoryPath, ['worktree', 'add', path, name]);
+      }
       writeFileSync(ownerMark(path), ownerFolder);
-      return { path, base };
+      return { path, base, branch: name };
     },
 
     async state(path) {

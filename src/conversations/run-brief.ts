@@ -25,8 +25,12 @@ export type RunBrief = {
   /** Retro only: the Cycle it looks back on. */
   retroCycle?: RetroCycle | null;
   parallelRuns: boolean;
-  /** The worktree Tandembike made for this Conversation, and what it is detached at. */
-  worktree?: { path: string; base: string } | null;
+  /**
+   * The worktree Tandembike made for this Conversation and what it starts
+   * from: on the Ticket's own branch for a Start on a Ticket (ADR 0032),
+   * else detached there.
+   */
+  worktree?: { path: string; base: string; onTicketBranch?: boolean } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
@@ -69,8 +73,6 @@ const intentLines: Record<ConversationIntent, string> = {
 type AgentBriefLines = {
   /** Ends the UI note's Widget sentence: another way the agent can ask. */
   askAlso: string;
-  /** A Start with Parallel runs on and no Tandembike worktree. */
-  ownWorktree: string;
   /** Setup's first check: the agent loads the repository's instructions. */
   instructionsCheck: string;
   /** Setup's check that the agent's own allowlist covers the Tandembike tools, if it has one. */
@@ -80,8 +82,6 @@ type AgentBriefLines = {
 const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
   'claude-code': {
     askAlso: '; AskUserQuestion also works and shows as choice cards',
-    ownWorktree:
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     instructionsCheck:
       "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
     allowlistCheck: 'The permission allowlist covers the Tandembike MCP tools.',
@@ -90,8 +90,6 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
   // or .github/copilot-instructions.md, and has no repository allowlist.
   copilot: {
     askAlso: '',
-    ownWorktree:
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`. Then work only inside it. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     instructionsCheck:
       "An AGENTS.md or a .github/copilot-instructions.md exists and holds the repository's instructions.",
     allowlistCheck: null,
@@ -168,12 +166,23 @@ export function runBrief(brief: RunBrief): string {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. It is not on the pull request's branch: the merge skill checks that branch out here. Do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
+  } else if (
+    brief.worktree?.onTicketBranch &&
+    brief.intent === 'start' &&
+    brief.ticketNumber !== null
+  ) {
+    const ticket = `T${brief.ticketNumber}`;
+    lines.push(
+      `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}. It is already on ${ticket}'s own branch (\`git branch --show-current\` names it): new from ${brief.worktree.base}, or the branch ${ticket} already had. Commit on that branch and check it before each commit; do not create another branch or worktree. Tandembike removes the worktree when the Conversation closes or the Ticket is Done; the branch stays.`,
+    );
   } else if (brief.worktree && brief.intent === 'start') {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
   } else if (brief.parallelRuns && brief.intent === 'start') {
-    lines.push(own.ownWorktree);
+    lines.push(
+      'Other runs may work in this repository at the same time, and this Conversation has no worktree of its own: it began before Parallel runs was on. Change no files and switch no branches here; tell the User, who can close this Conversation and start the Ticket again to get a worktree on its branch.',
+    );
   }
   if (brief.intent === 'start' || brief.intent === 'merge') {
     lines.push(
