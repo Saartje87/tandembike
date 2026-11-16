@@ -527,6 +527,20 @@ describe('Terminal Setup (T1561)', () => {
     expect(second.conversationId).not.toBe(first.conversationId);
   });
 
+  it('starts again once the idle sweep ended a killed one', async () => {
+    const { conversations, repositoryDir } = setup();
+    const first = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    conversations.endIdleTerminals(new Date(Date.now() + 60 * 60 * 1000));
+    const second = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    expect(second.conversationId).not.toBe(first.conversationId);
+  });
+
   it('names tandembike add for a folder in no Project', async () => {
     const { conversations } = setup();
 

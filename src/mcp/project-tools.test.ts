@@ -485,6 +485,26 @@ describe('set_check_command', () => {
     );
   });
 
+  it('is refused once the Setup Conversation has ended', async () => {
+    const { conversations, tickets, project, connect } = await setupRun();
+    const setup = await conversations.startTerminalSetup({
+      projectId: project.id,
+    });
+    await conversations.endTerminal(setup.conversationId, { exitCode: 0 });
+    const client = await connect(String(setup.conversationId));
+
+    const result = await client.callTool({
+      name: 'set_check_command',
+      arguments: { command: 'npm run check' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(tickets.getProjectAgentSettings(project.id).checkCommand).toBe(
+      'npm test',
+    );
+    await client.close();
+  });
+
   it('emits the change event so open tabs refresh', async () => {
     const changes = createChangeChannel();
     const { conversations, project, connect } = await setupRun(changes);

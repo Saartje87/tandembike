@@ -396,15 +396,15 @@ const noRepositoryPath = {
     'This Project has no repository path. Set one in the Project settings first.',
 };
 
+/** The User's first message of a Setup, from the app or `tandembike setup`: the brief holds the checklist. */
+export const setupPrompt =
+  "Check that this repository is ready for Tandembike's Agent runs.";
+
 /**
  * The model a run of `intent` starts on, from its Agent kind's models (ADR
  * 0051): Triage's own when set, Batch triage's too, else the run model; null
  * for the agent's own default.
  */
-/** The User's first message of a Setup, from the app or `tandembike setup`: the brief holds the checklist. */
-export const setupPrompt =
-  "Check that this repository is ready for Tandembike's Agent runs.";
-
 const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
   (intent === 'triage' || intent === 'batch_triage') &&
   settings.triageModel !== null
@@ -994,7 +994,6 @@ export function createConversations({
       : (costs[middle - 1] + costs[middle]) / 2;
   };
 
-  /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
   /** The Project's stored Agent commands, each with the Playbook's command it replaces. */
   const agentCommandOverridesOf = (projectId: number) => {
     const commands = tickets.getProjectAgentCommands(projectId);
@@ -1019,6 +1018,7 @@ export function createConversations({
       : { defaultBranch: null, checkCommandSuggestions: [] };
   };
 
+  /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
   const briefOf = (id: number): string => {
     const conversation = get(id);
     const settings = tickets.getProjectAgentSettings(conversation.projectId);
