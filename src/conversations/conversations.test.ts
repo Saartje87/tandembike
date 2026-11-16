@@ -2140,6 +2140,22 @@ describe('Setup', () => {
     );
   });
 
+  it("reports the Project's stored Agent commands against the Playbook's", async () => {
+    const { conversations, runner, tickets, project } = setup();
+    tickets.setProjectAgentCommands(
+      project.id,
+      agentCommandEntries({ startCommand: '/implement' }),
+    );
+
+    await startSetup(conversations, project.id);
+
+    const brief = runner.runs[0].options.systemPrompt;
+    expect(brief).toContain(
+      'Start command `/implement` overrides the Playbook, which covers this Stage with `/tandembike:implement`.',
+    );
+    expect(brief).not.toContain('Triage command');
+  });
+
   it('is about the Project, and the brief lists the checklist and the no-commit rule', async () => {
     const { conversations, runner, project } = setup();
 

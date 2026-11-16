@@ -250,7 +250,7 @@ describe('runBrief for Setup and the Check command', () => {
     expect(brief).toContain(
       'Tandembike detected these candidates, best first: `npm run check`, `npm test`.',
     );
-    expect(brief).toMatch(/propose the best one/i);
+    expect(brief).toMatch(/When the Project has none, propose it/);
     expect(brief).toMatch(
       /save it with set_check_command only after the User says yes/,
     );
@@ -341,5 +341,116 @@ describe("runBrief for Setup's checklist", () => {
 
   it('asks about no worktree convention: the runner makes each worktree', () => {
     expect(setup).not.toMatch(/convention for working in a git worktree/);
+  });
+});
+
+describe('runBrief for Setup on an existing Project', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: null,
+    ticketTitle: null,
+    ticketType: null,
+    projectName: 'Website',
+    agentKind: 'claude-code' as const,
+    intent: 'setup' as const,
+    parallelRuns: true,
+    runMode: 'default' as const,
+    defaultBranch: 'main',
+    checkCommandSuggestions: ['npm run check'],
+  };
+
+  it('keeps a Check command that matches the best suggestion without asking', () => {
+    const brief = runBrief({ ...base, checkCommand: 'npm run check' });
+
+    expect(brief).toContain("The Project's Check command is `npm run check`.");
+    expect(brief).toMatch(
+      /When it matches your best suggestion, report it as kept and ask nothing/,
+    );
+  });
+
+  it('asks once about a Check command that differs, naming both, and never replaces it without a yes', () => {
+    const brief = runBrief({ ...base, checkCommand: 'npm test' });
+
+    expect(brief).toMatch(
+      /When it differs, ask once, naming both and why yours may be better/,
+    );
+    expect(brief).toMatch(/Never clear or replace it without the User's yes/);
+  });
+
+  it('says the Project has no Check command yet when it has none', () => {
+    expect(runBrief({ ...base, checkCommand: null })).toContain(
+      'The Project has no Check command yet.',
+    );
+  });
+
+  it('suggests only the missing sections of an existing instructions file, never the skeleton over it', () => {
+    expect(runBrief(base)).toMatch(
+      /When the file exists, suggest only its missing sections as an edit, never the skeleton/,
+    );
+  });
+
+  it('reports an existing guardrail hook as already present, with no offer', () => {
+    expect(runBrief(base)).toMatch(
+      /When one exists, report it as already present and offer nothing/,
+    );
+  });
+
+  it('gives items that already match one "already in place" line, not a question', () => {
+    const brief = runBrief(base);
+
+    expect(brief).toMatch(
+      /An item that already matches gets no question, only "already in place" in the summary/,
+    );
+    expect(brief).toContain('already in place');
+  });
+
+  it('reports each stored Agent command and whether the Playbook covers its Stage, report only', () => {
+    const brief = runBrief({
+      ...base,
+      agentCommandOverrides: [
+        {
+          label: 'Start command',
+          command: '/implement',
+          playbook: '/tandembike:implement',
+        },
+        {
+          label: 'Triage command',
+          command: '/triage',
+          playbook: '/tandembike:triage',
+        },
+      ],
+    });
+
+    expect(brief).toContain(
+      'Start command `/implement` overrides the Playbook, which covers this Stage with `/tandembike:implement`.',
+    );
+    expect(brief).toContain(
+      'Triage command `/triage` overrides the Playbook, which covers this Stage with `/tandembike:triage`.',
+    );
+    expect(brief).toMatch(
+      /the User can clear it in the Project's Settings so the Playbook runs\. Report only: do not change Agent commands/,
+    );
+  });
+
+  it('says the Playbook runs every Stage when no Agent command is stored', () => {
+    expect(runBrief({ ...base, agentCommandOverrides: [] })).toContain(
+      'No Stage has an Agent command: the Playbook runs every Stage.',
+    );
+  });
+
+  it('flags the fixed list of outdated conventions in the docs, each with its file and an edit', () => {
+    const brief = runBrief(base);
+
+    expect(brief).toContain('Outdated conventions');
+    expect(brief).toMatch(
+      /a branch-name pattern other than `ticket-<number>-<slug>`/,
+    );
+    expect(brief).toMatch(
+      /instructions for agents to create their own worktree or branch at the start of a run/,
+    );
+    expect(brief).toMatch(/`\/to-spec`, `\/to-tickets` or a local `\/triage`/);
+    expect(brief).toMatch(
+      /Report each match with its file and offer an edit, which waits for the User's Allow/,
+    );
   });
 });

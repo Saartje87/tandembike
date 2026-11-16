@@ -19,7 +19,9 @@ import { playbookPath } from '../playbook/playbook';
 import { detectRepository } from '../repository/detect-repository';
 import {
   agentCommandMessage,
+  agentStages,
   planCommandMessage,
+  playbookCommand,
 } from '../tickets/agent-commands';
 import {
   type AgentKind,
@@ -989,6 +991,17 @@ export function createConversations({
   };
 
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
+  /** The Project's stored Agent commands, each with the Playbook's command it replaces. */
+  const agentCommandOverridesOf = (projectId: number) => {
+    const commands = tickets.getProjectAgentCommands(projectId);
+    return agentStages.flatMap(({ field, skill, label }) => {
+      const command = commands[field];
+      return command === null
+        ? []
+        : [{ label, command, playbook: playbookCommand(skill) }];
+    });
+  };
+
   /** What Setup's brief tells of the repository at `path`: its default branch and Check commands, best first. */
   const repositoryFacts = (
     path: string | null,
@@ -1035,7 +1048,12 @@ export function createConversations({
             },
       checkCommand: settings.checkCommand,
       ...(conversation.intent === 'setup'
-        ? repositoryFacts(settings.repositoryPath)
+        ? {
+            ...repositoryFacts(settings.repositoryPath),
+            agentCommandOverrides: agentCommandOverridesOf(
+              conversation.projectId,
+            ),
+          }
         : {}),
       runMode: settings.runMode,
       terminal: isTerminal(conversation),

@@ -33,6 +33,15 @@ export type RunBrief = {
   worktree?: { path: string; base: string; onTicketBranch?: boolean } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
+  /**
+   * Setup only: the Project's stored Agent commands, each with the
+   * Playbook's command for its Stage, which the override replaces.
+   */
+  agentCommandOverrides?: {
+    label: string;
+    command: string;
+    playbook: string;
+  }[];
   /** Setup only: the default branch Tandembike found in the repository. */
   defaultBranch?: string | null;
   /** Setup only: the Check commands Tandembike detected in the repository, best first. */
@@ -104,33 +113,66 @@ const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
   },
 };
 
+/**
+ * The conventions a repository may still state from before the runner owned
+ * the branch and the Playbook owned the Stages (ADR 0020, ADR 0033): fixed,
+ * like the checklist.
+ */
+const outdatedConventions = [
+  'a branch-name pattern other than `ticket-<number>-<slug>`, such as `t<number>-<slug>`',
+  'instructions for agents to create their own worktree or branch at the start of a run',
+  "references to `/to-spec`, `/to-tickets` or a local `/triage` that the Playbook's Stages replace",
+];
+
+/** Setup's report of the Project's Agent commands: report only (ADR 0020). */
+const agentCommandsItem = (
+  overrides: { label: string; command: string; playbook: string }[],
+): string =>
+  overrides.length === 0
+    ? 'Agent commands: No Stage has an Agent command: the Playbook runs every Stage. Report it.'
+    : `Agent commands: ${overrides
+        .map(
+          ({ label, command, playbook }) =>
+            `${label} \`${command}\` overrides the Playbook, which covers this Stage with \`${playbook}\`.`,
+        )
+        .join(
+          ' ',
+        )} Report each: when the Playbook covers its Stage, the User can clear it in the Project's Settings so the Playbook runs. Report only: do not change Agent commands.`;
+
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
   const own = agentBriefLines[brief.agentKind];
   const suggestions = brief.checkCommandSuggestions ?? [];
   const items = [
-    `${own.instructionsCheck} It says how to test, lint and run the app. When it is missing or silent on those, offer a skeleton \`${own.instructionsFile}\` that says how to test, lint and run the app, from what you found in the repository.`,
+    `${own.instructionsCheck} It says how to test, lint and run the app. When it is missing, offer a skeleton \`${own.instructionsFile}\` that says how to test, lint and run the app, from what you found in the repository. When the file exists, suggest only its missing sections as an edit, never the skeleton over it.`,
     ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
     `The Check command: what a Start run must see pass before it opens a pull request. ${
       suggestions.length === 0
         ? 'Tandembike detected no candidate.'
         : `Tandembike detected these candidates, best first: ${suggestions.map((command) => `\`${command}\``).join(', ')}.`
-    } Read the repository's scripts and propose the best one, and save it with set_check_command only after the User says yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.`,
+    } ${
+      brief.checkCommand
+        ? `The Project's Check command is \`${brief.checkCommand}\`.`
+        : 'The Project has no Check command yet.'
+    } Read the repository's scripts and find the best one. When the Project has none, propose it, and save it with set_check_command only after the User says yes. When it matches your best suggestion, report it as kept and ask nothing. When it differs, ask once, naming both and why yours may be better. Never clear or replace it without the User's yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.`,
     '`gh` is installed and logged in (`gh auth status`). Report only: runs need it to open pull requests.',
     'The repository has a CI workflow, such as one in `.github/workflows/`. Report only. Without CI, Auto-merge hands every pull request to the User for Approve merge, since no checks prove it.',
     `The default branch: Tandembike found ${brief.defaultBranch ? `\`${brief.defaultBranch}\`` : 'none'}. Report it, so the User can spot one they did not expect.`,
-    'A git guardrail: a hook in the repository that blocks destructive git commands (force pushes, pushes to the default branch, git reset --hard, git clean, commits on the default branch or a detached HEAD). When there is none, offer to install one as advice, not a requirement: it also keeps terminal sessions and people off the default branch.',
+    'A git guardrail: a hook in the repository that blocks destructive git commands (force pushes, pushes to the default branch, git reset --hard, git clean, commits on the default branch or a detached HEAD). When there is none, offer to install one as advice, not a requirement: it also keeps terminal sessions and people off the default branch. When one exists, report it as already present and offer nothing.',
     `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
     "Commits: when the repository has no commits yet, offer to make the first commit of what it holds, since worktrees and Start runs need one; make it only after the User's Allow.",
+    agentCommandsItem(brief.agentCommandOverrides ?? []),
+    `Outdated conventions: search the repository's instructions and agent docs for rules that contradict how Tandembike runs agents now: ${outdatedConventions.join('; ')}. Report each match with its file and offer an edit, which waits for the User's Allow like any other.`,
   ];
   return [
-    'Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:',
+    'Check the repository against this checklist, and nothing else; the rest of its process is its own. The Project may have been set up before: compare each item with what is there before you offer anything.',
     ...items.map((item, index) => `${index + 1}. ${item}`),
     brief.terminal
-      ? 'First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found and ask about that item alone, with your recommended answer; ask in the chat, so the User can accept it with a yes.'
-      : 'First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found and ask about that item alone, with your recommended answer, as a Widget: ask_choice, with your recommendation in `recommended`, so the User can accept it with a click.',
+      ? "First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found, and when the item needs the User's answer, ask about it alone, with your recommended answer; ask in the chat, so the User can accept it with a yes."
+      : "First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found, and when the item needs the User's answer, ask about it alone, with your recommended answer, as a Widget: ask_choice, with your recommendation in `recommended`, so the User can accept it with a click.",
     'Setup is advisory, and the User may decline any suggestion. Every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request, except that first commit of a repository with none: the User reviews the diff and commits it their own way.',
-    'End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), saved, committed, skipped by the User, or missing.',
+    'An item that already matches gets no question, only "already in place" in the summary.',
+    'End with a summary that marks each checklist item by number as exactly one of: already in place, added (uncommitted), saved, committed, reported, skipped by the User, or missing.',
   ];
 };
 
