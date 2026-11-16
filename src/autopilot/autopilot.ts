@@ -1,4 +1,4 @@
-import { verdictOf } from '../conversations/capacity';
+import { type LiveProcess, verdictOf } from '../conversations/capacity';
 import type { ConversationState } from '../conversations/conversation-state';
 import type {
   Conversation,
@@ -13,6 +13,7 @@ import type {
   AutopilotExplanation,
   AutopilotPauseReason,
   AutoTriagePauseReason,
+  CapHolder,
   Eligibility,
   EngineState,
   NotEligibleReason,
@@ -25,6 +26,11 @@ export type AutopilotDeps = {
   /** Where the Start Conversations are started, only through its public interface. */
   conversations: Conversations;
   changes: ChangeChannel;
+  /**
+   * A Spar's topic by its Conversation id, for naming it where it holds the
+   * Machine cap (T1521); null for none. Left out, a Spar goes by its Ticket.
+   */
+  sparTopic?: (conversationId: number) => string | null;
   /** The clock the triage day is read from; the system clock when left out. */
   now?: () => Date;
 };
@@ -58,6 +64,7 @@ export function createAutopilot({
   tickets,
   conversations,
   changes,
+  sparTopic = () => null,
   now = () => new Date(),
 }: AutopilotDeps) {
   let queue: Promise<void> = Promise.resolve();
@@ -156,6 +163,34 @@ export function createAutopilot({
     return Math.max(0, machine.cap - liveProcessCount);
   };
 
+  /** A live process named for Flow: its Project, and its Spar's or Ticket's title. */
+  const capHolderOf = (process: LiveProcess): CapHolder => {
+    const topic = process.intent === 'spar' ? sparTopic(process.id) : null;
+    return {
+      conversationId: process.id,
+      projectId: process.projectId,
+      projectName: tickets.getProject(process.projectId).name,
+      intent: process.intent,
+      terminal: process.terminal,
+      ticketNumber: process.ticketNumber,
+      title: topic ?? ticketTitleOf(process.ticketNumber),
+      waitingOnUser: process.waitingOnUser,
+      lastActivity: process.lastActivity,
+    };
+  };
+
+  /** Ticket `number`'s title; null without one, or when it is gone. */
+  const ticketTitleOf = (number: number | null): string | null => {
+    if (number === null) {
+      return null;
+    }
+    try {
+      return tickets.getTicket(number).title;
+    } catch {
+      return null;
+    }
+  };
+
   /**
    * The machine's own Pause reasons for Project `projectId` (ADR 0041),
    * shared by builds and triage: the Machine ceiling counts in the unit of
@@ -171,13 +206,12 @@ export function createAutopilot({
       AutopilotPauseReason,
       { type: 'machineCapFull' | 'overMachineCeiling' }
     >[] = [];
-    const { machine, liveProcesses, liveProcessCount } =
-      conversations.capacity();
+    const { machine, processes, liveProcessCount } = conversations.capacity();
     if (liveProcessCount >= machine.cap) {
       reasons.push({
         type: 'machineCapFull',
         cap: machine.cap,
-        waitingOnUser: liveProcesses.waiting,
+        holders: processes.map(capHolderOf),
       });
     }
     const budget = conversations.machineBudget(

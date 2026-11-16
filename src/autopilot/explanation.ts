@@ -1,3 +1,4 @@
+import type { ConversationIntent } from '../conversations/conversation-state';
 import type { CostUnit } from '../tickets/cost-unit';
 /**
  * What Autopilot's rule answers (ADR 0044): why Autopilot and Auto-triage
@@ -5,6 +6,24 @@ import type { CostUnit } from '../tickets/cost-unit';
  * next. Dispatch and triage act on this same answer, so it is never a second
  * copy of the rules. Types only, so the UI can import them.
  */
+
+/**
+ * A live Agent process a full Machine cap counts (T1521), named so the User
+ * can find it in any Project and answer, close or stop it.
+ */
+export type CapHolder = {
+  conversationId: number;
+  projectId: number;
+  projectName: string;
+  intent: ConversationIntent;
+  /** A Terminal Conversation, working in the User's terminal (ADR 0039). */
+  terminal: boolean;
+  ticketNumber: number | null;
+  /** A Spar's topic, else its Ticket's title; null without either. */
+  title: string | null;
+  waitingOnUser: boolean;
+  lastActivity: Date;
+};
 
 /** A Pause reason (GLOSSARY): why Autopilot starts no build now. */
 export type AutopilotPauseReason =
@@ -14,8 +33,8 @@ export type AutopilotPauseReason =
   | { type: 'noSpendCeiling' }
   | { type: 'overSpendCeiling'; spend: number; ceiling: number; unit: CostUnit }
   | { type: 'noFreeStartRunSlot'; limit: number }
-  /** `waitingOnUser`: how many of the live runs wait on the User (T1332). */
-  | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
+  /** `holders`: every live process the cap counts, oldest first (T1521). */
+  | { type: 'machineCapFull'; cap: number; holders: CapHolder[] }
   | {
       type: 'overMachineCeiling';
       spend: number;
@@ -36,7 +55,7 @@ export type AutoTriagePauseReason =
       unit: CostUnit;
     }
   | { type: 'triageRunWorking'; conversationId: number }
-  | { type: 'machineCapFull'; cap: number; waitingOnUser: number }
+  | { type: 'machineCapFull'; cap: number; holders: CapHolder[] }
   | {
       type: 'overMachineCeiling';
       spend: number;

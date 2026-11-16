@@ -24,7 +24,7 @@ The cap now bounds the Agent processes alive on the machine:
 
 ## Consequences
 
-- Unanswered Action needed runs, overnight included, stall Autopilot: nothing new starts until the User answers, closes, stops or sends them back. Flow's "Machine cap full" Pause reason names how many of its runs wait on the User, and the app header splits its runs into working and waiting on you (T1332).
+- Unanswered Action needed runs, overnight included, stall Autopilot: nothing new starts until the User answers, closes, stops or sends them back. Flow's "Machine cap full" Pause reason lists every live process it counts, from every Project, each with its state, last activity and a link to answer or close it, so an idle Spar in another Project shows as what stalls the factory (T1521); the app header splits its runs into working and waiting on you (T1332).
 - Ending a process at a handoff costs a session resume on Approve merge or a later reply, as an interrupted Start already did.
 - The User's own idle Conversations (an Ask, a Spec) count against Autopilot's headroom until the User closes them, so forgotten tabs shrink it; the header's "waiting on you" shows them. An idle Triage Autopilot started is not counted.
 - A Project whose old run count was above the Machine cap is now limited by the cap; the migration keeps no per-Project number.

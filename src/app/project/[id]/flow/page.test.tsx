@@ -178,7 +178,23 @@ describe('FlowPage', () => {
           { type: 'noActiveCycle' },
           { type: 'overSpendCeiling', spend: 12, ceiling: 10, unit: 'usd' },
           { type: 'noFreeStartRunSlot', limit: 2 },
-          { type: 'machineCapFull', cap: 3, waitingOnUser: 2 },
+          {
+            type: 'machineCapFull',
+            cap: 1,
+            holders: [
+              {
+                conversationId: 8,
+                projectId: 6,
+                projectName: 'Wrockle',
+                intent: 'spar',
+                terminal: false,
+                ticketNumber: null,
+                title: 'Pricing',
+                waitingOnUser: true,
+                lastActivity: new Date(),
+              },
+            ],
+          },
           { type: 'overMachineCeiling', spend: 21, ceiling: 20, unit: 'usd' },
         ],
       },
@@ -203,7 +219,8 @@ describe('FlowPage', () => {
       'There is no Active Cycle: Autopilot only starts work planned into one.',
       "This Cycle's Autopilot spend, $12.00, has reached the Spend ceiling of $10.00.",
       'All 2 Start run slots are in use.',
-      'The machine cap of 3 runs is full, across all Projects: 2 of its runs wait on you. Answer or close them to let Autopilot go on.',
+      'The machine cap of 1 run is full, across all Projects. Answer, close or stop one of these runs to let Autopilot go on:Spar “Pricing” in Wrockle: waiting on you, last active just now. Close it if you are done with it: idle, it still counts.',
+      'Spar “Pricing” in Wrockle: waiting on you, last active just now. Close it if you are done with it: idle, it still counts.',
       "Today's Autopilot spend across all Projects, $21.00, has reached the machine ceiling of $20.00.",
     ]);
     const triage = screen.getByRole('region', { name: 'Auto-triage' });

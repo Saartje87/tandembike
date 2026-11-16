@@ -19,6 +19,7 @@ const run = (
   intent: 'start',
   state: 'running',
   startedBy: 'user',
+  updatedAt: new Date(0),
   ...fields,
 });
 
@@ -92,6 +93,62 @@ describe('capacityOf', () => {
 
     expect(capacity.liveProcesses).toEqual({ working: 4, waiting: 2 });
     expect(capacity.liveProcessCount).toBe(6);
+  });
+
+  it('lists every live Agent process it counts, oldest first, from every Project (T1521)', () => {
+    const at = new Date('2026-11-14T19:00:00Z');
+    const capacity = capacityOf(
+      snapshot([
+        run({
+          id: 8,
+          intent: 'spar',
+          state: 'idle',
+          projectId: 6,
+          updatedAt: at,
+        }),
+        run({ id: 3, intent: 'start', ticketNumber: 12, state: 'running' }),
+        run({
+          id: 5,
+          intent: 'start',
+          startedBy: 'terminal',
+          state: 'idle',
+          ticketNumber: 4,
+        }),
+        // A Triage Autopilot started that does not work is not counted.
+        run({ id: 6, intent: 'triage', startedBy: 'autopilot', state: 'idle' }),
+      ]),
+      1,
+    );
+
+    expect(capacity.processes).toEqual([
+      {
+        id: 3,
+        projectId: 1,
+        ticketNumber: 12,
+        intent: 'start',
+        terminal: false,
+        waitingOnUser: false,
+        lastActivity: new Date(0),
+      },
+      {
+        id: 5,
+        projectId: 1,
+        ticketNumber: 4,
+        intent: 'start',
+        terminal: true,
+        waitingOnUser: false,
+        lastActivity: new Date(0),
+      },
+      {
+        id: 8,
+        projectId: 6,
+        ticketNumber: null,
+        intent: 'spar',
+        terminal: false,
+        waitingOnUser: true,
+        lastActivity: at,
+      },
+    ]);
   });
 
   it('names the holders oldest first, marking those waiting on the User', () => {

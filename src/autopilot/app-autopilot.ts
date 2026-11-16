@@ -1,4 +1,5 @@
 import { appConversations } from '../conversations/app-conversations';
+import { appSpars } from '../spars/app-spars';
 import { appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
 import { type Autopilot, createAutopilot } from './autopilot';
@@ -21,6 +22,7 @@ export function appAutopilot(): Autopilot {
     tickets: appTickets('user'),
     conversations: appConversations(),
     changes: appChangeChannel(),
+    sparTopic: (id) => appSpars().getSpar(id).topic,
   });
   return global[globalKey];
 }

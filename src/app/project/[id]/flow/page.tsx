@@ -156,6 +156,7 @@ async function flowTab(params: ProjectPageProps['params']) {
           />
         </Inline>
         <PauseReasons
+          projectId={project.id}
           autopilot={explanation.autopilot}
           autoTriage={explanation.autoTriage}
         />

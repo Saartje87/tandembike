@@ -23,6 +23,8 @@ export type CapacityConversation = {
   intent: ConversationIntent;
   state: ConversationState;
   startedBy: ConversationStarter;
+  /** When it last changed: its last activity. */
+  updatedAt: Date;
 };
 
 export type CapacitySnapshot = {
@@ -42,6 +44,22 @@ export type SlotHolder = {
   id: number;
   ticketNumber: number | null;
   waitingOnUser: boolean;
+};
+
+/**
+ * A live Agent process the Machine cap counts for Autopilot's headroom
+ * (T1521): what Flow names so the User can find, answer or close it.
+ */
+export type LiveProcess = {
+  id: number;
+  projectId: number;
+  ticketNumber: number | null;
+  intent: ConversationIntent;
+  /** A Terminal Conversation, working in the User's terminal (ADR 0039). */
+  terminal: boolean;
+  /** Idle after its turn, or waiting on a permission or a Widget. */
+  waitingOnUser: boolean;
+  lastActivity: Date;
 };
 
 export type ProjectCapacity = {
@@ -73,6 +91,8 @@ export type Capacity<Project = ProjectCapacity | null> = {
   liveProcesses: { working: number; waiting: number };
   /** How many live Agent processes there are, working and waiting. */
   liveProcessCount: number;
+  /** The live Agent processes themselves, oldest first, every Project's (T1521). */
+  processes: LiveProcess[];
   project: Project;
 };
 
@@ -159,28 +179,30 @@ const holdersOf = (conversations: CapacityConversation[]): SlotHolder[] =>
  * live runs (Spec, Plan, Ask, Spar, Setup, Retro, New Ticket, Triage, Batch
  * triage), idle ones included, and every open Terminal Conversation, which
  * works in the User's terminal and counts as working. A Triage Autopilot
- * started counts only while it works, as its slot does.
+ * started counts only while it works, as its slot does. Oldest first.
  */
-const liveProcessesOf = (conversations: CapacityConversation[]) => {
-  let working = 0;
-  let waiting = 0;
-  for (const conversation of conversations) {
-    if (
-      conversation.startedBy === 'autopilot' &&
-      !holdsMachineSlot(conversation)
-    ) {
-      continue;
-    }
-    if (isTerminal(conversation)) {
-      working += 1;
-    } else if (waitsOnUser(conversation)) {
-      waiting += 1;
-    } else {
-      working += 1;
-    }
-  }
-  return { working, waiting };
-};
+const liveProcessesOf = (
+  conversations: CapacityConversation[],
+): LiveProcess[] =>
+  conversations
+    .filter(
+      (conversation) =>
+        conversation.startedBy !== 'autopilot' ||
+        holdsMachineSlot(conversation),
+    )
+    .sort((a, b) => a.id - b.id)
+    .map((conversation) => {
+      const terminal = isTerminal(conversation);
+      return {
+        id: conversation.id,
+        projectId: conversation.projectId,
+        ticketNumber: conversation.ticketNumber,
+        intent: conversation.intent,
+        terminal,
+        waitingOnUser: !terminal && waitsOnUser(conversation),
+        lastActivity: conversation.updatedAt,
+      };
+    });
 
 /** The Run capacity of the machine and, given `projectId`, of that Project. */
 export function capacityOf(
@@ -200,10 +222,18 @@ export function capacityOf(
     slotsHeld: machineHolders.length,
     holders: machineHolders,
   };
-  const liveProcesses = liveProcessesOf(snapshot.conversations);
-  const liveProcessCount = liveProcesses.working + liveProcesses.waiting;
+  const processes = liveProcessesOf(snapshot.conversations);
+  const waiting = processes.filter((process) => process.waitingOnUser).length;
+  const liveProcesses = { working: processes.length - waiting, waiting };
+  const liveProcessCount = processes.length;
   if (projectId === undefined) {
-    return { machine, liveProcesses, liveProcessCount, project: null };
+    return {
+      machine,
+      liveProcesses,
+      liveProcessCount,
+      processes,
+      project: null,
+    };
   }
   const own = snapshot.conversations.filter(
     (conversation) => conversation.projectId === projectId,
@@ -220,6 +250,7 @@ export function capacityOf(
     machine,
     liveProcesses,
     liveProcessCount,
+    processes,
     project: {
       parallelRuns: snapshot.parallelRuns,
       limit: startRunLimit(snapshot, snapshot.machineCap),
