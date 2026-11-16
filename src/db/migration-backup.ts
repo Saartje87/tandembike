@@ -79,13 +79,21 @@ export function backUpBeforeMigrating(
   pruneBackups(folder);
 }
 
+/**
+ * Deletes all but the most recent backups. Best effort: the new backup is
+ * safe, so a backup that cannot be deleted does not stop the migration.
+ */
 function pruneBackups(folder: string): void {
-  // The ISO timestamp in each name sorts oldest first.
-  const backups = readdirSync(folder)
-    .filter((name) => /^ticket-.*\.db$/.test(name))
-    .sort();
-  for (const name of backups.slice(0, -keptBackups)) {
-    rmSync(join(folder, name), { force: true });
+  try {
+    // The ISO timestamp in each name sorts oldest first.
+    const backups = readdirSync(folder)
+      .filter((name) => /^ticket-.*\.db$/.test(name))
+      .sort();
+    for (const name of backups.slice(0, -keptBackups)) {
+      rmSync(join(folder, name), { force: true });
+    }
+  } catch (error) {
+    console.warn(`Could not delete old database backups in ${folder}:`, error);
   }
 }
 

@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTickets } from '../tickets/tickets';
 import { openDatabase } from './connection';
@@ -172,6 +172,29 @@ describe('openDatabase backs up before migrating (T1554)', () => {
     expect(files).toHaveLength(5);
     expect(files.slice(0, 4)).toEqual(older.slice(1));
     expect(files[4]).toMatch(new RegExp(`-before-${lastTag}\\.db$`));
+  });
+
+  it('still migrates when an old backup cannot be deleted', () => {
+    openDatabase(path, { migrationsFolder: behind });
+    for (const day of [1, 2, 3, 4, 5]) {
+      mkdirSync(
+        join(
+          backups,
+          `ticket-2020-01-0${day}T00-00-00-000Z-before-0001_old.db`,
+        ),
+        { recursive: true },
+      );
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    openDatabase(path);
+
+    expect(appliedCount(path)).toBe(journal.entries.length);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not delete old database backups'),
+      expect.anything(),
+    );
+    warn.mockRestore();
   });
 
   it('throws naming the reason and does not migrate when the backup fails', () => {
