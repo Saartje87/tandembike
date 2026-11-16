@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { createWorktrees } from './worktrees';
 import { execFileSync } from 'node:child_process';
@@ -170,6 +170,30 @@ describe('worktrees.runPrepare', () => {
     expect(result.output).toContain('warn');
     expect(result.output).toContain('c1');
     expect(readFileSync(join(path, 'prepared.txt'), 'utf8')).toBe('ready\n');
+  });
+
+  it("runs the command without the server's NODE_ENV and with the rest of its environment", async () => {
+    const { repo, worktrees } = repository({ remote: true });
+    const { path } = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 1,
+      conversationId: 1,
+    });
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('TANDEMBIKE_PREPARE_PROBE', 'kept');
+
+    try {
+      const result = await worktrees.runPrepare(
+        path,
+        'printenv NODE_ENV || echo "node=unset"; echo "probe=$TANDEMBIKE_PREPARE_PROBE home=$HOME"',
+      );
+
+      expect(result.output).toBe(
+        `node=unset\nprobe=kept home=${process.env.HOME}`,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('returns a non-zero exit code with the output of a failing command', async () => {

@@ -1,6 +1,7 @@
 import type { CopilotClient, CopilotSession } from '@github/copilot-sdk';
 
 import { noAgentCommands } from '../tickets/agent-commands';
+import { runEnvironment } from '../worktrees/run-environment';
 import type {
   AgentRunner,
   RunEvent,
@@ -56,7 +57,8 @@ export function createCopilotRunner({
   const clientOf = (): Promise<CopilotClient> => {
     client ??= (async () => {
       const { CopilotClient } = await import('@github/copilot-sdk');
-      const started = new CopilotClient();
+      // Not the server's NODE_ENV=production (T1555).
+      const started = new CopilotClient({ env: runEnvironment() });
       await started.start();
       return started;
     })().catch((error: unknown) => {
