@@ -133,6 +133,11 @@ Ticket takes the Project whose repository holds the current folder and starts
 a Terminal Start on the top
 Eligible item of its Active Cycle, the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
+`tandembike setup` takes the Project whose repository holds the current folder
+and opens a Setup session in its main checkout, with the brief of the app's
+Setup button: it checks the repository and asks you about one item at a time.
+A Project has one Setup running at most. From a folder in no Project's
+repository, these commands tell you to run `tandembike add` there.
 
 The Conversation shows on the Board as In flight, **Started by Terminal**. It
 holds no Start run slot and counts against no Spend ceiling, and Autopilot does

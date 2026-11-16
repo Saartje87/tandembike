@@ -25,6 +25,7 @@ type TerminalAction =
     }
   | ({ action: 'next' } & ProjectRefBody)
   | ({ action: 'plan'; goal: string } & ProjectRefBody)
+  | ({ action: 'setup' } & ProjectRefBody)
   | { action: 'projects'; folder: string }
   | ({ action: 'list'; intent: unknown } & ProjectRefBody)
   | { action: 'resume'; conversationId: number }
@@ -87,6 +88,10 @@ export const POST = async (request: Request): Promise<Response> => {
             ...projectRefOf(body),
             goal: String(body.goal ?? ''),
           }),
+        );
+      case 'setup':
+        return Response.json(
+          await conversations.startTerminalSetup(projectRefOf(body)),
         );
       case 'projects':
         return Response.json(

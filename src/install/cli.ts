@@ -149,6 +149,9 @@ async function runCommand(parsed: RunnableCommand): Promise<number> {
         ...projectRef(parsed.projectId),
         goal: parsed.goal,
       });
+    case 'setup':
+      if (!(await ensureServer())) return 1;
+      return startSession({ action: 'setup', ...projectRef(parsed.projectId) });
     case 'implement':
       if (!(await ensureServer())) return 1;
       return parsed.ticketNumber === null

@@ -121,6 +121,14 @@ describe('parseCommand', () => {
     });
   });
 
+  it('accepts setup without arguments (T1561)', () => {
+    expect(parseCommand(['setup'])).toEqual({ command: 'setup' });
+    expect(parseCommand(['setup', 'extra'])).toMatchObject({
+      command: 'usage',
+    });
+    expect(usageText).toContain('tandembike setup');
+  });
+
   it('accepts plan with a goal and refuses a missing one (T1249)', () => {
     expect(parseCommand(['plan', 'Ship the blog'])).toEqual({
       command: 'plan',

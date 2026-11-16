@@ -401,6 +401,10 @@ const noRepositoryPath = {
  * 0051): Triage's own when set, Batch triage's too, else the run model; null
  * for the agent's own default.
  */
+/** The User's first message of a Setup, from the app or `tandembike setup`: the brief holds the checklist. */
+export const setupPrompt =
+  "Check that this repository is ready for Tandembike's Agent runs.";
+
 const modelFor = (intent: ConversationIntent, settings: AgentModel) =>
   (intent === 'triage' || intent === 'batch_triage') &&
   settings.triageModel !== null
@@ -1339,11 +1343,9 @@ export function createConversations({
       }
       // At most one running Setup per Project: two would edit the same
       // checkout (ADR 0020). Starting another opens the running one.
-      for (const id of live.keys()) {
-        const other = get(id);
-        if (other.projectId === projectId && other.intent === 'setup') {
-          return other;
-        }
+      const running = runningSetupOf(projectId);
+      if (running !== null) {
+        return running;
       }
     }
     if (input.intent === 'spec') {
@@ -1632,10 +1634,83 @@ export function createConversations({
           names.length === 0
             ? 'There are no Projects yet.'
             : `Known Projects: ${names.join(', ')}.`
-        }`,
+        } Run \`tandembike add\` there to make it a Project.`,
       });
     }
     return projectId;
+  };
+
+  /**
+   * The Project's running Setup, in the app or a terminal; null when none.
+   * At most one runs per Project, since two would edit one checkout (ADR 0020).
+   */
+  const runningSetupOf = (projectId: number): Conversation | null => {
+    for (const id of live.keys()) {
+      const other = get(id);
+      if (other.projectId === projectId && other.intent === 'setup') {
+        return other;
+      }
+    }
+    return (
+      db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.projectId, projectId),
+            eq(conversations.intent, 'setup'),
+            eq(conversations.startedBy, 'terminal'),
+            eq(conversations.state, 'running'),
+          ),
+        )
+        .orderBy(conversations.id)
+        .limit(1)
+        .get() ?? null
+    );
+  };
+
+  /**
+   * `tandembike setup` (T1561): a Terminal Setup on the Project whose
+   * repository holds `folder`, in the main checkout, with the app's prompt
+   * and the same brief. Refused while the Project has a Setup running.
+   */
+  const startTerminalSetup = async (
+    ref: TerminalProjectRef,
+  ): Promise<TerminalSession> => {
+    const projectId = projectIdOfRef(ref);
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    const running = runningSetupOf(projectId);
+    if (running !== null) {
+      throw new NotAllowedError(
+        `${tickets.getProject(projectId).name} already has a Setup running (Conversation ${running.id}). Finish or stop it first.`,
+      );
+    }
+    const now = clock();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId,
+        intent: 'setup',
+        startedBy: 'terminal',
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, 'user', setupPrompt);
+    announce(created.id);
+    return {
+      conversationId: created.id,
+      cwd: settings.repositoryPath,
+      firstMessage: setupPrompt,
+      brief: briefOf(created.id),
+      runMode: settings.runMode,
+      model: modelFor('setup', settings.models['claude-code']),
+    };
   };
 
   /**
@@ -2529,6 +2604,7 @@ export function createConversations({
     startTerminal,
     startTerminalNext,
     startTerminalPlan,
+    startTerminalSetup,
 
     endTerminal,
     heartbeatTerminal,

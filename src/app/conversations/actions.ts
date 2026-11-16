@@ -14,6 +14,7 @@ import type {
   StartConversationInput,
   TranscriptEntry,
 } from '../../conversations/conversations';
+import { setupPrompt } from '../../conversations/conversations';
 import { conversationFootprint } from '../../footprint/app-footprint';
 import type { Footprint } from '../../footprint/footprint';
 import type { AgentKind } from '../../tickets/agent-kind';
@@ -83,10 +84,6 @@ export async function approveMerge(input: {
     appConversations().approveMerge({ ticketNumber: Number(input?.number) }),
   );
 }
-
-/** The User's first message of a Setup: the Agent's brief holds the checklist. */
-const setupPrompt =
-  "Check that this repository is ready for Tandembike's Agent runs.";
 
 /**
  * Starts a Setup Conversation about a Project, or returns its running one

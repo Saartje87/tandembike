@@ -24,6 +24,7 @@ export const usageText = [
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
+  "  tandembike setup              check this Project's repository for Agent runs (Setup)",
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
   '  tandembike plugin             install the Playbook plugin in Claude Code',
@@ -51,6 +52,11 @@ export type ParsedCommand =
       command: 'plan';
       goal: string;
       /** The wizard's Project; else the folder's. */
+      projectId?: number;
+    }
+  | {
+      command: 'setup';
+      /** The Project to set up; else the folder's. */
       projectId?: number;
     }
   | { command: 'resume'; conversationId: number }
@@ -119,6 +125,9 @@ export function parseCommand(argv: string[]): ParsedCommand {
     return rest.length === 1 && ticketNumber !== null
       ? { command: 'implement', ticketNumber }
       : usage;
+  }
+  if (first === 'setup') {
+    return rest.length === 0 ? { command: 'setup' } : usage;
   }
   if (first === 'plan') {
     const goal = rest.join(' ').trim();

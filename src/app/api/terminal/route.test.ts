@@ -124,3 +124,41 @@ describe('POST /api/terminal sessions (T1352)', () => {
     ]);
   });
 });
+
+describe('POST /api/terminal setup (T1561)', () => {
+  beforeEach(() => {
+    vi.mocked(appConversations).mockReset();
+  });
+
+  it("starts a Terminal Setup of the folder's Project", async () => {
+    const { conversations, repositoryDir } = setup();
+
+    const response = await post({ action: 'setup', folder: repositoryDir });
+
+    expect(response.status).toBe(200);
+    const session = await response.json();
+    expect(conversations.get(session.conversationId)).toMatchObject({
+      intent: 'setup',
+      startedBy: 'terminal',
+    });
+  });
+
+  it('refuses a folder in no Project with a message naming tandembike add', async () => {
+    setup();
+
+    const response = await post({ action: 'setup', folder: '/nowhere' });
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toContain('tandembike add');
+  });
+
+  it('refuses a second Setup while one runs', async () => {
+    const { repositoryDir } = setup();
+    await post({ action: 'setup', folder: repositoryDir });
+
+    const response = await post({ action: 'setup', folder: repositoryDir });
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toContain('already has a Setup running');
+  });
+});
