@@ -133,6 +133,12 @@ Ticket takes the Project whose repository holds the current folder and starts
 a Terminal Start on the top
 Eligible item of its Active Cycle, the rule of `next_work`; with none it says
 why, and from a folder in no Project's repository it names the known Projects.
+`tandembike add [path]` makes the repository of the current folder (or of
+the path, resolved to its repository root) a Project: named from its `origin`
+remote, else its folder, with the Check command and Reference template the New
+Project form detects. It refuses a folder that is not a git repository with the
+form's message, reports the Project a repository already is, writes nothing in
+the repository, and then asks "Run Setup now?".
 `tandembike setup` takes the Project whose repository holds the current folder
 and opens a Setup session in its main checkout, with the brief of the app's
 Setup button: it checks the repository and asks you about one item at a time.

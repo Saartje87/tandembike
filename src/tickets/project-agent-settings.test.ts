@@ -115,17 +115,13 @@ describe("A Project's agent settings", () => {
       ).toMatchObject({ agentMode: false, parallelRuns: false });
     });
 
-    it('keep Parallel runs off for a folder that is not a git repository, which a run worktree needs', () => {
+    it('refuse a folder that is not a git repository, which a run worktree needs', () => {
       const tickets = createTestTickets();
-      const project = tickets.createProject({
-        name: 'Website',
-        repositoryPath: directory(),
-      });
 
-      expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
-        agentMode: true,
-        parallelRuns: false,
-      });
+      expect(() =>
+        tickets.createProject({ name: 'Website', repositoryPath: directory() }),
+      ).toThrow(ValidationError);
+      expect(tickets.listProjects()).toEqual([]);
     });
 
     it('keep both off for an empty folder field', () => {

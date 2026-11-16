@@ -2,11 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { appConversations } from '../../../conversations/app-conversations';
 import { createTestConversations } from '../../../test/conversations';
+import { appTickets } from '../../../tickets/app-tickets';
 import { POST } from './route';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 vi.mock('../../../conversations/app-conversations', () => ({
   appConversations: vi.fn(),
 }));
+vi.mock('../../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
 function setup() {
   const world = createTestConversations();
@@ -160,5 +165,53 @@ describe('POST /api/terminal setup (T1561)', () => {
 
     expect(response.status).toBe(409);
     expect(await response.text()).toContain('already has a Setup running');
+  });
+});
+
+describe('POST /api/terminal add (T1562)', () => {
+  const gitFolder = () => {
+    const path = realpathSync(mkdtempSync(join(tmpdir(), 'add-')));
+    mkdirSync(join(path, '.git'));
+    writeFileSync(join(path, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+    return path;
+  };
+
+  beforeEach(() => {
+    vi.mocked(appTickets).mockReset();
+  });
+
+  it('creates the Project of the folder as the User, and reports it the second time', async () => {
+    const { tickets } = setup();
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const path = gitFolder();
+    mkdirSync(join(path, 'sub'));
+
+    const first = await post({ action: 'add', folder: join(path, 'sub') });
+    const again = await post({ action: 'add', folder: path });
+
+    expect(appTickets).toHaveBeenCalledWith('user');
+    const created = await first.json();
+    expect(created).toMatchObject({
+      created: true,
+      repositoryPath: path,
+      project: { name: path.split('/').pop() },
+    });
+    expect(await again.json()).toMatchObject({
+      created: false,
+      project: { id: created.project.id },
+    });
+  });
+
+  it("refuses a folder that is not a git repository with the module's message", async () => {
+    const { tickets } = setup();
+    vi.mocked(appTickets).mockReturnValue(tickets);
+    const plain = realpathSync(mkdtempSync(join(tmpdir(), 'plain-')));
+
+    const response = await post({ action: 'add', folder: plain });
+
+    expect(response.status).toBe(409);
+    expect(await response.text()).toBe(
+      'This folder is not a git repository: it has no .git inside.',
+    );
   });
 });

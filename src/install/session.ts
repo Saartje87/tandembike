@@ -24,6 +24,7 @@ export const usageText = [
   '  tandembike triage <ticket>    triage a Ticket in this terminal',
   '  tandembike spec <ticket>      spec an idea or an empty Epic in this terminal',
   '  tandembike plan "<goal>"      plan a goal into an Epic or Cycle in this Project',
+  "  tandembike add [path]         make this folder's repository (or path's) a Project",
   "  tandembike setup              check this Project's repository for Agent runs (Setup)",
   '  tandembike resume <conversation>  continue a Conversation in this terminal',
   '  tandembike mcp                register the MCP server with Claude Code',
@@ -54,6 +55,7 @@ export type ParsedCommand =
       /** The wizard's Project; else the folder's. */
       projectId?: number;
     }
+  | { command: 'add'; path: string | null }
   | {
       command: 'setup';
       /** The Project to set up; else the folder's. */
@@ -125,6 +127,10 @@ export function parseCommand(argv: string[]): ParsedCommand {
     return rest.length === 1 && ticketNumber !== null
       ? { command: 'implement', ticketNumber }
       : usage;
+  }
+  if (first === 'add') {
+    if (rest.length === 0) return { command: 'add', path: null };
+    return rest.length === 1 ? { command: 'add', path: rest[0] } : usage;
   }
   if (first === 'setup') {
     return rest.length === 0 ? { command: 'setup' } : usage;
@@ -215,3 +221,20 @@ export function planClaudeSession(
     env: { TANDEMBIKE_RUN: String(result.conversationId) },
   };
 }
+
+/** What the server answers `tandembike add`. */
+export type AddResult = {
+  created: boolean;
+  project: { id: number; name: string };
+  repositoryPath: string;
+};
+
+/** What `tandembike add` says it did. */
+export const addedMessage = ({
+  created,
+  project,
+  repositoryPath,
+}: AddResult): string =>
+  created
+    ? `Created the Project "${project.name}" for ${repositoryPath}.`
+    : `${repositoryPath} is already the Project "${project.name}". Nothing changed.`;
