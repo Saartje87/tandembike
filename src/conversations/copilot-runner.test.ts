@@ -40,6 +40,7 @@ type FakeSession = {
 const sdk = vi.hoisted(() => ({
   imported: 0,
   started: 0,
+  clientOptions: [] as unknown[],
   auth: {
     isAuthenticated: true,
     authType: 'gh-cli',
@@ -95,6 +96,9 @@ vi.mock('@github/copilot-sdk', () => {
   };
   return {
     CopilotClient: class {
+      constructor(options?: unknown) {
+        sdk.clientOptions.push(options);
+      }
       async start() {
         if (sdk.startError) {
           throw sdk.startError;
@@ -125,6 +129,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   sdk.started = 0;
+  sdk.clientOptions = [];
   sdk.auth = { isAuthenticated: true, authType: 'gh-cli', login: 'octo' };
   sdk.startError = null;
   sdk.createError = null;
@@ -160,6 +165,25 @@ describe('The Copilot runner', () => {
     expect(runner.invocationText).toBeTypeOf('function');
     await settle();
     expect(sdk.imported).toBe(before);
+  });
+
+  it('starts its client with the server environment minus NODE_ENV (T1555)', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('TANDEMBIKE_RUN_PROBE', 'kept');
+    try {
+      startRun();
+      await settle();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    const [options] = sdk.clientOptions as { env?: Record<string, string> }[];
+    expect(options?.env).not.toHaveProperty('NODE_ENV');
+    expect(options?.env).toMatchObject({
+      TANDEMBIKE_RUN_PROBE: 'kept',
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+    });
   });
 
   it("starts a session in the run's folder with Tandembike's MCP server, its headers and the brief appended", async () => {

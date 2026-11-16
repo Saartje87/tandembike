@@ -334,6 +334,37 @@ describe('The Claude runner', () => {
     );
   });
 
+  it('starts the Agent with the server environment minus NODE_ENV (T1555)', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('TANDEMBIKE_RUN_PROBE', 'kept');
+    query.mockReturnValue(fakeQuery([]));
+
+    try {
+      createClaudeRunner().start({
+        cwd: '/repo',
+        agentRunId: 'conv-1',
+        mcpUrl: 'http://x',
+        plugins: [],
+        systemPrompt: '',
+        message: { text: 'Hi' },
+        agentCommands: noAgentCommands,
+        askPermission: async () => 'deny',
+        askWidget: async () => ({ expired: true }),
+        onEvent: () => {},
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    const { env } = query.mock.calls[0][0].options;
+    expect(env).not.toHaveProperty('NODE_ENV');
+    expect(env).toMatchObject({
+      TANDEMBIKE_RUN_PROBE: 'kept',
+      PATH: process.env.PATH,
+      HOME: process.env.HOME,
+    });
+  });
+
   it('can always run, in default and auto mode, and honours Allow-always (ADR 0051)', () => {
     const runner = createClaudeRunner();
 

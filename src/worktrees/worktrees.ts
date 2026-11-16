@@ -1,4 +1,5 @@
 import { detectRepository } from '../repository/detect-repository';
+import { runEnvironment } from './run-environment';
 import { execFile } from 'node:child_process';
 import {
   existsSync,
@@ -247,6 +248,9 @@ export function createWorktrees({
       try {
         const { stdout, stderr } = await run(shell, ['-c', command], {
           cwd: path,
+          // The run's environment, so `npm ci` installs devDependencies. Next
+          // types NODE_ENV as always set, which this environment leaves out.
+          env: runEnvironment() as NodeJS.ProcessEnv,
           maxBuffer: 64 * 1024 * 1024,
         });
         return { exitCode: 0, output: tail(`${stdout}${stderr}`.trim()) };

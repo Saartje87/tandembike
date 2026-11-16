@@ -7,6 +7,7 @@ import {
 } from '@anthropic-ai/claude-agent-sdk';
 
 import type { UsageByModel } from '../footprint/token-usage';
+import { runEnvironment } from '../worktrees/run-environment';
 import type {
   AgentRunner,
   RunEvent,
@@ -276,6 +277,8 @@ export function createClaudeRunner(): AgentRunner {
         prompt: input.messages(),
         options: {
           cwd,
+          // Not the server's NODE_ENV=production (T1555).
+          env: runEnvironment(),
           plugins,
           ...(resume === undefined ? {} : { resume }),
           ...(model === undefined ? {} : { model }),
