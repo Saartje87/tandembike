@@ -100,6 +100,35 @@ export function createWork(
       .blockedBy.filter(({ resolved }) => !resolved);
   }
 
+  /**
+   * The first child of `epic` in order not yet started (not archived, Done or
+   * In progress) whose Blockers are resolved by the Blocker rule; or `null`.
+   */
+  function nextChildOf(epic: Ticket): number | null {
+    return (
+      epic.children.find(
+        (child) =>
+          !child.archived &&
+          child.status === 'Todo' &&
+          unresolvedBlockers(child.number).length === 0,
+      )?.number ?? null
+    );
+  }
+
+  /**
+   * Whether `ticket`, read with `ready-for-agent` and not archived, is ready
+   * by its Status: Todo, or an In progress Epic with a next child to work,
+   * since an Epic's Status follows its children (T1440).
+   */
+  function readyByStatus(ticket: Ticket): boolean {
+    return (
+      ticket.status === 'Todo' ||
+      (ticket.status === 'In progress' &&
+        ticket.type === 'Epic' &&
+        nextChildOf(ticket) !== null)
+    );
+  }
+
   /** The Epic of `ticket` (itself, or its parent), with children read now. */
   function epicBundle(ticket: Ticket): WorkBundle['epic'] {
     const epic =
@@ -111,13 +140,7 @@ export function createWork(
     if (epic === null) {
       return null;
     }
-    const nextChild =
-      epic.children.find(
-        (child) =>
-          !child.archived &&
-          child.status === 'Todo' &&
-          unresolvedBlockers(child.number).length === 0,
-      )?.number ?? null;
+    const nextChild = nextChildOf(epic);
     return {
       number: epic.number,
       title: epic.title,
@@ -129,11 +152,13 @@ export function createWork(
 
   return {
     /**
-     * The top item of Project `ref`'s Active Cycle to work next: Todo,
-     * `ready-for-agent`, unblocked, unclaimed (an Epic's Claim covers its
-     * children), not archived and not an Epic's child, an Epic only once it
-     * has a child, first in Board order. With none, `ticket` is `null` and
-     * `reason` says why. It cannot see Conversations (ADR 0004).
+     * The top item of Project `ref`'s Active Cycle to work next: Todo, or an
+     * In progress Epic with a next child to work (T1440), `ready-for-agent`,
+     * unblocked, unclaimed (an Epic's Claim covers its children), not
+     * archived and not an Epic's child, an Epic only once it has a child,
+     * first in Board order, so Todo items before In progress Epics. With
+     * none, `ticket` is `null` and `reason` says why. It cannot see
+     * Conversations (ADR 0004).
      */
     nextWork(ref: ProjectRef): NextWork {
       const projectId = deps.resolveProjectId(ref);
@@ -158,11 +183,19 @@ export function createWork(
         } while (cursor !== undefined);
         return found;
       };
-      const ready = listAll({
-        cycleId: active.id,
-        status: 'Todo',
-        labels: [readyLabel],
-      });
+      const ready = [
+        ...listAll({
+          cycleId: active.id,
+          status: 'Todo',
+          labels: [readyLabel],
+        }),
+        ...listAll({
+          cycleId: active.id,
+          status: 'In progress',
+          type: 'Epic',
+          labels: [readyLabel],
+        }).filter(readyByStatus),
+      ];
       // An Epic planned elsewhere joins this Board as the row holding its
       // children planned here (ADR 0025): it follows the Cycle's own rows.
       const here = new Set(ready.map(({ number }) => number));
@@ -176,8 +209,8 @@ export function createWork(
         if (
           !epic.archived &&
           epic.type === 'Epic' &&
-          epic.status === 'Todo' &&
-          epic.labels.includes(readyLabel)
+          epic.labels.includes(readyLabel) &&
+          readyByStatus(epic)
         ) {
           ready.push(epic);
         }

@@ -35,7 +35,7 @@ export const registerWorkTools = ({
     'next_work',
     {
       title: 'Next work',
-      description: `Find the top item to work next in your Project's Active Cycle, in Board order: Todo, labelled ready-for-agent, unblocked, unclaimed, not archived, not an Epic's child, and an Epic only once it has a child. Returns { ticket } with the whole Ticket, or { ticket: null, reason } where reason is "no-active-cycle", "nothing-ready" or "all-blocked-or-claimed": tell the User. It does not see Conversations, so an item with an open Start Conversation may still be returned. Then call start_work with its number. The Project defaults to your folder's.`,
+      description: `Find the top item to work next in your Project's Active Cycle, in Board order: Todo, or an In progress Epic that still has a Todo child with its Blockers resolved, labelled ready-for-agent, unblocked, unclaimed, not archived, not an Epic's child, and an Epic only once it has a child. Todo items come before In progress Epics. Returns { ticket } with the whole Ticket, or { ticket: null, reason } where reason is "no-active-cycle", "nothing-ready" or "all-blocked-or-claimed": tell the User. It does not see Conversations, so an item with an open Start Conversation may still be returned. Then call start_work with its number. The Project defaults to your folder's.`,
       inputSchema: {
         projectId: projectId
           .optional()

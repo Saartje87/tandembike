@@ -513,3 +513,100 @@ describe('nextWork for an Epic planned elsewhere', () => {
     );
   });
 });
+
+describe('nextWork for an In progress Epic (T1440)', () => {
+  /** An Epic whose first child is Done, so the Epic is In progress. */
+  const startedEpic = () => {
+    const ctx = setup();
+    const { tickets, make } = ctx;
+    const epic = make('Epic', { type: 'Epic' });
+    const done = make('Done child', { labels: [] });
+    const rest = make('Todo child', { labels: [] });
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [done.number, rest.number],
+    });
+    tickets.updateTicket(done.number, { status: 'Done' });
+    return { ...ctx, epic, done, rest };
+  };
+
+  it('returns an unclaimed In progress Epic with a ready child', () => {
+    const { tickets, project, cycle, epic } = startedEpic();
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.getTicket(epic.number).status).toBe('In progress');
+    expect(tickets.nextWork({ projectId: project.id }).ticket?.number).toBe(
+      epic.number,
+    );
+  });
+
+  it('skips it while it is claimed', () => {
+    const { tickets, project, cycle, epic } = startedEpic();
+    tickets.claimTicket(epic.number, { agentRunId: 'other' });
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.nextWork({ projectId: project.id })).toEqual({
+      ticket: null,
+      reason: 'all-blocked-or-claimed',
+    });
+  });
+
+  it('skips it while its remaining children are blocked, In progress or Done', () => {
+    const { tickets, project, cycle, make, epic, rest } = startedEpic();
+    const blocker = tickets.createTicket({
+      projectId: project.id,
+      title: 'Blocker',
+    });
+    tickets.addBlocker({ blocker: blocker.number, blocked: rest.number });
+    const started = make('Started child', { labels: [] });
+    const finished = make('Finished child', { labels: [] });
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [started.number, finished.number],
+    });
+    tickets.updateTicket(started.number, { status: 'In progress' });
+    tickets.updateTicket(finished.number, { status: 'Done' });
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.nextWork({ projectId: project.id })).toEqual({
+      ticket: null,
+      reason: 'nothing-ready',
+    });
+  });
+
+  it('ranks it after the Todo items, in Board order', () => {
+    const { tickets, project, cycle, make, epic } = startedEpic();
+    const todo = make('Todo');
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.nextWork({ projectId: project.id }).ticket?.number).toBe(
+      todo.number,
+    );
+    tickets.claimTicket(todo.number, { agentRunId: 'other' });
+    expect(tickets.nextWork({ projectId: project.id }).ticket?.number).toBe(
+      epic.number,
+    );
+  });
+
+  it('returns it when it is planned elsewhere and its child here', () => {
+    const { tickets, project, cycle, make } = setup();
+    const epic = tickets.createTicket({
+      projectId: project.id,
+      title: 'Epic',
+      type: 'Epic',
+      labels: ['ready-for-agent'],
+    });
+    const done = make('Done child', { labels: [] });
+    const rest = make('Todo child', { labels: [] });
+    tickets.attachTicketsToEpic({
+      epic: epic.number,
+      children: [done.number, rest.number],
+    });
+    tickets.updateTicket(done.number, { status: 'Done' });
+    tickets.startCycle(cycle.id);
+
+    expect(tickets.nextWork({ projectId: project.id }).ticket?.number).toBe(
+      epic.number,
+    );
+  });
+});

@@ -6,6 +6,8 @@ Amended (T1378): Agents may rename a Prepared Cycle with `update_cycle`. A Prepa
 
 Amended (T1380): Agents may reorder Tickets within a Status on the Board with `update_ticket` `before` or `after` another Ticket of the same Project and Status, by the same rule as the User's drag. An Agent that plans or reshapes work could not put first what should be worked first, and the User had to drag it. The Board order stays the User's to read: each Agent move is recorded in Activity as the Agent's, and the User can drag it back. Reordering a whole Lane in one call, the old `sort_lane`, stays removed.
 
+Amended (T1440): `next_work` also returns an In progress Epic that is labelled `ready-for-agent`, unblocked, unclaimed and not archived and still has a next child to work: a Todo child whose Blockers are resolved, the `start_work` bundle's `nextChild`. An Epic's Status follows its children, so one started and handed off stayed In progress and was never offered again. Such an Epic ranks after the Todo items, in Board order. Autopilot's Eligible rule is its own and does not include it yet.
+
 The 42 tools mirrored the tables: starting a Ticket took `claim_ticket`, `update_ticket`, `get_ticket` and `list_comments`; finding ready work took a five-filter `list_tickets` call every skill copied; giving up took `release_ticket_claim` and a Status change the Agent had to remember. Each run spent context on tracker mechanics, an Agent that got one step wrong left a Ticket Stalled, and the fine-grained tools let Agents do things that are the User's to decide.
 
 ## The tool set
