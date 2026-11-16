@@ -43,7 +43,14 @@ export function createFakeWorktrees(): FakeWorktrees {
       const path = `/fake/worktrees/${input.projectId}/c${input.conversationId}`;
       fake.created.push(input);
       fake.states.set(path, 'clean');
-      return { path, base: 'origin/main' };
+      return {
+        path,
+        base: 'origin/main',
+        branch:
+          input.branch === undefined
+            ? null
+            : `ticket-${input.branch.ticketNumber}-work`,
+      };
     },
     async state(path) {
       return fake.states.get(path) ?? 'missing';

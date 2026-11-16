@@ -48,7 +48,7 @@ Copilot reports tokens per model, so Copilot runs feed the same per-model usage 
 
 ## Run brief and Setup
 
-The brief is written per kind. The shared parts are the same for every kind: Project, Ticket, intent, the UI note, the widget tools, the Agent-run ID, the Tandembike worktree, the Check command, Retro and Plan. The Claude-only lines (EnterWorktree, "AskUserQuestion also works", the `CLAUDE.md` Setup check) go to Claude Code runs only, and a Claude Code brief stays word for word as before. A Copilot run works in Tandembike's run worktree, like any run (ADR 0033). Only in the fallback, with Parallel runs on and no Tandembike worktree, is it told to use the repository's worktree convention or `git worktree add`, since Copilot has no built-in worktree tool. Its Setup check accepts `AGENTS.md` or `.github/copilot-instructions.md`, which Copilot loads, instead of requiring `CLAUDE.md`.
+The brief is written per kind. The shared parts are the same for every kind: Project, Ticket, intent, the UI note, the widget tools, the Agent-run ID, the Tandembike worktree, the Check command, Retro and Plan. The Claude-only lines ("AskUserQuestion also works", the `CLAUDE.md` Setup check) go to Claude Code runs only, and a Claude Code brief stays word for word as before. A Copilot run works in Tandembike's run worktree, like any run (ADR 0033). (Before T1557 the fallback with Parallel runs on and no Tandembike worktree told each kind to make its own worktree, Claude Code with EnterWorktree and Copilot with `git worktree add`; now both are told to change nothing and tell the User.) Its Setup check accepts `AGENTS.md` or `.github/copilot-instructions.md`, which Copilot loads, instead of requiring `CLAUDE.md`.
 
 ## Auth
 

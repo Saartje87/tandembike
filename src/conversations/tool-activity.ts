@@ -33,6 +33,7 @@ const tandembikeLines: Record<string, [line: string, without: string]> = {
   update_ticket: ['Updating {T}', 'Updating a Ticket'],
   create_cycle: ['Creating a Cycle', 'Creating a Cycle'],
   update_cycle: ['Renaming a Cycle', 'Renaming a Cycle'],
+  set_check_command: ['Saving the Check command', 'Saving the Check command'],
 };
 
 const humanise = (name: string) => {

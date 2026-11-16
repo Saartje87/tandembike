@@ -17,7 +17,9 @@ Call `start_work` on the Epic. It claims the Epic, which covers its children, an
 
 ## 2. Branch
 
-Create one branch off the repository's default branch, named after the Epic: `t<number>-<slug>` (for example `t42-checkout-flow`), unless the repository's instructions name another pattern. If the working directory is already a git worktree on a branch of its own, use that branch.
+A run Tandembike starts in a worktree is already on the Epic's own branch, `ticket-<number>-<slug>` (for example `ticket-42-checkout-flow`): the runner checked it out, reusing the branch the Epic already had. Check with `git branch --show-current`, work all the children on that branch, and create no other branch or worktree.
+
+Only when you are not on a branch of the Epic's (a session in the main checkout, on the default branch or detached), switch to its existing `ticket-<number>-…` branch, or else create `ticket-<number>-<slug>` off the default branch, named after the Epic.
 
 ## 3. Work the children in Blocker order
 
@@ -25,9 +27,9 @@ Repeat until every child is Done, taking `nextChild` each time:
 
 1. Call `start_work` on the child. A child under your own Epic Claim moves to In progress.
 2. Build it test-first in small vertical slices: one test through the public interface, watch it fail for the right reason, write the least code to pass, repeat; refactor only while green. Mock only at system boundaries and follow the repository's test conventions. Pure styling, copy or documentation needs no test. Keep the red-run list as you go: each behaviour test's name and the failing line of its red run, or written after when it came after the code, leaving off tests that cover only styling or copy. When a subagent builds a child, ask for the same list in its report.
-3. Run the Check command from the `start_work` bundle (or the repository's own test and lint commands) and fix everything until it passes.
+3. Run the Check command from the `start_work` bundle (or the repository's own test and lint commands) and fix everything until it passes. With neither a Check command nor instructions that name them, find the repository's test and lint scripts yourself, run them, and list in the pull request body exactly what you ran. When the repository has a UI and its instructions say how to run it, also see the change working in a real browser: run the app as they say and check the behaviour the Ticket changes, then say in the pull request what you saw.
 4. Verify each acceptance criterion of the child against the running code or its tests, and call `check_criterion` for each as you verify it. A criterion you leave unmet needs an `add_note` saying why.
-5. Commit on the shared branch. Commit messages name the child (`T43`).
+5. Commit on the shared branch. Commit messages name the child (`T43`). Before each commit, check that `git branch --show-current` names the Epic's branch, not the default branch or a detached HEAD: a stray checkout is caught here.
 
 Do not call `finish_work` on a child: the Epic's `finish_work`, once its pull request is merged, finishes its children with it (step 6).
 
@@ -48,13 +50,13 @@ Then call `open_pr` on the Epic with the pull request's URL, without `handOff`, 
 Follow the Epic's `merge` from step 1, the Project's Auto-merge setting when you took the Claim; only the User sets it.
 
 - **`merge: "approve"`**: call `open_pr` on the Epic with the URL and `handOff: true`. That releases your Claim and leaves the Epic for the User to review and approve the merge. Do not merge and do not call `finish_work` unless the User approves (see "Merge").
-- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, you have read the red-run list (see "Merge"), and the pull request's checks are green. Then merge it by "Merge". When a condition does not hold, call `add_note` on the Epic saying which and why, then hand off as for `approve`, without `finish_work`.
+- **`merge: "auto"`**: merge it yourself only when all of these hold: the Check command passes, your review has no unresolved findings (one you chose not to fix is explained in a note), every acceptance criterion of the Epic and its children is checked or a note says why not, you have read the red-run list (see "Merge"), and the pull request has at least one CI check, and its checks are green. A pull request with no CI checks is a failed condition: nothing proved it, so hand off. Then merge it by "Merge". When a condition does not hold, call `add_note` on the Epic saying which and why, then hand off as for `approve`, without `finish_work`.
 
 ## Merge
 
 Both triggers use these steps: `merge: "auto"` once its conditions hold, and the User's approval, a reply to this Conversation such as `Approved: merge T42 now by the Playbook's merge steps, then finish_work.` (the only approval with `merge: "approve"`). They match the `merge` skill's. First read the red-run list per child in the pull request body. A new behaviour test missing from it, or listed as written after the code: say which in a note on the Epic (`add_note`). The list is self-reported and nothing checks it automatically; it does not block the merge by itself. Then merge the Epic's pull request, from the worktree you are in:
 
-1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: continue, and say so in a note on the Epic.
+1. Wait for the pull request's checks with the host CLI (`gh pr checks <number> --watch` for GitHub; poll no faster than every 30 seconds when your CLI cannot watch). A failing check that is not the branch being behind: go to step 5. No checks exist: with `merge: "auto"`, go to step 5 and hand off, since nothing proved the change; after the User's approval, continue and say so in a note on the Epic.
 2. When the branch is behind the default branch or conflicts, merge the default branch into it (`git fetch origin`, `git merge origin/<default>`), resolve conflicts keeping the intent of both sides without losing the Epic's changes, run the Check command when it is cheap, push normally with `git push`, and go back to step 1. Many repositories forbid force pushes, by a guardrail hook or in their instructions; only where force pushes are allowed may you rebase instead (`git rebase origin/<default>`, then `git push --force-with-lease`). Update and push at most twice.
 3. When the checks are green, merge with the host CLI (`gh pr merge <number> --merge`, unless the repository's instructions name another method). When it refuses, read why and go back to step 1 or 2 once.
 4. Call `finish_work` on the Epic. It finishes its unarchived children with it, and refuses while an acceptance criterion of the Epic or a child is unchecked: pass `override` with the reason only for a criterion you deliberately left unmet and explained.
@@ -66,7 +68,8 @@ Never push to the default branch, and never merge with failing checks.
 
 If you hit friction worth a Ticket of its own (a missing tool or parameter, an unclear error, a vague Ticket), file at most 3 with `file_tickets` before you merge or hand off; Tandembike refuses a fourth. Search with `find_tickets` first. When a match exists, add a note to it with `add_note` instead of filing. Each Ticket you file:
 
-- has a clear problem and how to reproduce it;
+- has a description with these sections: **Problem** (what went wrong), **Repro** (the steps that show it), **Expected** (what should have happened), and, when you used one, **Workaround**;
+- takes its acceptance criteria from Expected;
 - is labelled `needs-triage` and `from:agent-run`;
 - sits outside any Cycle and Epic (leave both out);
 - names the Epic you worked as its Origin (`originNumber`), so the Retro can find it.

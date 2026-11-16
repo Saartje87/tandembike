@@ -122,6 +122,29 @@ export function createConversationReader(
   };
 
   return {
+    /**
+     * The Project of Setup Conversation `conversationId`, UI or terminal,
+     * while it is live; null when there is no such Conversation, it is not
+     * a Setup, or it has ended.
+     */
+    setupProjectOf(conversationId: number): number | null {
+      const row = db
+        .select({
+          projectId: conversations.projectId,
+          intent: conversations.intent,
+          state: conversations.state,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId))
+        .get();
+      return row?.intent === 'setup' &&
+        (['running', 'waiting', 'idle'] as const).some(
+          (state) => state === row.state,
+        )
+        ? row.projectId
+        : null;
+    },
+
     /** A Ticket's Conversations, newest first. */
     ticketConversations: listOf,
 

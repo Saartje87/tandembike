@@ -35,6 +35,8 @@ import {
   stopServer,
 } from './server-lifecycle';
 import {
+  type AddResult,
+  addedMessage,
   noWorkMessage,
   parseCommand,
   planClaudeSession,
@@ -58,7 +60,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir, constants as osConstants } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 
 /**
@@ -149,6 +151,12 @@ async function runCommand(parsed: RunnableCommand): Promise<number> {
         ...projectRef(parsed.projectId),
         goal: parsed.goal,
       });
+    case 'add':
+      if (!(await ensureServer())) return 1;
+      return addProject(parsed.path);
+    case 'setup':
+      if (!(await ensureServer())) return 1;
+      return startSession({ action: 'setup', ...projectRef(parsed.projectId) });
     case 'implement':
       if (!(await ensureServer())) return 1;
       return parsed.ticketNumber === null
@@ -464,6 +472,26 @@ async function callServerOrReport<T>(body: object): Promise<T | null> {
 async function startSession(request: object): Promise<number> {
   const started = await callServerOrReport<TerminalStartResult>(request);
   return started ? runSession(started) : 1;
+}
+
+/**
+ * `tandembike add [path]`: makes the repository of the folder (this one by
+ * default) a Project, or reports the one it is, then offers Setup. It writes
+ * nothing in the repository.
+ */
+async function addProject(path: string | null): Promise<number> {
+  const added = await callServerOrReport<AddResult>({
+    action: 'add',
+    folder: resolve(callerFolder, path ?? '.'),
+  });
+  if (!added) return 1;
+  console.log(addedMessage(added));
+  if (!process.stdin.isTTY) {
+    console.log('Run `tandembike setup` in it to check it for Agent runs.');
+    return 0;
+  }
+  if (!(await askYesNo('Run Setup now? [y/N] '))) return 0;
+  return startSession({ action: 'setup', projectId: added.project.id });
 }
 
 /**

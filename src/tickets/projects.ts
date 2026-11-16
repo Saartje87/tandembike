@@ -41,7 +41,7 @@ import type {
   StyleProjectInput,
 } from './tickets';
 import { statSync } from 'node:fs';
-import { isAbsolute } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 
 const projectColumns = {
   id: projects.id,
@@ -160,6 +160,32 @@ function ceilingProblems(input: {
 function canHoldWorktrees(path: string): boolean {
   const detection = detectRepository(path);
   return detection.ok && detection.defaultBranch !== null;
+}
+
+/**
+ * Why the folder at `path` cannot be a new Project's repository, or
+ * `undefined` when it can: it must be a git repository with a branch, so
+ * worktrees and Start runs can start from it. The New Project form and
+ * `tandembike add` share this one rule.
+ */
+function newRepositoryProblem(path: string): string | undefined {
+  const detection = detectRepository(path);
+  if (!detection.ok) {
+    return detection.message;
+  }
+  return detection.defaultBranch === null
+    ? 'This repository has no branch: check out a branch, then add it.'
+    : undefined;
+}
+
+/** A Project's name from the `origin` remote's repository name, else the folder's. */
+function repositoryName(path: string, remote: string | null): string {
+  const fromRemote = remote
+    ?.replace(/\/+$/, '')
+    .split(/[/:]/)
+    .pop()
+    ?.replace(/\.git$/, '');
+  return fromRemote || basename(path);
 }
 
 /** Why `path` cannot be a repository path, or `undefined` when it can. */
@@ -603,7 +629,7 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
     return project;
   }
 
-  return {
+  const area = {
     /** All Projects, oldest first. */
     listProjects(): Project[] {
       return db
@@ -668,6 +694,11 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
           .returning(projectColumns)
           .get();
         const folder = trimmedOrNull(repositoryPath ?? null);
+        const problem =
+          folder === null ? undefined : newRepositoryProblem(folder);
+        if (problem !== undefined) {
+          throw new ValidationError({ repositoryPath: problem });
+        }
         if (repositoryPath !== undefined || checkCommand !== undefined) {
           setProjectAgentSettings(created.id, {
             ...(repositoryPath === undefined ? {} : { repositoryPath }),
@@ -687,6 +718,46 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
       });
       changes.publish({ type: 'project', id: project.id });
       return project;
+    },
+
+    /**
+     * Creates the Project of the repository `folder` is in (`tandembike
+     * add`), as the New Project form does: named from the `origin` remote,
+     * else the folder, with the first detected Check command and the
+     * Reference template. When the repository already is a Project it
+     * returns that one and changes nothing. Refused by the same rule as the
+     * form; it writes nothing in the repository.
+     */
+    addProject({ folder }: { folder: string }): {
+      project: Project;
+      created: boolean;
+    } {
+      const root = isAbsolute(folder)
+        ? (repositoryRootOf(folder) ?? folder)
+        : folder;
+      const problem = newRepositoryProblem(root);
+      if (problem !== undefined) {
+        throw new ValidationError({ repositoryPath: problem });
+      }
+      const existing = projectIdOfFolder(db, root, false);
+      if (existing !== undefined) {
+        return { project: area.getProject(existing), created: false };
+      }
+      const detection = detectRepository(root);
+      if (!detection.ok) {
+        throw new ValidationError({ repositoryPath: detection.message });
+      }
+      return {
+        project: area.createProject({
+          name: repositoryName(root, detection.remote),
+          repositoryPath: root,
+          checkCommand: detection.checkCommands[0] ?? null,
+          ...(detection.referenceTemplate === null
+            ? {}
+            : { referenceTemplate: detection.referenceTemplate }),
+        }),
+        created: true,
+      };
     },
 
     /**
@@ -809,4 +880,5 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
       return setProjectArchived(id, false);
     },
   };
+  return area;
 }

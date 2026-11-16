@@ -21,6 +21,14 @@ import { join } from 'node:path';
 vi.mock('next/cache', () => ({ refresh: vi.fn() }));
 vi.mock('../../tickets/app-tickets', () => ({ appTickets: vi.fn() }));
 
+/** A folder with a `.git` on `main`: a repository the New Project rule accepts. */
+const gitFolder = () => {
+  const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+  mkdirSync(join(path, '.git'));
+  writeFileSync(join(path, '.git', 'HEAD'), 'ref: refs/heads/main\n');
+  return path;
+};
+
 describe('Project actions', () => {
   beforeEach(() => {
     vi.mocked(refresh).mockClear();
@@ -29,7 +37,7 @@ describe('Project actions', () => {
   it('creates a Project with its repository, Check command and template', async () => {
     const tickets = createTestTickets();
     vi.mocked(appTickets).mockReturnValue(tickets);
-    const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+    const path = gitFolder();
 
     const result = await createProject({
       name: 'Site',
@@ -50,7 +58,7 @@ describe('Project actions', () => {
   it('refuses a repository another Project uses on the repositoryPath field', async () => {
     const tickets = createTestTickets();
     vi.mocked(appTickets).mockReturnValue(tickets);
-    const path = realpathSync(mkdtempSync(join(tmpdir(), 'action-')));
+    const path = gitFolder();
     await createProject({ name: 'Site', repositoryPath: path });
 
     const result = await createProject({ name: 'Other', repositoryPath: path });

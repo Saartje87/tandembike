@@ -148,10 +148,15 @@ const fakeWorktreesRoot = '/fake-worktrees/';
 export function createScriptedWorktrees(): Worktrees {
   const removed = new Set<string>();
   return {
-    async create({ projectId, conversationId }) {
+    async create({ projectId, conversationId, branch }) {
       const path = `${fakeWorktreesRoot}${projectId}/c${conversationId}`;
       removed.delete(path);
-      return { path, base: 'origin/main' };
+      return {
+        path,
+        base: 'origin/main',
+        branch:
+          branch === undefined ? null : `ticket-${branch.ticketNumber}-work`,
+      };
     },
     async state(path): Promise<WorktreeState> {
       return path.startsWith(fakeWorktreesRoot) && !removed.has(path)

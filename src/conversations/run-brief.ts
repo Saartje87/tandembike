@@ -25,10 +25,27 @@ export type RunBrief = {
   /** Retro only: the Cycle it looks back on. */
   retroCycle?: RetroCycle | null;
   parallelRuns: boolean;
-  /** The worktree Tandembike made for this Conversation, and what it is detached at. */
-  worktree?: { path: string; base: string } | null;
+  /**
+   * The worktree Tandembike made for this Conversation and what it starts
+   * from: on the Ticket's own branch for a Start on a Ticket (ADR 0032),
+   * else detached there.
+   */
+  worktree?: { path: string; base: string; onTicketBranch?: boolean } | null;
   /** The Project's Check command: what a Start run must see pass before a PR. */
   checkCommand?: string | null;
+  /**
+   * Setup only: the Project's stored Agent commands, each with the
+   * Playbook's command for its Stage, which the override replaces.
+   */
+  agentCommandOverrides?: {
+    label: string;
+    command: string;
+    playbook: string;
+  }[];
+  /** Setup only: the default branch Tandembike found in the repository. */
+  defaultBranch?: string | null;
+  /** Setup only: the Check commands Tandembike detected in the repository, best first. */
+  checkCommandSuggestions?: string[];
   /** The Project's Agent run mode, which Setup reports (ADR 0029). */
   runMode: 'default' | 'auto';
   /** Started by Terminal: an interactive session where the User answers (ADR 0039). */
@@ -69,10 +86,10 @@ const intentLines: Record<ConversationIntent, string> = {
 type AgentBriefLines = {
   /** Ends the UI note's Widget sentence: another way the agent can ask. */
   askAlso: string;
-  /** A Start with Parallel runs on and no Tandembike worktree. */
-  ownWorktree: string;
   /** Setup's first check: the agent loads the repository's instructions. */
   instructionsCheck: string;
+  /** The instructions file Setup offers as a skeleton: the one the agent loads. */
+  instructionsFile: string;
   /** Setup's check that the agent's own allowlist covers the Tandembike tools, if it has one. */
   allowlistCheck: string | null;
 };
@@ -80,45 +97,82 @@ type AgentBriefLines = {
 const agentBriefLines: Record<AgentKind, AgentBriefLines> = {
   'claude-code': {
     askAlso: '; AskUserQuestion also works and shows as choice cards',
-    ownWorktree:
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use the EnterWorktree tool. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back: by the repository's conventions, or with the ExitWorktree tool if you made it with EnterWorktree (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     instructionsCheck:
       "A CLAUDE.md exists and loads the repository's instructions (it includes AGENTS.md when the instructions live there).",
+    instructionsFile: 'CLAUDE.md',
     allowlistCheck: 'The permission allowlist covers the Tandembike MCP tools.',
   },
   // Copilot has no worktree tool and no AskUserQuestion; it loads AGENTS.md
   // or .github/copilot-instructions.md, and has no repository allowlist.
   copilot: {
     askAlso: '',
-    ownWorktree:
-      "Other runs may work in this repository at the same time. Work in a git worktree of your own, and create it before you change any file: follow the repository's own conventions for worktrees, or if it has none, use `git worktree add`. Then work only inside it. Name your branch by the repository's rules. Remove your worktree before you finish, as your last step, after your work on the Ticket is merged or handed back (push your branch first). Tandembike gives no prompt to keep or remove it when this run ends, so remove it yourself and tell the User you did.",
     instructionsCheck:
       "An AGENTS.md or a .github/copilot-instructions.md exists and holds the repository's instructions.",
+    instructionsFile: 'AGENTS.md',
     allowlistCheck: null,
   },
 };
 
+/**
+ * The conventions a repository may still state from before the runner owned
+ * the branch and the Playbook owned the Stages (ADR 0020, ADR 0033): fixed,
+ * like the checklist.
+ */
+const outdatedConventions = [
+  'a branch-name pattern other than `ticket-<number>-<slug>`, such as `t<number>-<slug>`',
+  'instructions for agents to create their own worktree or branch at the start of a run',
+  "references to `/to-spec`, `/to-tickets` or a local `/triage` that the Playbook's Stages replace",
+];
+
+/** Setup's report of the Project's Agent commands: report only (ADR 0020). */
+const agentCommandsItem = (
+  overrides: { label: string; command: string; playbook: string }[],
+): string =>
+  overrides.length === 0
+    ? 'Agent commands: No Stage has an Agent command: the Playbook runs every Stage. Report it.'
+    : `Agent commands: ${overrides
+        .map(
+          ({ label, command, playbook }) =>
+            `${label} \`${command}\` overrides the Playbook, which covers this Stage with \`${playbook}\`.`,
+        )
+        .join(
+          ' ',
+        )} Report each: when the Playbook covers its Stage, the User can clear it in the Project's Settings so the Playbook runs. Report only: do not change Agent commands.`;
+
 /** What Setup checks (ADR 0020): fixed, and only what Tandembike relies on. */
 const setupChecklist = (brief: RunBrief): string[] => {
   const own = agentBriefLines[brief.agentKind];
+  const suggestions = brief.checkCommandSuggestions ?? [];
   const items = [
-    own.instructionsCheck,
+    `${own.instructionsCheck} It says how to test, lint and run the app. When it is missing, offer a skeleton \`${own.instructionsFile}\` that says how to test, lint and run the app, from what you found in the repository. When the file exists, suggest only its missing sections as an edit, never the skeleton over it.`,
     ...(own.allowlistCheck === null ? [] : [own.allowlistCheck]),
-  ];
-  items.push(
+    `The Check command: what a Start run must see pass before it opens a pull request. ${
+      suggestions.length === 0
+        ? 'Tandembike detected no candidate.'
+        : `Tandembike detected these candidates, best first: ${suggestions.map((command) => `\`${command}\``).join(', ')}.`
+    } ${
+      brief.checkCommand
+        ? `The Project's Check command is \`${brief.checkCommand}\`.`
+        : 'The Project has no Check command yet.'
+    } Read the repository's scripts and find the best one. When the Project has none, propose it, and save it with set_check_command only after the User says yes. When it matches your best suggestion, report it as kept and ask nothing. When it differs, ask once, naming both and why yours may be better. Never clear or replace it without the User's yes. When you find none, say so: runs then look for the repository's test and lint scripts themselves.`,
+    '`gh` is installed and logged in (`gh auth status`). Report only: runs need it to open pull requests.',
+    'The repository has a CI workflow, such as one in `.github/workflows/`. Report only. Without CI, Auto-merge hands every pull request to the User for Approve merge, since no checks prove it.',
+    `The default branch: Tandembike found ${brief.defaultBranch ? `\`${brief.defaultBranch}\`` : 'none'}. Report it, so the User can spot one they did not expect.`,
+    'A git guardrail: a hook in the repository that blocks destructive git commands (force pushes, pushes to the default branch, git reset --hard, git clean, commits on the default branch or a detached HEAD). When there is none, offer to install one as advice, not a requirement: it also keeps terminal sessions and people off the default branch. When one exists, report it as already present and offer nothing.',
     `The Project's Agent run mode is ${brief.runMode}. Report it; do not suggest changing it.`,
-    'Report whether a hook in the repository blocks destructive git commands (force pushes, pushes to the main branch, git reset --hard, git clean). Only report whether one exists; do not suggest a run mode.',
-  );
-  if (brief.parallelRuns) {
-    items.push(
-      "Parallel runs is on: the instructions give a convention for working in a git worktree of one's own.",
-    );
-  }
+    "Commits: when the repository has no commits yet, offer to make the first commit of what it holds, since worktrees and Start runs need one; make it only after the User's Allow.",
+    agentCommandsItem(brief.agentCommandOverrides ?? []),
+    `Outdated conventions: search the repository's instructions and agent docs for rules that contradict how Tandembike runs agents now: ${outdatedConventions.join('; ')}. Report each match with its file and offer an edit, which waits for the User's Allow like any other.`,
+  ];
   return [
-    'Check the repository against this checklist, and nothing else; its branch names and the rest of its process are its own:',
+    'Check the repository against this checklist, and nothing else; the rest of its process is its own. The Project may have been set up before: compare each item with what is there before you offer anything.',
     ...items.map((item, index) => `${index + 1}. ${item}`),
-    'Setup is advisory. For each item that is missing, offer to add it and wait for the User: every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request: the User reviews the diff and commits it their own way.',
-    'End with a summary that marks each checklist item by number as exactly one of: ok, added (uncommitted), skipped by the User, or missing.',
+    brief.terminal
+      ? "First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found, and when the item needs the User's answer, ask about it alone, with your recommended answer; ask in the chat, so the User can accept it with a yes."
+      : "First inspect the repository for every item, without asking anything. Then go through the items one item at a time: say what you found, and when the item needs the User's answer, ask about it alone, with your recommended answer, as a Widget: ask_choice, with your recommendation in `recommended`, so the User can accept it with a click.",
+    'Setup is advisory, and the User may decline any suggestion. Every edit goes through their Allow or Deny. Work in the main checkout. Never commit, push or open a pull request, except that first commit of a repository with none: the User reviews the diff and commits it their own way.',
+    'An item that already matches gets no question, only "already in place" in the summary.',
+    'End with a summary that marks each checklist item by number as exactly one of: already in place, added (uncommitted), saved, committed, reported, skipped by the User, or missing.',
   ];
 };
 
@@ -168,12 +222,23 @@ export function runBrief(brief: RunBrief): string {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. It is not on the pull request's branch: the merge skill checks that branch out here. Do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
+  } else if (
+    brief.worktree?.onTicketBranch &&
+    brief.intent === 'start' &&
+    brief.ticketNumber !== null
+  ) {
+    const ticket = `T${brief.ticketNumber}`;
+    lines.push(
+      `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}. It is already on ${ticket}'s own branch (\`git branch --show-current\` names it): new from ${brief.worktree.base}, or the branch ${ticket} already had. Commit on that branch and check it before each commit; do not create another branch or worktree. Tandembike removes the worktree when the Conversation closes or the Ticket is Done; the branch stays.`,
+    );
   } else if (brief.worktree && brief.intent === 'start') {
     lines.push(
       `You are in a git worktree Tandembike made for this Conversation at ${brief.worktree.path}, detached at ${brief.worktree.base}. Create your branch here; do not create or enter another worktree; Tandembike removes it when the Conversation closes or the Ticket is Done.`,
     );
   } else if (brief.parallelRuns && brief.intent === 'start') {
-    lines.push(own.ownWorktree);
+    lines.push(
+      'Other runs may work in this repository at the same time, and this Conversation has no worktree of its own: it began before Parallel runs was on. Change no files and switch no branches here; tell the User, who can close this Conversation and start the Ticket again to get a worktree on its branch.',
+    );
   }
   if (brief.intent === 'start' || brief.intent === 'merge') {
     lines.push(

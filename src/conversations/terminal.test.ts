@@ -6,6 +6,7 @@ import { agentCommandEntries } from '../test/fixtures';
 import { createChangeChannel } from '../tickets/changes';
 import { NotAllowedError } from '../tickets/errors';
 import { holdsStartRunSlot } from './capacity';
+import { setupPrompt } from './conversations';
 
 async function failure(promise: Promise<unknown>): Promise<Error> {
   try {
@@ -444,6 +445,113 @@ describe('Terminal Plan (T1249)', () => {
     expect(error.message).toContain('/nowhere');
     expect(error.message).toContain('"Website"');
     expect(error.message).toContain('"Blog"');
+  });
+});
+
+describe('Terminal Setup (T1561)', () => {
+  it("records a Terminal Setup of the folder's Project in the main checkout, with the app's prompt and brief", async () => {
+    const { conversations, project, repositoryDir } = setup();
+
+    const session = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    expect(session.cwd).toBe(repositoryDir);
+    expect(session.firstMessage).toBe(setupPrompt);
+    expect(session.brief).toContain('Setup');
+    expect(session.brief).toContain('ask in the chat');
+    expect(session.brief).toContain('set_check_command');
+    expect(conversations.get(session.conversationId)).toMatchObject({
+      intent: 'setup',
+      startedBy: 'terminal',
+      state: 'running',
+      projectId: project.id,
+      ticketNumber: null,
+    });
+    expect(
+      conversations.listOpen().map(({ conversation }) => conversation.id),
+    ).toContain(session.conversationId);
+  });
+
+  it('refuses a second Setup while one runs, from the terminal or the app', async () => {
+    const { conversations, project, repositoryDir, runner } = setup();
+    const first = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    const error = await failure(
+      conversations.startTerminalSetup({ folder: repositoryDir }),
+    );
+    expect(error).toBeInstanceOf(NotAllowedError);
+    expect(error.message).toBe(
+      `Website already has a Setup running (Conversation ${first.conversationId}). Finish or stop it first.`,
+    );
+    // The app's Setup button opens the running one instead of starting a run.
+    const opened = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'setup',
+      prompt: setupPrompt,
+    });
+    expect(opened.id).toBe(first.conversationId);
+    expect(runner.runs).toHaveLength(0);
+  });
+
+  it("refuses while the app's Setup runs", async () => {
+    const { conversations, project, repositoryDir } = setup();
+    const running = await conversations.start({
+      startedBy: 'user',
+      projectId: project.id,
+      intent: 'setup',
+      prompt: setupPrompt,
+    });
+
+    const error = await failure(
+      conversations.startTerminalSetup({ folder: repositoryDir }),
+    );
+
+    expect(error.message).toContain(`Conversation ${running.id}`);
+  });
+
+  it('starts again once the earlier Setup ended', async () => {
+    const { conversations, repositoryDir } = setup();
+    const first = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+    await conversations.endTerminal(first.conversationId, { exitCode: 0 });
+
+    const second = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    expect(second.conversationId).not.toBe(first.conversationId);
+  });
+
+  it('starts again once the idle sweep ended a killed one', async () => {
+    const { conversations, repositoryDir } = setup();
+    const first = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    conversations.endIdleTerminals(new Date(Date.now() + 60 * 60 * 1000));
+    const second = await conversations.startTerminalSetup({
+      folder: repositoryDir,
+    });
+
+    expect(second.conversationId).not.toBe(first.conversationId);
+  });
+
+  it('names tandembike add for a folder in no Project', async () => {
+    const { conversations } = setup();
+
+    const error = await failure(
+      conversations.startTerminalSetup({ folder: '/nowhere' }),
+    );
+
+    expect(error.message).toContain('/nowhere');
+    expect(error.message).toContain(
+      'Run `tandembike add` there to make it a Project.',
+    );
   });
 });
 

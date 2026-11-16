@@ -16,9 +16,12 @@ import type { DatabaseConnection } from '../db/connection';
 import { conversationEntries, conversations, runOutcomes } from '../db/schema';
 import type { UsageByModel } from '../footprint/token-usage';
 import { playbookPath } from '../playbook/playbook';
+import { detectRepository } from '../repository/detect-repository';
 import {
   agentCommandMessage,
+  agentStages,
   planCommandMessage,
+  playbookCommand,
 } from '../tickets/agent-commands';
 import {
   type AgentKind,
@@ -392,6 +395,10 @@ const noRepositoryPath = {
   repositoryPath:
     'This Project has no repository path. Set one in the Project settings first.',
 };
+
+/** The User's first message of a Setup, from the app or `tandembike setup`: the brief holds the checklist. */
+export const setupPrompt =
+  "Check that this repository is ready for Tandembike's Agent runs.";
 
 /**
  * The model a run of `intent` starts on, from its Agent kind's models (ADR
@@ -987,6 +994,30 @@ export function createConversations({
       : (costs[middle - 1] + costs[middle]) / 2;
   };
 
+  /** The Project's stored Agent commands, each with the Playbook's command it replaces. */
+  const agentCommandOverridesOf = (projectId: number) => {
+    const commands = tickets.getProjectAgentCommands(projectId);
+    return agentStages.flatMap(({ field, skill, label }) => {
+      const command = commands[field];
+      return command === null
+        ? []
+        : [{ label, command, playbook: playbookCommand(skill) }];
+    });
+  };
+
+  /** What Setup's brief tells of the repository at `path`: its default branch and Check commands, best first. */
+  const repositoryFacts = (
+    path: string | null,
+  ): { defaultBranch: string | null; checkCommandSuggestions: string[] } => {
+    const detection = path === null ? null : detectRepository(path);
+    return detection?.ok
+      ? {
+          defaultBranch: detection.defaultBranch,
+          checkCommandSuggestions: detection.checkCommands,
+        }
+      : { defaultBranch: null, checkCommandSuggestions: [] };
+  };
+
   /** The run brief of Conversation `id` as its situation is now (ADR 0019). */
   const briefOf = (id: number): string => {
     const conversation = get(id);
@@ -1014,8 +1045,20 @@ export function createConversations({
           : {
               path: conversation.worktreePath,
               base: worktreeBaseOf(id),
+              // A Start on a Ticket is made on the Ticket's branch (ADR 0032).
+              onTicketBranch:
+                conversation.intent === 'start' &&
+                conversation.ticketNumber !== null,
             },
       checkCommand: settings.checkCommand,
+      ...(conversation.intent === 'setup'
+        ? {
+            ...repositoryFacts(settings.repositoryPath),
+            agentCommandOverrides: agentCommandOverridesOf(
+              conversation.projectId,
+            ),
+          }
+        : {}),
       runMode: settings.runMode,
       terminal: isTerminal(conversation),
       ...(conversation.intent === 'plan'
@@ -1135,7 +1178,8 @@ export function createConversations({
 
   /**
    * Makes the worktree of Conversation `id` and runs the Project's Prepare
-   * command in it. Returns why it failed, or null when the worktree is ready.
+   * command in it. A Start's worktree is on its Ticket's branch (ADR 0032),
+   * a Merge's detached. Returns why it failed, or null when it is ready.
    */
   const prepareWorktree = async (
     id: number,
@@ -1143,10 +1187,18 @@ export function createConversations({
     settings: { repositoryPath: string | null; prepareCommand: string | null },
   ): Promise<string | null> => {
     try {
+      const conversation = get(id);
+      const ticket =
+        conversation.intent === 'start' && conversation.ticketNumber !== null
+          ? tickets.getTicket(conversation.ticketNumber)
+          : null;
       const made = await worktrees.create({
         repositoryPath: settings.repositoryPath as string,
         projectId,
         conversationId: id,
+        ...(ticket === null
+          ? {}
+          : { branch: { ticketNumber: ticket.number, title: ticket.title } }),
       });
       update(id, { worktreePath: made.path, worktreeBase: made.base });
       if (settings.prepareCommand !== null) {
@@ -1291,11 +1343,9 @@ export function createConversations({
       }
       // At most one running Setup per Project: two would edit the same
       // checkout (ADR 0020). Starting another opens the running one.
-      for (const id of live.keys()) {
-        const other = get(id);
-        if (other.projectId === projectId && other.intent === 'setup') {
-          return other;
-        }
+      const running = runningSetupOf(projectId);
+      if (running !== null) {
+        return running;
       }
     }
     if (input.intent === 'spec') {
@@ -1584,10 +1634,83 @@ export function createConversations({
           names.length === 0
             ? 'There are no Projects yet.'
             : `Known Projects: ${names.join(', ')}.`
-        }`,
+        } Run \`tandembike add\` there to make it a Project.`,
       });
     }
     return projectId;
+  };
+
+  /**
+   * The Project's running Setup, in the app or a terminal; null when none.
+   * At most one runs per Project, since two would edit one checkout (ADR 0020).
+   */
+  const runningSetupOf = (projectId: number): Conversation | null => {
+    for (const id of live.keys()) {
+      const other = get(id);
+      if (other.projectId === projectId && other.intent === 'setup') {
+        return other;
+      }
+    }
+    return (
+      db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.projectId, projectId),
+            eq(conversations.intent, 'setup'),
+            eq(conversations.startedBy, 'terminal'),
+            eq(conversations.state, 'running'),
+          ),
+        )
+        .orderBy(conversations.id)
+        .limit(1)
+        .get() ?? null
+    );
+  };
+
+  /**
+   * `tandembike setup` (T1561): a Terminal Setup on the Project whose
+   * repository holds `folder`, in the main checkout, with the app's prompt
+   * and the same brief. Refused while the Project has a Setup running.
+   */
+  const startTerminalSetup = async (
+    ref: TerminalProjectRef,
+  ): Promise<TerminalSession> => {
+    const projectId = projectIdOfRef(ref);
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (settings.repositoryPath === null) {
+      throw new ValidationError(noRepositoryPath);
+    }
+    const running = runningSetupOf(projectId);
+    if (running !== null) {
+      throw new NotAllowedError(
+        `${tickets.getProject(projectId).name} already has a Setup running (Conversation ${running.id}). Finish or stop it first.`,
+      );
+    }
+    const now = clock();
+    const created = db
+      .insert(conversations)
+      .values({
+        projectId,
+        intent: 'setup',
+        startedBy: 'terminal',
+        state: 'running',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({ id: conversations.id })
+      .get();
+    append(created.id, 'user', setupPrompt);
+    announce(created.id);
+    return {
+      conversationId: created.id,
+      cwd: settings.repositoryPath,
+      firstMessage: setupPrompt,
+      brief: briefOf(created.id),
+      runMode: settings.runMode,
+      model: modelFor('setup', settings.models['claude-code']),
+    };
   };
 
   /**
@@ -2481,6 +2604,7 @@ export function createConversations({
     startTerminal,
     startTerminalNext,
     startTerminalPlan,
+    startTerminalSetup,
 
     endTerminal,
     heartbeatTerminal,

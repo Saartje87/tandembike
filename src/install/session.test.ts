@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  addedMessage,
   noWorkMessage,
   parseCommand,
   planClaudeSession,
@@ -119,6 +120,24 @@ describe('parseCommand', () => {
       command: 'spec',
       ticketNumber: 7,
     });
+  });
+
+  it('accepts add with or without a path (T1562)', () => {
+    expect(parseCommand(['add'])).toEqual({ command: 'add', path: null });
+    expect(parseCommand(['add', '../site'])).toEqual({
+      command: 'add',
+      path: '../site',
+    });
+    expect(parseCommand(['add', 'a', 'b'])).toMatchObject({ command: 'usage' });
+    expect(usageText).toContain('tandembike add [path]');
+  });
+
+  it('accepts setup without arguments (T1561)', () => {
+    expect(parseCommand(['setup'])).toEqual({ command: 'setup' });
+    expect(parseCommand(['setup', 'extra'])).toMatchObject({
+      command: 'usage',
+    });
+    expect(usageText).toContain('tandembike setup');
   });
 
   it('accepts plan with a goal and refuses a missing one (T1249)', () => {
@@ -283,5 +302,24 @@ describe('planClaudeSession', () => {
       'opus',
       '/tandembike:implement T42',
     ]);
+  });
+});
+
+describe('addedMessage (T1562)', () => {
+  it('says what add created, or which Project the repository already is', () => {
+    expect(
+      addedMessage({
+        created: true,
+        repositoryPath: '/r/site',
+        project: { id: 3, name: 'site' },
+      }),
+    ).toBe('Created the Project "site" for /r/site.');
+    expect(
+      addedMessage({
+        created: false,
+        repositoryPath: '/r/site',
+        project: { id: 3, name: 'site' },
+      }),
+    ).toBe('/r/site is already the Project "site". Nothing changed.');
   });
 });

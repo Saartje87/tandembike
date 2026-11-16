@@ -148,6 +148,7 @@ describe('MCP server', () => {
       'propose_hand_off',
       'propose_triage',
       'read_attachment',
+      'set_check_command',
       'start_work',
       'update_cycle',
       'update_ticket',

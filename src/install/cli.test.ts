@@ -190,3 +190,71 @@ describe('bin/tandembike.mjs', () => {
     }
   }, 30_000);
 });
+
+describe('tandembike add (T1562)', () => {
+  it('sends the path resolved from the folder it was typed in, prints the result and, without a terminal, the Setup hint', async () => {
+    const bodies: { action?: string; folder?: string }[] = [];
+    const server = createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk) => {
+        body += chunk;
+      });
+      req.on('end', () => {
+        if (body) bodies.push(JSON.parse(body));
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            created: true,
+            project: { id: 3, name: 'site' },
+            repositoryPath: '/r/site',
+          }),
+        );
+      });
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, '127.0.0.1', resolve),
+    );
+    const { port } = server.address() as AddressInfo;
+    const folder = realpathSync(mkdtempSync(join(tmpdir(), 'tandembike-add-')));
+    try {
+      const result = await new Promise<{
+        status: number | null;
+        stdout: string;
+      }>((resolve) => {
+        const child = spawn(
+          process.execPath,
+          [tsxCli, join('src', 'install', 'cli.ts'), 'add', 'sub'],
+          {
+            cwd: process.cwd(),
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: {
+              NODE_ENV: 'test',
+              PATH: '/usr/bin:/bin',
+              HOME: sandbox,
+              TANDEMBIKE_DATA_DIR: join(sandbox, '.tandembike'),
+              TANDEMBIKE_PACKAGE_DIR: join(sandbox, 'checkout'),
+              TANDEMBIKE_URL: `http://127.0.0.1:${port}`,
+              TANDEMBIKE_CWD: folder,
+            },
+          },
+        );
+        let stdout = '';
+        child.stdout.on('data', (chunk) => {
+          stdout += chunk;
+        });
+        child.on('exit', (status) => resolve({ status, stdout }));
+      });
+
+      expect(result.status).toBe(0);
+      expect(bodies).toEqual([{ action: 'add', folder: join(folder, 'sub') }]);
+      expect(result.stdout).toContain(
+        'Created the Project "site" for /r/site.',
+      );
+      expect(result.stdout).toContain('Run `tandembike setup`');
+      expect(result.stdout).not.toContain('Run Setup now?');
+    } finally {
+      server.close();
+      rmSync(folder, { recursive: true, force: true });
+    }
+  }, 30_000);
+});

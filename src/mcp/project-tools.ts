@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { ConversationReader } from '../conversations/conversation-reader';
 import { NotAllowedError, TicketsError } from '../tickets/errors';
 import { maxBatchSize } from '../tickets/rules';
 import {
@@ -15,11 +16,28 @@ import {
   withChildren,
 } from './tool-shared';
 
-export const registerProjectTools = ({
-  tickets,
-  resolveProjectId,
-  registerTool,
-}: ToolContext): void => {
+const onlySetup =
+  "Only a Setup Conversation may set the Check command. Otherwise the User sets it in the Project's Settings.";
+
+/** The Project of the calling Setup run, by its `X-Tandembike-Run`; refused for any other caller. */
+const setupProjectOf = (
+  conversations: ConversationReader | undefined,
+  runId: string | undefined,
+): number => {
+  const projectId =
+    conversations && runId !== undefined && /^\d+$/.test(runId)
+      ? conversations.setupProjectOf(Number(runId))
+      : null;
+  if (projectId === null) {
+    throw new NotAllowedError(onlySetup);
+  }
+  return projectId;
+};
+
+export const registerProjectTools = (
+  { tickets, resolveProjectId, registerTool, runId }: ToolContext,
+  conversations?: ConversationReader,
+): void => {
   registerTool(
     'get_project',
     {
@@ -152,5 +170,31 @@ export const registerProjectTools = ({
           return tickets.renameCycle(cycleId, { title });
         }),
       ),
+  );
+
+  registerTool(
+    'set_check_command',
+    {
+      title: 'Set Check command',
+      description:
+        "Set the Check command of your Setup Conversation's Project: the command a Start run must see pass before it opens a pull request, such as `npm run check`. An empty command clears it. Only in a Setup Conversation, and only after the User said yes to the command you proposed; refused from any other run or session, where the User sets it in the Project's Settings. Returns { projectId, checkCommand }.",
+      inputSchema: {
+        command: z
+          .string()
+          .max(500)
+          .describe(
+            'The command, run through the shell in the repository root, at most 500 characters. It is trimmed; empty clears the Check command.',
+          ),
+      },
+    },
+    ({ command }) =>
+      respond(() => {
+        const projectId = setupProjectOf(conversations, runId);
+        const trimmed = command.trim();
+        const settings = tickets.setProjectAgentSettings(projectId, {
+          checkCommand: trimmed === '' ? null : trimmed,
+        });
+        return { projectId, checkCommand: settings.checkCommand };
+      }),
   );
 };

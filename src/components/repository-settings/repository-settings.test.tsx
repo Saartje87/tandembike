@@ -44,6 +44,49 @@ describe('RepositorySettings', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
+  it('shows a Check command saved elsewhere, such as by Setup, without a reload (T1558)', async () => {
+    const { rerender } = renderWithTheme(
+      <RepositorySettings projectId={3} settings={set} />,
+    );
+
+    rerender(
+      <RepositorySettings
+        projectId={3}
+        settings={{ ...set, checkCommand: 'npm run check' }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Check command')).toHaveValue(
+        'npm run check',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('keeps a field the User is editing when a save elsewhere arrives', async () => {
+    const { rerender } = renderWithTheme(
+      <RepositorySettings projectId={3} settings={set} />,
+    );
+    await userEvent.type(screen.getByLabelText('Prepare command'), ' --quiet');
+
+    rerender(
+      <RepositorySettings
+        projectId={3}
+        settings={{ ...set, checkCommand: 'npm run check' }}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Check command')).toHaveValue(
+        'npm run check',
+      ),
+    );
+    expect(screen.getByLabelText('Prepare command')).toHaveValue(
+      'npm ci --quiet',
+    );
+  });
+
   it('saves only its own text fields with its Save, blank commands as none', async () => {
     renderWithTheme(<RepositorySettings projectId={3} settings={set} />);
 

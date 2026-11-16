@@ -135,6 +135,247 @@ describe('worktrees.create', () => {
   });
 });
 
+/** Makes local branch `name` with one commit of its own, committed at `date`. */
+function branchAt(repo: string, name: string, date = '2026-01-01T00:00:00Z') {
+  git(repo, 'branch', name, 'main');
+  const tree = git(repo, 'rev-parse', 'main^{tree}');
+  const commit = execFileSync(
+    'git',
+    ['commit-tree', tree, '-p', 'main', '-m', name],
+    {
+      cwd: repo,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'T',
+        GIT_AUTHOR_EMAIL: 't@example.com',
+        GIT_COMMITTER_NAME: 'T',
+        GIT_COMMITTER_EMAIL: 't@example.com',
+        GIT_COMMITTER_DATE: date,
+      },
+    },
+  ).trim();
+  git(repo, 'update-ref', `refs/heads/${name}`, commit);
+  return commit;
+}
+
+describe("worktrees.create on a Ticket's branch", () => {
+  const ticket = { ticketNumber: 42, title: 'Fix the Board: drag & drop!' };
+
+  it('creates ticket-<n>-<slug> from origin/<default>, not detached and not tracking it', async () => {
+    const { repo, worktrees } = repository({ remote: true });
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe(
+      'ticket-42-fix-the-board-drag-drop',
+    );
+    expect(created.base).toBe('origin/main');
+    expect(created.branch).toBe('ticket-42-fix-the-board-drag-drop');
+    expect(git(created.path, 'rev-parse', 'HEAD')).toBe(
+      git(repo, 'rev-parse', 'origin/main'),
+    );
+    expect(
+      git(
+        repo,
+        'config',
+        '--default',
+        'none',
+        '--get',
+        'branch.ticket-42-fix-the-board-drag-drop.merge',
+      ),
+    ).toBe('none');
+  });
+
+  it('creates it from the local default branch without a remote', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe(
+      'ticket-42-fix-the-board-drag-drop',
+    );
+    expect(created.base).toBe('main');
+  });
+
+  it('caps the slug in length, without a trailing hyphen', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: {
+        ticketNumber: 7,
+        title: `${'word '.repeat(30)}end`,
+      },
+    });
+
+    const name = git(created.path, 'branch', '--show-current');
+    expect(name.startsWith('ticket-7-word-word')).toBe(true);
+    expect(name.length).toBeLessThanOrEqual('ticket-7-'.length + 40);
+    expect(name.endsWith('-')).toBe(false);
+  });
+
+  it('reuses an existing ticket-<n>-* branch whose slug differs', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    const commit = branchAt(repo, 'ticket-42-old-title');
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe(
+      'ticket-42-old-title',
+    );
+    expect(git(created.path, 'rev-parse', 'HEAD')).toBe(commit);
+    expect(created.branch).toBe('ticket-42-old-title');
+  });
+
+  it('reuses an old t<n>-* branch when there is no ticket-<n>-* one', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 't42-playbook-name');
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe(
+      't42-playbook-name',
+    );
+  });
+
+  it('prefers ticket-<n>-* over a newer t<n>-* branch', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 'ticket-42-a', '2026-01-01T00:00:00Z');
+    branchAt(repo, 't42-b', '2026-06-01T00:00:00Z');
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe('ticket-42-a');
+  });
+
+  it('takes the most recently committed of several matching branches', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 'ticket-42-a', '2026-01-01T00:00:00Z');
+    branchAt(repo, 'ticket-42-b', '2026-06-01T00:00:00Z');
+    branchAt(repo, 'ticket-42-c', '2026-03-01T00:00:00Z');
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe('ticket-42-b');
+  });
+
+  it('never picks up the branch of a longer number', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 'ticket-420-other');
+    branchAt(repo, 't420-other');
+
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    expect(git(created.path, 'branch', '--show-current')).toBe(
+      'ticket-42-fix-the-board-drag-drop',
+    );
+  });
+
+  it('refuses a branch checked out in another worktree, naming it', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 'ticket-42-busy');
+    const elsewhere = join(temp('elsewhere'), 'tree');
+    folders.push(elsewhere);
+    git(repo, 'worktree', 'add', elsewhere, 'ticket-42-busy');
+
+    await expect(
+      worktrees.create({
+        repositoryPath: repo,
+        projectId: 3,
+        conversationId: 12,
+        branch: ticket,
+      }),
+    ).rejects.toThrow(
+      new RegExp(`ticket-42-busy.*checked out.*${realpathSync(elsewhere)}`),
+    );
+  });
+
+  it('refuses the branch checked out in the main checkout', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    branchAt(repo, 'ticket-42-here');
+    git(repo, 'switch', 'ticket-42-here');
+
+    await expect(
+      worktrees.create({
+        repositoryPath: repo,
+        projectId: 3,
+        conversationId: 12,
+        branch: ticket,
+      }),
+    ).rejects.toThrow(/ticket-42-here.*checked out/);
+  });
+
+  it('keeps the branch when the worktree is removed', async () => {
+    const { repo, worktrees } = repository({ remote: false });
+    const created = await worktrees.create({
+      repositoryPath: repo,
+      projectId: 3,
+      conversationId: 12,
+      branch: ticket,
+    });
+
+    await worktrees.remove(repo, created.path);
+
+    expect(git(repo, 'branch', '--list', created.branch as string)).toContain(
+      created.branch,
+    );
+  });
+
+  it('refuses a repository with no commits, saying to make a first commit', async () => {
+    const { worktrees } = repository({ remote: false });
+    const empty = temp('empty');
+    folders.push(empty);
+    git(empty, 'init', '-b', 'main');
+
+    await expect(
+      worktrees.create({
+        repositoryPath: empty,
+        projectId: 3,
+        conversationId: 12,
+        branch: ticket,
+      }),
+    ).rejects.toThrow(/make a first commit/i);
+  });
+});
+
 describe('worktrees.state', () => {
   it('reports clean, dirty and missing', async () => {
     const { repo, worktrees } = repository({ remote: true });

@@ -9,6 +9,7 @@ import {
   type TerminalIntent,
   terminalIntents,
 } from '../../../conversations/terminal-shared';
+import { appTickets } from '../../../tickets/app-tickets';
 import { NotFoundError, TicketsError } from '../../../tickets/errors';
 
 /**
@@ -25,6 +26,8 @@ type TerminalAction =
     }
   | ({ action: 'next' } & ProjectRefBody)
   | ({ action: 'plan'; goal: string } & ProjectRefBody)
+  | ({ action: 'setup' } & ProjectRefBody)
+  | { action: 'add'; folder: string }
   | { action: 'projects'; folder: string }
   | ({ action: 'list'; intent: unknown } & ProjectRefBody)
   | { action: 'resume'; conversationId: number }
@@ -87,6 +90,23 @@ export const POST = async (request: Request): Promise<Response> => {
             ...projectRefOf(body),
             goal: String(body.goal ?? ''),
           }),
+        );
+      case 'add': {
+        // Only the User creates Projects: `tandembike add` acts as the User.
+        const tickets = appTickets('user');
+        const { project, created } = tickets.addProject({
+          folder: String(body.folder),
+        });
+        return Response.json({
+          created,
+          project: { id: project.id, name: project.name },
+          repositoryPath: tickets.getProjectAgentSettings(project.id)
+            .repositoryPath,
+        });
+      }
+      case 'setup':
+        return Response.json(
+          await conversations.startTerminalSetup(projectRefOf(body)),
         );
       case 'projects':
         return Response.json(

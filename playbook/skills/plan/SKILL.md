@@ -10,6 +10,8 @@ The first message gives a goal in the User's words, such as `Ship the beta`. You
 
 Call `get_project` for the Project's Cycles and labels. Call `find_tickets` for the Backlog's work that is ready for an agent: the label `ready-for-agent`, Todo, in no Cycle and not Blocked. Call `get_ticket` on each candidate that looks relevant to the goal, for its description, acceptance criteria, Blockers and Epic. An Epic stands for its children: plan the children, not the Epic. Leave out anything archived, Done, already planned in a Prepared or Active Cycle, or labelled `needs-triage`, `needs-info` or `wontfix`.
 
+Look for the repository's domain docs: a glossary (`GLOSSARY.md` or `CONTEXT.md`) and decision records (`docs/adr/`) at its root. Read the goal and the Tickets in their language when they exist; when they do not, carry on without remarking on it.
+
 ## 2. Ask when the goal and the work do not meet
 
 Stop and ask the User, offering the choices with the `ask_choice` Widget tool (AskUserQuestion where it is missing, such as in a terminal) or a short question, when:
