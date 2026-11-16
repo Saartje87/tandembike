@@ -67,7 +67,13 @@ export const RepositorySettings: FC<RepositorySettingsProps> = ({
     setError,
     setValue,
     watch,
-  } = useForm<RepositoryValues>({ defaultValues: valuesOf(settings) });
+  } = useForm<RepositoryValues>({
+    defaultValues: valuesOf(settings),
+    // A save elsewhere, such as Setup's Check command (T1558), shows at once
+    // in the fields the User is not editing.
+    values: valuesOf(settings),
+    resetOptions: { keepDirtyValues: true },
+  });
   const hasPath = settings.repositoryPath !== null;
   const serverError = errors.root?.server?.message;
 
