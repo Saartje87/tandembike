@@ -1761,7 +1761,7 @@ export function createConversations({
   };
 
   /**
-   * `tandembike implement` without a Ticket (T1240, T1353): starts a Terminal Start on the top Eligible
+   * `tandembike implement` without a Ticket (T1240, T1353): starts a Terminal Start on the top ready
    * item of the Active Cycle of the Project whose repository holds `folder`,
    * by the `next_work` rule. With no work it returns `next_work`'s reason.
    */

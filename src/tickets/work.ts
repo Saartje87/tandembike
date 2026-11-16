@@ -157,8 +157,8 @@ export function createWork(
      * unblocked, unclaimed (an Epic's Claim covers its children), not
      * archived and not an Epic's child, an Epic only once it has a child,
      * first in Board order, so Todo items before In progress Epics. With
-     * none, `ticket` is `null` and
-     * `reason` says why. It cannot see Conversations (ADR 0004).
+     * none, `ticket` is `null` and `reason` says why. It cannot see
+     * Conversations (ADR 0004).
      */
     nextWork(ref: ProjectRef): NextWork {
       const projectId = deps.resolveProjectId(ref);
