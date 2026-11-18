@@ -187,3 +187,25 @@ describe('PauseReasons of the judgment runs (ADR 0054)', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('PauseReasons of Auto-reply (ADR 0054)', () => {
+  it('shows Auto-reply running, or why it starts nothing', () => {
+    renderWithTheme(
+      <PauseReasons
+        projectId={3}
+        autopilot={{ state: 'running' }}
+        autoTriage={{ state: 'running' }}
+        autoReply={{
+          state: 'paused',
+          reasons: [{ type: 'noQuestionWaiting' }],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('region', { name: 'Auto-reply' }),
+    ).toHaveTextContent(
+      'No question is waiting: no Start run on the Active Cycle waits on a Widget it has not answered.',
+    );
+  });
+});

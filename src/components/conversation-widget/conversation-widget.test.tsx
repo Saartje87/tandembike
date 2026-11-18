@@ -304,6 +304,26 @@ describe('A matrix Widget', () => {
 });
 
 describe('A settled Widget', () => {
+  it('says when Auto-reply answered it, not the User (ADR 0054)', () => {
+    renderWidget({
+      answer: { selected: ['Beta'] },
+      autoReply: {
+        conversationId: 9,
+        decision: 'approve',
+        at: '2026-11-18T10:00:00.000Z',
+      },
+    });
+
+    expect(screen.getByText('Beta')).toBeInTheDocument();
+    expect(screen.getByText('Answered by Auto-reply')).toBeInTheDocument();
+  });
+
+  it('says nothing of Auto-reply for the User’s own answer', () => {
+    renderWidget({ answer: { selected: ['Beta'] } });
+
+    expect(screen.queryByText(/Auto-reply/)).toBeNull();
+  });
+
   it('shows a matrix answer by quadrant, read-only', () => {
     renderWidget({
       widget: matrix,

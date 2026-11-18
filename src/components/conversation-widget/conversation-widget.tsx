@@ -54,12 +54,13 @@ const answerLines = (widget: Widget, answer: WidgetAnswer): string[] => {
 /**
  * A Widget of the Agent in the chat (ADR 0045), in any Conversation: the
  * form for its kind while the run waits on it; once answered, read-only with
- * the answer; once its run ended unanswered, marked expired.
+ * the answer, marked when Auto-reply gave it (ADR 0054); once its run ended
+ * unanswered, marked expired.
  */
 export const ConversationWidget: FC<ConversationWidgetProps> = ({
   conversationId,
   entryId,
-  entry: { widget, answer, expired },
+  entry: { widget, answer, expired, autoReply },
 }) => {
   const kept = useKeptConversation();
   const settled = answer !== null || expired;
@@ -92,6 +93,11 @@ export const ConversationWidget: FC<ConversationWidgetProps> = ({
             )}
           </ul>
         </Stack>
+        {autoReply && (
+          <Text tag="p" fontSize="small" color="muted">
+            Answered by Auto-reply
+          </Text>
+        )}
       </Stack>
     );
   }

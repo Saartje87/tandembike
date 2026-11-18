@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { errorFrom } from '../test/tickets';
 import { ValidationError } from '../tickets/errors';
-import { checkWidgetAnswer, tidyWidget, type Widget } from './widget';
+import {
+  answerText,
+  checkWidgetAnswer,
+  tidyWidget,
+  type Widget,
+} from './widget';
 
 const single: Widget = {
   kind: 'choice',
@@ -205,5 +210,20 @@ describe('Checking a matrix answer', () => {
         errorFrom(() => checkWidgetAnswer(matrix, { positions })),
       ).toBeInstanceOf(ValidationError);
     }
+  });
+});
+
+describe('answerText (ADR 0054)', () => {
+  it('words each kind of answer for a note', () => {
+    expect(answerText({ selected: ['A', 'B'] })).toBe('A, B');
+    expect(answerText({ order: ['B', 'A'] })).toBe('B, then A');
+    expect(answerText({ values: [{ item: 'Risk', value: 3 }] })).toBe('Risk 3');
+    expect(
+      answerText({
+        positions: [{ item: 'X', x: 0.9, y: 0.1, quadrant: 'high-low' }],
+      }),
+    ).toBe('X high-low');
+    expect(answerText({ other: 'Leave it out' })).toBe('Leave it out');
+    expect(answerText({ skipped: true })).toBe('skipped');
   });
 });

@@ -31,6 +31,8 @@ type AutomationValues = {
   spendCeilingAiCredits: string;
   triageCeiling: string;
   triageCeilingAiCredits: string;
+  /** Auto-reply's Reply rules, blank for none (ADR 0054). */
+  replyRules: string;
   /** Autopilot turned on, held until its ceiling saves with it. */
   holdAutopilot: boolean;
   /** Auto-triage turned on, held until its ceiling saves with it. */
@@ -39,11 +41,12 @@ type AutomationValues = {
 
 type CeilingField = Exclude<
   keyof AutomationValues,
-  'holdAutopilot' | 'holdAutoTriage'
+  'holdAutopilot' | 'holdAutoTriage' | 'replyRules'
 >;
 
 /** The form field each field of a refusal names. */
-const formFields: Record<string, CeilingField> = {
+const formFields: Record<string, CeilingField | 'replyRules'> = {
+  replyRules: 'replyRules',
   spendCeilingUsd: 'spendCeiling',
   spendCeilingAiCredits: 'spendCeilingAiCredits',
   triageCeilingUsd: 'triageCeiling',
@@ -63,6 +66,7 @@ const valuesOf = (settings: ProjectAgentSettings): AutomationValues => ({
   spendCeilingAiCredits: ceilingText(settings.spendCeilingAiCredits),
   triageCeiling: ceilingText(settings.triageCeilingUsd),
   triageCeilingAiCredits: ceilingText(settings.triageCeilingAiCredits),
+  replyRules: settings.replyRules ?? '',
   holdAutopilot: false,
   holdAutoTriage: false,
 });
@@ -95,8 +99,9 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
     autopilot: settings.autopilot,
     autoTriage: settings.autoTriage,
   });
+  const [autoReplyOn, setAutoReplyOn] = useState(settings.autoReply);
   const {
-    formState: { defaultValues, errors, isDirty, isSubmitting },
+    formState: { defaultValues, dirtyFields, errors, isDirty, isSubmitting },
     handleSubmit,
     register,
     reset,
@@ -165,6 +170,8 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
                 ),
               }
             : {}),
+          // Sent only when edited: the section saves only its own edits.
+          ...(dirtyFields.replyRules ? { replyRules: values.replyRules } : {}),
         }),
       'The automation settings could not be saved. Try again.',
     );
@@ -241,6 +248,14 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
               touch the same code, the higher one on the Board first, with a
               comment saying why; Autopilot waits for it. Its runs count against
               the Spend ceiling.
+            </Text>
+            <Text tag="p" fontSize="small" color="muted">
+              Auto-reply starts a short run when a Start run on the Active Cycle
+              waits on a Widget question. It approves the recommended option
+              when it changes no acceptance criterion, asks the run to leave an
+              out-of-scope matter for a follow-up, or leaves the question for
+              you with a comment saying why. Plain-text questions and permission
+              requests stay with you. Its runs count against the Spend ceiling.
             </Text>
             <Text tag="p" fontSize="small" color="muted">
               Turning a switch off leaves running runs alone.
@@ -330,6 +345,31 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
             checked={settings.overlapPlanning}
             disabled={locked}
           />
+        </div>
+        <Divider />
+        <div id="auto-reply">
+          <SettingSwitch
+            projectId={projectId}
+            setting="autoReply"
+            label="Auto-reply"
+            hint="Answer a Start run's Widget questions by your Reply rules: approve, split off or leave for you."
+            checked={autoReplyOn}
+            disabled={locked}
+            onSaved={setAutoReplyOn}
+          >
+            <Box paddingInlineStart={[0, 6]}>
+              <SettingsTextField
+                registration={register('replyRules')}
+                label="Reply rules"
+                anchor="reply-rules"
+                placeholder="None: Auto-reply follows its defaults."
+                hint="What Auto-reply follows on top of its defaults, such as “Always escalate anything touching the database schema.”"
+                error={errors.replyRules?.message}
+                multiline
+                disabled={locked || !autoReplyOn}
+              />
+            </Box>
+          </SettingSwitch>
         </div>
         {serverError && <Alert intent="danger">{serverError}</Alert>}
       </SettingsSection>

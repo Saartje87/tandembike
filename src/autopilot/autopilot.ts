@@ -6,6 +6,7 @@ import type {
 import type {
   Conversation,
   Conversations,
+  WaitingWidget,
 } from '../conversations/conversations';
 import type { ChangeChannel } from '../tickets/changes';
 import { ceilingsByUnit, costUnits } from '../tickets/cost-unit';
@@ -15,6 +16,7 @@ import { triageStateLabels } from '../tickets/triage-labels';
 import type {
   AutopilotExplanation,
   AutopilotPauseReason,
+  AutoReplyPauseReason,
   AutoTriagePauseReason,
   CapHolder,
   Eligibility,
@@ -812,6 +814,104 @@ export function createAutopilot({
   };
 
   /**
+   * Auto-reply's questions (ADR 0054): the Widgets live Starts on the
+   * Active Cycle's Tickets wait on, with no Auto-reply yet, oldest first.
+   */
+  const questions = (projectId: number, cycleId: number): WaitingWidget[] =>
+    conversations.waitingWidgets(projectId).filter((waiting) => {
+      try {
+        return tickets.getTicket(waiting.ticketNumber).cycle?.id === cycleId;
+      } catch {
+        return false;
+      }
+    });
+
+  /**
+   * Auto-reply: every Pause reason, and the Widget it would answer now. The
+   * one rule it acts on (ADR 0044, ADR 0054).
+   */
+  const explainAutoReply = (
+    projectId: number,
+  ): {
+    state: EngineState<AutoReplyPauseReason>;
+    next: WaitingWidget | null;
+    cycleId: number | null;
+  } => {
+    const settings = tickets.getProjectAgentSettings(projectId);
+    const room = judgmentRoom(projectId, 'auto_reply', settings.autoReply);
+    const reasons: AutoReplyPauseReason[] = [...room.reasons];
+    const next =
+      room.cycleId === null
+        ? null
+        : (questions(projectId, room.cycleId)[0] ?? null);
+    if (!next && reasons.length === 0) {
+      reasons.push({ type: 'noQuestionWaiting' });
+    }
+    return { state: stateOf(reasons), next, cycleId: room.cycleId };
+  };
+
+  /** The first message of an Auto-reply run: the question, its Ticket and the Reply rules. */
+  const replyPrompt = (waiting: WaitingWidget, replyRules: string | null) =>
+    [
+      `The Start run on T${waiting.ticketNumber} (Conversation ${waiting.conversationId}) asks the User this Widget question:`,
+      '',
+      '```json',
+      JSON.stringify(waiting.widget, null, 2),
+      '```',
+      ...(waiting.context === null
+        ? []
+        : ['', 'What it said just before it asked:', '', waiting.context]),
+      '',
+      replyRules === null
+        ? "The Project's Reply rules: none. Follow the defaults."
+        : `The Project's Reply rules, which you follow on top of the defaults:\n\n${replyRules}`,
+      '',
+      `Read T${waiting.ticketNumber} with get_ticket, its description and acceptance criteria, and its Conversation with get_conversations if you need more. Then call reply_to_question once:`,
+      "- approve with the recommended option, or the one within scope, as the Widget's own answer, only when it adds, drops or changes no acceptance criterion and the Reply rules do not reserve that kind of choice for the User;",
+      "- split when the question is outside the Ticket's scope: the run leaves it out and files a follow-up itself;",
+      '- escalate anything else: a product decision, criteria that contradict each other, a risky or irreversible change, or anything the Reply rules reserve for the User.',
+      'Give your reason in one or two sentences. When in doubt, escalate. Then end your turn.',
+    ].join('\n');
+
+  /**
+   * Auto-reply (ADR 0054): with the switch on, starts one run on the oldest
+   * Widget a Start on the Active Cycle waits on, recording the Widget and
+   * the Cycle. It takes a Machine slot and no Start run slot, so the Start
+   * waiting on the User never blocks its own Auto-reply.
+   */
+  const replyOne = async (projectId: number): Promise<boolean> => {
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (!settings.autoReply) {
+      return false;
+    }
+    const reply = explainAutoReply(projectId);
+    if (
+      reply.state.state !== 'running' ||
+      !reply.next ||
+      reply.cycleId === null
+    ) {
+      return false;
+    }
+    try {
+      await conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: reply.next.ticketNumber,
+        intent: 'auto_reply',
+        cycleId: reply.cycleId,
+        autoReplyEntryId: reply.next.entryId,
+        prompt: replyPrompt(reply.next, settings.replyRules),
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Autopilot could not start Auto-reply on T${reply.next.ticketNumber}`,
+        error,
+      );
+      return false;
+    }
+  };
+
+  /**
    * Whether Ticket `number` was proposed on since its latest change into its
    * current state: a triage proposal after the last Activity entry that
    * created it, sent it Back to Todo or added or removed a state label.
@@ -1028,6 +1128,7 @@ export function createAutopilot({
       autopilot: builds.state,
       autoTriage: triage.state,
       overlapPlanning: explainOverlap(projectId, todo).state,
+      autoReply: explainAutoReply(projectId).state,
       tickets: todo.map((ticket) => ({
         number: ticket.number,
         build: builds.eligibility.get(
@@ -1080,8 +1181,10 @@ export function createAutopilot({
         }
         let started = false;
         try {
-          // Planning first: builds wait for it while it is due (ADR 0054).
+          // An answer first, as it frees a waiting run; then planning, as
+          // builds wait for it while it is due (ADR 0054).
           started =
+            (await replyOne(id)) ||
             (await planOne(id)) ||
             (await dispatchOne(id)) ||
             (await triageOne(id));

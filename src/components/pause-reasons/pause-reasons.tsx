@@ -9,6 +9,7 @@ import {
 } from '../../app/lib/paths';
 import type {
   AutopilotPauseReason,
+  AutoReplyPauseReason,
   AutoTriagePauseReason,
   CapHolder,
   EngineState,
@@ -33,7 +34,8 @@ export type Engine =
 export type PauseReason =
   | AutopilotPauseReason
   | AutoTriagePauseReason
-  | OverlapPlanningPauseReason;
+  | OverlapPlanningPauseReason
+  | AutoReplyPauseReason;
 
 /** A Pause reason in plain words, shared by every engine. */
 export function pauseReasonText(reason: PauseReason, engine: Engine): string {
@@ -74,6 +76,8 @@ export function pauseReasonText(reason: PauseReason, engine: Engine): string {
       return `An ${engine} run is already working; it runs one at a time.`;
     case 'planningSettles':
       return 'The Active Cycle changed moments ago: Overlap planning waits 30 seconds after the last change, so a batch of changes is planned once.';
+    case 'noQuestionWaiting':
+      return 'No question is waiting: no Start run on the Active Cycle waits on a Widget it has not answered.';
     case 'noPlanningDue':
       return 'Nothing to plan: the Active Cycle has not changed since its last planning, or has fewer than two ready, unclaimed Tickets.';
   }
@@ -255,6 +259,8 @@ export type PauseReasonsProps = {
   autoTriage: EngineState<AutoTriagePauseReason>;
   /** Overlap planning's, when shown (ADR 0054). */
   overlapPlanning?: EngineState<OverlapPlanningPauseReason>;
+  /** Auto-reply's, when shown (ADR 0054). */
+  autoReply?: EngineState<AutoReplyPauseReason>;
 };
 
 /**
@@ -267,6 +273,7 @@ export const PauseReasons: FC<PauseReasonsProps> = ({
   autopilot,
   autoTriage,
   overlapPlanning,
+  autoReply,
 }) => (
   <Stack gap={3}>
     <EngineStatus projectId={projectId} engine="Autopilot" state={autopilot} />
@@ -280,6 +287,13 @@ export const PauseReasons: FC<PauseReasonsProps> = ({
         projectId={projectId}
         engine="Overlap planning"
         state={overlapPlanning}
+      />
+    )}
+    {autoReply && (
+      <EngineStatus
+        projectId={projectId}
+        engine="Auto-reply"
+        state={autoReply}
       />
     )}
   </Stack>

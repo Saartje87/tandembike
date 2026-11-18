@@ -1,6 +1,6 @@
 'use client';
 
-import { Label, Stack, Text, TextInput } from '@blockle/blocks';
+import { Label, Stack, Text, Textarea, TextInput } from '@blockle/blocks';
 import { type FC, type ReactNode, useId } from 'react';
 import type { UseFormRegisterReturn } from 'react-hook-form';
 
@@ -19,6 +19,8 @@ export type SettingsTextFieldProps = {
   placeholder?: string;
   /** A ceiling's amount, rather than text. */
   number?: boolean;
+  /** Free text over several lines, such as the Reply rules. */
+  multiline?: boolean;
   disabled?: boolean;
   /** Shown under the hint, such as a Detect button. */
   children?: ReactNode;
@@ -33,6 +35,7 @@ export const SettingsTextField: FC<SettingsTextFieldProps> = ({
   error,
   placeholder,
   number = false,
+  multiline = false,
   disabled,
   children,
 }) => {
@@ -45,19 +48,31 @@ export const SettingsTextField: FC<SettingsTextFieldProps> = ({
   return (
     <Stack gap={1} id={anchor}>
       <Label htmlFor={inputId}>{label}</Label>
-      <TextInput
-        {...registration}
-        id={inputId}
-        placeholder={placeholder}
-        autoComplete="off"
-        spellCheck={false}
-        disabled={disabled}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy || undefined}
-        {...(number
-          ? { type: 'number', min: 0, step: 'any', inputMode: 'decimal' }
-          : {})}
-      />
+      {multiline ? (
+        <Textarea
+          {...registration}
+          id={inputId}
+          rows={4}
+          placeholder={placeholder}
+          disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
+        />
+      ) : (
+        <TextInput
+          {...registration}
+          id={inputId}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+          disabled={disabled}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
+          {...(number
+            ? { type: 'number', min: 0, step: 'any', inputMode: 'decimal' }
+            : {})}
+        />
+      )}
       {hint && (
         <Text id={hintId} tag="p" fontSize="small" color="muted">
           {hint}

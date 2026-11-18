@@ -8,6 +8,7 @@ import { FlowSection } from '../../../../components/flow-section/flow-section';
 import { PageLoading } from '../../../../components/page-loading/page-loading';
 import { PauseReasons } from '../../../../components/pause-reasons/pause-reasons';
 import { ProjectSwitch } from '../../../../components/project-switch/project-switch';
+import { ReplyRules } from '../../../../components/reply-rules/reply-rules';
 import { SetupPanel } from '../../../../components/setup-panel/setup-panel';
 import { TicketPath } from '../../../../components/ticket-path/ticket-path';
 import { appConversations } from '../../../../conversations/app-conversations';
@@ -159,12 +160,22 @@ async function flowTab(params: ProjectPageProps['params']) {
             setting="overlapPlanning"
             checked={settings.overlapPlanning}
           />
+          <ProjectSwitch
+            projectId={project.id}
+            setting="autoReply"
+            checked={settings.autoReply}
+          />
         </Inline>
+        <ReplyRules
+          rules={settings.replyRules}
+          settingsHref={projectSettingsFieldPath(project.id, 'reply-rules')}
+        />
         <PauseReasons
           projectId={project.id}
           autopilot={explanation.autopilot}
           autoTriage={explanation.autoTriage}
           overlapPlanning={explanation.overlapPlanning}
+          autoReply={explanation.autoReply}
         />
       </FlowSection>
     </Stack>

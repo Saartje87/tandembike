@@ -78,6 +78,11 @@ export type OverlapPlanningPauseReason =
   | { type: 'planningSettles'; until: Date }
   | { type: 'noPlanningDue' };
 
+/** Why Auto-reply starts no run now (ADR 0054): a shared reason, or no Widget waiting. */
+export type AutoReplyPauseReason =
+  | JudgmentPauseReason
+  | { type: 'noQuestionWaiting' };
+
 /** A Pause reason (GLOSSARY): why Auto-triage starts no Triage run now. */
 export type AutoTriagePauseReason =
   | { type: 'projectArchived' }
@@ -144,6 +149,7 @@ export type AutopilotExplanation = {
   autopilot: EngineState<AutopilotPauseReason>;
   autoTriage: EngineState<AutoTriagePauseReason>;
   overlapPlanning: EngineState<OverlapPlanningPauseReason>;
+  autoReply: EngineState<AutoReplyPauseReason>;
   /** Every Todo Ticket and Epic of the Project, archived ones included. */
   tickets: TicketExplanation[];
 };

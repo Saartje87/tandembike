@@ -1272,6 +1272,43 @@
     }
   },
   {
+    "name": "reply_to_question",
+    "title": "Reply to question",
+    "description": "Auto-reply only: answer the one Widget question of a Start run this run was started for, once. approve answers with one of the Widget's own answers in `answer`, in its kind's shape (choice: { selected: [labels] }, rank: { order }, scale: { values }, matrix: { positions }): only a recommended option, or the one within scope, that adds, drops or changes no acceptance criterion and that the Reply rules do not reserve for the User. split tells the Start run to leave an out-of-scope matter out and file a follow-up with its Ticket as Origin; you file nothing. escalate leaves the question for the User. Every decision adds a comment on the Ticket with your reason. Refused outside an Auto-reply run, once replied, and when the User answered first: then end your turn.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "split",
+            "escalate"
+          ],
+          "description": "What you decided."
+        },
+        "answer": {
+          "description": "approve only: the Widget's answer, in its kind's shape."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "description": "Why, in one or two sentences, for the User."
+        }
+      },
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "set_check_command",
     "title": "Set Check command",
     "description": "Set the Check command of your Setup Conversation's Project: the command a Start run must see pass before it opens a pull request, such as `npm run check`. An empty command clears it. Only in a Setup Conversation, and only after the User said yes to the command you proposed; refused from any other run or session, where the User sets it in the Project's Settings. Returns { projectId, checkCommand }.",

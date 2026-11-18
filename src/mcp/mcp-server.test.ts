@@ -86,8 +86,12 @@ describe('MCP server and Conversations', () => {
 
     const { tools } = await client.listTools();
 
-    const touching = tools.filter((tool) =>
-      /conversation|agent_run|reply|stop|send/.test(tool.name),
+    // The one exception is Auto-reply's own tool: it answers the one Widget
+    // its run was started for, and refuses any other caller (ADR 0054).
+    const touching = tools.filter(
+      (tool) =>
+        /conversation|agent_run|reply|stop|send/.test(tool.name) &&
+        tool.name !== 'reply_to_question',
     );
     expect(touching.map((tool) => tool.name)).toEqual(['get_conversations']);
     expect(touching[0].annotations).toMatchObject({ readOnlyHint: true });
@@ -149,6 +153,7 @@ describe('MCP server', () => {
       'propose_hand_off',
       'propose_triage',
       'read_attachment',
+      'reply_to_question',
       'set_check_command',
       'start_work',
       'update_cycle',

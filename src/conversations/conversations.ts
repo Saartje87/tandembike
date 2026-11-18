@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lt,
   max,
   ne,
   or,
@@ -110,6 +111,8 @@ import {
   writeUsage,
 } from './usage-store';
 import {
+  type AutoReplyMark,
+  answerText,
   checkWidgetAnswer,
   tidyWidget,
   type Widget,
@@ -119,6 +122,49 @@ import {
 } from './widget';
 
 export type { ConversationSender };
+
+/** An unanswered Widget a live Start run waits on, which Auto-reply may answer (ADR 0054). */
+export type WaitingWidget = {
+  /** The Start Conversation. */
+  conversationId: number;
+  entryId: number;
+  ticketNumber: number;
+  widget: Widget;
+  /** What the Agent said just before it asked, for context; null for nothing. */
+  context: string | null;
+  createdAt: Date;
+};
+
+/** Auto-reply's decision (ADR 0054): `reason` says why, for the notes. */
+export type QuestionReply =
+  | { decision: 'approve'; answer: unknown; reason: string }
+  | { decision: 'split'; reason: string }
+  | { decision: 'escalate'; reason: string };
+
+/** What an Auto-reply did, for its tool to note on the Ticket. */
+export type QuestionReplyResult = {
+  decision: QuestionReply['decision'];
+  ticketNumber: number;
+  /** The Start Conversation whose Widget it answered or left. */
+  startConversationId: number;
+  /** The Widget's question. */
+  question: string;
+  /** The answer it gave, in words; null for an Escalate. */
+  answer: string | null;
+};
+
+/** A Split reply on a Widget of a Start, whose follow-up is checked once its run ends. */
+export type SplitReply = {
+  entryId: number;
+  /** The Start Conversation. */
+  conversationId: number;
+  projectId: number;
+  ticketNumber: number;
+  /** When Auto-reply answered. */
+  at: Date;
+  /** Whether the Start's run still works: running or waiting. */
+  working: boolean;
+};
 
 /** A judgment run's Conversation, as its own tool reads it (ADR 0054). */
 export type JudgmentRun = {
@@ -287,6 +333,8 @@ export type StartConversationInput = {
   retroCycleId?: number;
   /** Batch triage only: the Board, a Cycle's id or null for the Backlog, and its Tickets. */
   batchTriage?: { cycleId: number | null; ticketNumbers: number[] };
+  /** Auto-reply only: the Widget entry of a Start it answers (ADR 0054). */
+  autoReplyEntryId?: number;
   /** New Ticket: where the title field was; the Agent's defaults. */
   defaults?: NewTicketDefaults;
   /**
@@ -353,6 +401,9 @@ export type StartTerminalInput = {
   ticketNumber: number;
   intent: TerminalIntent;
 };
+
+/** How an Auto-reply's own transcript records that it replied, once. */
+const replied = 'Auto-reply replied:';
 
 const terminalRefusal =
   'This Conversation runs in a terminal; answer it there.';
@@ -634,6 +685,67 @@ export function createConversations({
     }
     handle.widgets.clear();
   };
+
+  /**
+   * Gives the run waiting on Widget `entryId` of Conversation `id` its
+   * answer `given`, checked already, marked as Auto-reply's with `autoReply`.
+   */
+  const giveWidgetAnswer = (
+    id: number,
+    entryId: number,
+    given: WidgetAnswer,
+    autoReply?: AutoReplyMark,
+  ) => {
+    const handle = live.get(id);
+    const resolve = handle?.widgets.get(entryId);
+    const widget = getEntry(entryId)?.widget;
+    if (!handle || !resolve || !widget) {
+      throw new NotAllowedError('This Widget is no longer waiting.');
+    }
+    handle.widgets.delete(entryId);
+    setWidget(entryId, {
+      ...widget,
+      answer: given,
+      ...(autoReply === undefined ? {} : { autoReply }),
+    });
+    if (!waitsOnUser(handle)) {
+      update(id, { state: 'running' });
+    }
+    announce(id);
+    resolve(given);
+  };
+
+  /** The entries of Conversation `id`, oldest first. */
+  const transcriptOf = (id: number) =>
+    db
+      .select()
+      .from(conversationEntries)
+      .where(eq(conversationEntries.conversationId, id))
+      .orderBy(conversationEntries.id)
+      .all();
+
+  /** Every Widget Auto-reply answered with a Split, with its Start Conversation. */
+  const splitReplies = () =>
+    db
+      .select({ entry: conversationEntries, conversation: conversations })
+      .from(conversationEntries)
+      .innerJoin(
+        conversations,
+        eq(conversations.id, conversationEntries.conversationId),
+      )
+      .where(
+        and(
+          eq(conversationEntries.role, 'widget'),
+          sql`json_extract(${conversationEntries.widget}, '$.autoReply.decision') = 'split'`,
+        ),
+      )
+      .orderBy(conversationEntries.id)
+      .all()
+      .map(({ entry, conversation }) => ({
+        entryId: entry.id,
+        mark: entry.widget?.autoReply as AutoReplyMark,
+        conversation,
+      }));
 
   /** Whether a live run still waits on the User for anything. */
   const waitsOnUser = (handle: RunHandle) =>
@@ -1376,6 +1488,14 @@ export function createConversations({
         `Only Autopilot starts ${input.intent === 'overlap_planning' ? 'Overlap planning' : 'Auto-reply'} (ADR 0054).`,
       );
     }
+    if (
+      input.intent === 'auto_reply' &&
+      getEntry(input.autoReplyEntryId ?? 0)?.role !== 'widget'
+    ) {
+      throw new ValidationError({
+        autoReplyEntryId: 'An Auto-reply answers one Widget of a Start run.',
+      });
+    }
     if (input.intent === 'spar' && input.startedBy !== 'user') {
       throw new NotAllowedError('Only the User starts a Spar.');
     }
@@ -1498,6 +1618,10 @@ export function createConversations({
         batchTriageTickets:
           input.intent === 'batch_triage'
             ? (input.batchTriage?.ticketNumbers ?? null)
+            : null,
+        autoReplyEntryId:
+          input.intent === 'auto_reply'
+            ? (input.autoReplyEntryId ?? null)
             : null,
         state: 'running',
         createdAt: now,
@@ -3183,14 +3307,240 @@ export function createConversations({
         throw new NotAllowedError('This Widget is no longer waiting.');
       }
       const given = checkWidgetAnswer(entry.widget.widget, answer);
-      handle.widgets.delete(entryId);
-      setWidget(entryId, { ...entry.widget, answer: given });
-      if (!waitsOnUser(handle)) {
-        update(conversationId, { state: 'running' });
-      }
-      announce(conversationId);
-      resolve(given);
+      giveWidgetAnswer(conversationId, entryId, given);
       return get(conversationId);
+    },
+
+    /**
+     * The unanswered Widgets live Start runs of Project `projectId` wait on,
+     * oldest first, each with no Auto-reply started for it yet (ADR 0054).
+     * Terminal and closed Starts, permission requests and other intents'
+     * Widgets are left out: those stay with the User.
+     */
+    waitingWidgets(projectId: number): WaitingWidget[] {
+      const answered = new Set(
+        db
+          .select({ entryId: conversations.autoReplyEntryId })
+          .from(conversations)
+          .where(
+            and(
+              eq(conversations.projectId, projectId),
+              eq(conversations.intent, 'auto_reply'),
+            ),
+          )
+          .all()
+          .map(({ entryId }) => entryId),
+      );
+      const waiting: WaitingWidget[] = [];
+      for (const [id, handle] of live) {
+        const conversation = get(id);
+        if (
+          conversation.projectId !== projectId ||
+          conversation.intent !== 'start' ||
+          conversation.ticketNumber === null ||
+          conversation.hidden ||
+          isTerminal(conversation)
+        ) {
+          continue;
+        }
+        for (const entryId of handle.widgets.keys()) {
+          const entry = getEntry(entryId);
+          if (!entry?.widget || answered.has(entryId)) {
+            continue;
+          }
+          const context =
+            db
+              .select({ text: conversationEntries.text })
+              .from(conversationEntries)
+              .where(
+                and(
+                  eq(conversationEntries.conversationId, id),
+                  eq(conversationEntries.role, 'agent'),
+                  lt(conversationEntries.id, entryId),
+                ),
+              )
+              .orderBy(desc(conversationEntries.id))
+              .limit(1)
+              .get()?.text ?? null;
+          waiting.push({
+            conversationId: id,
+            entryId,
+            ticketNumber: conversation.ticketNumber,
+            widget: entry.widget.widget,
+            context,
+            createdAt: entry.createdAt,
+          });
+        }
+      }
+      return waiting.sort((a, b) => a.entryId - b.entryId);
+    },
+
+    /**
+     * Auto-reply's answer (ADR 0054), once per Auto-reply Conversation `id`,
+     * to the Widget it was started for. Approve answers it with one of the
+     * Widget's own answers; Split answers it with Other, telling the Start to
+     * leave the matter out and file a follow-up with its Ticket as Origin;
+     * both are marked as Auto-reply's on the Widget and noted in the Start's
+     * transcript. Escalate leaves it for the User with a note. Refused for
+     * any other Conversation, once it replied, and when the User answered
+     * first or the run is gone.
+     */
+    async replyToQuestion(
+      id: number,
+      reply: QuestionReply,
+    ): Promise<QuestionReplyResult> {
+      const own = db
+        .select({
+          intent: conversations.intent,
+          entryId: conversations.autoReplyEntryId,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, id))
+        .get();
+      const entry =
+        own?.intent === 'auto_reply' && own.entryId !== null
+          ? getEntry(own.entryId)
+          : undefined;
+      if (!entry?.widget) {
+        throw new NotAllowedError(
+          'Only an Auto-reply run answers a question, the one it was started for.',
+        );
+      }
+      if (
+        transcriptOf(id).some(
+          (line) => line.role === 'session' && line.text.startsWith(replied),
+        )
+      ) {
+        throw new NotAllowedError(
+          'This Auto-reply has already replied: it answers once.',
+        );
+      }
+      const reason = (reply.reason ?? '').trim();
+      const start = get(entry.conversationId);
+      const ticketNumber = start.ticketNumber as number;
+      const question = entry.widget.widget.prompt;
+      const done = (answer: string | null): QuestionReplyResult => {
+        append(id, 'session', `${replied} ${reply.decision}.`);
+        announce(id);
+        return {
+          decision: reply.decision,
+          ticketNumber,
+          startConversationId: start.id,
+          question,
+          answer,
+        };
+      };
+      if (reply.decision === 'escalate') {
+        append(
+          start.id,
+          'session',
+          `Auto-reply (Conversation ${id}) left this question for you: ${reason}`,
+        );
+        announce(start.id);
+        return done(null);
+      }
+      if (entry.widget.answer !== null) {
+        throw new NotAllowedError(
+          'The User answered this question first, so Auto-reply sends nothing.',
+        );
+      }
+      if (entry.widget.expired || !live.get(start.id)?.widgets.has(entry.id)) {
+        throw new NotAllowedError('This Widget is no longer waiting.');
+      }
+      let given: WidgetAnswer;
+      if (reply.decision === 'approve') {
+        const answer = reply.answer;
+        if (
+          typeof answer !== 'object' ||
+          answer === null ||
+          'other' in answer ||
+          'skipped' in answer
+        ) {
+          throw new ValidationError({
+            answer:
+              "Approve answers with one of the Widget's own answers, such as its recommended option; Other and Skip are not an option.",
+          });
+        }
+        given = checkWidgetAnswer(entry.widget.widget, answer);
+      } else {
+        given = {
+          other:
+            `Auto-reply: this is outside the scope of T${ticketNumber}. Leave it out and carry on without it, and file a follow-up Ticket for it through your feedback step, with originNumber ${ticketNumber}. ${reason}`.trim(),
+        };
+      }
+      giveWidgetAnswer(start.id, entry.id, given, {
+        conversationId: id,
+        decision: reply.decision,
+        at: clock().toISOString(),
+      });
+      const words = answerText(given);
+      append(
+        start.id,
+        'session',
+        reply.decision === 'approve'
+          ? `Auto-reply (Conversation ${id}) answered for you: ${words}. ${reason}`.trim()
+          : `Auto-reply (Conversation ${id}) split this off: it asked the run to leave it out and file a follow-up. ${reason}`.trim(),
+      );
+      announce(start.id);
+      return done(reply.decision === 'approve' ? words : null);
+    },
+
+    /**
+     * The Split replies whose follow-up is not settled yet (ADR 0054), with
+     * whether their Start's run still works: once it does not, the follow-up
+     * is checked.
+     */
+    splitRepliesAwaitingFollowUp(): SplitReply[] {
+      return splitReplies().flatMap(({ entryId, mark, conversation }) =>
+        mark.followUp === undefined
+          ? [
+              {
+                entryId,
+                conversationId: conversation.id,
+                projectId: conversation.projectId,
+                ticketNumber: conversation.ticketNumber as number,
+                at: new Date(mark.at),
+                working:
+                  conversation.state === 'running' ||
+                  conversation.state === 'waiting',
+              },
+            ]
+          : [],
+      );
+    },
+
+    /** Records whether a Split's follow-up was filed, once its Start's run ended. */
+    setSplitFollowUp(entryId: number, followUp: 'filed' | 'missing'): void {
+      const entry = getEntry(entryId);
+      if (!entry?.widget?.autoReply) {
+        throw new NotFoundError(
+          `There is no Split reply on Widget ${entryId}.`,
+        );
+      }
+      setWidget(entryId, {
+        ...entry.widget,
+        autoReply: { ...entry.widget.autoReply, followUp },
+      });
+      announce(entry.conversationId);
+    },
+
+    /** The Split replies whose Start ended without filing the follow-up, for the Notice. */
+    missingSplitFollowUps(): Pick<
+      SplitReply,
+      'entryId' | 'conversationId' | 'projectId' | 'ticketNumber'
+    >[] {
+      return splitReplies().flatMap(({ entryId, mark, conversation }) =>
+        mark.followUp === 'missing'
+          ? [
+              {
+                entryId,
+                conversationId: conversation.id,
+                projectId: conversation.projectId,
+                ticketNumber: conversation.ticketNumber as number,
+              },
+            ]
+          : [],
+      );
     },
 
     /**

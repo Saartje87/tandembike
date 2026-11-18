@@ -89,6 +89,45 @@ export type WidgetEntry = {
   widget: Widget;
   answer: WidgetAnswer | null;
   expired: boolean;
+  /**
+   * Set when Auto-reply answered it, not the User (ADR 0054): its
+   * Conversation, its decision and when. A Split's `followUp` says, once the
+   * Start's run ended, whether it filed the follow-up it was asked for.
+   */
+  autoReply?: AutoReplyMark;
+};
+
+/** How Auto-reply answered a Widget (ADR 0054). */
+export type AutoReplyMark = {
+  conversationId: number;
+  decision: 'approve' | 'split';
+  /** When it answered, as an ISO time. */
+  at: string;
+  followUp?: 'filed' | 'missing';
+};
+
+/** An answer in plain words, for a note: the picks, the order or the values. */
+export const answerText = (answer: WidgetAnswer): string => {
+  if ('selected' in answer) {
+    return answer.selected.join(', ');
+  }
+  if ('order' in answer) {
+    return answer.order.join(', then ');
+  }
+  if ('values' in answer) {
+    return answer.values
+      .map(({ item, value }) => `${item} ${value}`)
+      .join(', ');
+  }
+  if ('positions' in answer) {
+    return answer.positions
+      .map(({ item, quadrant }) => `${item} ${quadrant}`)
+      .join(', ');
+  }
+  if ('other' in answer) {
+    return answer.other;
+  }
+  return 'skipped' in answer ? 'skipped' : 'expired';
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
