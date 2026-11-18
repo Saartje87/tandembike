@@ -59,6 +59,8 @@ function autopilotPhrase(reason: AutopilotPauseReason): string | null {
       return 'the machine cap is full';
     case 'overMachineCeiling':
       return 'Autopilot is over the machine ceiling';
+    case 'overlapPlanningFirst':
+      return 'Overlap planning goes first';
     case 'noEligibleWork':
       return null;
   }

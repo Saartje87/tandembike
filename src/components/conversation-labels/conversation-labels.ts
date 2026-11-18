@@ -29,6 +29,8 @@ export const intentNames: Record<ConversationIntent, string> = {
   plan: 'Plan',
   spar: 'Spar',
   batch_triage: 'Batch triage',
+  overlap_planning: 'Overlap planning',
+  auto_reply: 'Auto-reply',
 };
 
 /** Who started a Conversation, as the header says it. */

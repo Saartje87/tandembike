@@ -2,7 +2,10 @@ import {
   type ConversationIntent,
   type ConversationStarter,
   type ConversationState,
+  isJudgmentIntent,
   isTerminal,
+  type JudgmentIntent,
+  judgmentIntents,
 } from './conversation-state';
 
 /**
@@ -71,6 +74,8 @@ export type ProjectCapacity = {
   holders: SlotHolder[];
   /** The newest Triage run of the Project that works, by its id, or null. */
   triageRunning: number | null;
+  /** The newest working judgment run of each kind in the Project, by its id, or null (ADR 0054). */
+  judgmentRunning: Record<JudgmentIntent, number | null>;
 };
 
 export type Capacity<Project = ProjectCapacity | null> = {
@@ -141,9 +146,10 @@ export const holdsStartRunSlot = (conversation: {
   liveStates.includes(conversation.state);
 
 /**
- * Whether a Conversation holds a machine slot (ADR 0041, ADR 0049): a live
- * Start or Merge, or a working Triage Autopilot started, not a Terminal one.
- * The User's own interactive Conversations hold none.
+ * Whether a Conversation holds a machine slot (ADR 0041, ADR 0049, ADR
+ * 0054): a live Start or Merge, or a working Triage or judgment run
+ * Autopilot started, not a Terminal one. The User's own interactive
+ * Conversations hold none.
  */
 export const holdsMachineSlot = (conversation: {
   intent: ConversationIntent;
@@ -152,7 +158,8 @@ export const holdsMachineSlot = (conversation: {
 }): boolean =>
   holdsStartRunSlot(conversation) ||
   (!isTerminal(conversation) &&
-    conversation.intent === 'triage' &&
+    (conversation.intent === 'triage' ||
+      isJudgmentIntent(conversation.intent)) &&
     conversation.startedBy === 'autopilot' &&
     workingStates.includes(conversation.state));
 
@@ -239,13 +246,15 @@ export function capacityOf(
     (conversation) => conversation.projectId === projectId,
   );
   const holders = holdersOf(own.filter(holdsStartRunSlot));
-  const triage = own
-    .filter(
-      (conversation) =>
-        conversation.intent === 'triage' &&
-        workingStates.includes(conversation.state),
-    )
-    .sort((a, b) => b.id - a.id)[0];
+  /** The newest working run of `intent` in the Project, by its id, or null. */
+  const workingOf = (intent: ConversationIntent): number | null =>
+    own
+      .filter(
+        (conversation) =>
+          conversation.intent === intent &&
+          workingStates.includes(conversation.state),
+      )
+      .sort((a, b) => b.id - a.id)[0]?.id ?? null;
   return {
     machine,
     liveProcesses,
@@ -256,7 +265,10 @@ export function capacityOf(
       limit: startRunLimit(snapshot, snapshot.machineCap),
       slotsHeld: holders.length,
       holders,
-      triageRunning: triage?.id ?? null,
+      triageRunning: workingOf('triage'),
+      judgmentRunning: Object.fromEntries(
+        judgmentIntents.map((intent) => [intent, workingOf(intent)]),
+      ) as Record<JudgmentIntent, number | null>,
     },
   };
 }

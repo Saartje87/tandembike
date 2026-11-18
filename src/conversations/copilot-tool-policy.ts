@@ -26,6 +26,17 @@ export function copilotToolFilters(policy: ToolPolicy): CopilotToolFilters {
   const excludedTools = blockedTandembikeTools[policy].map(
     (name) => `mcp:tandembike-${name}`,
   );
+  // A judgment run reads and searches, with no shell, skill or question,
+  // and no Widget tools, which are `custom:*` (ADR 0054).
+  if (policy === 'judgment') {
+    return {
+      availableTools: [
+        ...['view', 'grep', 'glob'].map((name) => `builtin:${name}`),
+        'mcp:*',
+      ],
+      excludedTools,
+    };
+  }
   return policy === 'read-only'
     ? {
         availableTools: [

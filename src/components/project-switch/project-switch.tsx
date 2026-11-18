@@ -16,22 +16,33 @@ import { setProjectAgentSettings } from '../../app/projects/actions';
 import { AppLink } from '../app-link/app-link';
 import { FieldError } from '../field-error/field-error';
 
-const switches = {
+/** Each Project switch, the field a refusal names, and how to set its ceiling. */
+const switches: Record<
+  'autopilot' | 'autoTriage' | 'overlapPlanning' | 'autoReply',
+  { label: string; field: string; setCeiling: string | null }
+> = {
   autopilot: {
     label: 'Autopilot',
-    ceilingField: 'spendCeilingUsd',
+    field: 'spendCeilingUsd',
     setCeiling: 'Set a Spend ceiling',
   },
   autoTriage: {
     label: 'Auto-triage',
-    ceilingField: 'triageCeilingUsd',
+    field: 'triageCeilingUsd',
     setCeiling: 'Set a Triage ceiling',
   },
-} as const;
+  // The judgment runs have no ceiling of their own (ADR 0054).
+  overlapPlanning: {
+    label: 'Overlap planning',
+    field: 'overlapPlanning',
+    setCeiling: null,
+  },
+  autoReply: { label: 'Auto-reply', field: 'autoReply', setCeiling: null },
+};
 
 export type ProjectSwitchProps = {
   projectId: number;
-  /** Which Project switch: Autopilot, or Auto-triage. */
+  /** Which Project switch: Autopilot, Auto-triage, Overlap planning or Auto-reply. */
   setting: keyof typeof switches;
   /** Whether it is on. */
   checked: boolean;
@@ -44,7 +55,7 @@ export type ProjectSwitchProps = {
 };
 
 /**
- * Autopilot's or Auto-triage's switch, saving at once through the settings
+ * A Project switch on Flow: Autopilot's, Auto-triage's or a judgment run's, saving at once through the settings
  * page's Server Action, so a refusal reads the same everywhere. The
  * optimistic value is its pending state, and a refusal puts it back and
  * shows why (AGENTS.md, Forms).
@@ -55,7 +66,7 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
   checked,
   ceiling,
 }) => {
-  const { label, ceilingField, setCeiling } = switches[setting];
+  const { label, field, setCeiling } = switches[setting];
   const switchId = useId();
   const errorId = useId();
   const reasonId = useId();
@@ -70,7 +81,10 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
     (_current, next: boolean) => next,
   );
   const needsCeiling =
-    ceiling !== undefined && ceiling.amount === null && !checked;
+    setCeiling !== null &&
+    ceiling !== undefined &&
+    ceiling.amount === null &&
+    !checked;
 
   const change = (event: ChangeEvent<HTMLInputElement>) => {
     const next = event.target.checked;
@@ -82,7 +96,7 @@ export const ProjectSwitch: FC<ProjectSwitchProps> = ({
         'The setting could not be saved. Try again.',
       );
       // A refusal puts the switch back when the transition ends.
-      const reason = fieldRefusal(result, ceilingField) ?? rootRefusal(result);
+      const reason = fieldRefusal(result, field) ?? rootRefusal(result);
       if (reason) {
         setError('on', { type: 'server', message: reason });
       }

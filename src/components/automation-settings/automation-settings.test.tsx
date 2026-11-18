@@ -80,6 +80,69 @@ describe('AutomationSettings', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
+  it('saves the Overlap planning switch at once, with no ceiling of its own (ADR 0054)', async () => {
+    renderWithTheme(<AutomationSettings projectId={3} settings={set} />);
+
+    await userEvent.click(toggle('Overlap planning'));
+
+    expect(setProjectAgentSettings).toHaveBeenCalledWith({
+      projectId: 3,
+      overlapPlanning: true,
+    });
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
+  it('saves the Auto-reply switch at once, and puts the Reply rules under it, enabled only while it is on (ADR 0054)', async () => {
+    renderWithTheme(<AutomationSettings projectId={3} settings={set} />);
+
+    expect(screen.getByLabelText('Reply rules')).toBeDisabled();
+    await userEvent.click(toggle('Auto-reply'));
+
+    expect(setProjectAgentSettings).toHaveBeenCalledWith({
+      projectId: 3,
+      autoReply: true,
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText('Reply rules')).toBeEnabled(),
+    );
+    expect(
+      toggle('Auto-reply').compareDocumentPosition(
+        screen.getByLabelText('Reply rules'),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('saves the Reply rules with the section Save, and shows their refusal under them', async () => {
+    vi.mocked(setProjectAgentSettings).mockResolvedValue({
+      ok: false,
+      error: 'Keep the Reply rules under 4,000 characters.',
+      fieldErrors: {
+        replyRules: 'Keep the Reply rules under 4,000 characters.',
+      },
+    });
+    renderWithTheme(
+      <AutomationSettings
+        projectId={3}
+        settings={{ ...set, autoReply: true, replyRules: 'Approve copy.' }}
+      />,
+    );
+    const rules = screen.getByLabelText('Reply rules');
+    expect(rules).toHaveValue('Approve copy.');
+
+    await userEvent.type(rules, '{enter}Escalate schema changes.');
+    await save();
+
+    expect(setProjectAgentSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectId: 3,
+        replyRules: 'Approve copy.\nEscalate schema changes.',
+      }),
+    );
+    expect(rules).toHaveAccessibleDescription(
+      expect.stringContaining('Keep the Reply rules under 4,000 characters.'),
+    );
+  });
+
   it('turns a switch on at once when its ceiling is saved', async () => {
     renderWithTheme(
       <AutomationSettings
@@ -256,7 +319,13 @@ describe('AutomationSettings', () => {
     expect(
       within(card()).getByText(/Set a repository path first/),
     ).toBeInTheDocument();
-    for (const name of ['Autopilot', 'Auto-merge', 'Auto-triage']) {
+    for (const name of [
+      'Autopilot',
+      'Auto-merge',
+      'Auto-triage',
+      'Overlap planning',
+      'Auto-reply',
+    ]) {
       expect(toggle(name)).toBeDisabled();
     }
   });

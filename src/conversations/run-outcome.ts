@@ -46,6 +46,8 @@ const completesOnCleanEnd: ReadonlySet<ConversationIntent> = new Set([
   'new_ticket',
   'setup',
   'batch_triage',
+  'overlap_planning',
+  'auto_reply',
 ]);
 
 /** The result of a run end, first match wins (GLOSSARY: Run outcome). */

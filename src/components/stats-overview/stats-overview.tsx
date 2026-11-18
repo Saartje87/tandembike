@@ -64,6 +64,8 @@ const stageLabels = {
   plan: 'Plan',
   spar: 'Spar',
   batch_triage: 'Batch triage',
+  overlap_planning: 'Overlap planning',
+  auto_reply: 'Auto-reply',
 } as const;
 
 const dollars = (usd: number) => `$${usd.toFixed(2)}`;

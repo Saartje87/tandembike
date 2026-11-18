@@ -108,9 +108,10 @@ export type StageInvocation =
 /**
  * A restriction on a run, in Tandembike's terms: `read-only` for a Spar (ADR
  * 0046), `no-ticket-writes` for Autopilot Triage and Batch triage (ADR 0040,
- * ADR 0047).
+ * ADR 0047), `judgment` for a judgment run, which reads code and Tickets and
+ * writes only through its own tool (ADR 0054).
  */
-export type ToolPolicy = 'read-only' | 'no-ticket-writes';
+export type ToolPolicy = 'read-only' | 'no-ticket-writes' | 'judgment';
 
 /** What a run starts with: a Stage to invoke, or the User's text. */
 export type RunMessage = { invocation: StageInvocation } | { text: string };

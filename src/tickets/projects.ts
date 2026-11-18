@@ -77,8 +77,14 @@ const agentSettingsColumns = {
   triageCeilingUsd: projects.triageCeilingUsd,
   triageCeilingAiCredits: projects.triageCeilingAiCredits,
   autoMerge: projects.autoMerge,
+  overlapPlanning: projects.overlapPlanning,
+  autoReply: projects.autoReply,
+  replyRules: projects.replyRules,
   defaultAgentKind: projects.defaultAgentKind,
 };
+
+/** The longest Reply rules a Project keeps (ADR 0054). */
+const maxReplyRulesLength = 4000;
 
 /** A trimmed text setting; blank reads as not set. */
 function trimmedOrNull(value: string | null): string | null {
@@ -465,8 +471,13 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
       triageCeilingUsd,
       triageCeilingAiCredits,
       autoMerge,
+      overlapPlanning,
+      autoReply,
+      replyRules,
       defaultAgentKind,
     } = input;
+    const nextReplyRules =
+      replyRules === undefined ? before.replyRules : trimmedOrNull(replyRules);
     const kept = <T>(given: T | undefined, was: T): T =>
       given === undefined ? was : given;
     const nextTriageCeiling = kept(triageCeilingUsd, before.triageCeilingUsd);
@@ -535,6 +546,10 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
           ? 'Set a repository path before turning on agent mode.'
           : undefined,
       runMode: runModeProblem(runMode),
+      replyRules:
+        (nextReplyRules?.length ?? 0) > maxReplyRulesLength
+          ? 'Keep the Reply rules under 4,000 characters.'
+          : undefined,
       defaultAgentKind: agentKindProblem(defaultAgentKind),
       ...modelProblems,
       ...ceilingProblems({
@@ -589,6 +604,9 @@ export function createProjects(ctx: TicketRowContext, deps: ProjectsDeps) {
         triageCeilingUsd: nextTriageCeiling,
         triageCeilingAiCredits: nextTriageCredits,
         ...(autoMerge === undefined ? {} : { autoMerge }),
+        ...(overlapPlanning === undefined ? {} : { overlapPlanning }),
+        ...(autoReply === undefined ? {} : { autoReply }),
+        replyRules: nextReplyRules,
         ...(defaultAgentKind === undefined ? {} : { defaultAgentKind }),
       })
       .where(eq(projects.id, id))

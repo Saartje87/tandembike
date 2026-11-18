@@ -107,6 +107,16 @@ export const projects = sqliteTable('projects', {
   autoMerge: integer('auto_merge', { mode: 'boolean' })
     .notNull()
     .default(false),
+  /** Whether Autopilot starts Overlap planning runs on the Active Cycle (ADR 0054). */
+  overlapPlanning: integer('overlap_planning', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** Whether Autopilot starts Auto-reply runs on Start runs' Widgets (ADR 0054). */
+  autoReply: integer('auto_reply', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  /** What Auto-reply follows on top of its defaults; null while unset (ADR 0054). */
+  replyRules: text('reply_rules'),
   /** The command Triage sends before the Ticket number; null runs the Playbook's. */
   triageCommand: text('triage_command').default(
     legacyAgentCommandDefaults.triageCommand,
@@ -446,6 +456,8 @@ export const conversations = sqliteTable(
      * Backlog. Null for other intents too; the intent tells them apart.
      */
     batchTriageCycleId: integer('batch_triage_cycle_id'),
+    /** Auto-reply: the Widget entry it answers, one Auto-reply per Widget (ADR 0054). */
+    autoReplyEntryId: integer('auto_reply_entry_id'),
     /** Batch triage: the Ticket numbers it covers, fixed when it started (T1316). */
     batchTriageTickets: text('batch_triage_tickets', { mode: 'json' }).$type<
       number[]

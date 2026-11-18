@@ -14,6 +14,7 @@ import type { LaneScope } from './lanes';
 import { createLifecycle } from './lifecycle';
 import { createMachineSettings } from './machine-settings';
 import type { OriginLink, SplitOffTicket } from './origins';
+import { createOverlapBlockers } from './overlap-blockers';
 import type { PaletteColor } from './palette';
 import type { ProjectIcon } from './project-icons';
 import { createProjects } from './projects';
@@ -113,6 +114,12 @@ export type ProjectAgentSettings = {
   triageCeilingAiCredits: number | null;
   /** Whether the run that opened a PR merges it itself (ADR 0043). */
   autoMerge: boolean;
+  /** Whether Autopilot starts Overlap planning runs on the Active Cycle (ADR 0054). */
+  overlapPlanning: boolean;
+  /** Whether Autopilot starts Auto-reply runs on Start runs' Widgets (ADR 0054). */
+  autoReply: boolean;
+  /** What Auto-reply follows on top of its defaults; `null` while unset (ADR 0054). */
+  replyRules: string | null;
   /** The Agent kind new Conversations start on (ADR 0051). */
   defaultAgentKind: AgentKind;
 };
@@ -685,6 +692,11 @@ export function createTickets(
     claimMergeMode: claims.claimMergeMode,
     addExternalReferences: ticketChanges.addExternalReferences,
   });
+  const overlapBlockers = createOverlapBlockers(ctx, {
+    activeCycle: cycles.activeCycle,
+    updateTicket: ticketChanges.updateTicket,
+    addComment: discussion.addComment,
+  });
   return {
     /**
      * Runs `run` all or nothing: the module's functions nest in it, and a
@@ -708,5 +720,6 @@ export function createTickets(
     ...triageProposals,
     ...createMachineSettings(ctx),
     ...work,
+    ...overlapBlockers,
   };
 }

@@ -76,6 +76,41 @@ describe('capacityOf', () => {
     expect(capacity.project).toBeNull();
   });
 
+  it('counts a working judgment run Autopilot started as a Machine slot, not a Start run slot (ADR 0054)', () => {
+    const capacity = capacityOf(
+      snapshot([
+        run({ intent: 'overlap_planning', startedBy: 'autopilot' }),
+        run({ intent: 'auto_reply', startedBy: 'autopilot', state: 'waiting' }),
+        run({ intent: 'auto_reply', startedBy: 'autopilot', state: 'idle' }),
+      ]),
+      1,
+    );
+
+    expect(capacity.machine.slotsHeld).toBe(2);
+    expect(capacity.project.slotsHeld).toBe(0);
+    expect(capacity.liveProcessCount).toBe(2);
+  });
+
+  it('says which judgment run of each kind works in the Project (ADR 0054)', () => {
+    const planning = run({
+      intent: 'overlap_planning',
+      startedBy: 'autopilot',
+    });
+    const capacity = capacityOf(
+      snapshot([
+        planning,
+        run({ intent: 'auto_reply', startedBy: 'autopilot', state: 'idle' }),
+        run({ intent: 'auto_reply', startedBy: 'autopilot', projectId: 2 }),
+      ]),
+      1,
+    );
+
+    expect(capacity.project.judgmentRunning).toEqual({
+      overlap_planning: planning.id,
+      auto_reply: null,
+    });
+  });
+
   it('counts every live Agent process for Autopilot’s headroom, split into working and waiting on the User', () => {
     const capacity = capacityOf(
       snapshot([
@@ -252,7 +287,14 @@ describe('verdictOf', () => {
       1,
     );
 
-    for (const intent of ['ask', 'spec', 'triage', 'batch_triage'] as const) {
+    for (const intent of [
+      'ask',
+      'spec',
+      'triage',
+      'batch_triage',
+      'overlap_planning',
+      'auto_reply',
+    ] as const) {
       expect(verdictOf(capacity, intent)).toEqual({ ok: true });
     }
   });

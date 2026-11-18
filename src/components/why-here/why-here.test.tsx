@@ -74,6 +74,17 @@ describe('WhyHere', () => {
     ).toBe('Queued, but Autopilot is off, there is no Active Cycle.');
   });
 
+  it('says an Eligible Ticket waits for Overlap planning to go first (ADR 0054)', () => {
+    expect(
+      sentence({
+        autopilot: paused({
+          type: 'overlapPlanningFirst',
+          conversationId: null,
+        }),
+      }),
+    ).toBe('Queued, but Overlap planning goes first.');
+  });
+
   it('lists every reason a Queued Ticket waits, linking its Blockers and holding Conversation', () => {
     expect(
       sentence({

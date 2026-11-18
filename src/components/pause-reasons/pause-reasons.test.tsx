@@ -110,3 +110,102 @@ describe('PauseReasons', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('PauseReasons of the judgment runs (ADR 0054)', () => {
+  it('shows Overlap planning running, or paused on a working run it links to', () => {
+    renderWithTheme(
+      <PauseReasons
+        projectId={3}
+        autopilot={{
+          state: 'paused',
+          reasons: [{ type: 'overlapPlanningFirst', conversationId: 5 }],
+        }}
+        autoTriage={{ state: 'running' }}
+        overlapPlanning={{
+          state: 'paused',
+          reasons: [{ type: 'judgmentRunWorking', conversationId: 5 }],
+        }}
+      />,
+    );
+
+    const planning = screen.getByRole('region', { name: 'Overlap planning' });
+    expect(planning).toHaveTextContent(
+      'An Overlap planning run is already working; it runs one at a time.',
+    );
+    expect(
+      within(planning).getByRole('link', { name: 'Open the run' }),
+    ).toHaveAttribute('href', '/project/3/flow?conversation=5');
+    const autopilot = screen.getByRole('region', { name: 'Autopilot' });
+    expect(autopilot).toHaveTextContent(
+      'Overlap planning goes first: no build starts until it has added its Blockers.',
+    );
+    expect(
+      within(autopilot).getByRole('link', { name: 'Open the run' }),
+    ).toHaveAttribute('href', '/project/3/flow?conversation=5');
+  });
+
+  it("names Overlap planning's own reasons in plain words", () => {
+    renderWithTheme(
+      <PauseReasons
+        projectId={3}
+        autopilot={{ state: 'running' }}
+        autoTriage={{ state: 'running' }}
+        overlapPlanning={{
+          state: 'paused',
+          reasons: [
+            { type: 'switchedOff' },
+            { type: 'noActiveCycle' },
+            { type: 'planningSettles', until: new Date() },
+          ],
+        }}
+      />,
+    );
+
+    const items = within(
+      screen.getByRole('region', { name: 'Overlap planning' }),
+    )
+      .getAllByRole('listitem')
+      .map((item) => item.textContent);
+    expect(items).toEqual([
+      'Overlap planning is switched off.',
+      'There is no Active Cycle: Overlap planning works only on one.',
+      'The Active Cycle changed moments ago: Overlap planning waits 30 seconds after the last change, so a batch of changes is planned once.',
+    ]);
+  });
+
+  it('leaves out the engines it is not given', () => {
+    renderWithTheme(
+      <PauseReasons
+        projectId={3}
+        autopilot={{ state: 'running' }}
+        autoTriage={{ state: 'running' }}
+      />,
+    );
+
+    expect(
+      screen.queryByRole('region', { name: 'Overlap planning' }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('PauseReasons of Auto-reply (ADR 0054)', () => {
+  it('shows Auto-reply running, or why it starts nothing', () => {
+    renderWithTheme(
+      <PauseReasons
+        projectId={3}
+        autopilot={{ state: 'running' }}
+        autoTriage={{ state: 'running' }}
+        autoReply={{
+          state: 'paused',
+          reasons: [{ type: 'noQuestionWaiting' }],
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('region', { name: 'Auto-reply' }),
+    ).toHaveTextContent(
+      'No question is waiting: no Start run on the Active Cycle waits on a Widget it has not answered.',
+    );
+  });
+});

@@ -110,6 +110,47 @@ describe('Notices', () => {
       expect(kinds(world, 'merge')).toHaveLength(2);
     });
 
+    it('raises split_follow_up once when a Start ended without the follow-up an Auto-reply Split asked for (ADR 0054)', async () => {
+      const world = setup();
+      const { ticket, conversation, run } = await world.startRun('Ship it');
+      void run.options.askWidget({
+        kind: 'choice',
+        prompt: 'Also redo the footer?',
+        options: [{ label: 'Yes' }, { label: 'No' }],
+        multiSelect: false,
+      });
+      const entryId = world.conversations.transcript(conversation.id).at(-1)
+        ?.id as number;
+      const reply = await world.conversations.start({
+        startedBy: 'autopilot',
+        ticketNumber: ticket.number,
+        intent: 'auto_reply',
+        autoReplyEntryId: entryId,
+        prompt: 'Answer it',
+      });
+      await world.conversations.replyToQuestion(reply.id, {
+        decision: 'split',
+        reason: 'Another Ticket.',
+      });
+      world.notices.start();
+
+      world.conversations.setSplitFollowUp(entryId, 'missing');
+      world.changes.publish({ type: 'ticket', number: ticket.number });
+
+      expect(kinds(world, 'split_follow_up')).toEqual([
+        {
+          kind: 'split_follow_up',
+          key: `split_follow_up:${entryId}`,
+          projectId: world.project.id,
+          ticketNumber: ticket.number,
+          conversationId: conversation.id,
+          title: `T${ticket.number}'s follow-up was not filed`,
+          body: 'Ship it: Auto-reply asked its Start run to file a follow-up, and the run ended without one.',
+          path: `/project/${world.project.id}?ticket=${ticket.number}`,
+        },
+      ]);
+    });
+
     describe('auto_merged', () => {
       /** A Ticket an Agent run claimed with Auto-merge on and opened a PR for. */
       const autoMergeable = (

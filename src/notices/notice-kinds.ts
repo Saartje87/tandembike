@@ -306,6 +306,26 @@ const autoMerged: NoticeDetector = ({ tickets, now }) =>
       });
     });
 
+/**
+ * A Start that ended without the follow-up an Auto-reply Split asked it to
+ * file (ADR 0054), keyed by the Widget the Split answered.
+ */
+const splitFollowUp: NoticeDetector = ({ tickets, conversations }) =>
+  conversations
+    .missingSplitFollowUps()
+    .map(({ entryId, conversationId, ticketNumber }) => {
+      const ticket = tickets.getTicket(ticketNumber);
+      return {
+        ...ticketNotice(ticket, {
+          kind: 'split_follow_up',
+          key: `split_follow_up:${entryId}`,
+          title: `T${ticketNumber}'s follow-up was not filed`,
+          body: `${ticket.title}: Auto-reply asked its Start run to file a follow-up, and the run ended without one.`,
+        }),
+        conversationId,
+      };
+    });
+
 /** The local calendar day of `now`, as the ceilings' days reset at midnight. */
 const dayOf = (now: Date): string =>
   [now.getFullYear(), now.getMonth() + 1, now.getDate()]
@@ -402,4 +422,5 @@ export const noticeDetectors: NoticeDetector[] = [
   triage,
   ceiling,
   autoMerged,
+  splitFollowUp,
 ];

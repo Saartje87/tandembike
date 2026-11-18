@@ -101,6 +101,9 @@ export type SettingsField =
   | 'auto-triage'
   | 'triage-ceiling'
   | 'triage-ceiling-ai-credits'
+  | 'overlap-planning'
+  | 'auto-reply'
+  | 'reply-rules'
   | 'agent-commands'
   | `${string}-command`;
 

@@ -209,6 +209,13 @@ export async function setProjectAgentSettings(
       ...(settings.autoMerge === undefined
         ? {}
         : { autoMerge: Boolean(settings.autoMerge) }),
+      ...(settings.overlapPlanning === undefined
+        ? {}
+        : { overlapPlanning: Boolean(settings.overlapPlanning) }),
+      ...(settings.autoReply === undefined
+        ? {}
+        : { autoReply: Boolean(settings.autoReply) }),
+      ...nullableString('replyRules', settings.replyRules),
       ...(settings.defaultAgentKind === undefined
         ? {}
         : { defaultAgentKind: settings.defaultAgentKind }),

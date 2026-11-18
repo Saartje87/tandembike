@@ -3,6 +3,7 @@ import { appSpars } from '../spars/app-spars';
 import { appTickets } from '../tickets/app-tickets';
 import { appChangeChannel } from '../tickets/changes';
 import { type Autopilot, createAutopilot } from './autopilot';
+import { createSplitFollowUps } from './split-follow-ups';
 
 const globalKey = Symbol.for('ticket.autopilot');
 const startedKey = Symbol.for('ticket.autopilot.started');
@@ -35,9 +36,10 @@ export function appAutopilot(): Autopilot {
 }
 
 /**
- * Starts the app's Autopilot, once per server. It starts runs in-process
- * through the Conversations module, never through a route handler or an MCP
- * tool (ADR 0019, ADR 0030).
+ * Starts the app's Autopilot, once per server, and the check of Auto-reply's
+ * Split follow-ups beside it (ADR 0054). It starts runs in-process through
+ * the Conversations module, never through a route handler or an MCP tool
+ * (ADR 0019, ADR 0030).
  */
 export function startAppAutopilot(): void {
   const global = globalThis as GlobalWithAutopilot;
@@ -46,4 +48,9 @@ export function startAppAutopilot(): void {
   }
   global[startedKey] = true;
   appAutopilot().start();
+  createSplitFollowUps({
+    tickets: appTickets('agent'),
+    conversations: appConversations(),
+    changes: appChangeChannel(),
+  }).start();
 }

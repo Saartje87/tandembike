@@ -38,6 +38,25 @@ describe('ProjectSwitch', () => {
     });
   });
 
+  it.each([
+    ['overlapPlanning', 'Overlap planning'],
+    ['autoReply', 'Auto-reply'],
+  ] as const)(
+    'turns %s on, a judgment run with no ceiling of its own (ADR 0054)',
+    async (setting, label) => {
+      renderWithTheme(
+        <ProjectSwitch projectId={3} setting={setting} checked={false} />,
+      );
+
+      await userEvent.click(screen.getByRole('switch', { name: label }));
+
+      expect(setProjectAgentSettings).toHaveBeenCalledWith({
+        projectId: 3,
+        [setting]: true,
+      });
+    },
+  );
+
   it('turns Autopilot off', async () => {
     renderWithTheme(
       <ProjectSwitch projectId={3} setting="autopilot" checked />,
