@@ -80,7 +80,7 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
     }
     const root = document.documentElement;
     const observer = new ResizeObserver(([entry]) => {
-      const blockSize = entry?.borderBoxSize[0]?.blockSize;
+      const blockSize = entry?.borderBoxSize?.[0]?.blockSize;
       if (blockSize !== undefined) {
         root.style.setProperty(appHeaderBlockSize, `${blockSize}px`);
       }
