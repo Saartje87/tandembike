@@ -26,6 +26,13 @@ if (typeof window !== 'undefined') {
       this.focus();
     }
   };
+  // jsdom has no `ResizeObserver`; the app header measures itself with one.
+  // A test that needs sizes stubs it with `vi.stubGlobal`.
+  globalThis.ResizeObserver ??= class {
+    disconnect() {}
+    observe() {}
+    unobserve() {}
+  };
   HTMLDialogElement.prototype.close ??= function close(
     this: HTMLDialogElement,
   ) {
