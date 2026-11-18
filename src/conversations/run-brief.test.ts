@@ -496,3 +496,74 @@ describe('runBrief and the judgment runs (ADR 0054)', () => {
     },
   );
 });
+
+describe('runBrief for a New Ticket Conversation (T1666)', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: null,
+    ticketTitle: null,
+    ticketType: null,
+    projectName: 'Website',
+    agentKind: 'claude-code' as const,
+    intent: 'new_ticket' as const,
+    parallelRuns: false,
+    runMode: 'auto' as const,
+  };
+  const brief = runBrief(base);
+
+  it('looks at the code and for duplicate Tickets before asking', () => {
+    expect(brief).toMatch(/Look first: read the code the title points at/);
+    expect(brief).toContain('find_tickets');
+    expect(brief).toMatch(/Never file a likely duplicate without asking/);
+  });
+
+  it('asks what changes the Ticket with Widgets, and names its own defaults', () => {
+    expect(brief).toMatch(
+      /changes the Ticket: its scope, its behaviour or its acceptance criteria/,
+    );
+    expect(brief).toMatch(/at most three questions/);
+    expect(brief).toMatch(/`ask_choice` with your answer in `recommended`/);
+    expect(brief).toMatch(/a skip is not agreement/);
+    expect(brief).toMatch(/Pick obvious defaults yourself and name them/);
+    expect(brief).toMatch(/A small, clear request may need no questions/);
+  });
+
+  it('grills a big or vague idea, or offers the Spec button, but never a small clear one', () => {
+    expect(brief).toMatch(
+      /vague, has several open design decisions or looks bigger than one Ticket/,
+    );
+    expect(brief).toMatch(/look facts up instead of asking them/);
+    expect(brief).toMatch(/Stop when nothing is left silently assumed/);
+    expect(brief).toMatch(/press Spec on it/);
+    expect(brief).toMatch(/Never start a Spec yourself/);
+    expect(brief).toMatch(/Never grill a small, clear request/);
+  });
+
+  it('shows the draft only when it guessed, and files straight away otherwise', () => {
+    expect(brief).toMatch(/unconfirmed assumptions/);
+    expect(brief).toMatch(/"File it"/);
+    expect(brief).toMatch(/With nothing guessed, file straight away/);
+  });
+
+  it('names no skill the Project may lack', () => {
+    expect(brief).not.toMatch(/grilling|skill/i);
+  });
+
+  it('gives every Agent kind the same steps', () => {
+    const steps = (text: string) =>
+      text.slice(text.indexOf('Clarify the request'));
+
+    expect(steps(brief)).toMatch(/^Clarify the request/);
+    expect(steps(runBrief({ ...base, agentKind: 'copilot' }))).toBe(
+      steps(brief),
+    );
+  });
+
+  it('gives the steps to no other intent', () => {
+    for (const intent of conversationIntents.filter(
+      (intent) => intent !== 'new_ticket',
+    )) {
+      expect(runBrief({ ...base, intent })).not.toMatch(/Look first:/);
+    }
+  });
+});
