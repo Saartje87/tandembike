@@ -285,6 +285,8 @@ describe('The Claude runner', () => {
         'mcp__tandembike__create_cycle',
         'mcp__tandembike__update_cycle',
         'mcp__tandembike__set_check_command',
+        'mcp__tandembike__add_overlap_blocker',
+        'mcp__tandembike__reply_to_question',
       ],
     ],
     [

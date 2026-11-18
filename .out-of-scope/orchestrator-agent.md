@@ -8,6 +8,8 @@ It was considered in a grilling session on 2026-11-11, against 18 days of histor
 
 If judgment is ever needed, it is a short run started at a defined point, such as a stalled run, red CI, a merge hand-off or a collision, as Triage runs are. It is never a long-lived agent and never a run that starts other runs. The User keeps needs-info and Auto-merge refusals. An orchestrator stays out of triage and Ticket creation.
 
+Two such **judgment runs** exist since ADR 0054: **Overlap planning**, which adds Blockers between Active Cycle Tickets that would touch the same code (the collisions of (c)), and **Auto-reply**, which answers a Start run's Widget question (the waiting of (a)). Each is started by Autopilot at a defined trigger, starts no run and files no Ticket. Its only write is its own tool. The User waived the "When to revisit" thresholds below for them: they were not shown to be met. A long-lived orchestrator, and any run that starts other runs, stays out of scope.
+
 ### (a) Recovery of failed or stalled runs
 
 Rare. About 5 real CI failures in roughly 265 PRs, 3 early stops that all came from one cause, fixed by T1282, and no recorded Stalled Ticket. Too few for an agent that watches for them.

@@ -1,8 +1,8 @@
 import type { ConversationIntent } from '../conversations/conversation-state';
 import type { CostUnit } from '../tickets/cost-unit';
 /**
- * What Autopilot's rule answers (ADR 0044): why Autopilot and Auto-triage
- * start nothing now, and for each Todo Ticket or Epic, why it is or is not
+ * What Autopilot's rule answers (ADR 0044): why Autopilot, Auto-triage and
+ * the judgment runs (ADR 0054) start nothing now, and for each Todo Ticket or Epic, why it is or is not
  * next. Dispatch and triage act on this same answer, so it is never a second
  * copy of the rules. Types only, so the UI can import them.
  */
@@ -41,7 +41,42 @@ export type AutopilotPauseReason =
       ceiling: number;
       unit: CostUnit;
     }
-  | { type: 'noEligibleWork' };
+  | { type: 'noEligibleWork' }
+  /**
+   * With Overlap planning on, planning is due, settling or working: no build
+   * starts until it has added its Blockers (ADR 0054). `conversationId` names
+   * the working run, null while it is not started yet.
+   */
+  | { type: 'overlapPlanningFirst'; conversationId: number | null };
+
+/**
+ * A Pause reason (GLOSSARY) every judgment run shares (ADR 0054): Autopilot's
+ * Project and machine reasons but the Start run slot, and a run of its kind
+ * already working in the Project.
+ */
+export type JudgmentPauseReason =
+  | { type: 'projectArchived' }
+  | { type: 'switchedOff' }
+  | { type: 'noActiveCycle' }
+  | { type: 'noSpendCeiling' }
+  | { type: 'overSpendCeiling'; spend: number; ceiling: number; unit: CostUnit }
+  | { type: 'judgmentRunWorking'; conversationId: number }
+  | { type: 'machineCapFull'; cap: number; holders: CapHolder[] }
+  | {
+      type: 'overMachineCeiling';
+      spend: number;
+      ceiling: number;
+      unit: CostUnit;
+    };
+
+/**
+ * Why Overlap planning starts no run now (ADR 0054): a shared reason, the
+ * latest trigger not settled until `until`, or no planning due.
+ */
+export type OverlapPlanningPauseReason =
+  | JudgmentPauseReason
+  | { type: 'planningSettles'; until: Date }
+  | { type: 'noPlanningDue' };
 
 /** A Pause reason (GLOSSARY): why Auto-triage starts no Triage run now. */
 export type AutoTriagePauseReason =
@@ -108,6 +143,7 @@ export type TicketExplanation = {
 export type AutopilotExplanation = {
   autopilot: EngineState<AutopilotPauseReason>;
   autoTriage: EngineState<AutoTriagePauseReason>;
+  overlapPlanning: EngineState<OverlapPlanningPauseReason>;
   /** Every Todo Ticket and Epic of the Project, archived ones included. */
   tickets: TicketExplanation[];
 };

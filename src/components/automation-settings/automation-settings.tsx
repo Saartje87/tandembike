@@ -236,6 +236,13 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
               started after you change it, with or without Autopilot.
             </Text>
             <Text tag="p" fontSize="small" color="muted">
+              Overlap planning starts a short run when the Active Cycle starts
+              or gains ready work. It adds a Blocker between Tickets that would
+              touch the same code, the higher one on the Board first, with a
+              comment saying why; Autopilot waits for it. Its runs count against
+              the Spend ceiling.
+            </Text>
+            <Text tag="p" fontSize="small" color="muted">
               Turning a switch off leaves running runs alone.
             </Text>
           </>
@@ -312,6 +319,17 @@ export const AutomationSettings: FC<AutomationSettingsProps> = ({
                 )}
             </Ceilings>
           </SettingSwitch>
+        </div>
+        <Divider />
+        <div id="overlap-planning">
+          <SettingSwitch
+            projectId={projectId}
+            setting="overlapPlanning"
+            label="Overlap planning"
+            hint="Add Blockers between Active Cycle Tickets that would touch the same code, before Autopilot starts them."
+            checked={settings.overlapPlanning}
+            disabled={locked}
+          />
         </div>
         {serverError && <Alert intent="danger">{serverError}</Alert>}
       </SettingsSection>

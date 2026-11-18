@@ -6,6 +6,7 @@ import { isAllowedHost } from '../http/allowed-host';
 import type { Tickets } from '../tickets/tickets';
 import { registerAttachmentTools } from './attachment-tools';
 import { registerConversationTools } from './conversation-tools';
+import { type JudgmentTools, registerJudgmentTools } from './judgment-tools';
 import { registerProjectTools } from './project-tools';
 import { registerSparTools, type SparTools } from './spar-tools';
 import { registerTicketTools } from './ticket-tools';
@@ -57,6 +58,8 @@ export type McpServerOptions = {
   conversations?: ConversationReader;
   /** The Spars of Spar runs' tools; without it those tools refuse. */
   spars?: SparTools;
+  /** The judgment runs' Conversations, for their own tools; without it those tools refuse (ADR 0054). */
+  judgment?: JudgmentTools;
 };
 
 /**
@@ -68,7 +71,7 @@ export function createMcpServer(
   origin = 'http://localhost:4747',
   cwd?: string,
   runId?: string,
-  { onToolCall, conversations, spars }: McpServerOptions = {},
+  { onToolCall, conversations, spars, judgment }: McpServerOptions = {},
 ): McpServer {
   const server = new McpServer(
     { name: 'tandembike', version: '0.1.0' },
@@ -94,6 +97,7 @@ export function createMcpServer(
   registerAttachmentTools(context);
   registerConversationTools(context, conversations);
   registerSparTools(context, spars);
+  registerJudgmentTools(context, judgment);
 
   return server;
 }

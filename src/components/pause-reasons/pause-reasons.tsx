@@ -12,6 +12,7 @@ import type {
   AutoTriagePauseReason,
   CapHolder,
   EngineState,
+  OverlapPlanningPauseReason,
 } from '../../autopilot/explanation';
 import { isStartRunIntent } from '../../conversations/capacity';
 import { AppLink } from '../app-link/app-link';
@@ -21,20 +22,34 @@ import { RelativeTime } from '../relative-time/relative-time';
 const slots = (count: number, noun: string) =>
   count === 1 ? `The one ${noun} slot is` : `All ${count} ${noun} slots are`;
 
-/** A Pause reason in plain words, shared by Autopilot and Auto-triage. */
-export function pauseReasonText(
-  reason: AutopilotPauseReason | AutoTriagePauseReason,
-  engine: 'Autopilot' | 'Auto-triage',
-): string {
+/** What starts work on its own, and has Pause reasons (ADR 0044, ADR 0054). */
+export type Engine =
+  | 'Autopilot'
+  | 'Auto-triage'
+  | 'Overlap planning'
+  | 'Auto-reply';
+
+/** Any engine's Pause reason. */
+export type PauseReason =
+  | AutopilotPauseReason
+  | AutoTriagePauseReason
+  | OverlapPlanningPauseReason;
+
+/** A Pause reason in plain words, shared by every engine. */
+export function pauseReasonText(reason: PauseReason, engine: Engine): string {
   switch (reason.type) {
     case 'projectArchived':
       return 'The Project is archived.';
     case 'switchedOff':
       return `${engine} is switched off.`;
     case 'noActiveCycle':
-      return 'There is no Active Cycle: Autopilot only starts work planned into one.';
+      return engine === 'Autopilot'
+        ? 'There is no Active Cycle: Autopilot only starts work planned into one.'
+        : `There is no Active Cycle: ${engine} works only on one.`;
     case 'noSpendCeiling':
-      return 'No Spend ceiling is set, and Autopilot needs one.';
+      return engine === 'Autopilot'
+        ? 'No Spend ceiling is set, and Autopilot needs one.'
+        : `No Spend ceiling is set, and ${engine} needs one: its runs count against it.`;
     case 'overSpendCeiling':
       return `This Cycle's Autopilot spend, ${formatCost(reason.spend, reason.unit)}, has reached the Spend ceiling of ${formatCost(reason.ceiling, reason.unit)}.`;
     case 'noFreeStartRunSlot':
@@ -53,8 +68,24 @@ export function pauseReasonText(
       return 'A Triage run is already working; Auto-triage runs one at a time.';
     case 'noTriageEligibleWork':
       return 'Nothing is Triage-eligible: Intake is empty.';
+    case 'overlapPlanningFirst':
+      return 'Overlap planning goes first: no build starts until it has added its Blockers.';
+    case 'judgmentRunWorking':
+      return `An ${engine} run is already working; it runs one at a time.`;
+    case 'planningSettles':
+      return 'The Active Cycle changed moments ago: Overlap planning waits 30 seconds after the last change, so a batch of changes is planned once.';
+    case 'noPlanningDue':
+      return 'Nothing to plan: the Active Cycle has not changed since its last planning, or has fewer than two ready, unclaimed Tickets.';
   }
 }
+
+/** The run a reason names, if any, to link to. */
+const runOf = (reason: PauseReason): number | null =>
+  (reason.type === 'judgmentRunWorking' ||
+    reason.type === 'overlapPlanningFirst') &&
+  reason.conversationId !== null
+    ? reason.conversationId
+    : null;
 
 /**
  * A run the Machine cap counts, by its kind, Ticket and Spar or Ticket title,
@@ -148,18 +179,21 @@ const CapHolders: FC<CapHoldersProps> = ({ projectId, holders }) => (
 
 type EngineStatusProps = {
   projectId: number;
-  engine: 'Autopilot' | 'Auto-triage';
-  state: EngineState<AutopilotPauseReason | AutoTriagePauseReason>;
+  engine: Engine;
+  state: EngineState<PauseReason>;
 };
 
-const runningText = {
+const runningText: Record<Engine, string> = {
   Autopilot: 'Running: Autopilot starts the next Eligible Ticket now.',
   'Auto-triage': 'Running: Auto-triage starts on the oldest Intake now.',
+  'Overlap planning':
+    'Running: Overlap planning starts on the Active Cycle now.',
+  'Auto-reply': 'Running: Auto-reply answers the oldest waiting Widget now.',
 };
 
 /** One engine: running, or each Pause reason in a list. */
 const EngineStatus: FC<EngineStatusProps> = ({ projectId, engine, state }) => {
-  const id = `${engine.toLowerCase()}-status`;
+  const id = `${engine.toLowerCase().replace(' ', '-')}-status`;
   return (
     <Stack gap={1} aria-labelledby={id} asChild>
       <section>
@@ -173,19 +207,38 @@ const EngineStatus: FC<EngineStatusProps> = ({ projectId, engine, state }) => {
             <Text tag="p">{`Paused: ${engine} starts nothing because`}</Text>
             <Stack gap={1} asChild>
               <ul>
-                {state.reasons.map((reason) => (
-                  <li key={reason.type}>
-                    <Stack gap={1}>
-                      <Text>{pauseReasonText(reason, engine)}</Text>
-                      {reason.type === 'machineCapFull' && (
-                        <CapHolders
-                          projectId={projectId}
-                          holders={reason.holders}
-                        />
-                      )}
-                    </Stack>
-                  </li>
-                ))}
+                {state.reasons.map((reason) => {
+                  const run = runOf(reason);
+                  return (
+                    <li key={reason.type}>
+                      <Stack gap={1}>
+                        <Text>
+                          {pauseReasonText(reason, engine)}
+                          {run !== null && (
+                            <>
+                              {' '}
+                              <AppLink
+                                href={conversationOnPath(
+                                  projectFlowPath(projectId),
+                                  run,
+                                )}
+                                scroll={false}
+                              >
+                                Open the run
+                              </AppLink>
+                            </>
+                          )}
+                        </Text>
+                        {reason.type === 'machineCapFull' && (
+                          <CapHolders
+                            projectId={projectId}
+                            holders={reason.holders}
+                          />
+                        )}
+                      </Stack>
+                    </li>
+                  );
+                })}
               </ul>
             </Stack>
           </>
@@ -200,17 +253,20 @@ export type PauseReasonsProps = {
   projectId: number;
   autopilot: EngineState<AutopilotPauseReason>;
   autoTriage: EngineState<AutoTriagePauseReason>;
+  /** Overlap planning's, when shown (ADR 0054). */
+  overlapPlanning?: EngineState<OverlapPlanningPauseReason>;
 };
 
 /**
- * Why Autopilot and Auto-triage start nothing right now, in plain words, or
- * that each is running (GLOSSARY: Pause reason). The page refreshes on every
+ * Why Autopilot, Auto-triage and the judgment runs start nothing right now,
+ * in plain words, or that each is running (GLOSSARY: Pause reason). The page refreshes on every
  * change, so the reasons clear as soon as their cause does.
  */
 export const PauseReasons: FC<PauseReasonsProps> = ({
   projectId,
   autopilot,
   autoTriage,
+  overlapPlanning,
 }) => (
   <Stack gap={3}>
     <EngineStatus projectId={projectId} engine="Autopilot" state={autopilot} />
@@ -219,5 +275,12 @@ export const PauseReasons: FC<PauseReasonsProps> = ({
       engine="Auto-triage"
       state={autoTriage}
     />
+    {overlapPlanning && (
+      <EngineStatus
+        projectId={projectId}
+        engine="Overlap planning"
+        state={overlapPlanning}
+      />
+    )}
   </Stack>
 );

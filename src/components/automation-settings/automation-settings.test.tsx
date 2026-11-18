@@ -80,6 +80,18 @@ describe('AutomationSettings', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
   });
 
+  it('saves the Overlap planning switch at once, with no ceiling of its own (ADR 0054)', async () => {
+    renderWithTheme(<AutomationSettings projectId={3} settings={set} />);
+
+    await userEvent.click(toggle('Overlap planning'));
+
+    expect(setProjectAgentSettings).toHaveBeenCalledWith({
+      projectId: 3,
+      overlapPlanning: true,
+    });
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+  });
+
   it('turns a switch on at once when its ceiling is saved', async () => {
     renderWithTheme(
       <AutomationSettings
@@ -256,7 +268,12 @@ describe('AutomationSettings', () => {
     expect(
       within(card()).getByText(/Set a repository path first/),
     ).toBeInTheDocument();
-    for (const name of ['Autopilot', 'Auto-merge', 'Auto-triage']) {
+    for (const name of [
+      'Autopilot',
+      'Auto-merge',
+      'Auto-triage',
+      'Overlap planning',
+    ]) {
       expect(toggle(name)).toBeDisabled();
     }
   });

@@ -1,4 +1,8 @@
-/** Why a Conversation was started (GLOSSARY: Start, Triage, Ask, New Ticket, Setup, Retro, Spec, Batch triage). */
+/**
+ * Why a Conversation was started (GLOSSARY: Start, Triage, Ask, New Ticket,
+ * Setup, Retro, Spec, Batch triage, and the judgment runs Overlap planning
+ * and Auto-reply).
+ */
 export const conversationIntents = [
   'start',
   'triage',
@@ -11,6 +15,8 @@ export const conversationIntents = [
   'plan',
   'spar',
   'batch_triage',
+  'overlap_planning',
+  'auto_reply',
 ] as const;
 export type ConversationIntent = (typeof conversationIntents)[number];
 
@@ -102,6 +108,19 @@ export type QuestionEntry = {
   answers: Record<string, string> | null;
   expired: boolean;
 };
+
+/**
+ * The judgment runs (ADR 0054): short runs only Autopilot starts, at a
+ * defined trigger, each acting only through its own tool.
+ */
+export const judgmentIntents = ['overlap_planning', 'auto_reply'] as const;
+export type JudgmentIntent = (typeof judgmentIntents)[number];
+
+/** Whether `intent` is a judgment run's (ADR 0054). */
+export const isJudgmentIntent = (
+  intent: ConversationIntent,
+): intent is JudgmentIntent =>
+  (judgmentIntents as readonly string[]).includes(intent);
 
 /** Whether a Conversation runs in the User's terminal (ADR 0039). */
 export const isTerminal = (conversation: {

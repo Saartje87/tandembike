@@ -178,6 +178,9 @@ describe('setProjectAgentSettings', () => {
       triageCeilingUsd: 3,
       triageCeilingAiCredits: 40,
       autoMerge: false,
+      overlapPlanning: false,
+      autoReply: false,
+      replyRules: null,
       defaultAgentKind: 'copilot',
     });
     expect(refresh).toHaveBeenCalled();
@@ -285,6 +288,28 @@ describe('setProjectAgentSettings Auto-merge', () => {
 
     expect(saved).toEqual({ ok: true });
     expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(true);
+  });
+});
+
+describe('setProjectAgentSettings judgment runs (ADR 0054)', () => {
+  it('saves Overlap planning, Auto-reply and the Reply rules', async () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+    vi.mocked(appTickets).mockReturnValue(tickets);
+
+    const saved = await setProjectAgentSettings({
+      projectId: project.id,
+      overlapPlanning: true,
+      autoReply: true,
+      replyRules: 'Approve naming choices.',
+    });
+
+    expect(saved).toEqual({ ok: true });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      overlapPlanning: true,
+      autoReply: true,
+      replyRules: 'Approve naming choices.',
+    });
   });
 });
 

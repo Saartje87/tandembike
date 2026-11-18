@@ -132,6 +132,7 @@ describe('MCP server', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'abandon_work',
       'add_note',
+      'add_overlap_blocker',
       'attach',
       'check_criterion',
       'create_cycle',

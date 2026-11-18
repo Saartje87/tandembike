@@ -1,5 +1,8 @@
 import { type LiveProcess, verdictOf } from '../conversations/capacity';
-import type { ConversationState } from '../conversations/conversation-state';
+import type {
+  ConversationState,
+  JudgmentIntent,
+} from '../conversations/conversation-state';
 import type {
   Conversation,
   Conversations,
@@ -16,8 +19,10 @@ import type {
   CapHolder,
   Eligibility,
   EngineState,
+  JudgmentPauseReason,
   NotEligibleReason,
   NotTriageEligibleReason,
+  OverlapPlanningPauseReason,
 } from './explanation';
 
 export type AutopilotDeps = {
@@ -33,6 +38,11 @@ export type AutopilotDeps = {
   sparTopic?: (conversationId: number) => string | null;
   /** The clock the triage day is read from; the system clock when left out. */
   now?: () => Date;
+  /**
+   * How long Overlap planning waits after its latest trigger, so planning a
+   * batch starts one run (ADR 0054); 30 seconds when left out.
+   */
+  overlapSettleMs?: number;
 };
 
 const readyLabel = 'ready-for-agent';
@@ -66,6 +76,7 @@ export function createAutopilot({
   changes,
   sparTopic = () => null,
   now = () => new Date(),
+  overlapSettleMs = 30_000,
 }: AutopilotDeps) {
   let queue: Promise<void> = Promise.resolve();
   /** Backoff timers by Conversation; a restart drops them (startup resume covers it). */
@@ -386,7 +397,11 @@ export function createAutopilot({
    */
   const explainBuilds = (projectId: number, todo = todoTickets(projectId)) => {
     const open = projectRoom(projectId);
-    const reasons = [...open.reasons, ...machineReasons(projectId)];
+    const reasons = [
+      ...open.reasons,
+      ...machineReasons(projectId),
+      ...overlapFirst(projectId, todo),
+    ];
     const free = reasons.length === 0 ? Math.min(open.slots, machineFree()) : 0;
     const eligibility = buildEligibility(projectId, todo, open.cycleId, free);
     const next = todo.find(
@@ -539,6 +554,259 @@ export function createAutopilot({
       return true;
     } catch (error) {
       console.error(`Autopilot could not start T${ticket.number}`, error);
+      return false;
+    }
+  };
+
+  /**
+   * The Pause reasons every judgment run shares (ADR 0054): Autopilot's
+   * Project reasons but the Start run slot, a run of `intent` working in the
+   * Project, and the machine's. `cycleId` is the Active Cycle, if any.
+   */
+  const judgmentRoom = (
+    projectId: number,
+    intent: JudgmentIntent,
+    on: boolean,
+  ): { cycleId: number | null; reasons: JudgmentPauseReason[] } => {
+    const open = projectRoom(projectId);
+    // Autopilot's own reasons apply, but its switch and its Start run slot:
+    // the judgment run has its own switch and holds no Start run slot.
+    const shared = open.reasons.filter(
+      (reason): reason is Extract<JudgmentPauseReason, typeof reason> =>
+        reason.type === 'noActiveCycle' ||
+        reason.type === 'noSpendCeiling' ||
+        reason.type === 'overSpendCeiling',
+    );
+    const reasons: JudgmentPauseReason[] = [
+      ...(tickets.getProject(projectId).archived
+        ? [{ type: 'projectArchived' as const }]
+        : []),
+      ...(on ? [] : [{ type: 'switchedOff' as const }]),
+      ...shared,
+    ];
+    const working =
+      conversations.capacity(projectId).project.judgmentRunning[intent];
+    if (working !== null) {
+      reasons.push({ type: 'judgmentRunWorking', conversationId: working });
+    }
+    reasons.push(...machineReasons(projectId));
+    return { cycleId: open.cycleId, reasons };
+  };
+
+  /**
+   * Overlap planning's candidates (ADR 0054): the Active Cycle's Todo,
+   * unclaimed, unarchived, ready Tickets and Epics that are not an Epic's
+   * child, in Board order.
+   */
+  const overlapCandidates = (todo: Ticket[], cycleId: number): Ticket[] =>
+    todo.filter(
+      (ticket) =>
+        ticket.cycle?.id === cycleId &&
+        ticket.claim === null &&
+        !ticket.archived &&
+        ticket.epic === null &&
+        ticket.labels.includes(readyLabel),
+    );
+
+  /** The Project's latest Overlap planning Conversation for Cycle `cycleId`, or null. */
+  const latestPlanning = (
+    projectId: number,
+    cycleId: number,
+  ): Conversation | null =>
+    conversations
+      .list({ projectId })
+      .find(
+        (conversation) =>
+          conversation.intent === 'overlap_planning' &&
+          conversations.judgmentRunOf(conversation.id)?.cycleId === cycleId,
+      ) ?? null;
+
+  /**
+   * When the candidates last changed in a way that asks for planning: one
+   * created, planned into the Cycle or labelled ready-for-agent. Null when
+   * none of their Activity says so.
+   */
+  const latestTrigger = (
+    candidates: Ticket[],
+    cycleId: number,
+  ): Date | null => {
+    let latest: Date | null = null;
+    for (const ticket of candidates) {
+      for (const entry of tickets.listActivity(ticket.number)) {
+        const triggers = entry.changes.some(
+          (change) =>
+            change.type === 'created' ||
+            (change.type === 'cycle' && change.to?.id === cycleId) ||
+            (change.type === 'labelAdded' && change.label === readyLabel),
+        );
+        if (triggers && (latest === null || entry.createdAt > latest)) {
+          latest = entry.createdAt;
+        }
+      }
+    }
+    return latest;
+  };
+
+  /**
+   * Whether Overlap planning is due in Cycle `cycleId` (ADR 0054), and
+   * from when: at least two candidates, and no planning of this Cycle yet,
+   * or a trigger after the latest one started. `settlesAt` is when the run
+   * may start: at once for a Cycle never planned, else `overlapSettleMs`
+   * after the latest trigger. Null when it is not due.
+   */
+  const planningDue = (
+    projectId: number,
+    cycleId: number,
+    todo: Ticket[],
+  ): { candidates: Ticket[]; settlesAt: Date } | null => {
+    const candidates = overlapCandidates(todo, cycleId);
+    if (candidates.length < 2) {
+      return null;
+    }
+    const last = latestPlanning(projectId, cycleId);
+    const trigger = latestTrigger(candidates, cycleId);
+    if (last === null) {
+      return { candidates, settlesAt: new Date(0) };
+    }
+    if (trigger === null || trigger <= last.createdAt) {
+      return null;
+    }
+    return {
+      candidates,
+      settlesAt: new Date(trigger.getTime() + overlapSettleMs),
+    };
+  };
+
+  /** The timer that queues a pass when the latest overlap trigger settles. */
+  const settleTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+  /** Queues a pass for Project `projectId` at `at`, once. */
+  const wakeAt = (projectId: number, at: Date) => {
+    if (settleTimers.has(projectId)) {
+      return;
+    }
+    settleTimers.set(
+      projectId,
+      setTimeout(
+        () => {
+          settleTimers.delete(projectId);
+          void evaluate();
+        },
+        Math.max(1, at.getTime() - now().getTime()),
+      ),
+    );
+  };
+
+  /**
+   * Overlap planning: every Pause reason, and the candidates it would plan
+   * now. The one rule planning acts on (ADR 0044, ADR 0054).
+   */
+  const explainOverlap = (
+    projectId: number,
+    todo = todoTickets(projectId),
+  ): {
+    state: EngineState<OverlapPlanningPauseReason>;
+    candidates: Ticket[];
+    cycleId: number | null;
+  } => {
+    const settings = tickets.getProjectAgentSettings(projectId);
+    const room = judgmentRoom(
+      projectId,
+      'overlap_planning',
+      settings.overlapPlanning,
+    );
+    const reasons: OverlapPlanningPauseReason[] = [...room.reasons];
+    const due =
+      room.cycleId === null ? null : planningDue(projectId, room.cycleId, todo);
+    if (due && due.settlesAt > now()) {
+      reasons.push({ type: 'planningSettles', until: due.settlesAt });
+    }
+    if (!due && reasons.length === 0) {
+      reasons.push({ type: 'noPlanningDue' });
+    }
+    return {
+      state: stateOf(reasons),
+      candidates: due?.candidates ?? [],
+      cycleId: room.cycleId,
+    };
+  };
+
+  /**
+   * Whether builds wait for Overlap planning (ADR 0054): with its switch on,
+   * while planning of the Active Cycle is due, settling or working, so
+   * nothing it would block starts first.
+   */
+  const overlapFirst = (
+    projectId: number,
+    todo: Ticket[],
+  ): AutopilotPauseReason[] => {
+    if (!tickets.getProjectAgentSettings(projectId).overlapPlanning) {
+      return [];
+    }
+    const working =
+      conversations.capacity(projectId).project.judgmentRunning
+        .overlap_planning;
+    if (working !== null) {
+      return [{ type: 'overlapPlanningFirst', conversationId: working }];
+    }
+    const cycle = tickets.activeCycle(projectId);
+    return cycle && planningDue(projectId, cycle.id, todo)
+      ? [{ type: 'overlapPlanningFirst', conversationId: null }]
+      : [];
+  };
+
+  /** The first message of an Overlap planning run: its Cycle and candidates in Board order. */
+  const planningPrompt = (cycleId: number, candidates: Ticket[]): string => {
+    const cycle = tickets.getCycle(cycleId);
+    return [
+      `Plan the overlap of the Active Cycle "${cycle.title}" (Cycle ${cycle.id}). Its candidates, in Board order, top first:`,
+      '',
+      ...candidates.map(
+        (ticket) =>
+          `- T${ticket.number} "${ticket.title}"${ticket.type === 'Epic' ? ' (an Epic: compare it with its children as a whole)' : ''}`,
+      ),
+      '',
+      'Read each with get_ticket, and the code it would change. For each pair that would touch the same files or modules, call add_overlap_blocker with the one higher in this list as the blocker, naming the shared code. Add no Blocker on a guess: only where both would change the same code. Then end your turn with a one-line summary of the Blockers you added, or that there were none.',
+    ].join('\n');
+  };
+
+  /**
+   * Overlap planning (ADR 0054): with the switch on and planning of the
+   * Active Cycle due and settled, starts one run for it, recording the
+   * Cycle, which takes a Machine slot and no Start run slot.
+   */
+  const planOne = async (projectId: number): Promise<boolean> => {
+    const settings = tickets.getProjectAgentSettings(projectId);
+    if (!settings.overlapPlanning) {
+      return false;
+    }
+    const overlap = explainOverlap(projectId);
+    const settles =
+      overlap.state.state === 'paused'
+        ? overlap.state.reasons.find(
+            (reason) => reason.type === 'planningSettles',
+          )
+        : undefined;
+    if (settles?.type === 'planningSettles') {
+      wakeAt(projectId, settles.until);
+    }
+    if (overlap.state.state !== 'running' || overlap.cycleId === null) {
+      return false;
+    }
+    try {
+      await conversations.start({
+        startedBy: 'autopilot',
+        projectId,
+        intent: 'overlap_planning',
+        cycleId: overlap.cycleId,
+        prompt: planningPrompt(overlap.cycleId, overlap.candidates),
+      });
+      return true;
+    } catch (error) {
+      console.error(
+        `Autopilot could not start Overlap planning in Project ${projectId}`,
+        error,
+      );
       return false;
     }
   };
@@ -759,6 +1027,7 @@ export function createAutopilot({
     return {
       autopilot: builds.state,
       autoTriage: triage.state,
+      overlapPlanning: explainOverlap(projectId, todo).state,
       tickets: todo.map((ticket) => ({
         number: ticket.number,
         build: builds.eligibility.get(
@@ -811,7 +1080,11 @@ export function createAutopilot({
         }
         let started = false;
         try {
-          started = (await dispatchOne(id)) || (await triageOne(id));
+          // Planning first: builds wait for it while it is due (ADR 0054).
+          started =
+            (await planOne(id)) ||
+            (await dispatchOne(id)) ||
+            (await triageOne(id));
         } catch (error) {
           console.error(`Autopilot step failed in Project ${id}`, error);
         }
@@ -939,6 +1212,10 @@ export function createAutopilot({
           clearTimeout(timer);
         }
         backoffs.clear();
+        for (const timer of settleTimers.values()) {
+          clearTimeout(timer);
+        }
+        settleTimers.clear();
         if (dayTimer) {
           clearTimeout(dayTimer);
           dayTimer = null;

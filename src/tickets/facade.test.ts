@@ -17,6 +17,7 @@ describe('the Tickets facade', () => {
         "addComment",
         "addExternalReferences",
         "addLabels",
+        "addOverlapBlocker",
         "addProject",
         "addReferenceTemplate",
         "approveTriage",

@@ -31,6 +31,9 @@ describe("A Project's agent settings", () => {
       triageCeilingUsd: null,
       triageCeilingAiCredits: null,
       autoMerge: false,
+      overlapPlanning: false,
+      autoReply: false,
+      replyRules: null,
       defaultAgentKind: 'claude-code',
     });
   });
@@ -615,6 +618,55 @@ describe("A Project's agent settings", () => {
 
     tickets.setProjectAgentSettings(project.id, { autoMerge: false });
     expect(tickets.getProjectAgentSettings(project.id).autoMerge).toBe(false);
+  });
+
+  it('turn Overlap planning and Auto-reply on and off on their own, without a ceiling of their own (ADR 0054)', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    expect(
+      tickets.setProjectAgentSettings(project.id, {
+        overlapPlanning: true,
+        autoReply: true,
+      }),
+    ).toMatchObject({
+      overlapPlanning: true,
+      autoReply: true,
+      autopilot: false,
+    });
+    expect(tickets.getProject(project.id)).not.toHaveProperty('autoReply');
+
+    tickets.setProjectAgentSettings(project.id, { overlapPlanning: false });
+    expect(tickets.getProjectAgentSettings(project.id)).toMatchObject({
+      overlapPlanning: false,
+      autoReply: true,
+    });
+  });
+
+  it('save the Reply rules trimmed, clear them when blank, and refuse ones over 4,000 characters', () => {
+    const tickets = createTestTickets();
+    const project = tickets.createProject({ name: 'Website' });
+
+    tickets.setProjectAgentSettings(project.id, {
+      replyRules: '  Always escalate schema changes.  ',
+    });
+    expect(tickets.getProjectAgentSettings(project.id).replyRules).toBe(
+      'Always escalate schema changes.',
+    );
+    expect(tickets.getProject(project.id)).not.toHaveProperty('replyRules');
+
+    const error = errorFrom(() =>
+      tickets.setProjectAgentSettings(project.id, {
+        replyRules: 'x'.repeat(4001),
+      }),
+    );
+    expect(error).toBeInstanceOf(ValidationError);
+    expect((error as ValidationError).fieldErrors).toEqual({
+      replyRules: 'Keep the Reply rules under 4,000 characters.',
+    });
+
+    tickets.setProjectAgentSettings(project.id, { replyRules: '   ' });
+    expect(tickets.getProjectAgentSettings(project.id).replyRules).toBeNull();
   });
 
   describe('updated in part, one Settings section at a time (T1432)', () => {

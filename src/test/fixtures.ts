@@ -67,6 +67,9 @@ export const projectAgentSettings = (
   triageCeilingUsd: null,
   triageCeilingAiCredits: null,
   autoMerge: false,
+  overlapPlanning: false,
+  autoReply: false,
+  replyRules: null,
   defaultAgentKind: 'claude-code',
   ...overrides,
 });

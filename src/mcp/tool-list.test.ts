@@ -4,12 +4,12 @@ import { connectMcpClient } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
 import { instructions } from './mcp-server';
 
-it('lists the twenty-three workflow tools, their descriptions and schemas, and the instructions', async () => {
+it('lists the twenty-four workflow tools, their descriptions and schemas, and the instructions', async () => {
   const client = await connectMcpClient(createTestTickets());
 
   const { tools } = await client.listTools();
 
-  expect(tools).toHaveLength(23);
+  expect(tools).toHaveLength(24);
   await expect(
     JSON.stringify(
       [...tools].sort((a, b) => a.name.localeCompare(b.name)),

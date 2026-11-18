@@ -2,7 +2,10 @@ import { formatCost } from '../app/lib/format-cost';
 import type { AgentKind } from '../tickets/agent-kind';
 import type { CostUnit } from '../tickets/cost-unit';
 import type { TicketType } from '../tickets/ticket-type';
-import type { ConversationIntent } from './conversation-state';
+import {
+  type ConversationIntent,
+  isJudgmentIntent,
+} from './conversation-state';
 import { cycleReference, type RetroCycle } from './retro-prompt';
 
 /** Where a New Ticket Conversation's title field was: defaults for the Agent. */
@@ -76,6 +79,10 @@ const intentLines: Record<ConversationIntent, string> = {
   plan: 'The User started this Conversation to plan a Cycle toward a goal (Plan). Their first message names the goal.',
   batch_triage:
     "The User started this Conversation to triage a Board's Intake in one go (Batch triage). Their first message names the Board and the Tickets.",
+  overlap_planning:
+    'Autopilot started this Conversation for Overlap planning (ADR 0054): find which of the Active Cycle Tickets its first message lists would touch the same code if they ran at the same time, and add a Blocker between each such pair with add_overlap_blocker, the Ticket higher on the Board first. Its first message lists the Tickets in Board order.',
+  auto_reply:
+    "Autopilot started this Conversation to Auto-reply (ADR 0054): answer one Widget question that a Start run asked the User, by the defaults and the Project's Reply rules in its first message, with reply_to_question.",
   spar: "The User started this Conversation to think an idea through with you on a Spar page (Spar). Their first message gives the topic and the focus Ticket, if any. This run is read-only (ADR 0046): you may read and search the code and read Tickets, but not edit files or create or change Tickets; any command you run asks the User first. The Spar page shows a Canvas of Columns and Stickies beside the chat: read it with get_canvas and change it with edit_canvas. Below it, keep the Write-up (Decisions, Open questions, Next steps) current with update_write_up. When you agree, propose the Hand-off with propose_hand_off; only the User files it. The User's edits of it send you nothing; each of their messages ends with what they changed since your last turn. Prefer Widgets to questions in text.",
 };
 
@@ -200,9 +207,11 @@ export function runBrief(brief: RunBrief): string {
       ? 'This Conversation is about the Project; it has no Ticket yet.'
       : `This Conversation is about Ticket T${brief.ticketNumber}, "${brief.ticketTitle}"${brief.ticketType === 'Epic' ? ', an Epic' : ''}.`,
     intentLines[brief.intent],
-    brief.terminal
-      ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
-      : `A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: \`ask_choice\` for choice cards (put your recommendation in \`recommended\`), \`ask_rank\` for an order, \`ask_matrix\` to place items on a 2×2 you label, and \`ask_scale\` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount${own.askAlso}. Every Widget may come back as \`{ "other": text }\` or \`{ "skipped": true }\`. Ask open questions in your messages.`,
+    isJudgmentIntent(brief.intent)
+      ? 'Nobody answers in this Conversation: never ask the User anything, and do not use a Widget. Read the Tickets with get_ticket and the code with Read, Grep and Glob, not shell commands. Edit no files. Your only write is your own tool; end your turn when you have used it, or when there is nothing to do.'
+      : brief.terminal
+        ? 'You run in an interactive terminal session, and the User is at it: they answer permission prompts and questions there. Ask them directly when you need a decision.'
+        : `A human answers in the Tandembike UI, not in a terminal, and prefers clicking to typing. When you need a decision, ask it with a Widget tool, which shows the User a Widget in the chat and waits for the answer: \`ask_choice\` for choice cards (put your recommendation in \`recommended\`), \`ask_rank\` for an order, \`ask_matrix\` to place items on a 2×2 you label, and \`ask_scale\` for how much. Use a Widget instead of asking in text whenever the answer is a pick, an order, a placement or an amount${own.askAlso}. Every Widget may come back as \`{ "other": text }\` or \`{ "skipped": true }\`. Ask open questions in your messages.`,
     `Your Agent-run ID: ${brief.conversationId}. Tandembike's tools already know it.`,
   ];
   const { cycleId, epicNumber, type } = brief.defaults ?? {};
@@ -238,6 +247,11 @@ export function runBrief(brief: RunBrief): string {
   } else if (brief.parallelRuns && brief.intent === 'start') {
     lines.push(
       'Other runs may work in this repository at the same time, and this Conversation has no worktree of its own: it began before Parallel runs was on. Change no files and switch no branches here; tell the User, who can close this Conversation and start the Ticket again to get a worktree on its branch.',
+    );
+  }
+  if (brief.intent === 'start' && !brief.terminal) {
+    lines.push(
+      'Ask every question to the User as a Widget, never in plain text, so Auto-reply can answer it when the Project has it on.',
     );
   }
   if (brief.intent === 'start' || brief.intent === 'merge') {

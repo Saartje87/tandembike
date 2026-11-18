@@ -17,5 +17,7 @@ export const POST = (request: Request): Promise<Response> => {
     conversations: createConversationReader(appDatabase(), tickets),
     // A Spar run's own Canvas (ADR 0046).
     spars: appSpars(),
+    // A judgment run's own tool checks its caller (ADR 0054).
+    judgment: appConversations(),
   });
 };

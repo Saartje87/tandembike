@@ -73,6 +73,43 @@
     }
   },
   {
+    "name": "add_overlap_blocker",
+    "title": "Add overlap Blocker",
+    "description": "Overlap planning only: block one Active Cycle Ticket or Epic on another that would touch the same code, so they run one after the other. The blocker must be the one higher on the Board. Both must be Todo, unclaimed, unarchived, labelled ready-for-agent and not an Epic child: compare an Epic as a whole. It adds a comment on the blocked Ticket naming the blocker and sharedCode. A Blocker already there is left as it is; a Blocker cycle is refused. It never removes a Blocker. Refused outside an Overlap planning run. Returns the blocked Ticket's summary with blockedBy.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "blocker": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket that goes first: the one higher on the Board."
+        },
+        "blocked": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "description": "The Ticket that waits for it."
+        },
+        "sharedCode": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "The files or modules both would touch, such as `src/board/` or `src/tickets/cycles.ts`."
+        }
+      },
+      "required": [
+        "blocker",
+        "blocked",
+        "sharedCode"
+      ],
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false
+    },
+    "execution": {
+      "taskSupport": "forbidden"
+    }
+  },
+  {
     "name": "attach",
     "title": "Attach file",
     "description": "Attach a file to a Ticket or Epic, added by you as an Agent, and return its metadata (id, ticketNumber, name, mediaType, size, author, createdAt). Give exactly one of path or content. path is an absolute local file path that the app reads on the machine running it, so a saved screenshot never passes through your context; name defaults to the file's base name. content is the file as base64 and needs a name. At most 10 MB per file and 50 Attachments per Ticket. An Attachment cannot be renamed or replaced. mediaType defaults from the name's extension, else application/octet-stream.",

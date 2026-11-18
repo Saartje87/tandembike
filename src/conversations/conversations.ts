@@ -69,7 +69,9 @@ import {
   type ConversationIntent,
   type ConversationStarter,
   type ConversationState,
+  isJudgmentIntent,
   isTerminal,
+  type JudgmentIntent,
   type PermissionAnswer,
   type PermissionStatus,
   permissionAnswers,
@@ -117,6 +119,15 @@ import {
 } from './widget';
 
 export type { ConversationSender };
+
+/** A judgment run's Conversation, as its own tool reads it (ADR 0054). */
+export type JudgmentRun = {
+  conversationId: number;
+  intent: JudgmentIntent;
+  projectId: number;
+  /** The Active Cycle Autopilot started it for. */
+  cycleId: number | null;
+};
 
 export type Conversation = {
   id: number;
@@ -1159,11 +1170,13 @@ export function createConversations({
         // only propose and note (ADR 0040, ADR 0047).
         ...(conversation.intent === 'spar'
           ? { toolPolicy: 'read-only' as const }
-          : (conversation.intent === 'triage' &&
-                conversation.startedBy === 'autopilot') ||
-              conversation.intent === 'batch_triage'
-            ? { toolPolicy: 'no-ticket-writes' as const }
-            : {}),
+          : isJudgmentIntent(conversation.intent)
+            ? { toolPolicy: 'judgment' as const }
+            : (conversation.intent === 'triage' &&
+                  conversation.startedBy === 'autopilot') ||
+                conversation.intent === 'batch_triage'
+              ? { toolPolicy: 'no-ticket-writes' as const }
+              : {}),
         ...(resume === undefined ? {} : { resume }),
         askPermission: (request) =>
           askPermission(id, handle, request, runner.capabilities.allowAlways),
@@ -1357,6 +1370,11 @@ export function createConversations({
           ticketNumber: 'A Spec is about a Ticket.',
         });
       }
+    }
+    if (isJudgmentIntent(input.intent) && input.startedBy !== 'autopilot') {
+      throw new NotAllowedError(
+        `Only Autopilot starts ${input.intent === 'overlap_planning' ? 'Overlap planning' : 'Auto-reply'} (ADR 0054).`,
+      );
     }
     if (input.intent === 'spar' && input.startedBy !== 'user') {
       throw new NotAllowedError('Only the User starts a Spar.');
@@ -3114,6 +3132,26 @@ export function createConversations({
         update(id, { state: 'running' });
       }
       announce(id);
+    },
+
+    /**
+     * The judgment run of Conversation `id` (ADR 0054), for its own tool to
+     * check its caller: its intent, Project and the Active Cycle Autopilot
+     * started it for. Null for any other Conversation, or none.
+     */
+    judgmentRunOf(id: number): JudgmentRun | null {
+      const row = db
+        .select({
+          intent: conversations.intent,
+          projectId: conversations.projectId,
+          cycleId: conversations.autopilotCycleId,
+        })
+        .from(conversations)
+        .where(eq(conversations.id, id))
+        .get();
+      return row && isJudgmentIntent(row.intent)
+        ? { conversationId: id, ...row, intent: row.intent }
+        : null;
     },
 
     /**

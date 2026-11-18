@@ -121,7 +121,7 @@ async function flowTab(params: ProjectPageProps['params']) {
       <FlowSection
         id="switches"
         title="Switches and Pause reasons"
-        intro="Whether Autopilot and Auto-triage start work now, and every reason they do not."
+        intro="Whether Autopilot, Auto-triage and the judgment runs start work now, and every reason they do not."
       >
         <Inline gap={4} alignY="start">
           <ProjectSwitch
@@ -154,11 +154,17 @@ async function flowTab(params: ProjectPageProps['params']) {
               ),
             }}
           />
+          <ProjectSwitch
+            projectId={project.id}
+            setting="overlapPlanning"
+            checked={settings.overlapPlanning}
+          />
         </Inline>
         <PauseReasons
           projectId={project.id}
           autopilot={explanation.autopilot}
           autoTriage={explanation.autoTriage}
+          overlapPlanning={explanation.overlapPlanning}
         />
       </FlowSection>
     </Stack>

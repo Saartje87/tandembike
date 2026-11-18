@@ -24,7 +24,9 @@ export type SwitchSetting =
   | 'agentMode'
   | 'autopilot'
   | 'autoMerge'
-  | 'autoTriage';
+  | 'autoTriage'
+  | 'overlapPlanning'
+  | 'autoReply';
 
 export type SettingSwitchProps = {
   projectId: number;

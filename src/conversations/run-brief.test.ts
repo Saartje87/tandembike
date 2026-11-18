@@ -454,3 +454,45 @@ describe('runBrief for Setup on an existing Project', () => {
     );
   });
 });
+
+describe('runBrief and the judgment runs (ADR 0054)', () => {
+  const base = {
+    conversationId: 5,
+    ticketNumber: 7,
+    ticketTitle: 'Fix it',
+    ticketType: 'Ticket' as const,
+    projectName: 'Website',
+    agentKind: 'claude-code' as const,
+    parallelRuns: false,
+    runMode: 'default' as const,
+  };
+
+  it('tells a Start run to ask every question to the User as a Widget, so Auto-reply can answer it', () => {
+    const brief = runBrief({ ...base, intent: 'start' });
+
+    expect(brief).toContain(
+      'Ask every question to the User as a Widget, never in plain text, so Auto-reply can answer it when the Project has it on.',
+    );
+  });
+
+  it('leaves that line out of a Start in a terminal, where the User answers directly', () => {
+    const brief = runBrief({ ...base, intent: 'start', terminal: true });
+
+    expect(brief).not.toContain('Auto-reply');
+  });
+
+  it.each([
+    ['overlap_planning', 'add_overlap_blocker'],
+    ['auto_reply', 'reply_to_question'],
+  ] as const)(
+    'tells a %s run that Autopilot started it, that nobody answers, and its one tool',
+    (intent, tool) => {
+      const brief = runBrief({ ...base, ticketNumber: null, intent });
+
+      expect(brief).toContain('Autopilot started this Conversation');
+      expect(brief).toContain(tool);
+      expect(brief).toContain('Nobody answers in this Conversation');
+      expect(brief).not.toContain('ask_choice');
+    },
+  );
+});
