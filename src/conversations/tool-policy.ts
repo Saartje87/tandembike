@@ -1,11 +1,6 @@
 import type { ToolPolicy } from './agent-runner';
 
 /**
- * The Tandembike MCP tools each tool policy keeps a run from using, by their
- * own names (ADR 0046, ADR 0051): the one list every runner translates into
- * its agent's tool names, so a new writing tool is excluded on all of them.
- */
-/**
  * Every Tandembike tool that creates or changes Tickets or Cycles, but the
  * Spar tools and the judgment runs' own tools.
  */
@@ -25,10 +20,16 @@ const ticketWrites = [
   'set_check_command',
 ];
 
+/**
+ * The Tandembike MCP tools each tool policy keeps a run from using, by their
+ * own names (ADR 0046, ADR 0051): the one list every runner translates into
+ * its agent's tool names, so a new writing tool is excluded on all of them.
+ */
 export const blockedTandembikeTools: Record<ToolPolicy, readonly string[]> = {
   /**
    * A Spar, whatever the run mode: every tool that creates or changes
-   * Tickets or Cycles. Reading, the Widget tools and the Spar tools stay.
+   * Tickets or Cycles, the judgment runs' own tools included. Reading, the
+   * Widget tools and the Spar tools stay.
    */
   'read-only': [...ticketWrites, 'add_overlap_blocker', 'reply_to_question'],
   /**

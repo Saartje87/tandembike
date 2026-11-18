@@ -15,7 +15,8 @@ export type SplitFollowUpsDeps = {
  * to file a follow-up no longer works, it looks for a Ticket with the Start's
  * Ticket as Origin, filed after the answer. It records the follow-up filed,
  * or missing with a note on the Ticket, which the `split_follow_up` Notice
- * then tells the User. Autopilot writes no Ticket, so this lives apart.
+ * then tells the User. A follow-up filed later, by a resumed run, settles a
+ * missing one as filed. Autopilot writes no Ticket, so this lives apart.
  */
 export function createSplitFollowUps({
   tickets,
@@ -23,7 +24,7 @@ export function createSplitFollowUps({
   changes,
 }: SplitFollowUpsDeps) {
   /** Whether a Ticket with `reply`'s Ticket as Origin was filed at or after the answer. */
-  const filed = (reply: SplitReply): boolean =>
+  const filed = (reply: Pick<SplitReply, 'ticketNumber' | 'at'>): boolean =>
     tickets
       .getTicket(reply.ticketNumber)
       .splitOff.some(
@@ -31,6 +32,19 @@ export function createSplitFollowUps({
       );
 
   const check = () => {
+    // A run resumed after its end may still file it: that settles it.
+    for (const reply of conversations.missingSplitFollowUps()) {
+      try {
+        if (filed(reply)) {
+          conversations.setSplitFollowUp(reply.entryId, 'filed');
+        }
+      } catch (error) {
+        console.error(
+          `The Split follow-up of T${reply.ticketNumber} could not be checked`,
+          error,
+        );
+      }
+    }
     for (const reply of conversations.splitRepliesAwaitingFollowUp()) {
       if (reply.working) {
         continue;

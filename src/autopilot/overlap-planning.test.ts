@@ -283,4 +283,33 @@ describe('Overlap planning (ADR 0054)', () => {
       reasonTypes(world.autopilot.explain(world.project.id).overlapPlanning),
     ).toEqual(['machineCapFull']);
   });
+
+  it('lets builds go on when a planning run cannot start, until a new trigger', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const world = setup({ autopilot: true });
+    world.ready('A');
+    world.ready('B');
+    world.tickets.startCycle(world.cycle.id);
+    const start = world.conversations.start;
+    const refused = vi
+      .spyOn(world.conversations, 'start')
+      .mockImplementation((input) =>
+        input.intent === 'overlap_planning'
+          ? Promise.reject(new Error('The runner is gone.'))
+          : start(input),
+      );
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await world.autopilot.evaluate();
+
+    expect(world.plannings()).toEqual([]);
+    expect(world.ofIntent('start')).toHaveLength(2);
+    refused.mockRestore();
+    world.later(1000);
+    world.ready('C');
+    world.later(settleMs);
+    await world.autopilot.evaluate();
+
+    expect(world.plannings()).toHaveLength(1);
+  });
 });

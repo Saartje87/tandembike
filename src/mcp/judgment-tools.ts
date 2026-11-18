@@ -146,10 +146,18 @@ export const registerJudgmentTools = (
           run.conversationId,
           reply,
         );
-        tickets.addComment(result.ticketNumber, {
-          author: 'agent',
-          body: replyComment(result, reason.trim()),
-        });
+        // The reply went out: a comment that fails must not report it lost.
+        try {
+          tickets.addComment(result.ticketNumber, {
+            author: 'agent',
+            body: replyComment(result, reason.trim()),
+          });
+        } catch (error) {
+          console.error(
+            `Auto-reply could not comment on T${result.ticketNumber}`,
+            error,
+          );
+        }
         return jsonResult(result);
       } catch (error) {
         return errorResult(error);

@@ -3524,10 +3524,13 @@ export function createConversations({
       announce(entry.conversationId);
     },
 
-    /** The Split replies whose Start ended without filing the follow-up, for the Notice. */
+    /**
+     * The Split replies whose Start ended without filing the follow-up, for
+     * the Notice, and for a later filing to settle (`at` is when it answered).
+     */
     missingSplitFollowUps(): Pick<
       SplitReply,
-      'entryId' | 'conversationId' | 'projectId' | 'ticketNumber'
+      'entryId' | 'conversationId' | 'projectId' | 'ticketNumber' | 'at'
     >[] {
       return splitReplies().flatMap(({ entryId, mark, conversation }) =>
         mark.followUp === 'missing'
@@ -3537,6 +3540,7 @@ export function createConversations({
                 conversationId: conversation.id,
                 projectId: conversation.projectId,
                 ticketNumber: conversation.ticketNumber as number,
+                at: new Date(mark.at),
               },
             ]
           : [],

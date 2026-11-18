@@ -51,4 +51,6 @@ The out-of-scope note says an orchestrator "stays out of triage and Ticket creat
 
 - `ConversationIntent` gains `overlap_planning` and `auto_reply`. `holdsMachineSlot` counts them while they work.
 - Autopilot's `explain` gains `overlapPlanning` and `autoReply` engine states.
-- A Split's follow-up check writes a comment, so it lives in its own small watcher next to Autopilot. Autopilot still writes no Ticket.
+- A Split's follow-up check writes a comment, so it lives in its own small watcher next to Autopilot. Autopilot still writes no Ticket. A follow-up filed after the check marked it missing, by a run resumed later, settles it as filed.
+- A judgment run needs a free Machine slot like any run Autopilot starts. With the Machine cap full of Starts that all wait on the User, no Auto-reply starts, and Flow names the Machine cap as its Pause reason. Raising the cap leaves room for it.
+- An Overlap planning run that fails to start counts as the Cycle's last attempt, kept in memory: builds go on, and the next trigger plans again.

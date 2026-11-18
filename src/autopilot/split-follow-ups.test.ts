@@ -112,6 +112,21 @@ describe('Split follow-ups (ADR 0054)', () => {
     world.stop();
   });
 
+  it('marks a missing follow-up filed when a resumed run files it later, which ends the Notice', async () => {
+    const world = await split();
+    world.startRun.emit({ type: 'turn', cost: 1 });
+    expect(world.conversations.missingSplitFollowUps()).toHaveLength(1);
+
+    world.tickets.createTicket({
+      projectId: world.project.id,
+      title: 'Redo the footer',
+      originNumber: world.ticket.number,
+    });
+
+    expect(world.conversations.missingSplitFollowUps()).toEqual([]);
+    world.stop();
+  });
+
   it('does not count a Ticket with that Origin filed before the Split', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const world = await split((before) => {

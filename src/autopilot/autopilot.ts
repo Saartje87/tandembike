@@ -665,12 +665,18 @@ export function createAutopilot({
     if (candidates.length < 2) {
       return null;
     }
-    const last = latestPlanning(projectId, cycleId);
-    const trigger = latestTrigger(candidates, cycleId);
-    if (last === null) {
+    // A start that failed counts as the last attempt, so builds are not held
+    // back for good: planning is due again on the next trigger.
+    const attempts = [
+      latestPlanning(projectId, cycleId)?.createdAt,
+      failedPlanning.get(cycleId),
+    ].filter((at): at is Date => at !== undefined);
+    if (attempts.length === 0) {
       return { candidates, settlesAt: new Date(0) };
     }
-    if (trigger === null || trigger <= last.createdAt) {
+    const last = new Date(Math.max(...attempts.map((at) => at.getTime())));
+    const trigger = latestTrigger(candidates, cycleId);
+    if (trigger === null || trigger <= last) {
       return null;
     }
     return {
@@ -678,6 +684,9 @@ export function createAutopilot({
       settlesAt: new Date(trigger.getTime() + overlapSettleMs),
     };
   };
+
+  /** When an Overlap planning run last failed to start, by Cycle; in memory. */
+  const failedPlanning = new Map<number, Date>();
 
   /** The timer that queues a pass when the latest overlap trigger settles. */
   const settleTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -805,6 +814,7 @@ export function createAutopilot({
       });
       return true;
     } catch (error) {
+      failedPlanning.set(overlap.cycleId, now());
       console.error(
         `Autopilot could not start Overlap planning in Project ${projectId}`,
         error,

@@ -411,6 +411,7 @@ describe('Auto-reply in the Conversations module (ADR 0054)', () => {
         conversationId: world.start.id,
         projectId: world.project.id,
         ticketNumber: world.ticket.number,
+        at: expect.any(Date),
       },
     ]);
   });

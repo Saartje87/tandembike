@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { connectMcpClient, resultJson, resultText } from '../test/mcp';
 import { createTestTickets } from '../test/tickets';
@@ -210,5 +210,36 @@ describe('reply_to_question (ADR 0054)', () => {
       'The User answered this question first',
     );
     expect(tickets.listComments(second.number)).toEqual([]);
+  });
+
+  it('still returns a reply that went out when its comment cannot be added', async () => {
+    const { tickets, judgment } = replying();
+    const gone: JudgmentTools = {
+      ...judgment,
+      replyToQuestion: async (_id, reply) => ({
+        decision: reply.decision,
+        ticketNumber: 999,
+        startConversationId: 4,
+        question: 'Which library?',
+        answer: 'B',
+      }),
+    };
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const client = await connectMcpClient(tickets, {
+      runId: '8',
+      judgment: gone,
+    });
+
+    const result = await client.callTool({
+      name: 'reply_to_question',
+      arguments: {
+        decision: 'approve',
+        answer: { selected: ['B'] },
+        reason: 'x',
+      },
+    });
+    await client.close();
+
+    expect(resultJson(result)).toMatchObject({ decision: 'approve' });
   });
 });
