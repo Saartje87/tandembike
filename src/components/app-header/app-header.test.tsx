@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { Dialog } from '@blockle/blocks';
-import { screen, within } from '@testing-library/react';
+import { act, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import { usePathname } from 'next/navigation';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import type {
 import { renderWithTheme } from '../../test/render';
 import { useConversationDialog } from '../conversation-dialog-provider/conversation-dialog-provider';
 import { AppHeader } from './app-header';
+import { appHeaderBlockSize } from './app-header.css';
 
 vi.mock('next/navigation', () => ({ usePathname: vi.fn() }));
 vi.mock('../../app/settings/actions', () => ({
@@ -74,6 +75,40 @@ describe('AppHeader', () => {
     );
     expect(within(header).queryByText('Tandembike')).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('tells the page its height, so focus never scrolls under it', () => {
+    let report: ResizeObserverCallback = () => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          report = callback;
+        }
+        disconnect() {}
+        observe() {}
+        unobserve() {}
+      },
+    );
+    renderWithTheme(<AppHeader nav={nav} breadcrumbs={breadcrumbs} />);
+
+    const header = screen.getByRole('banner');
+    act(() =>
+      report(
+        [
+          {
+            target: header,
+            borderBoxSize: [{ blockSize: 56, inlineSize: 800 }],
+          } as unknown as ResizeObserverEntry,
+        ],
+        {} as ResizeObserver,
+      ),
+    );
+
+    expect(
+      document.documentElement.style.getPropertyValue(appHeaderBlockSize),
+    ).toBe('56px');
+    vi.unstubAllGlobals();
   });
 
   it('links to the Stats page', () => {

@@ -20,6 +20,7 @@ import { useConversationDialog } from '../conversation-dialog-provider/conversat
 import { Icon } from '../icon/icon';
 import { MachineRuns } from '../machine-runs/machine-runs';
 import { NotificationToggle } from '../notification-toggle/notification-toggle';
+import { appHeaderBlockSize, header } from './app-header.css';
 
 export type AppHeaderProps = {
   /** The side navigation the menu button opens. */
@@ -50,7 +51,8 @@ const CloseOnNavigation: FC<CloseOnNavigationProps> = ({ onNavigate }) => {
 };
 
 /**
- * The bar across the top of every page, in the theme's primary colour: a
+ * The bar across the top of every page, in the theme's primary colour,
+ * pinned to the top of the viewport while the page scrolls under it: a
  * menu button that opens `nav` in a drawer on the left, then the current
  * page's breadcrumbs, kept on one line, and at the end the working runs
  * against the machine cap, links to the Stats and Settings pages and the
@@ -68,6 +70,28 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
 
   const close = useCallback(() => setOpen(false), []);
 
+  // The root's scroll padding follows the header's height, so keyboard focus
+  // and `scrollIntoView` never land under the sticky header.
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const element = headerRef.current;
+    if (!element) {
+      return;
+    }
+    const root = document.documentElement;
+    const observer = new ResizeObserver(([entry]) => {
+      const blockSize = entry?.borderBoxSize[0]?.blockSize;
+      if (blockSize !== undefined) {
+        root.style.setProperty(appHeaderBlockSize, `${blockSize}px`);
+      }
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(appHeaderBlockSize);
+    };
+  }, []);
+
   return (
     <>
       {/* A deliberate fixed colour: the header is primary-600 with white in both
@@ -76,10 +100,13 @@ export const AppHeader: FC<AppHeaderProps> = ({ nav, breadcrumbs }) => {
         asChild
         backgroundColor="primary-600"
         color="white"
+        position="sticky"
+        insetBlockStart={0}
+        className={header}
         paddingBlock={2}
         paddingInline={[4, 5]}
       >
-        <header>
+        <header ref={headerRef}>
           <Inline gap={3} alignY="center" flexWrap="nowrap">
             <Button
               type="button"
