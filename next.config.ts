@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     '@github/copilot-sdk',
   ],
   experimental: {
+    agentUpgrade: 'security',
     serverActions: {
       // A 10 MB Attachment plus form overhead; the Tickets module enforces 10 MB.
       bodySizeLimit: '11mb',
