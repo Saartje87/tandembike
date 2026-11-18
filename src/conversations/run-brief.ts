@@ -176,6 +176,21 @@ const setupChecklist = (brief: RunBrief): string[] => {
   ];
 };
 
+/**
+ * How a New Ticket Conversation clarifies the request before filing (T1666):
+ * in proportion to its size. New Ticket is not a Stage and the Playbook has
+ * no skill for it, so the steps live here, in the brief, shared by every
+ * Agent kind (ADR 0019, ADR 0051). The grill mirrors the Playbook's Spec
+ * step 3 in its own words; keep the two consistent.
+ */
+const newTicketSteps = [
+  'Clarify the request in proportion to its size before you file, so each Ticket describes what the User actually asked for without turning a small Ticket into an interview:',
+  '1. Look first: read the code the title points at, and search the Project for Tickets about the same thing with find_tickets, so you never ask what the repository or the tracker already answers. On a likely duplicate, ask with `ask_choice`: add it to the existing Ticket as a comment (recommended), file a new Ticket anyway, or drop it. Never file a likely duplicate without asking.',
+  '2. Ask every open point that changes the Ticket: its scope, its behaviour or its acceptance criteria. Ask in rounds of at most three questions, each its own `ask_choice` with your answer in `recommended`, and wait for the answers before the next round; a skip is not agreement, so ask again or leave the point open. Pick obvious defaults yourself and name them. A small, clear request may need no questions.',
+  '3. Grill a big or vague idea: when the request is vague, has several open design decisions or looks bigger than one Ticket, interview the User a round at a time by the rules of step 2 until the scope is settled. Put each open decision whose prerequisites are settled to the User with your recommended answer, look facts up instead of asking them, and walk the branches: who it is for, what changes for them, edge cases, what stays out and how it fits what exists. Stop when nothing is left silently assumed. When it is really a spec, ask with `ask_choice`: file it as one idea Ticket for the Spec button (recommended), without `ready-for-agent`, and tell the User to press Spec on it; or grill it here. Never start a Spec yourself. Never grill a small, clear request.',
+  '4. Confirm only when you guessed: when you filled any gap with an assumption the User did not confirm, post the drafted Tickets (title, scope, acceptance criteria) with those unconfirmed assumptions listed after them, then ask with `ask_choice`: "File it" (recommended) or "Change something". On a change, or any other answer, revise the draft and show it again. One confirmation covers several Tickets or an Epic. With nothing guessed, file straight away, then report what you filed.',
+];
+
 /** An estimate in its unit: dollars to the cent, as the brief always read. */
 const estimateText = ({
   amount,
@@ -217,6 +232,7 @@ export function runBrief(brief: RunBrief): string {
         `Defaults from the title field, unless this Conversation leads elsewhere: ${fields.join(', ')}.`,
       );
     }
+    lines.push(...newTicketSteps);
   }
   if (brief.worktree && brief.intent === 'merge') {
     lines.push(
